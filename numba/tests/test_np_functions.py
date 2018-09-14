@@ -81,8 +81,11 @@ def tril(m, k=0):
 def triu(m, k=0):
     return np.triu(m, k)
 
-def np_vander(x, N=None, increasing=False):
+def vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
+
+def partition(a, kth):
+    return np.partition(a, kth)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -556,7 +559,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
     def test_vander_basic(self):
-        pyfunc = np_vander
+        pyfunc = vander
         cfunc = jit(nopython=True)(pyfunc)
 
         def _check_output(params):
@@ -613,7 +616,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check((True, False, 4))
 
     def test_vander_exceptions(self):
-        pyfunc = np_vander
+        pyfunc = vander
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -767,6 +770,97 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
+
+    def test_partition_fuzz(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for j in range(10, 30):
+            for i in range(1, j - 2):
+                for func in [cfunc]:
+                    d = np.arange(j)
+                    np.random.shuffle(d)
+                    d = d % np.random.randint(2, 30)
+                    idx = np.random.randint(d.size)
+                    for kth in [0, idx, i, i + 1]:
+                        tgt = np.sort(d)[kth]
+                        print(d, kth)
+                        self.assertPreciseEqual(func(d, kth)[kth], tgt)
+
+
+
+
+    def test_partition_basic_1d_no_axis(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, kth):
+            print(a, kth)
+
+            expected = pyfunc(a, kth)
+            got = cfunc(a, kth)
+
+            # print(expected)
+            # print(got)
+
+            assert expected.shape == got.shape
+            assert expected.dtype == got.dtype
+
+            a_sorted = np.sort(a)
+            if np.isnan(a_sorted.flat[kth]):
+                assert np.isnan(got.flat[kth])
+            else:
+                print(a_sorted.flatten())
+                print(got.flatten())
+                assert a_sorted.flat[kth] == got.flat[kth]
+
+            # if np.isnan(expected[kth]):
+            #     assert np.isnan(got[kth])
+            # else:
+            #     assert expected[kth] == got[kth]
+            #     sorted_a = np.sort(a.flat)
+            #     assert sorted_a.flat[kth] == expected.flat[kth]
+            #     assert sorted_a.flat[kth] == got.flat[kth]
+            #     assert np.all(got.flat[:kth] <= got.flat[kth])
+
+        def a_variations_1d(a):
+            # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 >= 1] = 3.5
+            yield a
+            a[a % 4 >= 2] = np.nan
+            yield a
+            a[-1] = -np.inf
+            yield a
+            a[:] = np.nan
+            yield a
+
+        def k_variations(n):
+            return range(1, n)  # why does 0 fail?  what about negative k?
+
+        n = 10
+        a = np.arange(n, dtype=np.float64)
+        for a in a_variations_1d(a):
+            for k in k_variations(n):
+                check(a, k)
+
+        n = 48
+        a = np.linspace(1, 10, n)
+        a[4:7] = np.nan
+        a[8] = -np.inf
+        a[9] = np.inf
+        a = a.reshape((4, 3, 4))
+        for k in 1, 2, 3:
+            check(a, k)
+            check(a.T, k)
+            check(np.asfortranarray(a), k)
+            check(a[::-1], k)
+
+
 
 
 class TestNPMachineParameters(TestCase):

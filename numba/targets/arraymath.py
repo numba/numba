@@ -911,6 +911,62 @@ if numpy_version >= (1, 9):
 
         return nanmedian_impl
 
+
+@register_jitable
+def _partition_in_place(temp_arry, kth):
+    """
+    Updates temp_arry in-place
+    """
+    low = 0
+    high = len(temp_arry) - 1
+
+    if kth and kth & 1 == 0:
+         _select_two(temp_arry, kth - 1, low, high)
+    else:
+        _select(temp_arry, kth, low, high)
+
+
+@overload(np.partition)
+def np_partition(a, kth):
+
+
+    # axis None
+    # def np_partition_impl(a, kth):
+    #     temp_arry = a.flatten()
+    #     mask = np.isnan(temp_arry)
+    #
+    #     dense = temp_arry[~mask]
+    #     nans = temp_arry[mask]
+    #
+    #     if kth < len(dense):
+    #         _partition_in_place(dense, kth)
+    #
+    #     out = np.hstack((dense, nans))
+    #     return out.reshape(a.shape)
+
+        # flat of axis is None
+
+    def np_partition_impl(a, kth):
+
+        out = np.empty_like(a)
+
+        idx = np.ndindex(a.shape[:-1])
+        for s in idx:
+            data = a[s].copy()
+            mask = np.isnan(data)
+
+            dense = data[~mask]
+            nans = data[mask]
+
+            if kth < len(dense):
+                _partition_in_place(dense, kth)
+
+            out[s] = np.hstack((dense, nans))
+
+        return out
+
+    return np_partition_impl
+
 #----------------------------------------------------------------------------
 # Building matrices
 
