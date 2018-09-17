@@ -53,6 +53,7 @@ CUDA Enhancements:
 * PR #3198: Fix GPU datetime timedelta types usage
 * PR #3221: Support datetime/timedelta scalar argument to a CUDA kernel.
 * PR #3259: Add DeviceNDArray.view method to reinterpret data as a different type.
+* PR #3310: Fix IPC handling of sliced cuda array.
 
 ROCm Enhancements:
 
