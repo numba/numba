@@ -81,6 +81,8 @@ class Type(object):
     """
 
     mutable = False
+    # Rather the type is reflected at the python<->nopython boundary
+    reflected = False
 
     def __init__(self, name):
         self.name = name
@@ -258,6 +260,12 @@ class Callable(Type):
         """
         Returns a tuple of (list of signatures, parameterized)
         """
+
+    def get_call_type_with_literals(self, context, args, kws, literals):
+        """Simliar to .get_call_type() but with extra argument for literals.
+        Default implementation ignores literals and forwards to .get_call_type().
+        """
+        return self.get_call_type(context, args, kws)
 
 
 class DTypeSpec(Type):

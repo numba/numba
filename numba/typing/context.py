@@ -1,17 +1,24 @@
 from __future__ import print_function, absolute_import
 
-from collections import defaultdict, Sequence
+from collections import defaultdict
 import types as pytypes
 import weakref
 import threading
 import contextlib
 
+import numba
 from numba import types, errors
 from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
 
 from numba import utils
+from numba.config import PYVERSION
+
+if PYVERSION >= (3, 3):
+    from collections.abc import Sequence
+else:
+    from collections import Sequence
 
 
 class Rating(object):
@@ -173,7 +180,7 @@ class BaseContext(object):
 
         return '\n'.join(desc)
 
-    def resolve_function_type(self, func, args, kws):
+    def resolve_function_type(self, func, args, kws, literals=None):
         """
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
@@ -184,6 +191,8 @@ class BaseContext(object):
             if functy is not None:
                 func = functy
         if func in self._functions:
+            # Note: Duplicating code with types.Function.get_call_type().
+            #       *defns* are CallTemplates.
             defns = self._functions[func]
             for defn in defns:
                 res = defn.apply(args, kws)
@@ -199,7 +208,7 @@ class BaseContext(object):
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
-            return func.get_call_type(self, args, kws)
+            return func.get_call_type_with_literals(self, args, kws, literals)
 
     def _get_attribute_templates(self, typ):
         """
@@ -251,18 +260,18 @@ class BaseContext(object):
     def resolve_static_setitem(self, target, index, value):
         assert not isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("static_setitem", args, kws)
 
     def resolve_setitem(self, target, index, value):
         assert isinstance(index, types.Type), index
         args = target, index, value
-        kws = ()
+        kws = {}
         return self.resolve_function_type("setitem", args, kws)
 
     def resolve_delitem(self, target, index):
         args = target, index
-        kws = ()
+        kws = {}
         return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):
@@ -285,7 +294,13 @@ class BaseContext(object):
 
         ValueError is raised for unsupported types.
         """
-        return typeof(val, Purpose.argument)
+        try:
+            return typeof(val, Purpose.argument)
+        except ValueError:
+            if numba.cuda.is_cuda_array(val):
+                return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+            else:
+                raise
 
     def resolve_value_type(self, val):
         """

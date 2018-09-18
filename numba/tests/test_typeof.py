@@ -237,9 +237,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(tp_404, typeof(RequestError.internal_error))
 
         with self.assertRaises(ValueError) as raises:
-            typeof(HeterogenousEnum.red)
+            typeof(HeterogeneousEnum.red)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, float64")
+                         "Cannot type heterogeneous enum: got value types complex128, float64")
 
     @tag('important')
     def test_enum_class(self):
@@ -256,9 +256,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(tp_error, tp_shape)
 
         with self.assertRaises(ValueError) as raises:
-            typeof(HeterogenousEnum)
+            typeof(HeterogeneousEnum)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, float64")
+                         "Cannot type heterogeneous enum: got value types complex128, float64")
 
     @tag('important')
     def test_dtype(self):
@@ -287,7 +287,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         mod.init()
         ty_cffi_cos = typeof(mod.cffi_cos)
         ty_cffi_sin = typeof(mod.cffi_sin)
+        ty_cffi_boolean = typeof(mod.cffi_bool)
         self.assertIsInstance(ty_cffi_cos, types.ExternalFunctionPointer)
+        self.assertEqual(ty_cffi_boolean.sig.return_type, types.boolean)
         self.assertEqual(ty_cffi_cos.sig.args, (types.float64,))
         self.assertEqual(ty_cffi_cos.sig.return_type, types.float64)
         self.assertEqual(ty_cffi_cos, ty_cffi_sin)

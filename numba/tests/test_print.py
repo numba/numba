@@ -94,7 +94,7 @@ class TestPrint(TestCase):
         cr = compile_isolated(pyfunc, (arraytype,), flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         with captured_stdout():
-            cfunc(np.arange(10))
+            cfunc(np.arange(10, dtype=np.int32))
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
@@ -161,6 +161,23 @@ class TestPrint(TestCase):
         with captured_stdout():
             cfunc(1, (2, 3), (4, 5j))
             self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
+
+    def test_inner_fn_print(self):
+        @jit(nopython=True)
+        def foo(x):
+            print(x)
+
+        @jit(nopython=True)
+        def bar(x):
+            foo(x)
+            foo('hello')
+
+        # Printing an array requires the Env.
+        # We need to make sure the inner function can obtain the Env.
+        x = np.arange(5)
+        with captured_stdout():
+            bar(x)
+            self.assertEqual(sys.stdout.getvalue(), '[0 1 2 3 4]\nhello\n')
 
 
 if __name__ == '__main__':

@@ -93,6 +93,7 @@ class TestCPUVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
 
 
 class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
+    _numba_parallel_test_ = False
     target = 'parallel'
 
 

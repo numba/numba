@@ -17,7 +17,7 @@ from numba import jit, vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
-
+from numba.six import exec_
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
@@ -54,7 +54,7 @@ def _make_ufunc_usecase(ufunc):
     ldict = {}
     arg_str = ','.join(['a{0}'.format(i) for i in range(ufunc.nargs)])
     func_str = 'def fn({0}):\n    np.{1}({0})'.format(arg_str, ufunc.__name__)
-    exec(func_str, globals(), ldict)
+    exec_(func_str, globals(), ldict)
     fn = ldict['fn']
     fn.__name__ = '{0}_usecase'.format(ufunc.__name__)
     return fn
@@ -63,7 +63,7 @@ def _make_ufunc_usecase(ufunc):
 def _make_unary_ufunc_usecase(ufunc):
     ufunc_name = ufunc.__name__
     ldict = {}
-    exec("def fn(x,out):\n    np.{0}(x,out)".format(ufunc_name), globals(), ldict)
+    exec_("def fn(x,out):\n    np.{0}(x,out)".format(ufunc_name), globals(), ldict)
     fn = ldict["fn"]
     fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
@@ -71,7 +71,7 @@ def _make_unary_ufunc_usecase(ufunc):
 
 def _make_unary_ufunc_op_usecase(ufunc_op):
     ldict = {}
-    exec("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
+    exec_("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
     fn = ldict["fn"]
     fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
@@ -80,7 +80,7 @@ def _make_unary_ufunc_op_usecase(ufunc_op):
 def _make_binary_ufunc_usecase(ufunc):
     ufunc_name = ufunc.__name__
     ldict = {}
-    exec("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
+    exec_("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
@@ -88,7 +88,7 @@ def _make_binary_ufunc_usecase(ufunc):
 
 def _make_binary_ufunc_op_usecase(ufunc_op):
     ldict = {}
-    exec("def fn(x,y):\n    return x{0}y".format(ufunc_op), globals(), ldict)
+    exec_("def fn(x,y):\n    return x{0}y".format(ufunc_op), globals(), ldict)
     fn = ldict["fn"]
     fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
@@ -96,7 +96,7 @@ def _make_binary_ufunc_op_usecase(ufunc_op):
 
 def _make_inplace_ufunc_op_usecase(ufunc_op):
     ldict = {}
-    exec("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
+    exec_("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
     fn = ldict["fn"]
     fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
@@ -1711,13 +1711,13 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_add(self):
         ufunc = np.add
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
         if not numpy_support.strict_ufunc_typing:
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
-        # heterogenous inputs, scaled output
+        # heterogeneous inputs, scaled output
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[ms]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
@@ -1727,10 +1727,10 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_subtract(self):
         ufunc = np.subtract
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[s]'])
-        # heterogenous inputs, scaled output
+        # heterogeneous inputs, scaled output
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[ms]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
@@ -1750,7 +1750,7 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     def test_true_divide(self):
         ufunc = np.true_divide
         fn = _make_ufunc_usecase(ufunc)
-        # heterogenous inputs
+        # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'd'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'd'])
         # scaled output

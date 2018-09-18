@@ -407,6 +407,13 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
+
+class SerialMixin(object):
+    """Mixin to mark test for serial execution.
+    """
+    _numba_parallel_test_ = False
+
+
 # Various helpers
 
 @contextlib.contextmanager
@@ -422,6 +429,29 @@ def override_config(name, value):
         yield
     finally:
         setattr(config, name, old_value)
+
+
+@contextlib.contextmanager
+def override_env_config(name, value):
+    """
+    Return a context manager that temporarily sets an Numba config environment
+    *name* to *value*.
+    """
+    old = os.environ.get(name)
+    os.environ[name] = value
+    config.reload_config()
+
+    try:
+        yield
+    finally:
+        if old is None:
+            # If it wasn't set originally, delete the environ var
+            del os.environ[name]
+        else:
+            # Otherwise, restore to the old value
+            os.environ[name] = old
+        # Always reload config
+        config.reload_config()
 
 
 def compile_function(name, code, globs):
@@ -558,6 +588,13 @@ def captured_stderr():
        self.assertEqual(stderr.getvalue(), "hello\n")
     """
     return captured_output("stderr")
+
+
+@contextlib.contextmanager
+def capture_cache_log():
+    with captured_stdout() as out:
+        with override_config('DEBUG_CACHE', True):
+            yield out
 
 
 class MemoryLeak(object):

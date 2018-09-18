@@ -145,11 +145,10 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
 * :meth:`~numpy.ndarray.std`
-* :meth:`~numpy.ndarray.sum`
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.var`
 
-The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
+The corresponding top-level Numpy functions (such as :func:`numpy.prod`)
 are similarly supported.
 
 Other methods
@@ -160,13 +159,21 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.argsort` (without arguments)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.dot` (only the 1-argument form)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
-* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
+
+  * If the ``axis`` argument is a compile-time constant, all valid values are supported.
+    An out-of-range value will result in a ``LoweringError`` at compile-time.
+  * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
+    An out-of-range value will result in a runtime exception.
+
+* :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
 
@@ -197,7 +204,7 @@ floating-point and complex numbers:
   change is supported e.g. real input -> real
   output, complex input -> complex output).
 * :func:`numpy.linalg.eigh` (only the first argument).
-* :func:`numpy.linalg.eigvals` (only running with data that does not cause a 
+* :func:`numpy.linalg.eigvals` (only running with data that does not cause a
   domain change is supported e.g. real input -> real output,
   complex input -> complex output).
 * :func:`numpy.linalg.eigvalsh` (only the first argument).
@@ -231,6 +238,8 @@ The following reduction functions are supported:
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
+* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 
 Other functions
 ---------------
@@ -247,14 +256,18 @@ The following top-level functions are supported:
 * :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
+* :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
+* :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
+* :func:`numpy.dtype` (only the first argument)
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`
 * :func:`numpy.eye`
+* :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
@@ -269,13 +282,20 @@ The following top-level functions are supported:
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
-* :func:`numpy.searchsorted` (only the 2 first arguments)
+* :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.transpose`
+* :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
+* :func:`numpy.tril` (second argument ``k`` must be an integer)
+* :func:`numpy.triu` (second argument ``k`` must be an integer)
+* :func:`numpy.unique` (only the first argument)
+* :func:`numpy.vander`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
@@ -301,6 +321,14 @@ construct a scalar) or a sequence (to construct an array):
 * :class:`numpy.uint64`
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
+
+The following machine parameter classes are supported, with all purely numerical
+attributes:
+
+* :class:`numpy.iinfo`
+* :class:`numpy.finfo` (``machar`` attribute not supported)
+* :class:`numpy.MachAr` (with no arguments to the constructor)
+
 
 Literal arrays
 --------------
@@ -342,7 +370,7 @@ Simple random data
 ''''''''''''''''''
 
 * :func:`numpy.random.rand`
-* :func:`numpy.random.randint`
+* :func:`numpy.random.randint` (only the first two arguments)
 * :func:`numpy.random.randn`
 * :func:`numpy.random.random`
 * :func:`numpy.random.random_sample`
@@ -354,13 +382,15 @@ Permutations
 
 * :func:`numpy.random.choice`: the optional *p* argument (probabilities
   array) is not supported
-
+* :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)
 
 Distributions
 '''''''''''''
+
+.. warning:: The `size` argument is not supported in the following functions.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
@@ -400,13 +430,8 @@ Distributions
    Numba random generator.
 
 .. note::
-   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
-
-   Also, under Unix, if creating a child process using :func:`os.fork` or the
-   :mod:`multiprocessing` module, the child's random generator will inherit
-   the parent's state and will therefore produce the same sequence of
-   numbers (except when using the "forkserver" start method under Python 3.4
-   and later).
+   Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
+   thread and each process will produce independent streams of random numbers.
 
 
 ``stride_tricks``

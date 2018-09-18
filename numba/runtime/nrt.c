@@ -340,6 +340,12 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
 static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
+    if (info) {
+        /* call element dtor */
+        typedef void dtor_fn_t(void *ptr);
+        dtor_fn_t *dtor = info;
+        dtor(ptr);
+    }
     NRT_Free(ptr);
 }
 
@@ -353,6 +359,14 @@ NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size)
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
+    return mi;
+}
+
+NRT_MemInfo *NRT_MemInfo_new_varsize_dtor(size_t size, NRT_dtor_function dtor) {
+    NRT_MemInfo *mi = NRT_MemInfo_new_varsize(size);
+    if (mi) {
+        mi->dtor_info = dtor;
+    }
     return mi;
 }
 

@@ -11,9 +11,13 @@ def get_sys_info():
     # function which then exits.
     import platform
     import json
+    import multiprocessing
+    from numba import config
     from numba import cuda as cu
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver
+    from numba import roc
+    from numba.roc.hlc import hlc, libhlc
     import textwrap as tw
     import ctypes as ct
     import llvmlite.binding as llvmbind
@@ -23,15 +27,57 @@ def get_sys_info():
     from subprocess import check_output, CalledProcessError
 
     try:
-        fmt = "%-21s : %-s"
+        fmt = "%-45s : %-s"
         print("-" * 80)
         print("__Time Stamp__")
         print(datetime.utcnow())
         print("")
 
         print("__Hardware Information__")
+        system_name = platform.system()
         print(fmt % ("Machine", platform.machine()))
         print(fmt % ("CPU Name", llvmbind.get_host_cpu_name()))
+        if system_name == 'Linux':
+            strmatch = 'Cpus_allowed'
+            try:
+                loc = '/proc/self/status'
+                with open(loc, 'rt') as f:
+                    proc_stat = f.read().splitlines()
+                    for x in proc_stat:
+                        if x.startswith(strmatch):
+                            if x.startswith('%s:' % strmatch):
+                                hexnum = '0x%s' % x.split(':')[1].strip()
+                                acc_cpus = int(hexnum, 16)
+                                _n = str(bin(acc_cpus).count('1'))
+                                print(fmt % ("Number of accessible CPU cores",
+                                                _n))
+                            elif x.startswith('%s_list:' % strmatch):
+                                _a = x.split(':')[1].strip()
+                                print(fmt % ("Listed accessible CPUs cores",
+                                                _a))
+            except BaseException:
+                print(fmt % ("CPU count", multiprocessing.cpu_count()))
+            # See if CFS is in place
+            # https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt
+            try:
+                def scrape_lines(loc):
+                    with open(loc, 'rt') as f:
+                        return f.read().splitlines()
+                loc = '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us'
+                cfs_period = int(scrape_lines(loc)[0])
+                loc = '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us'
+                cfs_quota = int(scrape_lines(loc)[0])
+                if cfs_quota == -1:
+                    print(fmt % ("CFS restrictions", "None"))
+                else:
+                    runtime_amount = float(cfs_quota)/float(cfs_period)
+                    print(fmt % ("CFS restrictions (CPUs worth of runtime)",
+                                 runtime_amount))
+            except BaseException:
+                print(fmt % ("CFS restrictions", 'Information not available'))
+        else:
+            print(fmt % ("CPU count", multiprocessing.cpu_count()))
+
         try:
             featuremap = llvmbind.get_host_cpu_features()
         except RuntimeError:
@@ -47,7 +93,6 @@ def get_sys_info():
         print("__OS Information__")
         print(fmt % ("Platform", platform.platform(aliased=True)))
         print(fmt % ("Release", platform.release()))
-        system_name = platform.system()
         print(fmt % ("System Name", system_name))
         print(fmt % ("Version", platform.version()))
         try:
@@ -122,6 +167,138 @@ def get_sys_info():
             except:
                 print(
                     "Error: Probing CUDA failed (device and driver present, runtime problem?)\n")
+
+        print("")
+        print("__ROC Information__")
+        roc_is_available = roc.is_available()
+        print(fmt % ("ROC available", roc_is_available))
+
+        toolchains = []
+        try:
+            libhlc.HLC()
+            toolchains.append('librocmlite library')
+        except:
+            pass
+        try:
+            cmd = hlc.CmdLine().check_tooling()
+            toolchains.append('ROC command line tools')
+        except:
+            pass
+
+        # if no ROC try and report why
+        if not roc_is_available:
+            from numba.roc.hsadrv.driver import hsa
+            try:
+                hsa.is_available
+            except BaseException as e:
+                msg = str(e)
+            else:
+               msg = 'No ROC toolchains found.'
+            print(fmt % ("Error initialising ROC due to", msg))
+
+        if toolchains:
+            print(fmt % ("Available Toolchains", ', '.join(toolchains)))
+
+        try:
+            # ROC might not be available due to lack of tool chain, but HSA
+            # agents may be listed
+            from numba.roc.hsadrv.driver import hsa, dgpu_count
+            decode = lambda x: x.decode('utf-8') if isinstance(x, bytes) else x
+            print("\nFound %s HSA Agents:" % len(hsa.agents))
+            for i, agent in enumerate(hsa.agents):
+                print('Agent id  : %s' % i)
+                print('    vendor: %s' % decode(agent.vendor_name))
+                print('      name: %s' % decode(agent.name))
+                print('      type: %s' % agent.device)
+                print("")
+
+            _dgpus = []
+            for a in hsa.agents:
+                if a.is_component and a.device == 'GPU':
+                   _dgpus.append(decode(a.name))
+            print(fmt % ("Found %s discrete GPU(s)" % dgpu_count(), \
+                  ', '.join(_dgpus)))
+        except Exception as e:
+            print("No HSA Agents found, encountered exception when searching:")
+            print(e)
+
+
+        print("")
+        print("__SVML Information__")
+        # replicate some SVML detection logic from numba.__init__ here.
+        # if SVML load fails in numba.__init__ the splitting of the logic
+        # here will help diagnosis of the underlying issue
+        have_svml_library = True
+        try:
+            if sys.platform.startswith('linux'):
+                llvmbind.load_library_permanently("libsvml.so")
+            elif sys.platform.startswith('darwin'):
+                llvmbind.load_library_permanently("libsvml.dylib")
+            elif sys.platform.startswith('win'):
+                llvmbind.load_library_permanently("svml_dispmd")
+            else:
+                have_svml_library = False
+        except:
+            have_svml_library = False
+        func = getattr(llvmbind.targets, "has_svml", None)
+        llvm_svml_patched = func() if func is not None else False
+        svml_operational = (config.USING_SVML and llvm_svml_patched \
+                            and have_svml_library)
+        print(fmt % ("SVML state, config.USING_SVML", config.USING_SVML))
+        print(fmt % ("SVML library found and loaded", have_svml_library))
+        print(fmt % ("llvmlite using SVML patched LLVM", llvm_svml_patched))
+        print(fmt % ("SVML operational", svml_operational))
+
+        # Check which threading backends are available.
+        print("")
+        print("__Threading Layer Information__")
+        def parse_error(e, backend):
+            # parses a linux based error message, this is to provide feedback
+            # and hide user paths etc
+            try:
+                path, problem, symbol =  [x.strip() for x in e.msg.split(':')]
+                extn_dso = os.path.split(path)[1]
+                if backend in extn_dso:
+                    return "%s: %s" % (problem, symbol)
+            except BaseException:
+                pass
+            return "Unknown import problem."
+
+        try:
+            from numba.npyufunc import tbbpool
+            print(fmt % ("TBB Threading layer available", True))
+        except ImportError as e:
+            # might be a missing symbol due to e.g. tbb libraries missing
+            print(fmt % ("TBB Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'tbbpool')))
+
+        try:
+            from numba.npyufunc import omppool
+            print(fmt % ("OpenMP Threading layer available", True))
+        except ImportError as e:
+            print(fmt % ("OpenMP Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'omppool')))
+
+        try:
+            from numba.npyufunc import workqueue
+            print(fmt % ("Workqueue Threading layer available", True))
+        except ImportError as e:
+            print(fmt % ("Workqueue Threading layer available", False))
+            print(fmt % ("+--> Disabled due to",
+                         parse_error(e, 'workqueue')))
+
+        # look for numba env vars that are set
+        print("")
+        print("__Numba Environment Variable Information__")
+        _envvar_found = False
+        for k, v in os.environ.items():
+            if k.startswith('NUMBA_'):
+                print(fmt % (k, v))
+                _envvar_found = True
+        if not _envvar_found:
+            print("None set.")
 
         # Look for conda and conda information
         print("")

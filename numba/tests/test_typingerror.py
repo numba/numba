@@ -38,6 +38,10 @@ def imprecise_list():
     l = []
     return len(l)
 
+def using_imprecise_list():
+    a = np.array([])
+    return a.astype(np.int32)
+
 def unknown_module():
     return numpyz.int32(0)
 
@@ -89,7 +93,7 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
 
         expected = (
-            "Invalid usage of * with parameters (({0} x 1), {0})"
+            "Invalid use of * with parameters (tuple({0} x 1), {0})"
             .format(str(types.intp)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("[1] During: typing of", str(raises.exception))
@@ -109,10 +113,12 @@ class TestTypingError(unittest.TestCase):
         # This is sensitive to the formatting of the error message.
         self.assertIn(" * (float64, float64) -> float64", errmsg)
 
+        # find the context lines
+        ctx_lines = [x for x in errmsg.splitlines() if "] During" in x ]
+
         # Check contextual msg
-        last_two = errmsg.splitlines()[-2:]
-        self.assertTrue(re.search(r'\[1\] During: resolving callee type: Function.*hypot', last_two[0]))
-        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py', last_two[1]))
+        self.assertTrue(re.search(r'\[1\] During: resolving callee type: Function.*hypot', ctx_lines[0]))
+        self.assertTrue(re.search(r'\[2\] During: typing of call .*test_typingerror.py', ctx_lines[1]))
 
 
     def test_imprecise_list(self):
@@ -126,6 +132,17 @@ class TestTypingError(unittest.TestCase):
         errmsg = str(raises.exception)
         self.assertIn("Can't infer type of variable 'l': list(undefined)",
                       errmsg)
+
+    def test_using_imprecise_list(self):
+        """
+        Type inference should report informative error about untyped list.
+        TODO: #2931
+        """
+        with self.assertRaises(TypingError) as raises:
+            compile_isolated(using_imprecise_list, ())
+
+        errmsg = str(raises.exception)
+        self.assertIn("Undecided type $0.6 := <undecided>", errmsg)
 
     def test_array_setitem_invalid_cast(self):
         with self.assertRaises(TypingError) as raises:
@@ -158,11 +175,12 @@ class TestArgumentTypingError(unittest.TestCase):
         foo = Foo()
         with self.assertRaises(TypingError) as raises:
             cfunc(1, foo, 1)
-        expected = textwrap.dedent("""\
-            This error may have been caused by the following argument(s):
-            - argument 1: cannot determine Numba type of <class 'numba.tests.test_typingerror.Foo'>"""
-            )
-        self.assertIn(expected, str(raises.exception))
+
+        expected=re.compile(("This error may have been caused by the following "
+                             "argument\(s\):\\n- argument 1:.*cannot determine "
+                             "Numba type of "
+                             "<class \'numba.tests.test_typingerror.Foo\'>"))
+        self.assertTrue(expected.search(str(raises.exception)) is not None)
 
 
 class TestCallError(unittest.TestCase):
@@ -181,7 +199,7 @@ class TestCallError(unittest.TestCase):
             outer()
 
         got = str(raises.exception)
-        pat = r"Invalid usage of.*readonly array\(float64, 1d, C\)"
+        pat = r"Invalid use of.*readonly array\(float64, 1d, C\)"
         self.assertIsNotNone(re.search(pat, got))
 
 

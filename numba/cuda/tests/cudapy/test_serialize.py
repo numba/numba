@@ -1,13 +1,13 @@
 from __future__ import print_function
 import pickle
 import numpy as np
-from numba import cuda, vectorize
+from numba import cuda, vectorize, numpy_support, types
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('pickling not supported in CUDASIM')
-class TestPickle(unittest.TestCase):
+class TestPickle(SerialMixin, unittest.TestCase):
 
     def check_call(self, callee):
         arr = np.array([100])
@@ -63,8 +63,10 @@ class TestPickle(unittest.TestCase):
         def cuda_vect(x):
             return x * 2
 
+        # accommodate int representations in np.arange
+        npty = numpy_support.as_dtype(types.intp)
         # get expected result
-        ary = np.arange(10)
+        ary = np.arange(10, dtype=npty)
         expected = cuda_vect(ary)
         # first pickle
         foo1 = pickle.loads(pickle.dumps(cuda_vect))

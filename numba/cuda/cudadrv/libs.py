@@ -17,8 +17,15 @@ else:
 def get_libdevice(arch):
     libdir = (os.environ.get('NUMBAPRO_LIBDEVICE') or
               os.environ.get('NUMBAPRO_CUDALIB'))
+
     pat = r'libdevice\.%s(\.\d+)*\.bc$' % arch
     candidates = find_file(re.compile(pat), libdir)
+
+    if not candidates:
+        # CUDA 9 switches to fat library, with no arch in name
+        pat = r'libdevice(\.\d+)*\.bc$'
+        candidates = find_file(re.compile(pat), libdir)
+
     return max(candidates) if candidates else None
 
 

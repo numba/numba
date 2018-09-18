@@ -552,6 +552,27 @@ class TestDType(TestCase):
         assert_matches(arr.astype(np.complex128), 1.2, (1.2 + 0j))
         assert_matches(arr.astype(np.complex128), 1.2j, 1.2j)
 
+    def test_kind(self):
+        def tkind(A):
+            return A.dtype.kind=='f'
+        jit_tkind = jit(nopython=True)(tkind)
+        self.assertEqual(tkind(np.ones(3)), jit_tkind(np.ones(3)))
+        self.assertEqual(tkind(np.ones(3, dtype=np.intp)),
+                            jit_tkind(np.ones(3, dtype=np.intp)))
+
+    def test_dtype_with_type(self):
+        def impl():
+            a = np.dtype(np.float64)
+            return a.type(0)
+        jit_impl = jit(nopython=True)(impl)
+        self.assertEqual(impl(), jit_impl())
+
+    def test_dtype_with_string(self):
+        def impl():
+            a = np.dtype('float64')
+            return a.type(0)
+        jit_impl = jit(nopython=True)(impl)
+        self.assertEqual(impl(), jit_impl())
 
 if __name__ == '__main__':
     unittest.main()

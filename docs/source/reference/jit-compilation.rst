@@ -5,7 +5,9 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, error_model='python', locals={})
+.. _jit-decorator:
+
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -59,6 +61,8 @@ JIT functions
    compile the function in :term:`nopython mode`, otherwise a compilation
    warning will be printed.
 
+.. _jit-decorator-cache:
+
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
    The cache is maintained in the ``__pycache__`` subdirectory of
@@ -66,6 +70,12 @@ JIT functions
    allowed to write to it, though, it falls back to a platform-specific
    user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
    platforms).
+
+.. _jit-decorator-parallel:
+
+   If true, *parallel* enables the automatic parallelization of a number of
+   common Numpy constructs as well as the fusion of adjacent parallel 
+   operations to maximize cache locality.
 
    The *error_model* option controls the divide-by-zero behavior.
    Setting it to 'python' causes divide-by-zero to raise exception like CPython.
@@ -75,6 +85,15 @@ JIT functions
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
    warning is emitted; use :envvar:`NUMBA_WARNINGS` to see it.
+
+.. _jit-decorator-fastmath:
+
+   If true, *fastmath* enables the use of otherwise unsafe floating point
+   transforms as described in the
+   `LLVM documentation <https://llvm.org/docs/LangRef.html#fast-math-flags>`_.
+   Further, if :ref:`Intel SVML <intel-svml>` is installed faster but less
+   accurate versions of some math intrinsics are used (answers to within
+   ``4 ULP``).
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the
@@ -139,12 +158,13 @@ Dispatcher objects
 
       The pure Python function which was compiled.
 
-   .. method:: inspect_types(file=None)
+   .. method:: inspect_types(file=None, pretty=False)
 
       Print out a listing of the function source code annotated line-by-line
       with the corresponding Numba IR, and the inferred types of the various
       variables.  If *file* is specified, printing is done to that file
-      object, otherwise to sys.stdout.
+      object, otherwise to sys.stdout. If *pretty* is set to True then colored
+      ANSI will be produced in a terminal and HTML in a notebook.
 
       .. seealso:: :ref:`architecture`
 
@@ -210,7 +230,8 @@ Vectorized functions (ufuncs and DUFuncs)
    then the decorator will wrap the user Python function in a
    :class:`~numba.DUFunc` instance, which will compile the user
    function at call time whenever Numpy can not find a matching loop
-   for the input arguments.
+   for the input arguments.  *signatures* is required if *target* is
+   ``"parallel"``.
 
    *identity* is the identity (or unit) value of the function being
    implemented.  Possible values are 0, 1, None, and the string
@@ -234,8 +255,9 @@ Vectorized functions (ufuncs and DUFuncs)
       @vectorize(["float32(float32)", "float64(float64)"])
       def f(x): ...
 
-   *target* is a string for backend target; Available values are "cpu", "parallel", and "cuda".
-   To use a multithreaded version, change the target to "parallel"::
+   *target* is a string for backend target; Available values are "cpu",
+   "parallel", and "cuda".  To use a multithreaded version, change the
+   target to "parallel" (which requires signatures to be specified)::
 
       @vectorize(["float64(float64)", "float32(float32)"], target='parallel')
       def f(x): ...

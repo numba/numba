@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import numba.unittest_support as unittest
+from .support import TestCase
 
 import sys
 
@@ -25,7 +26,7 @@ def comp_list(n):
     return s
 
 
-class TestListComprehension(unittest.TestCase):
+class TestListComprehension(TestCase):
 
     @tag('important')
     def test_comp_list(self):
@@ -107,7 +108,6 @@ class TestListComprehension(unittest.TestCase):
                 return [y + l[0] for y in x]
             return inner(l)
 
-        # expected fail, nested mem managed object
         def list11(x):
             """ Test scalar array construction in list comprehension """
             l = [np.array(z) for z in x]
@@ -189,7 +189,7 @@ class TestListComprehension(unittest.TestCase):
 
         # functions to test that are expected to pass
         f = [list1, list2, list3, list4,
-             list6, list7, list8, list9, list10,
+             list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
              list21, list23, list24]
@@ -209,17 +209,11 @@ class TestListComprehension(unittest.TestCase):
                     raise
 
         # test functions that are expected to fail
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(list5)
             cfunc(var)
         # TODO: we can't really assert the error message for the above
         # Also, test_nested_array is a similar case (but without list) that works.
-
-        with self.assertRaises(LoweringError) as raises:
-            cfunc = jit(nopython=True)(list11)
-            cfunc(var)
-        msg = "unsupported nested memory-managed object"
-        self.assertIn(msg, str(raises.exception))
 
         if sys.maxsize > 2 ** 32:
             bits = 64
@@ -230,10 +224,25 @@ class TestListComprehension(unittest.TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(list22)
                 cfunc(var)
-            msg = "cannot unify reflected list(int%d) and int%d" % (bits, bits)
+            msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
             self.assertIn(msg, str(raises.exception))
 
+    def test_objmode_inlining(self):
+        def objmode_func(y):
+            z = object()
+            inlined = [x for x in y]
+            return inlined
+
+        cfunc = jit(forceobj=True)(objmode_func)
+        t = [1, 2, 3]
+        expected = objmode_func(t)
+        got = cfunc(t)
+        self.assertPreciseEqual(expected, got)
+
+
 class TestArrayComprehension(unittest.TestCase):
+
+    _numba_parallel_test_ = False
 
     def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
@@ -316,11 +325,8 @@ class TestArrayComprehension(unittest.TestCase):
         import numba.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
-            # test is expected to fail
-            msg = 'unsupported nested memory-managed object'
-            with self.assertRaises(LoweringError) as raises:
-                self.check(comp_nest_with_array_noinline, 5)
-            self.assertIn(msg, str(raises.exception))
+            self.check(comp_nest_with_array_noinline, 5,
+                       assert_allocate_list=True)
         finally:
             ic.enable_inline_arraycall = True
 
@@ -353,11 +359,8 @@ class TestArrayComprehension(unittest.TestCase):
         def comp_nest_with_array_conditional(n):
             l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
             return l
-        # test is expected to fail
-        with self.assertRaises(LoweringError) as raises:
-            self.check(comp_nest_with_array_conditional, 5)
-        msg = 'unsupported nested memory-managed object'
-        self.assertIn(msg, str(raises.exception))
+        self.check(comp_nest_with_array_conditional, 5,
+                   assert_allocate_list=True)
 
     @tag('important')
     def test_comp_nest_with_dependency(self):
@@ -365,17 +368,24 @@ class TestArrayComprehension(unittest.TestCase):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
             return l
         # test is expected to fail
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Failed', str(raises.exception))
+        self.assertIn('Cannot resolve setitem', str(raises.exception))
 
     @tag('important')
     def test_no_array_comp(self):
-        def no_array_comp(n):
-            l = np.array([1,2,3,n])
-            return l
-        # no arraycall inline without comprehension
-        self.check(no_array_comp, 10, assert_allocate_list=True)
+        def no_array_comp1(n):
+            l = [1,2,3,4]
+            a = np.array(l)
+            return a
+        # const 1D array is actually inlined
+        self.check(no_array_comp1, 10, assert_allocate_list=False)
+        def no_array_comp2(n):
+            l = [1,2,3,4]
+            a = np.array(l)
+            l.append(5)
+            return a
+        self.check(no_array_comp2, 10, assert_allocate_list=True)
 
     @tag('important')
     def test_nested_array(self):
@@ -384,6 +394,14 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         self.check(nested_array, 10)
+
+    @tag('important')
+    def test_nested_array_with_const(self):
+        def nested_array(n):
+            l = np.array([ np.array([x for x in range(3)]) for y in range(4)])
+            return l
+
+        self.check(nested_array, 0)
 
     @tag('important')
     def test_array_comp_with_iter(self):

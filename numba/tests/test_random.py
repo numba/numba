@@ -76,7 +76,6 @@ def numpy_check_randn(seed, a, b):
     got = np.random.randn(a, b)
     return expected, got
 
-
 def jit_with_args(name, argstring):
     code = """def func(%(argstring)s):
         return %(name)s(%(argstring)s)
@@ -300,11 +299,12 @@ class TestRandom(BaseTest):
     # On some distributions, the errors seem to accumulate dramatically.
 
     def _check_dist(self, func, pyfunc, argslist, niters=3,
-                    prec='double', ulps=12):
+                    prec='double', ulps=12, pydtype=None):
         assert len(argslist)
         for args in argslist:
             results = [func(*args) for i in range(niters)]
-            pyresults = [pyfunc(*args) for i in range(niters)]
+            pyresults = [(pyfunc(*args, dtype=pydtype) if pydtype else pyfunc(*args))
+                         for i in range(niters)]
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
 
@@ -375,7 +375,7 @@ class TestRandom(BaseTest):
                                    jit_nullary("np.random.lognormal"),
                                    get_np_state_ptr())
 
-    def _check_randrange(self, func1, func2, func3, ptr, max_width):
+    def _check_randrange(self, func1, func2, func3, ptr, max_width, is_numpy, tp=None):
         """
         Check a randrange()-like function.
         """
@@ -389,16 +389,22 @@ class TestRandom(BaseTest):
         self.assertEqual(len(ints), len(set(ints)), ints)
         # Our implementation follows Python 3's.
         if sys.version_info >= (3,):
-            r = self._follow_cpython(ptr)
-            widths = [w for w in [1, 5, 5000, 2**62 + 2**61] if w < max_width]
+            if is_numpy:
+                rr = self._follow_numpy(ptr).randint
+            else:
+                rr = self._follow_cpython(ptr).randrange
+            widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
+            pydtype = tp if is_numpy and np.__version__ >= '1.11.0' else None
             for width in widths:
-                self._check_dist(func1, r.randrange, [(width,)], niters=10)
-                self._check_dist(func2, r.randrange, [(-2, 2 +width)], niters=10)
+                self._check_dist(func1, rr, [(width,)], niters=10,
+                                 pydtype=pydtype)
+                self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
+                                 pydtype=pydtype)
                 if func3 is not None:
                     self.assertPreciseEqual(func3(-2, 2 + width, 6),
-                                            r.randrange(-2, 2 + width, 6))
+                                            rr(-2, 2 + width, 6))
                     self.assertPreciseEqual(func3(2 + width, 2, -3),
-                                            r.randrange(2 + width, 2, -3))
+                                            rr(2 + width, 2, -3))
         # Empty ranges
         self.assertRaises(ValueError, func1, 0)
         self.assertRaises(ValueError, func1, -5)
@@ -415,15 +421,17 @@ class TestRandom(BaseTest):
             cr2 = compile_isolated(random_randrange2, (tp, tp))
             cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  cr3.entry_point, get_py_state_ptr(), max_width)
+                                  cr3.entry_point, get_py_state_ptr(),
+                                  max_width, False)
 
     @tag('important')
     def test_numpy_randint(self):
-        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
+        for tp, np_tp, max_width in [(types.int64, np.int64, 2**63),
+                                     (types.int32, np.int32, 2**31)]:
             cr1 = compile_isolated(numpy_randint1, (tp,))
             cr2 = compile_isolated(numpy_randint2, (tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  None, get_np_state_ptr(), max_width)
+                                  None, get_np_state_ptr(), max_width, True, np_tp)
 
     def _check_randint(self, func, ptr, max_width):
         """
@@ -827,29 +835,37 @@ class TestRandom(BaseTest):
         for val in (1.0, 0.5, 0.0, -0.1):
             self.assertRaises(ValueError, zipf, val)
 
-    def _check_shuffle(self, func, ptr):
+    def _check_shuffle(self, func, ptr, is_numpy):
         """
-        Check a shuffle()-like function for 1D arrays.
+        Check a shuffle()-like function for arrays.
         """
         # Our implementation follows Python 3's.
-        a = np.arange(20)
+        arrs = [np.arange(20), np.arange(32).reshape((8, 4))]
         if sys.version_info >= (3,):
-            r = self._follow_cpython(ptr)
-            for i in range(3):
-                got = a.copy()
-                expected = a.copy()
-                func(got)
-                r.shuffle(expected)
-                self.assertPreciseEqual(got, expected)
+            if is_numpy:
+                r = self._follow_numpy(ptr)
+            else:
+                r = self._follow_cpython(ptr)
+            for a in arrs:
+                for i in range(3):
+                    got = a.copy()
+                    expected = a.copy()
+                    func(got)
+                    if is_numpy or len(a.shape) == 1:
+                        r.shuffle(expected)
+                        self.assertPreciseEqual(got, expected)
         else:
             # Sanity check
-            for i in range(3):
-                b = a.copy()
-                func(b)
-                self.assertNotEqual(list(a), list(b))
-                self.assertEqual(sorted(a), sorted(b))
-                a = b
+            for a in arrs:
+                for i in range(3):
+                    b = a.copy()
+                    func(b)
+                    self.assertFalse(np.array_equal(a, b))
+                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                   np.sort(b, axis=0)))
+                    a = b
         # Test with an arbitrary buffer-providing object
+        a = arrs[0]
         b = a.copy()
         func(memoryview(b))
         self.assertNotEqual(list(a), list(b))
@@ -860,11 +876,11 @@ class TestRandom(BaseTest):
 
     @tag('important')
     def test_random_shuffle(self):
-        self._check_shuffle(jit_unary("random.shuffle"), get_py_state_ptr())
+        self._check_shuffle(jit_unary("random.shuffle"), get_py_state_ptr(), False)
 
     @tag('important')
     def test_numpy_shuffle(self):
-        self._check_shuffle(jit_unary("np.random.shuffle"), get_np_state_ptr())
+        self._check_shuffle(jit_unary("np.random.shuffle"), get_np_state_ptr(), True)
 
     def _check_startup_randomness(self, func_name, func_args):
         """
@@ -897,6 +913,42 @@ class TestRandom(BaseTest):
 
     def test_numpy_gauss_startup(self):
         self._check_startup_randomness("numpy_normal", (1.0, 1.0))
+
+    def test_numpy_random_permutation(self):
+        # Our implementation follows Python 3's.
+        func = jit_unary("np.random.permutation")
+        if sys.version_info >= (3,):
+            r = self._follow_numpy(get_np_state_ptr())
+            for s in [5, 10, 15, 20]:
+                a = np.arange(s)
+                b = a.copy()
+                # Test array version
+                self.assertPreciseEqual(func(a), r.permutation(a))
+                # Test int version
+                self.assertPreciseEqual(func(s), r.permutation(s))
+                # Permutation should not modify its argument
+                self.assertPreciseEqual(a, b)
+            # Check multi-dimensional arrays
+            arrs = [np.arange(10).reshape(2, 5),
+                    np.arange(27).reshape(3, 3, 3),
+                    np.arange(36).reshape(2, 3, 3, 2)]
+            for a in arrs:
+                b = a.copy()
+                self.assertPreciseEqual(func(a), r.permutation(a))
+                self.assertPreciseEqual(a, b)
+        else:
+            # Sanity check
+            arrs = [np.arange(20), np.arange(20).reshape(5, 2, 2)]
+            for a in arrs:
+                checked = 0
+                while checked < 3:
+                    b = func(a)
+                    # check that permuted arrays are equal when sorted
+                    # account for the possibility of the identity permutation
+                    if not np.array_equal(a, b):
+                        self.assertTrue(np.array_equal(np.sort(a, axis=0),
+                                                       np.sort(b, axis=0)))
+                        checked += 1
 
 
 class TestRandomArrays(BaseTest):

@@ -14,8 +14,9 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils, extending
-from numba.numpy_support import as_dtype, carray, farray
+from numba import types, cgutils, typing, utils, extending, pndindex
+from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
+                                 is_fortran)
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
@@ -24,8 +25,8 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable
-from . import quicksort, slicing
+from numba.extending import register_jitable, overload
+from . import quicksort, mergesort, slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1381,9 +1382,117 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 #-------------------------------------------------------------------------------
 # Shape / layout altering
 
+def vararg_to_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    dimtys = sig.args[1:]
+    # values
+    ary = args[0]
+    dims = args[1:]
+    # coerce all types to intp
+    dims = [context.cast(builder, val, ty, types.intp)
+            for ty, val in zip(dimtys, dims)]
+    # make a tuple
+    shape = cgutils.pack_array(builder, dims, dims[0].type)
+
+    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
+    new_sig = typing.signature(sig.return_type, aryty, shapety)
+    new_args = ary, shape
+
+    return new_sig, new_args
+
+
 @lower_builtin('array.transpose', types.Array)
 def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
+
+
+def permute_arrays(axis, shape, strides):
+    if len(axis) != len(set(axis)):
+        raise ValueError("repeated axis in transpose")
+    dim = len(shape)
+    for x in axis:
+        if x >= dim or abs(x) > dim:
+            raise ValueError("axis is out of bounds for array of given dimension")
+
+    shape[:] = shape[axis]
+    strides[:] = strides[axis]
+
+
+# Transposing an array involves permuting the shape and strides of the array
+# based on the given axes.
+@lower_builtin('array.transpose', types.Array, types.BaseTuple)
+def array_transpose_tuple(context, builder, sig, args):
+    aryty = sig.args[0]
+    ary = make_array(aryty)(context, builder, args[0])
+
+    axisty, axis = sig.args[1], args[1]
+    num_axis, dtype = axisty.count, axisty.dtype
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_ary_size = lc.Type.array(ll_intp, num_axis)
+
+    # Allocate memory for axes, shapes, and strides arrays.
+    arys = [axis, ary.shape, ary.strides]
+    ll_arys = [cgutils.alloca_once(builder, ll_ary_size) for _ in arys]
+
+    # Store axes, shapes, and strides arrays to the allocated memory.
+    for src, dst in zip(arys, ll_arys):
+        builder.store(src, dst)
+
+    np_ary_ty = types.Array(dtype=dtype, ndim=1, layout='C')
+    np_itemsize = context.get_constant(types.intp,
+                                       context.get_abi_sizeof(ll_intp))
+
+    # Form NumPy arrays for axes, shapes, and strides arrays.
+    np_arys = [make_array(np_ary_ty)(context, builder) for _ in arys]
+
+    # Roughly, `np_ary = np.array(ll_ary)` for each of axes, shapes, and strides.
+    for np_ary, ll_ary in zip(np_arys, ll_arys):
+        populate_array(np_ary,
+                       data=builder.bitcast(ll_ary, ll_intp.as_pointer()),
+                       shape=[context.get_constant(types.intp, num_axis)],
+                       strides=[np_itemsize],
+                       itemsize=np_itemsize,
+                       meminfo=None)
+
+    # Pass NumPy arrays formed above to permute_arrays function that permutes
+    # shapes and strides based on axis contents.
+    context.compile_internal(builder, permute_arrays,
+                             typing.signature(types.void,
+                                              np_ary_ty, np_ary_ty, np_ary_ty),
+                             [a._getvalue() for a in np_arys])
+
+    # Make a new array based on permuted shape and strides and return it.
+    ret = make_array(sig.return_type)(context, builder)
+    populate_array(ret,
+                   data=ary.data,
+                   shape=builder.load(ll_arys[1]),
+                   strides=builder.load(ll_arys[2]),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    res = ret._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin('array.transpose', types.Array, types.VarArg(types.Any))
+def array_transpose_vararg(context, builder, sig, args):
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+    return array_transpose_tuple(context, builder, new_sig, new_args)
+
+
+@overload(np.transpose)
+def numpy_transpose(a, axes=None):
+
+    if axes is None:
+        def np_transpose_impl(arr):
+            return arr.transpose()
+    else:
+        def np_transpose_impl(arr, axes=None):
+            return arr.transpose(axes)
+
+    return np_transpose_impl
+
 
 @lower_getattr(types.Array, 'T')
 def array_T(context, builder, typ, value):
@@ -1537,22 +1646,15 @@ def array_reshape(context, builder, sig, args):
 
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
-    # types
-    aryty = sig.args[0]
-    dimtys = sig.args[1:]
-    # values
-    ary = args[0]
-    dims = args[1:]
-    # coerce all types to intp
-    dims = [context.cast(builder, val, ty, types.intp)
-            for ty, val in zip(dimtys, dims)]
-    # make a tuple
-    shape = cgutils.pack_array(builder, dims, dims[0].type)
-
-    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
-    new_sig = typing.signature(sig.return_type, aryty, shapety)
-    new_args = ary, shape
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
     return array_reshape(context, builder, new_sig, new_args)
+
+
+@overload(np.reshape)
+def np_reshape(a, shape):
+    def np_reshape_impl(a, shape):
+        return a.reshape(shape)
+    return np_reshape_impl
 
 
 @lower_builtin('array.ravel', types.Array)
@@ -1723,6 +1825,16 @@ def _change_dtype(context, builder, oldty, newty, ary):
     return res
 
 
+@overload(np.unique)
+def np_unique(a):
+    def np_unique_impl(a):
+        b = np.sort(a.ravel())
+        head = list(b[:1])
+        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+        return np.array(head + tail)
+    return np_unique_impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -1842,10 +1954,12 @@ def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     # Create new ArrayCType structure
-    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
+    act = types.ArrayCTypes(typ)
+    ctinfo = context.make_helper(builder, act)
     ctinfo.data = array.data
+    ctinfo.meminfo = array.meminfo
     res = ctinfo._getvalue()
-    return impl_ret_untracked(context, builder, typ, res)
+    return impl_ret_borrowed(context, builder, act, res)
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
@@ -1864,25 +1978,63 @@ def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     return impl_ret_untracked(context, builder, toty, res)
 
 
+def _call_contiguous_check(checker, context, builder, aryty, ary):
+    """Helper to invoke the contiguous checker function on an array
+
+    Args
+    ----
+    checker :
+        ``numba.numpy_supports.is_contiguous``, or
+        ``numba.numpy_supports.is_fortran``.
+    context : target context
+    builder : llvm ir builder
+    aryty : numba type
+    ary : llvm value
+    """
+    ary = make_array(aryty)(context, builder, value=ary)
+    tup_intp = types.UniTuple(types.intp, aryty.ndim)
+    itemsize = context.get_abi_sizeof(context.get_value_type(aryty.dtype))
+    check_sig = signature(types.bool_, tup_intp, tup_intp, types.intp)
+    check_args = [ary.shape, ary.strides,
+                  context.get_constant(types.intp, itemsize)]
+    is_contig = context.compile_internal(builder, checker, check_sig,
+                                         check_args)
+    return is_contig
+
+
 # array.flags
 
 @lower_getattr(types.Array, "flags")
 def array_flags(context, builder, typ, value):
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, typ, res)
+    flagsobj = context.make_helper(builder, types.ArrayFlags(typ))
+    flagsobj.parent = value
+    res = flagsobj._getvalue()
+    return impl_ret_new_ref(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    val = typ.array_type.layout == 'C'
-    res = context.get_constant(types.boolean, val)
+def array_flags_c_contiguous(context, builder, typ, value):
+    if typ.array_type.layout != 'C':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_contiguous, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        val = typ.array_type.layout == 'C'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "f_contiguous")
-def array_ctypes_data(context, builder, typ, value):
-    layout = typ.array_type.layout
-    val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
-    res = context.get_constant(types.boolean, val)
+def array_flags_f_contiguous(context, builder, typ, value):
+    if typ.array_type.layout != 'F':
+        # any layout can stil be contiguous
+        flagsobj = context.make_helper(builder, typ, value=value)
+        res = _call_contiguous_check(is_fortran, context, builder,
+                                     typ.array_type, flagsobj.parent)
+    else:
+        layout = typ.array_type.layout
+        val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
+        res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 
@@ -1975,6 +2127,10 @@ def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
     return context.get_dummy_value()
 
+@lower_getattr(types.DType, 'kind')
+def dtype_type(context, builder, dtypety, dtypeval):
+    # Just return a dummy opaque value
+    return context.get_dummy_value()
 
 #-------------------------------------------------------------------------------
 # Structured / record lookup
@@ -2904,6 +3060,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, arrty, arr, result)
 
 
+@lower_builtin(pndindex, types.VarArg(types.Integer))
 @lower_builtin(np.ndindex, types.VarArg(types.Integer))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
@@ -2917,6 +3074,7 @@ def make_array_ndindex(context, builder, sig, args):
     res = nditer._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+@lower_builtin(pndindex, types.BaseTuple)
 @lower_builtin(np.ndindex, types.BaseTuple)
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""
@@ -3127,12 +3285,20 @@ def numpy_zeros_like_nd(context, builder, sig, args):
 if numpy_version >= (1, 8):
     @lower_builtin(np.full, types.Any, types.Any)
     def numpy_full_nd(context, builder, sig, args):
-
-        def full(shape, value):
-            arr = np.empty(shape)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+        if numpy_version < (1, 12):
+            # np < 1.12 returns float64 full regardless of value type
+            def full(shape, value):
+                arr = np.empty(shape)
+                val = np.float64(value.real)
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = val
+                return arr
+        else:
+            def full(shape, value):
+                arr = np.empty(shape, type(value))
+                for idx in np.ndindex(arr.shape):
+                    arr[idx] = value
+                return arr
 
         res = context.compile_internal(builder, full, sig, args)
         return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -3347,7 +3513,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
 
     res = context.compile_internal(builder, diag_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
- 
+
 @lower_builtin(np.take, types.Array, types.Integer)
 @lower_builtin('array.take', types.Array, types.Integer)
 def numpy_take_1(context, builder, sig, args):
@@ -3387,6 +3553,8 @@ def numpy_take_2(context, builder, sig, args):
 
 @lower_builtin('array.take', types.Array, types.List)
 @lower_builtin(np.take, types.Array, types.List)
+@lower_builtin('array.take', types.Array, types.BaseTuple)
+@lower_builtin(np.take, types.Array, types.BaseTuple)
 def numpy_take_3(context, builder, sig, args):
 
     def take_impl(a, indices):
@@ -3401,10 +3569,9 @@ def numpy_take_3(context, builder, sig, args):
             ret[i] = flat[x]
             i = i + 1
         return ret.reshape(convert.shape)
-    
+
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
-
 
 @lower_builtin(np.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
@@ -3541,11 +3708,15 @@ def array_copy(context, builder, sig, args):
 def numpy_copy(context, builder, sig, args):
     return _array_copy(context, builder, sig, args)
 
-@lower_builtin(np.asfortranarray, types.Array)
-def array_asfortranarray(context, builder, sig, args):
+
+def _as_layout_array(context, builder, sig, args, output_layout):
+    """
+    Common logic for layout conversion function;
+    e.g. ascontiguousarray and asfortranarray
+    """
     retty = sig.return_type
     aryty = sig.args[0]
-    assert retty.layout == 'F'
+    assert retty.layout == output_layout, 'return-type has incorrect layout'
 
     if aryty.ndim == 0:
         # 0-dim input => asfortranarray() returns a 1-dim array
@@ -3567,8 +3738,44 @@ def array_asfortranarray(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, retty, args[0])
 
     else:
-        # Return a copy with the right layout
-        return _array_copy(context, builder, sig, args)
+        if aryty.layout == 'A':
+            # There's still chance the array is in contiguous layout,
+            # just that we don't know at compile time.
+            # We can do a runtime check.
+
+            # Prepare and call is_contiguous or is_fortran
+            assert output_layout in 'CF'
+            check_func = is_contiguous if output_layout == 'C' else is_fortran
+            is_contig = _call_contiguous_check(check_func, context, builder, aryty, args[0])
+            with builder.if_else(is_contig) as (then, orelse):
+                # If the array is already contiguous, just return it
+                with then:
+                    out_then = impl_ret_borrowed(context, builder, retty,
+                                                 args[0])
+                    then_blk = builder.block
+                # Otherwise, copy to a new contiguous region
+                with orelse:
+                    out_orelse = _array_copy(context, builder, sig, args)
+                    orelse_blk = builder.block
+            # Phi node for the return value
+            ret_phi = builder.phi(out_then.type)
+            ret_phi.add_incoming(out_then, then_blk)
+            ret_phi.add_incoming(out_orelse, orelse_blk)
+            return ret_phi
+
+        else:
+            # Return a copy with the right layout
+            return _array_copy(context, builder, sig, args)
+
+
+@lower_builtin(np.asfortranarray, types.Array)
+def array_asfortranarray(context, builder, sig, args):
+    return _as_layout_array(context, builder, sig, args, output_layout='F')
+
+
+@lower_builtin(np.ascontiguousarray, types.Array)
+def array_ascontiguousarray(context, builder, sig, args):
+    return _as_layout_array(context, builder, sig, args, output_layout='C')
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
@@ -3745,8 +3952,9 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
     innerty, inner = seqty, seq
 
     for i in range(ndim):
+        if i > 0:
+            innerty, inner = get_first_item(innerty, inner)
         shapes.append(_get_seq_size(context, builder, innerty, inner))
-        innerty, inner = get_first_item(innerty, inner)
 
     return tuple(shapes)
 
@@ -4370,6 +4578,23 @@ def np_dstack(context, builder, sig, args):
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
 
+@extending.overload_method(types.Array, 'fill')
+def arr_fill(arr, val):
+
+    def fill_impl(arr, val):
+        arr[:] = val
+        return None
+
+    return fill_impl
+
+
+@extending.overload_method(types.Array, 'dot')
+def array_dot(arr, other):
+    def dot_impl(arr, other):
+        return np.dot(arr, other)
+
+    return dot_impl
+
 # -----------------------------------------------------------------------------
 # Sorting
 
@@ -4378,24 +4603,33 @@ _sorts = {}
 def lt_floats(a, b):
     return math.isnan(b) or a < b
 
-def get_sort_func(is_float, is_argsort=False):
+def get_sort_func(kind, is_float, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = is_float, is_argsort
+    key = kind, is_float, is_argsort
     try:
         return _sorts[key]
     except KeyError:
-        sort = quicksort.make_jit_quicksort(lt=lt_floats if is_float else None,
-                                            is_argsort=is_argsort)
-        func = _sorts[key] = sort.run_quicksort
+        if kind == 'quicksort':
+            sort = quicksort.make_jit_quicksort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_quicksort
+        elif kind == 'mergesort':
+            sort = mergesort.make_jit_mergesort(
+                lt=lt_floats if is_float else None,
+                is_argsort=is_argsort)
+            func = sort.run_mergesort
+        _sorts[key] = func
         return func
 
 
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float))
+    sort_func = get_sort_func(kind='quicksort',
+                              is_float=isinstance(arytype.dtype, types.Float))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -4413,17 +4647,21 @@ def np_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
-@lower_builtin("array.argsort", types.Array)
-@lower_builtin(np.argsort, types.Array)
+@lower_builtin("array.argsort", types.Array, types.Const)
+@lower_builtin(np.argsort, types.Array, types.Const)
 def array_argsort(context, builder, sig, args):
-    arytype = sig.args[0]
-    sort_func = get_sort_func(is_float=isinstance(arytype.dtype, types.Float),
+    arytype, kind = sig.args
+    sort_func = get_sort_func(kind=kind.value,
+                              is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
     def array_argsort_impl(arr):
         return sort_func(arr)
 
-    return context.compile_internal(builder, array_argsort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_argsort_impl,
+                                    innersig, innerargs)
 
 
 # -----------------------------------------------------------------------------
@@ -4432,7 +4670,7 @@ def array_argsort(context, builder, sig, args):
 @lower_cast(types.Array, types.Array)
 def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
-    assert toty.layout == 'A'
+    assert fromty.mutable != toty.mutable or toty.layout == 'A'
     return val
 
 

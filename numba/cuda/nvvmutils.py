@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import llvmlite.llvmpy.core as lc
 from .cudadrv import nvvm
+from .api import current_context
 from numba import cgutils
 
 
@@ -20,7 +21,10 @@ def declare_atomic_add_float32(lmod):
 
 
 def declare_atomic_add_float64(lmod):
-    fname = '___numba_atomic_double_add'
+    if current_context().device.compute_capability >= (6, 0):
+        fname = 'llvm.nvvm.atomic.load.add.f64.p0f64'
+    else:
+        fname = '___numba_atomic_double_add'
     fnty = lc.Type.function(lc.Type.double(),
         (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
     return lmod.get_or_insert_function(fnty, fname)
@@ -113,6 +117,9 @@ SREG_MAPPING = {
     'nctaid.x': 'llvm.nvvm.read.ptx.sreg.nctaid.x',
     'nctaid.y': 'llvm.nvvm.read.ptx.sreg.nctaid.y',
     'nctaid.z': 'llvm.nvvm.read.ptx.sreg.nctaid.z',
+
+    'warpsize': 'llvm.nvvm.read.ptx.sreg.warpsize',
+    'laneid': 'llvm.nvvm.read.ptx.sreg.laneid',
 }
 
 

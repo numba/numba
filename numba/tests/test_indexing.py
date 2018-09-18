@@ -74,11 +74,11 @@ def slicing_1d_usecase8(a, start):
 
 
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
-    # The index is a homogenous tuple of slices
+    # The index is a homogeneous tuple of slices
     return a[start1:stop1:step1, start2:stop2:step2]
 
 def slicing_2d_usecase3(a, start1, stop1, step1, index):
-    # The index is a heterogenous tuple
+    # The index is a heterogeneous tuple
     return a[start1:stop1:step1, index]
 
 def slicing_3d_usecase(a, index0, start1, index2):
@@ -679,7 +679,7 @@ class TestGetItem(TestCase):
             cfunc = compile_func(a)
             for i, j in itertools.product(bounds, bounds):
                 x = cfunc(a, i, j)
-                self.assertPreciseEqual(pyfunc(a, i, j), cfunc(a, i, j))
+                np.testing.assert_equal(pyfunc(a, i, j), cfunc(a, i, j))
 
         run(np.arange(16, dtype='i4').reshape(4, 4))
         run(np.arange(27, dtype='i4').reshape(3, 3, 3))
@@ -789,7 +789,7 @@ class TestSetItem(TestCase):
         1d to 1d slice assignment
         """
         pyfunc = slicing_1d_usecase_set
-        # Note heterogenous types for the source and destination arrays
+        # Note heterogeneous types for the source and destination arrays
         # (int16[:] -> int32[:])
         dest_type = types.Array(types.int32, 1, 'C')
         src_type = types.Array(types.int16, 1, 'A')
@@ -813,7 +813,7 @@ class TestSetItem(TestCase):
 
         # Mismatching input size and slice length
         with self.assertRaises(ValueError):
-            cfunc(np.zeros_like(arg), arg, 0, 0, 1)
+            cfunc(np.zeros_like(arg, dtype=np.int32), arg, 0, 0, 1)
 
     def check_1d_slicing_set_sequence(self, flags, seqty, seq):
         """
@@ -859,7 +859,7 @@ class TestSetItem(TestCase):
         """
         pyfunc = slicing_1d_usecase_set
         arraytype = types.Array(types.int32, 1, 'C')
-        # Note heterogenous types for the source scalar and the destination
+        # Note heterogeneous types for the source scalar and the destination
         # array (int16 -> int32[:])
         argtys = (arraytype, types.int16, types.int32, types.int32, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)
@@ -936,7 +936,7 @@ class TestSetItem(TestCase):
         """
         pyfunc = slicing_2d_usecase_set
         arraytype = types.Array(types.int32, 2, 'C')
-        # Note heterogenous types for the source scalar and the destination
+        # Note heterogeneous types for the source scalar and the destination
         # array (int16 -> int32[:])
         argtys = (arraytype, types.int16, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)

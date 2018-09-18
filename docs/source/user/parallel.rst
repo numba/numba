@@ -8,7 +8,7 @@ Automatic parallelization with ``@jit``
 =======================================
 
 Setting the :ref:`parallel_jit_option` option for :func:`~numba.jit` enables
-an experimental Numba feature that attempts to automatically parallelize and
+a Numba transformation pass that attempts to automatically parallelize and
 perform other optimizations on (part of) a function. At the moment, this
 feature only works on CPUs.
 
@@ -24,6 +24,7 @@ which is in contrast to Numba's :func:`~numba.vectorize` or
 :func:`~numba.guvectorize` mechanism, where manual effort is required
 to create parallel kernels.
 
+.. _numba-parallel-supported:
 
 Supported Operations
 ====================
@@ -31,7 +32,7 @@ Supported Operations
 In this section, we give a list of all the array operations that have
 parallel semantics and for which we attempt to parallelize.
 
-1. All numba array operations that are supported by :ref:`case-study-array-expressions`,
+#. All numba array operations that are supported by :ref:`case-study-array-expressions`,
    which include common arithmetic functions between Numpy arrays, and between
    arrays and scalars, as well as Numpy ufuncs. They are often called
    `element-wise` or `point-wise` array operations:
@@ -42,31 +43,50 @@ parallel semantics and for which we attempt to parallelize.
     * :ref:`Numpy ufuncs <supported_ufuncs>` that are supported in :term:`nopython mode`.
     * User defined :class:`~numba.DUFunc` through :func:`~numba.vectorize`.
 
-2. Numpy reduction functions ``sum`` and ``prod``.
+#. Numpy reduction functions ``sum``, ``prod``, ``min``, ``max``, ``argmin``,
+   and ``argmax``. Also, array math functions ``mean``, ``var``, and ``std``.
 
-3. Numpy array creation functions ``zeros``, ``ones``, and several
-   random functions (rand, randn, ranf, random_sample, sample, random,
-   standard_normal, chisquare, weibull, power, geometric, exponential,
+#. Numpy array creation functions ``zeros``, ``ones``, ``arange``, ``linspace``,
+   and several random functions (rand, randn, ranf, random_sample, sample,
+   random, standard_normal, chisquare, weibull, power, geometric, exponential,
    poisson, rayleigh, normal, uniform, beta, binomial, f, gamma, lognormal,
    laplace, randint, triangular).
 
-4. Numpy ``dot`` function between a matrix and a vector, or two vectors.
+#. Numpy ``dot`` function between a matrix and a vector, or two vectors.
    In all other cases, Numba's default implementation is used.
 
-5. Multi-dimensional arrays are also supported for the above operations
+#. Multi-dimensional arrays are also supported for the above operations
    when operands have matching dimension and size. The full semantics of
    Numpy broadcast between arrays with mixed dimensionality or size is
    not supported, nor is the reduction across a selected dimension.
 
+#. Array assignment in which the target is an array selection using a slice
+   or a boolean array, and the value being assigned is either a scalar or
+   another selection where the slice range or bitarray are inferred to be
+   compatible.
+
+#. The ``reduce`` operator of ``functools`` is supported for specifying parallel
+   reductions on 1D Numpy arrays but the initial value argument is mandatory.
+
+.. _numba-prange:
+
 Explicit Parallel Loops
 ========================
 
-Another experimental feature of this module is support for explicit parallel
-loops. One can use Numba's ``prange`` instead of ``range`` to specify that a
-loop can be parallelized. The user is required to make sure that the loop does
-not have cross iteration dependencies except the supported reductions.
-Currently, reductions on scalar values are supported and are inferred from
-in-place operations. The example below demonstrates a parallel loop with a
+Another feature of this code transformation pass is support for explicit
+parallel loops. One can use Numba's ``prange`` instead of ``range`` to specify
+that a loop can be parallelized. The user is required to make sure that the
+loop does not have cross iteration dependencies except for supported
+reductions.
+
+A reduction is inferred automatically if a variable is updated by a binary
+function/operator using its previous value in the loop body. The initial value
+of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
+For other functions/operators, the reduction variable should hold the identity
+value right before entering the ``prange`` loop.  Reductions in this manner
+are supported for scalars and for arrays of arbitrary dimensions.
+
+The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
 
     from numba import njit, prange
@@ -76,6 +96,20 @@ reduction (``A`` is a one-dimensional Numpy array)::
         for i in prange(A.shape[0]):
             s += A[i]
         return s
+
+The following example demonstrates a product reduction on a two-dimensional array::
+
+    from numba import njit, prange
+    @njit(parallel=True)
+    def two_d_array_reduction_prod(n):
+        shp = (13, 17)
+        result1 = 2 * np.ones(shp, np.int_)
+        tmp = 2 * np.ones_like(result1)
+
+        for i in numba.prange(n):
+            result1 *= tmp
+
+        return result1
 
 Examples
 ========
@@ -120,4 +154,4 @@ it would require a pervasive change that rewrites the code to extract kernel
 computation that can be parallelized, which was both tedious and challenging.
 
 
-.. seealso:: :ref:`parallel_jit_option`
+.. seealso:: :ref:`parallel_jit_option`, :ref:`Parallel FAQs <parallel_FAQs>`

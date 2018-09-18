@@ -4,6 +4,9 @@ import math
 import sys
 import pickle
 import multiprocessing
+import ctypes
+from distutils.version import LooseVersion
+import re
 
 import numpy as np
 
@@ -22,12 +25,22 @@ from numba.extending import (typeof_impl, type_callable,
                              make_attribute_wrapper,
                              intrinsic, _Intrinsic,
                              register_jitable,
+                             get_cython_function_address
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer)
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
+try:
+    import scipy
+    if LooseVersion(scipy.__version__) < '0.19':
+        sc = None
+    else:
+        import scipy.special.cython_special as sc
+except ImportError:
+    sc = None
 
 
 # -----------------------------------------------------------------------
@@ -466,7 +479,7 @@ class TestHighLevelExtending(TestCase):
         np.testing.assert_equal(expect, got)
         # Verify that the Module type cannot be returned to CPython
         bad_cfunc = jit(nopython=True)(non_boxable_bad_usecase)
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(TypeError) as raises:
             bad_cfunc()
         errmsg = str(raises.exception)
         expectmsg = "cannot convert native Module"
@@ -589,7 +602,6 @@ class TestIntrinsic(TestCase):
 
         # Test
         arr = np.arange(10, dtype=np.float32)
-        foo(arr)
         with captured_stdout() as buf:
             foo(arr)
             got = buf.getvalue().splitlines()
@@ -664,7 +676,13 @@ class TestIntrinsic(TestCase):
         memo_size += 1
         self.assertEqual(memo_size, len(memo))
         del original  # remove original before unpickling
-        # by deleting, the memo entry is removed
+
+        # by deleting, the memo entry is NOT removed due to recent
+        # function queue
+        self.assertEqual(memo_size, len(memo))
+
+        # Manually force clear of _recent queue
+        _Intrinsic._recent.clear()
         memo_size -= 1
         self.assertEqual(memo_size, len(memo))
 
@@ -707,6 +725,31 @@ class TestRegisterJitable(unittest.TestCase):
             cbar(2)
         msg = "Only accept returning of array passed into the function as argument"
         self.assertIn(msg, str(raises.exception))
+
+
+class TestImportCythonFunction(unittest.TestCase):
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_getting_function(self):
+        addr = get_cython_function_address("scipy.special.cython_special", "j0")
+        functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+        _j0 = functype(addr)
+        j0 = jit(nopython=True)(lambda x: _j0(x))
+        self.assertEqual(j0(0), 1)
+
+    def test_missing_module(self):
+        with self.assertRaises(ImportError) as raises:
+            addr = get_cython_function_address("fakemodule", "fakefunction")
+        # The quotes are not there in Python 2
+        msg = "No module named '?fakemodule'?"
+        match = re.match(msg, str(raises.exception))
+        self.assertIsNotNone(match)
+
+    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    def test_missing_function(self):
+        with self.assertRaises(ValueError) as raises:
+            addr = get_cython_function_address("scipy.special.cython_special", "foo")
+        msg = "No function 'foo' found in __pyx_capi__ of 'scipy.special.cython_special'"
+        self.assertEqual(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

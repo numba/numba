@@ -8,7 +8,7 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit
+from numba import njit, targets, typing
 from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
 from numba.runtime import nrtopt
@@ -28,14 +28,42 @@ class Dummy(object):
         type(self).alive -= 1
 
 
+class TestNrtMemInfoNotInitialized(unittest.TestCase):
+    """
+    Unit test for checking the use of the NRT fails if the
+    initialization sequence has not been run.
+    """
+    _numba_parallel_test_ = False
+
+    def test_init_fail(self):
+        methods = {'library': (),
+                   'meminfo_new': ((), ()),
+                   'meminfo_alloc': ((),),
+                   }
+
+        for meth, args in methods.items():
+            try:
+                with self.assertRaises(RuntimeError) as raises:
+                    rtsys._init = False
+                    fn = getattr(rtsys, meth)
+                    fn(*args)
+
+                msg = "Runtime must be initialized before use."
+                self.assertIn(msg, str(raises.exception))
+            finally:
+                rtsys._init = True
+
+
 class TestNrtMemInfo(unittest.TestCase):
     """
-    Unitest for core MemInfo functionality
+    Unit test for core MemInfo functionality
     """
 
     def setUp(self):
         # Reset the Dummy class
         Dummy.alive = 0
+        # initialize the NRT (in case the tests are run in isolation)
+        targets.cpu.CPUContext(typing.Context())
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -222,7 +250,10 @@ class TestTracemalloc(unittest.TestCase):
         stat = diff[0]
         # There is a slight overhead, so the allocated size won't exactly be N
         self.assertGreaterEqual(stat.size, N)
-        self.assertLess(stat.size, N * 1.01)
+        self.assertLess(stat.size, N * 1.015,
+                        msg=("Unexpected allocation overhead encountered. "
+                             "May be due to difference in CPython "
+                             "builds or running under coverage"))
         frame = stat.traceback[0]
         self.assertEqual(os.path.basename(frame.filename), "test_nrt.py")
         self.assertEqual(frame.lineno, alloc_lineno)

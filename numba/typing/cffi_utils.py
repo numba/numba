@@ -64,6 +64,7 @@ def _type_map():
     global _cached_type_map
     if _cached_type_map is None:
         _cached_type_map = {
+            ffi.typeof('bool') :                types.boolean,
             ffi.typeof('char') :                types.char,
             ffi.typeof('short') :               types.short,
             ffi.typeof('int') :                 types.intc,
@@ -110,6 +111,8 @@ def map_type(cffi_type):
             return types.voidptr
         else:
             return types.CPointer(map_type(pointee))
+    elif kind == 'array':
+        return map_type(cffi_type.item)
     else:
         result = _type_map().get(cffi_type)
         if result is None:
@@ -143,6 +146,9 @@ class FFI_from_buffer(templates.AbstractTemplate):
                               % (ary,))
         if ary.layout not in ('C', 'F'):
             raise TypingError("from_buffer() unsupported on non-contiguous buffers (got %s)"
+                              % (ary,))
+        if ary.layout != 'C' and ary.ndim > 1:
+            raise TypingError("from_buffer() only supports multidimensional arrays with C layout (got %s)"
                               % (ary,))
         ptr = types.CPointer(ary.dtype)
         return templates.signature(ptr, ary)

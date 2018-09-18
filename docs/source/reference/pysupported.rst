@@ -35,16 +35,11 @@ The ``raise`` statement is supported in several forms:
 Similarly, the ``assert`` statement is supported with or without an error
 message.
 
-Inner function and closure
---------------------------
-
-Numba now supports inner functions as long as they are non-recursive
-and only called locally, but not passed as argument or returned as
-result. The use of closure variables (variables defined in outer scopes)
-within an inner function is also supported.
+Functions
+---------
 
 Function calls
---------------
+''''''''''''''
 
 Numba supports function calls using positional and named arguments, as well
 as arguments with default values and ``*args`` (note the argument for
@@ -53,6 +48,46 @@ not supported.
 
 Function calls to locally defined inner functions are supported as long as
 they can be fully inlined.
+
+Functions as arguments
+''''''''''''''''''''''
+
+Functions can be passed as argument into another function.  But, they cannot
+be returned. For example:
+
+.. code-block:: python
+
+  from numba import jit
+
+  @jit
+  def add1(x):
+      return x + 1
+
+  @jit
+  def bar(fn, x):
+      return fn(x)
+
+  @jit
+  def foo(x):
+      return bar(add1, x)
+
+  # Passing add1 within numba compiled code.
+  print(foo(1))
+  # Passing add1 into bar from interpreted code
+  print(bar(add1, 1))
+
+.. note:: Numba does not handle function objects as real objects.  Once a
+          function is assigned to a variable, the variable cannot be
+          re-assigned to a different function.
+
+
+Inner function and closure
+'''''''''''''''''''''''''''
+
+Numba now supports inner functions as long as they are non-recursive
+and only called locally, but not passed as argument or returned as
+result. The use of closure variables (variables defined in outer scopes)
+within an inner function is also supported.
 
 Recursive calls
 '''''''''''''''
@@ -111,32 +146,82 @@ The following operations are supported:
 * tuple construction
 * tuple unpacking
 * comparison between tuples
-* iteration and indexing over homogenous tuples
+* iteration and indexing over homogeneous tuples
 * addition (concatenation) between tuples
 * slicing tuples with a constant slice
+* the index method on tuples
 
 list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.  Lists must be strictly homogenous:
+as well as all methods and operations.  Lists must be strictly homogeneous:
 Numba will reject any list containing objects of different types, even if
 the types are compatible (for example, ``[1, 2.5]`` is rejected as it
 contains a :class:`int` and a :class:`float`).
 
+For example, to create a list of arrays::
+
+  In [1]: from numba import njit
+
+  In [2]: import numpy as np
+
+  In [3]: @njit
+    ...: def foo(x):
+    ...:     lst = []
+    ...:     for i in range(x):
+    ...:         lst.append(np.arange(i))
+    ...:     return lst
+    ...:
+
+  In [4]: foo(4)
+  Out[4]: [array([], dtype=int64), array([0]), array([0, 1]), array([0, 1, 2])]
+
+
+List Reflection
+'''''''''''''''
+
+In nopython mode, Numba does not operate on Python objects.  ``list`` are
+compiled into an internal representation.  Any ``list`` arguments must be
+converted into this representation on the way in to nopython mode and their
+contained elements must be restored in the original Python objects via a
+process called :term:`reflection`.  Reflection is required to maintain the same
+semantics as found in regular Python code.  However, the reflection process
+can be expensive for large lists and it is not supported for lists that contain
+reflected data types.  Users cannot use list-of-list as an argument because
+of this limitation.
+
 .. note::
    When passing a list into a JIT-compiled function, any modifications
    made to the list will not be visible to the Python interpreter until
-   the function returns.
+   the function returns.  (A limitation of the reflection process.)
 
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+.. _pysupported-comprehension:
+
 List comprehension
 ''''''''''''''''''
 
-Numba supports list comprehension, but not the creation of nested list.
+Numba supports list comprehension.  For example::
+
+
+  In [1]: from numba import njit
+
+  In [2]: @njit
+    ...: def foo(x):
+    ...:     return [[i for i in range(n)] for n in range(x)]
+    ...:
+
+  In [3]: foo(3)
+  Out[3]: [[], [0], [0, 1]]
+
+
+.. note::
+  Prior to version 0.39.0, Numba did not support the creation of nested lists.
+
 
 Numba also supports "array comprehension" that is a list comprehension
 followed immediately by a call to :func:`numpy.array`. The following
@@ -144,7 +229,7 @@ is an example that produces a 2D Numpy array::
 
     from numba import jit
     import numpy as np
-    
+
     @jit(nopython=True)
     def f(n):
       return np.array([ [ x * y for x in range(n) ] for y in range(n) ])
@@ -163,7 +248,7 @@ set
 
 All methods and operations on sets are supported in JIT-compiled functions.
 
-Sets must be strictly homogenous: Numba will reject any set containing
+Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
 
@@ -272,6 +357,8 @@ and named parameters in the constructor are also supported.
 
 Creating a named tuple class inside Numba code is *not* supported; the class
 must be created at the global level.
+
+.. _ctypes-support:
 
 ``ctypes``
 ----------
@@ -383,6 +470,12 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.truediv`
 * :func:`operator.xor`
 
+``functools``
+-------------
+
+The :func:`functools.reduce` function is supported but the `initializer`
+argument is required.
+
 .. _pysupported-random:
 
 ``random``
@@ -418,13 +511,8 @@ startup with entropy drawn from the operating system.
    code) will seed the Python random generator, not the Numba random generator.
 
 .. note::
-   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
-
-   Also, under Unix, if creating a child process using :func:`os.fork` or the
-   :mod:`multiprocessing` module, the child's random generator will inherit
-   the parent's state and will therefore produce the same sequence of
-   numbers (except when using the "forkserver" start method under Python 3.4
-   and later).
+   Since version 0.28.0, the generator is thread-safe and fork-safe.  Each
+   thread and each process will produce independent streams of random numbers.
 
 .. seealso::
    Numba also supports most additional distributions from the :ref:`Numpy
@@ -436,6 +524,8 @@ Third-party modules
 
 .. I put this here as there's only one module (apart from Numpy), otherwise
    it should be a separate page.
+
+.. _cffi-support:
 
 ``cffi``
 --------

@@ -335,4 +335,14 @@ API_PROTOTYPES = {
 
 'cuIpcCloseMemHandle': (c_int,
                         cu_device_ptr),
+
+# CUresult cuCtxEnablePeerAccess ( CUcontext peerContext, unsigned int  Flags )
+'cuCtxEnablePeerAccess': (c_int,
+                          cu_context, c_int),
+
+# CUresult cuDeviceCanAccessPeer ( int* canAccessPeer,
+#                                  CUdevice dev, CUdevice peerDev )
+'cuDeviceCanAccessPeer': (c_int,
+                          POINTER(c_int), cu_device, cu_device),
+
 }

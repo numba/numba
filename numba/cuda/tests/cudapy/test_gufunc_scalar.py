@@ -7,19 +7,20 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import guvectorize, cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.tests.support import TestCase
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGUFuncScalr(unittest.TestCase):
+class TestGUFuncScalar(SerialMixin, TestCase):
     def test_gufunc_scalar_output(self):
-    #    function type:
-    #        - has no void return type
-    #        - array argument is one dimenion fewer than the source array
-    #        - scalar output is passed as a 1-element array.
-    #
-    #    signature: (n)->()
-    #        - the function takes an array of n-element and output a scalar.
+        #    function type:
+        #        - has no void return type
+        #        - array argument is one dimenion fewer than the source array
+        #        - scalar output is passed as a 1-element array.
+        #
+        #    signature: (n)->()
+        #        - the function takes an array of n-element and output a scalar.
 
         @guvectorize(['void(int32[:], int32[:])'], '(n)->()', target='cuda')
         def sum_row(inp, out):
@@ -53,6 +54,16 @@ class TestGUFuncScalr(unittest.TestCase):
         for i in range(inp.shape[0]):
             self.assertTrue(out1[i] == inp[i].sum())
             self.assertTrue(out2[i] == inp[i].sum())
+
+    def test_gufunc_scalar_output_bug(self):
+        # Issue 2812: Error due to using input argument types as output argument
+        @guvectorize(['void(int32, int32[:])'], '()->()', target='cuda')
+        def twice(inp, out):
+            out[0] = inp * 2
+
+        self.assertEqual(twice(10), 20)
+        arg = np.arange(10).astype(np.int32)
+        self.assertPreciseEqual(twice(arg), arg * 2)
 
     def test_gufunc_scalar_input_saxpy(self):
         @guvectorize(['void(float32, float32[:], float32[:], float32[:])'],
@@ -110,7 +121,40 @@ class TestGUFuncScalr(unittest.TestCase):
 
         self.assertIn("does not support .astype()", str(raises.exception))
 
+    def test_gufunc_old_style_scalar_as_array(self):
+        # Example from issue #2579
+        @guvectorize(['void(int32[:],int32[:],int32[:])'], '(n),()->(n)',
+                     target='cuda')
+        def gufunc(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y[0]
 
+        # Case 1
+        a = np.array([1, 2, 3, 4], dtype=np.int32)
+        b = np.array([2], dtype=np.int32)
+
+        res = np.zeros(4, dtype=np.int32)
+
+        expected = res.copy()
+        expected = a + b
+
+        gufunc(a, b, out=res)
+
+        np.testing.assert_almost_equal(expected, res)
+
+        # Case 2
+        a = np.array([1, 2, 3, 4] * 2, dtype=np.int32).reshape(2, 4)
+        b = np.array([2, 10], dtype=np.int32)
+
+        res = np.zeros((2, 4), dtype=np.int32)
+
+        expected = res.copy()
+        expected[0] = a[0] + b[0]
+        expected[1] = a[1] + b[1]
+
+        gufunc(a, b, res)
+
+        np.testing.assert_almost_equal(expected, res)
 
 
 if __name__ == '__main__':

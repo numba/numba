@@ -186,11 +186,11 @@ a file-based cache.  This is done by passing ``cache=True``::
 ``parallel``
 ------------
 
-Enables an experimental feature that automatically parallelizes (and
-performs other optimizations for) those operations in the function known to
-have parallel semantics.  For a list of supported operations, see
-:ref:`numba-parallel`.  This feature is enabled by passing ``parallel=True`` and
-must be used in conjunction with ``nopython=True``::
+Enables automatic parallelization (and related optimizations) for those
+operations in the function known to have parallel semantics.  For a list of
+supported operations, see :ref:`numba-parallel`.  This feature is enabled by
+passing ``parallel=True`` and must be used in conjunction with
+``nopython=True``::
 
    @jit(nopython=True, parallel=True)
    def f(x, y):

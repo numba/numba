@@ -666,6 +666,23 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
         self.check_2d(func)
 
+    def test_2d_dtype_from_type(self):
+        # tests issue #2862
+        def func(m, n):
+            return np.full((m, n), np.int32(1))
+        self.check_2d(func)
+
+        # tests meta issues from #2862, that np < 1.12 always
+        # returns float64. Complex uses `.real`, imaginary part dropped
+        def func(m, n):
+            return np.full((m, n), np.complex128(1))
+        self.check_2d(func)
+
+        # and that if a dtype is specified, this influences the return type
+        def func(m, n):
+            return np.full((m, n), 1, dtype=np.int8)
+        self.check_2d(func)
+
 
 class ConstructorLikeBaseTest(object):
 
@@ -702,6 +719,12 @@ class ConstructorLikeBaseTest(object):
             # Non-contiguous array
             if arr.ndim > 0:
                 check_arr(arr[::2])
+            # Check new array doesn't inherit readonly flag
+            arr.flags['WRITEABLE'] = False
+            # verify read-only
+            with self.assertRaises(ValueError):
+                arr[0] = 1
+            check_arr(arr)
 
         # Scalar argument => should produce a 0-d array
         check_arr(orig[0])
@@ -1039,7 +1062,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         # A list
         got = cfunc([2, 3, 42])
         self.assertPreciseEqual(got, np.intp([2, 3, 42]))
-        # A heterogenous tuple
+        # A heterogeneous tuple
         got = cfunc((1.0, 2.5j, 42))
         self.assertPreciseEqual(got, np.array([1.0, 2.5j, 42]))
         # An empty tuple
@@ -1101,7 +1124,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             self.assertIn(msg, str(raises.exception))
 
         with check_raises(('array(float64, 1d, C) not allowed in a '
-                           'homogenous sequence')):
+                           'homogeneous sequence')):
             cfunc(np.array([1.]))
 
         with check_raises(('type (int64, reflected list(int64)) does '
@@ -1109,7 +1132,7 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(("cannot convert (int64, Record([('a', '<i4'), "
-                           "('b', '<f4')])) to a homogenous type")):
+                           "('b', '<f4')])) to a homogeneous type")):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
             val = np.zeros(1, dtype=st)[0]
             cfunc(((1, 2), (np.int64(1), val)))

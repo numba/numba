@@ -51,7 +51,7 @@ def scale_timedelta(context, builder, val, srcty, destty):
 def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     """
     Scale either *left* or *right* to the other's unit, in order to have
-    homogenous units.
+    homogeneous units.
     """
     factor = npdatetime.get_timedelta_conversion_factor(leftty.unit, rightty.unit)
     if factor is not None:
@@ -191,7 +191,7 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fmul(val, number_arg)
-            val = builder.fptosi(val, TIMEDELTA64)
+            val = _cast_to_timedelta(context, builder, val)
         else:
             val = builder.mul(td_arg, number_arg)
         # The scaling is required for ufunc np.multiply() with an explicit
@@ -234,7 +234,7 @@ def timedelta_over_number(context, builder, sig, args):
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fdiv(val, number_arg)
-            val = builder.fptosi(val, TIMEDELTA64)
+            val = _cast_to_timedelta(context, builder, val)
         else:
             val = builder.sdiv(td_arg, number_arg)
         # The scaling is required for ufuncs np.*divide() with an explicit
@@ -626,3 +626,17 @@ def timedelta_min_impl(context, builder, sig, args):
     res = builder.select(in2_not_nat, res, in1)
 
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+def _cast_to_timedelta(context, builder, val):
+    temp = builder.alloca(TIMEDELTA64)
+    val_is_nan = builder.fcmp_unordered('uno', val, val)
+    with builder.if_else(val_is_nan) as (
+            then, els):
+        with then:
+            # NaN does not guarantee to cast to NAT.
+            # We should store NAT explicitly.
+            builder.store(NAT, temp)
+        with els:
+            builder.store(builder.fptosi(val, TIMEDELTA64), temp)
+    return builder.load(temp)

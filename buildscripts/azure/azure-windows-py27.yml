@@ -1,0 +1,51 @@
+parameters:
+  name: ''
+  vmImage: ''
+
+jobs:
+- job: ${{ parameters.name }}
+  pool: 
+    vmImage: ${{ parameters.vmImage }}
+  strategy:
+    maxParallel: 11
+    matrix:
+      py27_np15:
+        PYTHON: '2.7'
+        NUMPY: '1.15' 
+        CONDA_ENV: 'testenv'
+
+  steps:
+    - task: CondaEnvironment@1
+      inputs:
+        updateConda: no
+        packageSpecs: ''
+
+    # Need to install VC 9.0 only for Python 2.7
+    # Once we understand how to do tasks conditional on build matrix variables
+    # we could merge this into azure-windows.yml
+    - powershell: |
+        $wc = New-Object net.webclient
+        $wc.Downloadfile("https://download.microsoft.com/download/7/9/6/796EF2E4-801B-4FC4-AB28-B59FBF6D907B/VCForPython27.msi", "VCForPython27.msi")
+        Start-Process "VCForPython27.msi" /qn -Wait
+      displayName: 'Install VC 9.0'
+
+    - script: |
+        buildscripts\\incremental\\setup_conda_environment.cmd
+      displayName: 'Before Install'
+
+    # VC 9.0 cannot build tbbpool.cpp in Numba, so we need to remove
+    # tbb from the environment before the build stage.
+    - script: |
+        call activate %CONDA_ENV%
+        conda remove -y tbb tbb-devel
+      displayName: 'Remove TBB'
+
+    - script: |
+        buildscripts\\incremental\\build.cmd
+      displayName: 'Build'
+
+    - script: |
+        call activate %CONDA_ENV%
+        python -m numba.tests.test_runtests
+        python runtests.py -m 2 -b -- numba.tests
+      displayName: 'Test'

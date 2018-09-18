@@ -32,7 +32,7 @@ def test_wont_propagate(b, z, w):
     a = 2 * x
     return a < b
 
-def null_func(a,b,c):
+def null_func(a,b,c,d):
     False
 
 def inListVar(list_var, var):
@@ -75,12 +75,8 @@ class TestCopyPropagate(unittest.TestCase):
                 return_type=return_type,
                 html_output=config.HTML)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            #print("in_cps = ", in_cps)
-            #print("out_cps = ", out_cps)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), null_func, None, typemap, calltypes)
-            #print(test_ir.dump())
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            #print("findAssign = ", findAssign(test_ir, "x"))
             self.assertFalse(findAssign(test_ir, "x"))
 
     def test2(self):
@@ -94,8 +90,6 @@ class TestCopyPropagate(unittest.TestCase):
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
             typemap, return_type, calltypes = compiler.type_inference_stage(typingctx, test_ir, args, None)
-            #print("typemap = ", typemap)
-            #print("return_type = ", return_type)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -106,12 +100,8 @@ class TestCopyPropagate(unittest.TestCase):
                 return_type=return_type,
                 html_output=config.HTML)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            #print("in_cps = ", in_cps)
-            #print("out_cps = ", out_cps)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), null_func, None, typemap, calltypes)
-            #print(test_ir.dump())
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            #print("findAssign = ", findAssign(test_ir, "x"))
             self.assertTrue(findAssign(test_ir, "x"))
 
 if __name__ == "__main__":

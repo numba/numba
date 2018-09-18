@@ -5,16 +5,26 @@ dist: trusty
 
 matrix:
     include:
-        # Longest build first
         # Parametrize the conda env name so multiple builds can
         # work with multiple environments on the same machine in parallel.
+        # Try and cover all supported pythons and NumPy's in some combination
         - os: osx
-          env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
-        - env: PYTHON=3.5 NUMPY=1.11 RUN_COVERAGE=yes CONDA_ENV=travisci
-        - env: PYTHON=3.6 NUMPY=1.12 BUILD_DOC=yes CONDA_ENV=travisci
+          env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BUILD_DOC=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_THREADING=tbb
+        - env: PYTHON=2.7 NUMPY=1.15 CONDA_ENV=travisci
+        - env: PYTHON=2.7 NUMPY=1.9  CONDA_ENV=travisci
+        - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
+        - env: PYTHON=3.5 NUMPY=1.11 CONDA_ENV=travisci RUN_COVERAGE=yes
+        - env: PYTHON=3.6 NUMPY=1.12 CONDA_ENV=travisci BUILD_DOC=yes
         - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
-        - env: PYTHON=3.4 NUMPY=1.10 CONDA_ENV=travisci
-        - env: PYTHON=2.7 NUMPY=1.9 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_SVML=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci VANILLA_INSTALL=yes
+        - env: PYTHON=2.7 NUMPY=1.11 CONDA_ENV=travisci BITS32=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci BITS32=yes
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_THREADING=omp
+        - env: PYTHON=3.7 NUMPY=1.15 CONDA_ENV=travisci TEST_THREADING=workqueue
+
 
 branches:
     only:
@@ -22,6 +32,7 @@ branches:
         - travis
 
 before_install:
+    - if [ "$(uname)" == "Linux" ]; then sudo apt-get install libc6-dev-i386; fi
     - buildscripts/incremental/install_miniconda.sh
     - export PATH=$HOME/miniconda3/bin:$PATH
     - buildscripts/incremental/setup_conda_environment.sh
@@ -36,12 +47,13 @@ after_success:
 
 notifications:
     email: false
-    flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
     on_success: "change"
     on_failure: "always" # "change"
+    slack:
+        secure: SGgsT4DevPiF/u4y3HBorUYCVWan7EjSnEBmuGPnGkepv8JxfOnbbeM3ca2TSWa601J4OP2K2JhehUGZSn6YkTx5XKOzqF2pddZQX8j0B4htDgV2qvcY/aIUFz8UW2uQAuguP6OlHPmAj5KgF5raJ34rkmTd8UgObL6jAan2Kzg=
     webhooks:
         urls:
-            - https://webhooks.gitter.im/e/bd67cc227432d99bf1f1
+            - secure: "IpSOubapaCybPfQc/XRaFTB7nry+wSN0dGkU/m4aBclLiEx8Op+mAH8rm9N58U6TG5jhcNBmv7RCjs6k3Pi0Ra3Bt0x6fjB/46Xj93k0tftcfIn+0jLjujbmJym0efTxhj4ip+b0awh8f/LKY/U46PfEBSJmxUppY84YhRU23kI="
         on_success: change
         on_failure: always
         on_start: false

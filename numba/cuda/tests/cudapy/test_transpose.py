@@ -3,12 +3,13 @@ from numba import cuda
 from numba.cuda.kernels.transpose import transpose
 from numba.cuda.testing import unittest
 from numba.testing.ddt import ddt, data, unpack
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
+
 
 @skip_on_cudasim('Device Array API unsupported in the simulator')
 @ddt
-class Test(unittest.TestCase):
-        
+class Test(SerialMixin, unittest.TestCase):
+
     @data((5, 6, np.float64),
           (128, 128, np.complex128),
           (1025, 512, np.float64))

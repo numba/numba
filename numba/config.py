@@ -8,17 +8,25 @@ import re
 import warnings
 import multiprocessing
 
+# YAML needed to use file based Numba config
+try:
+    import yaml
+    _HAVE_YAML = True
+except ImportError:
+    _HAVE_YAML = False
+
+
 import llvmlite.binding as ll
 
-from .errors import NumbaWarning, PerformanceWarning
-
-
 IS_WIN32 = sys.platform.startswith('win32')
+IS_OSX = sys.platform.startswith('darwin')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
 
+# this is the name of the user supplied configuration file
+_config_fname = '.numba_config.yaml'
 
 def _parse_cc(text):
     """
@@ -73,6 +81,23 @@ class _EnvReloader(object):
 
     def update(self, force=False):
         new_environ = {}
+
+        # first check if there's a .numba_config.yaml and use values from that
+        if os.path.exists(_config_fname) and os.path.isfile(_config_fname):
+            if not _HAVE_YAML:
+                msg = ("A Numba config file is found but YAML parsing "
+                       "capabilities appear to be missing. "
+                       "To use this feature please install `pyyaml`. e.g. "
+                       "`conda install pyyaml`.")
+                warnings.warn(msg)
+            else:
+                with open(_config_fname, 'rt') as f:
+                    y_conf = yaml.load(f)
+                if y_conf is not None:
+                    for k, v in y_conf.items():
+                        new_environ['NUMBA_' + k.upper()] = v
+
+        # clobber file based config with any locally defined env vars
         for name, value in os.environ.items():
             if name.startswith('NUMBA_'):
                 new_environ[name] = value
@@ -97,12 +122,26 @@ class _EnvReloader(object):
                               (name, value), RuntimeWarning)
                 return default
 
+        def optional_str(x):
+            return str(x) if x is not None else None
+
         # Print warnings to screen about function compilation
         #   0 = Numba warnings suppressed (default)
         #   1 = All Numba warnings shown
         WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
-        if WARNINGS == 0:
-            warnings.simplefilter('ignore', NumbaWarning)
+
+        # developer mode produces full tracebacks, disables help instructions
+        DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
+
+        # Flag to enable full exception reporting
+        FULL_TRACEBACKS = _readenv("NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
+
+        # Show help text when an error occurs
+        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, not DEVELOPER_MODE)
+
+        # The color scheme to use for error messages, default is no color
+        # just bold fonts in use.
+        COLOR_SCHEME = _readenv("NUMBA_COLOR_SCHEME", str, "no_color")
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -112,6 +151,10 @@ class _EnvReloader(object):
 
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
+        # How many recently deserialized functions to retain regardless
+        # of external references
+        FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)
 
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
@@ -126,6 +169,13 @@ class _EnvReloader(object):
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 
+        # Configure compilation target to use the specified CPU name
+        # and CPU feature as the host information.
+        # Note: this overrides "host" option for AOT compilation.
+        CPU_NAME = _readenv("NUMBA_CPU_NAME", optional_str, None)
+        CPU_FEATURES = _readenv("NUMBA_CPU_FEATURES", optional_str,
+                                ("" if str(CPU_NAME).lower() == 'generic'
+                                 else None))
         # Optimization level
         OPT = _readenv("NUMBA_OPT", int, 3)
 
@@ -141,6 +191,12 @@ class _EnvReloader(object):
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
+
+        # insert debug stmts to print information at runtime
+        DEBUG_ARRAY_OPT_RUNTIME = _readenv("NUMBA_DEBUG_ARRAY_OPT_RUNTIME", int, 0)
+
+        # print stats about parallel for-loops
+        DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
 
         # print debug info of inline closure pass
         DEBUG_INLINE_CLOSURE = _readenv("NUMBA_DEBUG_INLINE_CLOSURE", int, 0)
@@ -186,9 +242,6 @@ class _EnvReloader(object):
         # Enable AVX on supported platforms where it won't degrade performance.
         def avx_default():
             if not _os_supports_avx():
-                warnings.warn("your operating system doesn't support "
-                              "AVX, this may degrade performance on "
-                              "some numerical code", PerformanceWarning)
                 return False
             else:
                 # There are various performance issues with AVX and LLVM
@@ -201,8 +254,15 @@ class _EnvReloader(object):
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
+        # if set and SVML is available, it will be disabled
+        # By default, it's disabled on 32-bit platforms.
+        DISABLE_INTEL_SVML = _readenv("NUMBA_DISABLE_INTEL_SVML", int, IS_32BITS)
+
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
+
+        # choose parallel backend to use
+        THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
         # CUDA Configs
 
@@ -253,6 +313,16 @@ class _EnvReloader(object):
             if name.isupper():
                 globals()[name] = value
 
+        # delay this until now, let the globals for the module be updated
+        # prior to loading numba.errors as it needs to use the config
+        if WARNINGS == 0:
+            from numba.errors import NumbaWarning
+            warnings.simplefilter('ignore', NumbaWarning)
+        if not _os_supports_avx():
+            from numba.errors import PerformanceWarning
+            warnings.warn("your operating system doesn't support "
+                            "AVX, this may degrade performance on "
+                            "some numerical code", PerformanceWarning)
 
 _env_reloader = _EnvReloader()
 

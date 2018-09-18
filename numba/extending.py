@@ -2,8 +2,9 @@
 import inspect
 import uuid
 import weakref
+import collections
 
-from numba import types
+from numba import types, config
 
 # Exported symbols
 from .typing.typeof import typeof_impl
@@ -13,6 +14,7 @@ from .targets.imputils import (
     lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
+from ._helperlib import _import_cython_function
 
 def type_callable(func):
     """
@@ -215,11 +217,16 @@ class _Intrinsic(object):
     Dummy callable for intrinsic
     """
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
+
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, support_literals=False):
         self._name = name
         self._defn = defn
+        self._support_literals = support_literals
 
     @property
     def _uuid(self):
@@ -239,11 +246,13 @@ class _Intrinsic(object):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
     def _register(self):
         from .typing.templates import make_intrinsic_template, infer_global
 
         template = make_intrinsic_template(self, self._defn, self._name)
+        template.support_literals = self._support_literals
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -283,7 +292,7 @@ class _Intrinsic(object):
             return llc
 
 
-def intrinsic(func):
+def intrinsic(*args, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -318,8 +327,51 @@ def intrinsic(func):
                     llrtype = context.get_value_type(rtype)
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
+
+    Optionally, keyword arguments can be provided to configure the intrinsic; e.g.
+
+        @intrinsic(support_literals=True)
+        def example(typingctx, ...):
+            ...
+
+    Supported keyword arguments are:
+
+    - support_literals : bool
+        Indicates to the type inferencer that the typing logic accepts and can specialize to
+        `Const` type.
     """
-    name = getattr(func, '__name__', str(func))
-    llc = _Intrinsic(name, func)
-    llc._register()
-    return llc
+    # Make inner function for the actual work
+    def _intrinsic(func):
+        name = getattr(func, '__name__', str(func))
+        llc = _Intrinsic(name, func, **kwargs)
+        llc._register()
+        return llc
+
+    if not kwargs:
+        # No option is given
+        return _intrinsic(*args)
+    else:
+        # options are given, create a new callable to recv the
+        # definition function
+        def wrapper(func):
+            return _intrinsic(func)
+        return wrapper
+
+
+def get_cython_function_address(module_name, function_name):
+    """
+    Get the address of a Cython function.
+
+    Args
+    ----
+    module_name:
+        Name of the Cython module
+    function_name:
+        Name of the Cython function
+
+    Returns
+    -------
+    A Python int containing the address of the function
+
+    """
+    return _import_cython_function(module_name, function_name)

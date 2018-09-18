@@ -11,7 +11,7 @@ import functools
 import os
 import subprocess
 import sys
-
+from tempfile import NamedTemporaryFile, gettempdir
 
 _configs = {
     # DLL suffix, Python C extension suffix
@@ -28,6 +28,30 @@ find_shared_ending = functools.partial(get_configs, 0)
 find_pyext_ending = functools.partial(get_configs, 1)
 
 
+def _check_external_compiler():
+    # see if the external compiler bound in numpy.distutil is present
+    # and working
+    compiler = new_compiler()
+    customize_compiler(compiler)
+    for suffix in ['.c', '.cxx']:
+        with NamedTemporaryFile('wt', suffix=suffix) as ntf:
+            simple_c = "int main(void) { return 0; }"
+            ntf.write(simple_c)
+            ntf.flush()
+            try:
+                # *output_dir* is set to avoid the compiler putting temp files
+                # in the current directory.
+                compiler.compile([ntf.name], output_dir=gettempdir())
+            except Exception: # likely CompileError
+                return False
+    return True
+
+
+# boolean on whether the externally provided compiler is present and
+# functioning correctly
+_external_compiler_ok = _check_external_compiler()
+
+
 class _DummyExtension(object):
     libraries = []
 
@@ -35,6 +59,9 @@ class _DummyExtension(object):
 class Toolchain(object):
 
     def __init__(self):
+        if not _external_compiler_ok:
+            self._raise_external_compiler_error()
+
         # Need to import it here since setuptools may monkeypatch it
         from distutils.dist import Distribution
         self._verbose = False
@@ -56,6 +83,27 @@ class Toolchain(object):
         # DEBUG will let Numpy spew many messages, so stick to INFO
         # to print commands executed by distutils
         log.set_threshold(log.INFO if value else log.WARN)
+
+    def _raise_external_compiler_error(self):
+        basemsg = ("Attempted to compile AOT function without the "
+                   "compiler used by `numpy.distutils` present.")
+        conda_msg = "If using conda try:\n\n#> conda install %s"
+        plt = sys.platform
+        if plt.startswith('linux'):
+            if sys.maxsize <= 2 ** 32:
+                compilers = ['gcc_linux-32', 'gxx_linux-32']
+            else:
+                compilers = ['gcc_linux-64', 'gxx_linux-64']
+            msg = "%s %s" % (basemsg, conda_msg % ' '.join(compilers))
+        elif plt.startswith('darwin'):
+            compilers = ['clang_osx-64', 'clangxx_osx-64']
+            msg = "%s %s" % (basemsg, conda_msg % ' '.join(compilers))
+        elif plt.startswith('win32'):
+            winmsg = "Cannot find suitable msvc."
+            msg = "%s %s" % (basemsg, winmsg)
+        else:
+            msg = "Unknown platform %s" % plt
+        raise RuntimeError(msg)
 
     def compile_objects(self, sources, output_dir,
                         include_dirs=(), depends=(), macros=(),
@@ -137,15 +185,16 @@ def _patch_exec_command():
     orig_exec_command = mod._exec_command
     mod._exec_command = _exec_command
 
-def _exec_command(command, use_shell=None, use_tee = None, **env):
+
+def _exec_command(command, use_shell=None, use_tee=None, **env):
     """
     Internal workhorse for exec_command().
     Code from https://github.com/numpy/numpy/pull/7862
     """
     if use_shell is None:
-        use_shell = os.name=='posix'
+        use_shell = os.name == 'posix'
     if use_tee is None:
-        use_tee = os.name=='posix'
+        use_tee = os.name == 'posix'
 
     executable = None
 

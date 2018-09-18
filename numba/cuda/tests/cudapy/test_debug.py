@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.tests.support import override_config, captured_stderr, captured_stdout
 from numba import unittest_support as unittest
 from numba import cuda, float64
@@ -14,7 +14,7 @@ def simple_cuda(A, B):
 
 
 @skip_on_cudasim('Simulator does not produce debug dumps')
-class TestDebugOutput(unittest.TestCase):
+class TestDebugOutput(SerialMixin, unittest.TestCase):
 
     def compile_simple_cuda(self):
         with captured_stderr() as err:

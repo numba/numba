@@ -2,13 +2,22 @@ from __future__ import print_function, absolute_import
 
 import os
 import platform
+import re
 import textwrap
+import warnings
 
-from .support import TestCase, override_config, captured_stdout, forbid_codegen
+import numpy as np
+
+from .support import (TestCase, override_config, override_env_config,
+                      captured_stdout, forbid_codegen)
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
-from numba.compiler import compile_isolated
-from numba import compiler
+from numba.compiler import compile_isolated, Flags
+from numba.targets.cpu import ParallelOptions
+from numba.errors import NumbaWarning
+from numba import compiler, prange
+from .test_parfors import skip_unsupported
+from .matmul_usecase import needs_blas
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -28,6 +37,18 @@ simple_class_spec = [('h', types.int32)]
 def simple_class_user(obj):
     return obj.h
 
+def unsupported_parfor(a, b):
+    return np.dot(a, b) # dot as gemm unsupported
+
+def supported_parfor(n):
+    a = np.ones(n)
+    for i in prange(n):
+        a[i] = a[i] + np.sin(i)
+    return a
+
+force_parallel_flags = Flags()
+force_parallel_flags.set("auto_parallel", ParallelOptions(True))
+force_parallel_flags.set('nrt')
 
 class DebugTestBase(TestCase):
 
@@ -63,7 +84,7 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'] == False:
+        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
             self.assertIn('%"retval" = alloca', out)
 
     def _check_dump_func_opt_llvm(self, out):
@@ -183,21 +204,110 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
     Test that environment variables are reloaded by Numba when modified.
     """
 
+    # mutates env with os.environ so must be run serially
+    _numba_parallel_test_ = False
+
     def test_debug(self):
         out = self.compile_simple_nopython()
         self.assertFalse(out)
-        os.environ['NUMBA_DEBUG'] = '1'
-        try:
+        with override_env_config('NUMBA_DEBUG', '1'):
             out = self.compile_simple_nopython()
             # Note that all variables dependent on NUMBA_DEBUG are
             # updated too.
             self.check_debug_output(out, ['ir', 'typeinfer',
                                           'llvm', 'func_opt_llvm',
                                           'optimized_llvm', 'assembly'])
-        finally:
-            del os.environ['NUMBA_DEBUG']
         out = self.compile_simple_nopython()
         self.assertFalse(out)
+
+class TestParforsDebug(TestCase):
+    """
+    Tests debug options associated with parfors
+    """
+
+    # mutates env with os.environ so must be run serially
+    _numba_parallel_test_ = False
+
+    def check_parfors_warning(self, warn_list):
+        msg = ("parallel=True was specified but no transformation for parallel"
+               " execution was possible.")
+        warning_found = False
+        for w in warn_list:
+            if msg in str(w.message):
+                warning_found = True
+                break
+        self.assertTrue(warning_found, "Warning message should be found.")
+
+    @needs_blas
+    @skip_unsupported
+    def test_warns(self):
+        """
+        Test that using parallel=True on a function that does not have parallel
+        semantics warns if NUMBA_WARNINGS is set.
+        """
+        with override_env_config('NUMBA_WARNINGS', '1'):
+            arr_ty = types.Array(types.float64, 2, "C")
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", NumbaWarning)
+                cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
+                                        flags=force_parallel_flags)
+            self.check_parfors_warning(w)
+
+    @skip_unsupported
+    def test_array_debug_opt_stats(self):
+        """
+        Test that NUMBA_DEBUG_ARRAY_OPT_STATS produces valid output
+        """
+        # deliberately trigger a compilation loop to increment the
+        # Parfor class state, this is to ensure the test works based
+        # on indices computed based on this state and not hard coded
+        # indices.
+        cres = compile_isolated(supported_parfor, (types.int64,),
+                                flags=force_parallel_flags)
+
+        with override_env_config('NUMBA_DEBUG_ARRAY_OPT_STATS', '1'):
+            with captured_stdout() as out:
+                cres = compile_isolated(supported_parfor, (types.int64,),
+                                        flags=force_parallel_flags)
+
+            # grab the various parts out the output
+            output = out.getvalue().split('\n')
+            parallel_loop_output = \
+                [x for x in output if 'is produced from pattern' in x]
+            fuse_output = \
+                [x for x in output if 'is fused into' in x]
+            after_fusion_output = \
+                [x for x in output if 'After fusion, function' in x]
+
+            # Parfor's have a shared state index, grab the current value
+            # as it will be used as an offset for all loop messages
+            parfor_state = int(re.compile(r'#([0-9]+)').search(
+                parallel_loop_output[0]).group(1))
+            bounds = range(parfor_state,
+                           parfor_state + len(parallel_loop_output))
+
+            # Check the Parallel for-loop <index> is produced from <pattern>
+            # works first
+            pattern = ('ones function', ('prange', 'user'))
+            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
+            for i, trials, lpattern in zip(bounds, parallel_loop_output,
+                                           pattern):
+                to_match = fmt.format(i, lpattern)
+                self.assertIn(to_match, trials)
+
+            # Check the fusion statements are correct
+            pattern = (parfor_state + 1, parfor_state + 0)
+            fmt = 'Parallel for-loop #{} is fused into for-loop #{}.'
+            for trials in fuse_output:
+                to_match = fmt.format(*pattern)
+                self.assertIn(to_match, trials)
+
+            # Check the post fusion statements are correct
+            pattern = (supported_parfor.__name__, 1, set([parfor_state]))
+            fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
+            for trials in after_fusion_output:
+                to_match = fmt.format(*pattern)
+                self.assertIn(to_match, trials)
 
 
 if __name__ == '__main__':

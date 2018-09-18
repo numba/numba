@@ -117,6 +117,16 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         self.check_getitem_indices(arr, indices)
 
+    def test_ellipsis_getsetitem(self):
+        # See https://github.com/numba/numba/issues/3225
+        @jit(nopython=True)
+        def foo(arr, v):
+            arr[..., 0] = arr[..., 1]
+
+        arr = np.arange(2)
+        foo(arr, 1)
+        self.assertEqual(arr[0], arr[1])
+
     @tag('important')
     def test_getitem_array(self):
         # Test advanced indexing with a single array index
@@ -186,13 +196,16 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # 2. 1d array index
         # 3. nd array index
         # 4. reflected list
-        
+        # 5. tuples
+
         test_indices = []
         test_indices.append(1)
         test_indices.append(np.array([1, 5, 1, 11, 3]))
         test_indices.append(np.array([[[1], [5]], [[1], [11]]]))
         test_indices.append([1, 5, 1, 11, 3])
-    
+        test_indices.append((1, 5, 1))
+        test_indices.append(((1, 5, 1), (11, 3, 2)))
+
         for dt in [np.int64, np.complex128]:
             A = np.arange(12, dtype=dt).reshape((4, 3))
             for ind in test_indices:
@@ -209,7 +222,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # check float indexing raises
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
-       
+
         # check unsupported arg raises
         with self.assertRaises(TypingError):
             take_kws = jit(nopython=True)(np_take_kws)

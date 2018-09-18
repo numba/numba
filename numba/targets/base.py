@@ -13,16 +13,15 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import llvmthreadsafe as llvmts
 from numba import types, utils, cgutils, typing, funcdesc, debuginfo
 from numba import _dynfunc, _helperlib
+from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
 from numba import datamodel
-
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
@@ -220,6 +219,9 @@ class BaseContext(object):
     # python exceution environment
     environment = None
 
+    # the function descriptor
+    fndesc = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
 
@@ -279,6 +281,35 @@ class BaseContext(object):
         Perform name mangling.
         """
         return funcdesc.default_mangler(name, types)
+
+    def get_env_name(self, fndesc):
+        """Get the environment name given a FunctionDescriptior.
+
+        Use this instead of the ``fndesc.env_name`` so that the target-context
+        can provide necessary mangling of the symbol to meet ABI requirements.
+        """
+        return fndesc.env_name
+
+    def declare_env_global(self, module, envname):
+        """Declare the Environment pointer as a global of the module.
+
+        The pointer is initialized to NULL.  It must be filled by the runtime
+        with the actual address of the Env before the associated function
+        can be executed.
+
+        Parameters
+        ----------
+        module :
+            The LLVM Module
+        envname : str
+            The name of the global variable.
+        """
+        if envname not in module.globals:
+            gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
+            gv.linkage = 'common'
+            gv.initializer = cgutils.get_null_value(gv.type.pointee)
+
+        return module.globals[envname]
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
@@ -376,7 +407,7 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
-        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes)
+        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
         return fn
@@ -456,7 +487,7 @@ class BaseContext(object):
             impl = self._get_constants.find((ty,))
             return impl(self, builder, ty, val)
         except NotImplementedError:
-            raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
+            raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
 
     def get_constant(self, ty, val):
         """
@@ -621,14 +652,14 @@ class BaseContext(object):
 
     def pair_first(self, builder, val, ty):
         """
-        Extract the first element of a heterogenous pair.
+        Extract the first element of a heterogeneous pair.
         """
         pair = self.make_helper(builder, ty, val)
         return pair.first
 
     def pair_second(self, builder, val, ty):
         """
-        Extract the second element of a heterogenous pair.
+        Extract the second element of a heterogeneous pair.
         """
         pair = self.make_helper(builder, ty, val)
         return pair.second
@@ -756,21 +787,22 @@ class BaseContext(object):
         # Compile
         from numba import compiler
 
-        codegen = self.codegen()
-        library = codegen.create_library(impl.__name__)
-        if flags is None:
-            flags = compiler.Flags()
-        flags.set('no_compile')
-        flags.set('no_cpython_wrapper')
-        cres = compiler.compile_internal(self.typing_context, self,
-                                         library,
-                                         impl, sig.args,
-                                         sig.return_type, flags,
-                                         locals=locals)
+        with global_compiler_lock:
+            codegen = self.codegen()
+            library = codegen.create_library(impl.__name__)
+            if flags is None:
+                flags = compiler.Flags()
+            flags.set('no_compile')
+            flags.set('no_cpython_wrapper')
+            cres = compiler.compile_internal(self.typing_context, self,
+                                            library,
+                                            impl, sig.args,
+                                            sig.return_type, flags,
+                                            locals=locals)
 
-        # Allow inlining the function inside callers.
-        codegen.add_linking_library(cres.library)
-        return cres
+            # Allow inlining the function inside callers.
+            codegen.add_linking_library(cres.library)
+            return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}):
         """
@@ -812,6 +844,8 @@ class BaseContext(object):
 
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def call_unresolved(self, builder, name, sig, args):
@@ -854,6 +888,8 @@ class BaseContext(object):
                                                    sig.args, args)
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
+
+        res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
 
     def get_executable(self, func, fndesc):
@@ -998,7 +1034,6 @@ class BaseContext(object):
         gv.initializer = addr
         return builder.load(gv)
 
-    @llvmts.lock_llvm
     def get_abi_sizeof(self, ty):
         """
         Get the ABI size of LLVM type *ty*.
@@ -1028,7 +1063,6 @@ class BaseContext(object):
         """Create a LLVM module
         """
         return lc.Module(name)
-
 
 
 class _wrap_impl(object):

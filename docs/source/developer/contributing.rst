@@ -13,12 +13,38 @@ Communication
 Mailing-list
 ''''''''''''
 
-We have a public mailing-list that you can e-mail at numba-users@continuum.io.
+We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
 If you have any questions about contributing to Numba, it is ok to ask them
 on this mailing-list.  You can subscribe and read the archives on
 `Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
 and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
 allowing NNTP access.
+
+Real-time Chat
+''''''''''''''
+
+Numba uses Gitter for public real-time chat.  To help improve the
+signal-to-noise ratio, we have two channels:
+
+* `numba/numba <https://gitter.im/numba/numba>`_: General Numba discussion,
+  questions, and debugging help.
+* `numba/numba-dev <https://gitter.im/numba/numba-dev>`_: Discussion of PRs,
+  planning, release coordination, etc.
+
+Both channels are public, but we may ask that discussions on numba-dev move to
+the numba channel.  This is simply to ensure that numba-dev is easy for core
+developers to keep up with.
+
+Note that the Github issue tracker is the best place to report bugs.  Bug
+reports in chat are difficult to track and likely to be lost.
+
+Weekly Meetings
+'''''''''''''''
+
+The core Numba developers have a weekly video conference to discuss roadmap,
+feature planning, and outstanding issues.  These meetings are invite only, but
+minutes will be taken and will be posted to the
+`Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
 
 .. _report-numba-bugs:
 
@@ -46,7 +72,7 @@ request from the Github interface.
 
 If you want, you can submit a pull request even when you haven't finished
 working.  This can be useful to gather feedback, or to stress your changes
-against the :ref:`continuous integration <travis_ci>` platorm.  In this
+against the :ref:`continuous integration <travis_ci>` platform.  In this
 case, please prepend ``[WIP]`` to your pull request's title.
 
 .. _buildenv:
@@ -54,44 +80,47 @@ case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `Numpy <http://www.numpy.org/>`_
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
 and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
-recommend you use `Conda <http://conda.pydata.org/miniconda.html>`_ to
+recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
 create a dedicated development environment and install precompiled versions
 of those dependencies there.
 
-First add the Binstar ``numba`` channel so as to get development builds of
-the llvmlite library::
+First add the Anaconda Cloud ``numba`` channel so as to get development builds
+of the llvmlite library::
 
    $ conda config --add channels numba
 
 Then create an environment with the right dependencies::
 
-   $ <path_to_miniconda>/conda create -n numbaenv python=3.5 llvmlite numpy
+   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.5, but you can of course
-   choose another version supported by Numba.
+   This installs an environment based on Python 3.6, but you can of course
+   choose another version supported by Numba.  To test additional features,
+   you may also need to install ``tbb`` and/or ``llvm-openmp`` and 
+   ``intel-openmp``.
 
 To activate the environment for the current shell session::
 
-   $ source <path_to_miniconda>/activate numbaenv
+   $ conda activate numbaenv
 
 .. note::
-   Those instructions are for a standard Linux shell.  You may need to
+   These instructions are for a standard Linux shell.  You may need to
    adapt them for other platforms.
 
 Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
-   $ python
-   Python 3.4.2 |Continuum Analytics, Inc.| (default, Oct 21 2014, 17:16:37)
-   [GCC 4.4.7 20120313 (Red Hat 4.4.7-1)] on linux
-   Type "help", "copyright", "credits" or "license" for more information.
-   >>> import llvmlite
-   >>> llvmlite.__version__
-   '0.2.0-3-g9f60cd1'
+    $ python
+    Python 3.6.6 |Anaconda, Inc.| (default, Jun 28 2018, 11:07:29)
+    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> import llvmlite
+    >>> llvmlite.__version__
+    '0.24.0'
+
 
 Building Numba
 ''''''''''''''
@@ -99,6 +128,8 @@ Building Numba
 For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
+   $ git clone git://github.com/numba/numba.git
+   $ cd numba
    $ python setup.py build_ext --inplace
 
 This assumes you have a working C compiler and runtime on your development
@@ -128,16 +159,29 @@ Examples:
 
 * to run those tests::
 
-    $ python -m numba.runtests -l numba.tests.test_usecases
+    $ python -m numba.runtests numba.tests.test_usecases
 
 * to run all tests in parallel, using multiple sub-processes::
 
     $ python -m numba.runtests -m
-    
+
 * For a detailed list of all options::
 
     $ python -m numba.runtests -h
 
+The numba test suite can take a long time to complete.  When you want to avoid
+the long wait,  it is useful to focus on the failing tests first with the
+following test runner options:
+
+* The ``--failed-first`` option is added to capture the list of failed tests
+  and to re-execute them first::
+
+    $ python -m numba.runtests --failed-first -mvb
+
+* The ``--last-failed`` option is used with ``--failed-first`` to execute
+  the previously failed tests only::
+
+    $ python -m numba.runtests --last-failed -mvb
 
 Development rules
 -----------------
@@ -178,27 +222,23 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Numba is to be kept compatible with Python 2.7, 3.4 and 3.5 under
-at least Linux, OS X and Windows.  Also, Numpy versions 1.7 and upwards
-are supported.
-
-We don't expect invidual contributors to test those combinations
-themselves! Instead, we have a continuous integration platform.  Part of
-the platform is hosted at `Travis-CI <https://travis-ci.org/numba/numba>`_.
-Each time you submit a pull request, a corresponding build will be started
-at Travis-CI and check that Numba builds and tests without any errors.
-You can expect this to take less than 20 minutes.
-
-Some platforms (such as Windows) cannot be hosted by Travis-CI, and the
-Numba team has therefore access to a separate platform provided by
-`Continuum <http://continuum.io>`_, our sponsor. We hope parts of that
-infrastructure can be made public in the future.
+Every commit to the master branch is automatically tested on all of the
+platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
+AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
+also use `Travis CI <https://travis-ci.org/numba/numba>`_ and 
+`AppVeyor <https://ci.appveyor.com/project/seibert/numba-j46mi>`_ to provide 
+public continuous integration information for as many combinations as can be
+supported by the service.  Travis CI automatically tests all pull requests on OS
+X and Linux, as well as a sampling of different Python and NumPy versions.  If
+you see problems on platforms you are unfamiliar with, feel free to ask for
+help in your pull request.  The Numba core developers can help diagnose
+cross-platform compatibiliy issues.
 
 
 Documentation
 -------------
 
-The numba documentation is split over two repositories:
+The Numba documentation is split over two repositories:
 
 * This documentation is in the ``docs`` directory inside the
   `Numba repository <https://github.com/numba/numba>`_.
@@ -214,11 +254,9 @@ This documentation is under the ``docs`` directory of the `Numba repository`_.
 It is built with `Sphinx <http://sphinx-doc.org/>`_, which is available
 using conda or pip.
 
-To build the documentation, you need the basicstrap theme and
-its dependencies::
+To build the documentation, you need the bootstrap theme::
 
-   $ pip install sphinxjp.themes.basicstrap
-   $ pip install sphinxjp.themecore
+   $ pip install sphinx_bootstrap_theme
 
 You can edit the source files under ``docs/source/``, after which you can
 build and check the documentation::

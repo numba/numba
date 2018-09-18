@@ -3,9 +3,8 @@ NRT specific optimizations
 """
 import re
 from collections import defaultdict, deque
-
-import numba.llvmthreadsafe as llvmts
-
+from llvmlite import binding as ll
+from numba import cgutils
 
 _regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')
@@ -163,5 +162,10 @@ def remove_redundant_nrt_refct(ll_module):
     except NameError:
         return ll_module
 
+    # the optimisation pass loses the name of module as it operates on
+    # strings, so back it up and reset it on completion
+    name = ll_module.name
     newll = _remove_redundant_nrt_refct(str(ll_module))
-    return llvmts.parse_assembly(newll)
+    new_mod = ll.parse_assembly(newll)
+    new_mod.name = cgutils.normalize_ir_text(name)
+    return new_mod

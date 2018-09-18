@@ -11,9 +11,9 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see test_script below)
-    - PYTHON: "3.4"
+    - PYTHON: "3.7"
       ARCH: "64"
-      NUMPY: "1.11"
+      NUMPY: "1.15"
       CONDA_ENV: testenv
 
 init:
@@ -23,9 +23,8 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # Update to a known good conda
-  # (to workaround http://help.appveyor.com/discussions/problems/4910)
-  - conda install -q -y conda=4.1.4
+  # Update conda
+  - conda update -q -y conda
   - buildscripts\\incremental\\setup_conda_environment.cmd
   # Build the package
   - buildscripts\\incremental\\build.cmd
@@ -42,4 +41,5 @@ test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
+  - "%CMD_IN_ENV% python -m numba.tests.test_runtests"
   - "%CMD_IN_ENV% python runtests.py -b --tags important"

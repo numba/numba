@@ -115,13 +115,13 @@ parallel                Multi-core CPU
 
 cuda                    CUDA GPU
 
-                        .. NOTE:: This creates an *ufunc-like* object.  
+                        .. NOTE:: This creates an *ufunc-like* object.
 			  See `documentation for CUDA ufunc <../cuda/ufunc.html>`_ for detail.
 =================       ===============================================================
 
 A general guideline is to choose different targets for different data sizes
 and algorithms.
-The "cpu" target works well for small data sizes (approx. less than 1KB) and low 
+The "cpu" target works well for small data sizes (approx. less than 1KB) and low
 compute intensity algorithms. It has the least amount of overhead.
 The "parallel" target works well for medium data sizes (approx. less than 1MB).
 Threading adds a small delay.
@@ -130,6 +130,7 @@ high compute intensity algorithms.  Transfering memory to and from the GPU adds
 significant overhead.
 
 
+.. _guvectorize:
 
 The ``@guvectorize`` decorator
 ==============================
@@ -149,10 +150,10 @@ the Numba-generated code.
 
 Here is a very simple example::
 
-   @guvectorize([(int64[:], int64[:], int64[:])], '(n),()->(n)')
+   @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
    def g(x, y, res):
        for i in range(x.shape[0]):
-           res[i] = x[i] + y[0]
+           res[i] = x[i] + y
 
 The underlying Python function simply adds a given scalar (``y``) to all
 elements of a 1-dimension array.  What's more interesting is the declaration.
@@ -167,10 +168,9 @@ There are two things there:
   only support ``int64`` arrays.
 
 .. note::
-   The concrete signature does not allow for scalar values, even though
-   the layout may mention them.  In this example, the second argument is
-   declared as ``int64[:]``, not ``int64``.
-   This is why it must be dereferenced by fetching ``y[0]``.
+   1D array type can also receive scalar arguments (those with shape ``()``).
+   In the above example, the second argument also could be declared as
+   ``int64[:]``.  In that case, the value must be read by ``y[0]``.
 
 We can now check what the compiled ufunc does, over a simple example::
 

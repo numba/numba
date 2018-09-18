@@ -70,6 +70,12 @@ def lift_gen1(x):
         a[i] = x
     yield np.sum(a)
 
+def lift_issue2561():
+    np.empty(1)   # This forces objectmode because no nrt
+    for i in range(10):
+        for j in range(10):
+            return 1
+    return 2
 
 def reject1(x):
     a = np.arange(4)
@@ -201,6 +207,9 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift5(self):
         self.check_lift_ok(lift5, (types.intp,), (123,))
 
+    def test_lift_issue2561(self):
+        self.check_no_lift(lift_issue2561, (), ())
+
     @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
@@ -293,6 +302,10 @@ class TestLoopLiftingAnnotate(TestCase):
 
 
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
+    def assert_has_lifted(self, jitted, loopcount):
+        lifted = jitted.overloads[jitted.signatures[0]].lifted
+        self.assertEqual(len(lifted), loopcount)
+
     def test_issue_734(self):
         from numba import jit, void, int32, double
 
@@ -334,7 +347,34 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
         np.testing.assert_equal(test.py_func(x), test(x))
 
-    def test_no_iteration(self):
+    def test_issue_2368(self):
+        from numba import jit
+
+        def lift_issue2368(a, b):
+            s = 0
+            for e in a:
+                s += e
+            h = b.__hash__()
+            return s, h
+
+        a = np.ones(10)
+        b = object()
+        jitted = jit(lift_issue2368)
+
+        expected = lift_issue2368(a, b)
+        got = jitted(a, b)
+
+        self.assertEqual(expected[0], got[0])
+        self.assertEqual(expected[1], got[1])
+
+        jitloop = jitted.overloads[jitted.signatures[0]].lifted[0]
+        [loopcres] = jitloop.overloads.values()
+        # assert lifted function is native
+        self.assertTrue(loopcres.fndesc.native)
+
+    def test_no_iteration_w_redef(self):
+        # redefinition of res in the loop with no use of res should not
+        # prevent lifting
         from numba import jit
 
         @jit(forceobj=True)
@@ -344,11 +384,43 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 res = i
             return res
 
-        # loop count = 0
+        # loop count = 1, loop lift but loop body not execute
         self.assertEqual(test.py_func(-1), test(-1))
+        self.assert_has_lifted(test, loopcount=1)
+        # loop count = 1, loop will lift and will execute
+        self.assertEqual(test.py_func(1), test(1))
+        self.assert_has_lifted(test, loopcount=1)
+
+    def test_no_iteration(self):
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            res = 0
+            for i in range(n):
+                res += i
+            return res
+
+        # loop count = 1
+        self.assertEqual(test.py_func(-1), test(-1))
+        self.assert_has_lifted(test, loopcount=1)
+        # loop count = 1
+        self.assertEqual(test.py_func(1), test(1))
+        self.assert_has_lifted(test, loopcount=1)
+
+    def test_define_in_loop_body(self):
+        # tests a definition in a loop that leaves the loop is liftable
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            for i in range(n):
+                res = i
+            return res
 
         # loop count = 1
         self.assertEqual(test.py_func(1), test(1))
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_invalid_argument(self):
         """Test a problem caused by invalid discovery of loop argument
@@ -378,7 +450,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         arg = np.arange(10)
         self.assertEqual(test.py_func(arg), test(arg))
 
-
     def test_conditionally_defined_in_loop(self):
         from numba import jit
         @jit(forceobj=True)
@@ -389,7 +460,10 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 if i > 0:
                    x = 6
                 y += x
+            return y, x
+
         self.assertEqual(test.py_func(), test())
+        self.assert_has_lifted(test, loopcount=1)
 
     def test_stack_offset_error_when_has_no_return(self):
         from numba import jit
@@ -426,6 +500,37 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         cfoo = jit(foo)
         self.assertEqual(foo(10), cfoo(10))
+
+    def test_recompilation_loop(self):
+        """
+        https://github.com/numba/numba/issues/2481
+        """
+        from numba import jit
+
+        def foo(x, y):
+            # slicing to make array `x` into different layout
+            # to cause a new compilation of the lifted loop
+            A = x[::y]
+            c = 1
+            for k in range(A.size):
+                object()  # to force objectmode and looplifting
+                c = c * A[::-1][k]   # the slice that is failing in static_getitem
+            return c
+
+        cfoo = jit(foo)
+        # First run just works
+        args = np.arange(10), 1
+        self.assertEqual(foo(*args), cfoo(*args))
+        # Exactly 1 lifted loop so far
+        self.assertEqual(len(cfoo.overloads[cfoo.signatures[0]].lifted), 1)
+        lifted = cfoo.overloads[cfoo.signatures[0]].lifted[0]
+        # The lifted loop has 1 signature
+        self.assertEqual(len(lifted.signatures), 1)
+        # Use different argument to trigger a new compilation of the lifted loop
+        args = np.arange(10), -1
+        self.assertEqual(foo(*args), cfoo(*args))
+        # Ensure that is really a new overload for the lifted loop
+        self.assertEqual(len(lifted.signatures), 2)
 
 
 if __name__ == '__main__':

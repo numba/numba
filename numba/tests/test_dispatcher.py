@@ -8,15 +8,34 @@ import subprocess
 import sys
 import threading
 import warnings
+import inspect
+import pickle
+import weakref
+
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
+
+try:
+    import pygments
+except ImportError:
+    pygments = None
 
 import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, jit, generated_jit, types, typeof
-from numba import config
 from numba import _dispatcher
+from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
-from .support import TestCase, tag, temp_directory, import_dynamic
+from .support import (TestCase, tag, temp_directory, import_dynamic,
+                      override_env_config, capture_cache_log, captured_stdout)
+from numba.targets import codegen
+from numba.caching import _UserWideCacheLocator
+from numba.dispatcher import Dispatcher
+
+import llvmlite.binding as ll
 
 
 def dummy(x):
@@ -69,6 +88,42 @@ class BaseTest(TestCase):
             self.assertPreciseEqual(result, expected)
         f = jit(**self.jit_args)(pyfunc)
         return f, check
+
+def check_access_is_preventable():
+    # This exists to check whether it is possible to prevent access to
+    # a file/directory through the use of `chmod 500`. If a user has
+    # elevated rights (e.g. root) then writes are likely to be possible
+    # anyway. Tests that require functioning access prevention are
+    # therefore skipped based on the result of this check.
+    tempdir = temp_directory('test_cache')
+    test_dir = (os.path.join(tempdir, 'writable_test'))
+    os.mkdir(test_dir)
+    # assume access prevention is not possible
+    ret = False
+    # check a write is possible
+    with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
+        f.write('check1')
+    # now forbid access
+    os.chmod(test_dir, 0o500)
+    try:
+        with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
+            f.write('check2')
+    except (OSError, IOError) as e:
+        # Check that the cause of the exception is due to access/permission
+        # as per https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37
+        eno = getattr(e, 'errno', None)
+        if eno in (errno.EACCES, errno.EPERM):
+            # errno reports access/perm fail so access prevention via
+            # `chmod 500` works for this user.
+            ret = True
+    finally:
+        os.chmod(test_dir, 0o775)
+        shutil.rmtree(test_dir)
+    return ret
+
+_access_preventable = check_access_is_preventable()
+_access_msg = "Cannot create a directory to which writes are preventable"
+skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 
 class TestDispatcher(BaseTest):
@@ -290,6 +345,50 @@ class TestDispatcher(BaseTest):
         [cr] = bar.overloads.values()
         self.assertEqual(len(cr.lifted), 1)
 
+    def test_serialization(self):
+        """
+        Test serialization of Dispatcher objects
+        """
+        @jit(nopython=True)
+        def foo(x):
+            return x + 1
+
+        self.assertEqual(foo(1), 2)
+
+        # get serialization memo
+        memo = Dispatcher._memo
+        Dispatcher._recent.clear()
+        memo_size = len(memo)
+
+        # pickle foo and check memo size
+        serialized_foo = pickle.dumps(foo)
+        # increases the memo size
+        self.assertEqual(memo_size + 1, len(memo))
+
+        # unpickle
+        foo_rebuilt = pickle.loads(serialized_foo)
+        self.assertEqual(memo_size + 1, len(memo))
+
+        self.assertIs(foo, foo_rebuilt)
+
+        # do we get the same object even if we delete all the explict references?
+        id_orig = id(foo_rebuilt)
+        del foo
+        del foo_rebuilt
+        self.assertEqual(memo_size + 1, len(memo))
+        new_foo = pickle.loads(serialized_foo)
+        self.assertEqual(id_orig, id(new_foo))
+
+        # now clear the recent cache
+        ref = weakref.ref(new_foo)
+        del new_foo
+        Dispatcher._recent.clear()
+        self.assertEqual(memo_size, len(memo))
+
+        # show that deserializing creates a new object
+        newer_foo = pickle.loads(serialized_foo)
+        self.assertIs(ref(), None)
+
 
 class TestSignatureHandling(BaseTest):
     """
@@ -493,10 +592,21 @@ class TestDispatcherMethods(TestCase):
             # Look for the function name
             self.assertTrue("foo" in asm)
 
-    @unittest.skipIf(config.IS_WIN32 and not config.IS_32BITS, "access violation on 64-bit windows")
+    def _check_cfg_display(self, cfg, wrapper=''):
+        # simple stringify test
+        if wrapper:
+            wrapper = "{}{}".format(len(wrapper), wrapper)
+        module_name = __name__.split('.', 1)[0]
+        module_len = len(module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
+        self.assertRegexpMatches(str(cfg), prefix)
+        # .display() requires an optional dependency on `graphviz`.
+        # just test for the attribute without running it.
+        self.assertTrue(callable(cfg.display))
+
     def test_inspect_cfg(self):
-        # Exercise the .inspect_cfg().  These are minimal tests and does not
-        # fully checks the correctness of the function.
+        # Exercise the .inspect_cfg(). These are minimal tests and do not fully
+        # check the correctness of the function.
         @jit
         def foo(the_array):
             return the_array.sum()
@@ -520,30 +630,34 @@ class TestDispatcherMethods(TestCase):
         self.assertEqual(set([s1, s2, s3]),
                          set(map(lambda x: (typeof(x),), [a1, a2, a3])))
 
-        def check_display(cfg, wrapper=''):
-            # simple stringify test
-            if wrapper:
-                wrapper = "{}{}".format(len(wrapper), wrapper)
-            module_name = __name__.split('.', 1)[0]
-            module_len = len(module_name)
-            prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
-            self.assertRegexpMatches(str(cfg), prefix)
-            # .display() requires an optional dependency on `graphviz`.
-            # just test for the attribute without running it.
-            self.assertTrue(callable(cfg.display))
-
         for cfg in cfgs.values():
-            check_display(cfg)
+            self._check_cfg_display(cfg)
         self.assertEqual(len(list(cfgs.values())), 3)
 
         # Call inspect_cfg(signature)
         cfg = foo.inspect_cfg(signature=foo.signatures[0])
-        check_display(cfg)
+        self._check_cfg_display(cfg)
+
+    def test_inspect_cfg_with_python_wrapper(self):
+        # Exercise the .inspect_cfg() including the python wrapper.
+        # These are minimal tests and do not fully check the correctness of
+        # the function.
+        @jit
+        def foo(the_array):
+            return the_array.sum()
+
+        # Generate 3 overloads
+        a1 = np.ones(1)
+        a2 = np.ones((1, 1))
+        a3 = np.ones((1, 1, 1))
+        foo(a1)
+        foo(a2)
+        foo(a3)
 
         # Call inspect_cfg(signature, show_wrapper="python")
         cfg = foo.inspect_cfg(signature=foo.signatures[0],
                               show_wrapper="python")
-        check_display(cfg, wrapper='cpython')
+        self._check_cfg_display(cfg, wrapper='cpython')
 
     def test_inspect_types(self):
         @jit
@@ -553,6 +667,34 @@ class TestDispatcherMethods(TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types(utils.StringIO())
+
+    @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
+    @unittest.skipIf(pygments is None, "please install the 'pygments' package")
+    def test_inspect_types_pretty(self):
+        @jit
+        def foo(a, b):
+            return a + b
+
+        foo(1, 2)
+
+        # Exercise the method, dump the output
+        with captured_stdout():
+            ann = foo.inspect_types(pretty=True)
+
+        # ensure HTML <span> is found in the annotation output
+        for k, v in ann.ann.items():
+            span_found = False
+            for line in v['pygments_lines']:
+                if 'span' in line[2]:
+                    span_found = True
+            self.assertTrue(span_found)
+
+        # check that file+pretty kwarg combo raises
+        with self.assertRaises(ValueError) as raises:
+            foo.inspect_types(file=utils.StringIO(), pretty=True)
+
+        self.assertIn("`file` must be None if `pretty=True`",
+                      str(raises.exception))
 
     def test_issue_with_array_layout_conflict(self):
         """
@@ -647,8 +789,7 @@ class BaseCacheTest(TestCase):
         pass
 
 
-class TestCache(BaseCacheTest):
-
+class BaseCacheUsecasesTest(BaseCacheTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
@@ -694,6 +835,9 @@ class TestCache(BaseCacheTest):
         if misses is not None:
             self.assertEqual(sum(st.cache_misses.values()), misses,
                              st.cache_misses)
+
+
+class TestCache(BaseCacheUsecasesTest):
 
     @tag('important')
     def test_caching(self):
@@ -920,6 +1064,28 @@ class TestCache(BaseCacheTest):
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
 
+    def test_frozen(self):
+        from .dummy_module import function
+        old_code = function.__code__
+        code_obj = compile('pass', 'tests/dummy_module.py', 'exec')
+        try:
+            function.__code__ = code_obj
+
+            source = inspect.getfile(function)
+            # doesn't return anything, since it cannot find the module
+            # fails unless the executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsNone(locator)
+
+            sys.frozen = True
+            # returns a cache locator object, only works when executable is frozen
+            locator = _UserWideCacheLocator.from_function(function, source)
+            self.assertIsInstance(locator, _UserWideCacheLocator)
+
+        finally:
+            function.__code__ = old_code
+            del sys.frozen
+
     def _test_pycache_fallback(self):
         """
         With a disabled __pycache__, test there is a working fallback
@@ -945,6 +1111,7 @@ class TestCache(BaseCacheTest):
         # wouldn't be met)
         self.check_pycache(0)
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_creatable_pycache(self):
@@ -955,6 +1122,7 @@ class TestCache(BaseCacheTest):
 
         self._test_pycache_fallback()
 
+    @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
     def test_non_writable_pycache(self):
@@ -1019,7 +1187,83 @@ class TestCache(BaseCacheTest):
         execute_with_input()
         # Run a second time and check caching
         err = execute_with_input()
-        self.assertEqual(err.strip(), "cache hits = 1")
+        self.assertIn("cache hits = 1", err.strip())
+
+
+class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
+    # Disable parallel testing due to envvars modification
+    _numba_parallel_test_ = False
+
+    def check_later_mtimes(self, mtimes_old):
+        match_count = 0
+        for k, v in self.get_cache_mtimes().items():
+            if k in mtimes_old:
+                self.assertGreaterEqual(v, mtimes_old[k])
+                match_count += 1
+        self.assertGreater(match_count, 0,
+                           msg='nothing to compare')
+
+    def test_user_set_cpu_name(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        mod.self_test()
+        cache_size = len(self.cache_contents())
+
+        mtimes = self.get_cache_mtimes()
+        # Change CPU name to generic
+        with override_env_config('NUMBA_CPU_NAME', 'generic'):
+            self.run_in_separate_process()
+
+        self.check_later_mtimes(mtimes)
+        self.assertGreater(len(self.cache_contents()), cache_size)
+        # Check cache index
+        cache = mod.add_usecase._cache
+        cache_file = cache._cache_file
+        cache_index = cache_file._load_index()
+        self.assertEqual(len(cache_index), 2)
+        [key_a, key_b] = cache_index.keys()
+        if key_a[1][1] == ll.get_host_cpu_name():
+            key_host, key_generic = key_a, key_b
+        else:
+            key_host, key_generic = key_b, key_a
+        self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_host[1][2], codegen.get_host_cpu_features())
+        self.assertEqual(key_generic[1][1], 'generic')
+        self.assertEqual(key_generic[1][2], '')
+
+    def test_user_set_cpu_features(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        mod.self_test()
+        cache_size = len(self.cache_contents())
+
+        mtimes = self.get_cache_mtimes()
+        # Change CPU feature
+        my_cpu_features = '-sse;-avx'
+
+        system_features = codegen.get_host_cpu_features()
+
+        self.assertNotEqual(system_features, my_cpu_features)
+        with override_env_config('NUMBA_CPU_FEATURES', my_cpu_features):
+            self.run_in_separate_process()
+        self.check_later_mtimes(mtimes)
+        self.assertGreater(len(self.cache_contents()), cache_size)
+        # Check cache index
+        cache = mod.add_usecase._cache
+        cache_file = cache._cache_file
+        cache_index = cache_file._load_index()
+        self.assertEqual(len(cache_index), 2)
+        [key_a, key_b] = cache_index.keys()
+
+        if key_a[1][2] == system_features:
+            key_host, key_generic = key_a, key_b
+        else:
+            key_host, key_generic = key_b, key_a
+
+        self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_host[1][2], system_features)
+        self.assertEqual(key_generic[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_generic[1][2], my_cpu_features)
 
 
 class TestMultiprocessCache(BaseCacheTest):
@@ -1049,6 +1293,241 @@ class TestMultiprocessCache(BaseCacheTest):
         finally:
             pool.close()
         self.assertEqual(res, n * (n - 1) // 2)
+
+
+class TestCacheFileCollision(unittest.TestCase):
+    _numba_parallel_test_ = False
+
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "caching_file_loc_fodder"
+    source_text_1 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 123
+"""
+    source_text_2 = """
+from numba import njit
+@njit(cache=True)
+def bar():
+    return 321
+"""
+
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+        sys.path.insert(0, self.tempdir)
+        self.modname = 'module_name_that_is_unlikely'
+        self.assertNotIn(self.modname, sys.modules)
+        self.modname_bar1 = self.modname
+        self.modname_bar2 = '.'.join([self.modname, 'foo'])
+        foomod = os.path.join(self.tempdir, self.modname)
+        os.mkdir(foomod)
+        with open(os.path.join(foomod, '__init__.py'), 'w') as fout:
+            print(self.source_text_1, file=fout)
+        with open(os.path.join(foomod, 'foo.py'), 'w') as fout:
+            print(self.source_text_2, file=fout)
+
+    def tearDown(self):
+        sys.modules.pop(self.modname_bar1, None)
+        sys.modules.pop(self.modname_bar2, None)
+        sys.path.remove(self.tempdir)
+
+    def import_bar1(self):
+        return import_dynamic(self.modname_bar1).bar
+
+    def import_bar2(self):
+        return import_dynamic(self.modname_bar2).bar
+
+    def test_file_location(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        # Check that the cache file is named correctly
+        idxname1 = bar1._cache._cache_file._index_name
+        idxname2 = bar2._cache._cache_file._index_name
+        self.assertNotEqual(idxname1, idxname2)
+        self.assertTrue(idxname1.startswith("__init__.bar-3.py"))
+        self.assertTrue(idxname2.startswith("foo.bar-3.py"))
+
+    @unittest.skipUnless(hasattr(multiprocessing, 'get_context'),
+                         'Test requires multiprocessing.get_context')
+    def test_no_collision(self):
+        bar1 = self.import_bar1()
+        bar2 = self.import_bar2()
+        with capture_cache_log() as buf:
+            res1 = bar1()
+        cachelog = buf.getvalue()
+        # bar1 should save new index and data
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        with capture_cache_log() as buf:
+            res2 = bar2()
+        cachelog = buf.getvalue()
+        # bar2 should save new index and data
+        self.assertEqual(cachelog.count('index saved'), 1)
+        self.assertEqual(cachelog.count('data saved'), 1)
+        self.assertEqual(cachelog.count('index loaded'), 0)
+        self.assertEqual(cachelog.count('data loaded'), 0)
+        self.assertNotEqual(res1, res2)
+
+        try:
+            # Make sure we can spawn new process without inheriting
+            # the parent context.
+            mp = multiprocessing.get_context('spawn')
+        except ValueError:
+            print("missing spawn context")
+
+        q = mp.Queue()
+        # Start new process that calls `cache_file_collision_tester`
+        proc = mp.Process(target=cache_file_collision_tester,
+                          args=(q, self.tempdir,
+                                self.modname_bar1,
+                                self.modname_bar2))
+        proc.start()
+        # Get results from the process
+        log1 = q.get()
+        got1 = q.get()
+        log2 = q.get()
+        got2 = q.get()
+        proc.join()
+
+        # The remote execution result of bar1() and bar2() should match
+        # the one executed locally.
+        self.assertEqual(got1, res1)
+        self.assertEqual(got2, res2)
+
+        # The remote should have loaded bar1 from cache
+        self.assertEqual(log1.count('index saved'), 0)
+        self.assertEqual(log1.count('data saved'), 0)
+        self.assertEqual(log1.count('index loaded'), 1)
+        self.assertEqual(log1.count('data loaded'), 1)
+
+        # The remote should have loaded bar2 from cache
+        self.assertEqual(log2.count('index saved'), 0)
+        self.assertEqual(log2.count('data saved'), 0)
+        self.assertEqual(log2.count('index loaded'), 1)
+        self.assertEqual(log2.count('data loaded'), 1)
+
+
+def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
+    sys.path.insert(0, tempdir)
+    bar1 = import_dynamic(modname_bar1).bar
+    bar2 = import_dynamic(modname_bar2).bar
+    with capture_cache_log() as buf:
+        r1 = bar1()
+    q.put(buf.getvalue())
+    q.put(r1)
+    with capture_cache_log() as buf:
+        r2 = bar2()
+    q.put(buf.getvalue())
+    q.put(r2)
+
+
+class TestDispatcherFunctionBoundaries(TestCase):
+    def test_pass_dispatcher_as_arg(self):
+        # Test that a Dispatcher object can be pass as argument
+        @jit(nopython=True)
+        def add1(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def bar(fn, x):
+            return fn(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(add1, x)
+
+        # Check dispatcher as argument inside NPM
+        inputs = [1, 11.1, np.arange(10)]
+        expected_results = [x + 1 for x in inputs]
+
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(foo(arg), expect)
+
+        # Check dispatcher as argument from python
+        for arg, expect in zip(inputs, expected_results):
+            self.assertPreciseEqual(bar(add1, arg), expect)
+
+    def test_dispatcher_as_arg_usecase(self):
+        @jit(nopython=True)
+        def maximum(seq, cmpfn):
+            tmp = seq[0]
+            for each in seq[1:]:
+                cmpval = cmpfn(tmp, each)
+                if cmpval < 0:
+                    tmp = each
+            return tmp
+
+        got = maximum([1, 2, 3, 4], cmpfn=jit(lambda x, y: x - y))
+        self.assertEqual(got, 4)
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[0] - y[0]))
+        self.assertEqual(got, (4, 0))
+        got = maximum(list(zip(range(5), range(5)[::-1])),
+                      cmpfn=jit(lambda x, y: x[1] - y[1]))
+        self.assertEqual(got, (0, 4))
+
+    def test_dispatcher_cannot_return_to_python(self):
+        @jit(nopython=True)
+        def foo(fn):
+            return fn
+
+        fn = jit(lambda x: x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(fn)
+        self.assertRegexpMatches(str(raises.exception),
+                                 "cannot convert native .* to Python object")
+
+    def test_dispatcher_in_sequence_arg(self):
+        @jit(nopython=True)
+        def one(x):
+            return x + 1
+
+        @jit(nopython=True)
+        def two(x):
+            return one(one(x))
+
+        @jit(nopython=True)
+        def three(x):
+            return one(one(one(x)))
+
+        @jit(nopython=True)
+        def choose(fns, x):
+            return fns[0](x), fns[1](x), fns[2](x)
+
+        # Tuple case
+        self.assertEqual(choose((one, two, three), 1), (2, 3, 4))
+        # List case
+        self.assertEqual(choose([one, one, one], 1), (2, 2, 2))
+
+
+class TestBoxingDefaultError(unittest.TestCase):
+    # Testing default error at boxing/unboxing
+    def test_unbox_runtime_error(self):
+        # Dummy type has no unbox support
+        def foo(x):
+            pass
+        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point(None)
+        self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
+
+    def test_box_runtime_error(self):
+        def foo():
+            return unittest  # Module type has no boxing logic
+        cres = compile_isolated(foo, ())
+        with self.assertRaises(TypeError) as raises:
+            # Can pass in whatever and the unbox logic will always raise
+            # without checking the input value.
+            cres.entry_point()
+        pat = "cannot convert native Module.* to Python object"
+        self.assertRegexpMatches(str(raises.exception), pat)
 
 
 if __name__ == '__main__':

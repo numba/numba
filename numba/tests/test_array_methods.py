@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product, cycle
+from itertools import product, cycle, permutations
 import sys
 
 import numpy as np
@@ -8,10 +8,11 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
-from numba.errors import TypingError
+from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
+from .matmul_usecase import needs_blas
 
 
 def np_around_array(arr, decimals, out):
@@ -73,6 +74,9 @@ def np_copy(arr):
 def np_asfortranarray(arr):
     return np.asfortranarray(arr)
 
+def np_ascontiguousarray(arr):
+    return np.ascontiguousarray(arr)
+
 def array_view(arr, newtype):
     return arr.view(newtype)
 
@@ -82,6 +86,8 @@ def array_take(arr, indices):
 def array_take_kws(arr, indices, axis):
     return arr.take(indices, axis=axis)
 
+def array_fill(arr, val):
+    return arr.fill(val)
 
 # XXX Can't pass a dtype as a Dispatcher argument for now
 def make_array_view(newtype):
@@ -145,11 +151,45 @@ def array_sum(a, *args):
 def array_sum_kws(a, axis):
     return a.sum(axis=axis)
 
+def array_sum_const_multi(arr, axis):
+    # use np.sum with different constant args multiple times to check
+    # for internal compile cache to see if constant-specialization is
+    # applied properly.
+    a = np.sum(arr, axis=4)
+    b = np.sum(arr, 3)
+    # the last invocation uses runtime-variable
+    c = np.sum(arr, axis)
+    # as method
+    d = arr.sum(axis=5)
+    # negative const axis
+    e = np.sum(arr, axis=-1)
+    return a, b, c, d, e
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
 
 def array_cumsum_kws(a, axis):
     return a.cumsum(axis=axis)
+
+
+def array_real(a):
+    return np.real(a)
+
+
+def array_imag(a):
+    return np.imag(a)
+
+
+def np_unique(a):
+    return np.unique(a)
+
+
+def array_dot(a, b):
+    return a.dot(b)
+
+
+def array_dot_chain(a, b):
+    return a.dot(b).dot(b)
 
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
@@ -437,6 +477,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.array([0]).reshape(())
         check_arr(arr)
 
+
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
 
@@ -454,6 +495,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray,
                                          check_sameness=numpy_version >= (1, 8))
+
+    def test_np_ascontiguousarray(self):
+        self.check_layout_dependent_func(np_ascontiguousarray,
+                                         check_sameness=numpy_version > (1, 11))
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
@@ -525,22 +570,40 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             arr[arr > 0.7] = float('nan')
             return arr
 
-        def check_arr(arr):
-            x = np.zeros_like(arr, dtype=np.float64)
-            y = np.copy(x)
+        layouts = cycle(['C', 'F', 'A'])
+        _types = [np.int32, np.int64, np.float32, np.float64, np.complex64,
+                  np.complex128]
+
+        np.random.seed(42)
+
+        def check_arr(arr, layout=False):
+            np.random.shuffle(_types)
+            if layout != False:
+                x = np.zeros_like(arr, dtype=_types[0], order=layout)
+                y = np.zeros_like(arr, dtype=_types[1], order=layout)
+                arr = arr.copy(order=layout)
+            else:
+                x = np.zeros_like(arr, dtype=_types[0], order=next(layouts))
+                y = np.zeros_like(arr, dtype=_types[1], order=next(layouts))
             x.fill(4)
             y.fill(9)
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
             got = cres.entry_point(arr, x, y)
             # Contiguity of result varies accross Numpy versions, only
-            # check contents.
-            self.assertEqual(got.dtype, expected.dtype)
-            np.testing.assert_array_equal(got, expected)
+            # check contents. NumPy 1.11+ seems to stabilize.
+            if numpy_version < (1, 11):
+                self.assertEqual(got.dtype, expected.dtype)
+                np.testing.assert_array_equal(got, expected)
+            else:
+                self.assertPreciseEqual(got, expected)
 
         def check_scal(scal):
             x = 4
             y = 5
+            np.random.shuffle(_types)
+            x = _types[0](4)
+            y = _types[1](5)
             cres = compile_isolated(pyfunc, (typeof(scal), typeof(x), typeof(y)))
             expected = pyfunc(scal, x, y)
             got = cres.entry_point(scal, x, y)
@@ -559,6 +622,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4)))
         check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
+
+        check_arr(arr.reshape((2, 3, 4)), layout='F')
+        check_arr(arr.reshape((2, 3, 4)).T, layout='F')
+        check_arr(arr.reshape((2, 3, 4))[::2], layout='F')
+
         for v in (0.0, 1.5, float('nan')):
             arr = np.array([v]).reshape(())
             check_arr(arr)
@@ -626,16 +694,73 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         # OK
-        a = np.ones((2, 3))
+        a = np.ones((7, 6, 5, 4, 3))
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # BAD: with axis
-        with self.assertRaises(TypingError):
-            cfunc(a, 1)
-        # BAD: with kw axis
+        # OK
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+
+    def test_sum_kws(self):
         pyfunc = array_sum_kws
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(TypingError):
-            cfunc(a, axis=1)
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
+        # OK
+        self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
+
+    def test_sum_const(self):
+        pyfunc = array_sum_const_multi
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.ones((3, 4, 5, 6, 7, 8))
+        axis = 1
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+        axis = 2
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+
+    def test_sum_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+        pyfunc = array_sum
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.ones((7, 6, 5, 4, 3))
+        b = np.ones((4, 3))
+        # BAD: axis > dimensions
+        with self.assertRaises(ValueError):
+            cfunc(b, 2)
+        # BAD: negative axis
+        with self.assertRaises(ValueError):
+            cfunc(a, -1)
+        # BAD: axis greater than 3
+        with self.assertRaises(ValueError):
+            cfunc(a, 4)
+
+    def test_sum_const_negative(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @jit(nopython=True)
+        def foo(arr):
+            return arr.sum(axis=-3)
+
+        # ndim == 4, axis == -3, OK
+        a = np.ones((1, 2, 3, 4))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 3, axis == -3, OK
+        a = np.ones((1, 2, 3))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 2, axis == -3, BAD
+        a = np.ones((1, 2))
+        with self.assertRaises(LoweringError) as raises:
+            foo(a)
+        errmsg = "'axis' entry is out of bounds"
+        self.assertIn(errmsg, str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            foo.py_func(a)
+        # Numpy 1.13 has a different error message than prior numpy
+        # Just check for the "out of bounds" phrase in it.
+        self.assertIn("out of bounds", str(raises.exception))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
@@ -651,7 +776,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         with self.assertRaises(TypingError):
             cfunc(a, axis=1)
-
 
     def test_take(self):
         pyfunc = array_take
@@ -669,7 +793,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # 2. 1d array index
         # 3. nd array index, >2d and F order
         # 4. reflected list
-        
+        # 5. tuples
+
         test_indices = []
         test_indices.append(1)
         test_indices.append(5)
@@ -680,7 +805,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         test_indices.append(np.array([[[1, 5, 1], [11, 3, 0]]]))
         test_indices.append(np.array([[[[1, 5]], [[11, 0]],[[1, 2]]]]))
         test_indices.append([1, 5, 1, 11, 3])
-    
+        test_indices.append((1, 5, 1))
+        test_indices.append(((1, 5, 1), (11, 3, 2)))
+        test_indices.append((((1,), (5,), (1,)), ((11,), (3,), (2,))))
+
         layouts = cycle(['C', 'F', 'A'])
 
         for dt in [np.float64, np.int64, np.complex128]:
@@ -700,7 +828,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # check float indexing raises
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
-       
+
         # check unsupported arg raises
         with self.assertRaises(TypingError):
             take_kws = jit(nopython=True)(array_take_kws)
@@ -713,6 +841,84 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         #exceptions leak refs
         self.disable_leak_check()
+
+    def test_fill(self):
+        pyfunc = array_fill
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr, val):
+            expected = np.copy(arr)
+            erv = pyfunc(expected, val)
+            self.assertTrue(erv is None)
+            got = np.copy(arr)
+            grv = cfunc(got, val)
+            self.assertTrue(grv is None)
+            # check mutation is the same
+            self.assertPreciseEqual(expected, got)
+
+        # scalar
+        A = np.arange(1)
+        for x in [np.float64, np.bool_]:
+            check(A, x(10))
+
+        # 2d
+        A = np.arange(12).reshape(3, 4)
+        for x in [np.float64, np.bool_]:
+            check(A, x(10))
+
+        # 4d
+        A = np.arange(48, dtype=np.complex64).reshape(2, 3, 4, 2)
+        for x in [np.float64, np.complex128, np.bool_]:
+            check(A, x(10))
+
+    def test_real(self):
+        pyfunc = array_real
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.linspace(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_imag(self):
+        pyfunc = array_imag
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.linspace(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_unique(self):
+        pyfunc = np_unique
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            np.testing.assert_equal(pyfunc(a), cfunc(a))
+
+        check(np.array([[1, 1, 3], [3, 4, 5]]))
+        check(np.array(np.zeros(5)))
+        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
+        check(np.array([]))
+
+    @needs_blas
+    def test_array_dot(self):
+        # just ensure that the dot impl dispatches correctly, do
+        # not test dot itself, this is done in test_linalg.
+        pyfunc = array_dot
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(20.).reshape(4, 5)
+        b = np.arange(5.)
+        np.testing.assert_equal(pyfunc(a, b), cfunc(a, b))
+
+        # check that chaining works
+        pyfunc = array_dot_chain
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(16.).reshape(4, 4)
+        np.testing.assert_equal(pyfunc(a, a), cfunc(a, a))
 
 
 class TestArrayComparisons(TestCase):

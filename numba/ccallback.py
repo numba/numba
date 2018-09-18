@@ -8,7 +8,7 @@ import ctypes
 
 from llvmlite import ir
 
-from . import config, sigutils, utils, compiler
+from . import utils, compiler
 from .caching import NullCache, FunctionCache
 from .dispatcher import _FunctionCompiler
 from .targets import registry
@@ -37,7 +37,8 @@ class CFunc(object):
     """
     _targetdescr = registry.cpu_target
 
-    def __init__(self, pyfunc, sig, locals, options):
+    def __init__(self, pyfunc, sig, locals, options,
+                 pipeline_class=compiler.Pipeline):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
@@ -48,7 +49,8 @@ class CFunc(object):
         self._pyfunc = pyfunc
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
-                                        options, locals)
+                                        options, locals,
+                                        pipeline_class=pipeline_class)
 
         self._wrapper_name = None
         self._wrapper_address = None
@@ -58,20 +60,19 @@ class CFunc(object):
     def enable_caching(self):
         self._cache = FunctionCache(self._pyfunc)
 
+    @compiler.global_compiler_lock
     def compile(self):
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Try to load from cache
-            cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
-            if cres is None:
-                cres = self._compile_uncached()
-                self._cache.save_overload(self._sig, cres)
-            else:
-                self._cache_hits += 1
+        # Try to load from cache
+        cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
+        if cres is None:
+            cres = self._compile_uncached()
+            self._cache.save_overload(self._sig, cres)
+        else:
+            self._cache_hits += 1
 
-            self._library = cres.library
-            self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-            self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
+        self._library = cres.library
+        self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+        self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
 
     def _compile_uncached(self):
         sig = self._sig
@@ -110,7 +111,7 @@ class CFunc(object):
 
         # XXX no obvious way to freeze an environment
         status, out = context.call_conv.call_function(
-            builder, fn, sig.return_type, sig.args, c_args, env=None)
+            builder, fn, sig.return_type, sig.args, c_args)
 
         with builder.if_then(status.is_error, likely=False):
             # If (and only if) an error occurred, acquire the GIL

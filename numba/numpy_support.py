@@ -464,3 +464,69 @@ def farray(ptr, shape, dtype=None):
     if not isinstance(shape, utils.INT_TYPES):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
+
+
+def is_contiguous(dims, strides, itemsize):
+    """Is the given shape, strides, and itemsize of C layout?
+
+    Note: The code is usable as a numba-compiled function
+    """
+    nd = len(dims)
+    # Check and skip 1s or 0s in inner dims
+    innerax = nd - 1
+    while innerax > -1 and dims[innerax] <= 1:
+        innerax -= 1
+
+    # Early exit if all axis are 1s or 0s
+    if innerax < 0:
+        return True
+
+    # Check itemsize matches innermost stride
+    if itemsize != strides[innerax]:
+        return False
+
+    # Check and skip 1s or 0s in outer dims
+    outerax = 0
+    while outerax < innerax and dims[outerax] <= 1:
+        outerax += 1
+
+    # Check remaining strides to be contiguous
+    ax = innerax
+    while ax > outerax:
+        if strides[ax] * dims[ax] != strides[ax - 1]:
+            return False
+        ax -= 1
+    return True
+
+
+def is_fortran(dims, strides, itemsize):
+    """Is the given shape, strides, and itemsize of F layout?
+
+    Note: The code is usable as a numba-compiled function
+    """
+    nd = len(dims)
+    # Check and skip 1s or 0s in inner dims
+    firstax = 0
+    while firstax < nd and dims[firstax] <= 1:
+        firstax += 1
+
+    # Early exit if all axis are 1s or 0s
+    if firstax >= nd:
+        return True
+
+    # Check itemsize matches innermost stride
+    if itemsize != strides[firstax]:
+        return False
+
+    # Check and skip 1s or 0s in outer dims
+    lastax = nd - 1
+    while lastax > firstax and dims[lastax] <= 1:
+        lastax -= 1
+
+    # Check remaining strides to be contiguous
+    ax = firstax
+    while ax < lastax:
+        if strides[ax] * dims[ax] != strides[ax + 1]:
+            return False
+        ax += 1
+    return True

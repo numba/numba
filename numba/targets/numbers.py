@@ -487,13 +487,48 @@ def int_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def bool_negate_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    res = context.cast(builder, val, typ, sig.return_type)
+    res = builder.neg(res)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+def bool_unary_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    res = context.cast(builder, val, typ, sig.return_type)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 lower_builtin('==', types.boolean, types.boolean)(int_eq_impl)
 lower_builtin('!=', types.boolean, types.boolean)(int_ne_impl)
 lower_builtin('<', types.boolean, types.boolean)(int_ult_impl)
 lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
 lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
 lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
+lower_builtin('-', types.boolean)(bool_negate_impl)
+lower_builtin('+', types.boolean)(bool_unary_positive_impl)
 
+
+@lower_builtin('==', types.Const, types.Const)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value==arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower_builtin('!=', types.Const, types.Const)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value!=arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 def _implement_integer_operators():
     ty = types.Integer
@@ -1198,7 +1233,7 @@ def hash_float(context, builder, sig, args):
     # NOTE: CPython's algorithm is more involved as it seeks to maintain
     # the invariant that hash(float(x)) == hash(x) for every integer x
     # exactly representable as a float.
-    # Numba doesn't care as it doesn't support heterogenous associative
+    # Numba doesn't care as it doesn't support heterogeneous associative
     # containers.
 
     intty = types.Integer("int%d" % ty.bitwidth)
@@ -1241,6 +1276,24 @@ def hash_complex(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
+
+@lower_cast(types.Integer, types.Const)
+def integer_to_constant(context, builder, fromty, toty, val):
+    # Perform runtime check to ensure that the runtime value
+    # matches the expected constant.
+    # The violation would imply an internal error.
+    # The runtime checking logic cannot be tested automatically.
+    # The easiest way to test is to change the comparison from `!=` to `==`
+    # so that the exception will raise when the expection is met.
+    const = context.get_constant(fromty, toty.value)
+    matches = builder.icmp_unsigned('!=', val, const)
+    with cgutils.if_unlikely(builder, matches):
+        # Raise RuntimeError about the assumption violation
+        usermsg = "numba constant integer assumption violated"
+        errmsg = "{}: expecting {}".format(usermsg, toty.value)
+        context.call_conv.return_user_exc(builder, RuntimeError, (errmsg,))
+    return cgutils.get_null_value(context.get_value_type(toty))
+
 
 @lower_cast(types.Integer, types.Integer)
 def integer_to_integer(context, builder, fromty, toty, val):

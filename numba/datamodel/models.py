@@ -288,7 +288,9 @@ class EnumModel(ProxyModel):
 @register_default(types.Object)
 @register_default(types.Module)
 @register_default(types.Phantom)
+@register_default(types.ContextManager)
 @register_default(types.Dispatcher)
+@register_default(types.ObjModeDispatcher)
 @register_default(types.ExceptionClass)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
@@ -300,7 +302,6 @@ class EnumModel(ProxyModel):
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
-@register_default(types.ArrayFlags)
 @register_default(types.RecursiveCall)
 class OpaqueModel(PrimitiveModel):
     """
@@ -323,10 +324,6 @@ class MemInfoModel(OpaqueModel):
         return True
 
     def get_nrt_meminfo(self, builder, value):
-        for tp in self.inner_types():
-            if self._dmm.lookup(tp).has_nrt_meminfo():
-                raise NotImplementedError(
-                    "unsupported nested memory-managed object")
         return value
 
 
@@ -849,6 +846,16 @@ class ArrayModel(StructModel):
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
+
+@register_default(types.ArrayFlags)
+class ArrayFlagsModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('parent', fe_type.array_type),
+        ]
+        super(ArrayFlagsModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.SmartArrayType)
 class SmartArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -1142,7 +1149,8 @@ class GeneratorModel(CompositeModel):
 class ArrayCTypesModel(StructModel):
     def __init__(self, dmm, fe_type):
         # ndim = fe_type.ndim
-        members = [('data', types.CPointer(fe_type.dtype))]
+        members = [('data', types.CPointer(fe_type.dtype)),
+                   ('meminfo', types.MemInfoPointer(fe_type.dtype))]
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
 
 

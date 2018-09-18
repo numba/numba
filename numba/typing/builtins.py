@@ -5,6 +5,7 @@ import itertools
 import numpy as np
 
 from numba import types, prange
+from numba.parfor import internal_prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -78,6 +79,7 @@ for func in RANGE_ITER_OBJECTS:
     infer_global(func, typing_key=range)(Range)
 
 infer_global(prange, typing_key=prange)(Range)
+infer_global(internal_prange, typing_key=internal_prange)(Range)
 
 @infer
 class GetIter(AbstractTemplate):
@@ -104,7 +106,7 @@ class IterNext(AbstractTemplate):
 @infer
 class PairFirst(AbstractTemplate):
     """
-    Given a heterogenous pair, return the first element.
+    Given a heterogeneous pair, return the first element.
     """
     key = "pair_first"
 
@@ -118,7 +120,7 @@ class PairFirst(AbstractTemplate):
 @infer
 class PairSecond(AbstractTemplate):
     """
-    Given a heterogenous pair, return the second element.
+    Given a heterogeneous pair, return the second element.
     """
     key = "pair_second"
 
@@ -295,16 +297,17 @@ class BitwiseInvert(ConcreteTemplate):
     # while Python returns an int.  This makes it consistent with
     # np.invert() and makes array expressions correct.
     cases = [signature(types.boolean, types.boolean)]
-    cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
-    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
 
     unsafe_casting = False
 
 class UnaryOp(ConcreteTemplate):
-    cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
-    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
+    cases = [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
     cases += [signature(op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op) for op in sorted(types.complex_domain)]
+    cases += [signature(types.intp, types.boolean)]
 
 
 @infer
@@ -358,6 +361,19 @@ class CmpOpGe(OrderedCmpOp):
 @infer
 class CmpOpEq(UnorderedCmpOp):
     key = '=='
+
+@infer
+class ConstOpEq(AbstractTemplate):
+    key = '=='
+    def generic(self, args, kws):
+        assert not kws
+        (arg1, arg2) = args
+        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+            return signature(types.boolean, arg1, arg2)
+
+@infer
+class ConstOpNotEq(ConstOpEq):
+    key = '!='
 
 @infer
 class CmpOpNe(UnorderedCmpOp):
@@ -493,6 +509,20 @@ class Len(AbstractTemplate):
             return signature(types.intp, val)
         elif isinstance(val, (types.RangeType)):
             return signature(val.dtype, val)
+
+@infer_global(tuple)
+class TupleConstructor(AbstractTemplate):
+    key = tuple
+
+    def generic(self, args, kws):
+        assert not kws
+        # empty tuple case
+        if len(args) == 0:
+            return signature(types.Tuple(()))
+        (val,) = args
+        # tuple as input
+        if isinstance(val, types.BaseTuple):
+            return signature(val, val)
 
 
 @infer
@@ -894,3 +924,62 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
+
+#------------------------------------------------------------------------------
+
+from numba.targets.builtins import get_type_min_value, get_type_max_value
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        assert isinstance(args[0], (types.DType, types.NumberClass))
+        return signature(args[0].dtype, *args)
+
+#------------------------------------------------------------------------------
+
+from numba.extending import (typeof_impl, type_callable, models, register_model,
+                                make_attribute_wrapper)
+
+class IndexValue(object):
+    """
+    Index and value
+    """
+    def __init__(self, ind, val):
+        self.index = ind
+        self.value = val
+
+    def __repr__(self):
+        return 'IndexValue(%f, %f)' % (self.index, self.value)
+
+class IndexValueType(types.Type):
+    def __init__(self, val_typ):
+        self.val_typ = val_typ
+        super(IndexValueType, self).__init__(
+                                    name='IndexValueType({})'.format(val_typ))
+
+@typeof_impl.register(IndexValue)
+def typeof_index(val, c):
+    val_typ = typeof_impl(val.value, c)
+    return IndexValueType(val_typ)
+
+@type_callable(IndexValue)
+def type_index_value(context):
+    def typer(ind, mval):
+        if ind == types.intp or ind == types.uintp:
+            return IndexValueType(mval)
+    return typer
+
+@register_model(IndexValueType)
+class IndexValueModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('index', types.intp),
+            ('value', fe_type.val_typ),
+            ]
+        models.StructModel.__init__(self, dmm, fe_type, members)
+
+make_attribute_wrapper(IndexValueType, 'index', 'index')
+make_attribute_wrapper(IndexValueType, 'value', 'value')

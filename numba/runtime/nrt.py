@@ -5,8 +5,8 @@ from collections import namedtuple
 from . import nrtdynmod
 from llvmlite import binding as ll
 
-from ..llvmthreadsafe import lock_llvm
 from numba.utils import finalize as _finalize
+from numba.compiler_lock import global_compiler_lock
 from . import _nrt_python as _nrt
 
 _nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
@@ -16,7 +16,7 @@ class _Runtime(object):
     def __init__(self):
         self._init = False
 
-    @lock_llvm # prevent race to install compiled library functions
+    @global_compiler_lock
     def initialize(self, ctx):
         """Initializes the NRT
 
@@ -46,6 +46,11 @@ class _Runtime(object):
 
         self._init = True
 
+    def _init_guard(self):
+        if not self._init:
+            msg = "Runtime must be initialized before use."
+            raise RuntimeError(msg)
+
     @staticmethod
     def shutdown():
         """
@@ -59,6 +64,7 @@ class _Runtime(object):
         """
         Return the Library object containing the various NRT functions.
         """
+        self._init_guard()
         return self._library
 
     def meminfo_new(self, data, pyobj):
@@ -67,6 +73,7 @@ class _Runtime(object):
         MemInfo will acquire a reference on `pyobj`.
         The release of MemInfo will release a reference on `pyobj`.
         """
+        self._init_guard()
         mi = _nrt.meminfo_new(data, pyobj)
         return MemInfo(mi)
 
@@ -80,6 +87,7 @@ class _Runtime(object):
         This is used for debugging and testing purposes.
         See `NRT_MemInfo_alloc_safe()` in "nrt.h" for details.
         """
+        self._init_guard()
         if safe:
             mi = _nrt.meminfo_alloc_safe(size)
         else:
@@ -91,6 +99,7 @@ class _Runtime(object):
         Returns a namedtuple of (alloc, free, mi_alloc, mi_free) for count of
         each memory operations.
         """
+        # No init guard needed to access stats members
         return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
                            free=_nrt.memsys_get_stats_free(),
                            mi_alloc=_nrt.memsys_get_stats_mi_alloc(),

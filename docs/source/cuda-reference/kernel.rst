@@ -9,7 +9,7 @@ The ``@cuda.jit`` decorator is used to create a CUDA kernel:
 .. autofunction:: numba.cuda.jit
 
 .. autoclass:: numba.cuda.compiler.AutoJitCUDAKernel
-   :members: inspect_asm, inspect_llvm, inspect_types, specialize
+   :members: inspect_asm, inspect_llvm, inspect_types, specialize, extensions
 
 Individual specialized kernels are instances of
 :class:`numba.cuda.compiler.CUDAKernel`:
@@ -48,8 +48,17 @@ Thread Indexing
 
 .. attribute:: numba.cuda.gridDim
 
-    The shape of the grid of blocks, accressed through the attributes ``x``,
+    The shape of the grid of blocks, accessed through the attributes ``x``,
     ``y``, and ``z``.
+
+.. attribute:: numba.cuda.laneid
+
+    The thread index in the current warp, as an integer spanning the range
+    from 0 inclusive to the :attr:`numba.cuda.warpsize` exclusive.
+
+.. attribute:: numba.cuda.warpsize
+
+    The size in threads of a warp on the GPU. Currently this is always 32.
 
 .. function:: numba.cuda.grid(ndim)
 
@@ -141,11 +150,26 @@ Synchronization and Atomic Operations
     function waits until all threads in the block call it, at which point it
     returns control to all its callers.
 
-    .. warning:: Must be called by every thread in the thread-block. Falling to
-                 do so may result in undefined behavior.
+.. function:: numba.cuda.syncthreads_count(predicate)
+
+    An extension to :attr:`numba.cuda.syncthreads` where the return value is a count
+    of the threads where ``predicate`` is true.
+
+.. function:: numba.cuda.syncthreads_and(predicate)
+
+    An extension to :attr:`numba.cuda.syncthreads` where 1 is returned if ``predicate`` is
+    true for all threads or 0 otherwise.
+
+.. function:: numba.cuda.syncthreads_or(predicate)
+
+    An extension to :attr:`numba.cuda.syncthreads` where 1 is returned if ``predicate`` is
+    true for any thread or 0 otherwise.
+
+    .. warning:: All syncthreads functions must be called by every thread in the
+                 thread-block. Falling to do so may result in undefined behavior.
 
 Memory Fences
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 The memory fences are used to guarantee the effect of memory operations
 are visible by other threads within the same thread-block, the same GPU device,
@@ -167,4 +191,133 @@ are guaranteed to not move across the memory fences by optimization passes.
 
 .. function:: numba.cuda.threadfence_system
 
-   A memory fence at system level (across GPUs)
+
+   A memory fence at system level (across GPUs).
+
+Warp Intrinsics
+~~~~~~~~~~~~~~~~~~
+
+All warp level operations require at least CUDA 9. The argument ``membermask`` is
+a 32 bit integer mask with each bit corresponding to a thread in the warp, with 1
+meaning the thread is in the subset of threads within the function call. The
+``membermask`` must be all 1 if the GPU compute capability is below 7.x.
+
+.. function:: numba.cuda.syncwarp(membermask)
+
+   Synchronize a masked subset of the threads in a warp.
+
+.. function:: numba.cuda.all_sync(membermask, predicate)
+
+    If the ``predicate`` is true for all threads in the masked warp, then
+    a non-zero value is returned, otherwise 0 is returned.
+
+.. function:: numba.cuda.any_sync(membermask, predicate)
+
+    If the ``predicate`` is true for any thread in the masked warp, then
+    a non-zero value is returned, otherwise 0 is returned.
+
+.. function:: numba.cuda.eq_sync(membermask, predicate)
+
+    If the boolean ``predicate`` is the same for all threads in the masked warp,
+    then a non-zero value is returned, otherwise 0 is returned.
+
+.. function:: numba.cuda.ballot_sync(membermask, predicate)
+
+    Returns a mask of all threads in the warp whose ``predicate`` is true,
+    and are within the given mask.
+
+.. function:: numba.cuda.shfl_sync(membermask, value, src_lane)
+
+    Shuffles ``value`` across the masked warp and returns the ``value``
+    from ``src_lane``. If this is outside the warp, then the
+    given ``value`` is returned.
+
+.. function:: numba.cuda.shfl_up_sync(membermask, value, delta)
+
+    Shuffles ``value`` across the masked warp and returns the ``value``
+    from ``laneid - delta``. If this is outside the warp, then the
+    given ``value`` is returned.
+
+.. function:: numba.cuda.shfl_down_sync(membermask, value, delta)
+
+    Shuffles ``value`` across the masked warp and returns the ``value``
+    from ``laneid + delta``. If this is outside the warp, then the
+    given ``value`` is returned.
+
+.. function:: numba.cuda.shfl_xor_sync(membermask, value, lane_mask)
+
+    Shuffles ``value`` across the masked warp and returns the ``value``
+    from ``laneid ^ lane_mask``.
+
+.. function:: numba.cuda.match_any_sync(membermask, value, lane_mask)
+
+    Returns a mask of threads that have same ``value`` as the given ``value``
+    from within the masked warp.
+
+.. function:: numba.cuda.match_all_sync(membermask, value, lane_mask)
+
+    Returns a tuple of (mask, pred), where mask is a mask of threads that have
+    same ``value`` as the given ``value`` from within the masked warp, if they
+    all have the same value, otherwise it is 0. And pred is a boolean of whether
+    or not all threads in the mask warp have the same warp.
+
+
+Integer Intrinsics
+~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA Math API's integer intrinsics are available. For further
+documentation, including semantics, please refer to the `CUDA Toolkit
+documentation
+<https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
+
+
+.. function:: numba.cuda.popc
+
+   Returns the number of set bits in the given value.
+
+.. function:: numba.cuda.brev
+
+   Reverses the bit pattern of an integer value, for example 0b10110110
+   becomes 0b01101101.
+
+.. function:: numba.cuda.clz
+
+   Counts the number of leading zeros in a value.
+
+.. function:: numba.cuda.ffs
+
+   Find the position of the least significant bit set to 1 in an integer.
+
+
+Floating Point Intrinsics
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA Math API's floating point intrinsics are available. For further
+documentation, including semantics, please refer to the `single
+<https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__SINGLE.html>`_ and
+`double <https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__DOUBLE.html>`_
+precision parts of the CUDA Toolkit documentation.
+
+
+.. function:: numba.cuda.fma
+
+   Perform the fused multiply-add operation. Named after the ``fma`` and ``fmaf`` in
+   the C api, but maps to the ``fma.rn.f32`` and ``fma.rn.f64`` (round-to-nearest-even)
+   PTX instructions.
+
+
+Control Flow Instructions
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA's control flow instructions are directly available as
+intrinsics. Avoiding branches is a key way to improve CUDA performance, and
+using these intrinsics mean you don't have to rely on the ``nvcc`` optimizer
+identifying and removing branches. For further documentation, including
+semantics, please refer to the `relevant CUDA Toolkit documentation
+<https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
+
+
+.. function:: numba.cuda.selp
+
+    Select between two expressions, depending on the value of the first
+    argument. Similar to LLVM's ``select`` instruction.

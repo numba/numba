@@ -1,9 +1,10 @@
 from __future__ import division, print_function
 
-from numba import unittest_support as unittest
-
 import sys
 import subprocess
+
+from numba import unittest_support as unittest
+from numba import cuda
 
 
 class TestCase(unittest.TestCase):
@@ -11,25 +12,50 @@ class TestCase(unittest.TestCase):
     Therefore, the logic used here shouldn't use numba.testing, but only the upstream
     unittest, and run the numba test suite only in a subprocess."""
 
+    def get_testsuite_listing(self, args):
+        cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
+        lines = subprocess.check_output(cmd).decode('UTF-8').splitlines()
+        lines = [line for line in lines if line.strip()]
+        return lines
+
+    def check_listing_prefix(self, prefix):
+        listing = self.get_testsuite_listing([prefix])
+        for ln in listing[:-1]:
+            errmsg = '{!r} not startswith {!r}'.format(ln, prefix)
+            self.assertTrue(ln.startswith(prefix), msg=errmsg)
+
     def check_testsuite_size(self, args, minsize, maxsize=None):
         """
         Check that the reported numbers of tests are in the
         (minsize, maxsize) range, or are equal to minsize if maxsize is None.
         """
-        cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
-        lines = subprocess.check_output(cmd).decode().splitlines()
-        lines = [line for line in lines if line.strip()]
+        lines = self.get_testsuite_listing(args)
         last_line = lines[-1]
         self.assertTrue(last_line.endswith('tests found'))
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
-        self.assertIn(len(lines), range(number + 1, number + 10))
-        if maxsize is None:
-            self.assertEqual(number, minsize)
-        else:
-            self.assertGreaterEqual(number, minsize)
-            self.assertLessEqual(number, maxsize)
+        try:
+            self.assertIn(len(lines), range(number + 1, number + 10))
+            if maxsize is None:
+                self.assertEqual(number, minsize)
+            else:
+                self.assertGreaterEqual(number, minsize)
+                self.assertLessEqual(number, maxsize)
+        except AssertionError:
+            # catch any error in the above, chances are test discovery
+            # has failed due to a syntax error or import problem.
+            # run the actual test suite to try and find the cause to
+            # inject into the error message for the user
+            try:
+                cmd = ['python', '-m', 'numba.runtests'] + list(args)
+                subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            except Exception as e:
+                msg = ("Test discovery has failed, the reported cause of the "
+                       " failure is:\n\n:")
+                indented  = '\n'.join(['\t' + x for x in
+                                       e.output.decode('UTF-8').splitlines()])
+                raise RuntimeError(msg + indented)
         return lines
 
     def check_all(self, ids):
@@ -48,7 +74,14 @@ class TestCase(unittest.TestCase):
     def test_cuda(self):
         # Even without CUDA enabled, there is at least one test
         # (in numba.cuda.tests.nocuda)
-        self.check_testsuite_size(['numba.cuda.tests'], 1, 400)
+        self.check_testsuite_size(['numba.cuda.tests'], 1, 470)
+
+    @unittest.skipIf(not cuda.is_available(), "NO CUDA")
+    def test_cuda_submodules(self):
+        self.check_listing_prefix('numba.cuda.tests.cudadrv')
+        self.check_listing_prefix('numba.cuda.tests.cudapy')
+        self.check_listing_prefix('numba.cuda.tests.nocuda')
+        self.check_listing_prefix('numba.cuda.tests.cudasim')
 
     def test_module(self):
         self.check_testsuite_size(['numba.tests.test_utils'], 3, 15)

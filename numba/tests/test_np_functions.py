@@ -11,7 +11,8 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
-from .support import TestCase, CompilationCache
+from numba.errors import TypingError
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")
@@ -41,19 +42,56 @@ def bincount2(a, w):
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
+def searchsorted_left(a, v):
+    return np.searchsorted(a, v, side='left')
+
+def searchsorted_right(a, v):
+    return np.searchsorted(a, v, side='right')
+
 def digitize(*args):
     return np.digitize(*args)
 
 def histogram(*args):
     return np.histogram(*args)
 
+def machar(*args):
+    return np.MachAr()
 
-class TestNPFunctions(TestCase):
+def iinfo(*args):
+    return np.iinfo(*args)
+
+def finfo(*args):
+    return np.finfo(*args)
+
+def finfo_machar(*args):
+    return np.finfo(*args).machar
+
+def correlate(a, v):
+    return np.correlate(a, v)
+
+def convolve(a, v):
+    return np.convolve(a, v)
+
+def tri(N, M=None, k=0):
+    return np.tri(N, M, k)
+
+def tril(m, k=0):
+    return np.tril(m, k)
+
+def triu(m, k=0):
+    return np.triu(m, k)
+
+def np_vander(x, N=None, increasing=False):
+    return np.vander(x, N, increasing)
+
+
+class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
     """
 
     def setUp(self):
+        super(TestNPFunctions, self).setUp()
         self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
@@ -163,7 +201,6 @@ class TestNPFunctions(TestCase):
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
 
-
     def test_angle(self, flags=no_pyobj_flags):
         """
         Tests the angle() function.
@@ -203,7 +240,6 @@ class TestNPFunctions(TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
-
     def diff_arrays(self):
         """
         Some test arrays for np.diff()
@@ -238,10 +274,18 @@ class TestNPFunctions(TestCase):
                 got = cfunc(arr, n)
                 self.assertPreciseEqual(expected, got)
 
+    def test_diff2_exceptions(self):
+        pyfunc = diff2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # 0-dim array
         arr = np.array(42)
         with self.assertTypingError():
             cfunc(arr, 1)
+
         # Invalid `n`
         arr = np.arange(10)
         for n in (-1, -2, -42):
@@ -266,6 +310,13 @@ class TestNPFunctions(TestCase):
             got = cfunc(seq)
             self.assertPreciseEqual(expected, got)
 
+    def test_bincount1_exceptions(self):
+        pyfunc = bincount1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # Negative input
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1])
@@ -283,6 +334,13 @@ class TestNPFunctions(TestCase):
                 got = cfunc(seq, weights)
                 self.assertPreciseEqual(expected, got)
 
+    def test_bincount2_exceptions(self):
+        pyfunc = bincount2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
         # Negative input
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1], [0, 0])
@@ -299,9 +357,23 @@ class TestNPFunctions(TestCase):
         pyfunc = searchsorted
         cfunc = jit(nopython=True)(pyfunc)
 
+        pyfunc_left = searchsorted_left
+        cfunc_left = jit(nopython=True)(pyfunc_left)
+
+        pyfunc_right = searchsorted_right
+        cfunc_right = jit(nopython=True)(pyfunc_right)
+
         def check(a, v):
             expected = pyfunc(a, v)
             got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_left(a, v)
+            got = cfunc_left(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_right(a, v)
+            got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
         # First with integer values (no NaNs)
@@ -332,6 +404,20 @@ class TestNPFunctions(TestCase):
             # Sequence values
             check(a, list(values))
 
+        # nonsense value for 'side' raises TypingError
+        def bad_side(a, v):
+            return np.searchsorted(a, v, side='nonsense')
+        cfunc = jit(nopython=True)(bad_side)
+        with self.assertTypingError():
+            cfunc([1,2], 1)
+
+        # non-constant value for 'side' raises TypingError
+        def nonconst_side(a, v, side='left'):
+            return np.searchsorted(a, v, side=side)
+        cfunc = jit(nopython=True)(nonconst_side)
+        with self.assertTypingError():
+            cfunc([1,2], 1, side='right')
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
@@ -357,7 +443,6 @@ class TestNPFunctions(TestCase):
             # Numpy < 1.10 had trouble with NaNs and N-d arrays
             all_bins = [bins1, bins2]
             xs = [values]
-
 
         # 2-ary digitize()
         for bins in all_bins:
@@ -410,3 +495,351 @@ class TestNPFunctions(TestCase):
         self.rnd.shuffle(values)
 
         check_values(values)
+
+    def _test_correlate_convolve(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        # only 1d arrays are accepted, test varying lengths
+        # and varying dtype
+        lengths = (1, 2, 3, 7)
+        dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
+               np.complex64, np.complex128]
+
+        for dt1, dt2, n, m in itertools.product(dts, dts, lengths, lengths):
+            a = np.arange(n, dtype=dt1)
+            v = np.arange(m, dtype=dt2)
+
+            if np.issubdtype(dt1, np.complexfloating):
+                a = (a + 1j * a).astype(dt1)
+            if np.issubdtype(dt2, np.complexfloating):
+                v = (v + 1j * v).astype(dt2)
+
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        _a = np.arange(12).reshape(4, 3)
+        _b = np.arange(12)
+        for x, y in [(_a, _b), (_b, _a)]:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(x, y)
+            msg = 'only supported on 1D arrays'
+            self.assertIn(msg, str(raises.exception))
+
+    def test_correlate(self):
+        self._test_correlate_convolve(correlate)
+        # correlate supports 0 dimension arrays
+        _a = np.ones(shape=(0,))
+        _b = np.arange(5)
+        cfunc = jit(nopython=True)(correlate)
+        for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
+            expected = correlate(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    def test_convolve(self):
+        self._test_correlate_convolve(convolve)
+
+    def test_convolve_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # convolve raises if either array has a 0 dimension
+        _a = np.ones(shape=(0,))
+        _b = np.arange(5)
+        cfunc = jit(nopython=True)(convolve)
+        for x, y in [(_a, _b), (_b, _a)]:
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x, y)
+            if len(x) == 0:
+                self.assertIn("'a' cannot be empty", str(raises.exception))
+            else:
+                self.assertIn("'v' cannot be empty", str(raises.exception))
+
+    def test_vander_basic(self):
+        pyfunc = np_vander
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check_output(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got)
+
+        def _check(x):
+            n_choices = [None, 0, 1, 2, 3, 4]
+            increasing_choices = [True, False]
+
+            # N and increasing defaulted
+            params = {'x': x}
+            _check_output(params)
+
+            # N provided and increasing defaulted
+            for n in n_choices:
+                params = {'x': x, 'N': n}
+                _check_output(params)
+
+            # increasing provided and N defaulted:
+            for increasing in increasing_choices:
+                params = {'x': x, 'increasing': increasing}
+                _check_output(params)
+
+            # both n and increasing supplied
+            for n in n_choices:
+                for increasing in increasing_choices:
+                    params = {'x': x, 'N': n, 'increasing': increasing}
+                    _check_output(params)
+
+        _check(np.array([1, 2, 3, 5]))
+        _check(np.arange(7) - 10.5)
+        _check(np.linspace(3, 10, 5))
+        _check(np.array([1.2, np.nan, np.inf, -np.inf]))
+        _check(np.array([]))
+        _check(np.arange(-5, 5) - 0.3)
+
+        # # boolean array
+        _check(np.array([True] * 5 + [False] * 4))
+
+        # cycle through dtypes to check type promotion a la numpy
+        for dtype in np.int32, np.int64, np.float32, np.float64:
+            _check(np.arange(10, dtype=dtype))
+
+        # non array inputs
+        _check([0, 1, 2, 3])
+        _check((4, 5, 6, 7))
+        _check((0.0, 1.0, 2.0))
+        _check(())
+
+        # edge cases
+        _check((3, 4.444, 3.142))
+        _check((True, False, 4))
+
+    def test_vander_exceptions(self):
+        pyfunc = np_vander
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        x = np.arange(5) - 0.5
+
+        def _check_n(N):
+            with self.assertTypingError() as raises:
+                cfunc(x, N=N)
+            assert "Second argument N must be None or an integer" in str(raises.exception)
+
+        for N in 1.1, True, np.inf, [1, 2]:
+            _check_n(N)
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(x, N=-1)
+        assert "Negative dimensions are not allowed" in str(raises.exception)
+
+        def _check_1d(x):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x)
+            self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+
+        x = np.arange(27).reshape((3, 3, 3))
+        _check_1d(x)
+
+        x = ((2, 3), (4, 5))
+        _check_1d(x)
+
+    def test_tri_basic(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
+
+        def m_variations():
+            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+
+        def k_variations():
+            return np.arange(-10, 10)  # offset
+
+        def _check(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got)
+
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
+
+        # N and M supplied, k defaulted
+        for n in n_variations():
+            for m in m_variations():
+                params = {'N': n, 'M': m}
+                _check(params)
+
+        # N and k supplied, M defaulted
+        for n in n_variations():
+            for k in k_variations():
+                params = {'N': n, 'k': k}
+                _check(params)
+
+        # N, M and k supplied
+        for n in n_variations():
+            for k in k_variations():
+                for m in m_variations():
+                    params = {'N': n, 'M': m, 'k': k}
+                    _check(params)
+
+    def test_tri_exceptions(self):
+        pyfunc = tri
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(k):
+            with self.assertTypingError() as raises:
+                cfunc(5, 6, k=k)
+            assert "k must be an integer" in str(raises.exception)
+
+        for k in 1.5, True, np.inf, [1, 2]:
+            _check(k)
+
+    def _triangular_matrix_tests(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(arr):
+            for k in itertools.chain.from_iterable(([None], range(-10, 10))):
+                if k is None:
+                    params = {}
+                else:
+                    params = {'k': k}
+                expected = pyfunc(arr, **params)
+                got = cfunc(arr, **params)
+                # TODO: Contiguity of result not consistent with numpy
+                self.assertEqual(got.dtype, expected.dtype)
+                np.testing.assert_array_equal(got, expected)
+
+        def check_odd(a):
+            _check(a)
+            a = a.reshape((9, 7))
+            _check(a)
+            a = a.reshape((7, 1, 3, 3))
+            _check(a)
+            _check(a.T)
+
+        def check_even(a):
+            _check(a)
+            a = a.reshape((4, 16))
+            _check(a)
+            a = a.reshape((4, 2, 2, 4))
+            _check(a)
+            _check(a.T)
+
+        check_odd(np.arange(63) + 10.5)
+        check_even(np.arange(64) - 10.5)
+
+        # edge cases
+        _check(np.arange(360).reshape(3, 4, 5, 6))
+        _check(np.array([]))
+        _check(np.arange(9).reshape((3, 3))[::-1])
+        _check(np.arange(9).reshape((3, 3), order='F'))
+
+        arr = (np.arange(64) - 10.5).reshape((4, 2, 2, 4))
+        _check(arr)
+        _check(np.asfortranarray(arr))
+
+    def _triangular_matrix_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.ones((5, 6))
+        with self.assertTypingError() as raises:
+            cfunc(a, k=1.5)
+        assert "k must be an integer" in str(raises.exception)
+
+    def test_tril_basic(self):
+        self._triangular_matrix_tests(tril)
+
+    def test_tril_exceptions(self):
+        self._triangular_matrix_exceptions(tril)
+
+    def test_triu_basic(self):
+        self._triangular_matrix_tests(triu)
+
+    def test_triu_exceptions(self):
+        self._triangular_matrix_exceptions(triu)
+
+
+class TestNPMachineParameters(TestCase):
+    # tests np.finfo, np.iinfo, np.MachAr
+
+    template = '''
+def foo():
+    ty = np.%s
+    return np.%s(ty)
+'''
+
+    bits = ('bits',) if np_version >= (1, 12)  else ()
+
+    def check(self, func, attrs, *args):
+        pyfunc = func
+        cfunc = jit(nopython=True)(pyfunc)
+
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+
+        # check result
+        for attr in attrs:
+            self.assertPreciseEqual(getattr(expected, attr),
+                                    getattr(got, attr))
+
+    def create_harcoded_variant(self, basefunc, ty):
+        #create an instance of using the function with a hardcoded type
+        #and eval it into existence, return the function for use
+        tystr = ty.__name__
+        basestr = basefunc.__name__
+        funcstr = self.template % (tystr, basestr)
+        eval(compile(funcstr, '<string>', 'exec'))
+        return locals()['foo']
+
+    def test_MachAr(self):
+        attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
+                 'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
+                 'epsilon', 'tiny', 'huge', 'precision', 'resolution',)
+        self.check(machar, attrs)
+
+    def test_finfo(self):
+        types = [np.float32, np.float64, np.complex64, np.complex128]
+        attrs = self.bits + ('eps', 'epsneg', 'iexp', 'machep', 'max',
+                'maxexp', 'negep', 'nexp', 'nmant', 'precision',
+                'resolution', 'tiny',)
+        for ty in types:
+            self.check(finfo, attrs, ty(1))
+            hc_func = self.create_harcoded_variant(np.finfo, ty)
+            self.check(hc_func, attrs)
+
+        # check unsupported attr raises
+        with self.assertRaises(TypingError) as raises:
+            cfunc = jit(nopython=True)(finfo_machar)
+            cfunc(7.)
+        msg = "Unknown attribute 'machar' of type finfo"
+        self.assertIn(msg, str(raises.exception))
+
+        # check invalid type raises
+        with self.assertTypingError():
+            cfunc = jit(nopython=True)(finfo)
+            cfunc(np.int32(7))
+
+    def test_iinfo(self):
+        # check types and instances of types
+        types = [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16,
+                 np.uint32, np.uint64]
+        attrs = ('min', 'max') + self.bits
+        for ty in types:
+            self.check(iinfo, attrs, ty(1))
+            hc_func = self.create_harcoded_variant(np.iinfo, ty)
+            self.check(hc_func, attrs)
+
+        # check invalid type raises
+        with self.assertTypingError():
+            cfunc = jit(nopython=True)(iinfo)
+            cfunc(np.float64(7))

@@ -61,7 +61,7 @@ Kernel invocation
 A kernel is typically launched in the following way::
 
     threadsperblock = 32
-    blockspergrid = (an_array.size + (threadsperblock - 1)) // threadperblock
+    blockspergrid = (an_array.size + (threadsperblock - 1)) // threadsperblock
     increment_by_one[blockspergrid, threadsperblock](an_array)
 
 We notice two steps here:

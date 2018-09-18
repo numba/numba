@@ -3,10 +3,10 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestFreeVar(unittest.TestCase):
+class TestFreeVar(SerialMixin, unittest.TestCase):
     def test_freevar(self):
         """Make sure we can compile the following kernel with freevar reference
         in macros

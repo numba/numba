@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 
-from collections import Mapping, defaultdict, OrderedDict
+from collections import defaultdict, OrderedDict
 from contextlib import closing
+import copy
 import inspect
 import os
 import re
@@ -11,6 +12,13 @@ import textwrap
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
+from numba.config import PYVERSION
+
+
+if PYVERSION >= (3, 3):
+    from collections.abc import Mapping
+else:
+    from collections import Mapping
 
 
 class SourceLines(Mapping):
@@ -147,6 +155,48 @@ class TypeAnnotation(object):
             return io.getvalue()
 
     def html_annotate(self, outfile):
+        # ensure that annotation information is assembled
+        self.annotate_raw()
+        # make a deep copy ahead of the pending mutations
+        func_data = copy.deepcopy(self.func_data)
+
+        key = 'python_indent'
+        for this_func in func_data.values():
+            if key in this_func:
+                idents = {}
+                for line, amount in this_func[key].items():
+                    idents[line] = '&nbsp;' * amount
+                this_func[key] = idents
+
+        key = 'ir_indent'
+        for this_func in func_data.values():
+            if key in this_func:
+                idents = {}
+                for line, ir_id in this_func[key].items():
+                    idents[line] = ['&nbsp;' * amount for amount in ir_id]
+                this_func[key] = idents
+
+
+
+        try:
+            from jinja2 import Template
+        except ImportError:
+            raise ImportError("please install the 'jinja2' package")
+
+        root = os.path.join(os.path.dirname(__file__))
+        template_filename = os.path.join(root, 'template.html')
+        with open(template_filename, 'r') as template:
+            html = template.read()
+
+        template = Template(html)
+        rendered = template.render(func_data=func_data)
+        outfile.write(rendered)
+
+    def annotate_raw(self):
+        """
+        This returns "raw" annotation information i.e. it has no output format
+        specific markup included.
+        """
         python_source = SourceLines(self.func_id.func)
         ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
@@ -160,7 +210,7 @@ class TypeAnnotation(object):
                 line_type = 'pyobject'
             func_data['ir_lines'][num].append((line_str, line_type))
             indent_len = len(_getindent(line))
-            func_data['ir_indent'][num].append('&nbsp;' * indent_len)
+            func_data['ir_indent'][num].append(indent_len)
 
         func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno + 1),
                     self.signature)
@@ -211,7 +261,7 @@ class TypeAnnotation(object):
             for num in line_nums:
                 func_data['python_lines'].append((num, python_source[num].strip()))
                 indent_len = len(_getindent(python_source[num]))
-                func_data['python_indent'][num] = '&nbsp;' * indent_len
+                func_data['python_indent'][num] = indent_len
                 func_data['python_tags'][num] = ''
                 func_data['ir_lines'][num] = []
                 func_data['ir_indent'][num] = []
@@ -222,20 +272,8 @@ class TypeAnnotation(object):
                         func_data['python_tags'][num] = 'lifted_tag'
                     elif line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
+        return self.func_data
 
-        try:
-            from jinja2 import Template
-        except ImportError:
-            raise ImportError("please install the 'jinja2' package")
-
-        root = os.path.join(os.path.dirname(__file__))
-        template_filename = os.path.join(root, 'template.html')
-        with open(template_filename, 'r') as template:
-            html = template.read()
-
-        template = Template(html)
-        rendered = template.render(func_data=TypeAnnotation.func_data)
-        outfile.write(rendered)
 
     def __str__(self):
         return self.annotate()

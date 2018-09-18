@@ -2,12 +2,21 @@
 # Copyright (c) 2017 Intel Corporation
 # SPDX-License-Identifier: BSD-2-Clause
 #
-
-from numba import ir, types, typing, config, analysis
-from numba.typing.templates import signature
 import numpy
+
+import types as pytypes
+import collections
+
+from llvmlite import ir as lir
+
+import numba
+from numba.six import exec_
+from numba import ir, types, typing, config, analysis, utils, cgutils, rewrites
+from numba.typing.templates import signature, infer_global, AbstractTemplate
+from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
+from numba.errors import TypingError, UnsupportedError
 import copy
 
 _unique_var_count = 0
@@ -21,6 +30,18 @@ def mk_unique_var(prefix):
 
 
 _max_label = 0
+
+
+def get_unused_var_name(prefix, var_table):
+    """ Get a new var name with a given prefix and
+        make sure it is unused in the given variable table.
+    """
+    cur = 0
+    while True:
+        var = prefix + str(cur)
+        if var not in var_table:
+            return var
+        cur += 1
 
 
 def next_label():
@@ -72,7 +93,11 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     if typemap:
         typemap[typ_var.name] = types.functions.NumberClass(dtype)
     # assuming str(dtype) returns valid np dtype string
-    np_typ_getattr = ir.Expr.getattr(g_np_var, str(dtype), loc)
+    dtype_str = str(dtype)
+    if dtype_str=='bool':
+        # empty doesn't like 'bool' sometimes (e.g. kmeans example)
+        dtype_str = 'bool_'
+    np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
     if calltypes:
@@ -165,7 +190,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
         if typemap:
             typemap[g_start_var.name] = types.intp
-        start_assign = ir.Assign(ir.Const(start, loc), g_start_var)
+        start_assign = ir.Assign(ir.Const(start, loc), g_start_var, loc)
         nodes.append(start_assign)
     if step == 1:
         return nodes, [g_start_var, g_stop_var]
@@ -177,7 +202,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
         if typemap:
             typemap[g_step_var.name] = types.intp
-        step_assign = ir.Assign(ir.Const(step, loc), g_step_var)
+        step_assign = ir.Assign(ir.Const(step, loc), g_step_var, loc)
         nodes.append(step_assign)
 
     return nodes, [g_start_var, g_stop_var, g_step_var]
@@ -231,8 +256,11 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
 def find_op_typ(op, arg_typs):
     for ft in typing.templates.builtin_registry.functions:
         if ft.key == op:
-            func_typ = types.Function(ft).get_call_type(typing.Context(),
-                                                        arg_typs, {})
+            try:
+                func_typ = types.Function(ft).get_call_type(typing.Context(),
+                                                            arg_typs, {})
+            except TypingError:
+                func_typ = None
             if func_typ is not None:
                 return func_typ
     raise RuntimeError("unknown array operation")
@@ -330,6 +358,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.name = visit_vars_inner(stmt.name, callback, cbdata)
     elif isinstance(stmt, ir.Return):
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Raise):
+        stmt.exception = visit_vars_inner(stmt.exception, callback, cbdata)
     elif isinstance(stmt, ir.Branch):
         stmt.cond = visit_vars_inner(stmt.cond, callback, cbdata)
     elif isinstance(stmt, ir.Jump):
@@ -358,6 +388,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.target = visit_vars_inner(stmt.target, callback, cbdata)
         stmt.index = visit_vars_inner(stmt.index, callback, cbdata)
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
+    elif isinstance(stmt, ir.Print):
+        stmt.args = [visit_vars_inner(x, callback, cbdata) for x in stmt.args]
     else:
         # TODO: raise NotImplementedError("no replacement for IR node: ", stmt)
         pass
@@ -399,10 +431,10 @@ def add_offset_to_labels(blocks, offset):
                     if isinstance(inst, T):
                         f_max = f(inst, offset)
         if isinstance(term, ir.Jump):
-            term.target += offset
+            b.body[-1] = ir.Jump(term.target + offset, term.loc)
         if isinstance(term, ir.Branch):
-            term.truebr += offset
-            term.falsebr += offset
+            b.body[-1] = ir.Branch(term.cond, term.truebr + offset,
+                                   term.falsebr + offset, term.loc)
         new_blocks[l + offset] = b
     return new_blocks
 
@@ -438,20 +470,33 @@ def remove_dels(blocks):
     return
 
 
-def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
+def remove_args(blocks):
+    """remove ir.Arg nodes"""
+    for block in blocks.values():
+        new_body = []
+        for stmt in block.body:
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
+                continue
+            new_body.append(stmt)
+        block.body = new_body
+    return
+
+
+def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
     """
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    call_table, _ = get_call_table(blocks)
     if alias_map is None or arg_aliases is None:
-        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap)
+        alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
+                                                        func_ir)
     if config.DEBUG_ARRAY_OPT == 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
-    call_table, _ = get_call_table(blocks)
 
     removed = False
     for label, block in blocks.items():
@@ -460,8 +505,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
             lives |= live_map[out_blk]
-        lives |= arg_aliases
-        removed |= remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap)
+        removed |= remove_dead_block(block, lives, call_table, arg_aliases,
+                                     alias_map, alias_set, func_ir, typemap)
     return removed
 
 
@@ -470,7 +515,8 @@ def remove_dead(blocks, args, typemap=None, alias_map=None, arg_aliases=None):
 remove_dead_extensions = {}
 
 
-def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_set, typemap):
+def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
+                                                  alias_set, func_ir, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -488,16 +534,20 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
         init_alias_lives = lives & alias_set
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
+        lives_n_aliases = lives | alias_lives | arg_aliases
         # let external calls handle stmt if type matches
-        for t, f in remove_dead_extensions.items():
-            if isinstance(stmt, t):
-                f(stmt, lives, arg_aliases, alias_map, typemap)
+        if type(stmt) in remove_dead_extensions:
+            f = remove_dead_extensions[type(stmt)]
+            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir, typemap)
+            if stmt is None:
+                removed = True
+                continue
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(
-                    rhs, lives, call_table):
+                    rhs, lives_n_aliases, call_table):
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name == rhs.name:
@@ -505,7 +555,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
                 continue
             # TODO: remove other nodes like SetItem etc.
         if isinstance(stmt, ir.SetItem):
-            if stmt.target.name not in lives and stmt.target.name not in alias_lives:
+            name = stmt.target.name
+            if name not in lives_n_aliases:
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -523,15 +574,35 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map, alias_se
     block.body = new_body
     return removed
 
+# list of functions
+remove_call_handlers = []
+
+def remove_dead_random_call(rhs, lives, call_list):
+    if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
+        return call_list[0] != 'seed'
+    return False
+
+remove_call_handlers.append(remove_dead_random_call)
 
 def has_no_side_effect(rhs, lives, call_table):
-    # TODO: find side-effect free calls like Numpy calls
+    """ Returns True if this expression has no side effects that
+        would prevent re-ordering.
+    """
     if isinstance(rhs, ir.Expr) and rhs.op == 'call':
         func_name = rhs.func.name
         if func_name not in call_table or call_table[func_name] == []:
             return False
         call_list = call_table[func_name]
-        if call_list == ['empty', numpy] or call_list == [slice]:
+        if (call_list == ['empty', numpy] or
+            call_list == [slice] or
+            call_list == ['stencil', numba] or
+            call_list == ['log', numpy] or
+            call_list == ['dtype', numpy] or
+            call_list == [numba.array_analysis.wrap_index]):
+            return True
+        elif (isinstance(call_list[0], numba.extending._Intrinsic) and
+              (call_list[0]._name == 'empty_inferred' or
+               call_list[0]._name == 'unsafe_empty_inferred')):
             return True
         from numba.targets.registry import CPUDispatcher
         from numba.targets.linalg import dot_3_mv_check_args
@@ -539,27 +610,64 @@ def has_no_side_effect(rhs, lives, call_table):
             py_func = call_list[0].py_func
             if py_func == dot_3_mv_check_args:
                 return True
+        for f in remove_call_handlers:
+            if f(rhs, lives, call_list):
+                return True
         return False
     if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop':
         return rhs.lhs.name not in lives
     if isinstance(rhs, ir.Yield):
         return False
+    if isinstance(rhs, ir.Expr) and rhs.op == 'pair_first':
+        # don't remove pair_first since prange looks for it
+        return False
+    return True
+
+is_pure_extensions = []
+
+def is_pure(rhs, lives, call_table):
+    """ Returns True if every time this expression is evaluated it
+        returns the same result.  This is not the case for things
+        like calls to numpy.random.
+    """
+    if isinstance(rhs, ir.Expr) and rhs.op == 'call':
+        func_name = rhs.func.name
+        if func_name not in call_table or call_table[func_name] == []:
+            return False
+        call_list = call_table[func_name]
+        if (call_list == [slice] or
+            call_list == ['log', numpy] or
+            call_list == ['empty', numpy]):
+            return True
+        for f in is_pure_extensions:
+            if f(rhs, lives, call_list):
+                return True
+        return False
+    if isinstance(rhs, ir.Yield):
+        return False
     return True
 
 alias_analysis_extensions = {}
+alias_func_extensions = {}
 
-def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=None):
+def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
+                                                            arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
     if arg_aliases is None:
         arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
 
+    # update definitions since they are not guaranteed to be up-to-date
+    # FIXME keep definitions up-to-date to avoid the need for rebuilding
+    func_ir._definitions = build_definitions(func_ir.blocks)
+    np_alias_funcs = ['ravel', 'transpose', 'reshape']
+
     for bl in blocks.values():
         for instr in bl.body:
             if type(instr) in alias_analysis_extensions:
                 f = alias_analysis_extensions[type(instr)]
-                f(instr, args, typemap, alias_map, arg_aliases)
+                f(instr, args, typemap, func_ir, alias_map, arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
@@ -569,9 +677,30 @@ def find_potential_aliases(blocks, args, typemap, alias_map=None, arg_aliases=No
                 if isinstance(expr, ir.Var) and lhs!=expr.name:
                     _add_alias(lhs, expr.name, alias_map, arg_aliases)
                 # subarrays like A = B[0] for 2D B
-                if (isinstance(expr, ir.Expr)
-                        and expr.op in ['getitem', 'static_getitem']):
+                if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
+                    expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # array attributes like A.T
+                if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr in ['T', 'ctypes', 'flat']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # calls that can create aliases such as B = A.ravel()
+                if isinstance(expr, ir.Expr) and expr.op == 'call':
+                    fdef = guard(find_callname, func_ir, expr, typemap)
+                    # TODO: sometimes gufunc backend creates duplicate code
+                    # causing find_callname to fail. Example: test_argmax
+                    # ignored here since those cases don't create aliases
+                    # but should be fixed in general
+                    if fdef is None:
+                        continue
+                    fname, fmod = fdef
+                    if fdef in alias_func_extensions:
+                        alias_func = alias_func_extensions[fdef]
+                        alias_func(lhs, expr.args, alias_map, arg_aliases)
+                    if fmod == 'numpy' and fname in np_alias_funcs:
+                        _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
+                    if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
+                        _add_alias(lhs, fmod.name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
@@ -748,18 +877,23 @@ def get_block_copies(blocks, typemap):
 apply_copy_propagate_extensions = {}
 
 
-def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
-                         typemap, calltypes):
+def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
+                         save_copies=None):
     """apply copy propagation to IR: replace variables when copies available"""
+    # save_copies keeps an approximation of the copies that were applied, so
+    # that the variable names of removed user variables can be recovered to some
+    # extent.
+    if save_copies is None:
+        save_copies = []
+
     for label, block in blocks.items():
         var_dict = {l: name_var_table[r] for l, r in in_copies[label]}
         # assignments as dict to replace with latest value
         for stmt in block.body:
-            ext_func(stmt, var_dict, ext_data)
             if type(stmt) in apply_copy_propagate_extensions:
                 f = apply_copy_propagate_extensions[type(stmt)]
-                f(stmt, var_dict, name_var_table, ext_func, ext_data,
-                    typemap, calltypes)
+                f(stmt, var_dict, name_var_table,
+                    typemap, calltypes, save_copies)
             # only rhs of assignments should be replaced
             # e.g. if x=y is available, x in x=z shouldn't be replaced
             elif isinstance(stmt, ir.Assign):
@@ -794,8 +928,20 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, ext_func, ext_data,
                             lhs_kill.append(k)
                     for k in lhs_kill:
                         var_dict.pop(k, None)
-    return
+            if (isinstance(stmt, ir.Assign)
+                                        and not isinstance(stmt.value, ir.Var)):
+                lhs = stmt.target.name
+                var_dict.pop(lhs, None)
+                # previous t=a is killed if a is killed
+                lhs_kill = []
+                for k, v in var_dict.items():
+                    if v.name == lhs:
+                        lhs_kill.append(k)
+                for k in lhs_kill:
+                    var_dict.pop(k, None)
+        save_copies.extend(var_dict.items())
 
+    return save_copies
 
 def fix_setitem_type(stmt, typemap, calltypes):
     """Copy propagation can replace setitem target variable, which can be array
@@ -822,19 +968,26 @@ def fix_setitem_type(stmt, typemap, calltypes):
     return
 
 
-def dprint_func_ir(func_ir, title):
+def dprint_func_ir(func_ir, title, blocks=None):
+    """Debug print function IR, with an optional blocks argument
+    that may differ from the IR's original blocks.
+    """
     if config.DEBUG_ARRAY_OPT == 1:
+        ir_blocks = func_ir.blocks
+        func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
         print(("IR %s: %s" % (title, name)).center(80, "-"))
         func_ir.dump()
         print("-" * 40)
+        func_ir.blocks = ir_blocks
 
 
-def find_topo_order(blocks):
+def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
-    cfg = compute_cfg_from_blocks(blocks)
+    if cfg == None:
+        cfg = compute_cfg_from_blocks(blocks)
     post_order = []
     seen = set()
 
@@ -892,6 +1045,12 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None):
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
+                if isinstance(rhs, ir.FreeVar):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.value)
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.value)
             for T, f in call_table_extensions.items():
                 if isinstance(inst, T):
                     f(inst, call_table, reverse_call_table)
@@ -933,7 +1092,7 @@ def get_stmt_writes(stmt):
 
 def rename_labels(blocks):
     """rename labels of function body blocks according to topological sort.
-    lowering requires this order.
+    The set of labels of these blocks will remain unchanged.
     """
     topo_order = find_topo_order(blocks)
 
@@ -948,10 +1107,9 @@ def rename_labels(blocks):
         topo_order.append(return_label)
 
     label_map = {}
-    new_label = 0
+    all_labels = sorted(topo_order, reverse=True)
     for label in topo_order:
-        label_map[label] = new_label
-        new_label += 1
+        label_map[label] = all_labels.pop()
     # update target labels in jumps/branches
     for b in blocks.values():
         term = b.terminator
@@ -971,26 +1129,29 @@ def rename_labels(blocks):
 
 def simplify_CFG(blocks):
     """transform chains of blocks that have no loop into a single block"""
+    # first, inline single-branch-block to its predecessors
     cfg = compute_cfg_from_blocks(blocks)
-    label_map = {}
-    for node in cfg.nodes():
-        # find nodes with one successors, that has one predecessor
-        successors = [n for n, _ in cfg.successors(node)]
-        if len(successors) == 1:
-            next_node = successors[0]
-            next_preds = list(cfg.predecessors(successors[0]))
-            if len(next_preds) == 1:
-                # nodes could have been replaced with previous nodes
-                node = label_map.get(node, node)
-                next_node = label_map.get(next_node, next_node)
-                assert isinstance(blocks[node].body[-1], ir.Jump)
-                assert blocks[node].body[-1].target == next_node
-                # remove next_node and append it's body to node
-                blocks[node].body.pop()
-                blocks[node].body.extend(blocks[next_node].body)
-                blocks.pop(next_node)
-                label_map[next_node] = node
-
+    def find_single_branch(label):
+        block = blocks[label]
+        return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
+    single_branch_blocks = list(filter(find_single_branch, blocks.keys()))
+    marked_for_del = set()
+    for label in single_branch_blocks:
+        inst = blocks[label].body[0]
+        predecessors = cfg.predecessors(label)
+        delete_block = True
+        for (p, q) in predecessors:
+            block = blocks[p]
+            if isinstance(block.body[-1], ir.Jump):
+                block.body[-1] = copy.copy(inst)
+            else:
+                delete_block = False
+        if delete_block:
+            marked_for_del.add(label)
+    # Delete marked labels
+    for label in marked_for_del:
+        del blocks[label]
+    merge_adjacent_blocks(blocks)
     return rename_labels(blocks)
 
 
@@ -999,9 +1160,10 @@ arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
             'nonzero', 'ravel']
 
 
-def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
+def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
     # save array arg to call
     # call_varname -> array
+    blocks = func_ir.blocks
     saved_arr_arg = {}
     topo_order = find_topo_order(blocks)
     for label in topo_order:
@@ -1027,6 +1189,7 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                     g_np_assign = ir.Assign(g_np, g_np_var, loc)
                     rhs.value = g_np_var
                     new_body.append(g_np_assign)
+                    func_ir._definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
                     func_typ = get_np_ufunc_typ(func)
@@ -1035,11 +1198,15 @@ def canonicalize_array_math(blocks, typemap, calltypes, typingctx):
                 if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
                     # add array as first arg
                     arr = saved_arr_arg[rhs.func.name]
-                    rhs.args = [arr] + rhs.args
                     # update call type signature to include array arg
                     old_sig = calltypes.pop(rhs)
+                    # argsort requires kws for typing so sig.args can't be used
+                    # reusing sig.args since some types become Const in sig
+                    argtyps = old_sig.args[:len(rhs.args)]
+                    kwtyps = {name: typemap[v.name] for name, v in rhs.kws}
                     calltypes[rhs] = typemap[rhs.func.name].get_call_type(
-                        typingctx, [typemap[arr.name]] + list(old_sig.args), {})
+                        typingctx, [typemap[arr.name]] + list(argtyps), kwtyps)
+                    rhs.args = [arr] + rhs.args
 
             new_body.append(stmt)
         block.body = new_body
@@ -1051,69 +1218,591 @@ array_accesses_extensions = {}
 
 
 def get_array_accesses(blocks, accesses=None):
-    """returns a dictionary of arrays accessed and their indices.
+    """returns a set of arrays accessed and their indices.
     """
     if accesses is None:
-        accesses = {}
+        accesses = set()
 
     for block in blocks.values():
         for inst in block.body:
             if isinstance(inst, ir.SetItem):
-                accesses[inst.target.name] = inst.index.name
+                accesses.add((inst.target.name, inst.index.name))
             if isinstance(inst, ir.StaticSetItem):
-                accesses[inst.target.name] = inst.index_var.name
+                accesses.add((inst.target.name, inst.index_var.name))
             if isinstance(inst, ir.Assign):
                 lhs = inst.target.name
                 rhs = inst.value
                 if isinstance(rhs, ir.Expr) and rhs.op == 'getitem':
-                    accesses[rhs.value.name] = rhs.index.name
+                    accesses.add((rhs.value.name, rhs.index.name))
                 if isinstance(rhs, ir.Expr) and rhs.op == 'static_getitem':
-                    accesses[rhs.value.name] = rhs.index_var.name
+                    index = rhs.index
+                    # slice is unhashable, so just keep the variable
+                    if index is None or is_slice_index(index):
+                        index = rhs.index_var.name
+                    accesses.add((rhs.value.name, index))
             for T, f in array_accesses_extensions.items():
                 if isinstance(inst, T):
                     f(inst, accesses)
     return accesses
 
-def merge_adjacent_blocks(func_ir):
-    cfg = compute_cfg_from_blocks(func_ir.blocks)
+def is_slice_index(index):
+    """see if index is a slice index or has slice in it"""
+    if isinstance(index, slice):
+        return True
+    if isinstance(index, tuple):
+        for i in index:
+            if isinstance(i, slice):
+                return True
+    return False
+
+def merge_adjacent_blocks(blocks):
+    cfg = compute_cfg_from_blocks(blocks)
     # merge adjacent blocks
-    removed = []
-    for label in list(func_ir.blocks.keys()):
+    removed = set()
+    for label in list(blocks.keys()):
         if label in removed:
             continue
+        block = blocks[label]
         succs = list(cfg.successors(label))
-        if len(succs) != 1:
-            continue
-        next_label = succs[0][0]
-        preds = list(cfg.predecessors(next_label))
-        if len(preds) != 1 or preds[0][0] != label:
-            continue
-        block = func_ir.blocks[label]
-        next_block = func_ir.blocks[next_label]
-        if block.scope != next_block.scope:
-            continue
-        # merge
-        removed.append(next_label)
-        block.body = block.body[:(len(block.body) - 1)]
-        for stmts in next_block.body:
-            block.body.append(stmts)
-        del func_ir.blocks[next_label]
+        while True:
+            if len(succs) != 1:
+                break
+            next_label = succs[0][0]
+            if next_label in removed:
+                break
+            preds = list(cfg.predecessors(next_label))
+            succs = list(cfg.successors(next_label))
+            if len(preds) != 1 or preds[0][0] != label:
+                break
+            next_block = blocks[next_label]
+            # XXX: commented out since scope objects are not consistent
+            # thoughout the compiler. for example, pieces of code are compiled
+            # and inlined on the fly without proper scope merge.
+            # if block.scope != next_block.scope:
+            #     break
+            # merge
+            block.body.pop()  # remove Jump
+            block.body += next_block.body
+            del blocks[next_label]
+            removed.add(next_label)
+            label = next_label
 
-def simplify(func_ir, typemap, array_analysis, calltypes, update_analysis):
+def restore_copy_var_names(blocks, save_copies, typemap):
+    """
+    restores variable names of user variables after applying copy propagation
+    """
+    rename_dict = {}
+    for (a, b) in save_copies:
+        # a is string name, b is variable
+        # if a is user variable and b is generated temporary and b is not
+        # already renamed
+        if (not a.startswith('$') and b.name.startswith('$')
+                                                and b.name not in rename_dict):
+            new_name = mk_unique_var('${}'.format(a));
+            rename_dict[b.name] = new_name
+            typ = typemap.pop(b.name)
+            typemap[new_name] = typ
+
+    replace_var_names(blocks, rename_dict)
+
+def simplify(func_ir, typemap, calltypes):
     remove_dels(func_ir.blocks)
     # get copies in to blocks and out from blocks
     in_cps, out_cps = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement
     name_var_table = get_name_var_table(func_ir.blocks)
-    apply_copy_propagate(
+    save_copies = apply_copy_propagate(
         func_ir.blocks,
         in_cps,
         name_var_table,
-        update_analysis,
-        array_analysis,
         typemap,
         calltypes)
+    restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
-    remove_dead(func_ir.blocks, func_ir.arg_names, typemap)
+    remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
+    func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT == 1:
         dprint_func_ir(func_ir, "after simplify")
+
+class GuardException(Exception):
+    pass
+
+def require(cond):
+    """
+    Raise GuardException if the given condition is False.
+    """
+    if not cond:
+       raise GuardException
+
+def guard(func, *args, **kwargs):
+    """
+    Run a function with given set of arguments, and guard against
+    any GuardException raised by the function by returning None,
+    or the expected return results if no such exception was raised.
+    """
+    try:
+        return func(*args, **kwargs)
+    except GuardException:
+        return None
+
+def get_definition(func_ir, name, **kwargs):
+    """
+    Same as func_ir.get_definition(name), but raise GuardException if
+    exception KeyError is caught.
+    """
+    try:
+        return func_ir.get_definition(name, **kwargs)
+    except KeyError:
+        raise GuardException
+
+def build_definitions(blocks, definitions=None):
+    """Build the definitions table of the given blocks by scanning
+    through all blocks and instructions, useful when the definitions
+    table is out-of-sync.
+    Will return a new definition table if one is not passed.
+    """
+    if definitions is None:
+        definitions = collections.defaultdict(list)
+
+    for block in blocks.values():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                name = inst.target.name
+                definition = definitions.get(name, [])
+                if definition == []:
+                    definitions[name] = definition
+                definition.append(inst.value)
+            if type(inst) in build_defs_extensions:
+                f = build_defs_extensions[type(inst)]
+                f(inst, definitions)
+
+    return definitions
+
+build_defs_extensions = {}
+
+def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
+    """Check if a call expression is calling a numpy function, and
+    return the callee's function name and module name (both are strings),
+    or raise GuardException. For array attribute calls such as 'a.f(x)'
+    when 'a' is a numpy array, the array variable 'a' is returned
+    in place of the module name.
+    """
+    require(isinstance(expr, ir.Expr) and expr.op == 'call')
+    callee = expr.func
+    callee_def = definition_finder(func_ir, callee)
+    attrs = []
+    obj = None
+    while True:
+        if isinstance(callee_def, (ir.Global, ir.FreeVar)):
+            # require(callee_def.value == numpy)
+            # these checks support modules like numpy, numpy.random as well as
+            # calls like len() and intrinsitcs like assertEquiv
+            keys = ['name', '_name', '__name__']
+            value = None
+            for key in keys:
+                if hasattr(callee_def.value, key):
+                    value = getattr(callee_def.value, key)
+                    break
+            if not value:
+                raise GuardException
+            attrs.append(value)
+            def_val = callee_def.value
+            # get the underlying definition of Intrinsic object to be able to
+            # find the module effectively.
+            # Otherwise, it will return numba.extending
+            if isinstance(def_val, numba.extending._Intrinsic):
+                def_val = def_val._defn
+            if hasattr(def_val, '__module__'):
+                mod_name = def_val.__module__
+                # it might be a numpy function imported directly
+                if (hasattr(numpy, value)
+                        and def_val == getattr(numpy, value)):
+                    attrs += ['numpy']
+                # it might be a np.random function imported directly
+                elif (hasattr(numpy.random, value)
+                        and def_val == getattr(numpy.random, value)):
+                    attrs += ['random', 'numpy']
+                elif mod_name is not None:
+                    attrs.append(mod_name)
+            else:
+                class_name = def_val.__class__.__name__
+                if class_name == 'builtin_function_or_method':
+                    class_name = 'builtin'
+                if class_name != 'module':
+                    attrs.append(class_name)
+            break
+        elif isinstance(callee_def, ir.Expr) and callee_def.op == 'getattr':
+            obj = callee_def.value
+            attrs.append(callee_def.attr)
+            if typemap and obj.name in typemap:
+                typ = typemap[obj.name]
+                if isinstance(typ, types.npytypes.Array):
+                    return attrs[0], obj
+            callee_def = definition_finder(func_ir, obj)
+        else:
+            # obj.func calls where obj is not np array
+            if obj is not None:
+                return '.'.join(reversed(attrs)), obj
+            raise GuardException
+    return attrs[0], '.'.join(reversed(attrs[1:]))
+
+def find_build_sequence(func_ir, var):
+    """Check if a variable is constructed via build_tuple or
+    build_list or build_set, and return the sequence and the
+    operator, or raise GuardException otherwise.
+    Note: only build_tuple is immutable, so use with care.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Expr))
+    build_ops = ['build_tuple', 'build_list', 'build_set']
+    require(var_def.op in build_ops)
+    return var_def.items, var_def.op
+
+def find_const(func_ir, var):
+    """Check if a variable is defined as constant, and return
+    the constant value, or raise GuardException otherwise.
+    """
+    require(isinstance(var, ir.Var))
+    var_def = get_definition(func_ir, var)
+    require(isinstance(var_def, ir.Const))
+    return var_def.value
+
+def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
+                        typemap=None, calltypes=None):
+    """
+    Compile a function or a make_function node to Numba IR.
+
+    Rename variables and
+    labels to avoid conflict if inlined somewhere else. Perform type inference
+    if typingctx and other typing inputs are available and update typemap and
+    calltypes.
+    """
+    from numba import compiler
+    # mk_func can be actual function or make_function node
+    if hasattr(mk_func, 'code'):
+        code = mk_func.code
+    elif hasattr(mk_func, '__code__'):
+        code = mk_func.__code__
+    else:
+        raise NotImplementedError("function type not recognized {}".format(mk_func))
+    f_ir = get_ir_of_code(glbls, code)
+    remove_dels(f_ir.blocks)
+
+    # relabel by adding an offset
+    global _max_label
+    f_ir.blocks = add_offset_to_labels(f_ir.blocks, _max_label + 1)
+    max_label = max(f_ir.blocks.keys())
+    _max_label = max_label
+
+    # rename all variables to avoid conflict
+    var_table = get_name_var_table(f_ir.blocks)
+    new_var_dict = {}
+    for name, var in var_table.items():
+        new_var_dict[name] = mk_unique_var(name)
+    replace_var_names(f_ir.blocks, new_var_dict)
+
+    # perform type inference if typingctx is available and update type
+    # data structures typemap and calltypes
+    if typingctx:
+        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+                typingctx, f_ir, arg_typs, None)
+        # remove argument entries like arg.a from typemap
+        arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
+        for a in arg_names:
+            f_typemap.pop(a)
+        typemap.update(f_typemap)
+        calltypes.update(f_calltypes)
+    return f_ir
+
+def get_ir_of_code(glbls, fcode):
+    """
+    Compile a code object to get its IR.
+    """
+    nfree = len(fcode.co_freevars)
+    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
+        func_env, func_arg, func_clo)
+    loc = {}
+    exec_(func_text, glbls, loc)
+
+    # hack parameter name .0 for Python 3 versions < 3.6
+    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
+        co_varnames = list(fcode.co_varnames)
+        if co_varnames[0] == ".0":
+            co_varnames[0] = "implicit0"
+        fcode = pytypes.CodeType(
+            fcode.co_argcount,
+            fcode.co_kwonlyargcount,
+            fcode.co_nlocals,
+            fcode.co_stacksize,
+            fcode.co_flags,
+            fcode.co_code,
+            fcode.co_consts,
+            fcode.co_names,
+            tuple(co_varnames),
+            fcode.co_filename,
+            fcode.co_name,
+            fcode.co_firstlineno,
+            fcode.co_lnotab,
+            fcode.co_freevars,
+            fcode.co_cellvars)
+
+    f = loc['g']()
+    f.__code__ = fcode
+    f.__name__ = fcode.co_name
+    from numba import compiler
+    ir = compiler.run_frontend(f)
+    # we need to run the before inference rewrite pass to normalize the IR
+    # XXX: check rewrite pass flag?
+    # for example, Raise nodes need to become StaticRaise before type inference
+    class DummyPipeline(object):
+        def __init__(self, f_ir):
+            self.typingctx = None
+            self.targetctx = None
+            self.args = None
+            self.func_ir = f_ir
+            self.typemap = None
+            self.return_type = None
+            self.calltypes = None
+    rewrites.rewrite_registry.apply('before-inference',
+                                    DummyPipeline(ir), ir)
+    # call inline pass to handle cases like stencils and comprehensions
+    inline_pass = numba.inline_closurecall.InlineClosureCallPass(
+        ir, numba.targets.cpu.ParallelOptions(False))
+    inline_pass.run()
+    from numba import postproc
+    post_proc = postproc.PostProcessor(ir)
+    post_proc.run()
+    return ir
+
+def replace_arg_nodes(block, args):
+    """
+    Replace ir.Arg(...) with variables
+    """
+    for stmt in block.body:
+        if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
+            idx = stmt.value.index
+            assert(idx < len(args))
+            stmt.value = args[idx]
+    return
+
+def replace_returns(blocks, target, return_label):
+    """
+    Return return statement by assigning directly to target, and a jump.
+    """
+    for block in blocks.values():
+        casts = []
+        for i, stmt in enumerate(block.body):
+            if isinstance(stmt, ir.Return):
+                assert(i + 1 == len(block.body))
+                block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
+                block.body.append(ir.Jump(return_label, stmt.loc))
+                # remove cast of the returned value
+                for cast in casts:
+                    if cast.target.name == stmt.value.name:
+                        cast.value = cast.value.value
+            elif isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr) and stmt.value.op == 'cast':
+                casts.append(stmt)
+
+def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
+    scope = args[0].scope
+    loc = args[0].loc
+
+    # g_np_var = Global(numpy)
+    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+    typemap[g_np_var.name] = types.misc.Module(numpy)
+    g_np = ir.Global('np', numpy, loc)
+    g_np_assign = ir.Assign(g_np, g_np_var, loc)
+    # attr call: <something>_attr = getattr(g_np_var, func_as_str)
+    np_attr_call = ir.Expr.getattr(g_np_var, func_as_str, loc)
+    attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
+    func_var_typ = get_np_ufunc_typ(func)
+    typemap[attr_var.name] = func_var_typ
+    attr_assign = ir.Assign(np_attr_call, attr_var, loc)
+    # np call: lhs = np_attr(*args)
+    np_call = ir.Expr.call(attr_var, args, (), loc)
+    arg_types = [typemap[x.name] for x in args]
+    func_typ = func_var_typ.get_call_type(typingctx, arg_types, {})
+    calltypes[np_call] = func_typ
+    np_assign = ir.Assign(np_call, lhs, loc)
+    return [g_np_assign, attr_assign, np_assign]
+
+def dump_blocks(blocks):
+    for label, block in blocks.items():
+        print(label, ":")
+        for stmt in block.body:
+            print("    ", stmt)
+
+def is_get_setitem(stmt):
+    """stmt is getitem assignment or setitem (and static cases)"""
+    return is_getitem(stmt) or is_setitem(stmt)
+
+
+def is_getitem(stmt):
+    """true if stmt is a getitem or static_getitem assignment"""
+    return (isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+            and stmt.value.op in ['getitem', 'static_getitem'])
+
+def is_setitem(stmt):
+    """true if stmt is a SetItem or StaticSetItem node"""
+    return isinstance(stmt, (ir.SetItem, ir.StaticSetItem))
+
+def index_var_of_get_setitem(stmt):
+    """get index variable for getitem/setitem nodes (and static cases)"""
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            return stmt.value.index
+        else:
+            return stmt.value.index_var
+
+    if is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            return stmt.index
+        else:
+            return stmt.index_var
+
+    return None
+
+def set_index_var_of_get_setitem(stmt, new_index):
+    if is_getitem(stmt):
+        if stmt.value.op == 'getitem':
+            stmt.value.index = new_index
+        else:
+            stmt.value.index_var = new_index
+    elif is_setitem(stmt):
+        if isinstance(stmt, ir.SetItem):
+            stmt.index = new_index
+        else:
+            stmt.index_var = new_index
+    else:
+        raise ValueError("getitem or setitem node expected but received {}".format(
+                     stmt))
+
+
+def is_namedtuple_class(c):
+    """check if c is a namedtuple class"""
+    if not isinstance(c, type):
+        return False
+    # should have only tuple as superclass
+    bases = c.__bases__
+    if len(bases) != 1 or bases[0] != tuple:
+        return False
+    # should have _make method
+    if not hasattr(c, '_make'):
+        return False
+    # should have _fields that is all string
+    fields = getattr(c, '_fields', None)
+    if not isinstance(fields, tuple):
+        return False
+    return all(isinstance(f, str) for f in fields)
+
+
+def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
+    """Fill *newblock* to call *callee* with arguments listed in *inputs*.
+    The returned values are unwraped into variables in *outputs*.
+    The block would then jump to *label_next*.
+    """
+    scope = newblock.scope
+    loc = newblock.loc
+
+    fn = ir.Const(value=callee, loc=loc)
+    fnvar = scope.make_temp(loc=loc)
+    newblock.append(ir.Assign(target=fnvar, value=fn, loc=loc))
+    # call
+    args = [scope.get_exact(name) for name in inputs]
+    callexpr = ir.Expr.call(func=fnvar, args=args, kws=(), loc=loc)
+    callres = scope.make_temp(loc=loc)
+    newblock.append(ir.Assign(target=callres, value=callexpr, loc=loc))
+    # unpack return value
+    for i, out in enumerate(outputs):
+        target = scope.get_exact(out)
+        getitem = ir.Expr.static_getitem(value=callres, index=i,
+                                         index_var=None, loc=loc)
+        newblock.append(ir.Assign(target=target, value=getitem, loc=loc))
+    # jump to next block
+    newblock.append(ir.Jump(target=label_next, loc=loc))
+    return newblock
+
+
+def fill_callee_prologue(block, inputs, label_next):
+    """
+    Fill a new block *block* that unwraps arguments using names in *inputs* and
+    then jumps to *label_next*.
+
+    Expected to use with *fill_block_with_call()*
+    """
+    scope = block.scope
+    loc = block.loc
+    # load args
+    args = [ir.Arg(name=k, index=i, loc=loc)
+            for i, k in enumerate(inputs)]
+    for aname, aval in zip(inputs, args):
+        tmp = ir.Var(scope=scope, name=aname, loc=loc)
+        block.append(ir.Assign(target=tmp, value=aval, loc=loc))
+    # jump to loop entry
+    block.append(ir.Jump(target=label_next, loc=loc))
+    return block
+
+
+def fill_callee_epilogue(block, outputs):
+    """
+    Fill a new block *block* to prepare the return values.
+    This block is the last block of the function.
+
+    Expected to use with *fill_block_with_call()*
+    """
+    scope = block.scope
+    loc = block.loc
+    # prepare tuples to return
+    vals = [scope.get_exact(name=name) for name in outputs]
+    tupexpr = ir.Expr.build_tuple(items=vals, loc=loc)
+    tup = scope.make_temp(loc=loc)
+    block.append(ir.Assign(target=tup, value=tupexpr, loc=loc))
+    # return
+    block.append(ir.Return(value=tup, loc=loc))
+    return block
+
+
+def raise_on_unsupported_feature(func_ir):
+    """
+    Helper function to walk IR and raise if it finds op codes
+    that are unsupported. Could be extended to cover IR sequences
+    as well as op codes. Intended use is to call it as a pipeline
+    stage just prior to lowering to prevent LoweringErrors for known
+    unsupported features.
+    """
+    for blk in func_ir.blocks.values():
+        for stmt in blk.find_insts(ir.Assign):
+            # This raises on finding `make_function`
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'make_function':
+                    val = stmt.value
+
+                    # See if the construct name can be refined
+                    code = getattr(val, 'code', None)
+                    if code is not None:
+                        # check if this is a closure, the co_name will
+                        # be the captured function name which is not
+                        # useful so be explicit
+                        if getattr(val, 'closure', None) is not None:
+                            use = '<creating a function from a closure>'
+                            expr = ''
+                        else:
+                            use = code.co_name
+                            expr = '(%s) ' % use
+                    else:
+                        use = '<could not ascertain use case>'
+                        expr = ''
+
+                    msg = ("Numba encountered the use of a language "
+                            "feature it does not support in this context: "
+                            "%s (op code: make_function not supported). If "
+                            "the feature is explicitly supported it is "
+                            "likely that the result of the expression %s"
+                            "is being used in an unsupported manner.") % \
+                            (use, expr)
+                    raise UnsupportedError(msg, stmt.value.loc)

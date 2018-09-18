@@ -5,6 +5,8 @@ Implementation of math operations on Array objects.
 from __future__ import print_function, absolute_import, division
 
 import math
+from collections import namedtuple
+from enum import IntEnum
 
 import numpy as np
 
@@ -20,6 +22,130 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from .linalg import ensure_blas
+
+from numba.extending import intrinsic
+from numba.errors import RequireConstValue, TypingError
+
+def _check_blas():
+    # Checks if a BLAS is available so e.g. dot will work
+    try:
+        ensure_blas()
+    except ImportError:
+        return False
+    return True
+
+_HAVE_BLAS = _check_blas()
+
+@intrinsic
+def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
+    """
+    This routine converts shape list where the axis dimension has already
+    been popped to a tuple for indexing of the same size.  The original shape
+    tuple is also required because it contains a length field at compile time
+    whereas the shape list does not.
+    """
+
+    # The new tuple's size is one less than the original tuple since axis
+    # dimension removed.
+    nd = len(shape_tuple) - 1
+    # The return type of this intrinsic is an int tuple of length nd.
+    tupty = types.UniTuple(types.intp, nd)
+    # The function signature for this intrinsic.
+    function_sig = tupty(shape_list, shape_tuple)
+
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        # Create an empty int tuple.
+        tup = cgutils.get_null_value(lltupty)
+
+        # Get the shape list from the args and we don't need shape tuple.
+        [in_shape, _] = args
+
+        def array_indexer(a, i):
+            return a[i]
+
+        # loop to fill the tuple
+        for i in range(nd):
+            dataidx = cgctx.get_constant(types.intp, i)
+            # compile and call array_indexer
+            data = cgctx.compile_internal(builder, array_indexer,
+                                          types.intp(shape_list, types.intp),
+                                          [in_shape, dataidx])
+            tup = builder.insert_value(tup, data, i)
+        return tup
+
+    return function_sig, codegen
+
+@intrinsic(support_literals=True)
+def _gen_index_tuple(tyctx, shape_tuple, value, axis):
+    """
+    Generates a tuple that can be used to index a specific slice from an
+    array for sum with axis.  shape_tuple is the size of the dimensions of
+    the input array.  'value' is the value to put in the indexing tuple
+    in the axis dimension and 'axis' is that dimension.  For this to work,
+    axis has to be a const.
+    """
+    if not isinstance(axis, types.Const):
+        raise RequireConstValue('axis argument must be a constant')
+    # Get the value of the axis constant.
+    axis_value = axis.value
+    # The length of the indexing tuple to be output.
+    nd = len(shape_tuple)
+
+    # If the axis value is impossible for the given size array then
+    # just fake it like it was for axis 0.  This will stop compile errors
+    # when it looks like it could be called from array_sum_axis but really
+    # can't because that routine checks the axis mismatch and raise an
+    # exception.
+    if axis_value >= nd:
+        axis_value = 0
+
+    # Calculate the type of the indexing tuple.  All the non-axis
+    # dimensions have slice2 type and the axis dimension has int type.
+    before = axis_value
+    after  = nd - before - 1
+    types_list = ([types.slice2_type] * before) +  \
+                  [types.intp] +                   \
+                 ([types.slice2_type] * after)
+
+    # Creates the output type of the function.
+    tupty = types.Tuple(types_list)
+    # Defines the signature of the intrinsic.
+    function_sig = tupty(shape_tuple, value, axis)
+
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        # Create an empty indexing tuple.
+        tup = cgutils.get_null_value(lltupty)
+
+        # We only need value of the axis dimension here.
+        # The rest are constants defined above.
+        [_, value_arg, _] = args
+
+        def create_full_slice():
+            return slice(None, None)
+
+        # loop to fill the tuple with slice(None,None) before
+        # the axis dimension.
+
+        # compile and call create_full_slice
+        slice_data = cgctx.compile_internal(builder, create_full_slice,
+                                            types.slice2_type(),
+                                            [])
+        for i in range(0, axis_value):
+            tup = builder.insert_value(tup, slice_data, i)
+
+        # Add the axis dimension 'value'.
+        tup = builder.insert_value(tup, value_arg, axis_value)
+
+        # loop to fill the tuple with slice(None,None) after
+        # the axis dimension.
+        for i in range(axis_value + 1, nd):
+            tup = builder.insert_value(tup, slice_data, i)
+        return tup
+
+    return function_sig, codegen
 
 
 #----------------------------------------------------------------------------
@@ -39,6 +165,96 @@ def array_sum(context, builder, sig, args):
     res = context.compile_internal(builder, array_sum_impl, sig, args,
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+@lower_builtin(np.sum, types.Array, types.intp)
+@lower_builtin(np.sum, types.Array, types.Const)
+@lower_builtin("array.sum", types.Array, types.intp)
+@lower_builtin("array.sum", types.Array, types.Const)
+def array_sum_axis(context, builder, sig, args):
+    """
+    The third parameter to gen_index_tuple that generates the indexing
+    tuples has to be a const so we can't just pass "axis" through since
+    that isn't const.  We can check for specific values and have
+    different instances that do take consts.  Supporting axis summation
+    only up to the fourth dimension for now.
+    """
+    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
+    # It is one dimension less than the input array.
+    zero = sig.return_type.dtype(0)
+
+    [ty_array, ty_axis] = sig.args
+    is_axis_const = False
+    const_axis_val = 0
+    if isinstance(ty_axis, types.Const):
+        # this special-cases for constant axis
+        const_axis_val = ty_axis.value
+        # fix negative axis
+        if const_axis_val < 0:
+            const_axis_val = ty_array.ndim + const_axis_val
+        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
+            raise ValueError("'axis' entry is out of bounds")
+
+        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
+        axis_val = context.get_constant(ty_axis, const_axis_val)
+        # rewrite arguments
+        args = args[0], axis_val
+        # rewrite sig
+        sig = sig.replace(args=[ty_array, ty_axis])
+        is_axis_const = True
+
+    def array_sum_impl_axis(arr, axis):
+        ndim = arr.ndim
+
+        if not is_axis_const:
+            # Catch where axis is negative or greater than 3.
+            if axis < 0 or axis > 3:
+                raise ValueError("Numba does not support sum with axis"
+                                 "parameter outside the range 0 to 3.")
+
+        # Catch the case where the user misspecifies the axis to be
+        # more than the number of the array's dimensions.
+        if axis >= ndim:
+            raise ValueError("axis is out of bounds for array")
+
+        # Convert the shape of the input array to a list.
+        ashape = list(arr.shape)
+        # Get the length of the axis dimension.
+        axis_len = ashape[axis]
+        # Remove the axis dimension from the list of dimensional lengths.
+        ashape.pop(axis)
+        # Convert this shape list back to a tuple using above intrinsic.
+        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
+        # Tuple needed here to create output array with correct size.
+        result = np.full(ashape_without_axis, zero, type(zero))
+
+        # Iterate through the axis dimension.
+        for axis_index in range(axis_len):
+            if is_axis_const:
+                # constant specialized version works for any valid axis value
+                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
+                                                       const_axis_val)
+                result += arr[index_tuple_generic]
+            else:
+                # Generate a tuple used to index the input array.
+                # The tuple is ":" in all dimensions except the axis
+                # dimension where it is "axis_index".
+                if axis == 0:
+                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
+                    result += arr[index_tuple1]
+                elif axis == 1:
+                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
+                    result += arr[index_tuple2]
+                elif axis == 2:
+                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
+                    result += arr[index_tuple3]
+                elif axis == 3:
+                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
+                    result += arr[index_tuple4]
+
+        return result
+
+    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.prod, types.Array)
 @lower_builtin("array.prod", types.Array)
@@ -126,7 +342,8 @@ def array_var(context, builder, sig, args):
         # Compute the sum of square diffs
         ssd = 0
         for v in np.nditer(arr):
-            ssd += (v.item() - m) ** 2
+            val = (v.item() - m)
+            ssd +=  np.real(val * np.conj(val))
         return ssd / arr.size
 
     res = context.compile_internal(builder, array_var_impl, sig, args)
@@ -383,7 +600,8 @@ if numpy_version >= (1, 8):
             for view in np.nditer(arr):
                 v = view.item()
                 if not isnan(v):
-                    ssd += (v.item() - m) ** 2
+                    val = (v.item() - m)
+                    ssd +=  np.real(val * np.conj(val))
                     count += 1
             # np.divide() doesn't raise ZeroDivisionError
             return np.divide(ssd, count)
@@ -549,6 +767,125 @@ def np_median(a):
 
     return median_impl
 
+@register_jitable
+def _collect_percentiles_inner(a, q):
+    n = len(a)
+
+    if n == 1:
+        # single element array; output same for all percentiles
+        out = np.full(len(q), a[0], dtype=np.float64)
+    else:
+        out = np.empty(len(q), dtype=np.float64)
+        for i in range(len(q)):
+            percentile = q[i]
+
+            # bypass pivoting where requested percentile is 100
+            if percentile == 100:
+                val = np.max(a)
+                # heuristics to handle infinite values a la NumPy
+                if ~np.all(np.isfinite(a)):
+                    if ~np.isfinite(val):
+                        val = np.nan
+
+            # bypass pivoting where requested percentile is 0
+            elif percentile == 0:
+                val = np.min(a)
+                # convoluted heuristics to handle infinite values a la NumPy
+                if ~np.all(np.isfinite(a)):
+                    num_pos_inf = np.sum(a == np.inf)
+                    num_neg_inf = np.sum(a == -np.inf)
+                    num_finite = n - (num_neg_inf + num_pos_inf)
+                    if num_finite == 0:
+                        val = np.nan
+                    if num_pos_inf == 1 and n == 2:
+                        val = np.nan
+                    if num_neg_inf > 1:
+                        val = np.nan
+                    if num_finite == 1:
+                        if num_pos_inf > 1:
+                            if num_neg_inf != 1:
+                                val = np.nan
+
+            else:
+                # linear interp between closest ranks
+                rank = 1 + (n - 1) * np.true_divide(percentile, 100.0)
+                f = math.floor(rank)
+                m = rank - f
+                lower, upper = _select_two(a, k=int(f - 1), low=0, high=(n - 1))
+                val = lower * (1 - m) + upper * m
+            out[i] = val
+
+    return out
+
+@register_jitable
+def _can_collect_percentiles(a, nan_mask, skip_nan):
+    if skip_nan:
+        a = a[~nan_mask]
+        if len(a) == 0:
+            return False  # told to skip nan, but no elements remain
+    else:
+        if np.any(nan_mask):
+            return False  # told *not* to skip nan, but nan encountered
+
+    if len(a) == 1:  # single element array
+        val = a[0]
+        return np.isfinite(val)  # can collect percentiles if element is finite
+    else:
+        return True
+
+@register_jitable
+def _collect_percentiles(a, q, skip_nan=False):
+    if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
+        raise ValueError('Percentiles must be in the range [0,100]')
+
+    temp_arry = a.flatten()
+    nan_mask = np.isnan(temp_arry)
+
+    if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
+        temp_arry = temp_arry[~nan_mask]
+        out = _collect_percentiles_inner(temp_arry, q)
+    else:
+        out = np.full(len(q), np.nan)
+
+    return out
+
+def _np_percentile_impl(a, q, skip_nan):
+    def np_percentile_q_scalar_impl(a, q):
+        percentiles = np.array([q])
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)[0]
+
+    def np_percentile_q_sequence_impl(a, q):
+        percentiles = np.array(q)
+        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)
+
+    def np_percentile_q_array_impl(a, q):
+        return _collect_percentiles(a, q, skip_nan=skip_nan)
+
+    if isinstance(q, (types.Float, types.Integer, types.Boolean)):
+        return np_percentile_q_scalar_impl
+
+    elif isinstance(q, (types.Tuple, types.Sequence)):
+        return np_percentile_q_sequence_impl
+
+    elif isinstance(q, types.Array):
+        return np_percentile_q_array_impl
+
+if numpy_version >= (1, 10):
+    @overload(np.percentile)
+    def np_percentile(a, q):
+        # Note: np.percentile behaviour in the case of an array containing one or
+        # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+        # length equal to q, hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=False)
+
+if numpy_version >= (1, 11):
+    @overload(np.nanpercentile)
+    def np_nanpercentile(a, q):
+        # Note: np.nanpercentile return type in the case of an all-NaN slice
+        # was changed in 1.11 to be an array of np.NaN of length equal to q,
+        # hence version guard.
+        return _np_percentile_impl(a, q, skip_nan=True)
+
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
     def np_nanmedian(a):
@@ -565,13 +902,307 @@ if numpy_version >= (1, 9):
                 if not isnan(v):
                     temp_arry[n] = v
                     n += 1
+
+            # all NaNs
+            if n == 0:
+                return np.nan
+
             return _median_inner(temp_arry, n)
 
         return nanmedian_impl
 
+#----------------------------------------------------------------------------
+# Building matrices
+
+@register_jitable
+def _tri_impl(N, M, k):
+    shape = max(0, N), max(0, M)  # numpy floors each dimension at 0
+    out = np.empty(shape, dtype=np.float64)  # numpy default dtype
+
+    for i in range(shape[0]):
+        m_max = min(max(0, i + k + 1), shape[1])
+        out[i, :m_max] = 1
+        out[i, m_max:] = 0
+
+    return out
+
+@overload(np.tri)
+def np_tri(N, M=None, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def tri_impl(N, M=None, k=0):
+        if M is None:
+            M = N
+        return _tri_impl(N, M, k)
+
+    return tri_impl
+
+@register_jitable
+def _make_square(m):
+    """
+    Takes a 1d array and tiles it to form a square matrix
+    - i.e. a facsimile of np.tile(m, (len(m), 1))
+    """
+    assert m.ndim == 1
+
+    len_m = len(m)
+    out = np.empty((len_m, len_m), dtype=m.dtype)
+
+    for i in range(len_m):
+        out[i] = m
+
+    return out
+
+@register_jitable
+def np_tril_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+    return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
+
+@overload(np.tril)
+def my_tril(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_tril_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_tril_impl_2d(m_2d, k)
+
+    def np_tril_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, m[sel], zero_opt)
+        return z
+
+    if m.ndim == 1:
+        return np_tril_impl_1d
+    elif m.ndim == 2:
+        return np_tril_impl_2d
+    else:
+        return np_tril_impl_multi
+
+@register_jitable
+def np_triu_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+    return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
+
+@overload(np.triu)
+def my_triu(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_triu_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_triu_impl_2d(m_2d, k)
+
+    def np_triu_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, zero_opt, m[sel])
+        return z
+
+    if m.ndim == 1:
+        return np_triu_impl_1d
+    elif m.ndim == 2:
+        return np_triu_impl_2d
+    else:
+        return np_triu_impl_multi
+
+@register_jitable
+def _np_vander(x, N, increasing, out):
+    """
+    Generate an N-column Vandermonde matrix from a supplied 1-dimensional
+    array, x. Store results in an output matrix, out, which is assumed to
+    be of the required dtype.
+
+    Values are accumulated using np.multiply to match the floating point
+    precision behaviour of numpy.vander.
+    """
+    m, n = out.shape
+    assert m == len(x)
+    assert n == N
+
+    if increasing:
+        for i in range(N):
+            if i == 0:
+                out[:, i] = 1
+            else:
+                out[:, i] = np.multiply(x, out[:, (i - 1)])
+    else:
+        for i in range(N - 1, -1, -1):
+            if i == N - 1:
+                out[:, i] = 1
+            else:
+                out[:, i] = np.multiply(x, out[:, (i + 1)])
+
+@register_jitable
+def _check_vander_params(x, N):
+    if x.ndim > 1:
+        raise ValueError('x must be a one-dimensional array or sequence.')
+    if N < 0:
+        raise ValueError('Negative dimensions are not allowed')
+
+@overload(np.vander)
+def np_vander(x, N=None, increasing=False):
+
+    if N not in (None, types.none):
+        if not isinstance(N, types.Integer):
+            raise TypingError('Second argument N must be None or an integer')
+
+    def np_vander_impl(x, N=None, increasing=False):
+        if N is None:
+            N = len(x)
+
+        _check_vander_params(x, N)
+
+        # allocate output matrix using dtype determined in closure
+        out = np.empty((len(x), int(N)), dtype=dtype)
+
+        _np_vander(x, N, increasing, out)
+        return out
+
+    def np_vander_seq_impl(x, N=None, increasing=False):
+        if N is None:
+            N = len(x)
+
+        x_arr = np.array(x)
+        _check_vander_params(x_arr, N)
+
+        # allocate output matrix using dtype inferred when x_arr was created
+        out = np.empty((len(x), int(N)), dtype=x_arr.dtype)
+
+        _np_vander(x_arr, N, increasing, out)
+        return out
+
+    if isinstance(x, types.Array):
+        x_dt = as_dtype(x.dtype)
+        dtype = np.promote_types(x_dt, int)  # replicate numpy behaviour w.r.t. type promotion
+        return np_vander_impl
+    elif isinstance(x, (types.Tuple, types.Sequence)):
+        return np_vander_seq_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations
+
+@register_jitable
+def _fill_diagonal_params(a, wrap):
+    if a.ndim == 2:
+        m = a.shape[0]
+        n = a.shape[1]
+        step = 1 + n
+        if wrap:
+            end = n * m
+        else:
+            end = n * min(m, n)
+    else:
+        shape = np.array(a.shape)
+
+        if not np.all(np.diff(shape) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        step = 1 + (np.cumprod(shape[:-1])).sum()
+        end = shape.prod()
+
+    return end, step
+
+@register_jitable
+def _fill_diagonal_scalar(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+
+    for i in range(0, end, step):
+        a.flat[i] = val
+
+@register_jitable
+def _fill_diagonal(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+    ctr = 0
+    v_len = len(val)
+
+    for i in range(0, end, step):
+        a.flat[i] = val[ctr]
+        ctr += 1
+        ctr = ctr % v_len
+
+@register_jitable
+def _check_val_int(a, val):
+    iinfo = np.iinfo(a.dtype)
+    v_min = iinfo.min
+    v_max = iinfo.max
+
+    # check finite values are within bounds
+    if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+@register_jitable
+def _check_val_float(a, val):
+    finfo = np.finfo(a.dtype)
+    v_min = finfo.min
+    v_max = finfo.max
+
+    # check finite values are within bounds
+    finite_vals = val[np.isfinite(val)]
+    if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+# no check performed, needed for pathway where no check is required
+_check_nop = register_jitable(lambda x, y: x)
+
+def _asarray(x):
+    pass
+
+@overload(_asarray)
+def _asarray_impl(x):
+    if isinstance(x, types.Array):
+        return lambda x: x
+    elif isinstance(x, (types.Sequence, types.Tuple)):
+        return lambda x: np.array(x)
+    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+        ty = as_dtype(x)
+        return lambda x: np.array([x], dtype=ty)
+
+@overload(np.fill_diagonal)
+def np_fill_diagonal(a, val, wrap=False):
+
+    if a.ndim > 1:
+        # the following can be simplified after #3088; until then, employ
+        # a basic mechanism for catching cases where val is of a type/value
+        # which cannot safely be cast to a.dtype
+        if isinstance(a.dtype, types.Integer):
+            checker = _check_val_int
+        elif isinstance(a.dtype, types.Float):
+            checker = _check_val_float
+        else:
+            checker = _check_nop
+
+        def scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal_scalar(a, val, wrap)
+
+        def non_scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal(a, tmpval, wrap)
+
+        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+            return scalar_impl
+        elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
+            return non_scalar_impl
+    else:
+        msg = "The first argument must be at least 2-D (found %s-D)" % a.ndim
+        raise TypingError(msg)
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
@@ -783,13 +1414,17 @@ def array_where(context, builder, sig, args):
     np.where(array, array, array)
     """
     layouts = set(a.layout for a in sig.args)
-    if layouts == set('C'):
+
+    npty = np.promote_types(as_dtype(sig.args[1].dtype),
+                            as_dtype(sig.args[2].dtype))
+
+    if layouts == set('C') or layouts == set('F'):
         # Faster implementation for C-contiguous arrays
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty_like(x, dtype=npty)
             cf = cond.flat
             xf = x.flat
             yf = y.flat
@@ -798,12 +1433,11 @@ def array_where(context, builder, sig, args):
                 rf[i] = xf[i] if cf[i] else yf[i]
             return res
     else:
-
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty(cond.shape, dtype=npty)
             for idx, c in np.ndenumerate(cond):
                 res[idx] = x[idx] if c else y[idx]
             return res
@@ -831,6 +1465,22 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@overload(np.real)
+def np_real(a):
+    def np_real_impl(a):
+        return a.real
+
+    return np_real_impl
+
+
+@overload(np.imag)
+def np_imag(a):
+    def np_imag_impl(a):
+        return a.imag
+
+    return np_imag_impl
 
 
 #----------------------------------------------------------------------------
@@ -932,59 +1582,67 @@ def np_bincount(a, weights=None):
 
     return bincount_impl
 
+def _searchsorted(func):
+    def searchsorted_inner(a, v):
+        n = len(a)
+        if np.isnan(v):
+            # Find the first nan (i.e. the last from the end of a,
+            # since there shouldn't be many of them in practice)
+            for i in range(n, 0, -1):
+                if not np.isnan(a[i - 1]):
+                    return i
+            return 0
+        lo = 0
+        hi = n
+        while hi > lo:
+            mid = (lo + hi) >> 1
+            if func(a[mid], (v)):
+                # mid is too low => go up
+                lo = mid + 1
+            else:
+                # mid is too high, or is a NaN => go down
+                hi = mid
+        return lo
+    return searchsorted_inner
+
+_lt = register_jitable(lambda x, y: x < y)
+_le = register_jitable(lambda x, y: x <= y)
+_searchsorted_left = register_jitable(_searchsorted(_lt))
+_searchsorted_right = register_jitable(_searchsorted(_le))
 
 @overload(np.searchsorted)
-def searchsorted(a, v):
+def searchsorted(a, v, side='left'):
+    side_val = getattr(side, 'value', side)
+    if side_val == 'left':
+        loop_impl = _searchsorted_left
+    elif side_val == 'right':
+        loop_impl = _searchsorted_right
+    else:
+        raise ValueError("Invalid value given for 'side': %s" % side_val)
+
     if isinstance(v, types.Array):
         # N-d array and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(v.shape, np.intp)
             for view, outview in np.nditer((v, out)):
-                index = np.searchsorted(a, view.item())
+                index = loop_impl(a, view.item())
                 outview.itemset(index)
             return out
 
-        return searchsorted_impl
-
     elif isinstance(v, types.Sequence):
         # 1-d sequence and output
-
-        def searchsorted_impl(a, v):
+        def searchsorted_impl(a, v, side='left'):
             out = np.empty(len(v), np.intp)
             for i in range(len(v)):
-                out[i] = np.searchsorted(a, v[i])
+                out[i] = loop_impl(a, v[i])
             return out
-
-        return searchsorted_impl
-
     else:
         # Scalar value and output
         # Note: NaNs come last in Numpy-sorted arrays
+        def searchsorted_impl(a, v, side='left'):
+            return loop_impl(a, v)
 
-        def searchsorted_impl(a, v):
-            n = len(a)
-            if np.isnan(v):
-                # Find the first nan (i.e. the last from the end of a,
-                # since there shouldn't be many of them in practice)
-                for i in range(n, 0, -1):
-                    if not np.isnan(a[i - 1]):
-                        return i
-                return 0
-            lo = 0
-            hi = n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if a[mid] < v:
-                    # mid is too low => go up
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => go down
-                    hi = mid
-            return lo
-
-        return searchsorted_impl
-
+    return searchsorted_impl
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
@@ -1193,3 +1851,222 @@ def np_histogram(a, bins=10, range=None):
             return hist, bins
 
     return histogram_impl
+
+
+# Create np.finfo, np.iinfo and np.MachAr
+# machar
+_mach_ar_supported = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg',
+                      'iexp', 'minexp', 'xmin', 'maxexp', 'xmax', 'irnd',
+                      'ngrd', 'epsilon', 'tiny', 'huge', 'precision',
+                      'resolution',)
+MachAr = namedtuple('MachAr', _mach_ar_supported)
+
+# Do not support MachAr field
+# finfo
+_finfo_supported = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'min',
+                    'minexp', 'negep', 'nexp', 'nmant', 'precision',
+                    'resolution', 'tiny',)
+if numpy_version >= (1, 12):
+    _finfo_supported = ('bits',) + _finfo_supported
+
+finfo = namedtuple('finfo', _finfo_supported)
+
+# iinfo
+_iinfo_supported = ('min', 'max')
+if numpy_version >= (1, 12):
+    _iinfo_supported = _iinfo_supported + ('bits',)
+
+iinfo = namedtuple('iinfo', _iinfo_supported)
+
+@overload(np.MachAr)
+def MachAr_impl():
+    f = np.MachAr()
+    _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+    def impl():
+        return MachAr(*_mach_ar_data)
+    return impl
+
+def generate_xinfo(np_func, container, attr):
+    @overload(np_func)
+    def xinfo_impl(arg):
+        nbty = getattr(arg, 'dtype', arg)
+        f = np_func(as_dtype(nbty))
+        data = tuple([getattr(f, x) for x in attr])
+        def impl(arg):
+            return container(*data)
+        return impl
+
+generate_xinfo(np.finfo, finfo, _finfo_supported)
+generate_xinfo(np.iinfo, iinfo, _iinfo_supported)
+
+def _get_inner_prod(dta, dtb):
+    # gets an inner product implementation, if both types are float then
+    # BLAS is used else a local function
+
+    @register_jitable
+    def _innerprod(a, b):
+        acc = 0
+        for i in range(len(a)):
+            acc = acc + a[i] * b[i]
+        return acc
+
+    # no BLAS... use local function regardless
+    if not _HAVE_BLAS:
+        return _innerprod
+
+    flty = types.real_domain | types.complex_domain
+    floats = dta in flty and dtb in flty
+    if not floats:
+        return _innerprod
+    else:
+        a_dt = as_dtype(dta)
+        b_dt = as_dtype(dtb)
+        dt = np.promote_types(a_dt, b_dt)
+
+        @register_jitable
+        def _dot_wrap(a, b):
+            return np.dot(a.astype(dt), b.astype(dt))
+        return _dot_wrap
+
+def _assert_1d(a, func_name):
+    if isinstance(a, types.Array):
+        if not a.ndim <= 1:
+            raise TypingError("%s() only supported on 1D arrays " % func_name)
+
+def _np_correlate_core(ap1, ap2, mode, direction):
+    pass
+
+
+class _corr_conv_Mode(IntEnum):
+    """
+    Enumerated modes for correlate/convolve as per:
+    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870
+    """
+    VALID = 0
+    SAME = 1
+    FULL = 2
+
+
+@overload(_np_correlate_core)
+def _np_correlate_core_impl(ap1, ap2, mode, direction):
+    a_dt = as_dtype(ap1.dtype)
+    b_dt = as_dtype(ap2.dtype)
+    dt = np.promote_types(a_dt, b_dt)
+    innerprod = _get_inner_prod(ap1.dtype, ap2.dtype)
+
+    Mode = _corr_conv_Mode
+
+    def impl(ap1, ap2, mode, direction):
+        # Implementation loosely based on `_pyarray_correlate` from
+        # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191
+        # For "Mode":
+        # Convolve uses 'full' by default, this is denoted by the number 2
+        # Correlate uses 'valid' by default, this is denoted by the number 0
+        # For "direction", +1 to write the return values out in order 0->N
+        # -1 to write them out N->0.
+
+        if not (mode == Mode.VALID or mode == Mode.FULL):
+            raise ValueError("Invalid mode")
+
+        n1 = len(ap1)
+        n2 = len(ap2)
+        length = n1
+        n = n2
+        if mode == Mode.VALID: # mode == valid == 0, correlate default
+            length = length - n + 1
+            n_left = 0
+            n_right = 0
+        elif mode == Mode.FULL: # mode == full == 2, convolve default
+            n_right = n - 1
+            n_left = n - 1
+            length = length + n - 1
+        else:
+            raise ValueError("Invalid mode")
+
+        ret = np.zeros(length, dt)
+        n = n - n_left
+
+        if direction == 1:
+            idx = 0
+            inc = 1
+        elif direction == -1:
+            idx = length - 1
+            inc = -1
+        else:
+            raise ValueError("Invalid direction")
+
+        for i in range(n_left):
+            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
+            idx = idx + inc
+
+        for i in range(n1 - n2 + 1):
+            ret[idx] = innerprod(ap1[i : i + n2], ap2)
+            idx = idx + inc
+
+        for i in range(n_right, 0, -1):
+            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+            idx = idx + inc
+        return ret
+
+    return impl
+
+@overload(np.correlate)
+def _np_correlate(a, v):
+    _assert_1d(a, 'np.correlate')
+    _assert_1d(v, 'np.correlate')
+
+    @register_jitable
+    def op_conj(x):
+        return np.conj(x)
+
+    @register_jitable
+    def op_nop(x):
+        return x
+
+    Mode = _corr_conv_Mode
+
+    if a.dtype in types.complex_domain:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_nop
+            b_op = op_nop
+    else:
+        if v.dtype in types.complex_domain:
+            a_op = op_nop
+            b_op = op_conj
+        else:
+            a_op = op_conj
+            b_op = op_nop
+
+    def impl(a, v):
+        if len(a) < len(v):
+            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
+        else:
+            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
+
+    return impl
+
+@overload(np.convolve)
+def np_convolve(a, v):
+    _assert_1d(a, 'np.convolve')
+    _assert_1d(v, 'np.convolve')
+
+    Mode = _corr_conv_Mode
+
+    def impl(a, v):
+        la = len(a)
+        lv = len(v)
+
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
+
+        if la < lv:
+            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+        else:
+            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+
+    return impl

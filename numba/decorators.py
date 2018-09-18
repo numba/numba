@@ -10,6 +10,7 @@ import warnings
 from . import config, sigutils
 from .errors import DeprecationError
 from .targets import registry
+from .stencil import stencil
 
 
 
@@ -26,19 +27,12 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-class _DisableJitWrapper(object):
-    def __init__(self, py_func):
-        self.py_func = py_func
-
-    def __call__(self, *args, **kwargs):
-        return self.py_func(*args, **kwargs)
-
-
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
+def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
+        pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -58,6 +52,9 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
     target: str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
+
+    pipeline_class: type numba.compiler.BasePipeline
+            The compiler pipeline type for customizing the compilation stages.
 
     options:
         For a cpu target, valid options are:
@@ -82,7 +79,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
                 The error-model affects divide-by-zero behavior.
                 Valid values are 'python' and 'numpy'. The 'python' model
                 raises exception.  The 'numpy' model sets the result to
-                *+/-inf* or *nan*.
+                *+/-inf* or *nan*. Default value is 'python'.
 
     Returns
     --------
@@ -149,7 +146,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
             warnings.warn(msg, RuntimeWarning)
             cache = False
 
-
     # Handle signature
     if signature_or_function is None:
         # No signature, no function
@@ -168,8 +164,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         pyfunc = signature_or_function
         sigs = None
 
+    dispatcher_args = {}
+    if pipeline_class is not None:
+        dispatcher_args['pipeline_class'] = pipeline_class
     wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
-                   targetoptions=options)
+                   targetoptions=options, **dispatcher_args)
     if pyfunc is not None:
         return wrapper(pyfunc)
     else:
@@ -184,7 +183,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             from . import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
-            return _DisableJitWrapper(func)
+            return func
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)
@@ -203,15 +202,20 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     return wrapper
 
 
-def generated_jit(function=None, target='cpu', cache=False, **options):
+def generated_jit(function=None, target='cpu', cache=False,
+                  pipeline_class=None, **options):
     """
     This decorator allows flexible type-based compilation
     of a jitted function.  It works as `@jit`, except that the decorated
     function is called at compile-time with the *types* of the arguments
     and should return an implementation function for those types.
     """
+    dispatcher_args = {}
+    if pipeline_class is not None:
+        dispatcher_args['pipeline_class'] = pipeline_class
     wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
-                   targetoptions=options, impl_kind='generated')
+                   targetoptions=options, impl_kind='generated',
+                   **dispatcher_args)
     if function is not None:
         return wrapper(function)
     else:

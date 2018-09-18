@@ -4,6 +4,7 @@ import numpy as np
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
 from numba import types, cgutils, compiler
+from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
 
 
@@ -14,8 +15,7 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     # Compute
     status, retval = context.call_conv.call_function(builder, func,
                                                      signature.return_type,
-                                                     signature.args, elems,
-                                                     env=env)
+                                                     signature.args, elems)
 
     # Store
     with builder.if_else(status.is_ok, likely=True) as (if_ok, if_error):
@@ -47,8 +47,9 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
     # the ufunc's execution.  We restore it unless the ufunc raised
     # a new error.
     with pyapi.err_push(keep_new=True):
-        status, retval = context.call_conv.call_function(builder, func, types.pyobject,
-                                                         _objargs, elems, env=env)
+        status, retval = context.call_conv.call_function(builder, func,
+                                                         types.pyobject,
+                                                         _objargs, elems)
         # Release owned reference to arguments
         for elem in elems:
             pyapi.decref(elem)
@@ -129,7 +130,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   env=env)
 
 
-def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env):
+def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -164,6 +165,12 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, envptr, env
 
     builder = Builder(wrapper.append_basic_block("entry"))
 
+    # Prepare Environment
+    envname = context.get_env_name(cres.fndesc)
+    env = cres.environment
+    envptr = builder.load(context.declare_env_global(builder.module, envname))
+
+    # Emit loop
     loopcount = builder.load(arg_dims, name="loopcount")
 
     # Prepare inputs
@@ -306,10 +313,6 @@ class _GufuncWrapper(object):
     def env(self):
         return self.cres.environment
 
-    @property
-    def envptr(self):
-        return self.env.as_pointer(self.context)
-
     def _build_wrapper(self, library, name):
         """
         The LLVM IRBuilder code to create the gufunc wrapper.
@@ -326,7 +329,7 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = library.create_ir_module('')
+        wrapper_module = library.create_ir_module('_gufunc_wrapper')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
                                                      self.fndesc.argtypes)
         fname = self.fndesc.llvm_func_name
@@ -397,29 +400,28 @@ class _GufuncWrapper(object):
         library.add_ir_module(wrapper_module)
         library.add_linking_library(self.library)
 
+    @global_compiler_lock
     def build(self):
         # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
-            wrapper_name = "__gufunc__." + self.fndesc.mangled_name
+        wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
+        wrapper_name = "__gufunc__." + self.fndesc.mangled_name
 
-            if wrapperlib is None:
-                # Create library and enable caching
-                wrapperlib = self.context.codegen().create_library(str(self))
-                wrapperlib.enable_object_caching()
-                # Build wrapper
-                self._build_wrapper(wrapperlib, wrapper_name)
-                # Cache
-                self.cache.save_overload(self.cres.signature, wrapperlib)
-            # Finalize and get function pointer
-            ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-            return ptr, self.env, wrapper_name
+        if wrapperlib is None:
+            # Create library and enable caching
+            wrapperlib = self.context.codegen().create_library(str(self))
+            wrapperlib.enable_object_caching()
+            # Build wrapper
+            self._build_wrapper(wrapperlib, wrapper_name)
+            # Cache
+            self.cache.save_overload(self.cres.signature, wrapperlib)
+        # Finalize and get function pointer
+        ptr = wrapperlib.get_pointer_to_function(wrapper_name)
+        return ptr, self.env, wrapper_name
 
     def gen_loop_body(self, builder, pyapi, func, args):
-        status, retval = self.call_conv.call_function(builder, func,
-                                                      self.signature.return_type,
-                                                      self.signature.args, args,
-                                                      env=self.envptr)
+        status, retval = self.call_conv.call_function(
+            builder, func, self.signature.return_type, self.signature.args,
+            args)
 
         with builder.if_then(status.is_error, likely=False):
             gil = pyapi.gil_ensure()
@@ -440,7 +442,7 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         innercall, error = _prepare_call_to_object_mode(self.context,
                                                         builder, pyapi, func,
                                                         self.signature,
-                                                        args, env=self.envptr)
+                                                        args)
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
@@ -461,7 +463,7 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,
-                                 signature, args, env):
+                                 signature, args):
     mod = builder.module
 
     bb_core_return = builder.append_basic_block('ufunc.core.return')
@@ -536,7 +538,7 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
 
     status, retval = context.call_conv.call_function(
         builder, func, types.pyobject, object_sig,
-        object_args, env=env)
+        object_args)
     builder.store(status.is_error, error_pointer)
 
     # Release returned object

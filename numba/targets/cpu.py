@@ -12,6 +12,7 @@ from numba.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
 from numba.runtime import rtsys
+from numba.compiler_lock import global_compiler_lock
 from . import fastmathpass
 
 # Keep those structures in sync with _dynfunc.c.
@@ -37,6 +38,7 @@ class CPUContext(BaseContext):
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
 
+    @global_compiler_lock
     def init(self):
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
@@ -76,20 +78,6 @@ class CPUContext(BaseContext):
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
-    def get_env_from_closure(self, builder, clo):
-        """
-        From the pointer *clo* to a _dynfunc.Closure, get a pointer
-        to the enclosed _dynfunc.Environment.
-        """
-        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
-            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
-            builder.unreachable()
-
-        clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
-        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
-        return clo_body.env
-
     def get_env_body(self, builder, envptr):
         """
         From the given *envptr* (a pointer to a _dynfunc.Environment object),
@@ -99,8 +87,10 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def get_env_manager(self, builder, envarg=None):
-        envarg = envarg or self.call_conv.get_env_argument(builder.function)
+    def get_env_manager(self, builder):
+        envgv = self.declare_env_global(builder.module,
+                                        self.get_env_name(self.fndesc))
+        envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(envarg)
         env_body = self.get_env_body(builder, envarg)
@@ -175,7 +165,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-
+        library.codegen.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):
@@ -184,6 +174,34 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
+class ParallelOptions(object):
+    """
+    Options for controlling auto parallelization.
+    """
+    def __init__(self, value):
+        if isinstance(value, bool):
+            self.enabled = value
+            self.comprehension = value
+            self.reduction = value
+            self.setitem = value
+            self.numpy = value
+            self.stencil = value
+            self.fusion = value
+            self.prange = value
+        elif isinstance(value, dict):
+            self.enabled = True
+            self.comprehension = value.pop('comprehension', True)
+            self.reduction = value.pop('reduction', True)
+            self.setitem = value.pop('setitem', True)
+            self.numpy = value.pop('numpy', True)
+            self.stencil = value.pop('stencil', True)
+            self.fusion = value.pop('fusion', True)
+            self.prange = value.pop('prange', True)
+            if value:
+                raise NameError("Unrecognized parallel options: %s" % value.keys())
+        else:
+            raise ValueError("Expect parallel option to be either a bool or a dict")
 
 
 # ----------------------------------------------------------------------------
@@ -202,7 +220,7 @@ class CPUTargetOptions(TargetOptions):
         "no_cpython_wrapper": bool,
         "fastmath": bool,
         "error_model": str,
-        "parallel": bool,
+        "parallel": ParallelOptions,
     }
 
 

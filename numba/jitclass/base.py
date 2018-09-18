@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function
 
-from collections import OrderedDict, Sequence
+from collections import OrderedDict
 import types as pytypes
 import inspect
 
@@ -13,7 +13,16 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils, utils
+from numba.config import PYVERSION
 from numba.six import exec_
+
+
+if PYVERSION >= (3, 3):
+    from collections.abc import Sequence
+else:
+    from collections import Sequence
+
+
 from . import _box
 
 

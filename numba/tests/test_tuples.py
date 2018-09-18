@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types, errors
+from numba import jit, types, errors, utils
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -91,6 +91,9 @@ def type_usecase(tup, *args):
 
 def identity(tup):
     return tup
+
+def index_method_usecase(tup, value):
+    return tup.index(value)
 
 
 class TestTupleReturn(TestCase):
@@ -183,6 +186,13 @@ class TestOperations(TestCase):
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
 
+        # Test empty tuple
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 0), types.int64])
+        with self.assertRaises(IndexError) as raises:
+            cr.entry_point((), 0)
+        self.assertEqual("tuple index out of range", str(raises.exception))
+
         # With a compile-time static index (the code generation path is different)
         pyfunc = tuple_index_static
         for typ in (types.UniTuple(types.int64, 4),
@@ -194,6 +204,7 @@ class TestOperations(TestCase):
         typ = types.UniTuple(types.int64, 1)
         with self.assertTypingError():
             cr = compile_isolated(pyfunc, (typ,))
+
 
     def test_in(self):
         pyfunc = in_usecase
@@ -306,9 +317,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
                 cfunc = jit(nopython=True)(pyfunc)
                 self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
 
     def test_len(self):
@@ -317,10 +328,10 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
         check(Point(4, 5, 6))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Point(4, 5.5, 6j))
 
@@ -338,9 +349,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-        # Homogenous
+        # Homogeneous
         check(Rect(4, 5))
-        # Heterogenous
+        # Heterogeneous
         check(Rect(4, 5.5))
         check(Empty())
 
@@ -472,9 +483,96 @@ class TestConversions(TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             check(fromty, types.Tuple((types.float32,)), (4, 5))
-        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
-                      str(raises.exception))
+        msg = "No conversion from tuple(int32 x 2) to tuple(float32 x 1)"
+        self.assertIn(msg, str(raises.exception))
 
+
+class TestMethods(TestCase):
+
+    def test_index(self):
+        pyfunc = index_method_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(cfunc((1, 2, 3), 2), 1)
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc((1, 2, 3), 4)
+        msg = 'tuple.index(x): x not in tuple'
+        self.assertEqual(msg, str(raises.exception))
+
+
+class TestTupleBuild(TestCase):
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            pyfunc = eval("lambda a: (1, *a)")
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack_more(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            pyfunc = eval("lambda a: (1, *a, (1, 2), *a)")
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_build_unpack_call(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            @jit
+            def inner(*args):
+                return args
+            pyfunc = eval("lambda a: inner(1, *a)", locals())
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    @unittest.skipIf(utils.PYVERSION < (3, 6), "needs Python 3.6+")
+    def test_build_unpack_call_more(self):
+        def check(p):
+            # using eval here since Python 2 doesn't even support the syntax
+            @jit
+            def inner(*args):
+                return args
+            pyfunc = eval("lambda a: inner(1, *a, *(1, 2), *a)", locals())
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    def test_tuple_constructor(self):
+        def check(pyfunc, arg):
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(arg), pyfunc(arg))
+
+        # empty
+        check(lambda _: tuple(), ())
+        # Homogeneous
+        check(lambda a: tuple(a), (4, 5))
+        # Heterogeneous
+        check(lambda a: tuple(a), (4, 5.5))
 
 if __name__ == '__main__':
     unittest.main()

@@ -328,3 +328,117 @@ def sized_bool(context, builder, sig, args):
         return cgutils.true_bit
     else:
         return cgutils.false_bit
+
+@lower_builtin(tuple)
+def lower_empty_tuple(context, builder, sig, args):
+    retty = sig.return_type
+    res = context.get_constant_undef(retty)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower_builtin(tuple, types.BaseTuple)
+def lower_tuple(context, builder, sig, args):
+    val, = args
+    return impl_ret_untracked(context, builder, sig.return_type, val)
+
+# -----------------------------------------------------------------------------
+
+def get_type_max_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return np.finfo(np.float32).max
+        if bw == 64:
+            return np.finfo(np.float64).max
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.maxval
+    raise NotImplementedError("Unsupported type")
+
+def get_type_min_value(typ):
+    if isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            return np.finfo(np.float32).min
+        if bw == 64:
+            return np.finfo(np.float64).min
+        raise NotImplementedError("Unsupported floating point type")
+    if isinstance(typ, types.Integer):
+        return typ.minval
+    raise NotImplementedError("Unsupported type")
+
+@lower_builtin(get_type_min_value, types.NumberClass)
+@lower_builtin(get_type_min_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = ir.IntType(bw)
+        val = typ.minval
+        res = ir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = ir.Constant(lty, np.finfo(npty).min)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_builtin(get_type_max_value, types.NumberClass)
+@lower_builtin(get_type_max_value, types.DType)
+def lower_get_type_max_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+    bw = typ.bitwidth
+
+    if isinstance(typ, types.Integer):
+        lty = ir.IntType(bw)
+        val = typ.maxval
+        res = ir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        if bw == 32:
+            lty = ir.FloatType()
+        elif bw == 64:
+            lty = ir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = ir.Constant(lty, np.finfo(npty).max)
+    return impl_ret_untracked(context, builder, lty, res)
+
+# -----------------------------------------------------------------------------
+
+from numba.typing.builtins import IndexValue, IndexValueType
+from numba.extending import overload
+
+@lower_builtin(IndexValue, types.intp, types.Type)
+@lower_builtin(IndexValue, types.uintp, types.Type)
+def impl_index_value(context, builder, sig, args):
+    typ = sig.return_type
+    index, value = args
+    index_value = cgutils.create_struct_proxy(typ)(context, builder)
+    index_value.index = index
+    index_value.value = value
+    return index_value._getvalue()
+
+@overload(min)
+def indval_min(*args):
+    if len(args) == 2 and (isinstance(args[0], IndexValueType)
+                        and isinstance(args[1], IndexValueType)):
+        def min_impl(indval1, indval2):
+            if indval1.value > indval2.value:
+                return indval2
+            return indval1
+        return min_impl
+
+@overload(max)
+def indval_max(*args):
+    if len(args) == 2 and (isinstance(args[0], IndexValueType)
+                        and isinstance(args[1], IndexValueType)):
+        def max_impl(indval1, indval2):
+            if indval2.value > indval1.value:
+                return indval2
+            return indval1
+        return max_impl

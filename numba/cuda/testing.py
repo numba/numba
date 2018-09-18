@@ -6,10 +6,10 @@ import os
 import sys
 
 from numba import config, unittest_support as unittest
-from numba.tests.support import captured_stdout
+from numba.tests.support import captured_stdout, SerialMixin
 
 
-class CUDATestCase(unittest.TestCase):
+class CUDATestCase(SerialMixin, unittest.TestCase):
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
 
@@ -18,6 +18,10 @@ class CUDATestCase(unittest.TestCase):
 
 def skip_on_cudasim(reason):
     return unittest.skipIf(config.ENABLE_CUDASIM, reason)
+
+
+def skip_unless_cudasim(reason):
+    return unittest.skipUnless(config.ENABLE_CUDASIM, reason)
 
 
 @contextlib.contextmanager

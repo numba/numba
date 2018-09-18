@@ -13,8 +13,8 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
 from ..numpy_support import version as numpy_version
-from ..errors import TypingError
-from ..config import PerformanceWarning
+from ..errors import TypingError, PerformanceWarning
+from numba import pndindex
 
 registry = Registry()
 infer = registry.register
@@ -349,14 +349,27 @@ class Numpy_method_redirection(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        assert not kws
-        [arr] = args
+        pysig = None
+        if kws:
+            if self.method_name == 'sum':
+                def sum_stub(arr, axis):
+                    pass
+                pysig = utils.pysignature(sum_stub)
+            elif self.method_name == 'argsort':
+                def argsort_stub(arr, kind='quicksort'):
+                    pass
+                pysig = utils.pysignature(argsort_stub)
+            else:
+                fmt = "numba doesn't support kwarg for {}"
+                raise TypingError(fmt.format(self.method_name))
+
+        arr = args[0]
         # This will return a BoundFunction
         meth_ty = self.context.resolve_getattr(arr, self.method_name)
         # Resolve arguments on the bound function
         meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
         if meth_sig is not None:
-            return meth_sig.as_function()
+            return meth_sig.as_function().replace(pysig=pysig)
 
 
 # Function to glue attributes onto the numpy-esque object
@@ -365,6 +378,9 @@ def _numpy_redirect(fname):
     cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
+    # special case literal support for 'sum'
+    if fname in ['sum', 'argsort']:
+        cls.support_literals = True
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
@@ -415,10 +431,10 @@ def _parse_nested_sequence(context, typ):
     """
     Parse a (possibly 0d) nested sequence type.
     A (ndim, dtype) tuple is returned.  Note the sequence may still be
-    heterogenous, as long as it converts to the given dtype.
+    heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogenous sequence" % typ)
+        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
@@ -436,7 +452,7 @@ def _parse_nested_sequence(context, typ):
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogenous type" % typ)
+            raise TypingError("cannot convert %r to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype
@@ -509,7 +525,7 @@ class NdConstructorLike(CallableTemplate):
             if nb_dtype is not None:
                 if isinstance(arg, types.Array):
                     layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout)
+                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
                 else:
                     return types.Array(nb_dtype, 0, 'C')
 
@@ -526,7 +542,10 @@ if numpy_version >= (1, 8):
         def generic(self):
             def typer(shape, fill_value, dtype=None):
                 if dtype is None:
-                    nb_dtype = fill_value
+                    if numpy_version < (1, 12):
+                        nb_dtype = types.float64
+                    else:
+                        nb_dtype = fill_value
                 else:
                     nb_dtype = _parse_dtype(dtype)
 
@@ -553,7 +572,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = arg
                 if nb_dtype is not None:
                     if isinstance(arg, types.Array):
-                        return arg.copy(dtype=nb_dtype)
+                        return arg.copy(dtype=nb_dtype, readonly=False)
                     else:
                         return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
@@ -684,6 +703,17 @@ class AsFortranArray(CallableTemplate):
         return typer
 
 
+@infer_global(np.ascontiguousarray)
+class AsContiguousArray(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                return a.copy(layout='C', ndim=max(a.ndim, 1))
+
+        return typer
+
+
 @infer_global(np.copy)
 class NdCopy(CallableTemplate):
 
@@ -747,7 +777,7 @@ class NdAtLeast3d(BaseAtLeastNdTemplate):
         return a.copy(ndim=max(a.ndim, 3))
 
 
-def _homogenous_dims(context, func_name, arrays):
+def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
@@ -757,7 +787,7 @@ def _homogenous_dims(context, func_name, arrays):
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
-                        dim_chooser=_homogenous_dims):
+                        dim_chooser=_homogeneous_dims):
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
@@ -1033,6 +1063,7 @@ class NdIter(AbstractTemplate):
         return signature(nditerty, *args)
 
 
+@infer_global(pndindex)
 @infer_global(np.ndindex)
 class NdIndex(AbstractTemplate):
 
@@ -1043,7 +1074,7 @@ class NdIndex(AbstractTemplate):
         if len(args) == 1 and isinstance(args[0], types.BaseTuple):
             tup = args[0]
             if tup.count > 0 and not isinstance(tup, types.UniTuple):
-                # Heterogenous tuple
+                # Heterogeneous tuple
                 return
             shape = list(tup)
         else:
@@ -1102,18 +1133,22 @@ class Where(AbstractTemplate):
             return signature(retty, ary)
 
         elif len(args) == 3:
-            # NOTE: contrary to Numpy, we only support homogenous arguments
             cond, x, y = args
+            retdty = from_dtype(np.promote_types(
+                        as_dtype(getattr(args[1], 'dtype', args[1])),
+                        as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
-                if (cond.ndim == x.ndim == y.ndim and
-                    x.dtype == y.dtype):
-                    retty = types.Array(x.dtype, x.ndim, x.layout)
+                if (cond.ndim == x.ndim == y.ndim):
+                    if x.layout == y.layout == cond.layout:
+                        retty = types.Array(retdty, x.ndim, x.layout)
+                    else:
+                        retty = types.Array(retdty, x.ndim, 'C')
                     return signature(retty, *args)
             else:
                 # scalar where()
-                if not isinstance(x, types.Array) and x == y:
-                    retty = types.Array(x, 0, 'C')
+                if not isinstance(x, types.Array):
+                    retty = types.Array(retdty, 0, 'C')
                     return signature(retty, *args)
 
 
@@ -1186,6 +1221,10 @@ class Take(AbstractTemplate):
             retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
         elif isinstance(ind, types.List):
             retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
+        elif isinstance(ind, types.BaseTuple):
+            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
+        else:
+            return None
 
         return signature(retty, *args)
 
