@@ -197,6 +197,30 @@ compiled version on disk for later use.
 A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
 
 
+GPU Programming
+===============
+
+How do I work around the ``CUDA intialized before forking`` error?
+------------------------------------------------------------------
+
+On Linux, the ``multiprocessing`` module in the Python standard library
+defaults to using the ``fork`` method for creating new processes.  Because of
+the way process forking duplicates state between the parent and child
+processes, CUDA will not work correctly in the child process if the CUDA
+runtime was initialized *prior* to the fork.  Numba detects this and raises a
+``CudaDriverError`` with the message ``CUDA initialized before forking``.
+
+One approach to avoid this error is to make all calls to ``numba.cuda``
+functions inside the child processes or after the process pool is created.
+However, this is not always possible, as you might want to query the number of
+available GPUs before starting the process pool.  In Python 3, you can change
+the process start method, as described in the `multiprocessing documentation
+<https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
+Switching from ``fork`` to ``spawn`` will avoid the CUDA initalization issue,
+although spawned processes will not inherit any global variables from their
+parent.
+
+
 Integration with other utilities
 ================================
 
