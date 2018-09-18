@@ -7,11 +7,11 @@ Deviations from Python Semantics
 Exceptions and Memory Allocation
 --------------------------------
 
-Due to limitations in the current compiler handling of exceptions, memory
+Due to limitations in the current compiler when handling exceptions, memory
 allocated (almost always NumPy arrays) within a function that raises an
-exception will **leak**.  This is a known issue that will be fixed, but
-in the meantime, it is best to do memory allocation outside of functions
-that can also raise exceptions.
+exception will **leak**.  This is a known issue that will be fixed, but in the
+meantime, it is best to do memory allocation outside of functions that can
+also raise exceptions.
 
 Integer width
 -------------
