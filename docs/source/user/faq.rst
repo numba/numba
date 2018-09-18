@@ -216,9 +216,9 @@ However, this is not always possible, as you might want to query the number of
 available GPUs before starting the process pool.  In Python 3, you can change
 the process start method, as described in the `multiprocessing documentation
 <https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
-Switching from ``fork`` to ``spawn`` will avoid the CUDA initalization issue,
-although spawned processes will not inherit any global variables from their
-parent.
+Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
+initalization issue, although the child processes will not inherit any global
+variables from their parent.
 
 
 Integration with other utilities
