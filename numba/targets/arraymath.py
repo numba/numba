@@ -915,7 +915,7 @@ if numpy_version >= (1, 9):
 def np_partition_impl_inner(a, kth_array):
     out = np.empty_like(a)
 
-    idx = np.ndindex(a.shape[:-1])
+    idx = np.ndindex(a.shape[:-1])  # Numpy default partition axis is -1
     for s in idx:
         data = a[s].copy()
         mask = np.isnan(data)
@@ -923,6 +923,7 @@ def np_partition_impl_inner(a, kth_array):
         dense = data[~mask]
         nans = data[mask]
 
+        # partition dense (i.e. not NaN) sub-array
         low = 0
         high = len(dense) - 1
         for kth in kth_array:
@@ -930,6 +931,7 @@ def np_partition_impl_inner(a, kth_array):
                 _select(dense, kth, low, high)
                 low = kth  # narrow span of subsequent partition
 
+        # stack NaNs to the right of partitioned sub-array
         out[s] = np.hstack((dense, nans))
 
     return out
@@ -941,10 +943,12 @@ def valid_kths(a, kth):
     as indexers for partitioning the input array, a.
 
     If the absolute value of any of the provided values
-    is greater than a.shape[-1], then an exception is raised.
+    is greater than a.shape[-1] an exception is raised since
+    we are partitioning along the last axis (per Numpy default
+    behaviour).
 
-    Values less than 0 then are transformed to equivalent
-    positive index values.
+    Values less than 0 are transformed to equivalent positive
+    index values.
     """
     kth_array = _asarray(kth)
 
@@ -955,7 +959,7 @@ def valid_kths(a, kth):
 
     for index, val in np.ndenumerate(kth_array):
         if val < 0:
-            out[index] = val + a.shape[-1]
+            out[index] = val + a.shape[-1]  # equivalent positive index
         else:
             out[index] = val
 
