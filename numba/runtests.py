@@ -69,7 +69,8 @@ class _FailedFirstRunner(object):
         print('Flags', flags)
         result = run_tests([prog] + flags + tests, **kwds)
         # Save failed
-        self.save_failed_tests(result, all_tests)
+        if not self.last_failed:
+            self.save_failed_tests(result, all_tests)
         return result.wasSuccessful()
 
     def save_failed_tests(self, result, all_tests):
