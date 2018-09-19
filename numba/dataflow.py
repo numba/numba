@@ -686,9 +686,13 @@ class DataFlowAnalysis(object):
         """
         Note: py2 only opcode
         """
+        # TOS is the return value of __exit__()
+        info.pop()
         info.append(inst)
 
     def op_WITH_CLEANUP_START(self, info, inst):
+        # TOS is the return value of __exit__()
+        info.pop()
         info.append(inst)
 
     def op_WITH_CLEANUP_FINISH(self, info, inst):

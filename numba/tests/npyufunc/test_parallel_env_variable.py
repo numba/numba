@@ -11,6 +11,8 @@ class TestParallelEnvVariable(unittest.TestCase):
     functions for npyufuncs.
     """
 
+    _numba_parallel_test_ = False
+
     def test_num_threads_variable(self):
         """
         Tests the NUMBA_NUM_THREADS env variable behaves as expected.

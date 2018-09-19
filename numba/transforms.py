@@ -47,6 +47,34 @@ def _extract_loop_lifting_candidates(cfg, blocks):
             if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
 
 
+def find_region_inout_vars(blocks, livemap, callfrom, returnto, body_block_ids):
+    """Find input and output variables to a block region.
+    """
+    inputs = livemap[callfrom]
+    outputs = livemap[returnto]
+
+    # ensure live variables are actually used in the blocks, else remove,
+    # saves having to create something valid to run through postproc
+    # to achieve similar
+    loopblocks = {}
+    for k in body_block_ids:
+        loopblocks[k] = blocks[k]
+
+    used_vars = set()
+    def_vars = set()
+    defs = compute_use_defs(loopblocks)
+    for vs in defs.usemap.values():
+        used_vars |= vs
+    for vs in defs.defmap.values():
+        def_vars |= vs
+    used_or_defined = used_vars | def_vars
+
+    # note: sorted for stable ordering
+    inputs = sorted(set(inputs) & used_or_defined)
+    outputs = sorted(set(outputs) & used_or_defined & def_vars)
+    return inputs, outputs
+
+
 _loop_lift_info = namedtuple('loop_lift_info',
                              'loop,inputs,outputs,callfrom,returnto')
 
@@ -61,29 +89,15 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
-        inputs = livemap[callfrom]
-        outputs = livemap[returnto]
 
-        # ensure live variables are actually used in the blocks, else remove,
-        # saves having to create something valid to run through postproc
-        # to achieve similar
         local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
-        loopblocks = {}
-        for k in local_block_ids:
-            loopblocks[k] = blocks[k]
-
-        used_vars = set()
-        def_vars = set()
-        defs = compute_use_defs(loopblocks)
-        for vs in defs.usemap.values():
-            used_vars |= vs
-        for vs in defs.defmap.values():
-            def_vars |= vs
-        used_or_defined = used_vars | def_vars
-
-        # note: sorted for stable ordering
-        inputs = sorted(set(inputs) & used_or_defined)
-        outputs = sorted(set(outputs) & used_or_defined)
+        inputs, outputs = find_region_inout_vars(
+            blocks=blocks,
+            livemap=livemap,
+            callfrom=callfrom,
+            returnto=returnto,
+            body_block_ids=local_block_ids,
+        )
 
         lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
                               callfrom=callfrom, returnto=returnto)
@@ -276,19 +290,30 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     """
     from numba import postproc
 
-    def dispatcher_factory(func_ir):
-        from numba.dispatcher import LiftedWith
+    def dispatcher_factory(func_ir, objectmode=False, **kwargs):
+        from numba.dispatcher import LiftedWith, ObjModeLiftedWith
 
-        return LiftedWith(func_ir, typingctx, targetctx, flags, locals)
+        myflags = flags.copy()
+        if objectmode:
+            # Lifted with-block cannot looplift
+            myflags.enable_looplift = False
+            # Lifted with-block uses object mode
+            myflags.enable_pyobject = True
+            cls = ObjModeLiftedWith
+        else:
+            cls = LiftedWith
+        return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
-    postproc.PostProcessor(func_ir).run()
+    postproc.PostProcessor(func_ir).run()  # ensure we have variable lifetime
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()
+    # find where with-contexts regions are
     withs = find_setupwiths(blocks)
     cfg = vlt.cfg
     _legalize_withs_cfg(withs, cfg, blocks)
-    # Remove the with blocks that are in the with-body
+    # For each with-regions, mutate them according to
+    # the kind of contextmanager
     sub_irs = []
     for (blk_start, blk_end) in withs:
         body_blocks = []
@@ -296,9 +321,12 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             body_blocks.append(node)
 
         _legalize_with_head(blocks[blk_start])
-        cmkind = _get_with_contextmanager(func_ir, blocks, blk_start)
+        # Find the contextmanager
+        cmkind, extra = _get_with_contextmanager(func_ir, blocks, blk_start)
+        # Mutate the body and get new IR
         sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
-                                      body_blocks, dispatcher_factory)
+                                      body_blocks, dispatcher_factory,
+                                      extra)
         sub_irs.append(sub)
     if not sub_irs:
         # Unchanged
@@ -311,28 +339,52 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
 def _get_with_contextmanager(func_ir, blocks, blk_start):
     """Get the global object used for the context manager
     """
+    _illegal_cm_msg = "Illegal use of context-manager."
+
+    def get_var_dfn(var):
+        """Get the definition given a variable"""
+        return func_ir.get_definition(var)
+
+    def get_ctxmgr_obj(dfn):
+        """Return the context-manager object and extra info.
+
+        The extra contains the arguments if the context-manager is used
+        as a call.
+        """
+        # If the contextmanager used as a Call
+        if isinstance(dfn, ir.Expr) and dfn.op == 'call':
+            args = [get_var_dfn(x) for x in dfn.args]
+            kws = {k: get_var_dfn(v) for k, v in dfn.kws}
+            extra = {'args': args, 'kwargs': kws}
+            dfn = func_ir.get_definition(dfn.func)
+        else:
+            extra = None
+
+        # Check the contextmanager object
+        if isinstance(dfn, ir.Global):
+            ctxobj = dfn.value
+            if ctxobj is not ir.UNDEFINED:
+                return ctxobj, extra
+            raise errors.CompilerError(
+                "Undefined variable used as context manager",
+                loc=blocks[blk_start].loc,
+                )
+
+        raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
+
+    # Scan the start of the with-region for the contextmanager
     for stmt in blocks[blk_start].body:
         if isinstance(stmt, ir.EnterWith):
             var_ref = stmt.contextmanager
             dfn = func_ir.get_definition(var_ref)
-            if not isinstance(dfn, ir.Global):
-                raise errors.CompilerError(
-                    "Illegal use of context-manager. ",
-                    loc=stmt.loc,
-                    )
-            ctxobj = dfn.value
-            if ctxobj is ir.UNDEFINED:
-                raise errors.CompilerError(
-                    "Undefined variable used as context manager",
-                    loc=blocks[blk_start].loc,
-                    )
+            ctxobj, extra = get_ctxmgr_obj(dfn)
             if not hasattr(ctxobj, 'mutate_with_body'):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
                     )
-            return ctxobj
-    # No
+            return ctxobj, extra
+    # No contextmanager found?
     raise errors.CompilerError(
         "malformed with-context usage",
         loc=blocks[blk_start].loc,
@@ -392,17 +444,24 @@ def _legalize_withs_cfg(withs, cfg, blocks):
 
     # Verify that the with-context has no side-exits
     for s, e in withs:
-        loc = blocks[s]
+        loc = blocks[s].loc
         if s not in doms[e]:
+            # Not sure what condition can trigger this error.
             msg = "Entry of with-context not dominating the exit."
             raise errors.CompilerError(msg, loc=loc)
         if e not in postdoms[s]:
-            msg = "Exit of with-context not post-dominating the entry."
+            msg = (
+                "Does not support with-context that contain branches "
+                "(i.e. break/return/raise) that can leave the with-context. "
+                "Details: exit of with-context not post-dominating the entry. "
+            )
             raise errors.CompilerError(msg, loc=loc)
 
 
 def find_setupwiths(blocks):
-    """Find all top-level with
+    """Find all top-level with.
+
+    Returns a list of ranges for the with-regions.
     """
     def find_ranges(blocks):
         for blk in blocks.values():
@@ -418,9 +477,13 @@ def find_setupwiths(blocks):
     known_ranges = []
     for s, e in sorted(find_ranges(blocks)):
         if not previously_occurred(s, known_ranges):
+            if e not in blocks:
+                # this's possible if there's an exit path in the with-block
+                raise errors.CompilerError(
+                    'unsupported controlflow due to return/raise '
+                    'statements inside with block'
+                    )
             assert s in blocks, 'starting offset is not a label'
-            assert e in blocks, 'ending offset is not a label'
             known_ranges.append((s, e))
 
     return known_ranges
-

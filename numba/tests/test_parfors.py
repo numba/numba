@@ -55,6 +55,8 @@ class TestParforsBase(TestCase):
     python functions, njit'd functions and parfor njit'd functions.
     """
 
+    _numba_parallel_test_ = False
+
     def __init__(self, *args):
         # flags for njit()
         self.cflags = Flags()
@@ -2454,6 +2456,7 @@ class TestParforsMisc(TestCase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """
+    _numba_parallel_test_ = False
 
     @skip_unsupported
     def test_warn_if_cache_set(self):

@@ -12,6 +12,7 @@ from distutils.spawn import spawn
 from distutils import sysconfig
 import sys
 import os
+import platform
 
 import versioneer
 
@@ -42,7 +43,7 @@ GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 if os.environ.get("NUMBA_GCC_FLAGS"):
     CFLAGS = GCCFLAGS
 else:
-    CFLAGS = []
+    CFLAGS = ['-g']
 
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
@@ -90,6 +91,7 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
+
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             extra_compile_args=CFLAGS,
@@ -135,27 +137,109 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
+
+    ext_npyufunc_workqueue_impls = []
+
+    def check_file_at_path(path2file):
+        """
+        Takes a list as a path, a single glob (*) is permitted as an entry which
+        indicates that expansion at this location is required (i.e. version
+        might not be known).
+        """
+        found = None
+        path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
+        path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
+        if sys.platform.startswith('win'):
+            path2check += [os.path.join(p, 'Library') for p in path2check]
+        for p in path2check:
+            if p:
+                if '*' in path2file:
+                    globloc = path2file.index('*')
+                    searchroot = os.path.join(*path2file[:globloc])
+                    try:
+                        potential_locs = os.listdir(os.path.join(p, searchroot))
+                    except BaseException:
+                        continue
+                    searchfor = path2file[globloc + 1:]
+                    for x in potential_locs:
+                        potpath = os.path.join(p, searchroot, x, *searchfor)
+                        if os.path.isfile(potpath):
+                            found = p  # the latest is used
+                elif os.path.isfile(os.path.join(p, *path2file)):
+                    found = p  # the latest is used
+        return found
+
+    # Search for Intel TBB, first check env var TBBROOT then conda locations
     tbb_root = os.getenv('TBBROOT')
+    if not tbb_root:
+        tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
+
+    # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
+    have_openmp = True
+    if sys.platform.startswith('win'):
+        cpp11flags = []
+        ompcompileflags = ['-openmp']
+        omplinkflags = []
+    elif sys.platform.startswith('darwin'):
+        cpp11flags = ['-std=c++11']
+        # This is a bit unusual but necessary...
+        # llvm (clang) OpenMP is used for headers etc at compile time
+        # Intel OpenMP (libiomp5) provides the link library.
+        # They are binary compatible and may not safely coexist in a process, as
+        # libiomp5 is more prevalent and often linked in for NumPy it is used
+        # here!
+        ompcompileflags = ['-fopenmp']
+        omplinkflags = ['-fopenmp=libiomp5']
+        omppath = ['lib', 'clang', '*', 'include', 'omp.h']
+        have_openmp = check_file_at_path(omppath)
+    else:
+        cpp11flags = ['-std=c++11']
+        ompcompileflags = ['-fopenmp']
+        if platform.machine() == 'ppc64le':
+            omplinkflags = ['-fopenmp']
+        else:
+            omplinkflags = ['-fopenmp']
 
     if tbb_root:
-        print("Using TBBROOT=", tbb_root)
-        ext_npyufunc_workqueue = Extension(
-            name='numba.npyufunc.workqueue',
+        print("Using Intel TBB from:", tbb_root)
+        ext_npyufunc_tbb_workqueue = Extension(
+            name='numba.npyufunc.tbbpool',
             sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args=[] if sys.platform.startswith('win') else ['-std=c++11'],
-            libraries   =['tbb'],
+            extra_compile_args=cpp11flags,
+            libraries   =['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
             library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
-                          os.path.join(tbb_root, 'lib'),                       # for MacOS
-                          os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
-                         ],
+                        os.path.join(tbb_root, 'lib'),                       # for MacOS
+                        os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
+                        ],
             )
+        ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
     else:
-        ext_npyufunc_workqueue = Extension(
-            name='numba.npyufunc.workqueue',
-            sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
-            depends=['numba/npyufunc/workqueue.h'])
+        print("TBB not found")
+
+    if have_openmp:
+        print("Using OpenMP from:", have_openmp)
+        # OpenMP backed work queue
+        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
+                                    sources=['numba/npyufunc/omppool.cpp',
+                                            'numba/npyufunc/gufunc_scheduler.cpp'],
+                                    depends=['numba/npyufunc/workqueue.h'],
+                                    extra_compile_args=ompcompileflags + cpp11flags,
+                                    extra_link_args = omplinkflags)
+
+        ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
+    else:
+        print("OpenMP not found")
+
+    # Build the Numba workqueue implementation irrespective of whether the TBB
+    # version is built. Users can select a backend via env vars.
+    ext_npyufunc_workqueue = Extension(
+        name='numba.npyufunc.workqueue',
+        sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
+        depends=['numba/npyufunc/workqueue.h'])
+    ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
+
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
@@ -179,10 +263,11 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_modules = [ext_dynfunc, ext_dispatcher,
-                   ext_helperlib, ext_typeconv,
-                   ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
-                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
+    ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
+                   ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
+                   ext_jitclass_box, ext_cuda_extras]
+
+    ext_modules += ext_npyufunc_workqueue_impls
 
     return ext_modules
 
