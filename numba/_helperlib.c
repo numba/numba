@@ -818,12 +818,60 @@ numba_fatal_error(void)
     return 0; /* unreachable */
 }
 
+static int numba_debug(void);
+
+NUMBA_EXPORT_FUNC(int)
+numba_debug(void){return 0;};
+
+/* Insert a frame into the traceback for (funcname, filename, lineno). */
+/* This function is CPython's _PyTraceback_Add, renamed, see:
+ * https://github.com/python/cpython/blob/d545869d084e70d4838310e79b52a25a72a1ca56/Python/traceback.c#L246
+ */
+static void traceback_add(const char *funcname, const char *filename, int lineno)
+{
+    PyObject *globals;
+    PyCodeObject *code;
+    PyFrameObject *frame;
+    PyObject *exc, *val, *tb;
+
+    /* Save and clear the current exception. Python functions must not be
+       called with an exception set. Calling Python functions happens when
+       the codec of the filesystem encoding is implemented in pure Python. */
+    PyErr_Fetch(&exc, &val, &tb);
+
+    globals = PyDict_New();
+    if (!globals)
+        goto error;
+    code = PyCode_NewEmpty(filename, funcname, lineno);
+    if (!code) {
+        Py_DECREF(globals);
+        goto error;
+    }
+    frame = PyFrame_New(PyThreadState_Get(), code, globals, NULL);
+    Py_DECREF(globals);
+    Py_DECREF(code);
+    if (!frame)
+        goto error;
+    frame->f_lineno = lineno;
+
+    PyErr_Restore(exc, val, tb);
+    PyTraceBack_Here(frame);
+    Py_DECREF(frame);
+    return;
+
+error:
+    _PyErr_ChainExceptions(exc, val, tb);
+}
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 NUMBA_EXPORT_FUNC(int)
 numba_do_raise(PyObject *exc)
 {
-    PyObject *type = NULL, *value = NULL;
+    PyObject *type = NULL, *value = NULL, *loc = NULL;
+    char *tmp1 = NULL, *tmp2 = NULL;
+    PyObject *function_name = NULL, *filename = NULL, *lineno = NULL;
+    Py_ssize_t pos;
 
     /* We support the following forms of raise:
        raise
@@ -856,8 +904,9 @@ numba_do_raise(PyObject *exc)
     }
 
     if (PyTuple_CheckExact(exc)) {
-        /* A (callable, arguments) tuple. */
-        if (!PyArg_ParseTuple(exc, "OO", &type, &value)) {
+        printf("Exception Is A Callable\n");
+        /* A (callable, arguments, location) tuple. */
+        if (!PyArg_ParseTuple(exc, "OOO", &type, &value, &loc)) {
             Py_DECREF(exc);
             goto raise_error;
         }
@@ -873,8 +922,38 @@ numba_do_raise(PyObject *exc)
         }
         type = PyExceptionInstance_Class(value);
         Py_INCREF(type);
+        if (loc != Py_None && PyTuple_Check(loc)) {
+            pos = 1;
+            function_name = PyTuple_GET_ITEM(loc, pos);
+            tmp1 = PyString_AsString(function_name);
+            if (!tmp1){
+                printf("string decode failed.\n");
+            }
+            else
+            {
+                printf("string decoded:");
+                printf(tmp1);
+                printf("\n");
+            }
+            pos = 2;
+            filename = PyTuple_GET_ITEM(loc, pos);
+            tmp2 = PyString_AsString(filename);
+            if (!tmp2){
+                printf("string decode failed.\n");
+            }
+            else
+            {
+                printf("string decoded:");
+                printf(tmp2);
+                printf("\n");
+            }
+
+            pos = 3;
+            lineno = PyTuple_GET_ITEM(loc, pos);
+        }
     }
     else if (PyExceptionClass_Check(exc)) {
+        printf("Is Exception Class\n");
         type = exc;
         value = PyObject_CallObject(exc, NULL);
         if (value == NULL)
@@ -886,6 +965,7 @@ numba_do_raise(PyObject *exc)
         }
     }
     else if (PyExceptionInstance_Check(exc)) {
+        printf("Is Exception Inst\n");
         value = exc;
         type = PyExceptionInstance_Class(exc);
         Py_INCREF(type);
@@ -900,6 +980,13 @@ numba_do_raise(PyObject *exc)
     }
 
     PyErr_SetObject(type, value);
+
+    /* instance is instantiated, if loc is present add a frame for it */
+    if(loc)
+    {
+        traceback_add(tmp1, tmp2, (int)PyLong_AsLong(lineno));
+    }
+
     /* PyErr_SetObject incref's its arguments */
     Py_XDECREF(value);
     Py_XDECREF(type);

@@ -186,13 +186,29 @@ class MinimalCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
         if exc_args is not None and not isinstance(exc_args, tuple):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
+
+        pyapi = self.context.get_python_api(builder)
+        # Build excinfo struct
+        if loc is not None:
+            f1 = loc._raw_function_name()
+            locinfo = ('padding', f1, loc.filename, loc.line)
+            print(locinfo)
+            if None in locinfo:
+                locinfo = None
+            print([type(x) for x in locinfo])
+        else:
+            locinfo = None
+        print(locinfo)
+        if exc_args is not None:
+            exc = (exc, exc_args, locinfo)
+
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
@@ -327,17 +343,28 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
         if exc_args is not None and not isinstance(exc_args, tuple):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
+
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
+        if loc is not None:
+            f1 = loc._raw_function_name()
+            locinfo = ('padding', f1, loc.filename, loc.line)
+            print(locinfo)
+            if None in locinfo:
+                locinfo = None
+            print([type(x) for x in locinfo])
+        else:
+            locinfo = None
+        print(locinfo)
         if exc_args is not None:
-            exc = (exc, exc_args)
+            exc = (exc, exc_args, locinfo)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)
