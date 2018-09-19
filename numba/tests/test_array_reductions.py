@@ -649,6 +649,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.array([]))
         check(np.full(10, np.nan))
 
+        parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+
+        a = parts + 1j * parts[::-1]
+        a = a.reshape(3, 3)
+        check(a)
+
     @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_basic(self):
         self.check_cumulative(array_nancumprod)
