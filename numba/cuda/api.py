@@ -8,6 +8,8 @@ import contextlib
 
 import numpy as np
 
+from numba.utils import singledispatch
+
 from .cudadrv import devicearray, devices, driver
 from .args import In, Out, InOut
 
@@ -46,6 +48,7 @@ def from_cuda_array_interface(desc, owner=None):
     return da
 
 
+@singledispatch
 def as_cuda_array(obj):
     """Create a DeviceNDArray from any object that implements
     the cuda-array-interface.
@@ -60,6 +63,7 @@ def as_cuda_array(obj):
                                          owner=obj)
 
 
+@singledispatch
 def is_cuda_array(obj):
     """Test if the object has defined the `__cuda_array_interface__`.
 
