@@ -660,7 +660,7 @@ if numpy_version >= (1, 12):
             return
 
         if isinstance(a.dtype, (types.Boolean, types.Integer)):
-            # dtype can't possibly contain NaN
+            # dtype cannot possibly contain NaN
             return lambda arr: np.cumprod(arr)
         else:
             retty = a.dtype
@@ -684,7 +684,7 @@ if numpy_version >= (1, 12):
             return
 
         if isinstance(a.dtype, (types.Boolean, types.Integer)):
-            # dtype can't possibly contain NaN
+            # dtype cannot possibly contain NaN
             return lambda arr: np.cumsum(arr)
         else:
             retty = a.dtype
