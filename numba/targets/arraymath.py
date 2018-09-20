@@ -176,7 +176,8 @@ def array_sum(context, builder, sig, args):
     IS_CONTIG = ary.is_contig
     flatten = _get_flat(IS_CONTIG)
     # do not do partial sums using a bool array!
-    dt = ary.dtype if ary.dtype is not types.boolean else np.float64
+    nbdt = ary.dtype if ary.dtype is not types.boolean else types.float64
+    dt = as_dtype(nbdt)
 
     def array_sum_impl(arr):
         n = arr.size
