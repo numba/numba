@@ -151,22 +151,17 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
-def _get_flat(contig):
-    """
-    returns a specialized implementation of array flattening, specialize at compile time
-    so that vectorization has the best chance of working
-    """
-    if contig:
-        @register_jitable
-        def contig_flat(arr):
-            return arr.ravel()
-        return contig_flat
-    else:
-        @register_jitable
-        def non_contig_flat(arr):
-            n = arr.size
-            return np.lib.stride_tricks.as_strided(arr, shape=(n,), strides=arr.strides[-1:])
-        return non_contig_flat
+
+# Implementations of array flattening, specialize at compile time
+# so that vectorization has the best chance of working
+@register_jitable
+def _arr_sum_contig_flat(arr):
+    return arr.ravel()
+
+@register_jitable
+def _arr_sum_non_contig_flat(arr):
+    n = arr.size
+    return np.lib.stride_tricks.as_strided(arr, shape=(n,), strides=arr.strides[-1:])
 
 @lower_builtin(np.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
@@ -174,7 +169,7 @@ def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
     ary = sig.args[0]
     IS_CONTIG = ary.is_contig
-    flatten = _get_flat(IS_CONTIG)
+    flatten = _arr_sum_contig_flat if IS_CONTIG else _arr_sum_non_contig_flat
     # do not do partial sums using a bool array!
     nbdt = ary.dtype if ary.dtype is not types.boolean else types.float64
     dt = as_dtype(nbdt)
