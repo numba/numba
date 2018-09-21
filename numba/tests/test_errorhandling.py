@@ -25,32 +25,6 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
             expected = self.expected_msg % "<lambda>"
             self.assertIn(expected, str(raises.exception))
 
-    def test_unsupported_make_function_listcomp(self):
-        try:
-            @jit
-            def func(x):
-                a = [i for i in x]
-                return undefined_global  # force error
-
-            with self.assertRaises(errors.UnsupportedError) as raises:
-                func([1])
-
-            expected = self.expected_msg % "<listcomp>"
-            self.assertIn(expected, str(raises.exception))
-        except NameError: #py27 cannot handle the undefined global
-            self.assertTrue(utils.PY2)
-
-    def test_unsupported_make_function_dictcomp(self):
-        @jit
-        def func():
-            return {i:0 for i in range(1)}
-
-        with self.assertRaises(errors.UnsupportedError) as raises:
-            func()
-
-        expected = self.expected_msg % "<dictcomp>"
-        self.assertIn(expected, str(raises.exception))
-
     def test_unsupported_make_function_return_inner_func(self):
         def func(x):
             """ return the closure """
@@ -82,6 +56,22 @@ class TestUnsupportedReporting(unittest.TestCase):
 
         expected = "Use of unsupported NumPy function 'numpy.asarray'"
         self.assertIn(expected, str(raises.exception))
+
+
+class TestMiscErrorHandling(unittest.TestCase):
+
+    def test_use_of_exception_for_flow_control(self):
+        # constant inference uses exceptions with no Loc specified to determine
+        # flow control, this asserts that the construction of the lowering
+        # error context handler works in the case of an exception with no Loc
+        # specified. See issue #3135.
+        @njit
+        def fn(x):
+            return 10**x
+
+        a = np.array([1.0],dtype=np.float64)
+        fn(a) # should not raise
+
 
 if __name__ == '__main__':
     unittest.main()

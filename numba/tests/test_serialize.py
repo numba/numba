@@ -172,6 +172,26 @@ class TestDispatcherPickling(TestCase):
         g.disable_compile()
         self.assertEqual(g(2, 4), 13)
 
+    def test_imp_deprecation(self):
+        """
+        The imp module was deprecated in v3.4 in favour of importlib
+        """
+        code = """if 1:
+            import pickle
+            import warnings
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always', DeprecationWarning)
+                from numba import njit
+                @njit
+                def foo(x):
+                    return x + 1
+                foo(1)
+                serialized_foo = pickle.dumps(foo)
+            for x in w:
+                if 'serialize.py' in x.filename:
+                    assert "the imp module is deprecated" not in x.msg
+        """
+        subprocess.check_call([sys.executable, "-c", code])
 
 if __name__ == '__main__':
     unittest.main()

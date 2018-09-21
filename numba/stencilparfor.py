@@ -17,7 +17,7 @@ from numba.typing import signature
 from numba import ir_utils, ir, utils, config, typing
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
-                            find_callname)
+                            find_callname, require, find_const, GuardException)
 from numba.six import exec_
 
 
@@ -46,7 +46,7 @@ class StencilPass(object):
         stencil_calls = []
         stencil_dict = {}
         for call_varname, call_list in call_table.items():
-            if isinstance(call_list[0], StencilFunc):
+            if len(call_list)==1 and isinstance(call_list[0], StencilFunc):
                 # Remember all calls to StencilFuncs.
                 stencil_calls.append(call_varname)
                 stencil_dict[call_varname] = call_list[0]
@@ -166,7 +166,7 @@ class StencilPass(object):
             parfor_vars.append(parfor_var)
 
         start_lengths, end_lengths = self._replace_stencil_accesses(
-             stencil_blocks, parfor_vars, in_args, index_offsets, stencil_func,
+             stencil_ir, parfor_vars, in_args, index_offsets, stencil_func,
              arg_to_arr_dict)
 
         if config.DEBUG_ARRAY_OPT == 1:
@@ -350,12 +350,13 @@ class StencilPass(object):
         ret_var = block.body[-2].value.value
         return ret_var
 
-    def _replace_stencil_accesses(self, stencil_blocks, parfor_vars, in_args,
+    def _replace_stencil_accesses(self, stencil_ir, parfor_vars, in_args,
                                   index_offsets, stencil_func, arg_to_arr_dict):
         """ Convert relative indexing in the stencil kernel to standard indexing
             by adding the loop index variables to the corresponding dimensions
             of the array index tuples.
         """
+        stencil_blocks = stencil_ir.blocks
         in_arr = in_args[0]
         in_arg_names = [x.name for x in in_args]
 
@@ -426,6 +427,12 @@ class StencilPass(object):
                     else:
                         if hasattr(index_list, 'name') and index_list.name in tuple_table:
                             index_list = tuple_table[index_list.name]
+                    # indices can be inferred as constant in simple expressions
+                    # like -c where c is constant
+                    # handled here since this is a common stencil index pattern
+                    stencil_ir._definitions = ir_utils.build_definitions(stencil_blocks)
+                    index_list = [_get_const_index_expr(
+                        stencil_ir, self.func_ir, v) for v in index_list]
                     if index_offsets:
                         index_list = self._add_index_offsets(index_list,
                                     list(index_offsets), new_body, scope, loc)
@@ -674,3 +681,70 @@ class DummyPipeline(object):
         self.typemap = None
         self.return_type = None
         self.calltypes = None
+
+
+def _get_const_index_expr(stencil_ir, func_ir, index_var):
+    """
+    infer index_var as constant if it is of a expression form like c-1 where c
+    is a constant in the outer function.
+    index_var is assumed to be inside stencil kernel
+    """
+    const_val = guard(
+        _get_const_index_expr_inner, stencil_ir, func_ir, index_var)
+    if const_val is not None:
+        return const_val
+    return index_var
+
+def _get_const_index_expr_inner(stencil_ir, func_ir, index_var):
+    """inner constant inference function that calls constant, unary and binary
+    cases.
+    """
+    require(isinstance(index_var, ir.Var))
+    # case where the index is a const itself in outer function
+    var_const =  guard(_get_const_two_irs, stencil_ir, func_ir, index_var)
+    if var_const is not None:
+        return var_const
+    # get index definition
+    index_def = ir_utils.get_definition(stencil_ir, index_var)
+    # match inner_var = unary(index_var)
+    var_const = guard(
+        _get_const_unary_expr, stencil_ir, func_ir, index_def)
+    if var_const is not None:
+        return var_const
+    # match inner_var = arg1 + arg2
+    var_const = guard(
+        _get_const_binary_expr, stencil_ir, func_ir, index_def)
+    if var_const is not None:
+        return var_const
+    raise GuardException
+
+def _get_const_two_irs(ir1, ir2, var):
+    """get constant in either of two IRs if available
+    otherwise, throw GuardException
+    """
+    var_const = guard(find_const, ir1, var)
+    if var_const is not None:
+        return var_const
+    var_const = guard(find_const, ir2, var)
+    if var_const is not None:
+        return var_const
+    raise GuardException
+
+def _get_const_unary_expr(stencil_ir, func_ir, index_def):
+    """evaluate constant unary expr if possible
+    otherwise, raise GuardException
+    """
+    require(isinstance(index_def, ir.Expr) and index_def.op == 'unary')
+    inner_var = index_def.value
+    # return -c as constant
+    const_val = _get_const_index_expr_inner(stencil_ir, func_ir, inner_var)
+    return eval("{}{}".format(index_def.fn, const_val))
+
+def _get_const_binary_expr(stencil_ir, func_ir, index_def):
+    """evaluate constant binary expr if possible
+    otherwise, raise GuardException
+    """
+    require(isinstance(index_def, ir.Expr) and index_def.op == 'binop')
+    arg1 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.lhs)
+    arg2 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.rhs)
+    return eval("{}{}{}".format(arg1, index_def.fn, arg2))

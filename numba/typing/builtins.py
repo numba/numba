@@ -510,6 +510,20 @@ class Len(AbstractTemplate):
         elif isinstance(val, (types.RangeType)):
             return signature(val.dtype, val)
 
+@infer_global(tuple)
+class TupleConstructor(AbstractTemplate):
+    key = tuple
+
+    def generic(self, args, kws):
+        assert not kws
+        # empty tuple case
+        if len(args) == 0:
+            return signature(types.Tuple(()))
+        (val,) = args
+        # tuple as input
+        if isinstance(val, types.BaseTuple):
+            return signature(val, val)
+
 
 @infer
 class TupleBool(AbstractTemplate):

@@ -75,6 +75,8 @@ on Numpy arrays::
           return arr.size * arr.itemsize
       return get
 
+.. _cython-support:
+
 Importing Cython Functions
 --------------------------
 

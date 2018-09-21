@@ -465,6 +465,12 @@ def list_constructor(context, builder, sig, args):
 
     return context.compile_internal(builder, list_impl, sig, args)
 
+@lower_builtin(list)
+def list_constructor(context, builder, sig, args):
+    list_type = sig.return_type
+    list_len = 0
+    inst = ListInstance.allocate(context, builder, list_type, list_len)
+    return impl_ret_new_ref(context, builder, list_type, inst.value)
 
 #-------------------------------------------------------------------------------
 # Various operations

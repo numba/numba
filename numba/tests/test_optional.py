@@ -73,6 +73,8 @@ def a_is_not_b(a, b):
 
 class TestOptional(TestCase):
 
+    _numba_parallel_test_ = False
+
     def test_return_double_or_none(self):
         pyfunc = return_double_or_none
         cres = compile_isolated(pyfunc, [types.boolean])

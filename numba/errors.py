@@ -33,6 +33,12 @@ class PerformanceWarning(NumbaWarning):
     """
 
 
+class ParallelSafetyWarning(RuntimeWarning):
+    """
+    Warning category for when an operation in a prange
+    might not have parallel semantics.
+    """
+
 # These are needed in the color formatting of errors setup
 
 @six.add_metaclass(abc.ABCMeta)
@@ -488,10 +494,8 @@ class LoweringError(NumbaError):
     """
     An error occurred during lowering.
     """
-    def __init__(self, msg, loc):
-        self.msg = msg
-        self.loc = loc
-        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+    def __init__(self, msg, loc=None):
+        super(LoweringError, self).__init__(msg, loc=loc)
 
 
 class ForbiddenConstruct(LoweringError):

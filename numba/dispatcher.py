@@ -10,14 +10,13 @@ import sys
 import uuid
 import weakref
 
-import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import Purpose, typeof, typeof_impl
+from numba.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, next, reraise
+from numba.six import create_bound_method, reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -514,6 +513,9 @@ class Dispatcher(_DispatcherBase):
         }
     # A {uuid -> instance} mapping, for deserialization
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
     __uuid = None
     __numba__ = 'py_func'
 
@@ -624,36 +626,36 @@ class Dispatcher(_DispatcherBase):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
+    @compiler.global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                args, return_type = sigutils.normalize_signature(sig)
-                # Don't recompile if signature already exists
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            args, return_type = sigutils.normalize_signature(sig)
+            # Don't recompile if signature already exists
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-                # Try to load from disk cache
-                cres = self._cache.load_overload(sig, self.targetctx)
-                if cres is not None:
-                    self._cache_hits[sig] += 1
-                    # XXX fold this in add_overload()? (also see compiler.py)
-                    if not cres.objectmode and not cres.interpmode:
-                        self.targetctx.insert_user_function(cres.entry_point,
-                                                    cres.fndesc, [cres.library])
-                    self.add_overload(cres)
-                    return cres.entry_point
-
-                self._cache_misses[sig] += 1
-                cres = self._compiler.compile(args, return_type)
+            # Try to load from disk cache
+            cres = self._cache.load_overload(sig, self.targetctx)
+            if cres is not None:
+                self._cache_hits[sig] += 1
+                # XXX fold this in add_overload()? (also see compiler.py)
+                if not cres.objectmode and not cres.interpmode:
+                    self.targetctx.insert_user_function(cres.entry_point,
+                                                cres.fndesc, [cres.library])
                 self.add_overload(cres)
-                self._cache.save_overload(sig, cres)
                 return cres.entry_point
+
+            self._cache_misses[sig] += 1
+            cres = self._compiler.compile(args, return_type)
+            self.add_overload(cres)
+            self._cache.save_overload(sig, cres)
+            return cres.entry_point
 
     def recompile(self):
         """
@@ -681,9 +683,9 @@ class Dispatcher(_DispatcherBase):
             )
 
 
-class LiftedLoop(_DispatcherBase):
+class LiftedCode(_DispatcherBase):
     """
-    Implementation of the hidden dispatcher objects used for lifted loop
+    Implementation of the hidden dispatcher objects used for lifted code
     (a lifted loop is really compiled as a separate function).
     """
     _fold_args = False
@@ -707,38 +709,128 @@ class LiftedLoop(_DispatcherBase):
         """
         return self.func_ir.loc.line
 
+    def _pre_compile(self, args, return_type, flags):
+        """Pre-compile actions
+        """
+        pass
+
+    @compiler.global_compiler_lock
     def compile(self, sig):
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                # XXX this is mostly duplicated from Dispatcher.
-                flags = self.flags
-                args, return_type = sigutils.normalize_signature(sig)
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            # XXX this is mostly duplicated from Dispatcher.
+            flags = self.flags
+            args, return_type = sigutils.normalize_signature(sig)
 
-                # Don't recompile if signature already exists
-                # (e.g. if another thread compiled it before we got the lock)
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
+            # Don't recompile if signature already exists
+            # (e.g. if another thread compiled it before we got the lock)
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-                assert not flags.enable_looplift, "Enable looplift flags is on"
-                # Clone IR to avoid mutation in rewrite pass
-                cloned_func_ir = self.func_ir.copy()
-                cres = compiler.compile_ir(typingctx=self.typingctx,
-                                           targetctx=self.targetctx,
-                                           func_ir=cloned_func_ir,
-                                           args=args, return_type=return_type,
-                                           flags=flags, locals=self.locals,
-                                           lifted=(),
-                                           lifted_from=self.lifted_from)
+            self._pre_compile(args, return_type, flags)
 
-                # Check typing error if object mode is used
-                if cres.typing_error is not None and not flags.enable_pyobject:
-                    raise cres.typing_error
+            # Clone IR to avoid mutation in rewrite pass
+            cloned_func_ir = self.func_ir.copy()
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                        targetctx=self.targetctx,
+                                        func_ir=cloned_func_ir,
+                                        args=args, return_type=return_type,
+                                        flags=flags, locals=self.locals,
+                                        lifted=(),
+                                        lifted_from=self.lifted_from)
 
-                self.add_overload(cres)
-                return cres.entry_point
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
+
+            self.add_overload(cres)
+            return cres.entry_point
+
+
+class LiftedLoop(LiftedCode):
+    def _pre_compile(self, args, return_type, flags):
+        assert not flags.enable_looplift, "Enable looplift flags is on"
+
+
+class LiftedWith(LiftedCode):
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        pysig = None
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
+
+
+class ObjModeLiftedWith(LiftedWith):
+    def __init__(self, *args, **kwargs):
+        self.output_types = kwargs.pop('output_types', None)
+        super(LiftedWith, self).__init__(*args, **kwargs)
+        if not self.flags.enable_pyobject:
+            raise ValueError("expecting `flags.enable_pyobject`")
+        if self.output_types is None:
+            raise TypeError('`output_types` must be provided')
+
+    @property
+    def _numba_type_(self):
+        return types.ObjModeDispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        assert not kws
+        self._legalize_arg_types(args)
+        # Coerce to object mode
+        args = [types.ffi_forced_object] * len(args)
+
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        signatures = [typing.signature(self.output_types, *args)]
+        pysig = None
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=signatures)
+
+        return call_template, pysig, args, kws
+
+    def _legalize_arg_types(self, args):
+        for i, a in enumerate(args, start=1):
+            if isinstance(a, types.List):
+                msg = (
+                    'Does not support list type inputs into '
+                    'with-context for arg {}'
+                )
+                raise errors.TypingError(msg.format(i))
+            elif isinstance(a, types.Dispatcher):
+                msg = (
+                    'Does not support function type inputs into '
+                    'with-context for arg {}'
+                )
+                raise errors.TypingError(msg.format(i))
 
 
 # Initialize typeof machinery

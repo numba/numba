@@ -196,6 +196,18 @@ class Cuda_popc(ConcreteTemplate):
         signature(types.uint64, types.uint64),
     ]
 
+@intrinsic
+class Cuda_fma(ConcreteTemplate):
+    """
+    Supported types from `llvm.fma`
+    [here](https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#standard-c-library-intrinics)
+    """
+    key = cuda.fma
+    cases = [
+        signature(types.float32, types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64, types.float64),
+    ]
+
 
 @intrinsic
 class Cuda_brev(ConcreteTemplate):
@@ -461,6 +473,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_ffs(self, mod):
         return types.Function(Cuda_ffs)
+
+    def resolve_fma(self, mod):
+        return types.Function(Cuda_fma)
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)

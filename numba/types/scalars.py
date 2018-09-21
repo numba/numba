@@ -105,7 +105,7 @@ class _NPDatetimeBase(Type):
     """
 
     def __init__(self, unit, *args, **kws):
-        name = '%s(%s)' % (self.type_name, unit)
+        name = '%s[%s]' % (self.type_name, unit)
         self.unit = unit
         self.unit_code = npdatetime.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name, *args, **kws)

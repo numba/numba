@@ -28,3 +28,5 @@ if "%RUN_COVERAGE%" == "yes" (
     set NUMBA_ENABLE_CUDASIM=1
     python -m numba.runtests -b -m -- numba.tests
 )
+
+if %errorlevel% neq 0 exit /b %errorlevel%

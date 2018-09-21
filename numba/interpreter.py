@@ -143,6 +143,12 @@ class Interpreter(object):
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
+        # Check out-of-scope syntactic-block
+        while self.syntax_blocks:
+            if inst.offset >= self.syntax_blocks[-1].exit:
+                self.syntax_blocks.pop()
+            else:
+                break
 
     def _end_current_block(self):
         self._remove_unused_temporaries()
@@ -217,7 +223,7 @@ class Interpreter(object):
 
     @property
     def code_cellvars(self):
-        return self.bytecode.co_cellvars 
+        return self.bytecode.co_cellvars
 
     @property
     def code_freevars(self):
@@ -272,7 +278,7 @@ class Interpreter(object):
         # See Parameter class in inspect.py (from Python source)
         if name[0] == '.' and name[1:].isdigit():
             name = 'implicit{}'.format(name[1:])
- 
+
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)
@@ -612,6 +618,28 @@ class Interpreter(object):
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
 
+    def op_SETUP_WITH(self, inst, contextmanager):
+        assert self.blocks[inst.offset] is self.current_block
+        exitpt = inst.next + inst.arg
+        wth = ir.With(inst.offset, exit=exitpt)
+        self.syntax_blocks.append(wth)
+        self.current_block.append(ir.EnterWith(
+            contextmanager=self.get(contextmanager),
+            begin=inst.offset, end=exitpt, loc=self.loc,
+            ))
+
+    def op_WITH_CLEANUP(self, inst):
+        "no-op"
+
+    def op_WITH_CLEANUP_START(self, inst):
+        "no-op"
+
+    def op_WITH_CLEANUP_FINISH(self, inst):
+        "no-op"
+
+    def op_END_FINALLY(self, inst):
+        "no-op"
+
     if PYVERSION < (3, 6):
 
         def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
@@ -671,12 +699,19 @@ class Interpreter(object):
             expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
             self.store(expr, res)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+    def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
         for other, tmp in zip(map(self.get, tuples[1:]), temps):
             out = ir.Expr.binop(fn='+', lhs=first, rhs=other, loc=self.loc)
             self.store(out, tmp)
-            first = tmp
+            first = self.get(tmp)
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(inst, tuples, temps)
+
+    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
+        self._build_tuple_unpack(inst, tuples, temps)
 
     def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
         # Unpack the constant key-tuple and reused build_map which takes
@@ -969,7 +1004,7 @@ class Interpreter(object):
 
     def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
-    
+
     def op_LOAD_CLOSURE(self, inst, res):
         n_cellvars = len(self.code_cellvars)
         if inst.arg < n_cellvars:

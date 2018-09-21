@@ -494,7 +494,7 @@ class ShapeEquivSet(EquivSet):
         for i in inds:
             require(i in self.ind_to_var)
             vs = self.ind_to_var[i]
-            assert(vs != [])
+            require(vs != [])
             shape.append(vs[0])
         return tuple(shape)
 

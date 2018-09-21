@@ -93,6 +93,17 @@ def list_comprehension6():
 def list_constructor(n):
     return list(range(n))
 
+def list_constructor_empty():
+    # cannot be typed, list is empty and no typing information is present to
+    # infer a type
+    return list()
+
+def list_constructor_empty_but_typeable(n):
+    # can be typed, list is empty but later append has typing info that allows
+    # for inference
+    y = list()
+    return y.append(n)
+
 def list_append(n):
     l = []
     l.append(42)
@@ -406,6 +417,23 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_constructor(self):
         self.check_unary_with_size(list_constructor)
+
+    def test_constructor_empty(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(list_constructor_empty)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc()
+        self.assertIn("Can't infer type of variable", str(raises.exception))
+        self.assertIn("list(undefined)", str(raises.exception))
+
+    def test_constructor_empty_but_typeable(self):
+        args = [np.int32(1), 10., 1 + 3j, [7], [17., 14.], np.array([10])]
+        pyfunc = list_constructor_empty_but_typeable
+        for arg in args:
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
 
     def test_append(self):
         self.check_unary_with_size(list_append)
@@ -1201,7 +1229,7 @@ class TestListOfList(ManagedListTestCase):
         with self.assertRaises(errors.TypingError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn(
-            "Invalid usage of BoundFunction(list.append",
+            "Invalid use of BoundFunction(list.append",
             str(raises.exception),
             )
 

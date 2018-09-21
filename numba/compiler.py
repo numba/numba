@@ -5,11 +5,10 @@ from collections import namedtuple, defaultdict
 import sys
 import warnings
 import traceback
-import threading
 from .tracing import event
 
 from numba import (bytecode, interpreter, funcdesc, postproc,
-                   typing, typeinfer, lowering, objmode, utils, config,
+                   typing, typeinfer, lowering, pylowering, utils, config,
                    errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -17,12 +16,10 @@ from numba.parfor import PreParforPass, ParforPass, Parfor
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
+from numba.compiler_lock import global_compiler_lock
 
 # terminal color markup
 _termcolor = errors.termcolor()
-
-# Lock for the preventing multiple compiler execution
-lock_compiler = threading.RLock()
 
 
 class Flags(utils.ConfigOptions):
@@ -156,7 +153,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
+                            flags, locals)
 
 
 def run_frontend(func):
@@ -235,6 +232,7 @@ class _PipelineManager(object):
         exc.args = (newmsg,)
         return exc
 
+    @global_compiler_lock
     def run(self, status):
         assert self._finalized, "PM must be finalized before run()"
         for pipeline_name in self.pipeline_order:
@@ -247,7 +245,8 @@ class _PipelineManager(object):
                 except _EarlyPipelineCompletion as e:
                     return e.result
                 except BaseException as e:
-                    msg = "Failed at %s (%s)" % (pipeline_name, stage_name)
+                    msg = "Failed in %s mode pipeline (step: %s)" % \
+                        (pipeline_name, stage_name)
                     patched_exception = self._patch_error(msg, e)
                     # No more fallback pipelines?
                     if is_final_pipeline:
@@ -428,6 +427,24 @@ class BasePipeline(object):
                               outer_flags, self.locals,
                               lifted=tuple(loops), lifted_from=None)
             return cres
+
+    def stage_frontend_withlift(self):
+        """
+        Extract with-contexts
+        """
+        main, withs = transforms.with_lifting(
+            func_ir=self.func_ir,
+            typingctx=self.typingctx,
+            targetctx=self.targetctx,
+            flags=self.flags,
+            locals=self.locals,
+            )
+        if withs:
+            cres = compile_ir(self.typingctx, self.targetctx, main,
+                              self.args, self.return_type,
+                              self.flags, self.locals,
+                              lifted=tuple(withs), lifted_from=None)
+            raise _EarlyPipelineCompletion(cres)
 
     def stage_objectmode_frontend(self):
         """
@@ -755,11 +772,15 @@ class BasePipeline(object):
         """
         pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
+    def add_with_handling_stage(self, pm):
+        pm.add_stage(self.stage_frontend_withlift, "Handle with contexts")
+
     def define_nopython_pipeline(self, pm, name='nopython'):
         """Add the nopython-mode pipeline to the pipeline manager
         """
         pm.create_pipeline(name)
         self.add_preprocessing_stage(pm)
+        self.add_with_handling_stage(pm)
         self.add_pre_typing_stage(pm)
         self.add_typing_stage(pm)
         self.add_optimization_stage(pm)
@@ -775,6 +796,8 @@ class BasePipeline(object):
         self.add_preprocessing_stage(pm)
         pm.add_stage(self.stage_objectmode_frontend,
                      "object mode frontend")
+        pm.add_stage(self.stage_inline_pass,
+                     "inline calls to locally defined closures")
         pm.add_stage(self.stage_annotate_type, "annotate type")
         pm.add_stage(self.stage_ir_legalization,
                      "ensure IR is legal prior to lowering")
@@ -1022,7 +1045,7 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = objmode.PyLower(targetctx, library, fndesc, interp)
+    lower = pylowering.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper()

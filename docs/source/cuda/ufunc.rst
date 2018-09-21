@@ -26,7 +26,7 @@ Example: Basic Example
     def cu_discriminant(a, b, c):
         return math.sqrt(b ** 2 - 4 * a * c)
 
-    N = 1e+4
+    N = 10000
     dtype = np.float32
 
     # prepare the input
@@ -108,7 +108,7 @@ the `max_blocksize` attribute on the compiled gufunc object.
                                      'float64(float64, float64, float64)'],
                                     target='cuda')(discriminant)
 
-        N = 1e+8
+        N = int(1e+8)
         dtype = np.float32
 
         # prepare the input

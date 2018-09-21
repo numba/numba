@@ -13,6 +13,10 @@ try:
 except ImportError:
     jinja2 = None
 
+try:
+    import pygments
+except ImportError:
+    pygments = None
 
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
@@ -129,6 +133,7 @@ class TestAnnotation(unittest.TestCase):
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
 
+    @unittest.skipIf(pygments is None, "please install the 'pygments' package")
     def test_pretty_print(self):
 
         @numba.njit
@@ -139,7 +144,7 @@ class TestAnnotation(unittest.TestCase):
         # Exercise the method
         obj = foo.inspect_types(pretty=True)
 
-        # Excerise but supply a not None file kwarg, this is invalid
+        # Exercise but supply a not None file kwarg, this is invalid
         with self.assertRaises(ValueError) as raises:
             obj = foo.inspect_types(pretty=True, file='should be None')
         self.assertIn('`file` must be None if `pretty=True`', str(raises.exception))
