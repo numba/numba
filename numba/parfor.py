@@ -112,7 +112,7 @@ def min_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
-            min_checker(in_arr)
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = min(val, in_arr[i])
@@ -120,7 +120,7 @@ def min_parallel_impl(return_type, arg):
     else:
         def min_1(in_arr):
             numba.parfor.init_prange()
-            min_checker(in_arr)
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = min(val, in_arr[i])
@@ -131,7 +131,7 @@ def max_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
-            max_checker(in_arr)
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = max(val, in_arr[i])
@@ -139,7 +139,7 @@ def max_parallel_impl(return_type, arg):
     else:
         def max_1(in_arr):
             numba.parfor.init_prange()
-            max_checker(in_arr)
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
@@ -148,7 +148,7 @@ def max_parallel_impl(return_type, arg):
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    argmin_checker(in_arr)
+    argmin_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -159,7 +159,7 @@ def argmin_parallel_impl(in_arr):
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
-    argmax_checker(in_arr)
+    argmax_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -396,25 +396,25 @@ replace_functions_map = {
 }
 
 @register_jitable
-def max_checker(arr):
-    if arr.size == 0:
+def max_checker(arr_size):
+    if arr_size == 0:
         raise ValueError(("zero-size array to reduction operation "
                             "maximum which has no identity"))
 
 @register_jitable
-def min_checker(arr):
-    if arr.size == 0:
+def min_checker(arr_size):
+    if arr_size == 0:
         raise ValueError(("zero-size array to reduction operation "
                             "minimum which has no identity"))
 
 @register_jitable
-def argmin_checker(arr):
-    if arr.size == 0:
+def argmin_checker(arr_size):
+    if arr_size == 0:
         raise ValueError("attempt to get argmin of an empty sequence")
 
 @register_jitable
-def argmax_checker(arr):
-    if arr.size == 0:
+def argmax_checker(arr_size):
+    if arr_size == 0:
         raise ValueError("attempt to get argmax of an empty sequence")
 
 checker_impl = namedtuple('checker_impl', ['name', 'func'])
