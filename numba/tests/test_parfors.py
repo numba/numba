@@ -523,16 +523,16 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
-    def test_fuse_argmin(self):
-        def test_impl(n):
-            A = np.ones(n)
-            C = A.argmin()
-            B = A.sum()
-            return B + C
-
-        self.check(test_impl, 256)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
-        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
+    def test_fuse_argmin_argmax_max_min(self):
+        for op in [np.argmin, np.argmax, np.min, np.max]:
+            def test_impl(n):
+                A = np.ones(n)
+                C = op(A)
+                B = A.sum()
+                return B + C
+            self.check(test_impl, 256)
+            self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+            self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')

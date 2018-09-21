@@ -385,6 +385,8 @@ replace_functions_map = {
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
     ('max', 'numpy'): max_parallel_impl,
+    ('amin', 'numpy'): min_parallel_impl,
+    ('amax', 'numpy'): max_parallel_impl,
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
     ('mean', 'numpy'): mean_parallel_impl,
@@ -424,6 +426,8 @@ replace_functions_checkers_map = {
     ('argmax', 'numpy') : checker_impl('argmax_checker', argmax_checker),
     ('min', 'numpy') : checker_impl('min_checker', min_checker),
     ('max', 'numpy') : checker_impl('max_checker', max_checker),
+    ('amin', 'numpy') : checker_impl('min_checker', min_checker),
+    ('amax', 'numpy') : checker_impl('max_checker', max_checker),
 }
 
 
