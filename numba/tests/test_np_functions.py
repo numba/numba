@@ -776,6 +776,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(params):
+            print(params)
             expected = pyfunc(**params)
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
@@ -783,6 +784,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def ary_permutations(include_none=False):
             yield np.arange(-4, 6)
             yield np.linspace(1, 2, 9).reshape(3, 3)
+            yield np.array([])
+            yield (2, 3, 3.142)
+            yield np.array((3.1, -2.2, np.nan))
+            yield np.asfortranarray(np.arange(4) - 2.2)
+            yield (True, False, True)
+            yield [5.5, 6.6, -4.4]
             if include_none:
                 yield None
 
@@ -810,6 +817,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 for to_end in ary_permutations(include_none=True):
                     params['to_end'] = to_end
                     check(params)
+
+        # params = {'ary': np.array([]), 'to_begin': np.arange(2)}
+        # check(params)
 
 
 class TestNPMachineParameters(TestCase):

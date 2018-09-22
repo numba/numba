@@ -1040,22 +1040,29 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
         mid = _prepare_array(ary)
         end = _prepare_array(to_end)
 
-        # allocate output array
-        out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=ary.dtype)
+        out_dtype = mid.dtype  # replcate Numpy behaviour
 
-        # populate output array
-        start_idx = len(start)
-        mid_idx = len(start) + len(mid) - 1
-        out[:start_idx] = start
-        out[start_idx:mid_idx] = np.diff(mid)
-        out[mid_idx:] = end
+        if len(mid) > 0:
+            out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+
+            # populate output array
+            start_idx = len(start)
+            mid_idx = len(start) + len(mid) - 1
+            out[:start_idx] = start
+            out[start_idx:mid_idx] = np.diff(mid)
+            out[mid_idx:] = end
+
+        else:
+            out = np.empty((len(start) + len(end)), dtype=out_dtype)
+
+            # populate output array
+            start_idx = len(start)
+            out[:start_idx] = start
+            out[start_idx:] = end
 
         return out
 
     return np_ediff1d_impl
-
-
-
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
