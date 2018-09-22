@@ -1020,6 +1020,65 @@ def my_triu(m, k=0):
     else:
         return np_triu_impl_multi
 
+
+
+@overload(np.ediff1d)
+def np_ediff1d(ary, to_end=None, to_begin=None):
+
+    def np_ediff1d_impl(ary, to_end=None, to_begin=None):
+        return np.diff(ary.ravel())
+
+    def np_ediff1d_impl_to_begin(ary, to_end=None, to_begin=None):
+        tmp_to_begin = _asarray(to_begin)
+
+        out = np.empty((ary.size + tmp_to_begin.size - 1), dtype=ary.dtype)
+
+        out[:tmp_to_begin.size] = tmp_to_begin.ravel()
+
+        out[tmp_to_begin.size:] = np.diff(ary.ravel())
+
+        return out
+
+    def np_ediff1d_impl_to_end(ary, to_end=None, to_begin=None):
+        tmp_to_end = _asarray(to_end)
+
+        out = np.empty((ary.size + tmp_to_end.size - 1), dtype=ary.dtype)
+
+        out[: (ary.size - 1)] = np.diff(ary.ravel())
+
+        out[(ary.size - 1):] = tmp_to_end.ravel()
+
+        return out
+
+    def np_ediff1d_impl_to_begin_to_end(ary, to_end=None, to_begin=None):
+        tmp_to_end = _asarray(to_end)
+        tmp_to_begin = _asarray(to_begin)
+
+        out = np.empty((tmp_to_begin.size + ary.size + tmp_to_end.size - 1), dtype=ary.dtype)
+
+        out[: tmp_to_begin.size] = tmp_to_begin.ravel()
+
+        out[tmp_to_begin.size: (tmp_to_begin.size + ary.size - 1)] = np.diff(ary.ravel())
+
+        out[(tmp_to_begin.size + ary.size - 1):] = tmp_to_end.ravel()
+
+        return out
+
+    if to_begin in (None, types.none):
+        if to_end in (None, types.none):
+            return np_ediff1d_impl
+        else:
+            return np_ediff1d_impl_to_end
+    else:
+        if to_end in (None, types.none):
+            return np_ediff1d_impl_to_begin
+        else:
+            return np_ediff1d_impl_to_begin_to_end
+
+
+
+
+
 @register_jitable
 def _np_vander(x, N, increasing, out):
     """

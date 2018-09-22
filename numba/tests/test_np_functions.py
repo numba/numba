@@ -84,6 +84,9 @@ def triu(m, k=0):
 def np_vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
+def ediff1d(ary, to_end=None, to_begin=None):
+    return np.ediff1d(ary, to_end, to_begin)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -767,6 +770,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
+
+    def test_ediff1d(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got)
+
+        def ary_permutations(include_none=False):
+            yield np.arange(-4, 6)
+            yield np.linspace(1, 2, 9).reshape(3, 3)
+            if include_none:
+                yield None
+
+        for ary in ary_permutations():
+            params = {'ary': ary}
+
+            # to_end and to_begin defaulted
+            check(params)
+
+            # to_begin specified and to_end defaulted
+            for to_begin in ary_permutations(include_none=True):
+                params['to_begin'] = to_begin
+                check(params)
+
+            # to_end specified and to_begin defaulted
+            params = {'ary': ary}
+            for to_end in ary_permutations(include_none=True):
+                params['to_end'] = to_end
+                check(params)
+
+            # to_end and to_begin specified
+            params = {'ary': ary}
+            for to_begin in ary_permutations(include_none=True):
+                params['to_begin'] = to_begin
+                for to_end in ary_permutations(include_none=True):
+                    params['to_end'] = to_end
+                    check(params)
 
 
 class TestNPMachineParameters(TestCase):
