@@ -1020,61 +1020,39 @@ def my_triu(m, k=0):
     else:
         return np_triu_impl_multi
 
+def _prepare_array(arr):
+    pass
 
+@overload(_prepare_array)
+def _prepare_array_impl(arr):
+    if isinstance(arr, types.Array):
+        return lambda x: x.ravel()
+    elif isinstance(arr, (types.Sequence, types.Tuple)):
+        return lambda x: _asarray(x).ravel()
+    if arr in (None, types.none):
+        return lambda x: np.array(())
 
 @overload(np.ediff1d)
 def np_ediff1d(ary, to_end=None, to_begin=None):
 
     def np_ediff1d_impl(ary, to_end=None, to_begin=None):
-        return np.diff(ary.ravel())
+        start = _prepare_array(to_begin)
+        mid = _prepare_array(ary)
+        end = _prepare_array(to_end)
 
-    def np_ediff1d_impl_to_begin(ary, to_end=None, to_begin=None):
-        tmp_to_begin = _asarray(to_begin)
+        # allocate output array
+        out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=ary.dtype)
 
-        out = np.empty((ary.size + tmp_to_begin.size - 1), dtype=ary.dtype)
-
-        out[:tmp_to_begin.size] = tmp_to_begin.ravel()
-
-        out[tmp_to_begin.size:] = np.diff(ary.ravel())
-
-        return out
-
-    def np_ediff1d_impl_to_end(ary, to_end=None, to_begin=None):
-        tmp_to_end = _asarray(to_end)
-
-        out = np.empty((ary.size + tmp_to_end.size - 1), dtype=ary.dtype)
-
-        out[: -tmp_to_end.size] = np.diff(ary.ravel())
-
-        out[(ary.size - 1):] = tmp_to_end.ravel()
+        # populate output array
+        start_idx = len(start)
+        mid_idx = len(start) + len(mid) - 1
+        out[:start_idx] = start
+        out[start_idx:mid_idx] = np.diff(mid)
+        out[mid_idx:] = end
 
         return out
 
-    def np_ediff1d_impl_to_begin_to_end(ary, to_end=None, to_begin=None):
-        tmp_to_end = _asarray(to_end)
-        tmp_to_begin = _asarray(to_begin)
-
-        out = np.empty((tmp_to_begin.size + ary.size + tmp_to_end.size - 1), dtype=ary.dtype)
-
-        out[: tmp_to_begin.size] = tmp_to_begin.ravel()
-
-        out[tmp_to_begin.size: -tmp_to_end.size] = np.diff(ary.ravel())
-
-        out[-tmp_to_end.size:] = tmp_to_end.ravel()
-
-        return out
-
-    if to_begin in (None, types.none):
-        if to_end in (None, types.none):
-            return np_ediff1d_impl
-        else:
-            return np_ediff1d_impl_to_end
-    else:
-        if to_end in (None, types.none):
-            return np_ediff1d_impl_to_begin
-        else:
-            return np_ediff1d_impl_to_begin_to_end
-
+    return np_ediff1d_impl
 
 
 
