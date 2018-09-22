@@ -776,7 +776,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(params):
-            print(params)
             expected = pyfunc(**params)
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
@@ -788,7 +787,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield (2, 3, 3.142)
             yield np.array((3.1, -2.2, np.nan))
             yield np.asfortranarray(np.arange(4) - 2.2)
-            yield (True, False, True)
             yield [5.5, 6.6, -4.4]
             if include_none:
                 yield None
@@ -818,8 +816,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params['to_end'] = to_end
                     check(params)
 
-        # params = {'ary': np.array([]), 'to_begin': np.arange(2)}
-        # check(params)
+        # edge cases
+        params = {'ary': np.arange(1), 'to_begin': (True, False)}
+        check(params)
+
+    def test_ediff1d_exceptions(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Numpy does not support case where 'ary' has boolean dtype"
+        assert msg in str(e.exception)
 
 
 class TestNPMachineParameters(TestCase):

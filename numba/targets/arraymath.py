@@ -1035,12 +1035,18 @@ def _prepare_array_impl(arr):
 @overload(np.ediff1d)
 def np_ediff1d(ary, to_end=None, to_begin=None):
 
+    if isinstance(ary, types.Array):
+        if isinstance(ary.dtype, types.Boolean):
+            raise TypeError("Numpy does not support case where 'ary' has boolean dtype")
+            # Numpy tries to do this: return ary[1:] - ary[:-1]
+            # which results in a TypeError exception being raised
+
     def np_ediff1d_impl(ary, to_end=None, to_begin=None):
         start = _prepare_array(to_begin)
         mid = _prepare_array(ary)
         end = _prepare_array(to_end)
 
-        out_dtype = mid.dtype  # replcate Numpy behaviour
+        out_dtype = mid.dtype  # replicate Numpy behaviour
 
         if len(mid) > 0:
             out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
