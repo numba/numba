@@ -1044,7 +1044,7 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
         out = np.empty((ary.size + tmp_to_end.size - 1), dtype=ary.dtype)
 
-        out[: (ary.size - 1)] = np.diff(ary.ravel())
+        out[: -tmp_to_end.size] = np.diff(ary.ravel())
 
         out[(ary.size - 1):] = tmp_to_end.ravel()
 
@@ -1058,9 +1058,9 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
         out[: tmp_to_begin.size] = tmp_to_begin.ravel()
 
-        out[tmp_to_begin.size: (tmp_to_begin.size + ary.size - 1)] = np.diff(ary.ravel())
+        out[tmp_to_begin.size: -tmp_to_end.size] = np.diff(ary.ravel())
 
-        out[(tmp_to_begin.size + ary.size - 1):] = tmp_to_end.ravel()
+        out[-tmp_to_end.size:] = tmp_to_end.ravel()
 
         return out
 
