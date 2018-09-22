@@ -771,6 +771,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -780,39 +781,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
 
-        def ary_permutations(include_none=False):
+        def input_permutations(include_none=False):
             yield np.arange(-4, 6)
-            yield np.linspace(1, 2, 9).reshape(3, 3)
-            yield np.array([])
-            yield (2, 3, 3.142)
-            yield np.array((3.1, -2.2, np.nan))
-            yield np.asfortranarray(np.arange(4) - 2.2)
-            yield [5.5, 6.6, -4.4]
+            yield np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan]).reshape(3, 3)
             if include_none:
                 yield None
 
-        for ary in ary_permutations():
+        for ary in input_permutations():
             params = {'ary': ary}
 
             # to_end and to_begin defaulted
             check(params)
 
             # to_begin specified and to_end defaulted
-            for to_begin in ary_permutations(include_none=True):
+            for to_begin in input_permutations(include_none=True):
                 params['to_begin'] = to_begin
                 check(params)
 
             # to_end specified and to_begin defaulted
             params = {'ary': ary}
-            for to_end in ary_permutations(include_none=True):
+            for to_end in input_permutations(include_none=True):
                 params['to_end'] = to_end
                 check(params)
 
             # to_end and to_begin specified
             params = {'ary': ary}
-            for to_begin in ary_permutations(include_none=True):
+            for to_begin in input_permutations(include_none=True):
                 params['to_begin'] = to_begin
-                for to_end in ary_permutations(include_none=True):
+                for to_end in input_permutations(include_none=True):
                     params['to_end'] = to_end
                     check(params)
 
@@ -820,6 +816,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': np.arange(1), 'to_begin': (True, False)}
         check(params)
 
+        params = {'ary': np.array([]), 'to_end': (), 'to_begin': None}
+        check(params)
+
+        params = {'ary': ((1, 2, 3), (-1, -2, -3)), 'to_end': np.arange(4)}
+        check(params)
+
+        params = {'ary': [5, 6], 'to_begin': (np.nan,)}
+        #check(params)
+
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)

@@ -1025,50 +1025,49 @@ def _prepare_array(arr):
 
 @overload(_prepare_array)
 def _prepare_array_impl(arr):
-    if isinstance(arr, types.Array):
-        return lambda x: x.ravel()
-    elif isinstance(arr, (types.Sequence, types.Tuple)):
+    if isinstance(arr, (types.Array, types.Sequence, types.Tuple)):
         return lambda x: _asarray(x).ravel()
     if arr in (None, types.none):
         return lambda x: np.array(())
 
-@overload(np.ediff1d)
-def np_ediff1d(ary, to_end=None, to_begin=None):
+if numpy_version >= (1, 12):
+    # we replicate the behaviour which was first
+    # included in NumPy 1.12 bugfix release
+    @overload(np.ediff1d)
+    def np_ediff1d(ary, to_end=None, to_begin=None):
 
-    if isinstance(ary, types.Array):
-        if isinstance(ary.dtype, types.Boolean):
-            raise TypeError("Numpy does not support case where 'ary' has boolean dtype")
-            # Numpy tries to do this: return ary[1:] - ary[:-1]
-            # which results in a TypeError exception being raised
+        if isinstance(ary, types.Array):
+            if isinstance(ary.dtype, types.Boolean):
+                raise TypeError("Numpy does not support case where 'ary' has boolean dtype")
+                # Numpy tries to do this: return ary[1:] - ary[:-1]
+                # which results in a TypeError exception being raised
 
-    def np_ediff1d_impl(ary, to_end=None, to_begin=None):
-        start = _prepare_array(to_begin)
-        mid = _prepare_array(ary)
-        end = _prepare_array(to_end)
+        def np_ediff1d_impl(ary, to_end=None, to_begin=None):
 
-        out_dtype = mid.dtype  # replicate Numpy behaviour
+            # transform each input into an equivalent 1d array
+            start = _prepare_array(to_begin)
+            mid = _prepare_array(ary)
+            end = _prepare_array(to_end)
 
-        if len(mid) > 0:
-            out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+            # output array dtype determined by ary dtype, per NumPy
+            out_dtype = mid.dtype
 
-            # populate output array
-            start_idx = len(start)
-            mid_idx = len(start) + len(mid) - 1
-            out[:start_idx] = start
-            out[start_idx:mid_idx] = np.diff(mid)
-            out[mid_idx:] = end
+            if len(mid) > 0:
+                out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+                start_idx = len(start)
+                mid_idx = len(start) + len(mid) - 1
+                out[:start_idx] = start
+                out[start_idx:mid_idx] = np.diff(mid)
+                out[mid_idx:] = end
+            else:
+                out = np.empty((len(start) + len(end)), dtype=out_dtype)
+                start_idx = len(start)
+                out[:start_idx] = start
+                out[start_idx:] = end
 
-        else:
-            out = np.empty((len(start) + len(end)), dtype=out_dtype)
+            return out
 
-            # populate output array
-            start_idx = len(start)
-            out[:start_idx] = start
-            out[start_idx:] = end
-
-        return out
-
-    return np_ediff1d_impl
+        return np_ediff1d_impl
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
