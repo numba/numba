@@ -107,13 +107,16 @@ class TestCudaArrayInterface(CUDATestCase):
                          out._arr.device_ctypes_pointer.value)
 
     def test_array_views(self):
-        """views created via array interface should provide:
-            - standard indexing operations
+        """Views created via array interface support:
+            - Strided slices
+            - Strided slices
         """
         h_arr = np.random.random(10)
         c_arr = cuda.to_device(h_arr)
 
         arr = cuda.as_cuda_array(c_arr)
+
+        # __getitem__ interface accesses expected data
 
         # Direct views
         np.testing.assert_array_equal(arr.copy_to_host(), h_arr)
@@ -127,12 +130,46 @@ class TestCudaArrayInterface(CUDATestCase):
 
         # View of strided array
         arr_strided = cuda.as_cuda_array(c_arr[::2])
+        np.testing.assert_array_equal(arr_strided.copy_to_host(), h_arr[::2])
 
+        # A strided-view-of-array and view-of-strided-array have the same
+        # shape, strides, itemsize, and alloc_size
         self.assertEqual(arr[::2].shape, arr_strided.shape)
         self.assertEqual(arr[::2].strides, arr_strided.strides)
         self.assertEqual(arr[::2].dtype.itemsize, arr_strided.dtype.itemsize)
         self.assertEqual(arr[::2].alloc_size, arr_strided.alloc_size)
-        np.testing.assert_array_equal(arr_strided.copy_to_host(), h_arr[::2])
+
+        # __setitem__ interface propogates into external array
+
+        # Writes to a slice
+        arr[:5] = np.pi
+        np.testing.assert_array_equal(
+            c_arr.copy_to_host(),
+            np.concatenate((np.full(5, np.pi), h_arr[5:]))
+        )
+
+        # Writes to a slice from a view
+        arr[:5] = arr[5:]
+        np.testing.assert_array_equal(
+            c_arr.copy_to_host(),
+            np.concatenate((h_arr[5:], h_arr[5:]))
+        )
+
+        # Writes through a view
+        arr[:] = cuda.to_device(h_arr)
+        np.testing.assert_array_equal(c_arr.copy_to_host(), h_arr)
+
+        # Writes to a strided slice
+        arr[::2] = np.pi
+        np.testing.assert_array_equal(
+            c_arr.copy_to_host()[::2],
+            np.full(5, np.pi),
+        )
+        np.testing.assert_array_equal(
+            c_arr.copy_to_host()[1::2],
+            h_arr[1::2]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
