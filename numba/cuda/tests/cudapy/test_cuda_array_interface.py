@@ -106,6 +106,24 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(returned.device_ctypes_pointer.value,
                          out._arr.device_ctypes_pointer.value)
 
+    def test_view_indexing(self):
+        """views created via array interface should provide:
+            - standard indexing operations
+        """
+        h_arr = np.random.random(10)
+        m_arr = MyArray(cuda.to_device(h_arr))
+
+        arr = cuda.as_cuda_array(m_arr)
+
+        # Direct views
+        np.testing.assert_array_equal(arr.copy_to_host(), h_arr)
+        np.testing.assert_array_equal(arr[:].copy_to_host(), h_arr)
+
+        # Slicing
+        np.testing.assert_array_equal(arr[:5].copy_to_host(), h_arr[:5])
+
+        # Striding
+        np.testing.assert_array_equal(arr[::2].copy_to_host(), h_arr[::2])
 
 if __name__ == '__main__':
     unittest.main()
