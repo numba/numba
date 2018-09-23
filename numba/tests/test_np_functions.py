@@ -812,13 +812,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([])
             yield ()
             yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
+            parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+            a = parts + 1j * parts[::-1]
+            yield a.reshape(3, 3)
 
         for i in input_variations():
             params = {'ary': i, 'to_end': i, 'to_begin': i}
             _check(params)
 
         # to_end / to_begin are boolean
-        params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
+        params = {'ary': [1], 'to_end': (False,), 'to_begin': (True,)}
         _check(params)
 
         # examples of unsafe type promotions
@@ -826,6 +829,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
         params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
+        _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    def test_ediff1d_investigations(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # to_end / to_begin are boolean
+        params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
         _check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
