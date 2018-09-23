@@ -106,14 +106,14 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(returned.device_ctypes_pointer.value,
                          out._arr.device_ctypes_pointer.value)
 
-    def test_view_indexing(self):
+    def test_array_views(self):
         """views created via array interface should provide:
             - standard indexing operations
         """
         h_arr = np.random.random(10)
-        m_arr = MyArray(cuda.to_device(h_arr))
+        c_arr = cuda.to_device(h_arr)
 
-        arr = cuda.as_cuda_array(m_arr)
+        arr = cuda.as_cuda_array(c_arr)
 
         # Direct views
         np.testing.assert_array_equal(arr.copy_to_host(), h_arr)
@@ -122,8 +122,17 @@ class TestCudaArrayInterface(CUDATestCase):
         # Slicing
         np.testing.assert_array_equal(arr[:5].copy_to_host(), h_arr[:5])
 
-        # Striding
+        # Strided view
         np.testing.assert_array_equal(arr[::2].copy_to_host(), h_arr[::2])
 
-if __name__ == '__main__':
+        # View of strided array
+        arr_strided = cuda.as_cuda_array(c_arr[::2])
+
+        self.assertEqual(arr[::2].shape, arr_strided.shape)
+        self.assertEqual(arr[::2].strides, arr_strided.strides)
+        self.assertEqual(arr[::2].dtype.itemsize, arr_strided.dtype.itemsize)
+        self.assertEqual(arr[::2].alloc_size, arr_strided.alloc_size)
+        np.testing.assert_array_equal(arr_strided.copy_to_host(), h_arr[::2])
+
+if __name__ == "__main__":
     unittest.main()
