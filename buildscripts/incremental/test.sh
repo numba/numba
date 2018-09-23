@@ -49,7 +49,7 @@ python -m numba.tests.test_runtests
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py -b -m $TEST_NPROCS -- numba.tests
+    $SEGVCATCH coverage run runtests.py -b -m $TEST_NPROCS -- numba.tests.test_np_functions
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- numba.tests.test_np_functions
 fi
