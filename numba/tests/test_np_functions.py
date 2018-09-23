@@ -829,28 +829,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
         _check(params)
 
-        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
-        _check(params)
+        # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
+        # _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
-    def test_ediff1d_investigations_1(self):
-        pyfunc = ediff1d
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        # to_end / to_begin are boolean
-        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_begin': (np.nan,)}
-        _check(params)
-
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
-    def test_ediff1d_investigations_2(self):
-        pyfunc = ediff1d
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        # to_end / to_begin are boolean
-        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
-        _check(params)
+    # @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    # def test_ediff1d_investigations_1(self):
+    #     pyfunc = ediff1d
+    #     cfunc = jit(nopython=True)(pyfunc)
+    #     _check = partial(self._check_output, pyfunc, cfunc)
+    #
+    #     # to_end / to_begin are boolean
+    #     params = {'ary': np.array([5, 6], dtype=np.int16), 'to_begin': (np.nan,)}
+    #     _check(params)
+    #
+    # @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    # def test_ediff1d_investigations_2(self):
+    #     pyfunc = ediff1d
+    #     cfunc = jit(nopython=True)(pyfunc)
+    #     _check = partial(self._check_output, pyfunc, cfunc)
+    #
+    #     # to_end / to_begin are boolean
+    #     params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
+    #     _check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
