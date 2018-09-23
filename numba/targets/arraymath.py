@@ -1030,20 +1030,17 @@ def _prepare_array_impl(arr):
     if arr in (None, types.none):
         return lambda x: np.array(())
 
-if numpy_version >= (1, 12):
-    # we replicate the behaviour which was first
-    # included in NumPy 1.12 bugfix release
+if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
     @overload(np.ediff1d)
     def np_ediff1d(ary, to_end=None, to_begin=None):
 
         if isinstance(ary, types.Array):
             if isinstance(ary.dtype, types.Boolean):
                 raise TypeError("Numpy does not support case where 'ary' has boolean dtype")
-                # Numpy tries to do this: return ary[1:] - ary[:-1]
-                # which results in a TypeError exception being raised
+                # Numpy tries to do this: return ary[1:] - ary[:-1] which results in a
+                # TypeError exception being raised
 
         def np_ediff1d_impl(ary, to_end=None, to_begin=None):
-
             # transform each input into an equivalent 1d array
             start = _prepare_array(to_begin)
             mid = _prepare_array(ary)
@@ -1064,7 +1061,6 @@ if numpy_version >= (1, 12):
                 start_idx = len(start)
                 out[:start_idx] = start
                 out[start_idx:] = end
-
             return out
 
         return np_ediff1d_impl

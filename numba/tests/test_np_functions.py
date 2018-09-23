@@ -772,7 +772,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_matrix_exceptions(triu)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
-    def test_ediff1d(self):
+    def test_ediff1d_basic(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -784,14 +784,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def to_variations(a):
             yield None
             yield a
-            yield a.astype(np.int16)  # check casting of to_begin and to_end to ary dtype
+            yield a.astype(np.int16)
 
         def ary_variations(a):
             yield a
-            yield a.reshape(3, 3)  # check flattening of input
-            yield a.astype(np.int32)  # check casting of to_begin and to_end to ary dtype
+            yield a.reshape(3, 2, 2)
+            yield a.astype(np.int32)
 
-        for ary in ary_variations(np.linspace(-2, 7, 9)):
+        for ary in ary_variations(np.linspace(-2, 7, 12)):
             params = {'ary': ary}
             check(params)
 
@@ -807,22 +807,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check(params)
 
         # edge cases
-        params = {'ary': np.arange(1), 'to_begin': (True, False)}
+        params = {'ary': [1], 'to_begin': (True, False)}
         check(params)
 
         params = {'ary': np.array([]), 'to_end': (), 'to_begin': None}
         check(params)
 
-        params = {'ary': ((1, 2, 3), (-1, -2, -3)), 'to_end': np.arange(4)}
+        params = {'ary': ((1, 2, 3), (-1, -2, -3)), 'to_end': [1, 2, 3]}
         check(params)
 
-        params = {'ary': np.array([5, 6]), 'to_begin': (np.nan,)}
+        # unsafe type promotions
+        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_begin': (np.nan,)}
         check(params)
 
-        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': (1e100,)}
-        check(params)
-
-        params = {'ary': [2, 2, 2], 'to_begin': (0, 0)}
+        params = {'ary': np.array([5, 6], dtype=np.int32), 'to_end': [1e100]}
         check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
