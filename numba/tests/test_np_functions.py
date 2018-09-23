@@ -777,40 +777,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(params):
-            print(params)
             expected = pyfunc(**params)
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
 
-        def input_permutations(include_none=False):
-            yield np.arange(-4, 6)
-            yield np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan]).reshape(3, 3)
-            if include_none:
-                yield None
+        def to_variations(a):
+            yield None
+            yield a
+            yield a.astype(np.int16)  # check casting of to_begin and to_end to ary dtype
 
-        for ary in input_permutations():
+        def ary_variations(a):
+            yield a
+            yield a.reshape(3, 3)  # check flattening of input
+            yield a.astype(np.int32)  # check casting of to_begin and to_end to ary dtype
+
+        for ary in ary_variations(np.linspace(-2, 7, 9)):
             params = {'ary': ary}
-
-            # to_end and to_begin defaulted
             check(params)
 
-            # to_begin specified and to_end defaulted
-            for to_begin in input_permutations(include_none=True):
-                params['to_begin'] = to_begin
+            for a in to_variations(ary):
+                params = {'ary': ary, 'to_begin': a}
                 check(params)
 
-            # to_end specified and to_begin defaulted
-            params = {'ary': ary}
-            for to_end in input_permutations(include_none=True):
-                params['to_end'] = to_end
+                params = {'ary': ary, 'to_end': a}
                 check(params)
 
-            # to_end and to_begin specified
-            params = {'ary': ary}
-            for to_begin in input_permutations(include_none=True):
-                params['to_begin'] = to_begin
-                for to_end in input_permutations(include_none=True):
-                    params['to_end'] = to_end
+                for b in to_variations(ary):
+                    params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     check(params)
 
         # edge cases
@@ -827,6 +820,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(params)
 
         params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': (1e100,)}
+        check(params)
+
+        params = {'ary': [2, 2, 2], 'to_begin': (0, 0)}
         check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
