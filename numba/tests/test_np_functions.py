@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import math
 import sys
+from functools import partial
 
 import numpy as np
 
@@ -558,14 +559,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
+    def _check_output(self, pyfunc, cfunc, params):
+        expected = pyfunc(**params)
+        got = cfunc(**params)
+        self.assertPreciseEqual(expected, got)
+
     def test_vander_basic(self):
         pyfunc = np_vander
         cfunc = jit(nopython=True)(pyfunc)
-
-        def _check_output(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got)
+        _check_output = partial(self._check_output, pyfunc, cfunc)
 
         def _check(x):
             n_choices = [None, 0, 1, 2, 3, 4]
@@ -650,6 +652,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_tri_basic(self):
         pyfunc = tri
         cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
 
         def n_variations():
             return np.arange(-4, 8)  # number of rows
@@ -659,11 +662,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def k_variations():
             return np.arange(-10, 10)  # offset
-
-        def _check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got)
 
         # N supplied, M and k defaulted
         for n in n_variations():
@@ -775,11 +773,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_ediff1d_basic(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
-
-        def check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got)
+        _check = partial(self._check_output, pyfunc, cfunc)
 
         def to_variations(a):
             yield None
@@ -793,35 +787,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for ary in ary_variations(np.linspace(-2, 7, 12)):
             params = {'ary': ary}
-            check(params)
+            _check(params)
 
             for a in to_variations(ary):
                 params = {'ary': ary, 'to_begin': a}
-                check(params)
+                _check(params)
 
                 params = {'ary': ary, 'to_end': a}
-                check(params)
+                _check(params)
 
                 for b in to_variations(ary):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
-                    check(params)
+                    _check(params)
 
-        # edge cases
-        params = {'ary': [1], 'to_begin': (True, False)}
-        check(params)
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    def test_ediff1d_edge_cases(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
 
-        params = {'ary': np.array([]), 'to_end': (), 'to_begin': None}
-        check(params)
+        def input_variations():
+            yield ((1, 2, 3), (4, 5, 6))
+            yield [4, 5, 6]
+            yield np.array([])
+            yield ()
+            yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
 
-        params = {'ary': ((1, 2, 3), (-1, -2, -3)), 'to_end': [1, 2, 3]}
-        check(params)
+        for i in input_variations():
+            params = {'ary': i, 'to_end': i, 'to_begin': i}
+            _check(params)
 
-        # unsafe type promotions
+        # to_end / to_begin are boolean
+        params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
+        _check(params)
+
+        # examples of unsafe type promotions
         params = {'ary': np.array([5, 6], dtype=np.int16), 'to_begin': (np.nan,)}
-        check(params)
+        _check(params)
 
-        params = {'ary': np.array([5, 6], dtype=np.int32), 'to_end': [1e100]}
-        check(params)
+        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
+        _check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
