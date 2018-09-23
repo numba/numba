@@ -777,6 +777,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(params):
+            print(params)
             expected = pyfunc(**params)
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got)
@@ -822,8 +823,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': ((1, 2, 3), (-1, -2, -3)), 'to_end': np.arange(4)}
         check(params)
 
-        params = {'ary': [5, 6], 'to_begin': (np.nan,)}
-        #check(params)
+        params = {'ary': np.array([5, 6]), 'to_begin': (np.nan,)}
+        check(params)
+
+        params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': (1e100,)}
+        check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
