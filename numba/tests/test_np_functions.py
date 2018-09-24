@@ -84,6 +84,9 @@ def triu(m, k=0):
 def np_vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
+def cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
+    return np.cov(m, y, rowvar, bias, ddof, fweights, aweights)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -767,6 +770,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
+
+    def test_cov_basic(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(params):
+            expected = pyfunc(**params)
+            print(expected)
+
+            got = cfunc(**params)
+            print(got)
+
+            self.assertPreciseEqual(expected, got, abs_tol='eps')
+
+        x = np.array([[0, 2], [1, 1], [2, 0]]).T
+        params = {'m': x}
+        _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x}
+        _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x, 'bias': True}
+        _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x, 'ddof': 2}
+        _check(params)
+
+
+
 
 
 class TestNPMachineParameters(TestCase):

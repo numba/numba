@@ -1094,6 +1094,82 @@ def np_vander(x, N=None, increasing=False):
         return np_vander_seq_impl
 
 #----------------------------------------------------------------------------
+# Stats
+
+
+@register_jitable
+def average(a):
+    assert a.ndim == 2
+
+    m, n = a.shape
+
+    out = np.empty((m, 1), dtype=np.float64)
+
+    for i in range(m):
+        out[i, 0] = np.sum(a[i, :]) / n
+
+    return out
+
+
+
+@register_jitable
+def crap_mult(A, B):
+
+    rows_A, cols_A = A.shape
+    rows_B, cols_B = B.shape
+
+    C = np.zeros((rows_A, cols_B), dtype=np.float64)
+
+    for i in range(rows_A):
+        for k in range(cols_A):
+            for j in range(cols_B):
+                C[i][j] += A[i][k] * B[k][j]
+
+    return C
+
+    # check ordering
+
+
+@overload(np.cov)
+def np_cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
+
+    if _HAVE_BLAS:
+        mmult = np.dot
+    else:
+        mmult = crap_mult
+
+    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
+
+        X = m.astype(np.float64)
+
+        if ddof is None:
+            if bias:
+                ddof = 0
+            else:
+                ddof = 1
+
+        # Get the product of frequencies and weights
+        w = None
+
+        # Determine the normalization
+        if w is None:
+            fact = X.shape[1] - ddof
+
+        X -= average(X)
+        if w is None:
+            X_T = X.T
+        # else:
+        #     X_T = (X * w).T
+        c = mmult(X, X_T)
+        c *= np.true_divide(1, fact)
+        return c
+
+    return np_cov_impl
+
+
+
+
+#----------------------------------------------------------------------------
 # Element-wise computations
 
 @register_jitable
