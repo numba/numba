@@ -1126,8 +1126,31 @@ def crap_mult(A, B):
                 C[i][j] += A[i][k] * B[k][j]
 
     return C
+    # TODO: check ordering
 
-    # check ordering
+@register_jitable
+def np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult):
+    if ddof is None:
+        if bias:
+            ddof = 0
+        else:
+            ddof = 1
+
+    # Get the product of frequencies and weights
+    w = None
+
+    # Determine the normalization
+    if w is None:
+        fact = X.shape[1] - ddof
+
+    X -= average(X)
+    if w is None:
+        X_T = X.T
+    # else:
+    #     X_T = (X * w).T
+    c = mmult(X, X_T)
+    c *= np.true_divide(1, fact)
+    return c
 
 
 @overload(np.cov)
@@ -1138,31 +1161,23 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweight
     else:
         mmult = crap_mult
 
-    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
+    def np_cov_impl_y_none(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
 
         X = m.astype(np.float64)
 
-        if ddof is None:
-            if bias:
-                ddof = 0
-            else:
-                ddof = 1
+        return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
 
-        # Get the product of frequencies and weights
-        w = None
+    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
 
-        # Determine the normalization
-        if w is None:
-            fact = X.shape[1] - ddof
+        X = np.stack((m, y)).astype(np.float64)
 
-        X -= average(X)
-        if w is None:
-            X_T = X.T
-        # else:
-        #     X_T = (X * w).T
-        c = mmult(X, X_T)
-        c *= np.true_divide(1, fact)
-        return c
+        return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
+
+
+    if y in (None, types.none):
+        return np_cov_impl_y_none
+    else:
+        return np_cov_impl
 
     return np_cov_impl
 

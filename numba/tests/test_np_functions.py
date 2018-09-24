@@ -800,6 +800,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'ddof': 2}
         _check(params)
 
+        x = np.array([-2.1, -1, 4.3])
+        y = np.array([3, 1.1, 0.12])
+        params = {'m': x, 'y': y}
+        _check(params)
 
 
 
