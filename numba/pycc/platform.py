@@ -11,7 +11,8 @@ import functools
 import os
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile, gettempdir
+from tempfile import NamedTemporaryFile, mkdtemp, gettempdir
+from contextlib import contextmanager
 
 _configs = {
     # DLL suffix, Python C extension suffix
@@ -27,6 +28,22 @@ def get_configs(arg):
 find_shared_ending = functools.partial(get_configs, 0)
 find_pyext_ending = functools.partial(get_configs, 1)
 
+@contextmanager
+def _gentmpfile(suffix):
+    # windows locks the tempfile so use a tempdir + file, see
+    # https://github.com/numba/numba/issues/3304
+    try:
+        tmpdir = mkdtemp()
+        ntf = open(os.path.join(tmpdir, "temp%s" % suffix), 'wt')
+        yield ntf
+    finally:
+        try:
+            ntf.close()
+            os.remove(ntf)
+        except:
+            pass
+        else:
+            os.rmdir(tmpdir)
 
 def _check_external_compiler():
     # see if the external compiler bound in numpy.distutil is present
@@ -34,18 +51,18 @@ def _check_external_compiler():
     compiler = new_compiler()
     customize_compiler(compiler)
     for suffix in ['.c', '.cxx']:
-        with NamedTemporaryFile('wt', suffix=suffix) as ntf:
-            simple_c = "int main(void) { return 0; }"
-            ntf.write(simple_c)
-            ntf.flush()
-            try:
+        try:
+            with _gentmpfile(suffix) as ntf:
+                simple_c = "int main(void) { return 0; }"
+                ntf.write(simple_c)
+                ntf.flush()
+                ntf.close()
                 # *output_dir* is set to avoid the compiler putting temp files
                 # in the current directory.
                 compiler.compile([ntf.name], output_dir=gettempdir())
-            except Exception: # likely CompileError
-                return False
+        except Exception: # likely CompileError or file system issue
+            return False
     return True
-
 
 # boolean on whether the externally provided compiler is present and
 # functioning correctly

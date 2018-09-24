@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
+from ..errors import TypingError
 
 
 class PyObject(Dummy):
@@ -420,7 +421,7 @@ class ClassDataType(Type):
         super(ClassDataType, self).__init__(name)
 
 
-class ContextManager(Phantom):
+class ContextManager(Callable, Phantom):
     """
     An overly-simple ContextManager type that cannot be materialized.
     """
@@ -428,3 +429,19 @@ class ContextManager(Phantom):
         self.cm = cm
         super(ContextManager, self).__init__("ContextManager({})".format(cm))
 
+    def get_call_signatures(self):
+        if not self.cm.is_callable:
+            msg = "contextmanager {} is not callable".format(self.cm)
+            raise TypingError(msg)
+
+        return (), False
+
+    def get_call_type(self, context, args, kws):
+        from numba import typing
+
+        if not self.cm.is_callable:
+            msg = "contextmanager {} is not callable".format(self.cm)
+            raise TypingError(msg)
+
+        posargs = list(args) + [v for k, v in sorted(kws.items())]
+        return typing.signature(self, *posargs)

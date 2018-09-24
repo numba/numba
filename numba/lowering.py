@@ -659,15 +659,77 @@ class Lower(BaseLower):
 
         if isinstance(expr.func, ir.Intrinsic):
             fnty = expr.func.name
-            argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-            argvals = self.fold_call_args(fnty, signature,
-                                          expr.args, expr.vararg, expr.kws)
 
-        if isinstance(fnty, types.ExternalFunction):
+        if isinstance(fnty, types.ObjModeDispatcher):
+            self.init_pyapi()
+            # Acquire the GIL
+            gil_state = self.pyapi.gil_ensure()
+            # Fix types
+            argnames = [a.name for a in expr.args]
+            argtypes = [self.typeof(a) for a in argnames]
+            argvalues = [self.loadvar(a) for a in argnames]
+            for v, ty in zip(argvalues, argtypes):
+                # Because .from_native_value steal the reference
+                self.incref(ty, v)
+
+            argobjs = [self.pyapi.from_native_value(atyp, aval,
+                                                    self.env_manager)
+                       for atyp, aval in zip(argtypes, argvalues)]
+            # Make Call
+            entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+            callee = self.context.add_dynamic_addr(self.builder,
+                                                   id(entry_pt),
+                                                   info="with_objectmode")
+            ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
+            has_exception = cgutils.is_null(self.builder, ret_obj)
+            with self. builder.if_else(has_exception) as (then, orelse):
+                # Handles exception
+                # This branch must exit the function
+                with then:
+                    # Clean arg
+                    for obj in argobjs:
+                        self.pyapi.decref(obj)
+
+                    # Release the GIL
+                    self.pyapi.gil_release(gil_state)
+
+                    # Return and signal exception
+                    self.call_conv.return_exc(self.builder)
+
+                # Handles normal return
+                with orelse:
+                    # Fix output value
+                    native = self.pyapi.to_native_value(
+                        fnty.dispatcher.output_types,
+                        ret_obj,
+                        )
+                    output = native.value
+
+                    # Release objs
+                    self.pyapi.decref(ret_obj)
+                    for obj in argobjs:
+                        self.pyapi.decref(obj)
+
+                    # cleanup output
+                    if callable(native.cleanup):
+                        native.cleanup()
+
+                    # Release the GIL
+                    self.pyapi.gil_release(gil_state)
+
+                    # Error during unboxing
+                    with self.builder.if_then(native.is_error):
+                        self.call_conv.return_exc(self.builder)
+
+                    res = output
+
+        elif isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
             self.debug_print("# external function")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
             func = self.context.declare_external_function(self.builder.module,
@@ -678,11 +740,15 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.NumbaFunction):
             # Handle a compiled Numba function
             self.debug_print("# calling numba function")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
             self.debug_print("# calling external function pointer")
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
             # If the external function pointer uses libpython
@@ -721,6 +787,8 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.RecursiveCall):
             # Recursive call
+            argvals = self.fold_call_args(fnty, signature,
+                                          expr.args, expr.vararg, expr.kws)
             qualprefix = fnty.overloads[signature.args]
             mangler = self.context.mangler or default_mangler
             mangled_name = mangler(qualprefix, signature.args)
@@ -736,6 +804,12 @@ class Lower(BaseLower):
             # Normal function resolution
             self.debug_print("# calling normal function: {0}".format(fnty))
             self.debug_print("# signature: {0}".format(signature))
+            if (isinstance(expr.func, ir.Intrinsic) or
+                    isinstance(fnty, types.ObjModeDispatcher)):
+                argvals = expr.func.args
+            else:
+                argvals = self.fold_call_args(fnty, signature,
+                                              expr.args, expr.vararg, expr.kws)
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object

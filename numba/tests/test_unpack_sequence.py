@@ -120,7 +120,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
                                                         layout='C')],
                               flags=flags)
         cfunc = cr.entry_point
-        a = np.zeros(shape=(1, 2, 3))
+        a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
     @tag('important')

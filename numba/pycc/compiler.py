@@ -13,6 +13,7 @@ from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
 from numba.compiler_lock import global_compiler_lock
+
 from numba.targets.registry import cpu_target
 from numba.runtime import nrtdynmod
 

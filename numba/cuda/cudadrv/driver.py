@@ -785,15 +785,13 @@ class Context(object):
             raise OSError('OS does not support CUDA IPC')
         ipchandle = drvapi.cu_ipc_mem_handle()
         driver.cuIpcGetMemHandle(
-            ctypes.cast(
-                ipchandle,
-                ctypes.POINTER(drvapi.cu_ipc_mem_handle),
-                ),
-            memory.handle,
+            ctypes.byref(ipchandle),
+            memory.owner.handle,
             )
-
         source_info = self.device.get_device_identity()
-        return IpcHandle(memory, ipchandle, memory.size, source_info)
+        offset = memory.handle.value - memory.owner.handle.value
+        return IpcHandle(memory, ipchandle, memory.size, source_info,
+                         offset=offset)
 
     def open_ipc_handle(self, handle, size):
         # open the IPC handle to get the device pointer
@@ -972,6 +970,7 @@ class _CudaIpcImpl(object):
         self.base = parent.base
         self.handle = parent.handle
         self.size = parent.size
+        self.offset = parent.offset
         # remember if the handle is already opened
         self._opened_mem = None
 
@@ -985,12 +984,12 @@ class _CudaIpcImpl(object):
         if self._opened_mem is not None:
             raise ValueError('IpcHandle is already opened')
 
-        mem = context.open_ipc_handle(self.handle, self.size)
+        mem = context.open_ipc_handle(self.handle, self.offset + self.size)
         # this object owns the opened allocation
         # note: it is required the memory be freed after the ipc handle is
         #       closed by the importing context.
         self._opened_mem = mem
-        return mem.own()
+        return mem.own().view(self.offset)
 
     def close(self):
         if self._opened_mem is None:
@@ -1047,12 +1046,13 @@ class IpcHandle(object):
     alive.  The *handle* is a ctypes object of the CUDA IPC handle. The *size*
     is the allocation size.
     """
-    def __init__(self, base, handle, size, source_info=None):
+    def __init__(self, base, handle, size, source_info=None, offset=0):
         self.base = base
         self.handle = handle
         self.size = size
         self.source_info = source_info
         self._impl = None
+        self.offset = offset
 
     def _sentry_source_info(self):
         if self.source_info is None:
@@ -1132,14 +1132,15 @@ class IpcHandle(object):
             preprocessed_handle,
             self.size,
             self.source_info,
+            self.offset,
             )
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, handle_ary, size, source_info):
+    def _rebuild(cls, handle_ary, size, source_info, offset):
         handle = drvapi.cu_ipc_mem_handle(*handle_ary)
         return cls(base=None, handle=handle, size=size,
-                   source_info=source_info)
+                   source_info=source_info, offset=offset)
 
 
 class MemoryPointer(object):
