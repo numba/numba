@@ -779,62 +779,115 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(params):
             expected = pyfunc(**params)
             got = cfunc(**params)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-13)
 
-        x = np.array([[0, 2], [1, 1], [2, 0]]).T
-        params = {'m': x}
-        _check(params)
+        def m_variations():
+            yield np.array([[0, 2], [1, 1], [2, 0]]).T
+            yield self.rnd.randn(100).reshape(5, 20)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x}
-        _check(params)
+        for m in m_variations():
+            params = {'m': m}
+            _check(params)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x, 'rowvar': False}
-        _check(params)
+            for rowvar in False, True:
+                params['rowvar'] = rowvar
+                _check(params)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x, 'bias': True}
-        _check(params)
+            for ddof in -1, 0, 1, 2:
+                params = {'m': m, 'ddof': ddof}
+                _check(params)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x, 'ddof': 2}
-        _check(params)
+            for bias in True, False:
+                params = {'m': m, 'bias': bias}
+                _check(params)
 
+            params = {'m': m, 'y': m[::-1]}
+            _check(params)
+
+            for rowvar in False, True:
+                params['rowvar'] = rowvar
+                _check(params)
+
+            for ddof in -1, 0, 1, 2:
+                params['ddof'] = ddof
+                _check(params)
+
+            for bias in True, False:
+                params['bias'] = bias
+                _check(params)
+
+        # example borrowed from numpy doc string
         x = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
         params = {'m': x, 'y': y}
         _check(params)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x, 'y': x.copy()}
+        params['rowvar'] = False
         _check(params)
 
-        x = np.random.RandomState(0).randn(100).reshape(5, 20)
-        params = {'m': x, 'y': x.copy(), 'rowvar': False}
+        x = np.array([[0, 2], [1, 1], [2, 0]]).T
+        params = {'m': x, 'ddof': 5}
         _check(params)
 
-        x = [-2.1, -1.0, 4.3]
-        y = np.array([3.0, 1.1, 0.12])
+
+        # return type
+        # params = {'m': np.array([])}
+        # _check(params)
+
+
+
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x}
+        # _check(params)
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x, 'rowvar': False}
+        # _check(params)
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x, 'bias': True}
+        # _check(params)
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x, 'ddof': 2}
+        # _check(params)
+        #
+        # x = np.array([-2.1, -1, 4.3])
+        # y = np.array([3, 1.1, 0.12])
+        # params = {'m': x, 'y': y}
+        # _check(params)
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x, 'y': x.copy()}
+        # _check(params)
+        #
+        # x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        # params = {'m': x, 'y': x.copy(), 'rowvar': False}
+        # _check(params)
+        #
+        # x = [-2.1, -1.0, 4.3]
+        # y = np.array([3.0, 1.1, 0.12])
+        # params = {'m': x, 'y': y}
+        # _check(params)
+
+    def test_cov_problems(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(params):
+            expected = pyfunc(**params)
+            print(expected)
+
+            got = cfunc(**params)
+            print(got)
+
+            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
+
+        x = np.array([[1, 2, 3]])
+        y = np.array([[1j, 2j, 3j]])
         params = {'m': x, 'y': y}
         _check(params)
-
-    # def test_cov_problems(self):
-    #     pyfunc = cov
-    #     cfunc = jit(nopython=True)(pyfunc)
-    #
-    #     def _check(params):
-    #         expected = pyfunc(**params)
-    #         print(expected)
-    #
-    #         got = cfunc(**params)
-    #         print(got)
-    #
-    #         self.assertPreciseEqual(expected, got, abs_tol=1e-12)
-    #
-    #     x = np.array([])
-    #     params = {'m': x, 'y': np.arange(3)}
-    #     _check(params)
 
 
 

@@ -1141,6 +1141,9 @@ def np_cov_impl_inner(X, rowvar, bias, ddof, mmult):
     # Determine the normalization
     fact = X.shape[1] - ddof
 
+    # Numpy warns
+    fact = max(fact, 0.0)
+
     # De-mean
     X -= row_wise_average(X)
 
