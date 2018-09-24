@@ -1094,15 +1094,13 @@ def np_vander(x, N=None, increasing=False):
         return np_vander_seq_impl
 
 #----------------------------------------------------------------------------
-# Stats
-
+# Statistics
 
 @register_jitable
-def average(a):
+def row_wise_average(a):
     assert a.ndim == 2
 
     m, n = a.shape
-
     out = np.empty((m, 1), dtype=np.float64)
 
     for i in range(m):
@@ -1110,13 +1108,16 @@ def average(a):
 
     return out
 
-
-
 @register_jitable
-def crap_mult(A, B):
+def simple_matrix_multiply(A, B):
+
+    assert A.ndim == 2
+    assert B.ndim == 2
 
     rows_A, cols_A = A.shape
     rows_B, cols_B = B.shape
+
+    assert cols_A == rows_B
 
     C = np.zeros((rows_A, cols_B), dtype=np.float64)
 
@@ -1129,51 +1130,73 @@ def crap_mult(A, B):
     # TODO: check ordering
 
 @register_jitable
-def np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult):
+def np_cov_impl_inner(X, rowvar, bias, ddof, mmult):
+    # Numpy-esque determination of ddof
     if ddof is None:
         if bias:
             ddof = 0
         else:
             ddof = 1
 
-    # Get the product of frequencies and weights
-    w = None
-
     # Determine the normalization
-    if w is None:
-        fact = X.shape[1] - ddof
+    fact = X.shape[1] - ddof
 
-    X -= average(X)
-    if w is None:
-        X_T = X.T
-    # else:
-    #     X_T = (X * w).T
-    c = mmult(X, X_T)
+    # De-mean
+    X -= row_wise_average(X)
+
+    c = mmult(X, np.conj(X.T))
     c *= np.true_divide(1, fact)
     return c
 
+@register_jitable
+def number_of_rows(a):
+    if a.ndim == 1:
+        a_rows = 1
+    else:
+        a_rows = a.shape[0]
+    return a_rows
+
+@register_jitable
+def _concatenate(a, b):
+
+    # require a and b to be at most 2D
+    assert a.ndim < 3
+    assert b.ndim < 3
+
+    # can only concatenate a and b if they have the same
+    # number of columns
+    assert a.shape[-1] == b.shape[-1]
+
+    # allocate output array
+    a_rows = number_of_rows(a)
+    b_rows = number_of_rows(a)
+    out = np.empty((a_rows + b_rows, a.shape[-1]), dtype=np.float64)
+
+    # fill output array (i.e. 'concatenate' a and b)
+    out[:a_rows, :] = a
+    out[-b_rows:, :] = b
+
+    return out
 
 @overload(np.cov)
-def np_cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
+def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     if _HAVE_BLAS:
         mmult = np.dot
     else:
-        mmult = crap_mult
+        mmult = simple_matrix_multiply
 
-    def np_cov_impl_y_none(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
-
-        X = m.astype(np.float64)
+    def np_cov_impl_y_none(m, y=None, rowvar=True, bias=False, ddof=None):
+        X = _asarray(m).astype(np.float64)
 
         if not rowvar and X.shape[0] != 1:
             X = X.T
 
-        return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
+        return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
-    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
-
-        X = m.astype(np.float64)
-        y = y.astype(np.float64)
+    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
+        X = _asarray(m).astype(np.float64)
+        y = _asarray(y).astype(np.float64)
 
         if not rowvar:
             if X.shape[0] != 1:
@@ -1181,20 +1204,14 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweight
             if y.shape[0] != 1:
                 y = y.T
 
-        X = np.concatenate((X, y), axis=0)
+        X = _concatenate(X, y)
 
-        return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
-
+        return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
     if y in (None, types.none):
         return np_cov_impl_y_none
     else:
         return np_cov_impl
-
-    return np_cov_impl
-
-
-
 
 #----------------------------------------------------------------------------
 # Element-wise computations

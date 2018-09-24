@@ -84,8 +84,8 @@ def triu(m, k=0):
 def np_vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
-def cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
-    return np.cov(m, y, rowvar, bias, ddof, fweights, aweights)
+def cov(m, y=None, rowvar=True, bias=False, ddof=None):
+    return np.cov(m, y, rowvar, bias, ddof)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -94,6 +94,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
 
     def setUp(self):
+        super(TestNPFunctions, self).setUp()
         super(TestNPFunctions, self).setUp()
         self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
@@ -777,11 +778,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def _check(params):
             expected = pyfunc(**params)
-            print(expected)
-
             got = cfunc(**params)
-            print(got)
-
             self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
         x = np.array([[0, 2], [1, 1], [2, 0]]).T
@@ -804,10 +801,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'ddof': 2}
         _check(params)
 
-        # x = np.array([-2.1, -1, 4.3])
-        # y = np.array([3, 1.1, 0.12])
-        # params = {'m': x, 'y': y}
-        # _check(params)
+        x = np.array([-2.1, -1, 4.3])
+        y = np.array([3, 1.1, 0.12])
+        params = {'m': x, 'y': y}
+        _check(params)
 
         x = np.random.RandomState(0).randn(100).reshape(5, 20)
         params = {'m': x, 'y': x.copy()}
@@ -815,6 +812,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = np.random.RandomState(0).randn(100).reshape(5, 20)
         params = {'m': x, 'y': x.copy(), 'rowvar': False}
+        _check(params)
+
+        x = [-2.1, -1.0, 4.3]
+        y = np.array([3.0, 1.1, 0.12])
+        params = {'m': x, 'y': y}
         _check(params)
 
     def test_cov_problems(self):
@@ -830,8 +832,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
-        x = np.array([-2.1, -1, 4.3])
-        y = np.array([3, 1.1, 0.12])
+        x = [-2.1, -1.0, 4.3]
+        y = np.array([3.0, 1.1, 0.12])
         params = {'m': x, 'y': y}
         _check(params)
 
