@@ -782,7 +782,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(**params)
             print(got)
 
-            self.assertPreciseEqual(expected, got, abs_tol='eps')
+            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
         x = np.array([[0, 2], [1, 1], [2, 0]]).T
         params = {'m': x}
@@ -793,12 +793,42 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
         x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x, 'rowvar': False}
+        _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
         params = {'m': x, 'bias': True}
         _check(params)
 
         x = np.random.RandomState(0).randn(100).reshape(5, 20)
         params = {'m': x, 'ddof': 2}
         _check(params)
+
+        # x = np.array([-2.1, -1, 4.3])
+        # y = np.array([3, 1.1, 0.12])
+        # params = {'m': x, 'y': y}
+        # _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x, 'y': x.copy()}
+        _check(params)
+
+        x = np.random.RandomState(0).randn(100).reshape(5, 20)
+        params = {'m': x, 'y': x.copy(), 'rowvar': False}
+        _check(params)
+
+    def test_cov_problems(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(params):
+            expected = pyfunc(**params)
+            print(expected)
+
+            got = cfunc(**params)
+            print(got)
+
+            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
         x = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])

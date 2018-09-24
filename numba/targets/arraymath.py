@@ -1165,11 +1165,23 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweight
 
         X = m.astype(np.float64)
 
+        if not rowvar and X.shape[0] != 1:
+            X = X.T
+
         return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
 
     def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None, aweights=None):
 
-        X = np.stack((m, y)).astype(np.float64)
+        X = m.astype(np.float64)
+        y = y.astype(np.float64)
+
+        if not rowvar:
+            if X.shape[0] != 1:
+                X = X.T
+            if y.shape[0] != 1:
+                y = y.T
+
+        X = np.concatenate((X, y), axis=0)
 
         return np_cov_impl_inner(X, rowvar, bias, ddof, fweights, aweights, mmult)
 
