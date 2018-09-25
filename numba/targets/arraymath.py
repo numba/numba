@@ -1101,7 +1101,7 @@ def row_wise_average(a):
     assert a.ndim == 2
 
     m, n = a.shape
-    out = np.empty((m, 1), dtype=np.float64)
+    out = np.empty((m, 1), dtype=a.dtype)
 
     for i in range(m):
         out[i, 0] = np.sum(a[i, :]) / n
@@ -1119,7 +1119,7 @@ def simple_matrix_multiply(A, B):
 
     assert cols_A == rows_B
 
-    C = np.zeros((rows_A, cols_B), dtype=np.float64)
+    C = np.zeros((rows_A, cols_B), dtype=A.dtype)
 
     for i in range(rows_A):
         for k in range(cols_A):
@@ -1173,7 +1173,7 @@ def _concatenate(a, b):
     # allocate output array
     a_rows = number_of_rows(a)
     b_rows = number_of_rows(a)
-    out = np.empty((a_rows + b_rows, a.shape[-1]), dtype=np.float64)
+    out = np.empty((a_rows + b_rows, a.shape[-1]), dtype=a.dtype)
 
     # fill output array (i.e. 'concatenate' a and b)
     out[:a_rows, :] = a
@@ -1190,7 +1190,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         mmult = simple_matrix_multiply
 
     def np_cov_impl_y_none(m, y=None, rowvar=True, bias=False, ddof=None):
-        X = _asarray(m).astype(np.float64)
+        X = _asarray(m).astype(dtype)
 
         if not rowvar and X.shape[0] != 1:
             X = X.T
@@ -1198,8 +1198,8 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
     def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-        X = _asarray(m).astype(np.float64)
-        y = _asarray(y).astype(np.float64)
+        X = _asarray(m).astype(dtype)
+        y = _asarray(y).astype(dtype)
 
         if not rowvar:
             if X.shape[0] != 1:
@@ -1212,8 +1212,13 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
     if y in (None, types.none):
+        m_dt = as_dtype(m.dtype)
+        dtype = np.result_type(m_dt, np.float64)
         return np_cov_impl_y_none
     else:
+        m_dt = as_dtype(m.dtype)
+        y_dt = as_dtype(y.dtype)
+        dtype = np.result_type(m_dt, y_dt, np.float64)
         return np_cov_impl
 
 #----------------------------------------------------------------------------
