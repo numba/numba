@@ -784,14 +784,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def m_variations():
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
-            # yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
+            yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
 
         def run_tests(m, y=None):
             params = {'m': m}
+            _check(params)
+
             if y is not None:
                 params['y'] = y
-
-            _check(params)
+                _check(params)
 
             for rowvar in False, True:
                 params['rowvar'] = rowvar
@@ -839,13 +840,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         m = np.ones((5, 6, 7))
-
-        print(m.ndim)
-
-        with self.assertRaises(ValueError) as raises:
+        with self.assertTypingError() as raises:
             cfunc(m)
+        self.assertIn('m has more than 2 dimensions', str(raises.exception))
 
-        print(raises.exception)
+        m = np.ones((5, 6))
+        y = np.ones((5, 6, 7))
+        with self.assertTypingError() as raises:
+            cfunc(m, y=y)
+        self.assertIn('y has more than 2 dimensions', str(raises.exception))
 
     def test_cov_problems(self):
         pyfunc = cov

@@ -1186,10 +1186,14 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     if isinstance(m, types.Array):
         m_dt = as_dtype(m.dtype)
+        if m.ndim > 2:
+            raise TypeError("m has more than 2 dimensions")
     else:
         m_dt = np.float64
     if isinstance(y, types.Array):
         y_dt = as_dtype(y.dtype)
+        if y.ndim > 2:
+            raise TypeError("y has more than 2 dimensions")
     else:
         y_dt = np.float64
     dtype = np.result_type(m_dt, y_dt, np.float64)
