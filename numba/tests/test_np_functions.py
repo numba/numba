@@ -785,6 +785,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
             yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
+            yield np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
 
         def run_tests(m, y=None):
             params = {'m': m}
@@ -832,10 +833,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'y': y}
         _check(params)
 
-        x = np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
+        x = np.array([])
         params = {'m': x}
         _check(params)
-    #
+
     # def test_cov_problems(self):
     #     pyfunc = cov
     #     cfunc = jit(nopython=True)(pyfunc)
@@ -847,7 +848,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     #         print(got)
     #         self.assertPreciseEqual(expected, got, abs_tol=1e-13)
     #
-    #     x = np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
+    #     x = np.array([])
     #     params = {'m': x}
     #     _check(params)
 
