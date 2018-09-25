@@ -1184,6 +1184,16 @@ def _concatenate(a, b):
 @overload(np.cov)
 def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
+    if isinstance(m, types.Array):
+        m_dt = as_dtype(m.dtype)
+    else:
+        m_dt = np.float64
+    if isinstance(y, types.Array):
+        y_dt = as_dtype(y.dtype)
+    else:
+        y_dt = np.float64
+    dtype = np.result_type(m_dt, y_dt, np.float64)
+
     if _HAVE_BLAS:
         mmult = np.dot
     else:
@@ -1212,13 +1222,8 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
     if y in (None, types.none):
-        m_dt = as_dtype(m.dtype)
-        dtype = np.result_type(m_dt, np.float64)
         return np_cov_impl_y_none
     else:
-        m_dt = as_dtype(m.dtype)
-        y_dt = as_dtype(y.dtype)
-        dtype = np.result_type(m_dt, y_dt, np.float64)
         return np_cov_impl
 
 #----------------------------------------------------------------------------

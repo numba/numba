@@ -784,6 +784,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def m_variations():
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
+            # yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
 
         def run_tests(m, y=None):
             params = {'m': m}
@@ -829,6 +830,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([[1j, 2j, 3j]])
         params = {'m': x, 'y': y}
         _check(params)
+
+    def test_cov_exceptions(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        m = np.ones((5, 6, 7))
+
+        print(m.ndim)
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(m)
+
+        print(raises.exception)
 
     def test_cov_problems(self):
         pyfunc = cov
