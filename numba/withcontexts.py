@@ -183,7 +183,7 @@ class _ObjModeContextType(WithContext):
         typeanns = {}
         for k, v in callkwargs.items():
             if not isinstance(v, ir.Const) or not isinstance(v.value, str):
-                raise errors.CompileError(
+                raise errors.CompilerError(
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
