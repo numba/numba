@@ -1168,7 +1168,11 @@ def _concatenate(a, b):
 
     # can only concatenate a and b if they have the same
     # number of columns
-    assert a.shape[-1] == b.shape[-1]
+    if a.shape[-1] != b.shape[-1]:
+        raise ValueError('m and y must have the same number of columns')
+
+    if len(a) == 0 and len(b) == 0:
+        return np.full((2, 2), fill_value=np.nan, dtype=a.dtype)
 
     # allocate output array
     a_rows = number_of_rows(a)

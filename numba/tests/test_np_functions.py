@@ -845,6 +845,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _check(params)
 
+        x = np.array([])
+        y = np.array([])
+        params = {'m': x, 'y': y}
+        _check(params)
+
     # def test_cov_problems(self):
     #     pyfunc = cov
     #     cfunc = jit(nopython=True)(pyfunc)
@@ -854,13 +859,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     #         print(expected)
     #         got = cfunc(**params)
     #         print(got)
-    #         self.assertPreciseEqual(expected, got, abs_tol=1e-13)
+    #         # self.assertPreciseEqual(expected, got, abs_tol=1e-13)
     #
-    #     x = np.array([]).reshape(2, 0)
-    #
-    #     print(x, len(x), x.ndim, x.shape)
-    #
-    #     params = {'m': x}
+    #     params = {'m': np.array([]), 'y': np.array([])}
     #     _check(params)
 
     def test_cov_exceptions(self):
@@ -880,6 +881,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             cfunc(m, y=y)
         self.assertIn('y has more than 2 dimensions', str(raises.exception))
+
+        m = np.arange(3)
+        y = np.arange(4)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(m, y=y)
+        self.assertIn('m and y must have the same number of columns', str(raises.exception))
+        # Numpy raises ValueError: all the input array dimensions except for
+        # the concatenation axis must match exactly
 
 
 class TestNPMachineParameters(TestCase):
