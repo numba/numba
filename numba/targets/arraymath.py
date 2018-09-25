@@ -1226,6 +1226,9 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
     if y in (None, types.none):
+        if isinstance(m, types.Array):
+            if m.ndim == 1:
+                raise TypeError('Covariance implementation requires two or more variables')
         return np_cov_impl_y_none
     else:
         return np_cov_impl

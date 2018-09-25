@@ -850,26 +850,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(m, y=y)
         self.assertIn('y has more than 2 dimensions', str(raises.exception))
 
-    def test_cov_problems(self):
-        pyfunc = cov
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def _check(params):
-            expected = pyfunc(**params)
-            print(expected)
-
-            got = cfunc(**params)
-            print(got)
-
-            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
-
-        x = np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
-        params = {'m': x}
-        _check(params)
-        # params = {'m': x, 'rowvar': False}
-        # _check(params)
-
-
+        m = np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
+        with self.assertTypingError() as raises:
+            cfunc(m)
+        self.assertIn('Covariance implementation requires two or more variables', str(raises.exception))
+        # this is different to Numpy, which returns a scalar variance
 
 
 class TestNPMachineParameters(TestCase):
