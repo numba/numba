@@ -1141,7 +1141,7 @@ def np_cov_impl_inner(X, rowvar, bias, ddof, mmult):
     # Determine the normalization
     fact = X.shape[1] - ddof
 
-    # Numpy warns
+    # Numpy warns if less than 0
     fact = max(fact, 0.0)
 
     # De-mean
@@ -1225,10 +1225,30 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
         return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
 
+    def np_cov_impl_scalar(m, y=None, rowvar=True, bias=False, ddof=None):
+        demeaned = m - np.mean(m)
+        sum_sq = np.sum(np.power(demeaned, 2))
+
+        # Numpy-esque determination of ddof
+        if ddof is None:
+            if bias:
+                ddof = 0
+            else:
+                ddof = 1
+
+        # Determine the normalization
+        fact = len(m) - ddof
+
+        # Numpy warns if less than 0
+        fact = max(fact, 0.0)
+
+        variance = sum_sq * np.true_divide(1, fact)
+        return np.array(variance)
+
     if y in (None, types.none):
         if isinstance(m, types.Array):
             if m.ndim == 1:
-                raise TypeError('Covariance implementation requires two or more variables')
+                return np_cov_impl_scalar
         return np_cov_impl_y_none
     else:
         return np_cov_impl
