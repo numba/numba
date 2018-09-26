@@ -1137,28 +1137,18 @@ def normalisation_factor(ddof, bias, n_variables):
         else:
             ddof = 1
 
-    # Determine the normalization
+    # Determine the normalization factor
     fact = n_variables - ddof
 
-    # Numpy warns if less than 0
+    # Numpy warns if less than 0 and floors at 0
     fact = max(fact, 0.0)
 
     return fact
 
 @register_jitable
-def np_cov_impl_inner(X, rowvar, bias, ddof, mmult):
-    # Numpy-esque determination of ddof
-    if ddof is None:
-        if bias:
-            ddof = 0
-        else:
-            ddof = 1
-
-    # Determine the normalization
-    fact = X.shape[1] - ddof
-
-    # Numpy warns if less than 0
-    fact = max(fact, 0.0)
+def np_cov_impl_inner(X, bias, ddof, mmult):
+    n_variables = X.shape[1]
+    fact = normalisation_factor(ddof, bias, n_variables)
 
     # De-mean
     X -= row_wise_average(X)
@@ -1192,7 +1182,7 @@ def _concatenate(a, b):
 
     # allocate output array
     a_rows = number_of_rows(a)
-    b_rows = number_of_rows(a)
+    b_rows = number_of_rows(b)
     out = np.empty((a_rows + b_rows, a.shape[-1]), dtype=a.dtype)
 
     # fill output array (i.e. 'concatenate' a and b)
@@ -1203,7 +1193,6 @@ def _concatenate(a, b):
 
 @overload(np.cov)
 def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
-
     if isinstance(m, types.Array):
         m_dt = as_dtype(m.dtype)
         if m.ndim > 2:
@@ -1232,7 +1221,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         if np.any(np.array(X.shape) == 0):
             return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
         else:
-            return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
+            return np_cov_impl_inner(X, bias, ddof, mmult)
 
     def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
         X = _asarray(m).astype(dtype)
@@ -1245,8 +1234,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
                 y = y.T
 
         X = _concatenate(X, y)
-
-        return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
+        return np_cov_impl_inner(X, bias, ddof, mmult)
 
     def np_cov_impl_scalar(m, y=None, rowvar=True, bias=False, ddof=None):
 
@@ -1256,18 +1244,8 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
             demeaned = m - np.mean(m)
             sum_sq = np.sum(np.power(demeaned, 2))
 
-            # Numpy-esque determination of ddof
-            if ddof is None:
-                if bias:
-                    ddof = 0
-                else:
-                    ddof = 1
-
-            # Determine the normalization
-            fact = len(m) - ddof
-
-            # Numpy warns if less than 0
-            fact = max(fact, 0.0)
+            n_variables = len(m)
+            fact = normalisation_factor(ddof, bias, n_variables)
 
             variance = sum_sq * np.true_divide(1, fact)
         return np.array(variance)
