@@ -837,10 +837,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _check(params)
 
-        # omitted as Numpy fails on some CI builds
-        # x = np.array([]).reshape(0, 2)
-        # params = {'m': x}
-        # _check(params)
+        x = np.array([]).reshape(0, 2)
+        params = {'m': x}
+        _check(params)
 
         x = np.array([]).reshape(2, 0)
         params = {'m': x}
@@ -850,22 +849,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([])
         params = {'m': x, 'y': y}
         _check(params)
-
-    def test_cov_problems(self):
-        pyfunc = cov
-        # cfunc = jit(nopython=True)(pyfunc)
-
-        x = np.array([]).reshape(0, 2)
-        params = {'m': x}
-        _ = pyfunc(**params)
-
-    def test_cov_problems_c(self):
-        pyfunc = cov
-        cfunc = jit(nopython=True)(pyfunc)
-
-        x = np.array([]).reshape(0, 2)
-        params = {'m': x}
-        _ = cfunc(**params)
 
     def test_cov_exceptions(self):
         pyfunc = cov

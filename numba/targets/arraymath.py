@@ -1127,7 +1127,23 @@ def simple_matrix_multiply(A, B):
                 C[i][j] += A[i][k] * B[k][j]
 
     return C
-    # TODO: check ordering
+
+@register_jitable
+def normalisation_factor(ddof, bias, n_variables):
+    # Numpy-esque determination of ddof
+    if ddof is None:
+        if bias:
+            ddof = 0
+        else:
+            ddof = 1
+
+    # Determine the normalization
+    fact = n_variables - ddof
+
+    # Numpy warns if less than 0
+    fact = max(fact, 0.0)
+
+    return fact
 
 @register_jitable
 def np_cov_impl_inner(X, rowvar, bias, ddof, mmult):
