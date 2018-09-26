@@ -859,6 +859,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _ = pyfunc(**params)
 
+    def test_cov_problems_c(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([]).reshape(0, 2)
+        params = {'m': x}
+        _ = cfunc(**params)
+
     def test_cov_exceptions(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
