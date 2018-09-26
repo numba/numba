@@ -779,7 +779,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(params):
             expected = pyfunc(**params)
             got = cfunc(**params)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-13)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
         def m_variations():
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
@@ -818,6 +818,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             run_tests(m)
             run_tests(m, y=m[::-1])
 
+    def test_cov_egde_cases(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(params):
+            expected = pyfunc(**params)
+            got = cfunc(**params)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
+
         # example borrowed from numpy doc string / unit tests
         x = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
@@ -854,6 +863,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
         params = {'m': x, 'y': y}
         _check(params)
+
+    def test_cov_problems(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([-2.1, -1, 4.3]).reshape(1, 3)
+        params = {'m': x}
+        expected = pyfunc(**params)
+        got = cfunc(**params)
+
+        self.assertPreciseEqual(expected, got, abs_tol=1e-10)   #oh!
 
     def test_cov_exceptions(self):
         pyfunc = cov
