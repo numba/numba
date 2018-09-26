@@ -845,10 +845,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # params = {'m': x}
         # _check(params)
 
-        # x = np.array([])
-        # y = np.array([])
-        # params = {'m': x, 'y': y}
-        # _check(params)
+        x = np.array([])
+        y = np.array([])
+        params = {'m': x, 'y': y}
+        _check(params)
 
     # def test_cov_problems(self):
     #     pyfunc = cov
