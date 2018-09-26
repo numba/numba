@@ -833,9 +833,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'y': y}
         _check(params)
 
-        # x = np.array([])
-        # params = {'m': x}
-        # _check(params)
+        x = np.array([])
+        params = {'m': x}
+        _check(params)
         #
         # x = np.array([]).reshape(0, 2)
         # params = {'m': x}
