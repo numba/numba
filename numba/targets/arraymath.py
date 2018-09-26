@@ -1213,7 +1213,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         if not rowvar and X.shape[0] != 1:
             X = X.T
 
-        if X.shape[-1] == 0:
+        if np.any(np.array(X.shape) == 0):
             return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
         else:
             return np_cov_impl_inner(X, rowvar, bias, ddof, mmult)
