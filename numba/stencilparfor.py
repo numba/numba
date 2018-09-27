@@ -20,6 +20,7 @@ from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
 from numba.six import exec_
+from numba.utils import OPERATORS_TO_BUILTINS
 
 
 def _compute_last_ind(dim_size, index_const):
@@ -739,7 +740,8 @@ def _get_const_unary_expr(stencil_ir, func_ir, index_def):
     inner_var = index_def.value
     # return -c as constant
     const_val = _get_const_index_expr_inner(stencil_ir, func_ir, inner_var)
-    return eval("{}{}".format(index_def.fn, const_val))
+    op = OPERATORS_TO_BUILTINS[index_def.fn]
+    return eval("{}{}".format(op, const_val))
 
 def _get_const_binary_expr(stencil_ir, func_ir, index_def):
     """evaluate constant binary expr if possible
@@ -748,4 +750,5 @@ def _get_const_binary_expr(stencil_ir, func_ir, index_def):
     require(isinstance(index_def, ir.Expr) and index_def.op == 'binop')
     arg1 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.lhs)
     arg2 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.rhs)
-    return eval("{}{}{}".format(arg1, index_def.fn, arg2))
+    op = OPERATORS_TO_BUILTINS[index_def.fn]
+    return eval("{}{}{}".format(arg1, op, arg2))
