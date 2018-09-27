@@ -23,6 +23,11 @@ body {
     height: 135%;
 }
 
+.nav li a {
+    padding-left: 11px;
+    padding-right: 11px;
+}
+
 @media (min-width: 768px) {
     .container {
         width: 700px;

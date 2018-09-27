@@ -552,7 +552,6 @@ class DeviceNDArray(DeviceNDArrayBase):
         _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
 
 
-
 class IpcArrayHandle(object):
     """
     An IPC array handle that can be serialized and transfer to another process
