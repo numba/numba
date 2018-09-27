@@ -443,7 +443,8 @@ class BasePipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               self.flags, self.locals,
-                              lifted=tuple(withs), lifted_from=None)
+                              lifted=tuple(withs), lifted_from=None,
+                              pipeline_class=type(self))
             raise _EarlyPipelineCompletion(cres)
 
     def stage_objectmode_frontend(self):
@@ -905,14 +906,15 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, library=None):
+               locals, lifted=(), lifted_from=None, library=None,
+               pipeline_class=Pipeline):
     """
     Compile a function with the given IR.
 
     For internal use only.
     """
 
-    pipeline = Pipeline(typingctx, targetctx, library,
+    pipeline = pipeline_class(typingctx, targetctx, library,
                         args, return_type, flags, locals)
     return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
                                lifted_from=lifted_from)
