@@ -869,7 +869,7 @@ NUMBA_EXPORT_FUNC(int)
 numba_do_raise(PyObject *exc)
 {
     PyObject *type = NULL, *value = NULL, *loc = NULL;
-    char *tmp1 = NULL, *tmp2 = NULL;
+    const char *tmp1 = NULL, *tmp2 = NULL;
     PyObject *function_name = NULL, *filename = NULL, *lineno = NULL;
     Py_ssize_t pos;
 
@@ -904,14 +904,12 @@ numba_do_raise(PyObject *exc)
     }
 
     if (PyTuple_CheckExact(exc)) {
-        printf("Exception Is A Callable\n");
         /* A (callable, arguments, location) tuple. */
         if (!PyArg_ParseTuple(exc, "OOO", &type, &value, &loc)) {
             Py_DECREF(exc);
             goto raise_error;
         }
         value = PyObject_CallObject(type, value);
-        Py_DECREF(exc);
         type = NULL;
         if (value == NULL)
             goto raise_error;
@@ -926,34 +924,14 @@ numba_do_raise(PyObject *exc)
             pos = 1;
             function_name = PyTuple_GET_ITEM(loc, pos);
             tmp1 = PyString_AsString(function_name);
-            if (!tmp1){
-                printf("string decode failed.\n");
-            }
-            else
-            {
-                printf("string decoded:");
-                printf(tmp1);
-                printf("\n");
-            }
             pos = 2;
             filename = PyTuple_GET_ITEM(loc, pos);
             tmp2 = PyString_AsString(filename);
-            if (!tmp2){
-                printf("string decode failed.\n");
-            }
-            else
-            {
-                printf("string decoded:");
-                printf(tmp2);
-                printf("\n");
-            }
-
             pos = 3;
             lineno = PyTuple_GET_ITEM(loc, pos);
         }
     }
     else if (PyExceptionClass_Check(exc)) {
-        printf("Is Exception Class\n");
         type = exc;
         value = PyObject_CallObject(exc, NULL);
         if (value == NULL)
@@ -965,7 +943,6 @@ numba_do_raise(PyObject *exc)
         }
     }
     else if (PyExceptionInstance_Check(exc)) {
-        printf("Is Exception Inst\n");
         value = exc;
         type = PyExceptionInstance_Class(exc);
         Py_INCREF(type);

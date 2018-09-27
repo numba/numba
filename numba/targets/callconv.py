@@ -199,13 +199,10 @@ class MinimalCallConv(BaseCallConv):
         if loc is not None:
             f1 = loc._raw_function_name()
             locinfo = ('padding', f1, loc.filename, loc.line)
-            print(locinfo)
             if None in locinfo:
                 locinfo = None
-            print([type(x) for x in locinfo])
         else:
             locinfo = None
-        print(locinfo)
         if exc_args is not None:
             exc = (exc, exc_args, locinfo)
 
@@ -356,13 +353,10 @@ class CPUCallConv(BaseCallConv):
         if loc is not None:
             f1 = loc._raw_function_name()
             locinfo = ('padding', f1, loc.filename, loc.line)
-            print(locinfo)
             if None in locinfo:
                 locinfo = None
-            print([type(x) for x in locinfo])
         else:
             locinfo = None
-        print(locinfo)
         if exc_args is not None:
             exc = (exc, exc_args, locinfo)
         struct_gv = pyapi.serialize_object(exc)
