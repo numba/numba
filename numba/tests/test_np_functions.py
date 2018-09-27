@@ -867,7 +867,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _check(params)
 
-    @unittest.skip('Example which breaks currently')
+        for rowvar in False, True:
+            x = np.array([-2.1, -1, 4.3])
+            y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])
+            params = {'m': x, 'y': y, 'rowvar': rowvar}
+            _check(params)
+            params = {'m': y, 'y': x, 'rowvar': rowvar}
+            _check(params)
+
+    @unittest.skip('Examples which break currently')
     def test_cov_outstanding_problems(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
@@ -880,6 +888,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # this fails as I can't tell the output is going to be scalar
         # (i.e. it gets past the naive ndim == 1 check)
         x = np.array([-2.1, -1, 4.3]).reshape(1, 3)
+        params = {'m': x}
+        _check(params)
+
+        # this fails as the input is not an array
+        x = (-2.1, -1, 4.3)
         params = {'m': x}
         _check(params)
 
@@ -908,6 +921,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('m and y must have the same number of variables', str(raises.exception))
         # Numpy raises ValueError: all the input array dimensions except for
         # the concatenation axis must match exactly
+
+    def test_all(self):
+        self.test_cov_basic()
+        self.test_cov_egde_cases()
+        self.test_convolve_exceptions()
 
 
 class TestNPMachineParameters(TestCase):

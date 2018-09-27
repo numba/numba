@@ -1155,14 +1155,6 @@ def np_cov_impl_inner(X, bias, ddof, mmult):
     c *= np.true_divide(1, fact)
     return c
 
-@register_jitable
-def number_of_rows(a):
-    if a.ndim == 1:
-        a_rows = 1
-    else:
-        a_rows = a.shape[0]
-    return a_rows
-
 def _prepare_cov_input():
     pass
 
@@ -1170,22 +1162,26 @@ def _prepare_cov_input():
 def _prepare_cov_input_impl(m, y, rowvar, dtype):
     if y in (None, types.none):
         def _prepare_cov_input_inner(m, y, rowvar, dtype):
-            m_arr = _asarray(m)
+            m_arr = np.atleast_2d(_asarray(m))
 
-            # transpose if asked to and m is not a (1, n) vector
+            # transpose if asked to and not a (1, n) vector
             if not rowvar and m_arr.shape[0] != 1:
                 m_arr = m_arr.T
 
             return m_arr
     else:
         def _prepare_cov_input_inner(m, y, rowvar, dtype):
-            m_arr = _asarray(m)
-            y_arr = _asarray(y)
+            m_arr = np.atleast_2d(_asarray(m))
+            y_arr = np.atleast_2d(_asarray(y))
 
-            # transpose if asked to
+            # transpose if asked to and not a (1, n) vector - this looks
+            # wrong as you might end up transposing one and not the other,
+            # but it's what numpy does
             if not rowvar:
-                m_arr = m_arr.T
-                y_arr = y_arr.T
+                if m_arr.shape[0] != 1:
+                    m_arr = m_arr.T
+                if y_arr.shape[0] != 1:
+                    y_arr = y_arr.T
 
             n_variables = m_arr.shape[-1]
 
@@ -1199,8 +1195,8 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
                 return np.full((2, 2), fill_value=np.nan, dtype=dtype)
 
             # allocate output array
-            m_rows = number_of_rows(m_arr)
-            y_rows = number_of_rows(y_arr)
+            m_rows = m_arr.shape[0]
+            y_rows = y_arr.shape[0]
             out = np.empty((m_rows + y_rows, n_variables), dtype=dtype)
 
             # fill output array
