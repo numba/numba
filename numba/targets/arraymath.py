@@ -1172,7 +1172,7 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
         def _prepare_cov_input_inner(m, y, rowvar, dtype):
             m_arr = _asarray(m)
 
-            # transpose if asked to & it makes sense to do so
+            # transpose if asked to and m is not a (1, n) vector
             if not rowvar and m_arr.shape[0] != 1:
                 m_arr = m_arr.T
 
@@ -1187,10 +1187,12 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
                 m_arr = m_arr.T
                 y_arr = y_arr.T
 
-            if m_arr.shape[-1] != y_arr.shape[-1]:
+            n_variables = m_arr.shape[-1]
+
+            if n_variables != y_arr.shape[-1]:
                 raise ValueError('m and y must have the same number of variables')
-                # 'variables' used here as the constraint on rows or columns depends
-                # on whether rowvar is True or False...
+                # 'variables' as the constraint on rows or columns depends on
+                # whether rowvar is True or False...
 
             # abort if both arrays have no rows
             if len(m_arr) == 0 and len(y_arr) == 0:
@@ -1199,7 +1201,7 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
             # allocate output array
             m_rows = number_of_rows(m_arr)
             y_rows = number_of_rows(y_arr)
-            out = np.empty((m_rows + y_rows, m_arr.shape[-1]), dtype=dtype)
+            out = np.empty((m_rows + y_rows, n_variables), dtype=dtype)
 
             # fill output array
             out[:m_rows, :] = m_arr
@@ -1230,7 +1232,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
     else:
         mmult = simple_matrix_multiply
 
-    def np_cov_impl_crap(m, y=None, rowvar=True, bias=False, ddof=None):
+    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
         X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
         if np.any(np.array(X.shape) == 0):
@@ -1238,7 +1240,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         else:
             return np_cov_impl_inner(X, bias, ddof, mmult)
 
-    def np_cov_impl_scalar(m, y=None, rowvar=True, bias=False, ddof=None):
+    def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
         if len(m) == 0:
             variance = np.nan
         else:
@@ -1253,9 +1255,9 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     if isinstance(m, types.Array) and y in (None, types.none):
         if m.ndim == 1:
-            return np_cov_impl_scalar
+            return np_cov_impl_single_variable
 
-    return np_cov_impl_crap
+    return np_cov_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations
