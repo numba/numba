@@ -24,14 +24,18 @@ from .smartarray import SmartArray
 # Re-export decorators
 from .decorators import autojit, cfunc, generated_jit, jit, njit, stencil
 
-# Re-export vectorize decorators
-from .npyufunc import vectorize, guvectorize
+# Re-export vectorize decorators and the thread layer querying function
+from .npyufunc import vectorize, guvectorize, threading_layer
 
 # Re-export Numpy helpers
 from .numpy_support import carray, farray, from_dtype
 
 # Re-export jitclass
 from .jitclass import jitclass
+
+# Initialize withcontexts
+import numba.withcontexts
+from numba.withcontexts import objmode_context as objmode
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -50,6 +54,7 @@ __all__ = """
     prange
     stencil
     vectorize
+    objmode
     """.split() + types.__all__ + errors.__all__
 
 

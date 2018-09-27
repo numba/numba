@@ -68,7 +68,7 @@ class TestRaising(TestCase):
                                          types.int32))
 
         cfunc = cres.entry_point
-        a = np.empty(2)
+        a = np.empty(2, dtype=np.int32)
 
         self.assertEqual(cfunc(a, 0), pyfunc(a, 0))
 

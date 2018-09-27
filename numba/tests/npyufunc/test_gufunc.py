@@ -68,6 +68,7 @@ class TestGUFunc(TestCase):
 
 
 class TestGUFuncParallel(TestGUFunc):
+    _numba_parallel_test_ = False
     target = 'parallel'
 
 
@@ -167,6 +168,7 @@ class TestGUVectorizeScalar(TestCase):
 
 
 class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
+    _numba_parallel_test_ = False
     target = 'parallel'
 
 

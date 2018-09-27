@@ -912,7 +912,297 @@ if numpy_version >= (1, 9):
         return nanmedian_impl
 
 #----------------------------------------------------------------------------
+# Building matrices
+
+@register_jitable
+def _tri_impl(N, M, k):
+    shape = max(0, N), max(0, M)  # numpy floors each dimension at 0
+    out = np.empty(shape, dtype=np.float64)  # numpy default dtype
+
+    for i in range(shape[0]):
+        m_max = min(max(0, i + k + 1), shape[1])
+        out[i, :m_max] = 1
+        out[i, m_max:] = 0
+
+    return out
+
+@overload(np.tri)
+def np_tri(N, M=None, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def tri_impl(N, M=None, k=0):
+        if M is None:
+            M = N
+        return _tri_impl(N, M, k)
+
+    return tri_impl
+
+@register_jitable
+def _make_square(m):
+    """
+    Takes a 1d array and tiles it to form a square matrix
+    - i.e. a facsimile of np.tile(m, (len(m), 1))
+    """
+    assert m.ndim == 1
+
+    len_m = len(m)
+    out = np.empty((len_m, len_m), dtype=m.dtype)
+
+    for i in range(len_m):
+        out[i] = m
+
+    return out
+
+@register_jitable
+def np_tril_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+    return np.where(mask, m, np.zeros_like(m, dtype=m.dtype))
+
+@overload(np.tril)
+def my_tril(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_tril_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_tril_impl_2d(m_2d, k)
+
+    def np_tril_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, m[sel], zero_opt)
+        return z
+
+    if m.ndim == 1:
+        return np_tril_impl_1d
+    elif m.ndim == 2:
+        return np_tril_impl_2d
+    else:
+        return np_tril_impl_multi
+
+@register_jitable
+def np_triu_impl_2d(m, k=0):
+    mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+    return np.where(mask, np.zeros_like(m, dtype=m.dtype), m)
+
+@overload(np.triu)
+def my_triu(m, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, types.Integer):
+        raise TypeError('k must be an integer')
+
+    def np_triu_impl_1d(m, k=0):
+        m_2d = _make_square(m)
+        return np_triu_impl_2d(m_2d, k)
+
+    def np_triu_impl_multi(m, k=0):
+        mask = np.tri(m.shape[-2], M=m.shape[-1], k=k-1).astype(np.uint)
+        idx = np.ndindex(m.shape[:-2])
+        z = np.empty_like(m)
+        zero_opt = np.zeros_like(mask, dtype=m.dtype)
+        for sel in idx:
+            z[sel] = np.where(mask, zero_opt, m[sel])
+        return z
+
+    if m.ndim == 1:
+        return np_triu_impl_1d
+    elif m.ndim == 2:
+        return np_triu_impl_2d
+    else:
+        return np_triu_impl_multi
+
+@register_jitable
+def _np_vander(x, N, increasing, out):
+    """
+    Generate an N-column Vandermonde matrix from a supplied 1-dimensional
+    array, x. Store results in an output matrix, out, which is assumed to
+    be of the required dtype.
+
+    Values are accumulated using np.multiply to match the floating point
+    precision behaviour of numpy.vander.
+    """
+    m, n = out.shape
+    assert m == len(x)
+    assert n == N
+
+    if increasing:
+        for i in range(N):
+            if i == 0:
+                out[:, i] = 1
+            else:
+                out[:, i] = np.multiply(x, out[:, (i - 1)])
+    else:
+        for i in range(N - 1, -1, -1):
+            if i == N - 1:
+                out[:, i] = 1
+            else:
+                out[:, i] = np.multiply(x, out[:, (i + 1)])
+
+@register_jitable
+def _check_vander_params(x, N):
+    if x.ndim > 1:
+        raise ValueError('x must be a one-dimensional array or sequence.')
+    if N < 0:
+        raise ValueError('Negative dimensions are not allowed')
+
+@overload(np.vander)
+def np_vander(x, N=None, increasing=False):
+
+    if N not in (None, types.none):
+        if not isinstance(N, types.Integer):
+            raise TypingError('Second argument N must be None or an integer')
+
+    def np_vander_impl(x, N=None, increasing=False):
+        if N is None:
+            N = len(x)
+
+        _check_vander_params(x, N)
+
+        # allocate output matrix using dtype determined in closure
+        out = np.empty((len(x), int(N)), dtype=dtype)
+
+        _np_vander(x, N, increasing, out)
+        return out
+
+    def np_vander_seq_impl(x, N=None, increasing=False):
+        if N is None:
+            N = len(x)
+
+        x_arr = np.array(x)
+        _check_vander_params(x_arr, N)
+
+        # allocate output matrix using dtype inferred when x_arr was created
+        out = np.empty((len(x), int(N)), dtype=x_arr.dtype)
+
+        _np_vander(x_arr, N, increasing, out)
+        return out
+
+    if isinstance(x, types.Array):
+        x_dt = as_dtype(x.dtype)
+        dtype = np.promote_types(x_dt, int)  # replicate numpy behaviour w.r.t. type promotion
+        return np_vander_impl
+    elif isinstance(x, (types.Tuple, types.Sequence)):
+        return np_vander_seq_impl
+
+#----------------------------------------------------------------------------
 # Element-wise computations
+
+@register_jitable
+def _fill_diagonal_params(a, wrap):
+    if a.ndim == 2:
+        m = a.shape[0]
+        n = a.shape[1]
+        step = 1 + n
+        if wrap:
+            end = n * m
+        else:
+            end = n * min(m, n)
+    else:
+        shape = np.array(a.shape)
+
+        if not np.all(np.diff(shape) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        step = 1 + (np.cumprod(shape[:-1])).sum()
+        end = shape.prod()
+
+    return end, step
+
+@register_jitable
+def _fill_diagonal_scalar(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+
+    for i in range(0, end, step):
+        a.flat[i] = val
+
+@register_jitable
+def _fill_diagonal(a, val, wrap):
+    end, step = _fill_diagonal_params(a, wrap)
+    ctr = 0
+    v_len = len(val)
+
+    for i in range(0, end, step):
+        a.flat[i] = val[ctr]
+        ctr += 1
+        ctr = ctr % v_len
+
+@register_jitable
+def _check_val_int(a, val):
+    iinfo = np.iinfo(a.dtype)
+    v_min = iinfo.min
+    v_max = iinfo.max
+
+    # check finite values are within bounds
+    if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+@register_jitable
+def _check_val_float(a, val):
+    finfo = np.finfo(a.dtype)
+    v_min = finfo.min
+    v_max = finfo.max
+
+    # check finite values are within bounds
+    finite_vals = val[np.isfinite(val)]
+    if np.any(finite_vals < v_min) or np.any(finite_vals > v_max):
+        raise ValueError('Unable to safely conform val to a.dtype')
+
+# no check performed, needed for pathway where no check is required
+_check_nop = register_jitable(lambda x, y: x)
+
+def _asarray(x):
+    pass
+
+@overload(_asarray)
+def _asarray_impl(x):
+    if isinstance(x, types.Array):
+        return lambda x: x
+    elif isinstance(x, (types.Sequence, types.Tuple)):
+        return lambda x: np.array(x)
+    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+        ty = as_dtype(x)
+        return lambda x: np.array([x], dtype=ty)
+
+@overload(np.fill_diagonal)
+def np_fill_diagonal(a, val, wrap=False):
+
+    if a.ndim > 1:
+        # the following can be simplified after #3088; until then, employ
+        # a basic mechanism for catching cases where val is of a type/value
+        # which cannot safely be cast to a.dtype
+        if isinstance(a.dtype, types.Integer):
+            checker = _check_val_int
+        elif isinstance(a.dtype, types.Float):
+            checker = _check_val_float
+        else:
+            checker = _check_nop
+
+        def scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal_scalar(a, val, wrap)
+
+        def non_scalar_impl(a, val, wrap=False):
+            tmpval = _asarray(val).flatten()
+            checker(a, tmpval)
+            _fill_diagonal(a, tmpval, wrap)
+
+        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+            return scalar_impl
+        elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
+            return non_scalar_impl
+    else:
+        msg = "The first argument must be at least 2-D (found %s-D)" % a.ndim
+        raise TypingError(msg)
 
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
@@ -1124,13 +1414,17 @@ def array_where(context, builder, sig, args):
     np.where(array, array, array)
     """
     layouts = set(a.layout for a in sig.args)
-    if layouts == set('C'):
+
+    npty = np.promote_types(as_dtype(sig.args[1].dtype),
+                            as_dtype(sig.args[2].dtype))
+
+    if layouts == set('C') or layouts == set('F'):
         # Faster implementation for C-contiguous arrays
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty_like(x, dtype=npty)
             cf = cond.flat
             xf = x.flat
             yf = y.flat
@@ -1139,12 +1433,11 @@ def array_where(context, builder, sig, args):
                 rf[i] = xf[i] if cf[i] else yf[i]
             return res
     else:
-
         def where_impl(cond, x, y):
             shape = cond.shape
             if x.shape != shape or y.shape != shape:
                 raise ValueError("all inputs should have the same shape")
-            res = np.empty_like(x)
+            res = np.empty(cond.shape, dtype=npty)
             for idx, c in np.ndenumerate(cond):
                 res[idx] = x[idx] if c else y[idx]
             return res

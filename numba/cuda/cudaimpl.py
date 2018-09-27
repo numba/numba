@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 import operator
+import six
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
@@ -100,29 +101,13 @@ for sreg in nvvmutils.SREG_MAPPING.keys():
 def ptx_cmem_arylike(context, builder, sig, args):
     lmod = builder.module
     [arr] = args
-    flat = arr.flatten(order='A')
     aryty = sig.return_type
-    dtype = aryty.dtype
 
-    if isinstance(dtype, types.Complex):
-        elemtype = (types.float32
-                    if dtype == types.complex64
-                    else types.float64)
-        constvals = []
-        for i in range(flat.size):
-            elem = flat[i]
-            real = context.get_constant(elemtype, elem.real)
-            imag = context.get_constant(elemtype, elem.imag)
-            constvals.extend([real, imag])
-
-    elif dtype in types.number_domain:
-        constvals = [context.get_constant(dtype, flat[i])
-                     for i in range(flat.size)]
-
-    else:
-        raise TypeError("unsupport type: %s" % dtype)
-
-    constary = lc.Constant.array(constvals[0].type, constvals)
+    constvals = [
+        context.get_constant(types.byte, i)
+        for i in six.iterbytes(arr.tobytes(order='A'))
+    ]
+    constary = lc.Constant.array(Type.int(8), constvals)
 
     addrspace = nvvm.ADDRSPACE_CONSTANT
     gv = lmod.add_global_variable(constary.type, name="_cudapy_cmem",

@@ -10,26 +10,30 @@ Programming
 Can I pass a function as an argument to a jitted function?
 ----------------------------------------------------------
 
-You can't, but in many cases you can use a closure to emulate it.
-For example, this example::
+As of Numba 0.39, you can, so long as the function argument has also been
+JIT-compiled::
 
    @jit(nopython=True)
    def f(g, x):
        return g(x) + g(-x)
 
-   result = f(my_g_function, 1)
+   result = f(jitted_g_function, 1)
 
-could be rewritten using a factory function::
+However, dispatching with arguments that are functions has extra overhead.
+If this matters for your application, you can also use a factory function to 
+capture the function argument in a closure::
 
    def make_f(g):
-       # Note: a new f() is compiled each time make_f() is called!
+       # Note: a new f() is created each time make_f() is called!
        @jit(nopython=True)
        def f(x):
            return g(x) + g(-x)
        return f
 
-   f = make_f(my_g_function)
+   f = make_f(jitted_g_function)
    result = f(1)
+
+Improving the dispatch performance of functions in Numba is an ongoing task.
 
 Numba doesn't seem to care when I modify a global variable
 ----------------------------------------------------------
@@ -157,8 +161,8 @@ Does Numba automatically parallelize code?
 It can, in some cases:
 
 * Ufuncs and gufuncs with the ``target="parallel"`` option will run on multiple threads.
-* The experimental ``parallel=True`` option to ``@jit`` will attempt to optimize
-  array operations and run them in parallel.  It also adds support for ``prange()`` to
+* The ``parallel=True`` option to ``@jit`` will attempt to optimize array
+  operations and run them in parallel.  It also adds support for ``prange()`` to
   explicitly parallelize a loop.
 
 You can also manually run computations on multiple threads yourself and use
@@ -191,6 +195,30 @@ Try to pass ``cache=True`` to the ``@jit`` decorator.  It will keep the
 compiled version on disk for later use.
 
 A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
+
+
+GPU Programming
+===============
+
+How do I work around the ``CUDA intialized before forking`` error?
+------------------------------------------------------------------
+
+On Linux, the ``multiprocessing`` module in the Python standard library
+defaults to using the ``fork`` method for creating new processes.  Because of
+the way process forking duplicates state between the parent and child
+processes, CUDA will not work correctly in the child process if the CUDA
+runtime was initialized *prior* to the fork.  Numba detects this and raises a
+``CudaDriverError`` with the message ``CUDA initialized before forking``.
+
+One approach to avoid this error is to make all calls to ``numba.cuda``
+functions inside the child processes or after the process pool is created.
+However, this is not always possible, as you might want to query the number of
+available GPUs before starting the process pool.  In Python 3, you can change
+the process start method, as described in the `multiprocessing documentation
+<https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
+Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
+initalization issue, although the child processes will not inherit any global
+variables from their parent.
 
 
 Integration with other utilities
