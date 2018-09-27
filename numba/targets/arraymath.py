@@ -1110,7 +1110,6 @@ def row_wise_average(a):
 
 @register_jitable
 def simple_matrix_multiply(A, B):
-
     assert A.ndim == 2
     assert B.ndim == 2
 
@@ -1130,7 +1129,6 @@ def simple_matrix_multiply(A, B):
 
 @register_jitable
 def normalisation_factor(ddof, bias, n_variables):
-    # Numpy-esque determination of ddof
     if ddof is None:
         if bias:
             ddof = 0
@@ -1165,31 +1163,49 @@ def number_of_rows(a):
         a_rows = a.shape[0]
     return a_rows
 
-@register_jitable
-def _concatenate(a, b):
+def _prepare_cov_input():
+    pass
 
-    # require a and b to be at most 2D
-    assert a.ndim < 3
-    assert b.ndim < 3
+@overload(_prepare_cov_input)
+def _prepare_cov_input_impl(m, y, rowvar, dtype):
+    if y in (None, types.none):
+        def _prepare_cov_input_inner(m, y, rowvar, dtype):
+            m_arr = _asarray(m)
 
-    # can only concatenate a and b if they have the same
-    # number of columns
-    if a.shape[-1] != b.shape[-1]:
-        raise ValueError('m and y must have the same number of columns')
+            # transpose if asked to & it makes sense to do so
+            if not rowvar and m_arr.shape[0] != 1:
+                m_arr = m_arr.T
 
-    if len(a) == 0 and len(b) == 0:
-        return np.full((2, 2), fill_value=np.nan, dtype=a.dtype)
+            return m_arr
+    else:
+        def _prepare_cov_input_inner(m, y, rowvar, dtype):
+            m_arr = _asarray(m)
+            y_arr = _asarray(y)
 
-    # allocate output array
-    a_rows = number_of_rows(a)
-    b_rows = number_of_rows(b)
-    out = np.empty((a_rows + b_rows, a.shape[-1]), dtype=a.dtype)
+            # transpose if asked to
+            if not rowvar:
+                m_arr = m_arr.T
+                y_arr = y_arr.T
 
-    # fill output array (i.e. 'concatenate' a and b)
-    out[:a_rows, :] = a
-    out[-b_rows:, :] = b
+            if m_arr.shape[-1] != y_arr.shape[-1]:
+                raise ValueError('m and y must have the same number of columns')
 
-    return out
+            # abort if both arrays have no rows
+            if len(m_arr) == 0 and len(y_arr) == 0:
+                return np.full((2, 2), fill_value=np.nan, dtype=dtype)
+
+            # allocate output array
+            m_rows = number_of_rows(m_arr)
+            y_rows = number_of_rows(y_arr)
+            out = np.empty((m_rows + y_rows, m_arr.shape[-1]), dtype=dtype)
+
+            # fill output array
+            out[:m_rows, :] = m_arr
+            out[-y_rows:, :] = y_arr
+
+            return out
+
+    return _prepare_cov_input_inner
 
 @overload(np.cov)
 def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
@@ -1212,32 +1228,15 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
     else:
         mmult = simple_matrix_multiply
 
-    def np_cov_impl_y_none(m, y=None, rowvar=True, bias=False, ddof=None):
-        X = _asarray(m).astype(dtype)
-
-        if not rowvar and X.shape[0] != 1:
-            X = X.T
+    def np_cov_impl_crap(m, y=None, rowvar=True, bias=False, ddof=None):
+        X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
         if np.any(np.array(X.shape) == 0):
             return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
         else:
             return np_cov_impl_inner(X, bias, ddof, mmult)
 
-    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-        X = _asarray(m).astype(dtype)
-        y = _asarray(y).astype(dtype)
-
-        if not rowvar:
-            if X.shape[0] != 1:
-                X = X.T
-            if y.shape[0] != 1:
-                y = y.T
-
-        X = _concatenate(X, y)
-        return np_cov_impl_inner(X, bias, ddof, mmult)
-
     def np_cov_impl_scalar(m, y=None, rowvar=True, bias=False, ddof=None):
-
         if len(m) == 0:
             variance = np.nan
         else:
@@ -1250,13 +1249,11 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
             variance = sum_sq * np.true_divide(1, fact)
         return np.array(variance)
 
-    if y in (None, types.none):
-        if isinstance(m, types.Array):
-            if m.ndim == 1:
-                return np_cov_impl_scalar
-        return np_cov_impl_y_none
-    else:
-        return np_cov_impl
+    if isinstance(m, types.Array) and y in (None, types.none):
+        if m.ndim == 1:
+            return np_cov_impl_scalar
+
+    return np_cov_impl_crap
 
 #----------------------------------------------------------------------------
 # Element-wise computations
