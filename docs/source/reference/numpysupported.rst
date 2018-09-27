@@ -156,7 +156,8 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
-* :meth:`~numpy.ndarray.argsort` (without arguments)
+* :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
+  values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.dot` (only the 1-argument form)
@@ -247,7 +248,8 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
-* :func:`numpy.argsort` (no optional arguments)
+* :func:`numpy.argsort` (``kind`` key word argument supported for values
+  ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
