@@ -1188,7 +1188,9 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
                 y_arr = y_arr.T
 
             if m_arr.shape[-1] != y_arr.shape[-1]:
-                raise ValueError('m and y must have the same number of columns')
+                raise ValueError('m and y must have the same number of variables')
+                # 'variables' used here as the constraint on rows or columns depends
+                # on whether rowvar is True or False...
 
             # abort if both arrays have no rows
             if len(m_arr) == 0 and len(y_arr) == 0:

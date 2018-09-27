@@ -905,7 +905,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.arange(4)
         with self.assertRaises(ValueError) as raises:
             cfunc(m, y=y)
-        self.assertIn('m and y must have the same number of columns', str(raises.exception))
+        self.assertIn('m and y must have the same number of variables', str(raises.exception))
         # Numpy raises ValueError: all the input array dimensions except for
         # the concatenation axis must match exactly
 
