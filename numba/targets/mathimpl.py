@@ -4,6 +4,7 @@ Provide math calls that uses intrinsics or libc math functions.
 
 from __future__ import print_function, absolute_import, division
 import math
+import operator
 import sys
 
 import llvmlite.llvmpy.core as lc
@@ -401,5 +402,5 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 @lower(math.pow, types.Float, types.Float)
 @lower(math.pow, types.Float, types.Integer)
 def pow_impl(context, builder, sig, args):
-    impl = context.get_function("**", sig)
+    impl = context.get_function(operator.pow, sig)
     return impl(builder, args)
