@@ -95,7 +95,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(TestNPFunctions, self).setUp()
-        super(TestNPFunctions, self).setUp()
         self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
