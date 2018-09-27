@@ -522,27 +522,6 @@ class TupleAdd(AbstractTemplate):
                 return signature(res, a, b)
 
 
-# Register default implementations of binary inplace operators for
-# immutable types.
-
-# class InplaceImmutable(AbstractTemplate):
-#     def generic(self, args, kws):
-#         lhs, rhs = args
-#         if not lhs.mutable:
-#             return self.context.resolve_function_type(self.immutable_func, args, kws)
-#         # Inplace ops on mutable arguments must be typed explicitly
-#
-# for _binop, _inp, op in operator_map:
-#     if _inp:
-#         mutable_func = getattr(operator, _inp)
-#         immutable_func = getattr(operator, _binop)
-#
-#         template = type('InplaceImmutable_%s' % _binop,
-#                         (InplaceImmutable,),
-#                         dict(key=mutable_func, immutable_func=immutable_func))
-#         infer(template)
-
-
 class CmpOpIdentity(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
@@ -664,7 +643,7 @@ class GenericNotIn(AbstractTemplate):
 
     def generic(self, args, kws):
         args = args[::-1]
-        sig =  self.context.resolve_function_type(operator.contains, args, kws)
+        sig = self.context.resolve_function_type(operator.contains, args, kws)
         return signature(sig.return_type, *sig.args[::-1])
 
 

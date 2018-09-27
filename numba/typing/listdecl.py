@@ -153,7 +153,6 @@ class ListAttribute(AttributeTemplate):
 
 @infer_global(operator.add)
 class AddList(AbstractTemplate):
-    #key = operator.add
 
     def generic(self, args, kws):
         if len(args) == 2:
@@ -166,7 +165,6 @@ class AddList(AbstractTemplate):
 
 @infer_global(operator.iadd)
 class InplaceAddList(AbstractTemplate):
-    #key = operator.iadd
 
     def generic(self, args, kws):
         if len(args) == 2:

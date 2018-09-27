@@ -54,10 +54,11 @@ class EnumCompare(AbstractTemplate):
 
 
 @infer_global(operator.eq)
-class EnumEq(EnumCompare): pass
-    #key = operator.eq
+class EnumEq(EnumCompare):
+    pass
+
 
 
 @infer_global(operator.ne)
-class EnumNe(EnumCompare): pass
-    #key = operator.ne
+class EnumNe(EnumCompare):
+    pass
