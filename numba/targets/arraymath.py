@@ -1128,29 +1128,25 @@ def simple_matrix_multiply(A, B):
     return C
 
 @register_jitable
-def normalisation_factor(ddof, bias, n_variables):
+def np_cov_impl_inner(X, bias, ddof, mmult):
+
+    # determine degrees of freedom
     if ddof is None:
         if bias:
             ddof = 0
         else:
             ddof = 1
 
-    # Determine the normalization factor
-    fact = n_variables - ddof
+    # determine the normalization factor
+    fact = X.shape[1] - ddof
 
-    # Numpy warns if less than 0 and floors at 0
+    # numpy warns if less than 0 and floors at 0
     fact = max(fact, 0.0)
 
-    return fact
-
-@register_jitable
-def np_cov_impl_inner(X, bias, ddof, mmult):
-    n_variables = X.shape[1]
-    fact = normalisation_factor(ddof, bias, n_variables)
-
-    # De-mean
+    # de-mean
     X -= row_wise_average(X)
 
+    # caclulate result
     c = mmult(X, np.conj(X.T))
     c *= np.true_divide(1, fact)
     return c
