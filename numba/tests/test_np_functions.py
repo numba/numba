@@ -867,6 +867,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _check(params)
 
+        x = 3.142
+        params = {'m': x}
+        _check(params)
+
         for rowvar in False, True:
             x = np.array([-2.1, -1, 4.3])
             y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])

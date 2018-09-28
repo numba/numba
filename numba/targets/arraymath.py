@@ -1239,8 +1239,12 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np.array(variance)
 
     # identify up front if output has ndim of 0...
-    if isinstance(m, types.Array) and y in (None, types.none):
-        if m.ndim == 1:
+    if isinstance(m, types.Array) and m.ndim == 1:
+        if y in (None, types.none):
+            return np_cov_impl_single_variable
+
+    if isinstance(m, (types.Integer, types.Float, types.Complex, types.Boolean)):
+        if y in (None, types.none):
             return np_cov_impl_single_variable
 
     # otherwise assume it's 2D
