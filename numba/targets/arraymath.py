@@ -1196,59 +1196,61 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
 
     return _prepare_cov_input_inner
 
-@overload(np.cov)
-def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
+if numpy_version >= (1, 10):
+    # replicate the behaviour post numpy 1.10 bugfix release
+    @overload(np.cov)
+    def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
-    # reject problem if m and / or y are more than 2D
-    if isinstance(m, types.Array):
-        if m.ndim > 2:
-            raise TypeError("m has more than 2 dimensions")
-    if isinstance(y, types.Array):
-        if y.ndim > 2:
-            raise TypeError("y has more than 2 dimensions")
+        # reject problem if m and / or y are more than 2D
+        if isinstance(m, types.Array):
+            if m.ndim > 2:
+                raise TypeError("m has more than 2 dimensions")
+        if isinstance(y, types.Array):
+            if y.ndim > 2:
+                raise TypeError("y has more than 2 dimensions")
 
-    # infer result dtype
-    if isinstance(m, types.Array):
-        m_dt = as_dtype(m.dtype)
-    else:
-        m_dt = np.float64
-    if isinstance(y, types.Array):
-        y_dt = as_dtype(y.dtype)
-    else:
-        y_dt = np.float64
-    dtype = np.result_type(m_dt, y_dt, np.float64)
-
-    # select a matrix multiply algorithm
-    if _HAVE_BLAS:
-        mmult = np.dot
-    else:
-        mmult = simple_matrix_multiply
-
-    # within scope as mmult and dtype are defined in closure
-    @register_jitable
-    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-        X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
-
-        if np.any(np.array(X.shape) == 0):
-            return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
+        # infer result dtype
+        if isinstance(m, types.Array):
+            m_dt = as_dtype(m.dtype)
         else:
-            return np_cov_impl_inner(X, bias, ddof, mmult)
+            m_dt = np.float64
+        if isinstance(y, types.Array):
+            y_dt = as_dtype(y.dtype)
+        else:
+            y_dt = np.float64
+        dtype = np.result_type(m_dt, y_dt, np.float64)
 
-    def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
-        variance = np_cov_impl(m, y, rowvar, bias, ddof).flat[0]
-        return np.array(variance)
+        # select a matrix multiply algorithm
+        if _HAVE_BLAS:
+            mmult = np.dot
+        else:
+            mmult = simple_matrix_multiply
 
-    # identify up front if output has ndim of 0...
-    if isinstance(m, types.Array) and m.ndim == 1:
-        if y in (None, types.none):
-            return np_cov_impl_single_variable
+        # within scope as mmult and dtype are defined in closure
+        @register_jitable
+        def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
+            X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
-    if isinstance(m, (types.Integer, types.Float, types.Complex, types.Boolean)):
-        if y in (None, types.none):
-            return np_cov_impl_single_variable
+            if np.any(np.array(X.shape) == 0):
+                return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
+            else:
+                return np_cov_impl_inner(X, bias, ddof, mmult)
 
-    # otherwise assume it's 2D
-    return np_cov_impl
+        def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
+            variance = np_cov_impl(m, y, rowvar, bias, ddof).flat[0]
+            return np.array(variance)
+
+        # identify up front if output has ndim of 0...
+        if isinstance(m, types.Array) and m.ndim == 1:
+            if y in (None, types.none):
+                return np_cov_impl_single_variable
+
+        if isinstance(m, (types.Integer, types.Float, types.Complex, types.Boolean)):
+            if y in (None, types.none):
+                return np_cov_impl_single_variable
+
+        # otherwise assume it's 2D
+        return np_cov_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations

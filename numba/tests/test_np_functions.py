@@ -771,6 +771,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_basic(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
@@ -817,6 +818,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             run_tests(m)
             run_tests(m, y=m[::-1])
 
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_egde_cases(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
@@ -858,17 +860,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'y': y}
         _check(params)
 
-        x = np.array([-2.1, -1, 4.3])
-        y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
-        params = {'m': x, 'y': y}
-        _check(params)
-
         x = np.array([-2.1, -1, 4.3]).reshape(3, 1)
         params = {'m': x}
         _check(params)
 
         x = 3.142
         params = {'m': x}
+        _check(params)
+
+        # The following tests pass with numpy version >= 1.10, but fail with 1.9
+        x = np.array([-2.1, -1, 4.3])
+        y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
+        params = {'m': x, 'y': y}
         _check(params)
 
         for rowvar in False, True:
@@ -895,11 +898,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x}
         _check(params)
 
-        # this fails as the input is not an array
+        # this fails as the input is not an array, so doesn't hit the
+        # ndim == 1 guard
         x = (-2.1, -1, 4.3)
         params = {'m': x}
         _check(params)
 
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_exceptions(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
