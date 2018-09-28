@@ -922,11 +922,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Numpy raises ValueError: all the input array dimensions except for
         # the concatenation axis must match exactly
 
-    def test_all(self):
-        self.test_cov_basic()
-        self.test_cov_egde_cases()
-        self.test_convolve_exceptions()
-
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

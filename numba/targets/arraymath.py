@@ -1183,23 +1183,16 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
                 if y_arr.shape[0] != 1:
                     y_arr = y_arr.T
 
-            n_variables = m_arr.shape[-1]
+            m_rows, m_cols = m_arr.shape
+            y_rows, y_cols = y_arr.shape
 
-            if n_variables != y_arr.shape[-1]:
+            if m_cols != y_cols:
                 raise ValueError('m and y must have the same number of variables')
                 # 'variables' as the constraint on rows or columns depends on
                 # whether rowvar is True or False...
 
-            # abort if both arrays have no rows
-            if len(m_arr) == 0 and len(y_arr) == 0:
-                return np.full((2, 2), fill_value=np.nan, dtype=dtype)
-
-            # allocate output array
-            m_rows = m_arr.shape[0]
-            y_rows = y_arr.shape[0]
-            out = np.empty((m_rows + y_rows, n_variables), dtype=dtype)
-
-            # fill output array
+            # allocate and fill output array
+            out = np.empty((m_rows + y_rows, m_cols), dtype=dtype)
             out[:m_rows, :] = m_arr
             out[-y_rows:, :] = y_arr
 
@@ -1209,25 +1202,34 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
 
 @overload(np.cov)
 def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
+
+    # reject problem if m and / or y are more than 2D
     if isinstance(m, types.Array):
-        m_dt = as_dtype(m.dtype)
         if m.ndim > 2:
             raise TypeError("m has more than 2 dimensions")
+    if isinstance(y, types.Array):
+        if y.ndim > 2:
+            raise TypeError("y has more than 2 dimensions")
+
+    # infer result dtype
+    if isinstance(m, types.Array):
+        m_dt = as_dtype(m.dtype)
     else:
         m_dt = np.float64
     if isinstance(y, types.Array):
         y_dt = as_dtype(y.dtype)
-        if y.ndim > 2:
-            raise TypeError("y has more than 2 dimensions")
     else:
         y_dt = np.float64
     dtype = np.result_type(m_dt, y_dt, np.float64)
 
+    # select a matrix multiply algorithm
     if _HAVE_BLAS:
         mmult = np.dot
     else:
         mmult = simple_matrix_multiply
 
+    # within scope as mmult and dtype are defined in closure
+    @register_jitable
     def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
         X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
@@ -1237,22 +1239,15 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
             return np_cov_impl_inner(X, bias, ddof, mmult)
 
     def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
-        if len(m) == 0:
-            variance = np.nan
-        else:
-            demeaned = m - np.mean(m)
-            sum_sq = np.sum(np.power(demeaned, 2))
-
-            n_variables = len(m)
-            fact = normalisation_factor(ddof, bias, n_variables)
-
-            variance = sum_sq * np.true_divide(1, fact)
+        variance = np_cov_impl(m, y, rowvar, bias, ddof).flat[0]
         return np.array(variance)
 
+    # identify up front if output has ndim of 0...
     if isinstance(m, types.Array) and y in (None, types.none):
         if m.ndim == 1:
             return np_cov_impl_single_variable
 
+    # otherwise assume it's 2D
     return np_cov_impl
 
 #----------------------------------------------------------------------------
