@@ -1146,7 +1146,7 @@ def np_cov_impl_inner(X, bias, ddof, mmult):
     # de-mean
     X -= row_wise_average(X)
 
-    # caclulate result
+    # calculate result
     c = mmult(X, np.conj(X.T))
     c *= np.true_divide(1, fact)
     return c
