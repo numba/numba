@@ -665,7 +665,21 @@ if numpy_version >= (1, 10):
 # Median and partitioning
 
 @register_jitable
-def _partition(A, low, high):
+def less_than(a, b):
+    return a < b
+
+@register_jitable
+def nan_aware_less_than(a, b):
+    if np.isnan(a):
+        return False
+    else:
+        if np.isnan(b):
+            return True
+        else:
+            return a < b
+
+@register_jitable
+def _partition(A, low, high, should_pivot=less_than):
     mid = (low + high) >> 1
     # NOTE: the pattern of swaps below for the pivot choice and the
     # partitioning gives good results (i.e. regular O(n log n))
@@ -673,11 +687,11 @@ def _partition(A, low, high):
     # risk breaking this property.
 
     # Use median of three {low, middle, high} as the pivot
-    if A[mid] < A[low]:
+    if should_pivot(A[mid], A[low]):
         A[low], A[mid] = A[mid], A[low]
-    if A[high] < A[mid]:
+    if should_pivot(A[high], A[mid]):
         A[high], A[mid] = A[mid], A[high]
-    if A[mid] < A[low]:
+    if should_pivot(A[mid], A[low]):
         A[low], A[mid] = A[mid], A[low]
     pivot = A[mid]
 
@@ -685,9 +699,9 @@ def _partition(A, low, high):
     i = low
     j = high - 1
     while True:
-        while i < high and A[i] < pivot:
+        while i < high and should_pivot(A[i], pivot):
             i += 1
-        while j >= low and pivot < A[j]:
+        while j >= low and should_pivot(pivot, A[j]):
             j -= 1
         if i >= j:
             break
@@ -700,18 +714,18 @@ def _partition(A, low, high):
     return i
 
 @register_jitable
-def _select(arry, k, low, high):
+def _select(arry, k, low, high, should_pivot=less_than):
     """
     Select the k'th smallest element in array[low:high + 1].
     """
-    i = _partition(arry, low, high)
+    i = _partition(arry, low, high, should_pivot)
     while i != k:
         if i < k:
             low = i + 1
-            i = _partition(arry, low, high)
+            i = _partition(arry, low, high, should_pivot)
         else:
             high = i - 1
-            i = _partition(arry, low, high)
+            i = _partition(arry, low, high, should_pivot)
     return arry[k]
 
 @register_jitable
@@ -913,27 +927,22 @@ if numpy_version >= (1, 9):
 
 @register_jitable
 def np_partition_impl_inner(a, kth_array):
+
+    # allocate and fill empty array rather than copy a and mutate in place
+    # as the latter approach fails to preserve strides
     out = np.empty_like(a)
 
     idx = np.ndindex(a.shape[:-1])  # Numpy default partition axis is -1
     for s in idx:
-        data = a[s].copy()
-        mask = np.isnan(data)
-
-        dense = data[~mask]
-        nans = data[mask]
-
-        # partition dense (i.e. not NaN) sub-array
+        dense = a[s].copy()
         low = 0
         high = len(dense) - 1
+
         for kth in kth_array:
-            if kth < len(dense):
-                _select(dense, kth, low, high)
-                low = kth  # narrow span of subsequent partition
+            _select(dense, kth, low, high, should_pivot=nan_aware_less_than)
+            low = kth  # narrow span of subsequent partition
 
-        # stack NaNs to the right of partitioned sub-array
-        out[s] = np.hstack((dense, nans))
-
+        out[s] = dense
     return out
 
 @register_jitable
