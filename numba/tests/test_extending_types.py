@@ -96,8 +96,8 @@ class TestExtTypDummy(unittest.TestCase):
         self.assertIn("TypeError: cannot type float(complex128)",
                       str(raises.exception))
 
-    def test_unbox(self):
-        """A test for the unbox logic on unknown type
+    def test_unboxing(self):
+        """A test for the unboxing logic on unknown type
         """
         Dummy = self.Dummy
 
@@ -109,9 +109,23 @@ class TestExtTypDummy(unittest.TestCase):
         # make sure a cpython wrapper is created
         @njit(no_cpython_wrapper=False)
         def bar(dummy_obj):
-            pass   #return dummy_obj
+            pass
 
         foo(123)
         with self.assertRaises(TypeError) as raises:
             bar(Dummy(123))
         self.assertIn("can't unbox Dummy type", str(raises.exception))
+
+    def test_boxing(self):
+        """A test for the boxing logic on unknown type
+        """
+        Dummy = self.Dummy
+
+        @njit
+        def foo(x):
+            return Dummy(x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(123)
+        self.assertIn("cannot convert native Dummy to Python object",
+                      str(raises.exception))
