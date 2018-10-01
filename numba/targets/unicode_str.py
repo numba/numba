@@ -19,6 +19,9 @@ class UnicodeModel(models.StructModel):
             ('data', types.voidptr),
             ('length', types.int64),
             ('kind', types.int64),
+            ('meminfo', types.MemInfoPointer(types.voidptr)),
+            # A pointer to the owner python str/unicode object
+            ('parent', types.pyobject),
             ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
@@ -41,6 +44,12 @@ def unbox_unicode_str(typ, obj, c):
     uni_str.data = data
     uni_str.length = length
     uni_str.kind = kind
+    uni_str.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
+        data,  # the borrowed data pointer
+        obj,   # the owner pyobject; the call will incref it.
+    )
+    uni_str.parent = obj
+
     is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
     return NativeValue(uni_str._getvalue(), is_error=is_error)
 
@@ -52,6 +61,7 @@ def box_unicode_str(typ, val, c):
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
     res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
+    c.context.nrt.decref(c.builder, typ, val)
     return res
 
 
@@ -106,7 +116,7 @@ def _cmp_region(a, a_offset, b, b_offset, n):
         return -1
     elif b_offset + n > b._length:
         return 1
-    
+
     for i in range(n):
         a_chr = _get_code_point(a, a_offset + i)
         b_chr = _get_code_point(b, b_offset + i)
