@@ -4,6 +4,8 @@ from numba.extending import (models, register_model,
 from numba import cgutils
 from numba import types
 from numba import njit
+from numba.pythonapi import (PY_UNICODE_1BYTE_KIND, PY_UNICODE_2BYTE_KIND,
+    PY_UNICODE_4BYTE_KIND, PY_UNICODE_WCHAR_KIND)
 from llvmlite.ir import IntType
 import operator
 
@@ -86,11 +88,11 @@ def deref_uint32(typingctx, data, offset):
 
 @njit
 def _get_code_point(a, i):
-    if a._kind == 1:
+    if a._kind == PY_UNICODE_1BYTE_KIND:
         return deref_uint8(a._data, i)
-    elif a._kind == 2:
+    elif a._kind == PY_UNICODE_2BYTE_KIND:
         return deref_uint16(a._data, i)
-    elif a._kind == 4:
+    elif a._kind == PY_UNICODE_4BYTE_KIND:
         return deref_uint32(a._data, i)
     else:
         return 0 # there's also a wchar kind, but that's one of the above, so skipping for this example

@@ -947,7 +947,7 @@ numba_unpickle(const char *data, int n)
 
 NUMBA_EXPORT_FUNC(void *)
 numba_extract_unicode(PyObject *obj, Py_ssize_t *length, long *kind) {
-#if PY_MAJOR_VERSION >= 3
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 3)
     if (!PyUnicode_READY(obj)) {
         *length = PyUnicode_GET_LENGTH(obj);
         *kind = PyUnicode_KIND(obj);
