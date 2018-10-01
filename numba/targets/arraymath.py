@@ -278,10 +278,7 @@ def array_cumsum(context, builder, sig, args):
     zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = zero
         for idx, v in enumerate(arr.flat):
             c += v
@@ -292,8 +289,6 @@ def array_cumsum(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-
-
 @lower_builtin(np.cumprod, types.Array)
 @lower_builtin("array.cumprod", types.Array)
 def array_cumprod(context, builder, sig, args):
@@ -301,10 +296,7 @@ def array_cumprod(context, builder, sig, args):
     dtype = as_dtype(scalar_dtype)
 
     def array_cumprod_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = 1
         for idx, v in enumerate(arr.flat):
             c *= v
@@ -660,6 +652,55 @@ if numpy_version >= (1, 10):
             return c
 
         return nanprod_impl
+
+if numpy_version >= (1, 12):
+    @overload(np.nancumprod)
+    def np_nancumprod(a):
+        if not isinstance(a, types.Array):
+            return
+
+        if isinstance(a.dtype, (types.Boolean, types.Integer)):
+            # dtype cannot possibly contain NaN
+            return lambda arr: np.cumprod(arr)
+        else:
+            retty = a.dtype
+            is_nan = get_isnan(retty)
+            one = retty(1)
+
+            def nancumprod_impl(arr):
+                out = np.empty(arr.size, retty)
+                c = one
+                for idx, v in enumerate(arr.flat):
+                    if ~is_nan(v):
+                        c *= v
+                    out[idx] = c
+                return out
+
+            return nancumprod_impl
+
+    @overload(np.nancumsum)
+    def np_nancumsum(a):
+        if not isinstance(a, types.Array):
+            return
+
+        if isinstance(a.dtype, (types.Boolean, types.Integer)):
+            # dtype cannot possibly contain NaN
+            return lambda arr: np.cumsum(arr)
+        else:
+            retty = a.dtype
+            is_nan = get_isnan(retty)
+            zero = retty(0)
+
+            def nancumsum_impl(arr):
+                out = np.empty(arr.size, retty)
+                c = zero
+                for idx, v in enumerate(arr.flat):
+                    if ~is_nan(v):
+                        c += v
+                    out[idx] = c
+                return out
+
+            return nancumsum_impl
 
 #----------------------------------------------------------------------------
 # Median and partitioning
