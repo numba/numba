@@ -210,6 +210,19 @@ class TestUnicode(BaseTest):
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
 
+    def test_make_string(self):
+        from numba.targets.unicode_str import make_string, copy_string
+
+        @njit
+        def cfunc(text):
+            out =  make_string(len(text), text._kind)
+            copy_string(out, text)
+            return out
+
+        for s in UNICODE_EXAMPLES:
+            self.assertEqual(s, cfunc(s))
+
+
 
 if __name__ == '__main__':
     unittest.main()

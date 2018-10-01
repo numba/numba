@@ -96,6 +96,51 @@ def deref_uint32(typingctx, data, offset):
     return sig, make_deref_codegen(32)
 
 
+@intrinsic
+def make_string(typingctx, length, kind):
+    """make_string(length, kind)
+
+    """
+    def details(context, builder, signature, args):
+        [length_val, kind_val] = args
+
+        # fill the struct
+        uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
+        uni_str = uni_str_ctor(context, builder)
+        uni_str.length = length_val
+        uni_str.kind = kind_val
+        nbytes = builder.mul(length_val, kind_val)
+        uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes)
+        uni_str.data = context.nrt.meminfo_data(builder, uni_str.meminfo)
+        # Set parent to NULL
+        uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
+        return uni_str._getvalue()
+
+    sig = types.unicode_type(length, kind)
+    return sig, details
+
+
+@intrinsic
+def copy_string(typingctx, dst, src):
+    """copy_string(dst, src)
+
+    Returns None.
+
+    Note: *dst* must have enought space for *src*
+    """
+    def details(context, builder, signature, args):
+        [dst_val, src_val] = args
+        uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
+        dst = uni_str_ctor(context, builder, dst_val)
+        src = uni_str_ctor(context, builder, src_val)
+        count = builder.mul(src.length, src.kind)
+        cgutils.memcpy(builder, dst.data, src.data, count)
+        return context.get_dummy_value()
+
+    sig = types.none(dst, src)
+    return sig, details
+
+
 @njit
 def _get_code_point(a, i):
     if a._kind == PY_UNICODE_1BYTE_KIND:
