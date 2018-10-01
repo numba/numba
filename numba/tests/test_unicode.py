@@ -55,6 +55,22 @@ def in_usecase(x, y):
     return x in y
 
 
+def lt_usecase(x, y):
+    return x < y
+
+
+def le_usecase(x, y):
+    return x <= y
+
+
+def gt_usecase(x, y):
+    return x > y
+
+
+def ge_usecase(x, y):
+    return x >= y
+
+
 def find_usecase(x, y):
     return x.find(y)
 
@@ -71,6 +87,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
 
+
 UNICODE_EXAMPLES = [
     'ascii',
     '12345',
@@ -80,8 +97,21 @@ UNICODE_EXAMPLES = [
     '大处着眼，小处着手。',
 ]
 
+UNICODE_ORDERING_EXAMPLES = [
+    '',
+    'asc',
+    'ascih',
+    'ascii',
+    'ascij',
+    '大处着眼，小处着手',
+    '大处着眼，小处着手。',
+    '大处着眼，小处着手。🐍⚡',
+]
+
+
 # FIXME
 UNICODE_EXAMPLES = [types.fake_str(x) for x in UNICODE_EXAMPLES]
+UNICODE_ORDERING_EXAMPLES = [types.fake_str(x) for x in UNICODE_ORDERING_EXAMPLES]
 
 @unittest.skipUnless(_py34_or_later, 'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
@@ -103,6 +133,39 @@ class TestUnicode(BaseTest):
             for b in reversed(UNICODE_EXAMPLES):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b), '%s, %s' % (a, b))
+
+    def _check_ordering_op(self, usecase):
+        pyfunc = usecase
+        cfunc = njit(pyfunc)
+
+        # Check comparison to self
+        for a in UNICODE_ORDERING_EXAMPLES:
+            self.assertEqual(pyfunc(a, a),
+                             cfunc(a, a),
+                             '%s: "%s", "%s"' % (usecase.__name__, a, a))
+
+        # Check comparison to adjacent
+        for a in UNICODE_ORDERING_EXAMPLES[:-1]:
+            for b in UNICODE_ORDERING_EXAMPLES[1:]:
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b),
+                             '%s: "%s", "%s"' % (usecase.__name__, a, b))
+                # and reversed
+                self.assertEqual(pyfunc(b, a),
+                                 cfunc(b, a),
+                             '%s: "%s", "%s"' % (usecase.__name__, b, a))
+
+    def test_lt(self, flags=no_pyobj_flags):
+        self._check_ordering_op(lt_usecase)
+
+    def test_le(self, flags=no_pyobj_flags):
+        self._check_ordering_op(le_usecase)
+
+    def test_gt(self, flags=no_pyobj_flags):
+        self._check_ordering_op(gt_usecase)
+
+    def test_ge(self, flags=no_pyobj_flags):
+        self._check_ordering_op(ge_usecase)
 
     def test_len(self, flags=no_pyobj_flags):
         pyfunc = len_usecase

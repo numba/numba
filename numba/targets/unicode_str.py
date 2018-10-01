@@ -99,26 +99,40 @@ def _get_code_point(a, i):
 
 
 @njit
-def _match_region(a, a_offset, b, b_offset, n):
+def _cmp_region(a, a_offset, b, b_offset, n):
     if n == 0:
-        return True
-    elif (a_offset + n > a._length) or (b_offset + n > b._length):
-        return False
+        return 0
+    elif a_offset + n > a._length:
+        return -1
+    elif b_offset + n > b._length:
+        return 1
     
     for i in range(n):
-        if _get_code_point(a, a_offset + i) != _get_code_point(b, b_offset + i):
-            return False
+        a_chr = _get_code_point(a, a_offset + i)
+        b_chr = _get_code_point(b, b_offset + i)
+        if a_chr < b_chr:
+            return -1
+        elif a_chr > b_chr:
+            return 1
 
-    return True
+    return 0
 
-_gcp = _get_code_point
+
+@njit
+def _cmp(a, b):
+    if len(a) < len(b):
+        return -1
+    elif len(a) > len(b):
+        return 1
+    else:
+        return _cmp_region(a, b)
 
 
 @njit
 def _find(substr, s):
     # Naive, slow string matching for now
     for i in range(len(s) - len(substr) + 1):
-        if _match_region(s, i, substr, 0, len(substr)):
+        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
             return i
     return -1
 
@@ -139,8 +153,59 @@ def unicode_eq(a, b):
         def eq_impl(a, b):
             if len(a) != len(b):
                 return False
-            return _match_region(a, 0, b, 0, len(a))
+            return _cmp_region(a, 0, b, 0, len(a)) == 0
         return eq_impl
+
+
+@overload(operator.lt)
+def unicode_lt(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def lt_impl(a, b):
+            if len(a) > len(b):
+                return False
+            elif len(a) < len(b):
+                return True
+            else:
+                return _cmp_region(a, 0, b, 0, len(a)) == -1
+        return lt_impl
+
+
+@overload(operator.gt)
+def unicode_gt(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def gt_impl(a, b):
+            if len(a) > len(b):
+                return True
+            elif len(a) < len(b):
+                return False
+            return _cmp_region(a, 0, b, 0, len(a)) == 1
+        return gt_impl
+
+
+@overload(operator.le)
+def unicode_le(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def le_impl(a, b):
+            if len(a) > len(b):
+                return False
+            elif len(a) < len(b):
+                return True
+            ret = _cmp_region(a, 0, b, 0, len(a))
+            return (ret == -1) or (ret == 0)
+        return le_impl
+
+
+@overload(operator.ge)
+def unicode_ge(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def ge_impl(a, b):
+            if len(a) > len(b):
+                return True
+            elif len(a) < len(b):
+                return False
+            ret = _cmp_region(a, 0, b, 0, len(a))
+            return (ret == 1) or (ret == 0)
+        return ge_impl
 
 
 @overload(operator.contains)
@@ -164,7 +229,7 @@ def unicode_find(a, b):
 def unicode_startswith(a, b):
    if isinstance(b, types.UnicodeType):
        def startswith_impl(a, b):
-           return _match_region(a, 0, b, 0, len(b))
+           return _cmp_region(a, 0, b, 0, len(b)) == 0
        return startswith_impl
 
 
@@ -175,7 +240,7 @@ def unicode_endswith(a, b):
             a_offset = len(a) - len(b)
             if a_offset < 0:
                 return False
-            return _match_region(a, a_offset, b, 0, len(b))
+            return _cmp_region(a, a_offset, b, 0, len(b)) == 0
         return endswith_impl
 
 
