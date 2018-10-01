@@ -1235,6 +1235,25 @@ class PythonAPI(object):
                                                            self.voidptr),
                                       ndim, writable, dtypeptr])
 
+    def nrt_meminfo_new_from_pyobject(self, data, pyobj):
+        """
+        Allocate a new MemInfo with data payload borrowed from a python
+        object.
+        """
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [cgutils.voidptr_t, cgutils.voidptr_t],
+            )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name="NRT_meminfo_new_from_pyobject",
+            )
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [data, pyobj])
+
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
