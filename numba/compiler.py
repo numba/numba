@@ -915,7 +915,7 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
     """
 
     pipeline = pipeline_class(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+                              args, return_type, flags, locals)
     return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
                                lifted_from=lifted_from)
 
