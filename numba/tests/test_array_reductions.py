@@ -732,5 +732,47 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 TestArrayReductions.install_generated_tests()
 
 
+class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
+
+    # int64, size 0
+    zero_size = np.arange(0)
+
+    def check_exception(self, pyfunc, msg):
+        cfunc = jit(nopython=True)(pyfunc)
+        # make sure NumPy raises consistently/no behaviour change
+        with self.assertRaises(BaseException):
+            pyfunc(self.zero_size)
+        # check numba impl raises expected
+        with self.assertRaises(ValueError) as e:
+            cfunc(self.zero_size)
+        self.assertIn(msg, str(e.exception))
+
+    @classmethod
+    def install(cls):
+
+        fn_to_msg = dict()
+        empty_seq = "attempt to get {0} of an empty sequence"
+        op_no_ident = ("zero-size array to reduction operation "
+                       "{0}")
+        for x in [array_argmax, array_argmax_global, array_argmin,
+                  array_argmin_global]:
+            fn_to_msg[x] = empty_seq
+        for x in [array_max, array_max, array_min, array_min]:
+            fn_to_msg[x] = op_no_ident
+
+        name_template = "test_zero_size_array_{0}"
+        for fn, msg in fn_to_msg.items():
+            test_name = name_template.format(fn.__name__)
+
+            lmsg = msg.format(fn.__name__)
+            lmsg = lmsg.replace('array_','').replace('_global','')
+            def test_fn(self, func=fn, message=lmsg):
+                self.check_exception(func, message)
+
+            setattr(cls, test_name, test_fn)
+
+TestArrayReductionsExceptions.install()
+
+
 if __name__ == '__main__':
     unittest.main()
