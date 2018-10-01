@@ -501,7 +501,7 @@ def iternext_listiter(context, builder, sig, args, result):
         inst.index = builder.add(index, context.get_constant(types.intp, 1))
 
 
-@lower_builtin('getitem', types.List, types.Integer)
+@lower_builtin(operator.getitem, types.List, types.Integer)
 def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -524,7 +524,7 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@lower_builtin('getitem', types.List, types.SliceType)
+@lower_builtin(operator.getitem, types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = context.make_helper(builder, sig.args[1], args[1])

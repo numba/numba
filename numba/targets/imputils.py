@@ -33,6 +33,9 @@ class Registry(object):
         The decorated implementation has the signature
         (context, builder, sig, args).
         """
+        #
+        assert func != 'getitem', 'switch to `operator.getitem`'
+
         def decorate(impl):
             self.functions.append((impl, func, argtys))
             return impl
