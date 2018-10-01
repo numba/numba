@@ -23,6 +23,7 @@ ellipsis = EllipsisType('...')
 Any = Phantom('any')
 undefined = Undefined('undefined')
 string = Opaque('str')
+unicode_type = UnicodeType('unicode_type')
 code_type = Opaque('code')
 pyfunc_type = Opaque('pyfunc')
 

@@ -1117,6 +1117,31 @@ class PythonAPI(object):
 
         return (ok, buffer, self.builder.load(p_length))
 
+    def string_as_string_size_and_kind(self, strobj):
+        """
+        Returns a tuple of ``(ok, buffer, length, kind)``.
+        The ``ok`` is i1 value that is set if ok.
+        The ``buffer`` is a i8* of the output buffer.
+        The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
+        The ``kind`` is a i64 (int64) of the Unicode kind constant
+        """
+        if PYVERSION >= (3, 3):
+            p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
+            p_kind = cgutils.alloca_once(self.builder, self.long)
+            fnty = Type.function(self.cstring, [self.pyobj,
+                                                self.py_ssize_t.as_pointer(),
+                                                self.long.as_pointer()])
+            fname = "numba_extract_unicode"
+            fn = self._get_function(fnty, name=fname)
+
+            buffer = self.builder.call(fn, [strobj, p_length, p_kind])
+            ok = self.builder.icmp_unsigned('!=',
+                                            ir.Constant(buffer.type, None),
+                                            buffer)
+            return (ok, buffer, self.builder.load(p_length), self.builder.load(p_kind))
+        else:
+            assert False, 'not supported on Python < 3.3'
+
     def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
@@ -1134,6 +1159,13 @@ class PythonAPI(object):
             fname = "PyString_FromString"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string])
+
+    def string_from_kind_and_data(self, kind, string, size):
+        fnty = Type.function(self.pyobj, [self.long, self.cstring, self.py_ssize_t])
+        if PYVERSION >= (3, 3):
+            fname = "PyUnicode_FromKindAndData"
+            fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [kind, string, size])
 
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
