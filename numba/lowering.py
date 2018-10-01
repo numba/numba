@@ -819,7 +819,7 @@ class Lower(BaseLower):
                 # Prepend the self reference
                 argvals = [the_self] + list(argvals)
 
-            res = impl(self.builder, argvals)
+            res = impl(self.builder, argvals, self.loc)
 
             libs = getattr(impl, "libs", ())
             for lib in libs:

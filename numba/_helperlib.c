@@ -826,12 +826,14 @@ numba_debug(void){return 0;};
 /* Insert a frame into the traceback for (funcname, filename, lineno). */
 /* This function is CPython's _PyTraceback_Add, renamed, see:
  * https://github.com/python/cpython/blob/d545869d084e70d4838310e79b52a25a72a1ca56/Python/traceback.c#L246
+ * and modified for Python 2.x based on
+ * https://github.com/python/cpython/blob/2e1a34025cde19bddf12a2eac8fedb6afcca8339/Modules/_ctypes/callbacks.c#L151-L174
  */
 static void traceback_add(const char *funcname, const char *filename, int lineno)
 {
-    PyObject *globals;
-    PyCodeObject *code;
-    PyFrameObject *frame;
+    PyObject *globals = NULL;
+    PyCodeObject *code = NULL;
+    PyFrameObject *frame = NULL;
     PyObject *exc, *val, *tb;
 
     /* Save and clear the current exception. Python functions must not be
@@ -844,7 +846,6 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
         goto error;
     code = PyCode_NewEmpty(filename, funcname, lineno);
     if (!code) {
-        Py_DECREF(globals);
         goto error;
     }
     frame = PyFrame_New(PyThreadState_Get(), code, globals, NULL);
@@ -860,7 +861,13 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     return;
 
 error:
+#if PY_MAJOR_VERSION >= 3
     _PyErr_ChainExceptions(exc, val, tb);
+#else
+    Py_XDECREF(globals);
+    Py_XDECREF(code);
+    Py_XDECREF(frame);
+#endif
 }
 
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
@@ -959,7 +966,7 @@ numba_do_raise(PyObject *exc)
     PyErr_SetObject(type, value);
 
     /* instance is instantiated, if loc is present add a frame for it */
-    if(loc)
+    if(loc && loc != Py_None)
     {
         traceback_add(tmp1, tmp2, (int)PyLong_AsLong(lineno));
     }

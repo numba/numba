@@ -732,7 +732,7 @@ def real_divmod_func_body(context, builder, vx, wx):
 
 
 @lower_builtin(divmod, types.Float, types.Float)
-def real_divmod_impl(context, builder, sig, args):
+def real_divmod_impl(context, builder, sig, args, loc=None):
     x, y = args
     quot = cgutils.alloca_once(builder, x.type, name="quot")
     rem = cgutils.alloca_once(builder, x.type, name="rem")
@@ -741,7 +741,7 @@ def real_divmod_impl(context, builder, sig, args):
                          ) as (if_zero, if_non_zero):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",)):
+                builder, ("modulo by zero",), loc):
                 # No exception raised => compute the nan result,
                 # and set the FP exception word for Numpy warnings.
                 q = builder.fdiv(x, y)
@@ -757,14 +757,14 @@ def real_divmod_impl(context, builder, sig, args):
                               (builder.load(quot), builder.load(rem)))
 
 
-def real_mod_impl(context, builder, sig, args):
+def real_mod_impl(context, builder, sig, args, loc=None):
     x, y = args
     res = cgutils.alloca_once(builder, x.type)
     with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
                          ) as (if_zero, if_non_zero):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",)):
+                builder, ("modulo by zero",), loc):
                 # No exception raised => compute the nan result,
                 # and set the FP exception word for Numpy warnings.
                 rem = builder.frem(x, y)
@@ -776,14 +776,14 @@ def real_mod_impl(context, builder, sig, args):
                               builder.load(res))
 
 
-def real_floordiv_impl(context, builder, sig, args):
+def real_floordiv_impl(context, builder, sig, args, loc=None):
     x, y = args
     res = cgutils.alloca_once(builder, x.type)
     with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
                          ) as (if_zero, if_non_zero):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("division by zero",)):
+                builder, ("division by zero",), loc):
                 # No exception raised => compute the +/-inf or nan result,
                 # and set the FP exception word for Numpy warnings.
                 quot = builder.fdiv(x, y)

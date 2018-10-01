@@ -475,9 +475,10 @@ class ErrorModel(object):
     def __init__(self, call_conv):
         self.call_conv = call_conv
 
-    def fp_zero_division(self, builder, exc_args=None):
+    def fp_zero_division(self, builder, exc_args=None, loc=None):
         if self.raise_on_fp_zero_division:
-            self.call_conv.return_user_exc(builder, ZeroDivisionError, exc_args)
+            self.call_conv.return_user_exc(builder, ZeroDivisionError, exc_args,
+                                           loc)
             return True
         else:
             return False
