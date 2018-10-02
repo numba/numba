@@ -198,7 +198,7 @@ class MinimalCallConv(BaseCallConv):
         # Build excinfo struct
         if loc is not None:
             f1 = loc._raw_function_name()
-            locinfo = ('padding', f1, loc.filename, loc.line)
+            locinfo = (f1, loc.filename, loc.line)
             if None in locinfo:
                 locinfo = None
         else:
@@ -341,6 +341,7 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None):
+        print("CPUCallConv::user exc", exc)
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -351,14 +352,13 @@ class CPUCallConv(BaseCallConv):
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if loc is not None:
-            f1 = loc._raw_function_name()
-            locinfo = ('padding', f1, loc.filename, loc.line)
+            locinfo = (loc._raw_function_name(), loc.filename, loc.line)
             if None in locinfo:
                 locinfo = None
         else:
             locinfo = None
-        if exc_args is not None:
-            exc = (exc, exc_args, locinfo)
+        exc = (exc, exc_args, locinfo)
+        print("Serializing:", exc)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)

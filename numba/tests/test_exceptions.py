@@ -1,25 +1,23 @@
 
 import numpy as np
 import sys
+import traceback
 
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 from numba import unittest_support as unittest
 from .support import TestCase, tag
 
-
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
-
 
 class MyError(Exception):
     pass
 
 class OtherError(Exception):
     pass
-
 
 def raise_class(exc):
     def raiser(i):
@@ -76,15 +74,49 @@ class TestRaising(TestCase):
             cfunc(a, 2)
         self.assertEqual(str(cm.exception), "tuple index out of range")
 
+    def check_against_python(self, pyfunc, cfunc, expected_error_class, *args):
+        with self.assertRaises(expected_error_class) as pyerr:
+            pyfunc(*args)
+        with self.assertRaises(expected_error_class) as jiterr:
+            cfunc(*args)
+        self.assertEqual(pyerr.exception.args, jiterr.exception.args)
+        try:
+            pyfunc(*args)
+        except BaseException as e:
+            # we only care about the bottom two frames, the error and the 
+            # location it was raised.
+            py_frames = traceback.format_exception(*sys.exc_info(),)
+            expected_frames = py_frames[-2:]
+
+        #try:
+        #cfunc(*args)
+        #except BaseException as e:
+            #c_frames = traceback.format_exception(*sys.exc_info(),)
+            #for x in c_frames:
+                #print("frame %s" % x)
+            #got_frames = c_frames[-2:]
+
+        #for expf, gotf in zip(expected_frames, got_frames):
+            #self.assertEqual(expf, gotf)
+
+        #try:
+            #cfunc(*args)
+        #except BaseException as e:
+            #exc_ty, exc_val, exc_tb = sys.exc_info()
+            #cfunc_last_frame = traceback.format_exception(*sys.exc_info(), 1)
+
+
+
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cres.entry_point
         self.assertEqual(cfunc(0), 0)
 
-        with self.assertRaises(MyError) as cm:
-            cfunc(1)
-        self.assertEqual(cm.exception.args, ())
+        #with self.assertRaises(MyError) as cm:
+            #cfunc(1)
+        #self.assertEqual(cm.exception.args, ())
+        self.check_against_python(pyfunc, cfunc, MyError, 1)
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
         self.assertEqual(cm.exception.args, ())
