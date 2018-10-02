@@ -341,7 +341,6 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None):
-        print("CPUCallConv::user exc", exc)
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -358,7 +357,6 @@ class CPUCallConv(BaseCallConv):
         else:
             locinfo = None
         exc = (exc, exc_args, locinfo)
-        print("Serializing:", exc)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)

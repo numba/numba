@@ -74,37 +74,39 @@ class TestRaising(TestCase):
             cfunc(a, 2)
         self.assertEqual(str(cm.exception), "tuple index out of range")
 
-    def check_against_python(self, pyfunc, cfunc, expected_error_class, *args):
+    def check_against_python(self, exec_mode, pyfunc, cfunc,
+                             expected_error_class, *args):
+
+        assert exec_mode in (force_pyobj_flags, no_pyobj_flags)
+
+        # invariant of mode, check the error class and args are the same
         with self.assertRaises(expected_error_class) as pyerr:
             pyfunc(*args)
         with self.assertRaises(expected_error_class) as jiterr:
             cfunc(*args)
         self.assertEqual(pyerr.exception.args, jiterr.exception.args)
-        try:
-            pyfunc(*args)
-        except BaseException as e:
+
+        # in npm check bottom of traceback matches as frame injection with
+        # location info should ensure this
+        if exec_mode is no_pyobj_flags:
+
             # we only care about the bottom two frames, the error and the 
             # location it was raised.
-            py_frames = traceback.format_exception(*sys.exc_info(),)
-            expected_frames = py_frames[-2:]
+            try:
+                pyfunc(*args)
+            except BaseException as e:
+                py_frames = traceback.format_exception(*sys.exc_info(),)
+                expected_frames = py_frames[-2:]
 
-        #try:
-        #cfunc(*args)
-        #except BaseException as e:
-            #c_frames = traceback.format_exception(*sys.exc_info(),)
-            #for x in c_frames:
-                #print("frame %s" % x)
-            #got_frames = c_frames[-2:]
+            try:
+                cfunc(*args)
+            except BaseException as e:
+                c_frames = traceback.format_exception(*sys.exc_info(),)
+                got_frames = c_frames[-2:]
 
-        #for expf, gotf in zip(expected_frames, got_frames):
-            #self.assertEqual(expf, gotf)
-
-        #try:
-            #cfunc(*args)
-        #except BaseException as e:
-            #exc_ty, exc_val, exc_tb = sys.exc_info()
-            #cfunc_last_frame = traceback.format_exception(*sys.exc_info(), 1)
-
+            # check exception and the injected frame are the same
+            for expf, gotf in zip(expected_frames, got_frames):
+                self.assertEqual(expf, gotf)
 
 
     def check_raise_class(self, flags):
@@ -112,17 +114,10 @@ class TestRaising(TestCase):
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cres.entry_point
         self.assertEqual(cfunc(0), 0)
-
-        #with self.assertRaises(MyError) as cm:
-            #cfunc(1)
-        #self.assertEqual(cm.exception.args, ())
-        self.check_against_python(pyfunc, cfunc, MyError, 1)
-        with self.assertRaises(ValueError) as cm:
-            cfunc(2)
-        self.assertEqual(cm.exception.args, ())
-        with self.assertRaises(np.linalg.LinAlgError) as cm:
-            cfunc(3)
-        self.assertEqual(cm.exception.args, ())
+        self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
+        self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
+        self.check_against_python(flags, pyfunc, cfunc,
+                                  np.linalg.linalg.LinAlgError, 3)
 
     @tag('important')
     def test_raise_class_nopython(self):
@@ -135,17 +130,12 @@ class TestRaising(TestCase):
         pyfunc = raise_instance(MyError, "some message")
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cres.entry_point
-        self.assertEqual(cfunc(0), 0)
 
-        with self.assertRaises(MyError) as cm:
-            cfunc(1)
-        self.assertEqual(cm.exception.args, ("some message", 1))
-        with self.assertRaises(ValueError) as cm:
-            cfunc(2)
-        self.assertEqual(cm.exception.args, ("some message", 2))
-        with self.assertRaises(np.linalg.LinAlgError) as cm:
-            cfunc(3)
-        self.assertEqual(cm.exception.args, ("some message", 3))
+        self.assertEqual(cfunc(0), 0)
+        self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
+        self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
+        self.check_against_python(flags, pyfunc, cfunc,
+                                  np.linalg.linalg.LinAlgError, 3)
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
@@ -154,40 +144,40 @@ class TestRaising(TestCase):
     def test_raise_instance_nopython(self):
         self.check_raise_instance(flags=no_pyobj_flags)
 
-    def check_raise_nested(self, **jit_args):
+    def check_raise_nested(self, flags, **jit_args):
         """
         Check exception propagation from nested functions.
         """
         inner_pyfunc = raise_instance(MyError, "some message")
+        pyfunc = outer_function(inner_pyfunc)
         inner_cfunc = jit(**jit_args)(inner_pyfunc)
         cfunc = jit(**jit_args)(outer_function(inner_cfunc))
 
-        with self.assertRaises(MyError) as cm:
-            cfunc(1)
-        self.assertEqual(cm.exception.args, ("some message", 1))
-        with self.assertRaises(ValueError) as cm:
-            cfunc(2)
-        self.assertEqual(cm.exception.args, ("some message", 2))
-        with self.assertRaises(OtherError) as cm:
-            cfunc(3)
-        self.assertEqual(cm.exception.args, ("bar", 3))
+        self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
+        self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
+        self.check_against_python(flags, pyfunc, cfunc, OtherError, 3)
 
-    def test_raise_nested(self):
-        self.check_raise_nested(forceobj=True)
+    def test_raise_nested_objmode(self):
+        self.check_raise_nested(force_pyobj_flags, forceobj=True)
 
     @tag('important')
-    def test_raise_nested_npm(self):
-        self.check_raise_nested(nopython=True)
+    def test_raise_nested_nopython(self):
+        self.check_raise_nested(no_pyobj_flags, nopython=True)
 
     def check_reraise(self, flags):
         pyfunc = reraise
         cres = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cres.entry_point
-        with self.assertRaises(ZeroDivisionError):
-            try:
-                1/0
-            except ZeroDivisionError as e:
-                cfunc()
+        def gen_impl(fn):
+            def impl():
+                try:
+                    1/0
+                except ZeroDivisionError as e:
+                    fn()
+            return impl
+        pybased = gen_impl(pyfunc)
+        cbased = gen_impl(cfunc)
+        self.check_against_python(flags, pybased, cbased, ZeroDivisionError,)
 
     def test_reraise_objmode(self):
         self.check_reraise(flags=force_pyobj_flags)
@@ -220,9 +210,7 @@ class TestRaising(TestCase):
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cres.entry_point
         cfunc(1)
-        with self.assertRaises(AssertionError) as cm:
-            cfunc(2)
-        self.assertEqual(str(cm.exception), "bar")
+        self.check_against_python(flags, pyfunc, cfunc, AssertionError, 2)
 
     def test_assert_statement_objmode(self):
         self.check_assert_statement(flags=force_pyobj_flags)
