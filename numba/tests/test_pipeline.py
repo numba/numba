@@ -1,7 +1,8 @@
 from __future__ import print_function
 
 from numba.compiler import Pipeline
-from numba import jit, generated_jit, types
+from numba import jit, generated_jit, types, objmode
+from numba.ir import FunctionIR
 from .support import TestCase
 
 
@@ -17,6 +18,12 @@ class TestCustomPipeline(TestCase):
                 # Store the compiled function
                 self.custom_pipeline_cache.append(func)
                 return super(CustomPipeline, self).compile_extra(func)
+
+            def compile_ir(self, func_ir, *args, **kwargs):
+                # Store the compiled function
+                self.custom_pipeline_cache.append(func_ir)
+                return super(CustomPipeline, self).compile_ir(
+                    func_ir, *args, **kwargs)
 
         self.pipeline_class = CustomPipeline
 
@@ -45,3 +52,24 @@ class TestCustomPipeline(TestCase):
         self.assertEqual(foo(5), 5)
         self.assertListEqual(self.pipeline_class.custom_pipeline_cache,
                              [inner])
+
+    def test_objmode_custom_pipeline(self):
+        self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [])
+
+        @jit(pipeline_class=self.pipeline_class)
+        def foo(x):
+            with objmode(x="intp"):
+                x += int(0x1)
+            return x
+
+        arg = 123
+        self.assertEqual(foo(arg), arg + 1)
+        # Two items in the list.
+        self.assertEqual(len(self.pipeline_class.custom_pipeline_cache), 2)
+        # First item is the `foo` function
+        first = self.pipeline_class.custom_pipeline_cache[0]
+        self.assertIs(first, foo.py_func)
+        # Second item is a FunctionIR of the obj-lifted function
+        second = self.pipeline_class.custom_pipeline_cache[1]
+        self.assertIsInstance(second, FunctionIR)
+
