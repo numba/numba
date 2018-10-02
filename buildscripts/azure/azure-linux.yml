@@ -78,7 +78,7 @@ jobs:
   steps:
     - script: |
         # Sleep 10 seconds because of race condition with background apt process
-        if [ "$(uname)" == "Linux" ]; then sleep 10; sudo apt-get install -y libc6-dev-i386; fi
+        if [ "$(uname)" == "Linux" ]; sudo apt-get install -y libc6-dev-i386; fi
         echo "Installing Miniconda"
         buildscripts/incremental/install_miniconda.sh
         export PATH=$HOME/miniconda3/bin:$PATH
