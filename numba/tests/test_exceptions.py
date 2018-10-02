@@ -95,13 +95,13 @@ class TestRaising(TestCase):
             try:
                 pyfunc(*args)
             except BaseException as e:
-                py_frames = traceback.format_exception(*sys.exc_info(),)
+                py_frames = traceback.format_exception(*sys.exc_info())
                 expected_frames = py_frames[-2:]
 
             try:
                 cfunc(*args)
             except BaseException as e:
-                c_frames = traceback.format_exception(*sys.exc_info(),)
+                c_frames = traceback.format_exception(*sys.exc_info())
                 got_frames = c_frames[-2:]
 
             # check exception and the injected frame are the same
