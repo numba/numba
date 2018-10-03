@@ -896,22 +896,61 @@ class TypeInferer(object):
         """
         typdict = utils.UniqueDict()
 
+        def find_offender(name, exhaustive=False):
+            # finds the offending variable definition by name
+            # if exhaustive is set it will try and trace through temporary
+            # variables to find a concrete offending definition.
+            offender = None
+            for block in self.func_ir.blocks.values():
+                offender = block.find_variable_assignment(name)
+                if offender is not None:
+                    if not exhaustive:
+                        break
+                    try:
+                        hasattr(offender.value, 'name')
+                    except (AttributeError, KeyError):
+                        break
+                    offender_value = offender.value.name
+                    orig_offender = offender
+                    if offender_value.startswith('$'):
+                        offender = find_offender(offender_value,
+                                                 exhaustive=exhaustive)
+                        if offender is None:
+                            offender = orig_offender
+                    break
+            return offender
+
+
         def check_var(name):
             tv = self.typevars[name]
             if not tv.defined:
-                offender = None
-                for block in self.func_ir.blocks.values():
-                    offender = block.find_variable_assignment(name)
-                    if offender is not None:
-                        break
+                offender = find_offender(name)
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', 'unknown location')
                 msg = "Undefined variable '%s', operation: %s, location: %s"
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
             if not tp.is_precise():
-                raise TypingError("Can't infer type of variable '%s': %s" %
-                                  (var, tp))
+                offender = find_offender(name, exhaustive=True)
+                msg = ("Cannot infer the type of variable '%s'%s, "
+                      "have imprecise type: %s. %s")
+                istmp = " (temporary variable)" if var.startswith('$') else ""
+                loc = getattr(offender, 'loc', 'unknown location')
+                extra_msg = ""
+                # special message addition for lists
+                if offender is not None:
+                    if hasattr(offender, 'value'):
+                        if hasattr(offender.value, 'op'):
+                            if offender.value.op == 'build_list':
+                                extra_msg = """\n
+For Numba to be able to compile a list, the list must have a known and
+precise type that can be inferred from the other variables. Whilst sometimes
+the type of empty lists can be inferred this is not always the case, see this
+documentation for help:
+
+http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+"""
+                raise TypingError(msg % (var, istmp, tp, extra_msg), loc)
             typdict[var] = tp
 
         # For better error display, check first user-visible vars, then
