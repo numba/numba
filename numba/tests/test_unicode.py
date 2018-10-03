@@ -43,8 +43,12 @@ def getitem_usecase(x, i):
     return x[i]
 
 
-def slice_usecase(x, i, j):
+def slice2_usecase(x, i, j):
     return x[i:j]
+
+
+def slice3_usecase(x, i, j, k):
+    return x[i:j:k]
 
 
 def concat_usecase(x, y):
@@ -210,17 +214,47 @@ class TestUnicode(BaseTest):
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
 
-    def test_make_string(self):
-        from numba.targets.unicode_str import make_string, copy_string
-
-        @njit
-        def cfunc(text):
-            out =  make_string(len(text), text._kind)
-            copy_string(out, text)
-            return out
+    def test_getitem(self):
+        pyfunc = getitem_usecase
+        cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            self.assertEqual(s, cfunc(s))
+            for i in range(-len(s)):
+                self.assertEqual(pyfunc(s, i),
+                                 cfunc(s, i),
+                                 "'%s'[%d]?" % (s, i))
+
+    def test_slice2(self):
+        pyfunc = slice2_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            for i in range(-len(s), len(s)):
+                for j in range(-len(s), len(s)):
+                    self.assertEqual(pyfunc(s, i, j),
+                                    cfunc(s, i, j),
+                                    "'%s'[%d:%d]?" % (s, i, j))
+
+    def test_slice3(self):
+        pyfunc = slice3_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            for i in range(-len(s), len(s)):
+                for j in range(-len(s), len(s)):
+                    for k in [-1, 1, 2]:
+                        self.assertEqual(pyfunc(s, i, j, k),
+                                        cfunc(s, i, j, k),
+                                        "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_concat(self, flags=no_pyobj_flags):
+        pyfunc = concat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            for b in UNICODE_EXAMPLES[::-1]:
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b),
+                                 "'%s' + '%s'?" % (a, b))
 
 
 

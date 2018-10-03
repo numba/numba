@@ -1,12 +1,13 @@
 from numba.extending import (models, register_model,
     make_attribute_wrapper, unbox, box, NativeValue, overload,
-    lower_getattr, overload_method, intrinsic)
+    lower_builtin, overload_method, intrinsic)
 from numba import cgutils
 from numba import types
 from numba import njit
 from numba.pythonapi import (PY_UNICODE_1BYTE_KIND, PY_UNICODE_2BYTE_KIND,
     PY_UNICODE_4BYTE_KIND, PY_UNICODE_WCHAR_KIND)
-from llvmlite.ir import IntType
+from llvmlite.ir import IntType, Constant
+import numpy as np
 import operator
 
 
@@ -97,48 +98,39 @@ def deref_uint32(typingctx, data, offset):
 
 
 @intrinsic
-def make_string(typingctx, length, kind):
-    """make_string(length, kind)
+def _malloc_string(typingctx, kind, char_bytes, length):
+    """make empty string with data buffer of size alloc_bytes.
 
+    Must set length and kind values for string after it is returned
     """
     def details(context, builder, signature, args):
-        [length_val, kind_val] = args
+        [kind_val, char_bytes_val, length_val] = args
 
         # fill the struct
         uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
         uni_str = uni_str_ctor(context, builder)
-        uni_str.length = length_val
+        # add null padding character
+        nbytes_val = builder.mul(char_bytes_val, 
+                                 builder.add(length_val,
+                                             Constant(length_val.type, 1)))
+        uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
-        nbytes = builder.mul(length_val, kind_val)
-        uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes)
+        uni_str.length = length_val
         uni_str.data = context.nrt.meminfo_data(builder, uni_str.meminfo)
         # Set parent to NULL
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
         return uni_str._getvalue()
 
-    sig = types.unicode_type(length, kind)
+    sig = types.unicode_type(types.int64, types.int64, types.int64)
     return sig, details
 
 
-@intrinsic
-def copy_string(typingctx, dst, src):
-    """copy_string(dst, src)
-
-    Returns None.
-
-    Note: *dst* must have enought space for *src*
-    """
-    def details(context, builder, signature, args):
-        [dst_val, src_val] = args
-        uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
-        dst = uni_str_ctor(context, builder, dst_val)
-        src = uni_str_ctor(context, builder, src_val)
-        count = builder.mul(src.length, src.kind)
-        cgutils.memcpy(builder, dst.data, src.data, count)
-        return context.get_dummy_value()
-
-    sig = types.none(dst, src)
-    return sig, details
+@njit
+def _empty_string(kind, length):
+    char_width = _kind_to_byte_width(kind)
+    s = _malloc_string(kind, char_width, length)
+    _set_code_point(s, length, np.uint32(0)) # Write NULL character
+    return s
 
 
 @njit
@@ -151,6 +143,82 @@ def _get_code_point(a, i):
         return deref_uint32(a._data, i)
     else:
         return 0 # there's also a wchar kind, but that's one of the above, so skipping for this example
+
+####
+
+def make_set_codegen(bitsize):
+    def codegen(context, builder, signature, args):
+        data, idx, ch = args
+        if bitsize < 32:
+            ch = builder.trunc(ch, IntType(bitsize))
+        ptr = builder.bitcast(data, IntType(bitsize).as_pointer())
+        builder.store(ch, builder.gep(ptr, [idx]))
+        return context.get_dummy_value()
+
+    return codegen
+
+
+@intrinsic
+def set_uint8(typingctx, data, idx, ch):
+    sig = types.void(types.voidptr, types.int64, types.uint32)
+    return sig, make_set_codegen(8)
+
+
+@intrinsic
+def set_uint16(typingctx, data, idx, ch):
+    sig = types.void(types.voidptr, types.int64, types.uint32)
+    return sig, make_set_codegen(16)
+
+
+@intrinsic
+def set_uint32(typingctx, data, idx, ch):
+    sig = types.void(types.voidptr, types.int64, types.uint32)
+    return sig, make_set_codegen(32)
+
+
+@njit
+def _set_code_point(a, i, ch):
+    ### WARNING: This method is very dangerous:
+    #   * Assumes that data contents can be changed (only allowed for new
+    #     strings)
+    #   * Assumes that the kind of unicode string is sufficiently wide to
+    #     accept ch.  Will truncate ch to make it fit.
+    #   * Assumes that i is within the valid boundaries of the function
+    if a._kind == PY_UNICODE_1BYTE_KIND:
+        set_uint8(a._data, i, ch)
+    elif a._kind == PY_UNICODE_2BYTE_KIND:
+        set_uint16(a._data, i, ch)
+    elif a._kind == PY_UNICODE_4BYTE_KIND:
+        set_uint32(a._data, i, ch)
+    else:
+        pass # FIXME: wchar?
+
+
+@njit
+def _pick_kind(kind1, kind2):
+    if kind1 == PY_UNICODE_1BYTE_KIND:
+        return kind2
+    elif kind1 == PY_UNICODE_2BYTE_KIND:
+        if kind2 == PY_UNICODE_4BYTE_KIND:
+            return kind2
+        else:
+            return kind1
+    elif kind1 == PY_UNICODE_4BYTE_KIND:
+        return kind1
+    else:
+        return PY_UNICODE_4BYTE_KIND # FIXME: wchar
+
+
+@njit
+def _kind_to_byte_width(kind):
+    if kind == PY_UNICODE_1BYTE_KIND:
+        return 1
+    elif kind == PY_UNICODE_2BYTE_KIND:
+        return 2
+    elif kind == PY_UNICODE_4BYTE_KIND:
+        return 4
+    else:
+        return 4 # FIXME: wchar
 
 
 @njit
@@ -299,3 +367,76 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
+### String creation
+@njit
+def normalize_str_idx(idx, length, is_start=True):
+    if idx is None:
+        if is_start:
+            return 0
+        else:
+            return length
+    elif idx < 0:
+        idx += length
+
+    if idx < 0 or idx >= length:
+        raise IndexError("string index out of range")
+    return idx
+
+    
+
+@overload(operator.getitem)
+def unicode_getitem(s, idx):
+    if isinstance(s, types.UnicodeType):
+        if isinstance(idx, types.Integer):
+            def getitem_char(s, idx):
+                idx = normalize_str_idx(idx, len(s))
+                ret = _empty_string(s._kind, 1)
+                _set_code_point(ret, 0, _get_code_point(s, idx))
+                return ret
+            return getitem_char
+        elif idx == types.slice2_type:
+            def getitem_slice2(s, slice_idx):
+                start = normalize_str_idx(slice_idx.start, len(s), is_start=True)
+                stop = normalize_str_idx(slice_idx.stop, len(s), is_start=False)
+                new_len = stop - start
+                if new_len <= 0:
+                    ret = _empty_string(s._kind, 0)
+                else:
+                    ret = _empty_string(s._kind, new_len)
+                    for i in range(new_len):
+                        _set_code_point(ret, i, _get_code_point(s, start + i))
+                return ret
+            return getitem_slice2
+        elif idx == types.slice3_type:
+            def getitem_slice3(s, slice_idx):
+                start = normalize_str_idx(slice_idx.start, len(s), is_start=True)
+                stop = normalize_str_idx(slice_idx.stop, len(s), is_start=False)
+                step = slice_idx.step
+
+                if step == 0:
+                    raise ValueError('slice step cannot be zero')
+
+                if (step > 0 and (stop - start) <= 0) or (step < 0 and (start - stop) <= 0):
+                    ret = _empty_string(s._kind, 0)
+                else:
+                    new_len = (stop - start + abs(step) - 1) // step
+                    ret = _empty_string(s._kind, new_len)
+                    for i in range(new_len):
+                        _set_code_point(ret, i, _get_code_point(s, start + step * i))
+                return ret
+            return getitem_slice3
+
+
+@overload(operator.add)
+def unicode_concat(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def concat_impl(a, b):
+            new_length = a._length + b._length
+            new_kind = _pick_kind(a._kind, b._kind)
+            result = _empty_string(new_kind, new_length)
+            for i in range(len(a)):
+                _set_code_point(result, i, _get_code_point(a, i))
+            for j in range(len(b)):
+                _set_code_point(result, len(a) + j, _get_code_point(b, j))
+            return result
+        return concat_impl
