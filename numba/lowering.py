@@ -10,7 +10,7 @@ from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError, new_error_context
+from .errors import LoweringError, new_error_context, TypingError
 from .targets import removerefctpass
 from .funcdesc import default_mangler
 from . import debuginfo, utils
@@ -77,6 +77,7 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
     def __init__(self, context, library, fndesc, func_ir):
         self.library = library
         self.fndesc = fndesc
@@ -506,6 +507,10 @@ class Lower(BaseLower):
         return self.context.get_constant_generic(self.builder, retty, None)
 
     def lower_binop(self, resty, expr, op):
+        # if op in utils.OPERATORS_TO_BUILTINS:
+        # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
+        op = self.context.typing_context.resolve_value_type(op)
+
         lhs = expr.lhs
         rhs = expr.rhs
         static_lhs = expr.static_lhs
@@ -528,7 +533,13 @@ class Lower(BaseLower):
         def try_static_impl(tys, args):
             if any(a is ir.UNDEFINED for a in args):
                 return None
-            static_sig = typing.signature(signature.return_type, *tys)
+            try:
+                if isinstance(op, types.Function):
+                    static_sig = op.get_call_type(self.context.typing_context, tys, {})
+                else:
+                    static_sig = typing.signature(signature.return_type, *tys)
+            except TypingError:
+                return None
             try:
                 static_impl = self.context.get_function(op, static_sig)
                 return static_impl(self.builder, args)
@@ -551,7 +562,9 @@ class Lower(BaseLower):
             return cast_result(res)
 
         # Normal implementation for generic arguments
-        impl = self.context.get_function(op, signature)
+
+        sig = op.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(op, sig)
         res = impl(self.builder, (lhs, rhs))
         return cast_result(res)
 
@@ -837,7 +850,7 @@ class Lower(BaseLower):
                 return self.lower_binop(resty, expr, expr.fn)
             else:
                 # inplace operators on non-mutable types reuse the same
-                # definition as the corresponding copying operators.
+                # definition as the corresponding copying operators.)
                 return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)

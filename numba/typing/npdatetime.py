@@ -5,9 +5,10 @@ Typing declarations for np.timedelta64.
 from __future__ import print_function, division, absolute_import
 
 from itertools import product
+import operator
 
 from numba import npdatetime, types
-from numba.utils import PYVERSION
+from numba.utils import IS_PY3
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
                                     infer_getattr, signature)
@@ -111,61 +112,74 @@ class TimedeltaDivOp(AbstractTemplate):
             return signature(left, left, types.int64)
 
 
-@infer
+@infer_global(operator.pos)
 class TimedeltaUnaryPos(TimedeltaUnaryOp):
-    key = "+"
+    key = operator.pos
 
-@infer
+@infer_global(operator.neg)
 class TimedeltaUnaryNeg(TimedeltaUnaryOp):
-    key = "-"
+    key = operator.neg
 
-@infer
+@infer_global(operator.add)
+@infer_global(operator.iadd)
 class TimedeltaBinAdd(TimedeltaBinOp):
-    key = "+"
+    key = operator.add
 
-@infer
+@infer_global(operator.sub)
+@infer_global(operator.isub)
 class TimedeltaBinSub(TimedeltaBinOp):
-    key = "-"
+    key = operator.sub
 
-@infer
+@infer_global(operator.mul)
+@infer_global(operator.imul)
 class TimedeltaBinMult(TimedeltaMixOp):
-    key = "*"
+    key = operator.mul
 
-@infer
+@infer_global(operator.truediv)
+@infer_global(operator.itruediv)
 class TimedeltaTrueDiv(TimedeltaDivOp):
-    key = "/"
+    key = operator.truediv
 
-@infer
+@infer_global(operator.floordiv)
+@infer_global(operator.ifloordiv)
 class TimedeltaFloorDiv(TimedeltaDivOp):
-    key = "//"
+    key = operator.floordiv
 
-@infer
-class TimedeltaLegacyDiv(TimedeltaDivOp):
-    key = "/?"
 
-@infer
+if not IS_PY3:
+    @infer_global(operator.div)
+    class TimedeltaLegacyDiv(TimedeltaDivOp):
+        key = operator.div
+
+
+    @infer_global(operator.idiv)
+    class TimedeltaLegacyDiv(TimedeltaDivOp):
+        key = operator.idiv
+
+
+@infer_global(operator.eq)
 class TimedeltaCmpEq(TimedeltaCmpOp):
-    key = '=='
+    key = operator.eq
 
-@infer
+@infer_global(operator.ne)
 class TimedeltaCmpNe(TimedeltaCmpOp):
-    key = '!='
+    key = operator.ne
 
-@infer
+@infer_global(operator.lt)
 class TimedeltaCmpLt(TimedeltaOrderedCmpOp):
-    key = '<'
+    key = operator.lt
 
-@infer
+@infer_global(operator.le)
 class TimedeltaCmpLE(TimedeltaOrderedCmpOp):
-    key = '<='
+    key = operator.le
 
-@infer
+@infer_global(operator.gt)
 class TimedeltaCmpGt(TimedeltaOrderedCmpOp):
-    key = '>'
+    key = operator.gt
 
-@infer
+@infer_global(operator.ge)
 class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
-    key = '>='
+    key = operator.ge
 
 
 @infer_global(abs)
@@ -175,9 +189,10 @@ class TimedeltaAbs(TimedeltaUnaryOp):
 
 # datetime64 operations
 
-@infer
+@infer_global(operator.add)
+@infer_global(operator.iadd)
 class DatetimePlusTimedelta(AbstractTemplate):
-    key = '+'
+    key = operator.add
 
     def generic(self, args, kws):
         if len(args) == 1:
@@ -197,9 +212,10 @@ class DatetimePlusTimedelta(AbstractTemplate):
             if unit is not None:
                 return signature(types.NPDatetime(unit), left, right)
 
-@infer
+@infer_global(operator.sub)
+@infer_global(operator.isub)
 class DatetimeMinusTimedelta(AbstractTemplate):
-    key = '-'
+    key = operator.sub
 
     def generic(self, args, kws):
         if len(args) == 1:
@@ -211,9 +227,9 @@ class DatetimeMinusTimedelta(AbstractTemplate):
             if unit is not None:
                 return signature(types.NPDatetime(unit), dt, td)
 
-@infer
+@infer_global(operator.sub)
 class DatetimeMinusDatetime(AbstractTemplate):
-    key = '-'
+    key = operator.sub
 
     def generic(self, args, kws):
         if len(args) == 1:
@@ -236,26 +252,26 @@ class DatetimeCmpOp(AbstractTemplate):
         return signature(types.boolean, left, right)
 
 
-@infer
+@infer_global(operator.eq)
 class DatetimeCmpEq(DatetimeCmpOp):
-    key = '=='
+    key = operator.eq
 
-@infer
+@infer_global(operator.ne)
 class DatetimeCmpNe(DatetimeCmpOp):
-    key = '!='
+    key = operator.ne
 
-@infer
+@infer_global(operator.lt)
 class DatetimeCmpLt(DatetimeCmpOp):
-    key = '<'
+    key = operator.lt
 
-@infer
+@infer_global(operator.le)
 class DatetimeCmpLE(DatetimeCmpOp):
-    key = '<='
+    key = operator.le
 
-@infer
+@infer_global(operator.gt)
 class DatetimeCmpGt(DatetimeCmpOp):
-    key = '>'
+    key = operator.gt
 
-@infer
+@infer_global(operator.ge)
 class DatetimeCmpGE(DatetimeCmpOp):
-    key = '>='
+    key = operator.ge

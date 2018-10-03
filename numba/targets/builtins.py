@@ -4,6 +4,7 @@ import math
 from functools import reduce
 
 import numpy as np
+import operator
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -16,16 +17,16 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
 from .. import typing, types, cgutils, utils
 
 
-@lower_builtin('is not', types.Any, types.Any)
+@lower_builtin(operator.is_not, types.Any, types.Any)
 def generic_is_not(context, builder, sig, args):
     """
     Implement `x is not y` as `not (x is y)`.
     """
-    is_impl = context.get_function('is', sig)
+    is_impl = context.get_function(operator.is_, sig)
     return builder.not_(is_impl(builder, args))
 
 
-@lower_builtin('is', types.Any, types.Any)
+@lower_builtin(operator.is_, types.Any, types.Any)
 def generic_is(context, builder, sig, args):
     """
     Default implementation for `x is y`
@@ -40,7 +41,7 @@ def generic_is(context, builder, sig, args):
             else:
                 # fallbacks to `==`
                 try:
-                    eq_impl = context.get_function('==', sig)
+                    eq_impl = context.get_function(operator.eq, sig)
                 except NotImplementedError:
                     # no `==` implemented for this type
                     return cgutils.false_bit
@@ -125,21 +126,21 @@ def do_minmax(context, builder, argtys, args, cmpop):
 def max_iterable(context, builder, sig, args):
     argtys = list(sig.args[0])
     args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, '>')
+    return do_minmax(context, builder, argtys, args, operator.gt)
 
 @lower_builtin(max, types.VarArg(types.Any))
 def max_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, '>')
+    return do_minmax(context, builder, sig.args, args, operator.gt)
 
 @lower_builtin(min, types.BaseTuple)
 def min_iterable(context, builder, sig, args):
     argtys = list(sig.args[0])
     args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, '<')
+    return do_minmax(context, builder, argtys, args, operator.lt)
 
 @lower_builtin(min, types.VarArg(types.Any))
 def min_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, '<')
+    return do_minmax(context, builder, sig.args, args, operator.lt)
 
 
 def _round_intrinsic(tp):
@@ -305,7 +306,7 @@ def next_impl(context, builder, sig, args):
 @lower_builtin("not in", types.Any, types.Any)
 def not_in(context, builder, sig, args):
     def in_impl(a, b):
-        return a in b
+        return operator.contains(b, a)
 
     res = context.compile_internal(builder, in_impl, sig, args)
     return builder.not_(res)

@@ -33,6 +33,7 @@ from numba.analysis import (
 from numba.targets.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
+import operator
 
 """
 Variable enable_inline_arraycall is only used for testing purpose.
@@ -656,7 +657,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
         if start == 0:
             size_val = stop
         else:
-            size_val = ir.Expr.binop(fn='-', lhs=stop, rhs=start, loc=loc)
+            size_val = ir.Expr.binop(fn=operator.sub, lhs=stop, rhs=start, loc=loc)
         # we can parallelize this loop if enable_prange = True, by changing
         # range function from range, to prange.
         if enable_prange and isinstance(range_func_def, ir.Global):
@@ -718,7 +719,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
             blk = func_ir.blocks[block_id]
             loc = blk.loc
             blk.body.insert(0, _new_definition(func_ir, index_var,
-                ir.Expr.binop(fn='-', lhs=iter_first_var,
+                ir.Expr.binop(fn=operator.sub, lhs=iter_first_var,
                                       rhs=range_def[0], loc=loc),
                 loc))
     else:
@@ -733,7 +734,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, enable_prange=False):
                      ir.Const(value=1,loc=loc), loc))
         # next_index_var = index_var + 1
         stmts.append(_new_definition(func_ir, next_index_var,
-                     ir.Expr.binop(fn='+', lhs=index_var, rhs=one, loc=loc), loc))
+                     ir.Expr.binop(fn=operator.add, lhs=index_var, rhs=one, loc=loc), loc))
         # index_var = next_index_var
         stmts.append(_new_definition(func_ir, index_var, next_index_var, loc))
         stmts.append(terminator)

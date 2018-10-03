@@ -2,12 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
-import sys
-from copy import copy
+import operator
 
 from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
 from .errors import NotDefinedError
+from .utils import (
+    BINOPS_TO_OPERATORS,
+    INPLACE_BINOPS_TO_OPERATORS,
+    UNARY_BUITINS_TO_OPERATORS,
+    OPERATORS_TO_BUILTINS,
+    )
 
 
 class Assigner(object):
@@ -702,7 +707,8 @@ class Interpreter(object):
     def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
         for other, tmp in zip(map(self.get, tuples[1:]), temps):
-            out = ir.Expr.binop(fn='+', lhs=first, rhs=other, loc=self.loc)
+            out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
+                                loc=self.loc)
             self.store(out, tmp)
             first = self.get(tmp)
 
@@ -825,15 +831,19 @@ class Interpreter(object):
         return self.store(expr, res)
 
     def _binop(self, op, lhs, rhs, res):
+        op = BINOPS_TO_OPERATORS[op]
         lhs = self.get(lhs)
         rhs = self.get(rhs)
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
     def _inplace_binop(self, op, lhs, rhs, res):
+        immuop = BINOPS_TO_OPERATORS[op]
+        op = INPLACE_BINOPS_TO_OPERATORS[op + '=']
         lhs = self.get(lhs)
         rhs = self.get(rhs)
-        expr = ir.Expr.inplace_binop(op + '=', op, lhs=lhs, rhs=rhs, loc=self.loc)
+        expr = ir.Expr.inplace_binop(op, immuop, lhs=lhs, rhs=rhs,
+                                     loc=self.loc)
         self.store(expr, res)
 
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
@@ -938,7 +948,16 @@ class Interpreter(object):
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
         op = dis.cmp_op[inst.arg]
-        self._binop(op, lhs, rhs, res)
+        if op == 'in' or op == 'not in':
+            lhs, rhs = rhs, lhs
+
+        if op == 'not in':
+            self._binop('in', lhs, rhs, res)
+            tmp = self.get(res)
+            out = ir.Expr.unary('not', value=tmp, loc=self.loc)
+            self.store(out, res)
+        else:
+            self._binop(op, lhs, rhs, res)
 
     def op_BREAK_LOOP(self, inst):
         loop = self.syntax_blocks[-1]
