@@ -1025,7 +1025,7 @@ def unbox_dispatcher(typ, obj, c):
 def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
                            "can't unbox {!r} type".format(typ))
-    res = c.pyapi.get_null_object()
+    res = c.context.get_constant_null(typ)
     return NativeValue(res, is_error=cgutils.true_bit)
 
 

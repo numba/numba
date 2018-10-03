@@ -193,8 +193,8 @@ def iternext_unituple(context, builder, sig, args, result):
         builder.store(nidx, iterval.index)
 
 
-@lower_builtin('getitem', types.UniTuple, types.intp)
-@lower_builtin('getitem', types.NamedUniTuple, types.intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args

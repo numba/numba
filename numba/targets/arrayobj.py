@@ -402,8 +402,8 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
         return load_item(context, builder, aryty, dataptr)
 
 
-@lower_builtin('getitem', types.Buffer, types.Integer)
-@lower_builtin('getitem', types.Buffer, types.SliceType)
+@lower_builtin(operator.getitem, types.Buffer, types.Integer)
+@lower_builtin(operator.getitem, types.Buffer, types.SliceType)
 def getitem_arraynd_intp(context, builder, sig, args):
     """
     Basic indexing with an integer or a slice.
@@ -419,7 +419,7 @@ def getitem_arraynd_intp(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('getitem', types.Buffer, types.BaseTuple)
+@lower_builtin(operator.getitem, types.Buffer, types.BaseTuple)
 def getitem_array_tuple(context, builder, sig, args):
     """
     Basic or advanced indexing with a tuple.
@@ -1028,7 +1028,7 @@ def fancy_getitem(context, builder, sig, args,
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
 
-@lower_builtin('getitem', types.Buffer, types.Array)
+@lower_builtin(operator.getitem, types.Buffer, types.Array)
 def fancy_getitem_array(context, builder, sig, args):
     """
     Advanced or basic indexing with an array.
@@ -1337,7 +1337,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem(source_indices):
             idx, = source_indices
-            getitem_impl = context.get_function('getitem',
+            getitem_impl = context.get_function(operator.getitem,
                                                 signature(src_dtype, srcty, types.intp))
             return getitem_impl(builder, (src, idx))
 
@@ -2983,7 +2983,7 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     flatiter.iternext_specific(context, builder, arrty, arr, result)
 
 
-@lower_builtin('getitem', types.NumpyFlatType, types.Integer)
+@lower_builtin(operator.getitem, types.NumpyFlatType, types.Integer)
 def iternext_numpy_getitem(context, builder, sig, args):
     flatiterty = sig.args[0]
     flatiter, index = args
@@ -3919,7 +3919,7 @@ def _get_borrowing_getitem(context, seqty):
     Return a getitem() implementation that doesn't incref its result.
     """
     retty = seqty.dtype
-    getitem_impl = context.get_function('getitem',
+    getitem_impl = context.get_function(operator.getitem,
                                         signature(retty, seqty, types.intp))
     def wrap(builder, args):
         ret = getitem_impl(builder, args)

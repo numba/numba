@@ -81,7 +81,7 @@ def deferred_to_any(context, builder, fromty, toty, val):
 
 #------------------------------------------------------------------------------
 
-@lower_builtin('getitem', types.CPointer, types.Integer)
+@lower_builtin(operator.getitem, types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
     base_ptr, idx = args
     elem_ptr = builder.gep(base_ptr, [idx])
