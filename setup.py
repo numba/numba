@@ -80,7 +80,8 @@ def is_building():
 
 def is_building_wheel():
     if len(sys.argv) < 2:
-        return True
+        # No command is given.
+        return False
 
     return 'bdist_wheel' in sys.argv[1:]
 
