@@ -423,7 +423,8 @@ class TestLists(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(list_constructor_empty)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc()
-        self.assertIn("Can't infer type of variable", str(raises.exception))
+        self.assertIn("Cannot infer the type of variable",
+                      str(raises.exception))
         self.assertIn("list(undefined)", str(raises.exception))
 
     def test_constructor_empty_but_typeable(self):

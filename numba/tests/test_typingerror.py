@@ -130,8 +130,9 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(imprecise_list, ())
 
         errmsg = str(raises.exception)
-        self.assertIn("Can't infer type of variable 'l': list(undefined)",
-                      errmsg)
+        msg = ("Cannot infer the type of variable 'l', have imprecise type: "
+               "list(undefined)")
+        self.assertIn(msg, errmsg)
 
     def test_using_imprecise_list(self):
         """
