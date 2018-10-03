@@ -571,7 +571,13 @@ class Lower(BaseLower):
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
-        impl = self.context.get_function(operator.getitem, signature)
+        op = operator.getitem
+        try:
+            impl = self.context.get_function(op, signature)
+        except NotImplementedError:
+            fnop = self.context.typing_context.resolve_value_type(op)
+            fnop.get_call_type(self.context.typing_context, signature.args, {})
+            impl = self.context.get_function(fnop, signature)
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
                    self.typeof(index.name))
