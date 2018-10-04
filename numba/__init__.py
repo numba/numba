@@ -8,7 +8,7 @@ import re
 import sys
 import warnings
 
-from . import config, errors, runtests, types
+from . import config, errors, _runtests as runtests, types
 
 # Re-export typeof
 from .special import typeof, prange, pndindex

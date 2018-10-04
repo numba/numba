@@ -15,6 +15,7 @@ import warnings
 from functools import reduce
 import numpy as np
 from numpy.random import randn
+import operator
 
 import numba
 from numba import unittest_support as unittest
@@ -523,16 +524,16 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
-    def test_fuse_argmin(self):
-        def test_impl(n):
-            A = np.ones(n)
-            C = A.argmin()
-            B = A.sum()
-            return B+C
-
-        self.check(test_impl, 256)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
-        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
+    def test_fuse_argmin_argmax_max_min(self):
+        for op in [np.argmin, np.argmax, np.min, np.max]:
+            def test_impl(n):
+                A = np.ones(n)
+                C = op(A)
+                B = A.sum()
+                return B + C
+            self.check(test_impl, 256)
+            self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+            self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
@@ -738,6 +739,28 @@ class TestParfors(TestParforsBase):
             b = np.arange(n)
             return np.sum(A[:, b])
         self.check(test_impl)
+
+    @test_disabled
+    def test_simple_operator_15(self):
+        """same as corresponding test_simple_<n> case but using operator.add"""
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(v1, v1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_16(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m1, m1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_17(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m2, v1)
+
+        self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
     def test_np_func_direct_import(self):
@@ -965,6 +988,15 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = ("zero-size array to reduction operation "
+               "minimum which has no identity")
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
+
     @skip_unsupported
     def test_max(self):
         def test_impl1(A):
@@ -983,6 +1015,15 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+
+        # checks that 0d array input raises
+        msg = ("zero-size array to reduction operation "
+               "maximum which has no identity")
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_argmin(self):
@@ -1003,6 +1044,14 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = 'attempt to get argmin of an empty sequence'
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
+
     @skip_unsupported
     def test_argmax(self):
         def test_impl1(A):
@@ -1022,6 +1071,13 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = 'attempt to get argmax of an empty sequence'
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_parfor_array_access1(self):
