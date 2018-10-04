@@ -32,6 +32,13 @@ obtained via the conda command::
 
     $ conda install tbb
 
+If you installed Numba with ``pip``, TBB can be enabled by running::
+
+    $ pip install tbb
+
+Due to compatibility issues with manylinux1 and other portability concerns,
+the OpenMP threading layer is disabled in the Numba binary wheels on PyPI.
+
 .. note::
     The default manner in which Numba searches for and loads a threading layer
     is tolerant of missing libraries, incompatible runtimes etc.

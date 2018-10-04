@@ -1,3 +1,18 @@
+Version 0.40.1
+--------------
+
+This is a PyPI-only patch release to ensure that PyPI wheels can enable the
+TBB threading backend, and to disable the OpenMP backend in the wheels.
+Limitations of manylinux1 and variation in user environments can cause
+segfaults when OpenMP is enabled on wheel builds.  Note that this release has
+no functional changes for users who obtained Numba 0.40.0 via conda.
+
+Patches:
+
+* PR #3338: Accidentally left Anton off contributor list for 0.40.0
+* PR #3374: Disable OpenMP in wheel building
+* PR #3376: Update 0.40.1 changelog and docs on OpenMP backend
+
 Version 0.40.0
 --------------
 
