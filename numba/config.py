@@ -318,6 +318,8 @@ class _EnvReloader(object):
         # The default value for the `debug` flag
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
+        # gdb binary location
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

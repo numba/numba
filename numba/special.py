@@ -16,4 +16,8 @@ class prange(object):
     def __new__(cls, *args):
         return range(*args)
 
-__all__ = ['typeof', 'prange', 'pndindex']
+def gdb(*args):
+    pass
+
+
+__all__ = ['typeof', 'prange', 'pndindex', 'gdb']
