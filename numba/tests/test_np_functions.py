@@ -778,9 +778,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for j in range(10, 30):
             for i in range(1, j - 2):
                 d = np.arange(j)
-                np.random.shuffle(d)
-                d = d % np.random.randint(2, 30)
-                idx = np.random.randint(d.size)
+                self.rnd.shuffle(d)
+                d = d % self.rnd.randint(2, 30)
+                idx = self.rnd.randint(d.size)
                 kth = [0, idx, i, i + 1, -idx, -i]  # include some negative kth's
                 tgt = np.sort(d)[kth]
                 self.assertPreciseEqual(cfunc(d, kth)[kth], tgt)
@@ -903,7 +903,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # equal elements
         d = np.arange(47) % 7
         tgt = np.sort(np.arange(47) % 7)
-        np.random.shuffle(d)
+        self.rnd.shuffle(d)
         for i in range(d.size):
             self.assertEqual(cfunc(d, i)[i], tgt[i])
 
@@ -915,9 +915,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         td = [(dt, s) for dt in [np.int32, np.float32] for s in (9, 16)]
         for dt, s in td:
             d = np.arange(s, dtype=dt)
-            np.random.shuffle(d)
+            self.rnd.shuffle(d)
             d1 = np.tile(np.arange(s, dtype=dt), (4, 1))
-            map(np.random.shuffle, d1)
+            map(self.rnd.shuffle, d1)
             for i in range(d.size):
                 p = cfunc(d, i)
                 self.assertEqual(p[i], i)
@@ -945,17 +945,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(p, cfunc(d, (-3, -1)))
 
         d = np.arange(17)
-        np.random.shuffle(d)
+        self.rnd.shuffle(d)
         self.assertPreciseEqual(np.arange(17), cfunc(d, list(range(d.size))))
 
         # test unsorted kth
         d = np.arange(17)
-        np.random.shuffle(d)
+        self.rnd.shuffle(d)
         keys = np.array([1, 3, 8, -2])
-        np.random.shuffle(d)
+        self.rnd.shuffle(d)
         p = cfunc(d, keys)
         self.assert_partitioned(p, keys)
-        np.random.shuffle(keys)
+        self.rnd.shuffle(keys)
         self.assertPreciseEqual(cfunc(d, keys), p)
 
         # equal kth
