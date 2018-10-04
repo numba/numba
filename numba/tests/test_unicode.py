@@ -242,7 +242,7 @@ class TestUnicode(BaseTest):
         for s in UNICODE_EXAMPLES:
             for i in range(-len(s), len(s)):
                 for j in range(-len(s), len(s)):
-                    for k in [-1, 1, 2]:
+                    for k in [-2, -1, 1, 2]:
                         self.assertEqual(pyfunc(s, i, j, k),
                                         cfunc(s, i, j, k),
                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))

@@ -416,10 +416,12 @@ def unicode_getitem(s, idx):
                 if step == 0:
                     raise ValueError('slice step cannot be zero')
 
-                if (step > 0 and (stop - start) <= 0) or (step < 0 and (start - stop) <= 0):
+                span = stop - start
+
+                if (step > 0 and span <= 0) or (step < 0 and span >= 0):
                     ret = _empty_string(s._kind, 0)
                 else:
-                    new_len = (stop - start + abs(step) - 1) // step
+                    new_len = (span + span % step) // step
                     ret = _empty_string(s._kind, new_len)
                     for i in range(new_len):
                         _set_code_point(ret, i, _get_code_point(s, start + step * i))
