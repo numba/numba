@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import math
 import sys
+from functools import partial
 
 import numpy as np
 
@@ -771,6 +772,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
+    def partition_sanity_check(self, pyfunc, cfunc, a, kth):
+        expected = pyfunc(a, kth)
+        got = cfunc(a, kth)
+
+        # expect the unordered collection of elements up to kth to be the same between numpy and numba
+        self.assertPreciseEqual(np.unique(expected[:kth]), np.unique(got[:kth]))
+
+        # expect the unordered collection of elements from kth onwards to be the same between numpy and numba
+        self.assertPreciseEqual(np.unique(expected[kth:]), np.unique(got[kth:]))
+
     def test_partition_fuzz(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
@@ -786,6 +797,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(cfunc(d, kth)[kth], tgt)  # a -> array
                 self.assertPreciseEqual(cfunc(d.tolist(), kth)[kth], tgt)  # a -> list
                 self.assertPreciseEqual(cfunc(tuple(d.tolist()), kth)[kth], tgt)  # a -> tuple
+
+                for k in kth:
+                    self.partition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_exception_out_of_range(self):
         pyfunc = partition
@@ -887,29 +901,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc(np.arange(40), kth)
         self.assertPreciseEqual(kth, okth)
 
-        # cycle through dtypes to check for consistency in output
         for r in ([2, 1], [1, 2], [1, 1]):
-            for dtype in np.int32, np.float32, np.float64:
-                d = np.array(r, dtype=dtype)
-                tgt = np.sort(d)
-                self.assertPreciseEqual(cfunc(d, 0)[0], tgt[0])
-                self.assertPreciseEqual(cfunc(d, 1)[1], tgt[1])
+            d = np.array(r)
+            tgt = np.sort(d)
+            for k in 0, 1:
+                self.assertPreciseEqual(cfunc(d, k)[k], tgt[k])
+                self.partition_sanity_check(pyfunc, cfunc, d, k)
 
         for r in ([3, 2, 1], [1, 2, 3], [2, 1, 3], [2, 3, 1],
                   [1, 1, 1], [1, 2, 2], [2, 2, 1], [1, 2, 1]):
             d = np.array(r)
             tgt = np.sort(d)
-            self.assertPreciseEqual(cfunc(d, 0)[0], tgt[0])
-            self.assertPreciseEqual(cfunc(d, 1)[1], tgt[1])
-            self.assertPreciseEqual(cfunc(d, 2)[2], tgt[2])
+            for k in 0, 1, 2:
+                self.assertPreciseEqual(cfunc(d, k)[k], tgt[k])
+                self.partition_sanity_check(pyfunc, cfunc, d, k)
 
         d = np.ones(50)
         self.assertPreciseEqual(cfunc(d, 0), d)
 
         # sorted
         d = np.arange(49)
-        self.assertEqual(cfunc(d, 5)[5], 5)
-        self.assertEqual(cfunc(d, 15)[15], 15)
+        for k in 5, 15:
+            self.assertEqual(cfunc(d, k)[k], k)
+            self.partition_sanity_check(pyfunc, cfunc, d, k)
 
         # rsorted, with input flavours: array, list and tuple
         d = np.arange(47)[::-1]
@@ -918,6 +932,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertEqual(cfunc(a, 16)[16], 16)
             self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
             self.assertPreciseEqual(cfunc(a, -16), cfunc(a, 31))
+            self.partition_sanity_check(pyfunc, cfunc, d, -16)
 
         # median of 3 killer, O(n^2) on pure median 3 pivot quickselect
         # exercises the median of median of 5 code used to keep O(n)
@@ -944,6 +959,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.rnd.shuffle(d)
         for i in range(d.size):
             self.assertEqual(cfunc(d, i)[i], tgt[i])
+            self.partition_sanity_check(pyfunc, cfunc, d, i)
 
         d = np.array([0, 1, 2, 3, 4, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
                       7, 7, 7, 7, 7, 9])
@@ -963,22 +979,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.testing.assert_array_less(p[:i], p[i])
                 # all after are larger
                 np.testing.assert_array_less(p[i], p[i + 1:])
+                # sanity check
+                self.partition_sanity_check(pyfunc, cfunc, d, i)
 
-    def assert_partitioned(self, d, kth):
+    def assert_partitioned(self, pyfunc, cfunc, d, kth):
         prev = 0
         for k in np.sort(kth):
             np.testing.assert_array_less(d[prev:k], d[k], err_msg='kth %d' % k)
             assert (d[k:] >= d[k]).all(), "kth %d, %r not greater equal %d" % (k, d[k:], d[k])
             prev = k + 1
+            self.partition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_iterative(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
+        assert_partitioned = partial(self.assert_partitioned, pyfunc, cfunc)
+
         d = np.array([3, 4, 2, 1])
         p = cfunc(d, (0, 3))
-        self.assert_partitioned(p, (0, 3))
-        self.assert_partitioned(d[np.argpartition(d, (0, 3))], (0, 3))
+        assert_partitioned(p, (0, 3))
+        assert_partitioned(d[np.argpartition(d, (0, 3))], (0, 3))
 
         self.assertPreciseEqual(p, cfunc(d, (-3, -1)))
 
@@ -992,14 +1013,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         keys = np.array([1, 3, 8, -2])
         self.rnd.shuffle(d)
         p = cfunc(d, keys)
-        self.assert_partitioned(p, keys)
+        assert_partitioned(p, keys)
         self.rnd.shuffle(keys)
         self.assertPreciseEqual(cfunc(d, keys), p)
 
         # equal kth
         d = np.arange(20)[::-1]
-        self.assert_partitioned(cfunc(d, [5] * 4), [5])
-        self.assert_partitioned(cfunc(d, [5] * 4 + [6, 13]), [5] * 4 + [6, 13])
+        assert_partitioned(cfunc(d, [5] * 4), [5])
+        assert_partitioned(cfunc(d, [5] * 4 + [6, 13]), [5] * 4 + [6, 13])
 
     def test_partition_multi_dim(self):
         pyfunc = partition
@@ -1027,17 +1048,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr in a_variations(a):
             for k in range(-3, 3):
                 check(arr, k)
-
-    def test_all(self):
-        self.test_partition_iterative()
-        self.test_partition_fuzz()
-        self.test_partition_exception_out_of_range()
-        self.test_partition_exception_non_integer_kth()
-        self.test_partition_empty_array()
-        self.test_partition_basic()
-        self.test_partition_multi_dim()
-        self.test_partition_exception_a_not_array_like()
-        self.test_partition_exception_a_zero_dim()
 
 
 class TestNPMachineParameters(TestCase):
