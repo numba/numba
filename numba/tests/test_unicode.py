@@ -43,14 +43,6 @@ def getitem_usecase(x, i):
     return x[i]
 
 
-def slice2_usecase(x, i, j):
-    return x[i:j]
-
-
-def slice3_usecase(x, i, j, k):
-    return x[i:j:k]
-
-
 def concat_usecase(x, y):
     return x + y
 
@@ -225,26 +217,28 @@ class TestUnicode(BaseTest):
                                  "'%s'[%d]?" % (s, i))
 
     def test_slice2(self):
-        pyfunc = slice2_usecase
+        pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            for i in range(-len(s), len(s)):
-                for j in range(-len(s), len(s)):
-                    self.assertEqual(pyfunc(s, i, j),
-                                    cfunc(s, i, j),
+            for i in [None] + list(range(-len(s), len(s))):
+                for j in [None] + list(range(-len(s), len(s))):
+                    sl = slice(i, j)
+                    self.assertEqual(pyfunc(s, sl),
+                                    cfunc(s, sl),
                                     "'%s'[%d:%d]?" % (s, i, j))
 
     def test_slice3(self):
-        pyfunc = slice3_usecase
+        pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
             for i in range(-len(s), len(s)):
                 for j in range(-len(s), len(s)):
                     for k in [-2, -1, 1, 2]:
-                        self.assertEqual(pyfunc(s, i, j, k),
-                                        cfunc(s, i, j, k),
+                        sl = slice(i, j, k)
+                        self.assertEqual(pyfunc(s, sl),
+                                        cfunc(s, sl),
                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
     def test_concat(self, flags=no_pyobj_flags):
