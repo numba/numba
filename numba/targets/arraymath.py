@@ -1045,12 +1045,19 @@ def np_partition(a, kth):
     if not isinstance(kthdt, types.Integer):
         raise TypeError('Partition index must be integer')
 
+    if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
+        raise TypeError('a must be an array-like')
+
+    if isinstance(a, types.Array) and a.ndim == 0:
+        raise TypeError('a must be at least 1D')
+
     def np_partition_impl(a, kth):
-        if a.size == 0:
-            return a.copy()
+        a_tmp = _asarray(a)
+        if a_tmp.size == 0:
+            return a_tmp.copy()
         else:
-            kth_array = valid_kths(a, kth)
-            return np_partition_impl_inner(a, kth_array)
+            kth_array = valid_kths(a_tmp, kth)
+            return np_partition_impl_inner(a_tmp, kth_array)
 
     return np_partition_impl
 
