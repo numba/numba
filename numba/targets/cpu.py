@@ -15,6 +15,7 @@ from numba.runtime import rtsys
 from numba.compiler_lock import global_compiler_lock
 from . import fastmathpass
 
+
 # Keep those structures in sync with _dynfunc.c.
 
 class ClosureBody(cgutils.Structure):
@@ -60,6 +61,7 @@ class CPUContext(BaseContext):
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(randomimpl.registry)
+        import numba.unicode
 
     @property
     def target_data(self):

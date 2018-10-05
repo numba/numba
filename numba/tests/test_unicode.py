@@ -12,11 +12,6 @@ from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 
-# register everything
-import numba.typing.unicode_str
-import numba.targets.unicode_str
-
-
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 
@@ -221,8 +216,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            for i in [None] + list(range(-len(s), len(s))):
-                for j in [None] + list(range(-len(s), len(s))):
+            for i in list(range(-len(s), len(s))):
+                for j in list(range(-len(s), len(s))):
                     sl = slice(i, j)
                     self.assertEqual(pyfunc(s, sl),
                                     cfunc(s, sl),

@@ -1,6 +1,6 @@
 from numba.extending import (models, register_model,
     make_attribute_wrapper, unbox, box, NativeValue, overload,
-    lower_builtin, overload_method, intrinsic)
+    lower_builtin, overload_method, intrinsic, typeof_impl)
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -10,6 +10,10 @@ from llvmlite.ir import IntType, Constant
 import numpy as np
 import operator
 
+# FIXME: Python 3
+@typeof_impl.register(types.fake_str)
+def typeof_unicode_type(val, c):
+    return types.unicode_type
 
 ### DATA MODEL
 
