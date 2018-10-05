@@ -773,16 +773,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_matrix_exceptions(triu)
 
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
+        # as NumPy uses a different algorithm, we do not expect to match outputs exactly...
         expected = pyfunc(a, kth)
         got = cfunc(a, kth)
 
-        # expect the unordered collection of elements up to kth to be the same between numpy and numba
+        # ... but we do expect the unordered collection of elements up to kth to tie out
         self.assertPreciseEqual(np.unique(expected[:kth]), np.unique(got[:kth]))
 
-        # expect the unordered collection of elements from kth onwards to be the same between numpy and numba
+        # ... likewise the unordered collection of elements from kth onwards
         self.assertPreciseEqual(np.unique(expected[kth:]), np.unique(got[kth:]))
 
     def test_partition_fuzz(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -802,6 +805,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     self.partition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_exception_out_of_range(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -821,6 +826,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(a, (3, 30))
 
     def test_partition_exception_non_integer_kth(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -867,6 +874,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(np.array(1), 0)
 
     def test_partition_empty_array(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -884,6 +893,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(arr)
 
     def test_partition_basic(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -991,6 +1002,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.partition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_iterative(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
