@@ -12,6 +12,7 @@ CONST2D = np.asfortranarray(
     np.arange(100, dtype=np.int32).reshape(10, 10))
 CONST3D = ((np.arange(5 * 5 * 5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
            2j)
+CONST3BYTES = np.arange(3, dtype=np.uint8)
 
 CONST_RECORD_EMPTY = np.array(
     [],
@@ -83,6 +84,13 @@ def cuconstRecAlign(A, B, C, D, E):
     E[i] = Z[i]['z']
 
 
+def cuconstAlign(z):
+    a = cuda.const.array_like(CONST3BYTES)
+    b = cuda.const.array_like(CONST1D)
+    i = cuda.grid(1)
+    z[i] = a[i] + b[i]
+
+
 class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
@@ -101,6 +109,12 @@ class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
         A = np.full(1, fill_value=-1, dtype=int)
         jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
+
+    def test_const_align(self):
+        jcuconstAlign = cuda.jit('void(float64[:])')(cuconstAlign)
+        A = np.full(3, fill_value=np.nan, dtype=float)
+        jcuconstAlign[1, 3](A)
+        self.assertTrue(np.all(A == (CONST3BYTES + CONST1D[:3])))
 
     def test_const_array_2d(self):
         jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
