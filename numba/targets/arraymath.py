@@ -1049,7 +1049,7 @@ def np_partition(a, kth):
             raise TypeError('Partition index must be integer')
 
     def np_partition_impl(a, kth):
-        if len(a.flat) == 0:
+        if a.size == 0:
             return a.copy()
         else:
             kth_array = valid_kths(a, kth)
