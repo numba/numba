@@ -1041,12 +1041,9 @@ def valid_kths(a, kth):
 @overload(np.partition)
 def np_partition(a, kth):
 
-    if isinstance(kth, (types.Array, types.Sequence)):
-        if not isinstance(kth.dtype, types.Integer):
-            raise TypeError('Partition index must be integer')
-    else:
-        if not isinstance(kth, types.Integer):
-            raise TypeError('Partition index must be integer')
+    kthdt = getattr(kth, 'dtype', kth)
+    if not isinstance(kthdt, types.Integer):
+        raise TypeError('Partition index must be integer')
 
     def np_partition_impl(a, kth):
         if a.size == 0:
