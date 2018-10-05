@@ -854,7 +854,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(a, kth):
             with self.assertTypingError() as raises:
                 cfunc(a, kth)
-            self.assertIn("a must be an array-like", str(raises.exception))
+            self.assertIn('The first argument must be an array-like', str(raises.exception))
 
         _check(4, 0)
         _check('Sausages', 0)
@@ -869,9 +869,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(a, kth):
             with self.assertTypingError() as raises:
                 cfunc(a, kth)
-            self.assertIn("a must be at least 1D", str(raises.exception))
+            self.assertIn('The first argument must be at least 1-D (found 0-D)', str(raises.exception))
 
         _check(np.array(1), 0)
+
+    def test_partition_exception_kth_multi_dimensional(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(a, kth):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, kth)
+            self.assertIn('kth must be scalar or 1-D', str(raises.exception))
+
+        _check(np.arange(10), kth=np.arange(6).reshape(3, 2))
 
     def test_partition_empty_array(self):
         # inspired by the test of the same name in:
