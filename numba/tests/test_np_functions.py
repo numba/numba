@@ -1062,6 +1062,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-3, 3):
                 check(arr, k)
 
+    def test_partition_boolean_inputs(self):
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for d in np.linspace(1, 10, 17), np.array((True, False, True)):
+            for kth in True, False, -1, 0, 1:
+                self.partition_sanity_check(pyfunc, cfunc, d, kth)
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

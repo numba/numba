@@ -1023,7 +1023,7 @@ def valid_kths(a, kth):
     Values less than 0 are transformed to equivalent positive
     index values.
     """
-    kth_array = _asarray(kth)
+    kth_array = _asarray(kth).astype(np.int64)  # cast boolean to int, where relevant
 
     if np.any(np.abs(kth_array) >= a.shape[-1]):
         raise ValueError("kth out of bounds")
@@ -1042,8 +1042,8 @@ def valid_kths(a, kth):
 def np_partition(a, kth):
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, types.Integer):
-        raise TypeError('Partition index must be integer')
+    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+        raise TypeError('Partition index must be integer')  # bool gets cast to int subsequently
 
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
         raise TypeError('a must be an array-like')
