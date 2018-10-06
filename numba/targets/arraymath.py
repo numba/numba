@@ -1045,15 +1045,15 @@ def valid_kths(a, kth):
 @overload(np.partition)
 def np_partition(a, kth):
 
-    kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):
-        raise TypeError('Partition index must be integer')  # bool gets cast to int subsequently
-
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
         raise TypeError('The first argument must be an array-like')
 
     if isinstance(a, types.Array) and a.ndim == 0:
         raise TypeError('The first argument must be at least 1-D (found 0-D)')
+
+    kthdt = getattr(kth, 'dtype', kth)
+    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+        raise TypeError('Partition index must be integer')  # bool gets cast to int subsequently
 
     def np_partition_impl(a, kth):
         a_tmp = _asarray(a)
