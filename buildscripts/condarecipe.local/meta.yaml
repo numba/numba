@@ -12,6 +12,10 @@ build:
     - numba = numba.numba_entry:main
   script_env:
     - PY_VCRUNTIME_REDIST
+  missing_dso_whitelist:
+    # optional dependency: required only when omp is chosen as the backend for
+    # the threading layer
+    - lib/libiomp5.dylib
 
 requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
