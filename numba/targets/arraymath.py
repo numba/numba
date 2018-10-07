@@ -998,15 +998,15 @@ def np_partition_impl_inner(a, kth_array):
 
     idx = np.ndindex(a.shape[:-1])  # Numpy default partition axis is -1
     for s in idx:
-        dense = a[s].copy()
+        arry = a[s].copy()
         low = 0
-        high = len(dense) - 1
+        high = len(arry) - 1
 
         for kth in kth_array:
-            _select_w_nan(dense, kth, low, high)
+            _select_w_nan(arry, kth, low, high)
             low = kth  # narrow span of subsequent partition
 
-        out[s] = dense
+        out[s] = arry
     return out
 
 @register_jitable
