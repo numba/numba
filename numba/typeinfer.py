@@ -954,7 +954,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             if not tv.defined:
                 offender = find_offender(name)
                 val = getattr(offender, 'value', 'unknown operation')
-                loc = getattr(offender, 'loc', 'unknown location')
+                loc = getattr(offender, 'loc', ir.unknown_loc)
                 msg = "Undefined variable '%s', operation: %s, location: %s"
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
@@ -1039,7 +1039,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                     break
 
                     for name, offender in returns.items():
-                        loc = getattr(offender, 'loc', 'unknown location')
+                        loc = getattr(offender, 'loc', ir.unknown_loc)
                         msg = ("Return of: IR name '%s', type '%s', "
                                "location: %s")
                         interped = msg % (name, atype, loc.strformat())
