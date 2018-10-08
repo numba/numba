@@ -905,7 +905,7 @@ class TypeInferer(object):
                     if offender is not None:
                         break
                 val = getattr(offender, 'value', 'unknown operation')
-                loc = getattr(offender, 'loc', 'unknown location')
+                loc = getattr(offender, 'loc', ir.unknown_loc)
                 msg = "Undefined variable '%s', operation: %s, location: %s"
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
@@ -983,7 +983,7 @@ class TypeInferer(object):
                                     break
 
                     for name, offender in returns.items():
-                        loc = getattr(offender, 'loc', 'unknown location')
+                        loc = getattr(offender, 'loc', ir.unknown_loc)
                         msg = ("Return of: IR name '%s', type '%s', "
                                "location: %s")
                         interped = msg % (name, atype, loc.strformat())

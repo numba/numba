@@ -113,6 +113,10 @@ class Loc(object):
         return type(self)(self.filename, line, col)
 
 
+# Used for annotating errors when source location is unknown.
+unknown_loc = Loc("unknown location", 0, 0)
+
+
 class VarMap(object):
     def __init__(self):
         self._con = {}
