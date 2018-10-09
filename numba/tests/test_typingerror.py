@@ -133,6 +133,8 @@ class TestTypingError(unittest.TestCase):
         msg = ("Cannot infer the type of variable 'l', have imprecise type: "
                "list(undefined)")
         self.assertIn(msg, errmsg)
+        # check help message has gone in
+        self.assertIn("For Numba to be able to compile a list", errmsg)
 
     def test_using_imprecise_list(self):
         """

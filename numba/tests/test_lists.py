@@ -423,9 +423,11 @@ class TestLists(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(list_constructor_empty)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc()
-        self.assertIn("Cannot infer the type of variable",
-                      str(raises.exception))
-        self.assertIn("list(undefined)", str(raises.exception))
+        errmsg = str(raises.exception)
+        self.assertIn("Cannot infer the type of variable", errmsg)
+        self.assertIn("list(undefined)", errmsg)
+        # check error message went in
+        self.assertIn("For Numba to be able to compile a list", errmsg)
 
     def test_constructor_empty_but_typeable(self):
         args = [np.int32(1), 10., 1 + 3j, [7], [17., 14.], np.array([10])]

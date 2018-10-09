@@ -906,11 +906,11 @@ class TypeInferer(object):
                 if offender is not None:
                     if not exhaustive:
                         break
-                    try:
+                    try: # simple assignment
                         hasattr(offender.value, 'name')
+                        offender_value = offender.value.name
                     except (AttributeError, KeyError):
                         break
-                    offender_value = offender.value.name
                     orig_offender = offender
                     if offender_value.startswith('$'):
                         offender = find_offender(offender_value,
@@ -920,6 +920,36 @@ class TypeInferer(object):
                     break
             return offender
 
+        def diagnose_imprecision(offender):
+            # helper for diagnosing imprecise types
+
+            list_msg = """\n
+For Numba to be able to compile a list, the list must have a known and
+precise type that can be inferred from the other variables. Whilst sometimes
+the type of empty lists can be inferred, this is not always the case, see this
+documentation for help:
+
+http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+"""
+            if offender is not None:
+                # This block deals with imprecise lists
+                if hasattr(offender, 'value'):
+                    if hasattr(offender.value, 'op'):
+                        # might be `foo = []`
+                        if offender.value.op == 'build_list':
+                            return list_msg
+                        # or might be `foo = list()`
+                        elif offender.value.op == 'call':
+                            try: # assignment involving a call
+                                call_name = offender.value.func.name
+                                # find the offender based on the call name
+                                offender = find_offender(call_name)
+                                if isinstance(offender.value, ir.Global):
+                                    if offender.value.name == 'list':
+                                        return list_msg
+                            except (AttributeError, KeyError):
+                                pass
+            return "" # no help possible
 
         def check_var(name):
             tv = self.typevars[name]
@@ -936,22 +966,11 @@ class TypeInferer(object):
                       "have imprecise type: %s. %s")
                 istmp = " (temporary variable)" if var.startswith('$') else ""
                 loc = getattr(offender, 'loc', 'unknown location')
-                extra_msg = ""
-                # special message addition for lists
-                if offender is not None:
-                    if hasattr(offender, 'value'):
-                        if hasattr(offender.value, 'op'):
-                            if offender.value.op == 'build_list':
-                                extra_msg = """\n
-For Numba to be able to compile a list, the list must have a known and
-precise type that can be inferred from the other variables. Whilst sometimes
-the type of empty lists can be inferred this is not always the case, see this
-documentation for help:
-
-http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
-"""
+                # is this an untyped list? try and provide help
+                extra_msg = diagnose_imprecision(offender)
                 raise TypingError(msg % (var, istmp, tp, extra_msg), loc)
-            typdict[var] = tp
+            else: # type is precise, hold it
+                typdict[var] = tp
 
         # For better error display, check first user-visible vars, then
         # temporaries
