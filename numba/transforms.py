@@ -299,6 +299,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             myflags.enable_looplift = False
             # Lifted with-block uses object mode
             myflags.enable_pyobject = True
+            myflags.force_pyobject = True
             cls = ObjModeLiftedWith
         else:
             cls = LiftedWith
