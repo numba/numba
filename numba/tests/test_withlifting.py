@@ -290,6 +290,12 @@ def expected_failure_for_function_arg(fn):
 
 class TestLiftObj(MemoryLeak, TestCase):
 
+    def setUp(self):
+        warnings.simplefilter("error", errors.NumbaWarning)
+
+    def tearDown(self):
+        warnings.resetwarnings()
+
     def assert_equal_return_and_stdout(self, pyfunc, *args):
         py_args = copy.deepcopy(args)
         c_args = copy.deepcopy(args)
