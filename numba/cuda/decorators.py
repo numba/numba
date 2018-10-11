@@ -44,6 +44,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
        from which they are called.
+    :param max_registers: Limit the kernel to using at most this number of
+       registers per thread. Useful for increasing occupancy.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
