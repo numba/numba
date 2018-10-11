@@ -57,7 +57,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[]):
+                   fastmath=False, extensions=[], max_registers=None):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -73,7 +73,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         debug=debug,
                         call_helper=cres.call_helper,
                         fastmath=fastmath,
-                        extensions=extensions)
+                        extensions=extensions,
+                        max_registers=max_registers)
     return cukern
 
 
@@ -363,12 +364,13 @@ class CachedCUFunction(object):
     Uses device ID as key for cache.
     """
 
-    def __init__(self, entry_name, ptx, linking):
+    def __init__(self, entry_name, ptx, linking, max_registers):
         self.entry_name = entry_name
         self.ptx = ptx
         self.linking = linking
         self.cache = {}
         self.ccinfos = {}
+        self.max_registers = max_registers
 
     def get(self):
         cuctx = get_context()
@@ -378,7 +380,7 @@ class CachedCUFunction(object):
             ptx = self.ptx.get()
 
             # Link
-            linker = driver.Linker()
+            linker = driver.Linker(max_registers=self.max_registers)
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
@@ -428,7 +430,7 @@ class CUDAKernel(CUDAKernelBase):
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
-                 extensions=[]):
+                 extensions=[], max_registers=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -439,7 +441,7 @@ class CUDAKernel(CUDAKernelBase):
                                 fma=True))
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
-        cufunc = CachedCUFunction(name, ptx, link)
+        cufunc = CachedCUFunction(name, ptx, link, max_registers)
         # populate members
         self.entry_name = name
         self.argument_types = tuple(argtypes)
