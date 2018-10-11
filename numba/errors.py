@@ -94,8 +94,10 @@ try:
 
     # If the colorama version is < 0.3.9 it can break stdout/stderr in some
     # situations, as a result if this condition is met colorama is disabled and
-    # the user is warned.
-    if tuple([int(x) for x in colorama.__version__.split('.')]) < (0, 3, 9):
+    # the user is warned. Note that early versions did not have a __version__.
+    colorama_version = getattr(colorama, '__version__', '0.0.0')
+
+    if tuple([int(x) for x in colorama_version.split('.')]) < (0, 3, 9):
         msg = ("Insufficiently recent colorama version found. "
                "Numba requires colorama >= 0.3.9")
         # warn the user
