@@ -50,6 +50,9 @@ class CPUContext(BaseContext):
         # Initialize NRT runtime
         rtsys.initialize(self)
 
+        # Initialize additional implementations
+        import numba.unicode
+
     def load_additional_registries(self):
         # Add target specific implementations
         from . import (cffiimpl, cmathimpl, mathimpl, npyimpl,
@@ -61,7 +64,6 @@ class CPUContext(BaseContext):
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(randomimpl.registry)
-        import numba.unicode
 
     @property
     def target_data(self):
