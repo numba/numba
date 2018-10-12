@@ -818,11 +818,6 @@ numba_fatal_error(void)
     return 0; /* unreachable */
 }
 
-static int numba_debug(void);
-
-NUMBA_EXPORT_FUNC(int)
-numba_debug(void){return 0;};
-
 /* Insert a frame into the traceback for (funcname, filename, lineno). */
 /* This function is CPython's _PyTraceback_Add, renamed, see:
  * https://github.com/python/cpython/blob/d545869d084e70d4838310e79b52a25a72a1ca56/Python/traceback.c#L246

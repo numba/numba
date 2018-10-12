@@ -1078,8 +1078,9 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        try: #98 % of cases will use this branch as they will not need location
-             # information to proceed.
+        try:
+            # 98 % of cases will use this branch as they will not need location
+            # information to proceed.
             return self._imp(self._context, builder, self._sig, args)
         except TypeError:
             return self._imp(self._context, builder, self._sig, args, loc=loc)
