@@ -1111,7 +1111,7 @@ class TypeInferer(object):
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
         # Special case string constant as Const type
-        if ty == types.string:
+        if ty == types.unicode_type:
             ty = types.Const(value=const)
         self.lock_type(target.name, ty, loc=inst.loc,
                        literal_value=const)

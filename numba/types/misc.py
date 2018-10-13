@@ -451,20 +451,3 @@ class UnicodeType(Type):
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)
 
-
-### FIXME: Temp workaround until we figure out how to integrate with const string
-class fake_str(str):
-    def __new__(cls, obj):
-        return str.__new__(cls, obj)
-
-    @property
-    def _kind(self):
-        return 10
-
-    @property
-    def _data(self):
-        return 20
-
-    @property
-    def _length(self):
-        return 0

@@ -101,8 +101,8 @@ UNICODE_ORDERING_EXAMPLES = [
 
 
 # FIXME
-UNICODE_EXAMPLES = [types.fake_str(x) for x in UNICODE_EXAMPLES]
-UNICODE_ORDERING_EXAMPLES = [types.fake_str(x) for x in UNICODE_ORDERING_EXAMPLES]
+UNICODE_EXAMPLES = [x for x in UNICODE_EXAMPLES]
+UNICODE_ORDERING_EXAMPLES = [x for x in UNICODE_ORDERING_EXAMPLES]
 
 @unittest.skipUnless(_py34_or_later, 'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
@@ -168,7 +168,7 @@ class TestUnicode(BaseTest):
         pyfunc = startswith_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for b in [types.fake_str(x) for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
+            for b in [x for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
@@ -177,7 +177,7 @@ class TestUnicode(BaseTest):
         pyfunc = endswith_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for b in [types.fake_str(x) for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
+            for b in [x for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
@@ -187,7 +187,7 @@ class TestUnicode(BaseTest):
         pyfunc = in_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for substr in [types.fake_str(x) for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
+            for substr in [x for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
                                  "'%s' in '%s'?" % (substr, a))
@@ -196,7 +196,7 @@ class TestUnicode(BaseTest):
         pyfunc = find_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for substr in [types.fake_str(x) for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
+            for substr in [x for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))

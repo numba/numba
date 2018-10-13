@@ -1,6 +1,7 @@
 from numba.extending import (models, register_model,
     make_attribute_wrapper, unbox, box, NativeValue, overload,
     lower_builtin, overload_method, intrinsic, typeof_impl)
+from numba.targets.imputils import lower_constant
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -10,10 +11,6 @@ from llvmlite.ir import IntType, Constant
 import numpy as np
 import operator
 
-# FIXME: Python 3
-@typeof_impl.register(types.fake_str)
-def typeof_unicode_type(val, c):
-    return types.unicode_type
 
 ### DATA MODEL
 
@@ -34,6 +31,16 @@ class UnicodeModel(models.StructModel):
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+
+
+### CONSTANT
+
+@lower_constant(types.unicode_type)
+def constant_unicode(context, builder, typ, pyval):
+    # Constants are handled specially.
+    #
+    uni_str = cgutils.create_struct_proxy(typ)(context, builder)
+    return uni_str._getvalue()
 
 
 ### BOXING
@@ -114,7 +121,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
         uni_str = uni_str_ctor(context, builder)
         # add null padding character
-        nbytes_val = builder.mul(char_bytes_val, 
+        nbytes_val = builder.mul(char_bytes_val,
                                  builder.add(length_val,
                                              Constant(length_val.type, 1)))
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
@@ -386,7 +393,7 @@ def normalize_str_idx(idx, length, is_start=True):
         raise IndexError("string index out of range")
     return idx
 
-    
+
 
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
