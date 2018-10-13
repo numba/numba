@@ -1226,8 +1226,6 @@ if numpy_version >= (1, 10):
         else:
             mmult = simple_matrix_multiply
 
-        # within scope as mmult and dtype are defined in closure
-        @register_jitable
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
             X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
@@ -1237,7 +1235,13 @@ if numpy_version >= (1, 10):
                 return np_cov_impl_inner(X, bias, ddof, mmult)
 
         def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
-            variance = np_cov_impl(m, y, rowvar, bias, ddof).flat[0]
+            X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
+
+            if np.any(np.array(X.shape) == 0):
+                variance = np.nan
+            else:
+                variance = np_cov_impl_inner(X, bias, ddof, mmult).flat[0]
+
             return np.array(variance)
 
         # identify up front if output has ndim of 0...
