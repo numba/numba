@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import math
 import sys
+from functools import partial
 
 import numpy as np
 
@@ -771,64 +772,57 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
+    def compare_outputs(self, pyfunc, cfunc, params, abs_tol=None):
+        expected = pyfunc(**params)
+        got = cfunc(**params)
+        self.assertPreciseEqual(expected, got, abs_tol=abs_tol)
+
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_basic(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-
-        def _check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
+        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
 
         def m_variations():
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
             yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
             yield np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
+            yield np.array([])
+            yield np.array([]).reshape(0, 2)
+            yield np.array([]).reshape(2, 0)
+            yield 3.142
+            yield np.full((4, 5), fill_value=True)
+            yield np.array([np.nan, 0.5969, -np.inf, 0.9918, 0.7964])
+            yield np.linspace(-3, 3, 33).reshape(33, 1, order='F')
 
-        def run_tests(m, y=None):
-            params = {'m': m}
-            _check(params)
-
-            if y is not None:
-                params['y'] = y
-                _check(params)
-
-            for rowvar in False, True:
-                params['rowvar'] = rowvar
-                _check(params)
-                params.pop('rowvar')
-
-            for ddof in range(-1, 3):
-                params['ddof'] = ddof
-                _check(params)
-                params.pop('ddof')
-
-            for bias in False, True:
-                params['bias'] = bias
-                _check(params)
-                params.pop('bias')
-
-            params.update({'rowvar': False, 'bias': True})
-            params.pop('bias')
-            params.update({'rowvar': False, 'ddof': 1})
-
+        # all inputs other than the first are defaulted
         for m in m_variations():
-            run_tests(m)
-            run_tests(m, y=m[::-1])
+            _check({'m': m})
+
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    def test_cov_explicit_arguments(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
+
+        m = self.rnd.randn(1050).reshape(150, 7)
+        y_choices = None, m[::-1]
+        rowvar_choices = False, True
+        bias_choices = False, True
+        ddof_choice = None, -1, 0, 1, 3
+
+        for y, rowvar, bias, ddof in itertools.product(y_choices, rowvar_choices, bias_choices, ddof_choice):
+            params = {'m': m, 'y': y, 'ddof': ddof, 'bias': bias, 'rowvar': rowvar}
+            _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_egde_cases(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
 
-        def _check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
-
-        # example borrowed from numpy doc string / unit tests
+        # examples borrowed from numpy doc string / unit tests
         x = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
         params = {'m': x, 'y': y}
@@ -844,28 +838,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
         x = np.array([])
-        params = {'m': x}
-        _check(params)
-
-        x = np.array([]).reshape(0, 2)
-        params = {'m': x}
-        _check(params)
-
-        x = np.array([]).reshape(2, 0)
-        params = {'m': x}
-        _check(params)
-
-        x = np.array([])
         y = np.array([])
         params = {'m': x, 'y': y}
         _check(params)
 
-        x = np.array([-2.1, -1, 4.3]).reshape(3, 1)
-        params = {'m': x}
-        _check(params)
-
-        x = 3.142
-        params = {'m': x}
+        x = 1.1
+        y = 2.2
+        params = {'m': x, 'y': y}
         _check(params)
 
         # The following tests pass with numpy version >= 1.10, but fail with 1.9
@@ -892,7 +871,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(**params)
             self.assertPreciseEqual(expected, got, abs_tol=1e-12)
 
-        # this fails as I can't tell the output is going to be scalar
+        # this fails as I can't tell the output is going to be 0D
         # (i.e. it gets past the naive ndim == 1 check)
         x = np.array([-2.1, -1, 4.3]).reshape(1, 3)
         params = {'m': x}
@@ -901,6 +880,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # this fails as the input is not an array, so doesn't hit the
         # ndim == 1 guard
         x = (-2.1, -1, 4.3)
+        params = {'m': x}
+        _check(params)
+
+        # this fails to return a 0D result
+        x = ()
         params = {'m': x}
         _check(params)
 
@@ -928,8 +912,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(m, y=y)
         self.assertIn('m and y must have the same number of variables', str(raises.exception))
-        # Numpy raises ValueError: all the input array dimensions except for
-        # the concatenation axis must match exactly
+        # Numpy raises ValueError: all the input array dimensions except for the
+        # concatenation axis must match exactly.
 
 
 class TestNPMachineParameters(TestCase):
