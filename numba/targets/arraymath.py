@@ -1046,8 +1046,10 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
             mid = _prepare_array(ary)
             end = _prepare_array(to_end)
 
-            # output array dtype determined by ary dtype, per NumPy
             out_dtype = mid.dtype
+            # output array dtype determined by ary dtype, per NumPy (for the most part);
+            # an exception to the rule is a zero length array-like, where NumPy falls back
+            # to np.float64; this behaviour is *not* replicated
 
             if len(mid) > 0:
                 out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
