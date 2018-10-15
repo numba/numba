@@ -267,6 +267,7 @@ The following top-level functions are supported:
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
+* :func:`numpy.ediff1d`
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`
