@@ -844,7 +844,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc(np.array((True, True, False)))
 
-        msg = "Numpy does not support case where 'ary' has boolean dtype"
+        msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
 

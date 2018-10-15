@@ -1036,7 +1036,7 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
 
         if isinstance(ary, types.Array):
             if isinstance(ary.dtype, types.Boolean):
-                raise TypeError("Numpy does not support case where 'ary' has boolean dtype")
+                raise TypeError("Boolean dtype is unsupported (as per NumPy)")
                 # Numpy tries to do this: return ary[1:] - ary[:-1] which results in a
                 # TypeError exception being raised
 
