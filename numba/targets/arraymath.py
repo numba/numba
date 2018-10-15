@@ -1076,6 +1076,53 @@ def my_triu(m, k=0):
     else:
         return np_triu_impl_multi
 
+def _prepare_array(arr):
+    pass
+
+@overload(_prepare_array)
+def _prepare_array_impl(arr):
+    if arr in (None, types.none):
+        return lambda x: np.array(())
+    else:
+        return lambda x: _asarray(x).ravel()
+
+if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
+    @overload(np.ediff1d)
+    def np_ediff1d(ary, to_end=None, to_begin=None):
+
+        if isinstance(ary, types.Array):
+            if isinstance(ary.dtype, types.Boolean):
+                raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+                # Numpy tries to do this: return ary[1:] - ary[:-1] which results in a
+                # TypeError exception being raised
+
+        def np_ediff1d_impl(ary, to_end=None, to_begin=None):
+            # transform each input into an equivalent 1d array
+            start = _prepare_array(to_begin)
+            mid = _prepare_array(ary)
+            end = _prepare_array(to_end)
+
+            out_dtype = mid.dtype
+            # output array dtype determined by ary dtype, per NumPy (for the most part);
+            # an exception to the rule is a zero length array-like, where NumPy falls back
+            # to np.float64; this behaviour is *not* replicated
+
+            if len(mid) > 0:
+                out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+                start_idx = len(start)
+                mid_idx = len(start) + len(mid) - 1
+                out[:start_idx] = start
+                out[start_idx:mid_idx] = np.diff(mid)
+                out[mid_idx:] = end
+            else:
+                out = np.empty((len(start) + len(end)), dtype=out_dtype)
+                start_idx = len(start)
+                out[:start_idx] = start
+                out[start_idx:] = end
+            return out
+
+        return np_ediff1d_impl
+
 @register_jitable
 def _np_vander(x, N, increasing, out):
     """
