@@ -2,8 +2,9 @@
 import inspect
 import uuid
 import weakref
+import collections
 
-from numba import types
+from numba import types, config
 
 # Exported symbols
 from .typing.typeof import typeof_impl
@@ -216,6 +217,10 @@ class _Intrinsic(object):
     Dummy callable for intrinsic
     """
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
+
     __uuid = None
 
     def __init__(self, name, defn, support_literals=False):
@@ -241,6 +246,7 @@ class _Intrinsic(object):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
     def _register(self):
         from .typing.templates import make_intrinsic_template, infer_global

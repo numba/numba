@@ -395,7 +395,26 @@ def unbox_array(typ, obj, c):
         errcode = c.pyapi.nrt_adapt_ndarray_from_python(obj, ptr)
     else:
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
-    failed = cgutils.is_not_null(c.builder, errcode)
+
+    # TODO: here we have minimal typechecking by the itemsize.
+    #       need to do better
+    try:
+        expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
+    except NotImplementedError:
+        # Don't check types that can't be `as_dtype()`-ed
+        itemsize_mismatch = cgutils.false_bit
+    else:
+        expected_itemsize = nativeary.itemsize.type(expected_itemsize)
+        itemsize_mismatch = c.builder.icmp_unsigned(
+            '!=',
+            nativeary.itemsize,
+            expected_itemsize,
+            )
+
+    failed = c.builder.or_(
+        cgutils.is_not_null(c.builder, errcode),
+        itemsize_mismatch,
+    )
     # Handle error
     with c.builder.if_then(failed, likely=False):
         c.pyapi.err_set_string("PyExc_TypeError",
@@ -1006,7 +1025,7 @@ def unbox_dispatcher(typ, obj, c):
 def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
                            "can't unbox {!r} type".format(typ))
-    res = c.pyapi.get_null_object()
+    res = c.context.get_constant_null(typ)
     return NativeValue(res, is_error=cgutils.true_bit)
 
 
@@ -1015,4 +1034,3 @@ def box_unsupported(typ, val, c):
     c.pyapi.err_set_string("PyExc_TypeError", msg)
     res = c.pyapi.get_null_object()
     return res
-

@@ -7,7 +7,7 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     const, grid, gridsize, atomic, shfl_sync_intrinsic,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs)
+                    threadfence, selp, popc, brev, clz, ffs, fma)
 from .cudadrv.error import CudaSupportError
 from .cudadrv import nvvm
 from . import initialize

@@ -9,13 +9,15 @@ import pprint
 import sys
 import warnings
 from numba import config, errors
+import operator
 
-from . import utils
+from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 
 # terminal color markup
 _termcolor = errors.termcolor()
+
 
 class Loc(object):
     """Source location
@@ -231,12 +233,15 @@ class Expr(Inst):
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
+        assert not isinstance(fn, str)
         op = 'binop'
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
+        assert not isinstance(fn, str)
+        assert not isinstance(immutable_fn, str)
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
@@ -245,6 +250,7 @@ class Expr(Inst):
     @classmethod
     def unary(cls, fn, value, loc):
         op = 'unary'
+        fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
@@ -339,7 +345,11 @@ class Expr(Inst):
             arglist = ', '.join(filter(None, [args, vararg, kws]))
             return 'call %s(%s)' % (self.func, arglist)
         elif self.op == 'binop':
-            return '%s %s %s' % (self.lhs, self.fn, self.rhs)
+            lhs, rhs = self.lhs, self.rhs
+            if self.fn == operator.contains:
+                lhs, rhs = rhs, lhs
+            fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
+            return '%s %s %s' % (lhs, fn, rhs)
         else:
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
             args = ('%s=%s' % (k, v) for k, v in pres_order)
@@ -568,6 +578,31 @@ class Yield(Inst):
 
     def list_vars(self):
         return [self.value]
+
+
+class EnterWith(Stmt):
+    """Enter a "with" context
+    """
+    def __init__(self, contextmanager, begin, end, loc):
+        """
+        Parameters
+        ----------
+        contextmanager : IR value
+        begin, end : int
+            The beginning and the ending offset of the with-body.
+        loc : int
+            Source location
+        """
+        self.contextmanager = contextmanager
+        self.begin = begin
+        self.end = end
+        self.loc = loc
+
+    def __str__(self):
+        return 'enter_with {}'.format(self.contextmanager)
+
+    def list_vars(self):
+        return [self.contextmanager]
 
 
 class Arg(object):
@@ -880,6 +915,8 @@ class Block(object):
 
 
 class Loop(object):
+    """Describes a loop-block
+    """
     __slots__ = "entry", "exit"
 
     def __init__(self, entry, exit):
@@ -889,6 +926,20 @@ class Loop(object):
     def __repr__(self):
         args = self.entry, self.exit
         return "Loop(entry=%s, exit=%s)" % args
+
+
+class With(object):
+    """Describes a with-block
+    """
+    __slots__ = "entry", "exit"
+
+    def __init__(self, entry, exit):
+        self.entry = entry
+        self.exit = exit
+
+    def __repr__(self):
+        args = self.entry, self.exit
+        return "With(entry=%s, exit=%s)" % args
 
 
 class FunctionIR(object):
@@ -1012,4 +1063,8 @@ class FunctionIR(object):
 
 
 # A stub for undefined global reference
-UNDEFINED = object()
+class UndefinedType(object):
+    def __repr__(self):
+        return "Undefined"
+
+UNDEFINED = UndefinedType()

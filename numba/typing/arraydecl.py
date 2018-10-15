@@ -1,12 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 import numpy as np
-
+import operator
 from collections import namedtuple
 
 from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    infer, infer_getattr, signature,
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate, infer,
+                                    infer_global, infer_getattr, signature,
                                     bound_function)
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
@@ -144,7 +144,11 @@ def get_array_index_type(ary, idx):
             elif not check_contiguity(right_indices[::-1]):
                 layout = 'A'
 
-        res = ary.copy(ndim=ndim, layout=layout)
+        if ndim == 0:
+            # Implicitly convert to a scalar if the output ndim==0
+            res = ary.dtype
+        else:
+            res = ary.copy(ndim=ndim, layout=layout)
 
     # Re-wrap indices
     if isinstance(idx, types.BaseTuple):
@@ -697,9 +701,9 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@infer
+@infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
-    key = '=='
+    #key = operator.eq
 
     def generic(self, args, kws):
         assert not kws

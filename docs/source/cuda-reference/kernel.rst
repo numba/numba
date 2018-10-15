@@ -265,10 +265,10 @@ meaning the thread is in the subset of threads within the function call. The
 Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
 
-A subset of the CUDA Math API's integer intrisics are available. For further
+A subset of the CUDA Math API's integer intrinsics are available. For further
 documentation, including semantics, please refer to the `CUDA Toolkit
 documentation
-<docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
+<https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
 
 
 .. function:: numba.cuda.popc
@@ -288,6 +288,24 @@ documentation
 
    Find the position of the least significant bit set to 1 in an integer.
 
+
+Floating Point Intrinsics
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A subset of the CUDA Math API's floating point intrinsics are available. For further
+documentation, including semantics, please refer to the `single
+<https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__SINGLE.html>`_ and
+`double <https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__DOUBLE.html>`_
+precision parts of the CUDA Toolkit documentation.
+
+
+.. function:: numba.cuda.fma
+
+   Perform the fused multiply-add operation. Named after the ``fma`` and ``fmaf`` in
+   the C api, but maps to the ``fma.rn.f32`` and ``fma.rn.f64`` (round-to-nearest-even)
+   PTX instructions.
+
+
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -296,7 +314,7 @@ intrinsics. Avoiding branches is a key way to improve CUDA performance, and
 using these intrinsics mean you don't have to rely on the ``nvcc`` optimizer
 identifying and removing branches. For further documentation, including
 semantics, please refer to the `relevant CUDA Toolkit documentation
-<docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
+<https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions>`_.
 
 
 .. function:: numba.cuda.selp

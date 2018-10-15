@@ -8,6 +8,12 @@ Apart from the :ref:`pysupported-language` part below, which applies to both
 :term:`object mode` and :term:`nopython mode`, this page only lists the
 features supported in :term:`nopython mode`.
 
+.. warning::
+    Numba behavior differs from Python semantics in some situations.  We
+    strongly advise reviewing :ref:`pysemantics` to become familiar with these
+    differences. 
+
+
 .. _pysupported-language:
 
 Language
@@ -358,6 +364,8 @@ and named parameters in the constructor are also supported.
 Creating a named tuple class inside Numba code is *not* supported; the class
 must be created at the global level.
 
+.. _ctypes-support:
+
 ``ctypes``
 ----------
 
@@ -522,6 +530,8 @@ Third-party modules
 
 .. I put this here as there's only one module (apart from Numpy), otherwise
    it should be a separate page.
+
+.. _cffi-support:
 
 ``cffi``
 --------

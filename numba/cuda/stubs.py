@@ -174,7 +174,7 @@ class syncthreads_count(Stub):
     '''
     syncthreads_count(predictate)
 
-    An extension to numba.cuda.syncthreads where the return value is a count 
+    An extension to numba.cuda.syncthreads where the return value is a count
     of the threads where predicate is true.
     '''
     _description_ = '<syncthreads_count()>'
@@ -417,6 +417,16 @@ class selp(Stub):
     selp(a, b, c)
 
     Select between source operands, based on the value of the predicate source operand.
+    """
+
+#-------------------------------------------------------------------------------
+# single / double precision arithmetic
+
+class fma(Stub):
+    """
+    fma(a, b, c)
+
+    Perform the fused multiply-add operation.
     """
 
 #-------------------------------------------------------------------------------

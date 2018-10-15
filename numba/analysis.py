@@ -61,24 +61,52 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     We use a simple fix-point algorithm that iterates until the set of
     live variables is unchanged for each block.
     """
+    def fix_point_progress(dct):
+        """Helper function to determine if a fix-point has been reached.
+        """
+        return tuple(len(v) for v in dct.values())
+
+    def fix_point(fn, dct):
+        """Helper function to run fix-point algorithm.
+        """
+        old_point = None
+        new_point = fix_point_progress(dct)
+        while old_point != new_point:
+            fn(dct)
+            old_point = new_point
+            new_point = fix_point_progress(dct)
+
+    def def_reach(dct):
+        """Find all variable definition reachable at the entry of a block
+        """
+        for offset in var_def_map:
+            used_or_defined = var_def_map[offset] | var_use_map[offset]
+            dct[offset] |= used_or_defined
+            # Propagate to outgoing nodes
+            for out_blk, _ in cfg.successors(offset):
+                dct[out_blk] |= dct[offset]
+
+    def liveness(dct):
+        """Find live variables.
+
+        Push var usage backward.
+        """
+        for offset in dct:
+            # Live vars here
+            live_vars = dct[offset]
+            for inc_blk, _data in cfg.predecessors(offset):
+                # Reachable at the predecessor
+                reachable = live_vars & def_reach_map[inc_blk]
+                # But not defined in the predecessor
+                dct[inc_blk] |= reachable - var_def_map[inc_blk]
+
     live_map = {}
     for offset in blocks.keys():
-        live_map[offset] = var_use_map[offset]
+        live_map[offset] = set(var_use_map[offset])
 
-    def fix_point_progress():
-        return tuple(len(v) for v in live_map.values())
-
-    old_point = None
-    new_point = fix_point_progress()
-    while old_point != new_point:
-        for offset in live_map.keys():
-            for inc_blk, _data in cfg.predecessors(offset):
-                # substract all variables that are defined in
-                # the incoming block
-                live_map[inc_blk] |= live_map[offset] - var_def_map[inc_blk]
-        old_point = new_point
-        new_point = fix_point_progress()
-
+    def_reach_map = defaultdict(set)
+    fix_point(def_reach, def_reach_map)
+    fix_point(liveness, live_map)
     return live_map
 
 
@@ -97,14 +125,14 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
     escaping_dead_map = defaultdict(set)
     # all vars that should be deleted within this block
     internal_dead_map = defaultdict(set)
-    # all vars that should be delted after the function exit
+    # all vars that should be deleted after the function exit
     exit_dead_map = defaultdict(set)
 
     for offset, ir_block in blocks.items():
         # live vars WITHIN the block will include all the locally
         # defined variables
         cur_live_set = live_map[offset] | var_def_map[offset]
-        # vars alive alive in the outgoing blocks
+        # vars alive in the outgoing blocks
         outgoing_live_map = dict((out_blk, live_map[out_blk])
                                  for out_blk, _data in cfg.successors(offset))
         # vars to keep alive for the terminator
@@ -115,7 +143,7 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
                                   set())
         # include variables used in terminator
         combined_liveset |= terminator_liveset
-        # vars that are dead within the block beacuse they are not
+        # vars that are dead within the block because they are not
         # propagated to any outgoing blocks
         internal_set = cur_live_set - combined_liveset
         internal_dead_map[offset] = internal_set

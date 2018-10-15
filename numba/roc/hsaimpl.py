@@ -187,19 +187,24 @@ def _gen_ds_permute(intrinsic_name):
         """
         args are (index, src)
         """
-        assert sig.args[0] == sig.args[1]
+        assert sig.return_type == sig.args[1]
         idx, src = args
         i32 = Type.int(32)
         fnty = Type.function(i32, [i32, i32])
         fn = builder.module.declare_intrinsic(intrinsic_name, fnty=fnty)
         # the args are byte addressable, VGPRs are 4 wide so mul idx by 4
+        # the idx might be an int64, this is ok to trunc to int32 as
+        # wavefront_size is never likely overflow an int32
+        idx = builder.trunc(idx, i32)
         four = lc.Constant.int(i32, 4)
         idx = builder.mul(idx, four)
-        return builder.call(fn, (idx, src))
+        # bit cast is so float32 works as packed i32, the return casts back
+        result = builder.call(fn, (idx, builder.bitcast(src, i32)))
+        return builder.bitcast(result, context.get_value_type(sig.return_type))
     return _impl
 
-lower(stubs.ds_permute, types.int32, types.int32)(_gen_ds_permute('llvm.amdgcn.ds.permute'))
-lower(stubs.ds_bpermute, types.int32, types.int32)(_gen_ds_permute('llvm.amdgcn.ds.bpermute'))
+lower(stubs.ds_permute, types.Any, types.Any)(_gen_ds_permute('llvm.amdgcn.ds.permute'))
+lower(stubs.ds_bpermute, types.Any, types.Any)(_gen_ds_permute('llvm.amdgcn.ds.bpermute'))
 
 @lower(stubs.atomic.add, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.add, types.Array,

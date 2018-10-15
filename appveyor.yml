@@ -11,9 +11,9 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see test_script below)
-    - PYTHON: "3.6"
+    - PYTHON: "3.7"
       ARCH: "64"
-      NUMPY: "1.14"
+      NUMPY: "1.15"
       CONDA_ENV: testenv
 
 init:
@@ -41,4 +41,5 @@ test_script:
   # Run a subset of the test suite, as AppVeyor is quite slow.
   # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
   # on certain build configurations.
+  - "%CMD_IN_ENV% python -m numba.tests.test_runtests"
   - "%CMD_IN_ENV% python runtests.py -b --tags important"
