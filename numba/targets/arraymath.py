@@ -1025,10 +1025,10 @@ def _prepare_array(arr):
 
 @overload(_prepare_array)
 def _prepare_array_impl(arr):
-    if isinstance(arr, (types.Array, types.Sequence, types.Tuple)):
-        return lambda x: _asarray(x).ravel()
     if arr in (None, types.none):
         return lambda x: np.array(())
+    else:
+        return lambda x: _asarray(x).ravel()
 
 if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
     @overload(np.ediff1d)

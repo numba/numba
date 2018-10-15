@@ -829,6 +829,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
         _check(params)
 
+        # to_begin / to_end are scalar
+        params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
+        _check(params)
+
         # the following would fail on one of the BITS32 builds:
         # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
         # _check(params)
