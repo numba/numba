@@ -779,18 +779,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
 
         def m_variations():
+            # array inputs
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
-            yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
             yield np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
-            yield np.array([])
-            yield np.array([]).reshape(0, 2)
-            yield np.array([]).reshape(2, 0)
-            yield 3.142
             yield np.full((4, 5), fill_value=True)
             yield np.array([np.nan, 0.5969, -np.inf, 0.9918, 0.7964])
             yield np.linspace(-3, 3, 33).reshape(33, 1, order='F')
+
+            # non-array inputs
+            yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
             yield (-2.1, -1, 4.3)
+            yield (1, 2, 3)
+            yield 3.142
+
+            # empty data structures
+            yield np.array([])
+            yield np.array([]).reshape(0, 2)
+            yield np.array([]).reshape(2, 0)
             yield ()
 
         # all inputs other than the first are defaulted
