@@ -772,6 +772,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
+    def test_cov_all(self):
+        # TODO remove me
+        self.test_cov_basic()
+        self.test_cov_egde_cases()
+        self.test_cov_exceptions()
+        self.test_cov_explicit_arguments()
+
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_basic(self):
         pyfunc = cov
@@ -791,6 +798,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
             yield (-2.1, -1, 4.3)
             yield (1, 2, 3)
+            yield [4, 5, 6]
+            yield ((0.1, 0.2, 0.3), (0.1, 0.2, 0.3))
+            yield [(1, 2, 3), (1, 3, 2)]
             yield 3.142
 
             # empty data structures
@@ -877,10 +887,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
+        def _check(m):
+            with self.assertTypingError() as raises:
+                cfunc(m)
+            self.assertIn('m has more than 2 dimensions', str(raises.exception))
+
         m = np.ones((5, 6, 7))
-        with self.assertTypingError() as raises:
-            cfunc(m)
-        self.assertIn('m has more than 2 dimensions', str(raises.exception))
+        _check(m)
+
+        m = ((((1, 2, 3), (2, 2, 2)),),)
+        _check(m)
+
+        m = [[[5, 6, 7]]]
+        _check(m)
 
         m = np.ones((5, 6))
         y = np.ones((5, 6, 7))

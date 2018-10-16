@@ -1360,17 +1360,6 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
 
             return np.array(variance)
 
-        if isinstance(m, types.Sequence):
-            for val in m:
-                if hasattr(val, 'count'):
-                    is_1D = False
-                    break
-                else:
-                    is_1D = True
-
-
-        #import pdb; pdb.set_trace()
-
         # identify up front if output has ndim of 0...
         if isinstance(m, types.Array) and m.ndim == 1 or isinstance(m, types.Tuple):
             if y in (None, types.none):
@@ -1381,8 +1370,11 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
                 return np_cov_impl_single_variable
 
         if isinstance(m, types.Sequence):
-            if not any(hasattr(v, 'count') for v in m):
+            if not isinstance(m.key[0], types.Sequence) and y in (None, types.none):
                 return np_cov_impl_single_variable
+            else:
+                if isinstance(m.key[0].key[0], types.Sequence):
+                    raise TypeError("m has more than 2 dimensions")
 
         # otherwise assume it's 2D
         return np_cov_impl
