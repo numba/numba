@@ -808,6 +808,9 @@ class BaseContext(object):
         Compile the function *impl* for the given *sig* (in nopython mode).
         Return a placeholder object that's callable from another Numba
         function.
+
+        If *caching* evaluates True, the function keeps the compiled function
+        for reuse in *.cached_internal_func*.
         """
         cache_key = (impl.__code__, sig, type(self.error_model))
         if not caching:
