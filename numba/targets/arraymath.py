@@ -1376,6 +1376,11 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
                 if isinstance(m.key[0].key[0], types.Sequence):
                     raise TypeError("m has more than 2 dimensions")
 
+        if isinstance(y, types.Sequence):
+            if isinstance(y.key[0], types.Sequence):
+                if isinstance(y.key[0].key[0], types.Sequence):
+                    raise TypeError("y has more than 2 dimensions")
+
         # otherwise assume it's 2D
         return np_cov_impl
 

@@ -901,11 +901,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         m = [[[5, 6, 7]]]
         _check(m)
 
+        def _check_y(m, y):
+            with self.assertTypingError() as raises:
+                cfunc(m, y=y)
+            self.assertIn('y has more than 2 dimensions', str(raises.exception))
+
         m = np.ones((5, 6))
         y = np.ones((5, 6, 7))
-        with self.assertTypingError() as raises:
-            cfunc(m, y=y)
-        self.assertIn('y has more than 2 dimensions', str(raises.exception))
+        _check_y(m, y)
+
+        m = np.array((1.1, 2.2, 1.1))
+        y = (((1.2, 2.2, 2.3),),)
+        _check_y(m, y)
 
         m = np.arange(3)
         y = np.arange(4)
