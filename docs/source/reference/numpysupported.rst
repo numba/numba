@@ -156,7 +156,8 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
-* :meth:`~numpy.ndarray.argsort` (without arguments)
+* :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
+  values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.dot` (only the 1-argument form)
@@ -230,16 +231,18 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
+* :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
+* :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
 * :func:`numpy.nanmax` (only the first argument)
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
 * :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
-* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
 
 Other functions
 ---------------
@@ -247,7 +250,8 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
-* :func:`numpy.argsort` (no optional arguments)
+* :func:`numpy.argsort` (``kind`` key word argument supported for values
+  ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
@@ -264,6 +268,7 @@ The following top-level functions are supported:
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
+* :func:`numpy.ediff1d`
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`

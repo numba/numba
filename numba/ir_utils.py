@@ -6,6 +6,7 @@ import numpy
 
 import types as pytypes
 import collections
+import operator
 
 from llvmlite import ir as lir
 
@@ -263,6 +264,12 @@ def find_op_typ(op, arg_typs):
                 func_typ = None
             if func_typ is not None:
                 return func_typ
+    else:
+        for f, ft in typing.templates.builtin_registry.globals:
+            if f == op:
+                return ft.get_call_type(typing.Context(),
+                                                    arg_typs, {})
+
     raise RuntimeError("unknown array operation")
 
 
@@ -1765,6 +1772,25 @@ def fill_callee_epilogue(block, outputs):
     # return
     block.append(ir.Return(value=tup, loc=loc))
     return block
+
+
+def find_global_value(func_ir, var):
+    """Check if a variable is a global value, and return the value,
+    or raise GuardException otherwise.
+    """
+    dfn = func_ir.get_definition(var)
+    if isinstance(dfn, ir.Global):
+        return dfn.value
+
+    if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
+        prev_val = find_global_value(func_ir, dfn.value)
+        try:
+            val = getattr(prev_val, dfn.attr)
+            return val
+        except KeyError:
+            raise GuardException
+
+    raise GuardException
 
 
 def raise_on_unsupported_feature(func_ir):

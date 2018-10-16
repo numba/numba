@@ -345,39 +345,41 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         """Get the definition given a variable"""
         return func_ir.get_definition(var)
 
-    def get_ctxmgr_obj(dfn):
+    def get_ctxmgr_obj(var_ref):
         """Return the context-manager object and extra info.
 
         The extra contains the arguments if the context-manager is used
         as a call.
         """
         # If the contextmanager used as a Call
+        dfn = func_ir.get_definition(var_ref)
         if isinstance(dfn, ir.Expr) and dfn.op == 'call':
             args = [get_var_dfn(x) for x in dfn.args]
             kws = {k: get_var_dfn(v) for k, v in dfn.kws}
             extra = {'args': args, 'kwargs': kws}
-            dfn = func_ir.get_definition(dfn.func)
+            var_ref = dfn.func
         else:
             extra = None
 
-        # Check the contextmanager object
-        if isinstance(dfn, ir.Global):
-            ctxobj = dfn.value
-            if ctxobj is not ir.UNDEFINED:
-                return ctxobj, extra
+        ctxobj = ir_utils.guard(ir_utils.find_global_value, func_ir, var_ref)
+
+        # check the contextmanager object
+        if ctxobj is ir.UNDEFINED:
             raise errors.CompilerError(
                 "Undefined variable used as context manager",
                 loc=blocks[blk_start].loc,
                 )
 
-        raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
+        if ctxobj is None:
+            raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
+
+        return ctxobj, extra
 
     # Scan the start of the with-region for the contextmanager
     for stmt in blocks[blk_start].body:
         if isinstance(stmt, ir.EnterWith):
             var_ref = stmt.contextmanager
-            dfn = func_ir.get_definition(var_ref)
-            ctxobj, extra = get_ctxmgr_obj(dfn)
+            ctxobj, extra = get_ctxmgr_obj(var_ref)
             if not hasattr(ctxobj, 'mutate_with_body'):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",

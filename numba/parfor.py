@@ -16,8 +16,9 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys, math
 from functools import reduce
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from contextlib import contextmanager
+import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
@@ -26,6 +27,7 @@ from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
+from numba.extending import register_jitable
 
 
 from numba.ir_utils import (
@@ -111,6 +113,7 @@ def min_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = min(val, in_arr[i])
@@ -118,6 +121,7 @@ def min_parallel_impl(return_type, arg):
     else:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = min(val, in_arr[i])
@@ -128,6 +132,7 @@ def max_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = max(val, in_arr[i])
@@ -135,6 +140,7 @@ def max_parallel_impl(return_type, arg):
     else:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
@@ -143,6 +149,7 @@ def max_parallel_impl(return_type, arg):
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    argmin_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -153,6 +160,7 @@ def argmin_parallel_impl(in_arr):
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    argmax_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -378,6 +386,8 @@ replace_functions_map = {
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
     ('max', 'numpy'): max_parallel_impl,
+    ('amin', 'numpy'): min_parallel_impl,
+    ('amax', 'numpy'): max_parallel_impl,
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
     ('mean', 'numpy'): mean_parallel_impl,
@@ -387,6 +397,40 @@ replace_functions_map = {
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
+
+@register_jitable
+def max_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError(("zero-size array to reduction operation "
+                            "maximum which has no identity"))
+
+@register_jitable
+def min_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError(("zero-size array to reduction operation "
+                            "minimum which has no identity"))
+
+@register_jitable
+def argmin_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+
+@register_jitable
+def argmax_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+
+checker_impl = namedtuple('checker_impl', ['name', 'func'])
+
+replace_functions_checkers_map = {
+    ('argmin', 'numpy') : checker_impl('argmin_checker', argmin_checker),
+    ('argmax', 'numpy') : checker_impl('argmax_checker', argmax_checker),
+    ('min', 'numpy') : checker_impl('min_checker', min_checker),
+    ('max', 'numpy') : checker_impl('max_checker', max_checker),
+    ('amin', 'numpy') : checker_impl('min_checker', min_checker),
+    ('amax', 'numpy') : checker_impl('max_checker', max_checker),
+}
+
 
 class LoopNest(object):
 
@@ -586,6 +630,12 @@ class PreParforPass(object):
                             g['numba'] = numba
                             g['np'] = numpy
                             g['math'] = math
+                            # if the function being inlined has a function
+                            # checking the inputs, find it and add it to globals
+                            check = replace_functions_checkers_map.get(callname,
+                                                                       None)
+                            if check is not None:
+                                g[check.name] = check.func
                             # inline the parallel implementation
                             inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
@@ -1771,7 +1821,7 @@ def _arrayexpr_tree_to_ir(
                 el_typ2 = typemap[arg_vars[1].name]
                 func_typ = find_op_typ(op, [el_typ1, el_typ2])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
-                if op == '/':
+                if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
@@ -2197,9 +2247,9 @@ def get_reduction_init(nodes):
     require(nodes[-2].target.name == nodes[-1].value.name)
     acc_expr = nodes[-2].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == '+=':
+    if acc_expr.fn == operator.iadd:
         return 0
-    if acc_expr.fn == '*=':
+    if acc_expr.fn == operator.imul:
         return 1
     return None
 

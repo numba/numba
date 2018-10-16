@@ -278,10 +278,7 @@ def array_cumsum(context, builder, sig, args):
     zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = zero
         for idx, v in enumerate(arr.flat):
             c += v
@@ -292,8 +289,6 @@ def array_cumsum(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-
-
 @lower_builtin(np.cumprod, types.Array)
 @lower_builtin("array.cumprod", types.Array)
 def array_cumprod(context, builder, sig, args):
@@ -301,10 +296,7 @@ def array_cumprod(context, builder, sig, args):
     dtype = as_dtype(scalar_dtype)
 
     def array_cumprod_impl(arr):
-        size = 1
-        for i in arr.shape:
-            size = size * i
-        out = np.empty(size, dtype)
+        out = np.empty(arr.size, dtype)
         c = 1
         for idx, v in enumerate(arr.flat):
             c *= v
@@ -369,6 +361,9 @@ def array_min(context, builder, sig, args):
         nat = ty('NaT')
 
         def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             min_value = nat
             it = np.nditer(arry)
             for view in it:
@@ -385,6 +380,9 @@ def array_min(context, builder, sig, args):
 
     else:
         def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(("zero-size array to reduction operation "
+                                  "minimum which has no identity"))
             it = np.nditer(arry)
             for view in it:
                 min_value = view.item()
@@ -403,6 +401,9 @@ def array_min(context, builder, sig, args):
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
     def array_max_impl(arry):
+        if arry.size == 0:
+            raise ValueError(("zero-size array to reduction operation "
+                                "maximum which has no identity"))
         it = np.nditer(arry)
         for view in it:
             max_value = view.item()
@@ -431,6 +432,8 @@ def array_argmin(context, builder, sig, args):
         nat = ty('NaT')
 
         def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
             min_value = nat
             min_idx = 0
             it = arry.flat
@@ -452,6 +455,8 @@ def array_argmin(context, builder, sig, args):
 
     else:
         def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
             for v in arry.flat:
                 min_value = v
                 min_idx = 0
@@ -472,6 +477,8 @@ def array_argmin(context, builder, sig, args):
 @lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
     def array_argmax_impl(arry):
+        if arry.size == 0:
+            raise ValueError("attempt to get argmax of an empty sequence")
         for v in arry.flat:
             max_value = v
             max_idx = 0
@@ -660,6 +667,55 @@ if numpy_version >= (1, 10):
             return c
 
         return nanprod_impl
+
+if numpy_version >= (1, 12):
+    @overload(np.nancumprod)
+    def np_nancumprod(a):
+        if not isinstance(a, types.Array):
+            return
+
+        if isinstance(a.dtype, (types.Boolean, types.Integer)):
+            # dtype cannot possibly contain NaN
+            return lambda arr: np.cumprod(arr)
+        else:
+            retty = a.dtype
+            is_nan = get_isnan(retty)
+            one = retty(1)
+
+            def nancumprod_impl(arr):
+                out = np.empty(arr.size, retty)
+                c = one
+                for idx, v in enumerate(arr.flat):
+                    if ~is_nan(v):
+                        c *= v
+                    out[idx] = c
+                return out
+
+            return nancumprod_impl
+
+    @overload(np.nancumsum)
+    def np_nancumsum(a):
+        if not isinstance(a, types.Array):
+            return
+
+        if isinstance(a.dtype, (types.Boolean, types.Integer)):
+            # dtype cannot possibly contain NaN
+            return lambda arr: np.cumsum(arr)
+        else:
+            retty = a.dtype
+            is_nan = get_isnan(retty)
+            zero = retty(0)
+
+            def nancumsum_impl(arr):
+                out = np.empty(arr.size, retty)
+                c = zero
+                for idx, v in enumerate(arr.flat):
+                    if ~is_nan(v):
+                        c += v
+                    out[idx] = c
+                return out
+
+            return nancumsum_impl
 
 #----------------------------------------------------------------------------
 # Median and partitioning
@@ -1019,6 +1075,53 @@ def my_triu(m, k=0):
         return np_triu_impl_2d
     else:
         return np_triu_impl_multi
+
+def _prepare_array(arr):
+    pass
+
+@overload(_prepare_array)
+def _prepare_array_impl(arr):
+    if arr in (None, types.none):
+        return lambda x: np.array(())
+    else:
+        return lambda x: _asarray(x).ravel()
+
+if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
+    @overload(np.ediff1d)
+    def np_ediff1d(ary, to_end=None, to_begin=None):
+
+        if isinstance(ary, types.Array):
+            if isinstance(ary.dtype, types.Boolean):
+                raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+                # Numpy tries to do this: return ary[1:] - ary[:-1] which results in a
+                # TypeError exception being raised
+
+        def np_ediff1d_impl(ary, to_end=None, to_begin=None):
+            # transform each input into an equivalent 1d array
+            start = _prepare_array(to_begin)
+            mid = _prepare_array(ary)
+            end = _prepare_array(to_end)
+
+            out_dtype = mid.dtype
+            # output array dtype determined by ary dtype, per NumPy (for the most part);
+            # an exception to the rule is a zero length array-like, where NumPy falls back
+            # to np.float64; this behaviour is *not* replicated
+
+            if len(mid) > 0:
+                out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+                start_idx = len(start)
+                mid_idx = len(start) + len(mid) - 1
+                out[:start_idx] = start
+                out[start_idx:mid_idx] = np.diff(mid)
+                out[mid_idx:] = end
+            else:
+                out = np.empty((len(start) + len(end)), dtype=out_dtype)
+                start_idx = len(start)
+                out[:start_idx] = start
+                out[start_idx:] = end
+            return out
+
+        return np_ediff1d_impl
 
 @register_jitable
 def _np_vander(x, N, increasing, out):

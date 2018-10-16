@@ -156,8 +156,6 @@ class _ObjModeContextType(WithContext):
         - with-block cannot use incoming function object.
         - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` \
           such that the execution will leave the with-block immediately.
-        - the ``objmode()`` function must be directly referenced as a global. \
-          i.e. ``with numba.objmode():`` doesn't work.
 
     .. note:: When used outside of no-python mode, the context-manager has no
         effect.
@@ -183,7 +181,7 @@ class _ObjModeContextType(WithContext):
         typeanns = {}
         for k, v in callkwargs.items():
             if not isinstance(v, ir.Const) or not isinstance(v.value, str):
-                raise errors.CompileError(
+                raise errors.CompilerError(
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
