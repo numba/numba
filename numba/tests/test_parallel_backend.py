@@ -500,6 +500,28 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
+class TestMiscBackendIssues(ThreadLayerTestHelper):
+
+    _DEBUG = False
+
+    @skip_no_omp
+    def test_omp_stack_overflow_fix(self):
+        """
+        Tests that the stack does not overflow in OMP implementation
+        """
+        body = """if 1:
+            func = threading_backend_usecases.simple_vec
+            N = 2**20
+            x = np.ones(N, np.float32)
+            y = np.ones(N, np.float32)
+            func(x, y)
+        """
+        runme = self.template % body
+        cmdline = [sys.executable, '-c', runme]
+        out, err = self.run_cmd(cmdline)
+        if self._DEBUG:
+            print(out, err)
+
 # 32bit or windows py27 (not that this runs on windows)
 @parfors_skip_unsupported
 @skip_unless_gnu_omp

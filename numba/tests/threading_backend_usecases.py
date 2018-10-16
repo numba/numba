@@ -1,6 +1,6 @@
 import signal
 import sys
-from numba import njit
+from numba import njit, vectorize
 import numpy as np
 
 def sigterm_handler(signum, frame):
@@ -24,3 +24,7 @@ def busy_func(a, b, q=None):
     except BaseException as e:
         if q is not None:
             q.put(e)
+
+@vectorize(['float32(float32, float32)'], target='parallel')
+def simple_vec(x, y):
+    return x + y

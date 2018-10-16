@@ -101,11 +101,18 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
+    // C99 has 127 stipulated as the minimum number of arguments that must
+    // be supported in a function call
+    #define _C99_FN_ARG_COUNT 127
+    // These are threadprivate, one copy per thread, this is in preference to
+    // using alloca and the stack which can overflow for large size inputs
+    static size_t count_space[_C99_FN_ARG_COUNT];
+    static char * array_arg_space[_C99_FN_ARG_COUNT];
+
+    #pragma omp threadprivate(count_space, array_arg_space)
     #pragma omp parallel for
     for(ptrdiff_t r = 0; r < size; r++)
     {
-        size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
-        char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
         count_space[0] = 1;
 
