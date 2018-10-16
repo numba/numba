@@ -88,6 +88,9 @@ def vander(x, N=None, increasing=False):
 def partition(a, kth):
     return np.partition(a, kth)
 
+def ediff1d(ary, to_end=None, to_begin=None):
+    return np.ediff1d(ary, to_end, to_begin)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -559,14 +562,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
+    def _check_output(self, pyfunc, cfunc, params):
+        expected = pyfunc(**params)
+        got = cfunc(**params)
+        self.assertPreciseEqual(expected, got)
+
     def test_vander_basic(self):
         pyfunc = vander
         cfunc = jit(nopython=True)(pyfunc)
-
-        def _check_output(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got)
+        _check_output = partial(self._check_output, pyfunc, cfunc)
 
         def _check(x):
             n_choices = [None, 0, 1, 2, 3, 4]
@@ -651,6 +655,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_tri_basic(self):
         pyfunc = tri
         cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
 
         def n_variations():
             return np.arange(-4, 8)  # number of rows
@@ -660,11 +665,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def k_variations():
             return np.arange(-10, 10)  # offset
-
-        def _check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got)
 
         # N supplied, M and k defaulted
         for n in n_variations():
@@ -1083,6 +1083,95 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
+
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    def test_ediff1d_basic(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        def to_variations(a):
+            yield None
+            yield a
+            yield a.astype(np.int16)
+
+        def ary_variations(a):
+            yield a
+            yield a.reshape(3, 2, 2)
+            yield a.astype(np.int32)
+
+        for ary in ary_variations(np.linspace(-2, 7, 12)):
+            params = {'ary': ary}
+            _check(params)
+
+            for a in to_variations(ary):
+                params = {'ary': ary, 'to_begin': a}
+                _check(params)
+
+                params = {'ary': ary, 'to_end': a}
+                _check(params)
+
+                for b in to_variations(ary):
+                    params = {'ary': ary, 'to_begin': a, 'to_end': b}
+                    _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    def test_ediff1d_edge_cases(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        def input_variations():
+            yield ((1, 2, 3), (4, 5, 6))
+            yield [4, 5, 6]
+            yield np.array([])
+            yield ()
+            yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
+            parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+            a = parts + 1j * parts[::-1]
+            yield a.reshape(3, 3)
+
+        for i in input_variations():
+            params = {'ary': i, 'to_end': i, 'to_begin': i}
+            _check(params)
+
+        # to_end / to_begin are boolean
+        params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
+        _check(params)
+
+        # example of unsafe type casting (np.nan to np.int32)
+        to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
+        params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
+        _check(params)
+
+        # scalar inputs
+        params = {'ary': 3.142}
+        _check(params)
+
+        params = {'ary': 3, 'to_begin': 3.142}
+        _check(params)
+
+        params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
+        _check(params)
+
+        # the following would fail on one of the BITS32 builds (difference in
+        # overflow handling):
+        # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
+        # _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    def test_ediff1d_exceptions(self):
+        pyfunc = ediff1d
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Boolean dtype is unsupported (as per NumPy)"
+        assert msg in str(e.exception)
 
 
 class TestNPMachineParameters(TestCase):
