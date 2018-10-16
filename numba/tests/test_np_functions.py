@@ -14,6 +14,7 @@ from numba import jit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin
+from .matmul_usecase import needs_blas
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")
@@ -772,18 +773,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
-    def test_cov_all(self):
-        # TODO remove me
-        self.test_cov_basic()
-        self.test_cov_egde_cases()
-        self.test_cov_exceptions()
-        self.test_cov_explicit_arguments()
-
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_basic(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
         def m_variations():
             # array inputs
@@ -814,10 +809,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check({'m': m})
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_explicit_arguments(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
         m = self.rnd.randn(1050).reshape(150, 7)
         y_choices = None, m[::-1]
@@ -830,56 +826,56 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_egde_cases(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
         # examples borrowed from numpy doc string / unit tests
-        x = np.array([-2.1, -1, 4.3])
+        m = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
-        x = np.array([[0, 2], [1, 1], [2, 0]]).T
-        params = {'m': x, 'ddof': 5}
+        m = np.array([[0, 2], [1, 1], [2, 0]]).T
+        params = {'m': m, 'ddof': 5}
         _check(params)
 
-        x = np.array([1, 2, 3])  # test case modified such that m is 1D
+        m = np.array([1, 2, 3])  # test case modified such that m is 1D
         y = np.array([[1j, 2j, 3j]])
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
-        x = np.array([])
+        m = np.array([])
         y = np.array([])
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
-        x = 1.1
+        m = 1.1
         y = 2.2
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
-        x = self.rnd.randn(10, 3)
+        m = self.rnd.randn(10, 3)
         y = np.array([-2.1, -1, 4.3]).reshape(1, 3) / 10
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
         # The following tests pass with numpy version >= 1.10, but fail with 1.9
-        x = np.array([-2.1, -1, 4.3])
+        m = np.array([-2.1, -1, 4.3])
         y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
-        params = {'m': x, 'y': y}
+        params = {'m': m, 'y': y}
         _check(params)
 
         for rowvar in False, True:
-            x = np.array([-2.1, -1, 4.3])
+            m = np.array([-2.1, -1, 4.3])
             y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])
-            params = {'m': x, 'y': y, 'rowvar': rowvar}
-            _check(params)
-            params = {'m': y, 'y': x, 'rowvar': rowvar}
+            params = {'m': m, 'y': y, 'rowvar': rowvar}
             _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_exceptions(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)

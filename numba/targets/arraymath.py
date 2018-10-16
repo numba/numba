@@ -1212,26 +1212,7 @@ def row_wise_average(a):
     return out
 
 @register_jitable
-def simple_matrix_multiply(A, B):
-    assert A.ndim == 2
-    assert B.ndim == 2
-
-    rows_A, cols_A = A.shape
-    rows_B, cols_B = B.shape
-
-    assert cols_A == rows_B
-
-    C = np.zeros((rows_A, cols_B), dtype=A.dtype)
-
-    for i in range(rows_A):
-        for k in range(cols_A):
-            for j in range(cols_B):
-                C[i][j] += A[i][k] * B[k][j]
-
-    return C
-
-@register_jitable
-def np_cov_impl_inner(X, bias, ddof, mmult):
+def np_cov_impl_inner(X, bias, ddof):
 
     # determine degrees of freedom
     if ddof is None:
@@ -1249,8 +1230,8 @@ def np_cov_impl_inner(X, bias, ddof, mmult):
     # de-mean
     X -= row_wise_average(X)
 
-    # calculate result
-    c = mmult(X, np.conj(X.T))
+    # calculate result - requires blas
+    c = np.dot(X, np.conj(X.T))
     c *= np.true_divide(1, fact)
     return c
 
@@ -1309,7 +1290,7 @@ def _handle_m_dim_change(m):
 
 _handle_m_dim_nop = register_jitable(lambda x:x)
 
-if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix release
+if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
@@ -1334,12 +1315,6 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
             y_dt = np.float64
         dtype = np.result_type(m_dt, y_dt, np.float64)
 
-        # select a matrix multiply algorithm
-        if _HAVE_BLAS:
-            mmult = np.dot
-        else:
-            mmult = simple_matrix_multiply
-
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
             _M_DIM_HANDLER(m)
             X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
@@ -1347,7 +1322,7 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
             if np.any(np.array(X.shape) == 0):
                 return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
             else:
-                return np_cov_impl_inner(X, bias, ddof, mmult)
+                return np_cov_impl_inner(X, bias, ddof)
 
         def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
             _M_DIM_HANDLER(m)
@@ -1356,11 +1331,11 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
             if np.any(np.array(X.shape) == 0):
                 variance = np.nan
             else:
-                variance = np_cov_impl_inner(X, bias, ddof, mmult).flat[0]
+                variance = np_cov_impl_inner(X, bias, ddof).flat[0]
 
             return np.array(variance)
 
-        # identify up front if output has ndim of 0...
+        # identify up front if output is 0D, and check dimensionality of array-like inputs
         if isinstance(m, types.Array) and m.ndim == 1 or isinstance(m, types.Tuple):
             if y in (None, types.none):
                 return np_cov_impl_single_variable
@@ -1381,7 +1356,7 @@ if numpy_version >= (1, 10): # replicate the behaviour post numpy 1.10 bugfix re
                 if isinstance(y.key[0].key[0], types.Sequence):
                     raise TypeError("y has more than 2 dimensions")
 
-        # otherwise assume it's 2D
+        # otherwise assume it's 2D and we're good to go
         return np_cov_impl
 
 #----------------------------------------------------------------------------
