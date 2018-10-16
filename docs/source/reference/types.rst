@@ -100,6 +100,17 @@ the beginning or the end of the index specification::
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
 
+Miscellaneous Types
+-------------------
+
+There are some non-numerical types that do not fit into the other categories.
+
+===================   =================================================
+Type name(s)          Comments
+===================   =================================================
+pyobject              generic Python object
+voidptr               raw pointer, no operations can be performed on it
+===================   =================================================
 
 Advanced types
 ==============

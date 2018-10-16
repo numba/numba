@@ -15,6 +15,7 @@ import warnings
 from functools import reduce
 import numpy as np
 from numpy.random import randn
+import operator
 
 import numba
 from numba import unittest_support as unittest
@@ -54,6 +55,8 @@ class TestParforsBase(TestCase):
     Provides functions for compilation and three way comparison between
     python functions, njit'd functions and parfor njit'd functions.
     """
+
+    _numba_parallel_test_ = False
 
     def __init__(self, *args):
         # flags for njit()
@@ -521,16 +524,16 @@ class TestParfors(TestParforsBase):
 
     @skip_unsupported
     @tag('important')
-    def test_fuse_argmin(self):
-        def test_impl(n):
-            A = np.ones(n)
-            C = A.argmin()
-            B = A.sum()
-            return B+C
-
-        self.check(test_impl, 256)
-        self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
-        self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
+    def test_fuse_argmin_argmax_max_min(self):
+        for op in [np.argmin, np.argmax, np.min, np.max]:
+            def test_impl(n):
+                A = np.ones(n)
+                C = op(A)
+                B = A.sum()
+                return B + C
+            self.check(test_impl, 256)
+            self.assertTrue(countParfors(test_impl, (types.int64, )) == 1)
+            self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_unsupported
     @tag('important')
@@ -736,6 +739,28 @@ class TestParfors(TestParforsBase):
             b = np.arange(n)
             return np.sum(A[:, b])
         self.check(test_impl)
+
+    @test_disabled
+    def test_simple_operator_15(self):
+        """same as corresponding test_simple_<n> case but using operator.add"""
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(v1, v1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_16(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m1, m1)
+
+        self.check(test_impl, *self.simple_args)
+
+    @test_disabled
+    def test_simple_operator_17(self):
+        def test_impl(v1, v2, m1, m2):
+            return operator.add(m2, v1)
+
+        self.check(test_impl, *self.simple_args)
 
     @skip_unsupported
     def test_np_func_direct_import(self):
@@ -963,6 +988,15 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = ("zero-size array to reduction operation "
+               "minimum which has no identity")
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
+
     @skip_unsupported
     def test_max(self):
         def test_impl1(A):
@@ -981,6 +1015,15 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+
+        # checks that 0d array input raises
+        msg = ("zero-size array to reduction operation "
+               "maximum which has no identity")
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_argmin(self):
@@ -1001,6 +1044,14 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = 'attempt to get argmin of an empty sequence'
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
+
     @skip_unsupported
     def test_argmax(self):
         def test_impl1(A):
@@ -1020,6 +1071,13 @@ class TestParfors(TestParforsBase):
         self.check(test_impl2, B)
         self.check(test_impl2, C)
 
+        # checks that 0d array input raises
+        msg = 'attempt to get argmax of an empty sequence'
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.int64[:],))
+            with self.assertRaises(ValueError) as e:
+                pcfunc.entry_point(np.array([], dtype=np.int64))
+            self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_parfor_array_access1(self):
@@ -1189,6 +1247,108 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countArrayAllocs(test_impl, (types.intp,)), 1)
 
     @skip_unsupported
+    def test_reduction_var_reuse(self):
+        # issue #3139
+        def test_impl(n):
+            acc = 0
+            for i in prange(n):
+                acc += 1
+
+            for i in prange(n):
+                acc += 2
+
+            return acc
+        self.check(test_impl, 16)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_reuse(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            for i in numba.prange(n):
+                result1 += tmp
+                
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_one_d_array_reduction(self):
+        def test_impl(n):
+            result = np.zeros(1, np.int_)
+
+            for i in numba.prange(n):
+                result += np.array([i], np.int_)
+
+            return result
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction(self):
+        def test_impl(n):
+            shp = (13, 17)
+            size = shp[0] * shp[1]
+            result1 = np.zeros(shp, np.int_)
+            tmp = np.arange(size).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_with_float_sizes(self):
+        # result1 is float32 and tmp is float64.
+        # Tests reduction with differing dtypes.
+        def test_impl(n):
+            shp = (2, 3)
+            result1 = np.zeros(shp, np.float32)
+            tmp = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).reshape(shp)
+
+            for i in numba.prange(n):
+                result1 += tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_two_d_array_reduction_prod(self):
+        def test_impl(n):
+            shp = (13, 17)
+            result1 = 2 * np.ones(shp, np.int_)
+            tmp = 2 * np.ones_like(result1)
+
+            for i in numba.prange(n):
+                result1 *= tmp
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
+    def test_three_d_array_reduction(self):
+        def test_impl(n):
+            shp = (3, 2, 7)
+            result1 = np.zeros(shp, np.int_)
+
+            for i in numba.prange(n):
+                result1 += np.ones(shp, np.int_)
+
+            return result1
+
+        self.check(test_impl, 100)
+
+    @skip_unsupported
     def test_preparfor_canonicalize_kws(self):
         # test canonicalize_array_math typing for calls with kw args
         def test_impl(A):
@@ -1346,7 +1506,9 @@ class TestPrangeBase(TestParforsBase):
         cfunc = self.compile_njit(pyfunc, sig)
 
         # compile the prange injected function
-        cpfunc = self.compile_parallel(pfunc, sig)
+        with warnings.catch_warnings(record=True) as raised_warnings:
+            warnings.simplefilter('always')
+            cpfunc = self.compile_parallel(pfunc, sig)
 
         # if check_fastmath is True then check fast instructions
         if check_fastmath:
@@ -1359,6 +1521,7 @@ class TestPrangeBase(TestParforsBase):
             kwargs = dict({'fastmath_pcres': fastcpfunc}, **kwargs)
 
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+        return raised_warnings
 
 
 class TestPrange(TestPrangeBase):
@@ -1830,6 +1993,19 @@ class TestPrange(TestPrangeBase):
                   c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
+
+    @skip_unsupported
+    def test_parfor_race_1(self):
+        def test_impl(x, y):
+            for j in range(y):
+                k = x
+            return k
+        raised_warnings = self.prange_tester(test_impl, 10, 20)
+        warning_obj = raised_warnings[0]
+        expected_msg = ("Variable k used in parallel loop may be written to "
+                        "simultaneously by multiple workers and may result "
+                        "in non-deterministic or unintended results.")
+        self.assertIn(expected_msg, str(warning_obj.message))
 
 
 @x86_only
@@ -2336,6 +2512,7 @@ class TestParforsMisc(TestCase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """
+    _numba_parallel_test_ = False
 
     @skip_unsupported
     def test_warn_if_cache_set(self):

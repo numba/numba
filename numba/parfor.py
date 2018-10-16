@@ -16,8 +16,9 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys, math
 from functools import reduce
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from contextlib import contextmanager
+import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
@@ -26,6 +27,7 @@ from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
+from numba.extending import register_jitable
 
 
 from numba.ir_utils import (
@@ -111,6 +113,7 @@ def min_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = min(val, in_arr[i])
@@ -118,6 +121,7 @@ def min_parallel_impl(return_type, arg):
     else:
         def min_1(in_arr):
             numba.parfor.init_prange()
+            min_checker(len(in_arr))
             val = numba.targets.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = min(val, in_arr[i])
@@ -128,6 +132,7 @@ def max_parallel_impl(return_type, arg):
     if arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.parfor.internal_prange(len(in_arr)):
                 val = max(val, in_arr[i])
@@ -135,6 +140,7 @@ def max_parallel_impl(return_type, arg):
     else:
         def max_1(in_arr):
             numba.parfor.init_prange()
+            max_checker(len(in_arr))
             val = numba.targets.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
@@ -143,6 +149,7 @@ def max_parallel_impl(return_type, arg):
 
 def argmin_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    argmin_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -153,6 +160,7 @@ def argmin_parallel_impl(in_arr):
 
 def argmax_parallel_impl(in_arr):
     numba.parfor.init_prange()
+    argmax_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
     ival = numba.typing.builtins.IndexValue(0, init_val)
@@ -378,6 +386,8 @@ replace_functions_map = {
     ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
     ('max', 'numpy'): max_parallel_impl,
+    ('amin', 'numpy'): min_parallel_impl,
+    ('amax', 'numpy'): max_parallel_impl,
     ('sum', 'numpy'): sum_parallel_impl,
     ('prod', 'numpy'): prod_parallel_impl,
     ('mean', 'numpy'): mean_parallel_impl,
@@ -387,6 +397,40 @@ replace_functions_map = {
     ('arange', 'numpy'): arange_parallel_impl,
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
+
+@register_jitable
+def max_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError(("zero-size array to reduction operation "
+                            "maximum which has no identity"))
+
+@register_jitable
+def min_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError(("zero-size array to reduction operation "
+                            "minimum which has no identity"))
+
+@register_jitable
+def argmin_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
+
+@register_jitable
+def argmax_checker(arr_size):
+    if arr_size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
+
+checker_impl = namedtuple('checker_impl', ['name', 'func'])
+
+replace_functions_checkers_map = {
+    ('argmin', 'numpy') : checker_impl('argmin_checker', argmin_checker),
+    ('argmax', 'numpy') : checker_impl('argmax_checker', argmax_checker),
+    ('min', 'numpy') : checker_impl('min_checker', min_checker),
+    ('max', 'numpy') : checker_impl('max_checker', max_checker),
+    ('amin', 'numpy') : checker_impl('min_checker', min_checker),
+    ('amax', 'numpy') : checker_impl('max_checker', max_checker),
+}
+
 
 class LoopNest(object):
 
@@ -431,7 +475,8 @@ class Parfor(ir.Expr, ir.Stmt):
             equiv_set,
             pattern,
             flags,
-            no_sequential_lowering=False):
+            no_sequential_lowering=False,
+            races=set()):
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -455,6 +500,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # if True, this parfor shouldn't be lowered sequentially even with the
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
+        self.races = races
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -481,8 +527,23 @@ class Parfor(ir.Expr, ir.Stmt):
 
         return all_uses
 
-    def get_shape_classes(self, var):
-        return self.equiv_set.get_shape_classes(var)
+    def get_shape_classes(self, var, typemap=None):
+        """get the shape classes for a given variable.
+        If a typemap is specified then use it for type resolution
+        """
+        # We get shape classes from the equivalence set but that
+        # keeps its own typemap at a time prior to lowering.  So
+        # if something is added during lowering then we can pass
+        # in a type map to use.  We temporarily replace the
+        # equivalence set typemap, do the work and then restore
+        # the original on the way out.
+        if typemap is not None:
+            save_typemap = self.equiv_set.typemap
+            self.equiv_set.typemap = typemap
+        res = self.equiv_set.get_shape_classes(var)
+        if typemap is not None:
+            self.equiv_set.typemap = save_typemap
+        return res
 
     def dump(self, file=None):
         file = file or sys.stdout
@@ -569,6 +630,12 @@ class PreParforPass(object):
                             g['numba'] = numba
                             g['np'] = numpy
                             g['math'] = math
+                            # if the function being inlined has a function
+                            # checking the inputs, find it and add it to globals
+                            check = replace_functions_checkers_map.get(callname,
+                                                                       None)
+                            if check is not None:
+                                g[check.name] = check.func
                             # inline the parallel implementation
                             inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
@@ -894,6 +961,17 @@ class ParforPass(object):
                     # Add an empty block to the end of loop body
                     end_label = next_label()
                     loop_body[end_label] = ir.Block(scope, loc)
+
+                    # Detect races in the prange.
+                    # Races are defs in the parfor body that are live at the exit block.
+                    bodydefs = set()
+                    for bl in body_labels:
+                        bodydefs = bodydefs.union(usedefs.defmap[bl])
+                    exit_lives = set()
+                    for bl in loop.exits:
+                        exit_lives = exit_lives.union(live_map[bl])
+                    races = bodydefs.intersection(exit_lives)
+
                     # replace jumps to header block with the end block
                     for l in body_labels:
                         last_inst = loop_body[l].body[-1]
@@ -1050,7 +1128,7 @@ class ParforPass(object):
                                     orig_index_var if mask_indices else index_var,
                                     equiv_set,
                                     ("prange", loop_kind),
-                                    self.flags)
+                                    self.flags, races=races)
                     # add parfor to entry block's jump target
                     jump = blocks[entry].body[-1]
                     jump.target = list(loop.exits)[0]
@@ -1743,7 +1821,7 @@ def _arrayexpr_tree_to_ir(
                 el_typ2 = typemap[arg_vars[1].name]
                 func_typ = find_op_typ(op, [el_typ1, el_typ2])
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
-                if op == '/':
+                if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
@@ -2040,7 +2118,7 @@ def get_parfor_params(blocks, options_fusion):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion)
+            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion) | parfor.races
             parfor_ids.add(parfor.id)
 
         pre_defs |= all_defs[label]
@@ -2169,9 +2247,9 @@ def get_reduction_init(nodes):
     require(nodes[-2].target.name == nodes[-1].value.name)
     acc_expr = nodes[-2].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == '+=':
+    if acc_expr.fn == operator.iadd:
         return 0
-    if acc_expr.fn == '*=':
+    if acc_expr.fn == operator.imul:
         return 1
     return None
 

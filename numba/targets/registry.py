@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import contextlib
-import threading
 
 from . import cpu
 from .descriptors import TargetDescriptor
@@ -10,27 +9,24 @@ from .. import dispatcher, utils, typing
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors
 
-class _ThreadLocalContext(threading.local):
-    """
-    Thread-local helper for CPUTarget.
-    """
-    _nested_typing_context = None
-    _nested_target_context = None
+class _NestedContext(object):
+    _typing_context = None
+    _target_context = None
 
     @contextlib.contextmanager
     def nested(self, typing_context, target_context):
-        old_nested = self._nested_typing_context, self._nested_target_context
+        old_nested = self._typing_context, self._target_context
         try:
-            self._nested_typing_context = typing_context
-            self._nested_target_context = target_context
+            self._typing_context = typing_context
+            self._target_context = target_context
             yield
         finally:
-            self._nested_typing_context, self._nested_target_context = old_nested
+            self._typing_context, self._target_context = old_nested
 
 
 class CPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
-    _tls = _ThreadLocalContext()
+    _nested = _NestedContext()
 
     @utils.cached_property
     def _toplevel_target_context(self):
@@ -47,7 +43,7 @@ class CPUTarget(TargetDescriptor):
         """
         The target context for CPU targets.
         """
-        nested = self._tls._nested_target_context
+        nested = self._nested._target_context
         if nested is not None:
             return nested
         else:
@@ -58,7 +54,7 @@ class CPUTarget(TargetDescriptor):
         """
         The typing context for CPU targets.
         """
-        nested = self._tls._nested_typing_context
+        nested = self._nested._typing_context
         if nested is not None:
             return nested
         else:
@@ -69,7 +65,7 @@ class CPUTarget(TargetDescriptor):
         A context manager temporarily replacing the contexts with the
         given ones, for the current thread of execution.
         """
-        return self._tls.nested(typing_context, target_context)
+        return self._nested.nested(typing_context, target_context)
 
 
 # The global CPU target

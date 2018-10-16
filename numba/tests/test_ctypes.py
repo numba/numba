@@ -230,6 +230,37 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         self.assertIn("Invalid use of ExternalFunctionPointer",
                       str(raises.exception))
 
+    def test_storing_voidptr_to_int_array(self):
+        # Make C callback that returns a void*
+        cproto = CFUNCTYPE(c_void_p)
+
+        @cproto
+        def get_voidstar():
+            return 0xdeadbeef
+
+        # Make python functions that use the C callback
+        def pyfunc(a):
+            ptr = get_voidstar()
+            a[0] = ptr
+            return ptr
+
+        # Compile it
+        cres = compile_isolated(pyfunc, [types.uintp[::1]])
+        cfunc = cres.entry_point
+
+        # Setup inputs
+        arr_got = np.zeros(1, dtype=np.uintp)
+        arr_expect = arr_got.copy()
+
+        # Run functions
+        ret_got = cfunc(arr_got)
+        ret_expect = pyfunc(arr_expect)
+
+        # Check
+        self.assertEqual(ret_expect, 0xdeadbeef)
+        self.assertPreciseEqual(ret_got, ret_expect)
+        self.assertPreciseEqual(arr_got, arr_expect)
+
 
 if __name__ == '__main__':
     unittest.main()

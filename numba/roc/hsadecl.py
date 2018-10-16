@@ -86,15 +86,25 @@ class Hsa_activelanepermute_wavewidth(ConcreteTemplate):
     cases = [signature(ty, ty, types.uint32, ty, types.bool_)
              for ty in (types.integer_domain|types.real_domain)]
 
-@intrinsic
-class Hsa_ds_permute(ConcreteTemplate):
-    key = roc.ds_permute
-    cases = [signature(types.int32, types.int32, types.int32)]
+
+class _Hsa_ds_permuting(ConcreteTemplate):
+    # parameter: index, source
+    cases = [signature(types.int32, types.int32, types.int32),
+             signature(types.int32, types.int64, types.int32),
+             signature(types.float32, types.int32, types.float32),
+             signature(types.float32, types.int64, types.float32)]
+    unsafe_casting = False
+
 
 @intrinsic
-class Hsa_ds_bpermute(ConcreteTemplate):
+class Hsa_ds_permute(_Hsa_ds_permuting):
+    key = roc.ds_permute
+
+
+@intrinsic
+class Hsa_ds_bpermute(_Hsa_ds_permuting):
     key = roc.ds_bpermute
-    cases = [signature(types.int32, types.int32, types.int32)]
+
 
 # hsa.shared submodule -------------------------------------------------------
 

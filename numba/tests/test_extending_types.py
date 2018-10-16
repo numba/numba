@@ -11,6 +11,7 @@ from numba.extending import models, register_model
 from numba.extending import make_attribute_wrapper
 from numba.extending import type_callable
 from numba.extending import overload
+from numba.extending import typeof_impl
 
 from numba import unittest_support as unittest
 
@@ -52,6 +53,10 @@ class TestExtTypDummy(unittest.TestCase):
             dummy.value = value
             return dummy._getvalue()
 
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return DummyType()
+
         # Store attributes
         self.Dummy = Dummy
         self.DummyType = DummyType
@@ -89,4 +94,38 @@ class TestExtTypDummy(unittest.TestCase):
         self.assertIn("TypeError: float() does not support complex",
                       str(raises.exception))
         self.assertIn("TypeError: cannot type float(complex128)",
+                      str(raises.exception))
+
+    def test_unboxing(self):
+        """A test for the unboxing logic on unknown type
+        """
+        Dummy = self.Dummy
+
+        @njit
+        def foo(x):
+            # pass a dummy object into another function
+            bar(Dummy(x))
+
+        # make sure a cpython wrapper is created
+        @njit(no_cpython_wrapper=False)
+        def bar(dummy_obj):
+            pass
+
+        foo(123)
+        with self.assertRaises(TypeError) as raises:
+            bar(Dummy(123))
+        self.assertIn("can't unbox Dummy type", str(raises.exception))
+
+    def test_boxing(self):
+        """A test for the boxing logic on unknown type
+        """
+        Dummy = self.Dummy
+
+        @njit
+        def foo(x):
+            return Dummy(x)
+
+        with self.assertRaises(TypeError) as raises:
+            foo(123)
+        self.assertIn("cannot convert native Dummy to Python object",
                       str(raises.exception))

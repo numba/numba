@@ -111,10 +111,13 @@ class TestIpcMemory(CUDATestCase):
             np.testing.assert_equal(arr, out)
         proc.join(3)
 
-    def test_ipc_handle_serialization(self):
+    def check_ipc_handle_serialization(self, index_arg=None):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
+        if index_arg is not None:
+            devarr = devarr[index_arg]
+        expect = devarr.copy_to_host()
 
         # create IPC handle
         ctx = cuda.current_context()
@@ -137,13 +140,25 @@ class TestIpcMemory(CUDATestCase):
         if not succ:
             self.fail(out)
         else:
-            np.testing.assert_equal(arr, out)
+            np.testing.assert_equal(expect, out)
         proc.join(3)
 
-    def test_ipc_array(self):
+    def test_ipc_handle_serialization(self):
+        # test no slicing
+        self.check_ipc_handle_serialization()
+        # slicing tests
+        self.check_ipc_handle_serialization(slice(3, None))
+        self.check_ipc_handle_serialization(slice(3, 8))
+        self.check_ipc_handle_serialization(slice(None, 8))
+
+    def check_ipc_array(self, index_arg=None):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
+        # Slice
+        if index_arg is not None:
+            devarr = devarr[index_arg]
+        expect = devarr.copy_to_host()
         ipch = devarr.get_ipc_handle()
 
         # spawn new process for testing
@@ -156,9 +171,16 @@ class TestIpcMemory(CUDATestCase):
         if not succ:
             self.fail(out)
         else:
-            np.testing.assert_equal(arr, out)
+            np.testing.assert_equal(expect, out)
         proc.join(3)
 
+    def test_ipc_array(self):
+        # test no slicing
+        self.check_ipc_array()
+        # slicing tests
+        self.check_ipc_array(slice(3, None))
+        self.check_ipc_array(slice(3, 8))
+        self.check_ipc_array(slice(None, 8))
 
 @unittest.skipUnless(not_linux, "Only on OS other than Linux")
 @skip_on_cudasim('Ipc not available in CUDASIM')

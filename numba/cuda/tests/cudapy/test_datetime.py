@@ -24,6 +24,24 @@ class TestCudaDateTime(SerialMixin, TestCase):
 
         self.assertPreciseEqual(delta, arr2 - arr1)
 
+    def test_scalar_datetime_kernel(self):
+        @cuda.jit
+        def foo(dates, target, delta, matches, outdelta):
+            for i in range(cuda.grid(1), matches.size, cuda.gridsize(1)):
+                matches[i] = dates[i] == target
+                outdelta[i] = dates[i] - delta
+        arr1 = np.arange('2005-02', '2006-02', dtype='datetime64[D]')
+        target = arr1[5]           # datetime
+        delta = arr1[6] - arr1[5]  # timedelta
+        matches = np.zeros_like(arr1, dtype=np.bool_)
+        outdelta = np.zeros_like(arr1, dtype='datetime64[D]')
+
+        foo[1, 32](arr1, target, delta, matches, outdelta)
+        where = matches.nonzero()
+
+        self.assertEqual(list(where), [5])
+        self.assertPreciseEqual(outdelta, arr1 - delta)
+
     @skip_on_cudasim('ufunc API unsupported in the simulator')
     def test_ufunc(self):
         datetime_t = from_dtype(np.dtype('datetime64[D]'))
@@ -55,6 +73,24 @@ class TestCudaDateTime(SerialMixin, TestCase):
         delta = timediff(arr1, arr2)
 
         self.assertPreciseEqual(delta, arr2 - arr1)
+
+    @skip_on_cudasim('no .copy_to_host() in the simulator')
+    def test_datetime_view_as_int64(self):
+        arr = np.arange('2005-02', '2006-02', dtype='datetime64[D]')
+        darr = cuda.to_device(arr)
+        viewed = darr.view(np.int64)
+        self.assertPreciseEqual(arr.view(np.int64), viewed.copy_to_host())
+        self.assertEqual(viewed.gpu_data, darr.gpu_data)
+
+    @skip_on_cudasim('no .copy_to_host() in the simulator')
+    def test_timedelta_view_as_int64(self):
+        arr = np.arange('2005-02', '2006-02', dtype='datetime64[D]')
+        arr = arr - (arr - 1)
+        self.assertEqual(arr.dtype, np.dtype('timedelta64[D]'))
+        darr = cuda.to_device(arr)
+        viewed = darr.view(np.int64)
+        self.assertPreciseEqual(arr.view(np.int64), viewed.copy_to_host())
+        self.assertEqual(viewed.gpu_data, darr.gpu_data)
 
 
 if __name__ == '__main__':

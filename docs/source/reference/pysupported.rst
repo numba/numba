@@ -8,6 +8,12 @@ Apart from the :ref:`pysupported-language` part below, which applies to both
 :term:`object mode` and :term:`nopython mode`, this page only lists the
 features supported in :term:`nopython mode`.
 
+.. warning::
+    Numba behavior differs from Python semantics in some situations.  We
+    strongly advise reviewing :ref:`pysemantics` to become familiar with these
+    differences. 
+
+
 .. _pysupported-language:
 
 Language

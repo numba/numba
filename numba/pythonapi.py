@@ -128,6 +128,7 @@ class EnvironmentManager(object):
         A borrowed reference is returned.
         """
         assert index < len(self.env.consts)
+
         return self.pyapi.list_getitem(self.env_body.consts, index)
 
 

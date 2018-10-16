@@ -3,12 +3,14 @@ Implementation of operations on numpy timedelta64.
 """
 
 import numpy as np
+import operator
 
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, cgutils
 from .imputils import lower_builtin, lower_constant, impl_ret_untracked
+from ..utils import IS_PY3
 
 
 # datetime64 and timedelta64 use the same internal representation
@@ -116,12 +118,12 @@ def datetime_constant(context, builder, ty, pyval):
 
 # Arithmetic operators on timedelta64
 
-@lower_builtin('+', types.NPTimedelta)
+@lower_builtin(operator.pos, types.NPTimedelta)
 def timedelta_pos_impl(context, builder, sig, args):
     res =args[0]
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('-', types.NPTimedelta)
+@lower_builtin(operator.neg, types.NPTimedelta)
 def timedelta_neg_impl(context, builder, sig, args):
     res = builder.neg(args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -159,7 +161,8 @@ def timedelta_sign_impl(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('+', *TIMEDELTA_BINOP_SIG)
+@lower_builtin(operator.add, *TIMEDELTA_BINOP_SIG)
+@lower_builtin(operator.iadd, *TIMEDELTA_BINOP_SIG)
 def timedelta_add_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -171,7 +174,8 @@ def timedelta_add_impl(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('-', *TIMEDELTA_BINOP_SIG)
+@lower_builtin(operator.sub, *TIMEDELTA_BINOP_SIG)
+@lower_builtin(operator.isub, *TIMEDELTA_BINOP_SIG)
 def timedelta_sub_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -191,7 +195,7 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fmul(val, number_arg)
-            val = builder.fptosi(val, TIMEDELTA64)
+            val = _cast_to_timedelta(context, builder, val)
         else:
             val = builder.mul(td_arg, number_arg)
         # The scaling is required for ufunc np.multiply() with an explicit
@@ -201,28 +205,34 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
     return builder.load(ret)
 
 
-@lower_builtin('*', types.NPTimedelta, types.Integer)
-@lower_builtin('*', types.NPTimedelta, types.Float)
+@lower_builtin(operator.mul, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.imul, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.mul, types.NPTimedelta, types.Float)
+@lower_builtin(operator.imul, types.NPTimedelta, types.Float)
 def timedelta_times_number(context, builder, sig, args):
     res = _timedelta_times_number(context, builder,
                                    args[0], sig.args[0], args[1], sig.args[1],
                                    sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('*', types.Integer, types.NPTimedelta)
-@lower_builtin('*', types.Float, types.NPTimedelta)
+@lower_builtin(operator.mul, types.Integer, types.NPTimedelta)
+@lower_builtin(operator.imul, types.Integer, types.NPTimedelta)
+@lower_builtin(operator.mul, types.Float, types.NPTimedelta)
+@lower_builtin(operator.imul, types.Float, types.NPTimedelta)
 def number_times_timedelta(context, builder, sig, args):
     res = _timedelta_times_number(context, builder,
                                    args[1], sig.args[1], args[0], sig.args[0],
                                    sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('/', types.NPTimedelta, types.Integer)
-@lower_builtin('//', types.NPTimedelta, types.Integer)
-@lower_builtin('/?', types.NPTimedelta, types.Integer)
-@lower_builtin('/', types.NPTimedelta, types.Float)
-@lower_builtin('//', types.NPTimedelta, types.Float)
-@lower_builtin('/?', types.NPTimedelta, types.Float)
+@lower_builtin(operator.truediv, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.itruediv, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.floordiv, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Integer)
+@lower_builtin(operator.truediv, types.NPTimedelta, types.Float)
+@lower_builtin(operator.itruediv, types.NPTimedelta, types.Float)
+@lower_builtin(operator.floordiv, types.NPTimedelta, types.Float)
+@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Float)
 def timedelta_over_number(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
@@ -234,7 +244,7 @@ def timedelta_over_number(context, builder, sig, args):
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fdiv(val, number_arg)
-            val = builder.fptosi(val, TIMEDELTA64)
+            val = _cast_to_timedelta(context, builder, val)
         else:
             val = builder.sdiv(td_arg, number_arg)
         # The scaling is required for ufuncs np.*divide() with an explicit
@@ -244,8 +254,16 @@ def timedelta_over_number(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('/', *TIMEDELTA_BINOP_SIG)
-@lower_builtin('/?', *TIMEDELTA_BINOP_SIG)
+
+if not IS_PY3:
+    lower_builtin(operator.div, types.NPTimedelta, types.Integer)(timedelta_over_number)
+    lower_builtin(operator.idiv, types.NPTimedelta, types.Integer)(timedelta_over_number)
+    lower_builtin(operator.div, types.NPTimedelta, types.Float)(timedelta_over_number)
+    lower_builtin(operator.idiv, types.NPTimedelta, types.Float)(timedelta_over_number)
+
+
+@lower_builtin(operator.truediv, *TIMEDELTA_BINOP_SIG)
+@lower_builtin(operator.itruediv, *TIMEDELTA_BINOP_SIG)
 def timedelta_over_timedelta(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -261,6 +279,10 @@ def timedelta_over_timedelta(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
+if not IS_PY3:
+    lower_builtin(operator.div, *TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
+    lower_builtin(operator.idiv, *TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
 
 # Comparison operators on timedelta64
 
@@ -314,13 +336,13 @@ timedelta_le_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLE)
 timedelta_gt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGT)
 timedelta_ge_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGE)
 
-for op, func in [('==', timedelta_eq_timedelta_impl),
-                 ('!=', timedelta_ne_timedelta_impl),
-                 ('<',  timedelta_lt_timedelta_impl),
-                 ('<=', timedelta_le_timedelta_impl),
-                 ('>',  timedelta_gt_timedelta_impl),
-                 ('>=', timedelta_ge_timedelta_impl)]:
-    lower_builtin(op, *TIMEDELTA_BINOP_SIG)(func)
+for op_, func in [(operator.eq, timedelta_eq_timedelta_impl),
+                 (operator.ne, timedelta_ne_timedelta_impl),
+                 (operator.lt,  timedelta_lt_timedelta_impl),
+                 (operator.le, timedelta_le_timedelta_impl),
+                 (operator.gt,  timedelta_gt_timedelta_impl),
+                 (operator.ge, timedelta_ge_timedelta_impl)]:
+    lower_builtin(op_, *TIMEDELTA_BINOP_SIG)(func)
 
 
 # Arithmetic on datetime64
@@ -473,7 +495,8 @@ _datetime_minus_timedelta = _datetime_timedelta_arith('sub')
 
 # datetime64 + timedelta64
 
-@lower_builtin('+', types.NPDatetime, types.NPTimedelta)
+@lower_builtin(operator.add, types.NPDatetime, types.NPTimedelta)
+@lower_builtin(operator.iadd, types.NPDatetime, types.NPTimedelta)
 def datetime_plus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
@@ -483,7 +506,8 @@ def datetime_plus_timedelta(context, builder, sig, args):
                                     sig.return_type.unit)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin('+', types.NPTimedelta, types.NPDatetime)
+@lower_builtin(operator.add, types.NPTimedelta, types.NPDatetime)
+@lower_builtin(operator.iadd, types.NPTimedelta, types.NPDatetime)
 def timedelta_plus_datetime(context, builder, sig, args):
     td_arg, dt_arg = args
     td_type, dt_type = sig.args
@@ -495,7 +519,8 @@ def timedelta_plus_datetime(context, builder, sig, args):
 
 # datetime64 - timedelta64
 
-@lower_builtin('-', types.NPDatetime, types.NPTimedelta)
+@lower_builtin(operator.sub, types.NPDatetime, types.NPTimedelta)
+@lower_builtin(operator.isub, types.NPDatetime, types.NPTimedelta)
 def datetime_minus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
@@ -507,7 +532,7 @@ def datetime_minus_timedelta(context, builder, sig, args):
 
 # datetime64 - datetime64
 
-@lower_builtin('-', types.NPDatetime, types.NPDatetime)
+@lower_builtin(operator.sub, types.NPDatetime, types.NPDatetime)
 def datetime_minus_datetime(context, builder, sig, args):
     va, vb = args
     ta, tb = sig.args
@@ -556,12 +581,12 @@ datetime_le_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SLE)
 datetime_gt_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGT)
 datetime_ge_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGE)
 
-for op, func in [('==', datetime_eq_datetime_impl),
-                 ('!=', datetime_ne_datetime_impl),
-                 ('<', datetime_lt_datetime_impl),
-                 ('<=', datetime_le_datetime_impl),
-                 ('>', datetime_gt_datetime_impl),
-                 ('>=', datetime_ge_datetime_impl)]:
+for op, func in [(operator.eq, datetime_eq_datetime_impl),
+                 (operator.ne, datetime_ne_datetime_impl),
+                 (operator.lt, datetime_lt_datetime_impl),
+                 (operator.le, datetime_le_datetime_impl),
+                 (operator.gt, datetime_gt_datetime_impl),
+                 (operator.ge, datetime_ge_datetime_impl)]:
     lower_builtin(op, *[types.NPDatetime]*2)(func)
 
 
@@ -626,3 +651,17 @@ def timedelta_min_impl(context, builder, sig, args):
     res = builder.select(in2_not_nat, res, in1)
 
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+def _cast_to_timedelta(context, builder, val):
+    temp = builder.alloca(TIMEDELTA64)
+    val_is_nan = builder.fcmp_unordered('uno', val, val)
+    with builder.if_else(val_is_nan) as (
+            then, els):
+        with then:
+            # NaN does not guarantee to cast to NAT.
+            # We should store NAT explicitly.
+            builder.store(NAT, temp)
+        with els:
+            builder.store(builder.fptosi(val, TIMEDELTA64), temp)
+    return builder.load(temp)
