@@ -562,10 +562,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
-    def _check_output(self, pyfunc, cfunc, params):
+    def _check_output(self, pyfunc, cfunc, params, abs_tol=None):
         expected = pyfunc(**params)
         got = cfunc(**params)
-        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(expected, got, abs_tol=abs_tol)
 
     def test_vander_basic(self):
         pyfunc = np_vander
@@ -772,16 +772,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu)
 
-    def compare_outputs(self, pyfunc, cfunc, params, abs_tol=None):
-        expected = pyfunc(**params)
-        got = cfunc(**params)
-        self.assertPreciseEqual(expected, got, abs_tol=abs_tol)
-
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_basic(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
 
         def m_variations():
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
@@ -795,6 +790,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.full((4, 5), fill_value=True)
             yield np.array([np.nan, 0.5969, -np.inf, 0.9918, 0.7964])
             yield np.linspace(-3, 3, 33).reshape(33, 1, order='F')
+            yield (-2.1, -1, 4.3)
+            yield ()
 
         # all inputs other than the first are defaulted
         for m in m_variations():
@@ -804,7 +801,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_cov_explicit_arguments(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
 
         m = self.rnd.randn(1050).reshape(150, 7)
         y_choices = None, m[::-1]
@@ -820,7 +817,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_cov_egde_cases(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self.compare_outputs, pyfunc, cfunc, abs_tol=1e-12)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
 
         # examples borrowed from numpy doc string / unit tests
         x = np.array([-2.1, -1, 4.3])
@@ -832,7 +829,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': x, 'ddof': 5}
         _check(params)
 
-        x = np.array([[1, 2, 3]])
+        x = np.array([1, 2, 3])  # test case modified such that m is 1D
         y = np.array([[1j, 2j, 3j]])
         params = {'m': x, 'y': y}
         _check(params)
@@ -844,6 +841,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = 1.1
         y = 2.2
+        params = {'m': x, 'y': y}
+        _check(params)
+
+        x = self.rnd.randn(10, 3)
+        y = np.array([-2.1, -1, 4.3]).reshape(1, 3) / 10
         params = {'m': x, 'y': y}
         _check(params)
 
@@ -860,33 +862,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params)
             params = {'m': y, 'y': x, 'rowvar': rowvar}
             _check(params)
-
-    @unittest.skip('Examples which break currently')
-    def test_cov_outstanding_problems(self):
-        pyfunc = cov
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def _check(params):
-            expected = pyfunc(**params)
-            got = cfunc(**params)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-12)
-
-        # this fails as I can't tell the output is going to be 0D
-        # (i.e. it gets past the naive ndim == 1 check)
-        x = np.array([-2.1, -1, 4.3]).reshape(1, 3)
-        params = {'m': x}
-        _check(params)
-
-        # this fails as the input is not an array, so doesn't hit the
-        # ndim == 1 guard
-        x = (-2.1, -1, 4.3)
-        params = {'m': x}
-        _check(params)
-
-        # this fails to return a 0D result
-        x = ()
-        params = {'m': x}
-        _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     def test_cov_exceptions(self):
@@ -914,6 +889,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('m and y must have the same number of variables', str(raises.exception))
         # Numpy raises ValueError: all the input array dimensions except for the
         # concatenation axis must match exactly.
+
+        m = np.array([-2.1, -1, 4.3]).reshape(1, 3)
+        with self.assertRaises(RuntimeError) as raises:
+            cfunc(m)
+        self.assertIn('2D array containing a single row is unsupported', str(raises.exception))
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_basic(self):
