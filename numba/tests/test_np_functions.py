@@ -1058,6 +1058,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(a, kth)
             self.assertPreciseEqual(expected[:, :, kth], got[:, :, kth])
 
+            for s in np.ndindex(expected.shape[:-1]):
+                self.assertPreciseEqual(np.unique(expected[s][:kth]), np.unique(got[s][:kth]))
+                self.assertPreciseEqual(np.unique(expected[s][kth:]), np.unique(got[s][kth:]))
+
         def a_variations(a):
             yield a
             yield a.T
