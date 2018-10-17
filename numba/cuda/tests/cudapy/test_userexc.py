@@ -8,6 +8,10 @@ class MyError(Exception):
     pass
 
 
+regex_pattern = (
+    r'In function [\'"]test_exc[\'"], file ([\.\/\\a-zA-Z_0-9]+), line \d+'
+)
+
 class TestUserExc(SerialMixin, unittest.TestCase):
     def test_user_exception(self):
         @cuda.jit("void(int32)", debug=True)
@@ -20,10 +24,12 @@ class TestUserExc(SerialMixin, unittest.TestCase):
         test_exc(0)    # no raise
         with self.assertRaises(MyError) as cm:
             test_exc(1)
-        self.assertEqual("tid=[0, 0, 0] ctaid=[0, 0, 0]", str(cm.exception))
+        self.assertRegexpMatches(str(cm.exception), regex_pattern)
+        self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]", str(cm.exception))
         with self.assertRaises(MyError) as cm:
             test_exc(2)
-        self.assertEqual("tid=[0, 0, 0] ctaid=[0, 0, 0]: foo", str(cm.exception))
+        self.assertRegexpMatches(str(cm.exception), regex_pattern)
+        self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]: foo", str(cm.exception))
 
 
 if __name__ == '__main__':
