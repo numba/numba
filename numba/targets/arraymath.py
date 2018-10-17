@@ -1308,30 +1308,29 @@ def determine_dtype(array_like):
 
     return array_like_dt
 
+def check_dimensions(array_like, name):
+    if isinstance(array_like, types.Array):
+        if array_like.ndim > 2:
+            raise TypeError("{0} has more than 2 dimensions".format(name))
+    elif isinstance(array_like, types.Sequence):
+        if isinstance(array_like.key[0], types.Sequence):
+            if isinstance(array_like.key[0].key[0], types.Sequence):
+                raise TypeError("{0} has more than 2 dimensions".format(name))
+
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
-        _M_DIM_HANDLER = _handle_m_dim_nop
-
         # reject problem if m and / or y are more than 2D
+        check_dimensions(m, 'm')
+        check_dimensions(y, 'y')
+
+        # special case for 2D array input with 1 row of data - select
+        # handler function which we'll call later when we have access
+        # to the shape of the input array
+        _M_DIM_HANDLER = _handle_m_dim_nop
         if isinstance(m, types.Array):
             _M_DIM_HANDLER = _handle_m_dim_change
-            if m.ndim > 2:
-                raise TypeError("m has more than 2 dimensions")
-        if isinstance(y, types.Array):
-            if y.ndim > 2:
-                raise TypeError("y has more than 2 dimensions")
-
-        if isinstance(m, types.Sequence):
-            if isinstance(m.key[0], types.Sequence):
-                if isinstance(m.key[0].key[0], types.Sequence):
-                    raise TypeError("m has more than 2 dimensions")
-
-        if isinstance(y, types.Sequence):
-            if isinstance(y.key[0], types.Sequence):
-                if isinstance(y.key[0].key[0], types.Sequence):
-                    raise TypeError("y has more than 2 dimensions")
 
         # infer result dtype
         m_dt = determine_dtype(m)
@@ -1358,7 +1357,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 
             return np.array(variance)
 
-        # identify up front if output is 0D, and check dimensionality of array-like inputs
+        # identify up front if output is 0D
         if isinstance(m, types.Array) and m.ndim == 1 or isinstance(m, types.Tuple):
             if y in (None, types.none):
                 return np_cov_impl_single_variable
