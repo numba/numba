@@ -156,8 +156,9 @@ class BaseLower(object):
         Called before lowering a block.
         """
 
-    def return_exception(self, exc_class, exc_args=None):
-        self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
+    def return_exception(self, exc_class, exc_args=None, loc=None):
+        self.call_conv.return_user_exc(self.builder, exc_class, exc_args,
+                                       loc=loc)
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
@@ -433,9 +434,9 @@ class Lower(BaseLower):
     def lower_static_raise(self, inst):
         if inst.exc_class is None:
             # Reraise
-            self.return_exception(None)
+            self.return_exception(None, loc=self.loc)
         else:
-            self.return_exception(inst.exc_class, inst.exc_args)
+            self.return_exception(inst.exc_class, inst.exc_args, loc=self.loc)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -831,7 +832,7 @@ class Lower(BaseLower):
                 # Prepend the self reference
                 argvals = [the_self] + list(argvals)
 
-            res = impl(self.builder, argvals)
+            res = impl(self.builder, argvals, self.loc)
 
             libs = getattr(impl, "libs", ())
             for lib in libs:
@@ -926,7 +927,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.return_exception(ValueError)
+                    self.return_exception(ValueError, loc=self.loc)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -937,7 +938,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.return_exception(ValueError)
+                self.return_exception(ValueError, loc=self.loc)
 
             self.decref(ty.iterator_type, iterobj)
             return tup

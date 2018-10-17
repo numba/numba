@@ -1021,14 +1021,15 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline, noalias=flags.noalias)
 
-    lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper(flags.release_gil)
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+    with targetctx.push_code_library(library):
+        lower = lowering.Lower(targetctx, library, fndesc, interp)
+        lower.lower()
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper(flags.release_gil)
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
@@ -1047,14 +1048,15 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = pylowering.PyLower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper()
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+    with targetctx.push_code_library(library):
+        lower = pylowering.PyLower(targetctx, library, fndesc, interp)
+        lower.lower()
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper()
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
