@@ -582,7 +582,7 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                exccls, exc_args = self.call_helper.get_exception(code)
+                exccls, exc_args, loc = self.call_helper.get_exception(code)
                 # Prefix the exception message with the thread position
                 prefix = "tid=%s ctaid=%s" % (tid, ctaid)
                 if exc_args:
