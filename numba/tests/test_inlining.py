@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba import jit, njit, types
 from numba.ir_utils import guard, find_callname
 from numba.inline_closurecall import inline_closure_call
-
+from .test_parfors import skip_unsupported
 
 @jit((types.int32,), nopython=True)
 def inner(a):
@@ -112,6 +112,7 @@ class TestInlining(TestCase):
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
+    @skip_unsupported
     def test_inline_call_after_parfor(self):
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
