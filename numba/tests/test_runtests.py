@@ -9,8 +9,8 @@ from numba import cuda
 
 class TestCase(unittest.TestCase):
     """These test cases are meant to test the Numba test infrastructure itself.
-    Therefore, the logic used here shouldn't use numba.testing, but only the upstream
-    unittest, and run the numba test suite only in a subprocess."""
+    Therefore, the logic used here shouldn't use numba.testing, but only the
+    upstream unittest, and run the numba test suite only in a subprocess."""
 
     def get_testsuite_listing(self, args):
         cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
@@ -24,7 +24,7 @@ class TestCase(unittest.TestCase):
             errmsg = '{!r} not startswith {!r}'.format(ln, prefix)
             self.assertTrue(ln.startswith(prefix), msg=errmsg)
 
-    def check_testsuite_size(self, args, minsize, maxsize=None):
+    def check_testsuite_size(self, args, minsize, maxsize):
         """
         Check that the reported numbers of tests are in the
         (minsize, maxsize) range, or are equal to minsize if maxsize is None.
@@ -36,11 +36,8 @@ class TestCase(unittest.TestCase):
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
         self.assertIn(len(lines), range(number + 1, number + 10))
-        if maxsize is None:
-            self.assertEqual(number, minsize)
-        else:
-            self.assertGreaterEqual(number, minsize)
-            self.assertLessEqual(number, maxsize)
+        self.assertGreaterEqual(number, minsize)
+        self.assertLessEqual(number, maxsize)
         return lines
 
     def check_all(self, ids):
@@ -48,7 +45,9 @@ class TestCase(unittest.TestCase):
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
         # As well as subpackage
-        self.assertTrue(any('numba.tests.npyufunc.test_' in line for line in lines))
+        self.assertTrue(
+            any('numba.tests.npyufunc.test_' in line for line in lines),
+            )
 
     def test_default(self):
         self.check_all([])
@@ -59,7 +58,8 @@ class TestCase(unittest.TestCase):
     def test_cuda(self):
         # Even without CUDA enabled, there is at least one test
         # (in numba.cuda.tests.nocuda)
-        self.check_testsuite_size(['numba.cuda.tests'], 1, 470)
+        minsize = 100 if cuda.is_available() else 1
+        self.check_testsuite_size(['numba.cuda.tests'], minsize, 1000)
 
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_cuda_submodules(self):
@@ -87,8 +87,9 @@ class TestCase(unittest.TestCase):
     @unittest.skipIf(sys.version_info < (3, 4),
                      "'--tags' only supported on Python 3.4 or higher")
     def test_tags(self):
-        self.check_testsuite_size(['--tags', 'important', 'numba.tests.npyufunc'],
-                                  20, 50)
+        self.check_testsuite_size(
+            ['--tags', 'important', 'numba.tests.npyufunc'], 20, 50,
+            )
 
 
 if __name__ == '__main__':
