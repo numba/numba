@@ -24,10 +24,9 @@ class TestCase(unittest.TestCase):
             errmsg = '{!r} not startswith {!r}'.format(ln, prefix)
             self.assertTrue(ln.startswith(prefix), msg=errmsg)
 
-    def check_testsuite_size(self, args, minsize, maxsize):
+    def check_testsuite_size(self, args, minsize):
         """
-        Check that the reported numbers of tests are in the
-        (minsize, maxsize) range, or are equal to minsize if maxsize is None.
+        Check that the reported numbers of tests are at least *minsize*.
         """
         lines = self.get_testsuite_listing(args)
         last_line = lines[-1]
@@ -37,11 +36,10 @@ class TestCase(unittest.TestCase):
         # so do an approximate check.
         self.assertIn(len(lines), range(number + 1, number + 10))
         self.assertGreaterEqual(number, minsize)
-        self.assertLessEqual(number, maxsize)
         return lines
 
     def check_all(self, ids):
-        lines = self.check_testsuite_size(ids, 5000, 8000)
+        lines = self.check_testsuite_size(ids, 5000)
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
         # As well as subpackage
@@ -59,7 +57,7 @@ class TestCase(unittest.TestCase):
         # Even without CUDA enabled, there is at least one test
         # (in numba.cuda.tests.nocuda)
         minsize = 100 if cuda.is_available() else 1
-        self.check_testsuite_size(['numba.cuda.tests'], minsize, 1000)
+        self.check_testsuite_size(['numba.cuda.tests'], minsize)
 
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_cuda_submodules(self):
@@ -69,26 +67,26 @@ class TestCase(unittest.TestCase):
         self.check_listing_prefix('numba.cuda.tests.cudasim')
 
     def test_module(self):
-        self.check_testsuite_size(['numba.tests.test_utils'], 3, 15)
-        self.check_testsuite_size(['numba.tests.test_nested_calls'], 5, 15)
+        self.check_testsuite_size(['numba.tests.test_utils'], 3)
+        self.check_testsuite_size(['numba.tests.test_nested_calls'], 5)
         # Several modules
         self.check_testsuite_size(['numba.tests.test_nested_calls',
-                                   'numba.tests.test_utils'], 13, 30)
+                                   'numba.tests.test_utils'], 13)
 
     def test_subpackage(self):
-        self.check_testsuite_size(['numba.tests.npyufunc'], 50, 200)
+        self.check_testsuite_size(['numba.tests.npyufunc'], 50)
 
     @unittest.skipIf(sys.version_info < (3, 4),
                      "'--random' only supported on Python 3.4 or higher")
     def test_random(self):
-        self.check_testsuite_size(['--random', '0.1', 'numba.tests.npyufunc'],
-                                  5, 20)
+        self.check_testsuite_size(
+            ['--random', '0.1', 'numba.tests.npyufunc'], 5)
 
     @unittest.skipIf(sys.version_info < (3, 4),
                      "'--tags' only supported on Python 3.4 or higher")
     def test_tags(self):
         self.check_testsuite_size(
-            ['--tags', 'important', 'numba.tests.npyufunc'], 20, 50,
+            ['--tags', 'important', 'numba.tests.npyufunc'], 20,
             )
 
 
