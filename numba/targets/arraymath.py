@@ -1290,29 +1290,52 @@ def _handle_m_dim_change(m):
 
 _handle_m_dim_nop = register_jitable(lambda x:x)
 
+def determine_dtype(array_like):
+    array_like_dt = np.float64
+    if isinstance(array_like, types.Array):
+        array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, (types.UniTuple, types.Tuple)):
+        coltypes = set()
+        for val in array_like:
+            if hasattr(val, 'count'):
+                [coltypes.add(v) for v in val]
+            else:
+                coltypes.add(val)
+        if len(coltypes) > 1:
+            array_like_dt = np.promote_types(*[as_dtype(ty) for ty in coltypes])
+        elif len(coltypes) == 1:
+            array_like_dt = as_dtype(coltypes.pop())
+
+    return array_like_dt
+
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
+        _M_DIM_HANDLER = _handle_m_dim_nop
+
         # reject problem if m and / or y are more than 2D
         if isinstance(m, types.Array):
+            _M_DIM_HANDLER = _handle_m_dim_change
             if m.ndim > 2:
                 raise TypeError("m has more than 2 dimensions")
         if isinstance(y, types.Array):
             if y.ndim > 2:
                 raise TypeError("y has more than 2 dimensions")
 
+        if isinstance(m, types.Sequence):
+            if isinstance(m.key[0], types.Sequence):
+                if isinstance(m.key[0].key[0], types.Sequence):
+                    raise TypeError("m has more than 2 dimensions")
+
+        if isinstance(y, types.Sequence):
+            if isinstance(y.key[0], types.Sequence):
+                if isinstance(y.key[0].key[0], types.Sequence):
+                    raise TypeError("y has more than 2 dimensions")
+
         # infer result dtype
-        if isinstance(m, types.Array):
-            m_dt = as_dtype(m.dtype)
-            _M_DIM_HANDLER = _handle_m_dim_change
-        else:
-            m_dt = np.float64
-            _M_DIM_HANDLER = _handle_m_dim_nop
-        if isinstance(y, types.Array):
-            y_dt = as_dtype(y.dtype)
-        else:
-            y_dt = np.float64
+        m_dt = determine_dtype(m)
+        y_dt = determine_dtype(y)
         dtype = np.result_type(m_dt, y_dt, np.float64)
 
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
@@ -1347,14 +1370,6 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
         if isinstance(m, types.Sequence):
             if not isinstance(m.key[0], types.Sequence) and y in (None, types.none):
                 return np_cov_impl_single_variable
-            else:
-                if isinstance(m.key[0].key[0], types.Sequence):
-                    raise TypeError("m has more than 2 dimensions")
-
-        if isinstance(y, types.Sequence):
-            if isinstance(y.key[0], types.Sequence):
-                if isinstance(y.key[0].key[0], types.Sequence):
-                    raise TypeError("y has more than 2 dimensions")
 
         # otherwise assume it's 2D and we're good to go
         return np_cov_impl

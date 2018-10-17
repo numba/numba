@@ -847,6 +847,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': m, 'y': y}
         _check(params)
 
+        m = np.array([1, 2, 3])
+        y = (1j, 2j, 3j)
+        params = {'m': m, 'y': y}
+        _check(params)
+        params = {'m': y, 'y': m}  # flip real and complex inputs
+        _check(params)
+
+        m = np.array([1, 2, 3])
+        y = (1j, 2j, 3)  # note last item is not complex
+        params = {'m': m, 'y': y}
+        _check(params)
+        params = {'m': y, 'y': m}  # flip real and complex inputs
+        _check(params)
+
         m = np.array([])
         y = np.array([])
         params = {'m': m, 'y': y}
