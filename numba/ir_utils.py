@@ -1538,7 +1538,7 @@ def get_ir_of_code(glbls, fcode):
     # hack parameter name .0 for Python 3 versions < 3.6
     if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
         co_varnames = list(fcode.co_varnames)
-        if co_varnames[0] == ".0":
+        if len(co_varnames) > 0 and co_varnames[0] == ".0":
             co_varnames[0] = "implicit0"
         fcode = pytypes.CodeType(
             fcode.co_argcount,
