@@ -173,7 +173,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     def test_str(self):
         ty = typeof("abc")
-        self.assertEqual(ty, types.string)
+        self.assertEqual(ty, types.unicode_type)
 
     @tag('important')
     def test_slices(self):
