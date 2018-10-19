@@ -34,6 +34,7 @@ from .support import (TestCase, tag, temp_directory, import_dynamic,
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
+from .test_linalg import needs_lapack
 
 import llvmlite.binding as ll
 
@@ -389,6 +390,7 @@ class TestDispatcher(BaseTest):
         newer_foo = pickle.loads(serialized_foo)
         self.assertIs(ref(), None)
 
+    @needs_lapack
     def test_misaligned_array_dispatch(self):
         # for context see issue #2937
         def foo(a):
@@ -467,6 +469,7 @@ class TestDispatcher(BaseTest):
         check("F_contig_misaligned", F_contig_misaligned,
               disable_write_bit=True)
 
+    @needs_lapack
     def test_misaligned_high_dimension_array_dispatch(self):
 
         def foo(a):
