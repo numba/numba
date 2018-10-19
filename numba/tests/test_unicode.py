@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # This file tests Python 3.4 style unicode strings
 # Tests should be skipped on Python < 3.4
 
