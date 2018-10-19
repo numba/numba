@@ -696,6 +696,10 @@ int typecode_ndarray(PyObject *dispatcher, PyArrayObject *ary) {
         layout = 2;
     }
 
+    /* the typecode cache by convention is for "behaved" arrays (aligned and
+     * writeable), all others must be forced to the fall back */
+    if (!PyArray_ISBEHAVED(ary)) goto FALLBACK;
+
     if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
 
     dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
