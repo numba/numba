@@ -1,15 +1,29 @@
-from numba.extending import (models, register_model,
-    make_attribute_wrapper, unbox, box, NativeValue, overload,
-    lower_builtin, overload_method, intrinsic, typeof_impl)
+import operator
+
+import numpy as np
+from llvmlite.ir import IntType, Constant
+
+from numba.extending import (
+    models,
+    register_model,
+    make_attribute_wrapper,
+    unbox,
+    box,
+    NativeValue,
+    overload,
+    overload_method,
+    intrinsic,
+    )
 from numba.targets.imputils import lower_constant
 from numba import cgutils
 from numba import types
 from numba import njit
-from numba.pythonapi import (PY_UNICODE_1BYTE_KIND, PY_UNICODE_2BYTE_KIND,
-    PY_UNICODE_4BYTE_KIND, PY_UNICODE_WCHAR_KIND)
-from llvmlite.ir import IntType, Constant
-import numpy as np
-import operator
+from numba.pythonapi import (
+    PY_UNICODE_1BYTE_KIND,
+    PY_UNICODE_2BYTE_KIND,
+    PY_UNICODE_4BYTE_KIND,
+    PY_UNICODE_WCHAR_KIND,
+    )
 
 
 ### DATA MODEL
@@ -51,7 +65,7 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
-    ok, data, length, kind  = c.pyapi.string_as_string_size_and_kind(obj)
+    ok, data, length, kind = c.pyapi.string_as_string_size_and_kind(obj)
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
@@ -140,7 +154,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
 def _empty_string(kind, length):
     char_width = _kind_to_byte_width(kind)
     s = _malloc_string(kind, char_width, length)
-    _set_code_point(s, length, np.uint32(0)) # Write NULL character
+    _set_code_point(s, length, np.uint32(0))    # Write NULL character
     return s
 
 
@@ -153,7 +167,9 @@ def _get_code_point(a, i):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         return deref_uint32(a._data, i)
     else:
-        return 0 # there's also a wchar kind, but that's one of the above, so skipping for this example
+        # there's also a wchar kind, but that's one of the above,
+        # so skipping for this example
+        return 0
 
 ####
 
@@ -202,7 +218,7 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
-        pass # FIXME: wchar?
+        pass    # FIXME: wchar?
 
 
 @njit
@@ -217,7 +233,7 @@ def _pick_kind(kind1, kind2):
     elif kind1 == PY_UNICODE_4BYTE_KIND:
         return kind1
     else:
-        return PY_UNICODE_4BYTE_KIND # FIXME: wchar
+        return PY_UNICODE_4BYTE_KIND    # FIXME: wchar
 
 
 @njit
@@ -229,7 +245,7 @@ def _kind_to_byte_width(kind):
     elif kind == PY_UNICODE_4BYTE_KIND:
         return 4
     else:
-        return 4 # FIXME: wchar
+        return 4    # FIXME: wchar
 
 
 @njit
@@ -276,9 +292,9 @@ def _find(substr, s):
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):
-       def len_impl(s):
-           return s._length
-       return len_impl
+        def len_impl(s):
+            return s._length
+        return len_impl
 
 
 @overload(operator.eq)
@@ -361,10 +377,10 @@ def unicode_find(a, b):
 
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
-   if isinstance(b, types.UnicodeType):
-       def startswith_impl(a, b):
-           return _cmp_region(a, 0, b, 0, len(b)) == 0
-       return startswith_impl
+    if isinstance(b, types.UnicodeType):
+        def startswith_impl(a, b):
+            return _cmp_region(a, 0, b, 0, len(b)) == 0
+        return startswith_impl
 
 
 @overload_method(types.UnicodeType, 'endswith')
@@ -394,7 +410,6 @@ def normalize_str_idx(idx, length, is_start=True):
     return idx
 
 
-
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
@@ -407,8 +422,10 @@ def unicode_getitem(s, idx):
             return getitem_char
         elif idx == types.slice2_type:
             def getitem_slice2(s, slice_idx):
-                start = normalize_str_idx(slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx(slice_idx.stop, len(s), is_start=False)
+                start = normalize_str_idx(
+                    slice_idx.start, len(s), is_start=True)
+                stop = normalize_str_idx(
+                    slice_idx.stop, len(s), is_start=False)
                 new_len = stop - start
                 if new_len <= 0:
                     ret = _empty_string(s._kind, 0)
@@ -420,8 +437,10 @@ def unicode_getitem(s, idx):
             return getitem_slice2
         elif idx == types.slice3_type:
             def getitem_slice3(s, slice_idx):
-                start = normalize_str_idx(slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx(slice_idx.stop, len(s), is_start=False)
+                start = normalize_str_idx(
+                    slice_idx.start, len(s), is_start=True)
+                stop = normalize_str_idx(
+                    slice_idx.stop, len(s), is_start=False)
                 step = slice_idx.step
 
                 if step == 0:
@@ -435,7 +454,8 @@ def unicode_getitem(s, idx):
                     new_len = (span + span % step) // step
                     ret = _empty_string(s._kind, new_len)
                     for i in range(new_len):
-                        _set_code_point(ret, i, _get_code_point(s, start + step * i))
+                        _set_code_point(
+                            ret, i, _get_code_point(s, start + step * i))
                 return ret
             return getitem_slice3
 
