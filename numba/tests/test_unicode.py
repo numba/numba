@@ -5,12 +5,9 @@
 
 from __future__ import print_function
 
-import numba.unittest_support as unittest
-
 import sys
 
-from numba.compiler import compile_isolated, Flags
-from numba import njit, types
+from numba import njit
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 
@@ -22,9 +19,6 @@ def literal_usecase():
 
 
 def passthrough_usecase(x):
-    #print(x._length)
-    #print(x._kind)
-    #print('__')
     return x
 
 
@@ -106,7 +100,8 @@ UNICODE_ORDERING_EXAMPLES = [
 UNICODE_EXAMPLES = [x for x in UNICODE_EXAMPLES]
 UNICODE_ORDERING_EXAMPLES = [x for x in UNICODE_ORDERING_EXAMPLES]
 
-@unittest.skipUnless(_py34_or_later, 'unicode support requires Python 3.4 or later')
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
 
     def test_literal(self, flags=no_pyobj_flags):
@@ -133,20 +128,26 @@ class TestUnicode(BaseTest):
 
         # Check comparison to self
         for a in UNICODE_ORDERING_EXAMPLES:
-            self.assertEqual(pyfunc(a, a),
-                             cfunc(a, a),
-                             '%s: "%s", "%s"' % (usecase.__name__, a, a))
+            self.assertEqual(
+                pyfunc(a, a),
+                cfunc(a, a),
+                '%s: "%s", "%s"' % (usecase.__name__, a, a),
+                )
 
         # Check comparison to adjacent
         for a in UNICODE_ORDERING_EXAMPLES[:-1]:
             for b in UNICODE_ORDERING_EXAMPLES[1:]:
-                self.assertEqual(pyfunc(a, b),
-                                 cfunc(a, b),
-                             '%s: "%s", "%s"' % (usecase.__name__, a, b))
+                self.assertEqual(
+                    pyfunc(a, b),
+                    cfunc(a, b),
+                    '%s: "%s", "%s"' % (usecase.__name__, a, b),
+                    )
                 # and reversed
-                self.assertEqual(pyfunc(b, a),
-                                 cfunc(b, a),
-                             '%s: "%s", "%s"' % (usecase.__name__, b, a))
+                self.assertEqual(
+                    pyfunc(b, a),
+                    cfunc(b, a),
+                    '%s: "%s", "%s"' % (usecase.__name__, b, a),
+                    )
 
     def test_lt(self, flags=no_pyobj_flags):
         self._check_ordering_op(lt_usecase)
@@ -184,12 +185,12 @@ class TestUnicode(BaseTest):
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
 
-
     def test_in(self, flags=no_pyobj_flags):
         pyfunc = in_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for substr in [x for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
+            extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
+            for substr in [x for x in extras]:
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
                                  "'%s' in '%s'?" % (substr, a))
@@ -198,7 +199,8 @@ class TestUnicode(BaseTest):
         pyfunc = find_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for substr in [x for x in ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]]:
+            extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
+            for substr in [x for x in extras]:
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
@@ -222,8 +224,8 @@ class TestUnicode(BaseTest):
                 for j in list(range(-len(s), len(s))):
                     sl = slice(i, j)
                     self.assertEqual(pyfunc(s, sl),
-                                    cfunc(s, sl),
-                                    "'%s'[%d:%d]?" % (s, i, j))
+                                     cfunc(s, sl),
+                                     "'%s'[%d:%d]?" % (s, i, j))
 
     def test_slice3(self):
         pyfunc = getitem_usecase
@@ -235,8 +237,8 @@ class TestUnicode(BaseTest):
                     for k in [-2, -1, 1, 2]:
                         sl = slice(i, j, k)
                         self.assertEqual(pyfunc(s, sl),
-                                        cfunc(s, sl),
-                                        "'%s'[%d:%d:%d]?" % (s, i, j, k))
+                                         cfunc(s, sl),
+                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase
@@ -246,7 +248,6 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
-
 
 
 if __name__ == '__main__':
