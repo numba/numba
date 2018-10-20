@@ -19,8 +19,8 @@ class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('data', types.voidptr),
-            ('length', types.int64),
-            ('kind', types.int64),
+            ('length', types.intp),
+            ('kind', types.intp),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
@@ -92,19 +92,19 @@ def make_deref_codegen(bitsize):
 
 @intrinsic
 def deref_uint8(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.int64)
+    sig = types.uint32(types.voidptr, types.intp)
     return sig, make_deref_codegen(8)
 
 
 @intrinsic
 def deref_uint16(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.int64)
+    sig = types.uint32(types.voidptr, types.intp)
     return sig, make_deref_codegen(16)
 
 
 @intrinsic
 def deref_uint32(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.int64)
+    sig = types.uint32(types.voidptr, types.intp)
     return sig, make_deref_codegen(32)
 
 
@@ -132,7 +132,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
         return uni_str._getvalue()
 
-    sig = types.unicode_type(types.int64, types.int64, types.int64)
+    sig = types.unicode_type(types.intp, types.intp, types.intp)
     return sig, details
 
 
