@@ -109,9 +109,9 @@ UNICODE_ORDERING_EXAMPLES = [x for x in UNICODE_ORDERING_EXAMPLES]
 @unittest.skipUnless(_py34_or_later, 'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
 
-    #def test_literal(self, flags=no_pyobj_flags):
-    #    pyfunc = literal_usecase
-    #    self.run_nullary_func(pyfunc, flags=flags)
+    def test_literal(self, flags=no_pyobj_flags):
+        pyfunc = literal_usecase
+        self.run_nullary_func(pyfunc, flags=flags)
 
     def test_passthrough(self, flags=no_pyobj_flags):
         pyfunc = passthrough_usecase
