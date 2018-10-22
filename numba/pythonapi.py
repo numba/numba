@@ -1139,10 +1139,10 @@ class PythonAPI(object):
         """
         if PYVERSION >= (3, 3):
             p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
-            p_kind = cgutils.alloca_once(self.builder, self.long)
+            p_kind = cgutils.alloca_once(self.builder, Type.int())
             fnty = Type.function(self.cstring, [self.pyobj,
                                                 self.py_ssize_t.as_pointer(),
-                                                self.long.as_pointer()])
+                                                Type.int().as_pointer()])
             fname = "numba_extract_unicode"
             fn = self._get_function(fnty, name=fname)
 
@@ -1173,7 +1173,7 @@ class PythonAPI(object):
         return self.builder.call(fn, [string])
 
     def string_from_kind_and_data(self, kind, string, size):
-        fnty = Type.function(self.pyobj, [self.long, self.cstring, self.py_ssize_t])
+        fnty = Type.function(self.pyobj, [Type.int(), self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 3):
             fname = "PyUnicode_FromKindAndData"
             fn = self._get_function(fnty, name=fname)

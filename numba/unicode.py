@@ -34,7 +34,7 @@ class UnicodeModel(models.StructModel):
         members = [
             ('data', types.voidptr),
             ('length', types.intp),
-            ('kind', types.intp),
+            ('kind', types.int32),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
@@ -146,7 +146,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
         return uni_str._getvalue()
 
-    sig = types.unicode_type(types.intp, types.intp, types.intp)
+    sig = types.unicode_type(types.int32, types.intp, types.intp)
     return sig, details
 
 
