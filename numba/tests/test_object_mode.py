@@ -158,6 +158,19 @@ class TestObjectModeInvalidRewrite(TestCase):
         self.assertEqual(test(*args), compiled(*args))
         self._ensure_objmode(compiled)
 
+    def test_dynamic_func_objmode(self):
+        """
+        Test issue https://github.com/numba/numba/issues/3355
+        """
+        func_text = "def func():\n"
+        func_text += "    np.array([1,2,3])\n"
+        loc_vars = {}
+        custom_globals = {'np': np}
+        exec(func_text, custom_globals, loc_vars)
+        func = loc_vars['func']
+        jitted = jit(forceobj=True)(func)
+        jitted()
+
 
 if __name__ == '__main__':
     unittest.main()
