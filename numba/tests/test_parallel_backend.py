@@ -316,7 +316,9 @@ class TestParallelBackend(TestParallelBackendBase):
                         else:
                             self.run_compile(impl, parallelism=p)
                     return test_method
-                setattr(cls, methname, methgen(impl, p))
+                fn = methgen(impl, p)
+                fn.__name__ = methname
+                setattr(cls, methname, fn)
 
 
 TestParallelBackend.generate()
