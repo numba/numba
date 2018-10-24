@@ -522,7 +522,10 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             njit(foo)(123)
-        self.assertIn("Failed in object mode pipeline", str(raises.exception))
+        # Check that an error occurred in with-lifting in objmode
+        pat = ("During: resolving callee type: "
+               "type\(ObjModeLiftedWith\(<.*>\)\)")
+        self.assertRegexpMatches(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
