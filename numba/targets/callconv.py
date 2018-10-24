@@ -194,7 +194,6 @@ class MinimalCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
-        pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if loc is not None:
             f1 = loc._raw_function_name()
@@ -203,11 +202,9 @@ class MinimalCallConv(BaseCallConv):
                 locinfo = None
         else:
             locinfo = None
-        if exc_args is not None:
-            exc = (exc, exc_args, locinfo)
 
         call_helper = self._get_call_helper(builder)
-        exc_id = call_helper._add_exception(exc, exc_args)
+        exc_id = call_helper._add_exception(exc, exc_args, locinfo)
         self._return_errcode_raw(builder, _const_int(exc_id))
 
     def return_status_propagate(self, builder, status):
@@ -296,9 +293,19 @@ class _MinimalCallHelper(object):
     def __init__(self):
         self.exceptions = {}
 
-    def _add_exception(self, exc, exc_args):
+    def _add_exception(self, exc, exc_args, locinfo):
+        """
+        Parameters
+        ----------
+        exc :
+            exception type
+        exc_args : None or tuple
+            exception args
+        locinfo : tuple
+            location information
+        """
         exc_id = len(self.exceptions) + FIRST_USEREXC
-        self.exceptions[exc_id] = exc, exc_args
+        self.exceptions[exc_id] = exc, exc_args, locinfo
         return exc_id
 
     def get_exception(self, exc_id):

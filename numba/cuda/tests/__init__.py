@@ -5,7 +5,6 @@ from os.path import dirname, join
 
 
 def load_tests(loader, tests, pattern):
-
     suite = unittest.TestSuite()
     this_dir = dirname(__file__)
     suite.addTests(load_testsuite(loader, join(this_dir, 'nocuda')))
