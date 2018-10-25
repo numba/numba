@@ -5,6 +5,7 @@ import functools
 import locale
 import weakref
 import ctypes
+import platform
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -790,8 +791,12 @@ class JITCPUCodegen(BaseCPUCodegen):
         # we can specialize for this CPU.
         options['cpu'] = self._get_host_cpu_name()
         # LLVM 7 change: # https://reviews.llvm.org/D47211#inline-425406
-        # JIT needs static relocation
-        options['reloc'] = 'static'
+        # JIT needs static relocation on x86*
+        if 'x86' in platform.machine():
+            reloc_model = 'static'
+        else:
+            reloc_model = 'default'
+        options['reloc'] = reloc_model
         options['codemodel'] = 'jitdefault'
 
         # Set feature attributes (such as ISA extensions)
