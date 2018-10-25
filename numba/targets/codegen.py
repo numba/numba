@@ -789,7 +789,9 @@ class JITCPUCodegen(BaseCPUCodegen):
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
         options['cpu'] = self._get_host_cpu_name()
-        options['reloc'] = 'default'
+        # LLVM 7 change: # https://reviews.llvm.org/D47211#inline-425406
+        # JIT needs static relocation
+        options['reloc'] = 'static'
         options['codemodel'] = 'jitdefault'
 
         # Set feature attributes (such as ISA extensions)
