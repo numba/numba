@@ -499,6 +499,34 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
             cls._inject(backend, backend_guard)
 
 
+    @skip_no_tbb
+    @skip_unless_py3
+    def test_single_thread_tbb(self):
+        """
+        Tests that TBB works well with single thread
+        https://github.com/numba/numba/issues/3440
+        """
+        runme = """if 1:
+            from numba import njit, prange, threading_layer
+            @njit(parallel=True)
+            def foo(n):
+                acc = 0
+                for i in prange(n):
+                    acc += i
+                return acc
+            foo(100)
+            print(threading_layer())
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "tbb"
+        env['NUMBA_NUM_THREADS'] = "1"
+        out, err = self.run_cmd(cmdline, env=env)
+        if self._DEBUG:
+            print(out, err)
+        assert out.strip() == "tbb"
+
+
 TestThreadingLayerSelection.generate()
 
 
