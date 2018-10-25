@@ -499,7 +499,6 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
             cls._inject(backend, backend_guard)
 
 
-    @linux_only
     @skip_unless_py3
     def test_single_thread_tbb(self):
         """
