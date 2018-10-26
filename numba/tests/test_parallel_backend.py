@@ -518,12 +518,14 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         runme = """if 1:
             from numba import vectorize, threading_layer
             import numpy as np
+
             @vectorize(['f4(f4,f4,f4,f4,f4,f4,f4,f4)'], target='parallel')
-            def foo(a,b,c,d,e,f,g,h): 
+            def foo(a, b, c, d, e, f, g, h):
                 return a+b+c+d+e+f+g+h
+
             x = np.ones(2**20, np.float32)
             foo(*([x]*8))
-            print(threading_layer())
+            print("@%s@" % threading_layer())
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
@@ -532,7 +534,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline, env=env)
         if self._DEBUG:
             print(out, err)
-        assert out.strip() == "omp"
+        self.assertIn("@omp@", out)
 
     @skip_no_tbb
     def test_single_thread_tbb(self):
@@ -542,14 +544,16 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         """
         runme = """if 1:
             from numba import njit, prange, threading_layer
+
             @njit(parallel=True)
             def foo(n):
                 acc = 0
                 for i in prange(n):
                     acc += i
                 return acc
+
             foo(100)
-            print(threading_layer())
+            print("@%s@" % threading_layer())
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
@@ -558,7 +562,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline, env=env)
         if self._DEBUG:
             print(out, err)
-        assert out.strip() == "tbb"
+        self.assertIn("@tbb@", out)
 
 
 # 32bit or windows py27 (not that this runs on windows)
