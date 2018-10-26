@@ -791,11 +791,9 @@ class JITCPUCodegen(BaseCPUCodegen):
         options['cpu'] = self._get_host_cpu_name()
         # LLVM 7 change: # https://reviews.llvm.org/D47211#inline-425406
         # JIT needs static relocation on x86*
-        arch = ll.get_process_triple().split()[0]
-        if '86' in arch:
-            # make sure it's an i*86 or an x86*
-            if not (arch.startswith('i') or arch.startswith('x86')):
-                raise RuntimeError("Unknown x86 like architecture")
+        # native target is already initialized from base class __init__
+        arch = ll.Target.from_default_triple().name
+        if arch.startswith('x86'): # one of x86 or x86_64
             reloc_model = 'static'
         else:
             reloc_model = 'default'
