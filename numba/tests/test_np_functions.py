@@ -1183,7 +1183,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
-        # examples borrowed from numpy doc string / unit tests
+        # some of these examples borrowed from numpy doc string examples:
+        # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L2199-L2231
+        # some borrowed from TestCov:
+        # https://github.com/numpy/numpy/blob/80d3a7a/numpy/lib/tests/test_function_base.py
         m = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
         params = {'m': m, 'y': y}
