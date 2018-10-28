@@ -1113,10 +1113,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # array inputs
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
+            yield np.asfortranarray(np.array([[0, 2], [1, 1], [2, 0]]).T)
+            yield self.rnd.randn(100).reshape(5, 20)[:, ::2]
             yield np.array([0.3942, 0.5969, 0.7730, 0.9918, 0.7964])
             yield np.full((4, 5), fill_value=True)
             yield np.array([np.nan, 0.5969, -np.inf, 0.9918, 0.7964])
-            yield np.linspace(-3, 3, 33).reshape(33, 1, order='F')
+            yield np.linspace(-3, 3, 33).reshape(33, 1)
 
             # non-array inputs
             yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
