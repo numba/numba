@@ -1092,14 +1092,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
-    # TODO : remove me
-    def test_all(self):
-        self.test_cov_basic()
-        self.test_cov_edge_cases()
-        self.test_cov_exceptions()
-        self.test_cov_explicit_arguments()
-        self.test_cov_invalid_ddof()
-
     def test_cov_invalid_ddof(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
@@ -1141,7 +1133,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.linspace(-3, 3, 33).reshape(33, 1)
 
             # non-array inputs
-            yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))
+            yield ((0.1, 0.2), (0.11, 0.19), (0.09, 0.21))  # UniTuple
+            yield ((0.1, 0.2), (0.11, 0.19), (0.09j, 0.21j))  # Tuple
             yield (-2.1, -1, 4.3)
             yield (1, 2, 3)
             yield [4, 5, 6]

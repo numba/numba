@@ -1479,9 +1479,14 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
             return np.array(variance)
 
         # identify up front if output is 0D
-        if isinstance(m, types.Array) and m.ndim == 1 or isinstance(m, types.Tuple):
+        if isinstance(m, types.Array) and m.ndim == 1:
             if y in (None, types.none):
                 return np_cov_impl_single_variable
+
+        if isinstance(m, types.BaseTuple):
+            if all(isinstance(x, (types.Number, types.Boolean)) for x in m.types):
+                if y in (None, types.none):
+                    return np_cov_impl_single_variable
 
         if isinstance(m, (types.Number, types.Boolean)):
             if y in (None, types.none):
