@@ -1342,8 +1342,7 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
         def _prepare_cov_input_inner(m, y, rowvar, dtype):
             m_arr = np.atleast_2d(_asarray(m))
 
-            # transpose if asked to and not a (1, n) vector
-            if not rowvar and m_arr.shape[0] != 1:
+            if not rowvar:
                 m_arr = m_arr.T
 
             return m_arr
@@ -1368,8 +1367,6 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
                 msg = ("m and y have incompatible dimensions and thus "
                        "cannot be concatenated")
                 raise ValueError(msg)
-                # 'variables' as the constraint on rows or columns depends on
-                # whether rowvar is True or False...
 
             # allocate and fill output array
             out = np.empty((m_rows + y_rows, m_cols), dtype=dtype)
@@ -1487,6 +1484,10 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
             if all(isinstance(x, (types.Number, types.Boolean)) for x in m.types):
                 if y in (None, types.none):
                     return np_cov_impl_single_variable
+            else:
+                if len(m.types) == 1 and isinstance(m.types[0], types.BaseTuple):
+                    if y in (None, types.none):
+                        return np_cov_impl_single_variable
 
         if isinstance(m, (types.Number, types.Boolean)):
             if y in (None, types.none):

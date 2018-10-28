@@ -1141,6 +1141,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield ((0.1, 0.2, 0.3), (0.1, 0.2, 0.3))
             yield [(1, 2, 3), (1, 3, 2)]
             yield 3.142
+            yield ((1.1, 2.2, 1.5),)
 
             # empty data structures
             yield np.array([])
@@ -1233,6 +1234,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             m = np.array([-2.1, -1, 4.3])
             y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])
             params = {'m': m, 'y': y, 'rowvar': rowvar}
+            _check(params)
+            params = {'m': y, 'y': m, 'rowvar': rowvar}  # swap m and y
             _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
