@@ -1365,7 +1365,9 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
             y_rows, y_cols = y_arr.shape
 
             if m_cols != y_cols:
-                raise ValueError('m and y must have the same number of variables')
+                msg = ("m and y have incompatible dimensions and thus "
+                       "cannot be concatenated")
+                raise ValueError(msg)
                 # 'variables' as the constraint on rows or columns depends on
                 # whether rowvar is True or False...
 
