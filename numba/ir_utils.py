@@ -1443,7 +1443,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             attrs.append(callee_def.attr)
             if typemap and obj.name in typemap:
                 typ = typemap[obj.name]
-                if isinstance(typ, types.npytypes.Array):
+                if not isinstance(typ, types.Module):
                     return attrs[0], obj
             callee_def = definition_finder(func_ir, obj)
         else:
