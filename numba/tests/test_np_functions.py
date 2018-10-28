@@ -1146,7 +1146,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
-    def test_cov_egde_cases(self):
+    def test_cov_edge_cases(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
