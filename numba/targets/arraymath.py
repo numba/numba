@@ -1386,7 +1386,7 @@ def _handle_m_dim_change(m):
                "simply pass the row as a 1D array, i.e. m[0].")
         raise RuntimeError(msg)
 
-_handle_m_dim_nop = register_jitable(lambda x:x)
+_handle_m_dim_nop = register_jitable(lambda x: x)
 
 def determine_dtype(array_like):
     array_like_dt = np.float64
