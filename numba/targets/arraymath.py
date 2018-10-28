@@ -1333,10 +1333,10 @@ def np_cov_impl_inner(X, bias, ddof):
     c *= np.true_divide(1, fact)
     return c
 
-def _prepare_cov_input():
+def _prepare_cov_input_inner():
     pass
 
-@overload(_prepare_cov_input)
+@overload(_prepare_cov_input_inner)
 def _prepare_cov_input_impl(m, y, rowvar, dtype):
     if y in (None, types.none):
         def _prepare_cov_input_inner(m, y, rowvar, dtype):
@@ -1423,6 +1423,12 @@ def _handle_ddof(ddof):
 
 _handle_ddof_nop = register_jitable(lambda x: x)
 
+@register_jitable
+def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER):
+    _M_DIM_HANDLER(m)
+    _DDOF_HANDLER(ddof)
+    return _prepare_cov_input_inner(m, y, rowvar, dtype)
+
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
@@ -1454,9 +1460,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
         dtype = np.result_type(m_dt, y_dt, np.float64)
 
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-            _M_DIM_HANDLER(m)
-            _DDOF_HANDLER(ddof)
-            X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
+            X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
                 return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
@@ -1464,9 +1468,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
                 return np_cov_impl_inner(X, bias, ddof)
 
         def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
-            _M_DIM_HANDLER(m)
-            _DDOF_HANDLER(ddof)
-            X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
+            X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
                 variance = np.nan
