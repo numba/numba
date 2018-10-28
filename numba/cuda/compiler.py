@@ -24,6 +24,36 @@ from .api import get_current_device
 from .args import wrap_arg
 
 
+def get_implementation(py_func, impl_kind, *args):
+    if impl_kind == "direct":
+        return py_func
+    elif impl_kind == "generated":
+        impl = py_func(*args)
+        # Check the generating function and implementation signatures are
+        # compatible, otherwise compiling would fail later.
+        pysig = utils.pysignature(py_func)
+        implsig = utils.pysignature(impl)
+        ok = len(pysig.parameters) == len(implsig.parameters)
+        if ok:
+            for pyparam, implparam in zip(pysig.parameters.values(),
+                                          implsig.parameters.values()):
+                # We allow the implementation to omit default values, but
+                # if it mentions them, they should have the same value...
+                if (pyparam.name != implparam.name or
+                    pyparam.kind != implparam.kind or
+                    (implparam.default is not implparam.empty and
+                     implparam.default != pyparam.default)):
+                    ok = False
+        if not ok:
+            raise TypeError("generated implementation %s should be compatible "
+                            "with signature '%s', but has signature '%s'"
+                            % (impl, pysig, implsig))
+        return impl
+
+    raise ValueError("Invalid implementation kind %s" % impl_kind)
+
+
+
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
@@ -82,10 +112,11 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
 class DeviceFunctionTemplate(object):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug, inline):
+    def __init__(self, pyfunc, debug, inline, impl_kind):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
+        self.impl_kind = impl_kind
         self._compileinfos = {}
 
     def __reduce__(self):
@@ -106,7 +137,8 @@ class DeviceFunctionTemplate(object):
         this object.
         """
         if args not in self._compileinfos:
-            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
+            impl = get_implementation(self.py_func, self.impl_kind, *args)
+            cres = compile_cuda(impl, None, args, debug=self.debug,
                                 inline=self.inline)
             first_definition = not self._compileinfos
             self._compileinfos[args] = cres
@@ -125,13 +157,15 @@ class DeviceFunctionTemplate(object):
         return cres.signature
 
 
-def compile_device_template(pyfunc, debug=False, inline=False):
+def compile_device_template(pyfunc, debug=False, inline=False,
+                            impl_kind='direct'):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
     from .descriptor import CUDATargetDesc
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline,
+                                 impl_kind=impl_kind)
 
     class device_function_template(AbstractTemplate):
         key = dft
@@ -145,8 +179,10 @@ def compile_device_template(pyfunc, debug=False, inline=False):
     return dft
 
 
-def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False)
+def compile_device(pyfunc, return_type, args, inline=True,
+                   debug=False, impl_kind='direct'):
+    return DeviceFunction(pyfunc, return_type, args, inline=True,
+                          debug=False, impl_kind=impl_kind)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -170,13 +206,16 @@ def declare_device_function(name, restype, argtypes):
 
 class DeviceFunction(object):
 
-    def __init__(self, pyfunc, return_type, args, inline, debug):
+    def __init__(self, pyfunc, return_type, args, inline, debug, impl_kind):
         self.py_func = pyfunc
         self.return_type = return_type
         self.args = args
         self.inline = True
         self.debug = False
-        cres = compile_cuda(self.py_func, self.return_type, self.args,
+        self.impl_kind = impl_kind
+
+        impl = get_implementation(self.py_func, impl_kind, *self.args)
+        cres = compile_cuda(impl, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
         # Register
@@ -719,10 +758,11 @@ class AutoJitCUDAKernel(CUDAKernelBase):
     Kernel objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, bind, targetoptions):
+    def __init__(self, func, bind, targetoptions, impl_kind):
         super(AutoJitCUDAKernel, self).__init__()
         self.py_func = func
         self.bind = bind
+        self.impl_kind = impl_kind
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
@@ -788,7 +828,9 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         if kernel is None:
             if 'link' not in self.targetoptions:
                 self.targetoptions['link'] = ()
-            kernel = compile_kernel(self.py_func, argtypes,
+
+            impl = get_implementation(self.py_func, self.impl_kind, *argtypes)
+            kernel = compile_kernel(impl, argtypes,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
             if self.bind:

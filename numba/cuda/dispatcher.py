@@ -15,12 +15,14 @@ from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
 class CUDADispatcher(object):
     targetdescr = CUDATargetDesc
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals={}, targetoptions={},
+                 impl_kind='direct'):
         assert not locals
         self.py_func = py_func
         self.targetoptions = targetoptions
         self.doc = py_func.__doc__
         self._compiled = None
+        self._impl_kind = impl_kind
 
     def compile(self, sig, locals={}, **targetoptions):
         assert self._compiled is None
@@ -35,7 +37,9 @@ class CUDADispatcher(object):
     @property
     def compiled(self):
         if self._compiled is None:
-            self._compiled = autojit(self.py_func, **self.targetoptions)
+            self._compiled = jit(self.py_func,
+                                 impl_kind=self._impl_kind,
+                                 **self.targetoptions)
         return self._compiled
 
     def __call__(self, *args, **kws):
