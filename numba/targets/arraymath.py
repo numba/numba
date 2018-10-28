@@ -1460,7 +1460,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
             if y in (None, types.none):
                 return np_cov_impl_single_variable
 
-        if isinstance(m, (types.Integer, types.Float, types.Complex, types.Boolean)):
+        if isinstance(m, (types.Number, types.Boolean)):
             if y in (None, types.none):
                 return np_cov_impl_single_variable
 
