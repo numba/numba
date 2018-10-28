@@ -1092,15 +1092,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
-
     # TODO : remove me
     def test_all(self):
         self.test_cov_basic()
         self.test_cov_edge_cases()
         self.test_cov_exceptions()
         self.test_cov_explicit_arguments()
+        self.test_cov_invalid_ddof()
 
+    def test_cov_invalid_ddof(self):
+        pyfunc = cov
+        cfunc = jit(nopython=True)(pyfunc)
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(m, ddof, expected_msg):
+            with self.assertTypingError() as raises:
+               cfunc(m, ddof=ddof)
+            self.assertIn(expected_msg, str(raises.exception))
+
+        m = np.array([[0, 2], [1, 1], [2, 0]]).T
+
+        for ddof in np.nan, -np.inf:
+            msg = 'Cannot convert non-finite ddof to integer'
+            _check(m, ddof, msg)
+
+        for ddof in 'bacon', np.arange(4), 1.1, -3.142:
+            msg = 'ddof must be integer'
+            _check(m, ddof, msg)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
@@ -1150,7 +1170,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y_choices = None, m[::-1]
         rowvar_choices = False, True
         bias_choices = False, True
-        ddof_choice = None, -1, 0, 1, 3
+        ddof_choice = None, -1, 0, 1, 3.0, True
 
         for y, rowvar, bias, ddof in itertools.product(y_choices, rowvar_choices, bias_choices, ddof_choice):
             params = {'m': m, 'y': y, 'ddof': ddof, 'bias': bias, 'rowvar': rowvar}

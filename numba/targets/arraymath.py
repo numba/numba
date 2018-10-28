@@ -1417,6 +1417,15 @@ def check_dimensions(array_like, name):
             if isinstance(array_like.key[0].key[0], types.Sequence):
                 raise TypeError("{0} has more than 2 dimensions".format(name))
 
+@register_jitable
+def _handle_ddof(ddof):
+    if not np.isfinite(ddof):
+        raise TypeError('Cannot convert non-finite ddof to integer')
+    if ddof - int(ddof) != 0:
+        raise TypeError('ddof must be integer')
+
+_handle_ddof_nop = register_jitable(lambda x: x)
+
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
@@ -1424,6 +1433,16 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
         # reject problem if m and / or y are more than 2D
         check_dimensions(m, 'm')
         check_dimensions(y, 'y')
+
+        # reject problem if ddof invalid (either upfront if type is
+        # obviously invalid, or later if value found to be non-integral)
+        if ddof in (None, types.none):
+            _DDOF_HANDLER = _handle_ddof_nop
+        else:
+            if isinstance(ddof, (types.Number, types.Boolean)):
+                _DDOF_HANDLER = _handle_ddof
+            else:
+                raise TypeError('ddof must be integer')
 
         # special case for 2D array input with 1 row of data - select
         # handler function which we'll call later when we have access
@@ -1439,6 +1458,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
             _M_DIM_HANDLER(m)
+            _DDOF_HANDLER(ddof)
             X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
@@ -1448,6 +1468,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 
         def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
             _M_DIM_HANDLER(m)
+            _DDOF_HANDLER(ddof)
             X = _prepare_cov_input(m, y, rowvar, dtype).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
