@@ -612,6 +612,9 @@ class BaseCPUCodegen(object):
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
 
+        if config.ENABLE_PROFILING:
+            engine.enable_jit_events()
+
         self._tm = tm
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data

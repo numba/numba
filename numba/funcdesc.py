@@ -33,14 +33,16 @@ class FunctionDescriptor(object):
     """
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name', 'env_name',
+                 'mangled_name', 'unique_name', 'env_name', 'global_dict',
                  'inline', 'noalias')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, inline=False, noalias=False, env_name=None):
+                 argtypes=None, inline=False, noalias=False, env_name=None,
+                 global_dict=None):
         self.native = native
         self.modname = modname
+        self.global_dict = global_dict
         self.qualname = qualname
         self.unique_name = unique_name
         self.doc = doc
@@ -70,6 +72,14 @@ class FunctionDescriptor(object):
         self.env_name = env_name
         self.inline = inline
         self.noalias = noalias
+
+    def lookup_globals(self):
+        """
+        Return the global dictionary of the function.
+        It may not match the Module's globals if the function is created
+        dynamically (i.e. exec)
+        """
+        return self.global_dict or self.lookup_module().__dict__
 
     def lookup_module(self):
         """
@@ -133,23 +143,29 @@ class FunctionDescriptor(object):
         doc = func.__doc__ or ''
         args = tuple(func_ir.arg_names)
         kws = ()        # TODO
+        global_dict = None
 
         if modname is None:
             # Dynamically generated function.
             modname = _dynamic_modname
+            # Retain a reference to the dictionary of the function.
+            # This disables caching, serialization and pickling.
+            global_dict = func_ir.func_id.func.__globals__
 
         unique_name = func_ir.func_id.unique_name
 
-        return qualname, unique_name, modname, doc, args, kws
+        return qualname, unique_name, modname, doc, args, kws, global_dict
 
     @classmethod
     def _from_python_function(cls, func_ir, typemap, restype, calltypes,
                               native, mangler=None, inline=False, noalias=False):
-        (qualname, unique_name, modname, doc, args, kws,
+        (qualname, unique_name, modname, doc, args, kws, global_dict,
          )= cls._get_function_info(func_ir)
+
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
-                   args, kws, mangler=mangler, inline=inline, noalias=noalias)
+                   args, kws, mangler=mangler, inline=inline, noalias=noalias,
+                   global_dict=global_dict)
         return self
 
 

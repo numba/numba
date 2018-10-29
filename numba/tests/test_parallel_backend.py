@@ -316,7 +316,9 @@ class TestParallelBackend(TestParallelBackendBase):
                         else:
                             self.run_compile(impl, parallelism=p)
                     return test_method
-                setattr(cls, methname, methgen(impl, p))
+                fn = methgen(impl, p)
+                fn.__name__ = methname
+                setattr(cls, methname, fn)
 
 
 TestParallelBackend.generate()
@@ -495,6 +497,34 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
     def generate(cls):
         for backend, backend_guard in cls.backends.items():
             cls._inject(backend, backend_guard)
+
+
+    @skip_no_tbb
+    @skip_unless_py3
+    def test_single_thread_tbb(self):
+        """
+        Tests that TBB works well with single thread
+        https://github.com/numba/numba/issues/3440
+        """
+        runme = """if 1:
+            from numba import njit, prange, threading_layer
+            @njit(parallel=True)
+            def foo(n):
+                acc = 0
+                for i in prange(n):
+                    acc += i
+                return acc
+            foo(100)
+            print(threading_layer())
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "tbb"
+        env['NUMBA_NUM_THREADS'] = "1"
+        out, err = self.run_cmd(cmdline, env=env)
+        if self._DEBUG:
+            print(out, err)
+        assert out.strip() == "tbb"
 
 
 TestThreadingLayerSelection.generate()
