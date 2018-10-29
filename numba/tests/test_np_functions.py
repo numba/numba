@@ -1092,6 +1092,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_invalid_ddof(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
