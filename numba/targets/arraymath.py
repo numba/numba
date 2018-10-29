@@ -1442,7 +1442,9 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
         if ddof in (None, types.none):
             _DDOF_HANDLER = _handle_ddof_nop
         else:
-            if isinstance(ddof, (types.Number, types.Boolean)):
+            if isinstance(ddof, (types.Integer, types.Boolean)):
+                _DDOF_HANDLER = _handle_ddof_nop
+            elif isinstance(ddof, types.Float):
                 _DDOF_HANDLER = _handle_ddof
             else:
                 raise TypeError('ddof must be integer')
