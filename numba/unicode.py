@@ -158,7 +158,8 @@ def _empty_string(kind, length):
     return s
 
 
-@njit
+# Disable RefCt for performance.
+@njit(_nrt=False)
 def _get_code_point(a, i):
     if a._kind == PY_UNICODE_1BYTE_KIND:
         return deref_uint8(a._data, i)
