@@ -1092,6 +1092,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
     def test_cov_invalid_ddof(self):
         pyfunc = cov
         cfunc = jit(nopython=True)(pyfunc)
@@ -1278,8 +1280,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.arange(4)
         with self.assertRaises(ValueError) as raises:
             cfunc(m, y=y)
-        self.assertIn('m and y have incompatible dimensions and '
-                      'thus cannot be concatenated', str(raises.exception))
+        self.assertIn('m and y have incompatible dimensions', str(raises.exception))
         # Numpy raises ValueError: all the input array dimensions except for the
         # concatenation axis must match exactly.
 

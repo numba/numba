@@ -1364,9 +1364,7 @@ def _prepare_cov_input_impl(m, y, rowvar, dtype):
             y_rows, y_cols = y_arr.shape
 
             if m_cols != y_cols:
-                msg = ("m and y have incompatible dimensions and thus "
-                       "cannot be concatenated")
-                raise ValueError(msg)
+                raise ValueError("m and y have incompatible dimensions")
 
             # allocate and fill output array
             out = np.empty((m_rows + y_rows, m_cols), dtype=dtype)
