@@ -1101,20 +1101,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        def _check(m, ddof, expected_msg):
-            with self.assertTypingError() as raises:
-               cfunc(m, ddof=ddof)
-            self.assertIn(expected_msg, str(raises.exception))
-
         m = np.array([[0, 2], [1, 1], [2, 0]]).T
 
-        for ddof in np.nan, -np.inf:
-            msg = 'Cannot convert non-finite ddof to integer'
-            _check(m, ddof, msg)
+        for ddof in np.arange(4), 4j:
+            with self.assertTypingError() as raises:
+               cfunc(m, ddof=ddof)
+            self.assertIn('ddof must be a real numerical scalar type', str(raises.exception))
 
-        for ddof in 'bacon', np.arange(4), 1.1, -3.142:
-            msg = 'ddof must be integer'
-            _check(m, ddof, msg)
+        for ddof in np.nan, np.inf:
+            with self.assertRaises(ValueError) as raises:
+               cfunc(m, ddof=ddof)
+            self.assertIn('Cannot convert non-finite ddof to integer', str(raises.exception))
+
+        for ddof in 1.1, -0.7:
+            with self.assertRaises(ValueError) as raises:
+               cfunc(m, ddof=ddof)
+            self.assertIn('ddof must be integral value', str(raises.exception))
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas

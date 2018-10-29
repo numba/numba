@@ -1415,9 +1415,9 @@ def check_dimensions(array_like, name):
 @register_jitable
 def _handle_ddof(ddof):
     if not np.isfinite(ddof):
-        raise TypeError('Cannot convert non-finite ddof to integer')
+        raise ValueError('Cannot convert non-finite ddof to integer')
     if ddof - int(ddof) != 0:
-        raise TypeError('ddof must be integer')
+        raise ValueError('ddof must be integral value')
 
 _handle_ddof_nop = register_jitable(lambda x: x)
 
@@ -1445,7 +1445,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
             elif isinstance(ddof, types.Float):
                 _DDOF_HANDLER = _handle_ddof
             else:
-                raise TypeError('ddof must be integer')
+                raise TypingError('ddof must be a real numerical scalar type')
 
         # special case for 2D array input with 1 row of data - select
         # handler function which we'll call later when we have access
