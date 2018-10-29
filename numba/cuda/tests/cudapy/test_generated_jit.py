@@ -47,6 +47,35 @@ class TestCudaGeneratedJit(SerialMixin, unittest.TestCase):
         assert np.all(host_out == 1)
 
 
+    def test_generated_jit_device(self):
+        @generated_jit(target='cuda')
+        def kernel(array):
+            @cuda.jit(device=True)
+            def device_add(array):
+                i = cuda.grid(1)
+
+                if i >= array.shape[0]:
+                    return
+
+                array[i] += 1
+
+
+            @wraps(kernel)
+            def _kernel(array):
+                device_add(array)
+
+            return _kernel
+
+        array = np.zeros(200, dtype=np.float64)
+        array = cuda.to_device(array)
+        kernel[(1,1,1), (200,1,1)](array)
+
+        host_out = array.copy_to_host()
+
+        assert host_out.dtype == array.dtype
+        assert np.all(host_out == 1)
+
+
 if __name__ == '__main__':
     unittest.main()
 

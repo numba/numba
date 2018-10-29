@@ -17,7 +17,7 @@ def jitdevice(func, link=[], debug=None, inline=False, impl_kind='direct'):
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=None, impl_kind=None, **kws):
+        link=[], debug=None, impl_kind='direct', **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -41,6 +41,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        kernel. Since this degrades performance, this should only be used for
        debugging purposes.  Defaults to False.  (The default value can be
        overriden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+    :impl_kind: 'direct' or 'generated'.
     :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
@@ -50,6 +51,10 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
+    if device is True and impl_kind != 'direct':
+        raise NotImplementedError("Can only use direct implementations "
+                                  "for device functions")
+
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
@@ -58,19 +63,26 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
-                    return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                          impl_kind=impl_kind, debug=debug)
+                    return FakeCUDAKernel(func, device=device,
+                                          fastmath=fastmath,
+                                          impl_kind=impl_kind,
+                                          debug=debug)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, debug=debug,
-                               impl_kind=impl_kind, **kws)
+                    return jit(func, device=device,
+                               bind=bind,
+                               debug=debug,
+                               impl_kind=impl_kind,
+                               **kws)
 
             return autojitwrapper
         # func_or_sig is a function
         else:
             if config.ENABLE_CUDASIM:
-                return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
-                                      impl_kind=impl_kind, debug=debug)
+                return FakeCUDAKernel(func_or_sig, device=device,
+                                      fastmath=fastmath,
+                                      impl_kind=impl_kind,
+                                      debug=debug)
             elif device:
                 return jitdevice(func_or_sig, debug=debug,
                                  impl_kind=impl_kind, **kws)
@@ -84,8 +96,10 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     else:
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                      impl_kind=impl_kind, debug=debug)
+                return FakeCUDAKernel(func, device=device,
+                                      fastmath=fastmath,
+                                      impl_kind=impl_kind,
+                                      debug=debug)
             return jitwrapper
 
         restype, argtypes = convert_types(func_or_sig, argtypes)
@@ -93,24 +107,28 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-        def kernel_jit(func):
-            kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    impl_kind=impl_kind, inline=inline,
-                                    fastmath=fastmath)
-
-            # Force compilation for the current context
-            if bind:
-                kernel.bind()
-
-            return kernel
-
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  impl_kind=impl_kind, debug=debug)
 
         if device:
+            def device_jit(func):
+                return compile_device(func, restype, argtypes,
+                                      inline=inline, impl_kind=impl_kind,
+                                      debug=debug)
+
             return device_jit
         else:
+            def kernel_jit(func):
+                kernel = compile_kernel(func, argtypes, link=link, debug=debug,
+                                        impl_kind=impl_kind, inline=inline,
+                                        fastmath=fastmath)
+
+                # Force compilation for the current context
+                if bind:
+                    kernel.bind()
+
+                return kernel
+
+
+
             return kernel_jit
 
 

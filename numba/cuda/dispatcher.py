@@ -23,13 +23,14 @@ class CUDADispatcher(object):
         self.doc = py_func.__doc__
         self._compiled = None
         self._impl_kind = impl_kind
+        self.__name__ = py_func.__name__  # Ensure that @wraps works
 
     def compile(self, sig, locals={}, **targetoptions):
         assert self._compiled is None
         assert not locals
         options = self.targetoptions.copy()
         options.update(targetoptions)
-        kernel = jit(sig, **options)(self.py_func)
+        kernel = jit(sig, impl_kind=self._impl_kind, **options)(self.py_func)
         self._compiled = kernel
         if hasattr(kernel, "_npm_context_"):
             self._npm_context_ = kernel._npm_context_
