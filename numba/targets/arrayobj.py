@@ -1337,8 +1337,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem(source_indices):
             idx, = source_indices
-            getitem_impl = context.get_function(operator.getitem,
-                                                signature(src_dtype, srcty, types.intp))
+            getitem_impl = context.get_function(
+                operator.getitem,
+                signature(src_dtype, srcty, types.intp),
+                )
             return getitem_impl(builder, (src, idx))
 
         def src_cleanup():
