@@ -550,9 +550,9 @@ def normalize_1d_index(index):
         return types.intp if index.signed else types.uintp
 
 
-@infer
+@infer_global(operator.getitem)
 class GetItemCPointer(AbstractTemplate):
-    key = "getitem"
+    key = operator.getitem
 
     def generic(self, args, kws):
         assert not kws

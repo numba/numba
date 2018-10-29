@@ -37,9 +37,10 @@ class SequenceBool(AbstractTemplate):
         if isinstance(val, (types.Sequence)):
             return signature(types.boolean, val)
 
-@infer
+
+@infer_global(operator.getitem)
 class GetItemSequence(AbstractTemplate):
-    key = "getitem"
+    key = operator.getitem
 
     def generic(self, args, kws):
         seq, idx = args
