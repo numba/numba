@@ -574,7 +574,7 @@ def _make_dtype_object(typingctx, desc):
 
         return sig, codegen
 
-    if isinstance(desc, types.Const):
+    if isinstance(desc, types.Literal):
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(desc.value))
         return from_nb_type(nb_type)
@@ -588,7 +588,7 @@ def _make_dtype_object(typingctx, desc):
 def numpy_dtype(desc):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(desc, (types.Const, types.functions.NumberClass)):
+    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
         def imp(desc):
             return _make_dtype_object(desc)
         return imp

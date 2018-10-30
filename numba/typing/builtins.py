@@ -460,7 +460,7 @@ class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (arg1, arg2) = args
-        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+        if isinstance(arg1, types.Literal) and isinstance(arg2, types.Literal):
             return signature(types.boolean, arg1, arg2)
 
 @infer_global(operator.ne)

@@ -86,7 +86,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     in the axis dimension and 'axis' is that dimension.  For this to work,
     axis has to be a const.
     """
-    if not isinstance(axis, types.Const):
+    if not isinstance(axis, types.Literal):
         raise RequireConstValue('axis argument must be a constant')
     # Get the value of the axis constant.
     axis_value = axis.value
@@ -185,7 +185,7 @@ def array_sum_axis(context, builder, sig, args):
     [ty_array, ty_axis] = sig.args
     is_axis_const = False
     const_axis_val = 0
-    if isinstance(ty_axis, types.Const):
+    if isinstance(ty_axis, types.Literal):
         # this special-cases for constant axis
         const_axis_val = ty_axis.value
         # fix negative axis

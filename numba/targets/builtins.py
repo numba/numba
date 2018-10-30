@@ -50,6 +50,27 @@ def generic_is(context, builder, sig, args):
     else:
         return cgutils.false_bit
 
+
+@lower_builtin(operator.eq, types.Literal, types.Literal)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value == arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(operator.ne, types.Literal, types.Literal)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.value != arg2.value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 #-------------------------------------------------------------------------------
 
 @lower_getattr_generic(types.DeferredType)

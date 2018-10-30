@@ -61,35 +61,47 @@ class RawPointer(Opaque):
 #         return type(self.value), self._key
 
 
+class _LiteralTypeError(TypeError):
+    pass
+
+
 class Literal(Dummy):
     @staticmethod
     def from_value(value):
-        from numba import ir
+        """Create a Literal  instance for the type of value.
+
+        raises _LiteralTypeError if *value* is not of a supported type
+        """
         if isinstance(value, int):
             return LiteralInt(value)
         elif isinstance(value, str):
             return LiteralStr(value)
-        elif value == ir.UNDEFINED:
-            return value
+        elif isinstance(value, slice):
+            return LiteralSlice(value)
         else:
             fmt = "cannot create literal from type {}"
-            raise TypeError(fmt.format(type(value)))
+            raise _LiteralTypeError(fmt.format(type(value)))
 
     def __init__(self, value):
         self.value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
         try:
             hash(value)
         except TypeError:
             self._key = id(value)
         else:
             self._key = value
-        fmt = "Lit[{!r}({})"
+        fmt = "Lit[{}({})"
         super(Literal, self).__init__(fmt.format(type(value), value))
 
     @property
     def key(self):
         return type(self.value), self._key
 
+
+class UnLiteral(Literal):
+    pass
 
 class LiteralInt(Literal):
     pass
@@ -98,9 +110,30 @@ class LiteralInt(Literal):
 class LiteralStr(Literal):
     pass
 
+class LiteralSlice(Literal):
+    pass
+
 
 def literal(value):
+    """Returns a Literal instance or raise _LiteralTypeError
+    """
     return Literal.from_value(value)
+
+
+def maybe_literal(value):
+    try:
+        return Literal.from_value(value)
+    except _LiteralTypeError:
+        return
+
+
+def try_literal(value):
+    """Returns a Literal instance if the type of value is supported
+    """
+    try:
+        return Literal.from_value(value)
+    except _LiteralTypeError:
+        return Omitted(value)
 
 
 class Omitted(Opaque):

@@ -512,6 +512,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
+        assert sig is not None
         sig = sig.as_function()
         if isinstance(fn, (types.Function, types.BoundFunction,
                            types.Dispatcher)):

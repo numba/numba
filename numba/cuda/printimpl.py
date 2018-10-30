@@ -42,7 +42,7 @@ def real_print_impl(ty, context, builder, val):
     lld = context.cast(builder, val, ty, types.float64)
     return "%f", [lld]
 
-@print_item.register(types.Const)
+@print_item.register(types.LiteralStr)
 def const_print_impl(ty, context, builder, sigval):
     pyval = ty.value
     assert isinstance(pyval, str)  # Ensured by lowering

@@ -545,18 +545,24 @@ class Lower(BaseLower):
             except NotImplementedError:
                 return None
 
-        res = try_static_impl((types.literal(static_lhs), types.literal(static_rhs)),
-                              (static_lhs, static_rhs))
+        res = try_static_impl(
+            (types.try_literal(static_lhs), types.try_literal(static_rhs)),
+            (static_lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((types.literal(static_lhs), rty),
-                              (static_lhs, rhs))
+        res = try_static_impl(
+            (types.try_literal(static_lhs), rty),
+            (static_lhs, rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((lty, types.literal(static_rhs)),
-                              (lhs, static_rhs))
+        res = try_static_impl(
+            (lty, types.try_literal(static_rhs)),
+            (lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
@@ -570,6 +576,7 @@ class Lower(BaseLower):
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
+        assert signature is not None
         impl = self.context.get_function("getitem", signature)
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
@@ -970,8 +977,11 @@ class Lower(BaseLower):
             return res
 
         elif expr.op == "static_getitem":
-            signature = typing.signature(resty, self.typeof(expr.value.name),
-                                         types.Literal.from_value(expr.index))
+            signature = typing.signature(
+                resty,
+                self.typeof(expr.value.name),
+                types.try_literal(expr.index),
+                )
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported

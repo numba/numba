@@ -107,10 +107,9 @@ class TypeVar(object):
         if self.type is None:
             raise TypingError("Undecided type {}".format(self))
         if self.literal_value is not NOTSET and get_literals:
-            try:
-                return types.literal(self.literal_value)
-            except TypeError:
-                pass
+            maybe_lit = types.maybe_literal(self.literal_value)
+            if maybe_lit is not None:
+                return maybe_lit
         return self.type
 
     def __len__(self):
@@ -374,7 +373,7 @@ def fold_arg_vars(typevars, args, vararg, kws, get_literals=False):
     if vararg is not None:
         errmsg = "*args in function call should be a tuple, got %s"
         # Handle constant literal used for `*args`
-        if isinstance(args[-1], types.Const):
+        if isinstance(args[-1], types.Literal):
             const_val = args[-1].value
             # Is the constant value a tuple?
             if not isinstance(const_val, tuple):
@@ -878,6 +877,7 @@ class TypeInferer(object):
             self.propagate_refined_type(var, unified)
 
     def add_calltype(self, inst, signature):
+        assert signature is not None
         self.calltypes[inst] = signature
 
     def copy_type(self, src_var, dest_var, loc):
