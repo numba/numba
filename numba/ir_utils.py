@@ -639,18 +639,18 @@ def is_pure(rhs, lives, call_table):
     """
     if isinstance(rhs, ir.Expr)
         if rhs.op == 'call':
-			func_name = rhs.func.name
-			if func_name not in call_table or call_table[func_name] == []:
-				return False
-			call_list = call_table[func_name]
-			if (call_list == [slice] or
-				call_list == ['log', numpy] or
-				call_list == ['empty', numpy]):
-				return True
-			for f in is_pure_extensions:
-				if f(rhs, lives, call_list):
-					return True
-			return False
+            func_name = rhs.func.name
+            if func_name not in call_table or call_table[func_name] == []:
+                return False
+            call_list = call_table[func_name]
+            if (call_list == [slice] or
+                call_list == ['log', numpy] or
+                call_list == ['empty', numpy]):
+                return True
+            for f in is_pure_extensions:
+                if f(rhs, lives, call_list):
+                    return True
+            return False
         elif rhs.op == 'getiter' or rhs.op == 'iternext':
             return False
     if isinstance(rhs, ir.Yield):
