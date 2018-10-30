@@ -2174,7 +2174,7 @@ def array_record_getattr(context, builder, typ, value, attr):
     res = rary._getvalue()
     return impl_ret_borrowed(context, builder, resty, res)
 
-@lower_builtin('static_getitem', types.Array, types.Const)
+@lower_builtin('static_getitem', types.Array, types.LiteralStr)
 def array_record_getitem(context, builder, sig, args):
     index = args[1]
     if not isinstance(index, str):
@@ -2243,7 +2243,7 @@ def record_setattr(context, builder, sig, args, attr):
     context.pack_value(builder, elemty, val, dptr, align=align)
 
 
-@lower_builtin('static_getitem', types.Record, types.Const)
+@lower_builtin('static_getitem', types.Record, types.LiteralStr)
 def record_getitem(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
@@ -2251,7 +2251,7 @@ def record_getitem(context, builder, sig, args):
     impl = context.get_getattr(sig.args[0], args[1])
     return impl(context, builder, sig.args[0], args[0], args[1])
 
-@lower_builtin('static_setitem', types.Record, types.Const, types.Any)
+@lower_builtin('static_setitem', types.Record, types.LiteralStr, types.Any)
 def record_setitem(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
@@ -4648,8 +4648,8 @@ def np_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
-@lower_builtin("array.argsort", types.Array, types.Const)
-@lower_builtin(np.argsort, types.Array, types.Const)
+@lower_builtin("array.argsort", types.Array, types.LiteralStr)
+@lower_builtin(np.argsort, types.Array, types.LiteralStr)
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
     sort_func = get_sort_func(kind=kind.value,

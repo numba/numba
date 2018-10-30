@@ -107,7 +107,10 @@ class TypeVar(object):
         if self.type is None:
             raise TypingError("Undecided type {}".format(self))
         if self.literal_value is not NOTSET and get_literals:
-            return types.Const(self.literal_value)
+            try:
+                return types.literal(self.literal_value)
+            except TypeError:
+                pass
         return self.type
 
     def __len__(self):
@@ -1170,7 +1173,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         ty = self.resolve_value_type(inst, const)
         # Special case string constant as Const type
         if ty == types.string:
-            ty = types.Const(value=const)
+            ty = types.literal(value=const)
         self.lock_type(target.name, ty, loc=inst.loc,
                        literal_value=const)
 

@@ -545,17 +545,17 @@ class Lower(BaseLower):
             except NotImplementedError:
                 return None
 
-        res = try_static_impl((types.Const(static_lhs), types.Const(static_rhs)),
+        res = try_static_impl((types.literal(static_lhs), types.literal(static_rhs)),
                               (static_lhs, static_rhs))
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((types.Const(static_lhs), rty),
+        res = try_static_impl((types.literal(static_lhs), rty),
                               (static_lhs, rhs))
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((lty, types.Const(static_rhs)),
+        res = try_static_impl((lty, types.literal(static_rhs)),
                               (lhs, static_rhs))
         if res is not None:
             return cast_result(res)
@@ -655,7 +655,7 @@ class Lower(BaseLower):
             if i in inst.consts:
                 pyval = inst.consts[i]
                 if isinstance(pyval, str):
-                    pos_tys[i] = types.Const(pyval)
+                    pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
         fixed_sig.pysig = sig.pysig
@@ -971,7 +971,7 @@ class Lower(BaseLower):
 
         elif expr.op == "static_getitem":
             signature = typing.signature(resty, self.typeof(expr.value.name),
-                                         types.Const(expr.index))
+                                         types.Literal.from_value(expr.index))
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported

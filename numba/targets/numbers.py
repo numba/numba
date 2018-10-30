@@ -253,10 +253,10 @@ def int_power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.pow, types.Integer, types.Const)
-@lower_builtin(operator.ipow, types.Integer, types.Const)
-@lower_builtin(operator.pow, types.Float, types.Const)
-@lower_builtin(operator.ipow, types.Float, types.Const)
+@lower_builtin(operator.pow, types.Integer, types.LiteralInt)
+@lower_builtin(operator.ipow, types.Integer, types.LiteralInt)
+@lower_builtin(operator.pow, types.Float, types.LiteralInt)
+@lower_builtin(operator.ipow, types.Float, types.LiteralInt)
 def static_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b a constant integer
@@ -521,7 +521,7 @@ lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
 lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
 lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
 
-@lower_builtin(operator.eq, types.Const, types.Const)
+@lower_builtin(operator.eq, types.LiteralInt, types.LiteralInt)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -530,11 +530,11 @@ def const_eq_impl(context, builder, sig, args):
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(operator.ne, types.Const, types.Const)
+@lower_builtin(operator.ne, types.LiteralInt, types.LiteralInt)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
-    if arg1.value!=arg2.value:
+    if arg1.value != arg2.value:
         val = 1
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -1317,7 +1317,7 @@ def hash_complex(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
-@lower_cast(types.Integer, types.Const)
+@lower_cast(types.Integer, types.LiteralInt)
 def integer_to_constant(context, builder, fromty, toty, val):
     # Perform runtime check to ensure that the runtime value
     # matches the expected constant.

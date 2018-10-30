@@ -38,27 +38,69 @@ class RawPointer(Opaque):
     """
 
 
-class Const(Dummy):
-    """
-    A compile-time constant, for (internal) use when a type is needed for
-    lookup.
-    """
+# class Const(Dummy):
+#     """
+#     A compile-time constant, for (internal) use when a type is needed for
+#     lookup.
+#     """
+
+#     def __init__(self, value):
+#         self.value = value
+#         # We want to support constants of non-hashable values, therefore
+#         # fall back on the value's id() if necessary.
+#         try:
+#             hash(value)
+#         except TypeError:
+#             self._key = id(value)
+#         else:
+#             self._key = value
+#         super(Const, self).__init__("const(%r)" % (value,))
+
+#     @property
+#     def key(self):
+#         return type(self.value), self._key
+
+
+class Literal(Dummy):
+    @staticmethod
+    def from_value(value):
+        from numba import ir
+        if isinstance(value, int):
+            return LiteralInt(value)
+        elif isinstance(value, str):
+            return LiteralStr(value)
+        elif value == ir.UNDEFINED:
+            return value
+        else:
+            fmt = "cannot create literal from type {}"
+            raise TypeError(fmt.format(type(value)))
 
     def __init__(self, value):
         self.value = value
-        # We want to support constants of non-hashable values, therefore
-        # fall back on the value's id() if necessary.
         try:
             hash(value)
         except TypeError:
             self._key = id(value)
         else:
             self._key = value
-        super(Const, self).__init__("const(%r)" % (value,))
+        fmt = "Lit[{!r}({})"
+        super(Literal, self).__init__(fmt.format(type(value), value))
 
     @property
     def key(self):
         return type(self.value), self._key
+
+
+class LiteralInt(Literal):
+    pass
+
+
+class LiteralStr(Literal):
+    pass
+
+
+def literal(value):
+    return Literal.from_value(value)
 
 
 class Omitted(Opaque):
