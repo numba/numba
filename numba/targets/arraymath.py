@@ -25,7 +25,7 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from .linalg import ensure_blas
 
 from numba.extending import intrinsic
-from numba.errors import RequireConstValue, TypingError
+from numba.errors import RequireLiteralValue, TypingError
 
 def _check_blas():
     # Checks if a BLAS is available so e.g. dot will work
@@ -87,7 +87,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     axis has to be a const.
     """
     if not isinstance(axis, types.Literal):
-        raise RequireConstValue('axis argument must be a constant')
+        raise RequireLiteralValue('axis argument must be a constant')
     # Get the value of the axis constant.
     axis_value = axis.value
     # The length of the indexing tuple to be output.
