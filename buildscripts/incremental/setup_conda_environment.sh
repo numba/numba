@@ -70,3 +70,9 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
 # install the faulthandler for Python 2.x
 if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
+
+# environment dump for debug
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"

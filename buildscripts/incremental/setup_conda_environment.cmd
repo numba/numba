@@ -29,3 +29,8 @@ if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
 %CONDA_INSTALL% tbb tbb-devel
 if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"
