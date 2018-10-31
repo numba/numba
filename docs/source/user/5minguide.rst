@@ -199,8 +199,8 @@ Extra options available in some decorators:
 
 * ``parallel = True`` - :ref:`enable <jit-decorator-parallel>` the 
   :ref:`automatic parallelization <numba-parallel>` of the function.
-* ``fastmath = True`` - enable `fast-math <jit-decorator-fastmath>`_ behaviour
-  for the function.
+* ``fastmath = True`` - enable :ref:`fast-math <jit-decorator-fastmath>`
+  behaviour for the function.
 
 ctypes/cffi/cython interoperability:
 
