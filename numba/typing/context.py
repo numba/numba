@@ -180,7 +180,7 @@ class BaseContext(object):
 
         return '\n'.join(desc)
 
-    def resolve_function_type(self, func, args, kws, literals=None):
+    def resolve_function_type(self, func, args, kws):
         """
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
@@ -195,9 +195,14 @@ class BaseContext(object):
             #       *defns* are CallTemplates.
             defns = self._functions[func]
             for defn in defns:
-                res = defn.apply(args, kws)
-                if res is not None:
-                    return res
+                for support_literals in [True, False]:
+                    if support_literals:
+                        res = defn.apply(args, kws)
+                    else:
+                        fixedargs = [types.unliteral(a) for a in args]
+                        res = defn.apply(fixedargs, kws)
+                    if res is not None:
+                        return res
 
         if isinstance(func, types.Type):
             # If it's a type, it may support a __call__ method
@@ -208,7 +213,7 @@ class BaseContext(object):
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
-            return func.get_call_type_with_literals(self, args, kws, literals)
+            return func.get_call_type(self, args, kws)
 
     def _get_attribute_templates(self, typ):
         """
@@ -559,7 +564,6 @@ class BaseContext(object):
             Fallback to stable, deterministic sort.
             """
             return getattr(obj, 'bitwidth', 0)
-
         typelist = sorted(typelist, key=keyfunc)
         unified = typelist[0]
         for tp in typelist[1:]:
@@ -600,6 +604,11 @@ class BaseContext(object):
         if conv is not None and conv <= Conversion.safe:
             # Can convert from second to first
             return first
+
+        if isinstance(first, types.Literal) or isinstance(second, types.Literal):
+            first = types.unliteral(first)
+            second = types.unliteral(second)
+            return self.unify_pairs(first, second)
 
         # Cannot unify
         return None

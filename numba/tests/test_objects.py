@@ -35,7 +35,7 @@ class TestAttributes(TestCase):
 
     def test_setattr(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (object, types.int32), flags=flags)
+        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
         cfunc = cr.entry_point
         c = C()
         cfunc(c, 123)
@@ -43,7 +43,7 @@ class TestAttributes(TestCase):
 
     def test_setattr_attribute_error(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (object, types.int32), flags=flags)
+        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
         cfunc = cr.entry_point
         # Can't set undeclared slot
         with self.assertRaises(AttributeError):
@@ -51,7 +51,7 @@ class TestAttributes(TestCase):
 
     def test_delattr(self, flags=enable_pyobj_flags):
         pyfunc = delattr_usecase
-        cr = compile_isolated(pyfunc, (object,), flags=flags)
+        cr = compile_isolated(pyfunc, (types.pyobject,), flags=flags)
         cfunc = cr.entry_point
         c = C()
         c.x = 123
@@ -61,7 +61,7 @@ class TestAttributes(TestCase):
 
     def test_delattr_attribute_error(self, flags=enable_pyobj_flags):
         pyfunc = delattr_usecase
-        cr = compile_isolated(pyfunc, (object,), flags=flags)
+        cr = compile_isolated(pyfunc, (types.pyobject,), flags=flags)
         cfunc = cr.entry_point
         # Can't delete non-existing attribute
         with self.assertRaises(AttributeError):

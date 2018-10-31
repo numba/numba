@@ -28,6 +28,12 @@ def unbox_boolean(typ, obj, c):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
+@box(types.LiteralInt)
+def box_literal_integer(typ, val, c):
+    val = c.context.cast(c.builder, val, typ, typ.value_type)
+    return c.box(typ.value_type, val)
+
+
 @box(types.Integer)
 def box_integer(typ, val, c):
     if typ.signed:

@@ -543,6 +543,7 @@ def normalize_1d_index(index):
     Normalize the *index* type (an integer or slice) for indexing a 1D
     sequence.
     """
+    index = types.unliteral(index)
     if isinstance(index, types.SliceType):
         return index
 
@@ -627,6 +628,7 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
+        idx = types.unliteral(idx)
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
@@ -936,7 +938,7 @@ class Enumerate(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         it = args[0]
-        if len(args) > 1 and not args[1] in types.integer_domain:
+        if len(args) > 1 and not isinstance(args[1], types.Number):
             raise TypeError("Only integers supported as start value in "
                             "enumerate")
         elif len(args) > 2:

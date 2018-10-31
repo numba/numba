@@ -115,6 +115,8 @@ def as_dtype(nbtype):
     Return a numpy dtype instance corresponding to the given Numba type.
     NotImplementedError is if no correspondence is known.
     """
+    if isinstance(nbtype, types.Literal):
+        nbtype = nbtype.value_type
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
     if nbtype is types.bool_:

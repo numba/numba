@@ -65,7 +65,7 @@ class SetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 if not self.context.can_convert(value, seq.dtype):
                     msg = "invalid setitem with value of {} to element of {}"
-                    raise errors.TypingError(msg.format(value, seq.dtype))
+                    raise errors.TypingError(msg.format(types.unliteral(value), seq.dtype))
                 return signature(types.none, seq, idx, seq.dtype)
 
 

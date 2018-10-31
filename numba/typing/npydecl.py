@@ -513,6 +513,9 @@ class NdConstructor(CallableTemplate):
 
     def generic(self):
         def typer(shape, dtype=None):
+            if shape != types.unliteral(shape):
+                # Shape must be unliteral'ed
+                return
             if dtype is None:
                 nb_dtype = types.double
             else:
@@ -632,6 +635,8 @@ class NdEye(CallableTemplate):
                 nb_dtype = types.float64
             else:
                 nb_dtype = _parse_dtype(dtype)
+            if k is not None and not isinstance(k, types.Integer):
+                return
             if nb_dtype is not None:
                 return types.Array(ndim=2, dtype=nb_dtype, layout='C')
 
@@ -1226,7 +1231,8 @@ class DiagCtor(CallableTemplate):
                     rdim = 1
                 else:
                     return None
-                return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
+                if isinstance(k, (int, types.Integer)):
+                    return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
 
 

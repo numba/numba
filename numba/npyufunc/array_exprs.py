@@ -382,7 +382,7 @@ def _lower_array_expr(lowerer, expr):
         if isinstance(argty, types.Array):
             inner_sig_args.append(argty.dtype)
         else:
-            inner_sig_args.append(argty)
+            inner_sig_args.append(types.unliteral(argty))
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing

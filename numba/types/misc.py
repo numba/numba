@@ -5,7 +5,6 @@ from .common import *
 from ..typeconv import Conversion
 from ..errors import TypingError
 
-
 class PyObject(Dummy):
     """
     A generic CPython object.
@@ -72,18 +71,19 @@ class Literal(Dummy):
 
         raises _LiteralTypeError if *value* is not of a supported type
         """
-        if isinstance(value, int):
+        assert not isinstance(value, Literal)
+        if isinstance(value, int) and type(value) in (int, bool):
             return LiteralInt(value)
-        elif isinstance(value, str):
+        elif type(value) is str:
             return LiteralStr(value)
-        elif isinstance(value, slice):
+        elif type(value) is slice:
             return LiteralSlice(value)
         else:
             fmt = "cannot create literal from type {}"
             raise _LiteralTypeError(fmt.format(type(value)))
 
     def __init__(self, value):
-        self.value = value
+        self._value = value
         # We want to support constants of non-hashable values, therefore
         # fall back on the value's id() if necessary.
         try:
@@ -92,26 +92,56 @@ class Literal(Dummy):
             self._key = id(value)
         else:
             self._key = value
-        fmt = "Lit[{}({})"
-        super(Literal, self).__init__(fmt.format(type(value), value))
+        fmt = "Lit[{}]({})"
+        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+
+    @property
+    def value(self):
+        return self._value
 
     @property
     def key(self):
         return type(self.value), self._key
 
+    @property
+    def value_type(self):
+        from numba import typing
+        ctx = typing.Context()
+        return ctx.resolve_value_type(self.value)
 
-class UnLiteral(Literal):
-    pass
 
 class LiteralInt(Literal):
-    pass
+    def can_convert_to(self, typingctx, other):
+        conv = typingctx.can_convert(self.value_type, other)
+        if conv is not None:
+            return max(conv, Conversion.promote)
+
+    # def can_convert_from(self, typingctx, other):
+    #     conv = typingctx.can_convert(other, self.value_type)
+    #     if conv is not None:
+    #         return max(conv, Conversion.promote)
+
+    # def unify(self, typingctx, other):
+    #     return typingctx.unify_pairs(self.value_type, other)
+
+    # def instanceof(self, cls):
+    #     from . import Integer, Number
+
+    #     return issubclass(cls, Integer) or cls is Number
 
 
 class LiteralStr(Literal):
     pass
 
+
 class LiteralSlice(Literal):
     pass
+
+
+def unliteral(lit_type):
+    if hasattr(lit_type, '__unliteral__'):
+        return lit_type.__unliteral__()
+    return getattr(lit_type, 'value_type', lit_type)
 
 
 def literal(value):
@@ -266,7 +296,7 @@ class Optional(Type):
 
     def __init__(self, typ):
         assert not isinstance(typ, (Optional, NoneType))
-        self.type = typ
+        self.type = unliteral(typ)
         name = "?%s" % typ
         super(Optional, self).__init__(name)
 

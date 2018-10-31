@@ -583,7 +583,7 @@ class PreParforPass(object):
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options):
         self.func_ir = func_ir
-        self.typemap = typemap
+        self.typemap = array_analysis.UnliteralProxy(typemap)
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.options = options
@@ -714,7 +714,7 @@ class ParforPass(object):
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options, flags):
         self.func_ir = func_ir
-        self.typemap = typemap
+        self.typemap = array_analysis.UnliteralProxy(typemap)
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.return_type = return_type
@@ -886,7 +886,7 @@ class ParforPass(object):
                     value = instr.value
                     target_typ = self.typemap[target.name]
                     index_typ = self.typemap[index.name]
-                    value_typ = self.typemap[value.name]
+                    value_typ = types.unliteral(self.typemap[value.name])
                     if isinstance(target_typ, types.npytypes.Array):
                         if (isinstance(index_typ, types.npytypes.Array) and
                             isinstance(index_typ.dtype, types.Boolean) and
@@ -1402,7 +1402,7 @@ class ParforPass(object):
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[lhs.name], index_var_typ, el_typ)
+            types.none, self.typemap[lhs.name], types.unliteral(index_var_typ), el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT == 1:
@@ -1433,7 +1433,7 @@ class ParforPass(object):
             subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
             self.typemap[subarr_var.name] = subarr_typ
             self.calltypes[getitem_call] = signature(subarr_typ, arr_typ,
-                                                     index_typ)
+                                                     types.unliteral(index_typ))
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
         else:
@@ -1488,13 +1488,13 @@ class ParforPass(object):
             self.typemap[value_var.name] = value_typ.dtype
             getitem_call = ir.Expr.getitem(value, index_var, loc)
             self.calltypes[getitem_call] = signature(
-                value_typ.dtype, value_typ, index_var_typ)
+                value_typ.dtype, value_typ, types.unliteral(index_var_typ))
             true_block.body.append(ir.Assign(getitem_call, value_var, loc))
         else:
             value_var = value
         setitem_node = ir.SetItem(target, index_var, value_var, loc)
         self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[target.name], index_var_typ, el_typ)
+            types.none, self.typemap[target.name], types.unliteral(index_var_typ), el_typ)
         true_block.body.append(setitem_node)
         if end_label:
             true_block.body.append(ir.Jump(end_label, loc))
@@ -1582,7 +1582,7 @@ class ParforPass(object):
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[lhs.name], index_var_typ, el_typ)
+            types.none, self.typemap[lhs.name], types.unliteral(index_var_typ), el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT == 1:
@@ -1609,7 +1609,7 @@ class ParforPass(object):
         self.typemap[tmp_var.name] = in_typ
         getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
         self.calltypes[getitem_call] = signature(
-            in_typ, arr_typ, index_var_type)
+            in_typ, arr_typ, types.unliteral(index_var_type))
         body_block.append(ir.Assign(getitem_call, tmp_var, loc))
 
         reduce_f_ir = compile_to_numba_ir(reduce_func,
@@ -3131,7 +3131,8 @@ def parfor_typeinfer(parfor, typeinferer):
     # assigned to a tuple from individual indices
     first_block = min(blocks.keys())
     loc = blocks[first_block].loc
-    index_assigns = [ir.Assign(ir.Const(1, loc), v, loc) for v in index_vars]
+    # XXX
+    index_assigns = [ir.Assign(ir.Const(1, loc=loc, const=False), v, loc) for v in index_vars]
     save_first_block_body = blocks[first_block].body
     blocks[first_block].body = index_assigns + blocks[first_block].body
     typeinferer.blocks = blocks

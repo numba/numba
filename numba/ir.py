@@ -649,9 +649,10 @@ class Arg(object):
 
 
 class Const(object):
-    def __init__(self, value, loc):
+    def __init__(self, value, loc, const=True):
         self.value = value
         self.loc = loc
+        self.const = const
 
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)

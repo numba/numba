@@ -6,6 +6,7 @@ import sys
 
 from .abstract import *
 from .common import *
+from .misc import unliteral
 from numba.ir import Loc
 from numba import errors
 
@@ -115,27 +116,30 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        return self.get_call_type_with_literals(context, args, kws,
-                                                literals=None)
+        return self.get_call_type_with_literals(context, args, kws)
 
-    def get_call_type_with_literals(self, context, args, kws, literals):
+    def get_call_type_with_literals(self, context, args, kws, literals=None):
         failures = _ResolutionFailures(context, self, args, kws)
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            try:
-                if literals is not None and temp.support_literals:
-                    sig = temp.apply(*literals)
+            for support_literals in [True, False]:
+                try:
+                    #if temp.support_literals:
+                    if support_literals:
+                        sig = temp.apply(args, kws)
+                    else:
+                        nolitargs = tuple([unliteral(a) for a in args])
+                        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+                        sig = temp.apply(nolitargs, nolitkws)
+                except Exception as e:
+                    sig = None
+                    failures.add_error(temp_cls, e)
                 else:
-                    sig = temp.apply(args, kws)
-            except Exception as e:
-                sig = None
-                failures.add_error(temp_cls, e)
-            else:
-                if sig is not None:
-                    self._impl_keys[sig.args] = temp.get_impl_key(sig)
-                    return sig
-                else:
-                    failures.add_error(temp_cls, "All templates rejected")
+                    if sig is not None:
+                        self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                        return sig
+                    else:
+                        failures.add_error(temp_cls, "All templates rejected")
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "
@@ -198,7 +202,19 @@ class BoundFunction(Callable, Opaque):
         return self.typing_key
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        from numba import types
+        template = self.template(context)
+        e = None
+        try:
+            out = template.apply(args, kws)
+        except Exception as e:
+            out = None
+        if out is None:
+            args = [types.unliteral(a) for a in args]
+            out = template.apply(args, kws)
+        if out is None and e is not None:
+            raise e
+        return out
 
     def get_call_type_with_literals(self, context, args, kws, literals):
         if literals is not None and self.template.support_literals:

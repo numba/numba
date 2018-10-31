@@ -60,6 +60,15 @@ class _TypeMetaclass(ABCMeta):
         inst = type.__call__(cls, *args, **kwargs)
         return cls._intern(inst)
 
+    # def __instancecheck__(cls, instance):
+    #     if not isinstance(instance, type):
+    #         instance = type(instance)
+    #     instanceof = getattr(instance, 'instanceof', None)
+    #     if instanceof is None:
+    #         return issubclass(instance, cls)
+    #     else:
+    #         return issubclass(instance, cls) or instanceof(instance, cls)
+
 
 def _type_reconstructor(reconstructor, reconstructor_args, state):
     """
@@ -69,6 +78,7 @@ def _type_reconstructor(reconstructor, reconstructor_args, state):
     if state:
         obj.__dict__.update(state)
     return type(obj)._intern(obj)
+
 
 
 @add_metaclass(_TypeMetaclass)

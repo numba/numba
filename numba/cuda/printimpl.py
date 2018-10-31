@@ -26,6 +26,7 @@ def print_item(ty, context, builder, val):
 
 
 @print_item.register(types.Integer)
+@print_item.register(types.LiteralInt)
 def int_print_impl(ty, context, builder, val):
     if ty in types.unsigned_domain:
         rawfmt = "%llu"

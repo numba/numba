@@ -62,7 +62,7 @@ def const_eq_impl(context, builder, sig, args):
 
 
 @lower_builtin(operator.ne, types.Literal, types.Literal)
-def const_eq_impl(context, builder, sig, args):
+def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
     if arg1.value != arg2.value:
@@ -279,6 +279,7 @@ def number_constructor(context, builder, sig, args):
 # Constants
 
 @lower_constant(types.Dummy)
+# @lower_constant(types.LiteralInt)
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()

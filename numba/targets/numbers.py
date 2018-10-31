@@ -1300,7 +1300,14 @@ def hash_complex(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
-@lower_cast(types.Integer, types.LiteralInt)
+@lower_cast(types.LiteralInt, types.Integer)
+@lower_cast(types.LiteralInt, types.Float)
+@lower_cast(types.LiteralInt, types.Complex)
+def literal_int_to_number(context, builder, fromty, toty, val):
+    lit = context.get_constant_generic(builder, fromty.value_type, fromty.value)
+    return context.cast(builder, lit, fromty.value_type, toty)
+
+# @lower_cast(types.Integer, types.LiteralInt)
 def integer_to_constant(context, builder, fromty, toty, val):
     # Perform runtime check to ensure that the runtime value
     # matches the expected constant.
@@ -1393,6 +1400,11 @@ def boolean_to_any(context, builder, fromty, toty, val):
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
+
+@lower_cast(types.LiteralInt, types.Boolean)
+def literal_to_boolean(context, builder, fromty, toty, val):
+    lit = context.get_constant_generic(builder, fromty.value_type, fromty.value)
+    return context.is_true(builder, fromty.value_type, lit)
 
 #-------------------------------------------------------------------------------
 # Constants

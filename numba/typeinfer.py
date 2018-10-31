@@ -146,6 +146,7 @@ class ConstraintNetwork(object):
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
+                    show_error(e)
                     errors.append(e)
                 except Exception:
                     msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
@@ -154,8 +155,20 @@ class ConstraintNetwork(object):
                                                sep='--%<' + '-' * 76),
                                     loc=constraint.loc,
                                     highlighting=False)
+                    show_error(e)
                     errors.append(e)
         return errors
+
+
+def show_error(e):
+    if False:
+        import traceback
+        import sys
+        print('-' * 80, file=sys.stderr)
+        traceback.print_exc(file=sys.stderr, chain=False)
+        # print(e, file=sys.stderr)
+        print('=' * 80, file=sys.stderr)
+
 
 
 class Propagate(object):
@@ -427,7 +440,6 @@ class CallConstraint(object):
     def resolve(self, typeinfer, typevars, fnty):
         assert fnty
         context = typeinfer.context
-
         r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
         if r is None:
             # Cannot resolve call type until all argument types are known
@@ -445,11 +457,9 @@ class CallConstraint(object):
                 else:
                     return
 
-        literals = fold_arg_vars(typevars, self.args, self.vararg, self.kws,
-                                 get_literals=True)
         # Resolve call type
-        sig = typeinfer.resolve_call(fnty, pos_args, kw_args,
-                                     literals=literals)
+        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
@@ -840,7 +850,7 @@ class TypeInferer(object):
             if retvar.name in cloned.typevars:
                 typevar = cloned.typevars[retvar.name]
                 if typevar and typevar.defined:
-                    rettypes.add(typevar.getone())
+                    rettypes.add(types.unliteral(typevar.getone()))
         if not rettypes:
             return
         # unify return types
@@ -1171,11 +1181,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
-        # Special case string constant as Const type
-        if ty == types.string:
-            ty = types.literal(value=const)
-        self.lock_type(target.name, ty, loc=inst.loc,
-                       literal_value=const)
+        # XXX
+        if inst.value.const:
+            lit = types.maybe_literal(value=const)
+        else:
+            lit = None
+        self.add_type(target.name, lit or ty, loc=inst.loc)
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
@@ -1199,7 +1210,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             raise TypingError("Modified builtin '%s'" % gvar.name,
                               loc=inst.loc)
 
-    def resolve_call(self, fnty, pos_args, kw_args, literals=None):
+    def resolve_call(self, fnty, pos_args, kw_args):
         """
         Resolve a call to a given function type.  A signature is returned.
         """
@@ -1233,8 +1244,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             return sig
         else:
             # Normal non-recursive call
-            return self.context.resolve_function_type(fnty, pos_args, kw_args,
-                                                      literals=literals)
+            return self.context.resolve_function_type(fnty, pos_args, kw_args)
 
     def typeof_global(self, inst, target, gvar):
         try:
@@ -1268,8 +1278,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
         # like const value in numba
-        self.lock_type(target.name, typ, loc=inst.loc,
-                       literal_value=gvar.value)
+        lit = types.maybe_literal(gvar.value)
+        self.lock_type(target.name, lit or typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
