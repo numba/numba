@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import weakref
 import time
 from collections import namedtuple, deque
+import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
@@ -13,7 +14,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context, TypingError
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo, utils
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -570,7 +571,12 @@ class Lower(BaseLower):
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
-        impl = self.context.get_function("getitem", signature)
+        # Get implementation of getitem
+        op = operator.getitem
+        fnop = self.context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(fnop, signature)
+
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
                    self.typeof(index.name))

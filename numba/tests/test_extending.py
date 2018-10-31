@@ -258,6 +258,14 @@ def overload_add_dummy(arg1, arg2):
         return dummy_add_impl
 
 
+@overload(operator.getitem)
+def overload_dummy_getitem(obj, idx):
+    if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+        def dummy_getitem_impl(obj, idx):
+            return idx + 123
+        return dummy_getitem_impl
+
+
 def call_add_operator(arg1, arg2):
     return operator.add(arg1, arg2)
 
@@ -283,6 +291,10 @@ def call_iadd_binop(arg1, arg2):
     arg1 += arg2
 
     return arg1
+
+
+def call_getitem(obj, idx):
+    return obj[idx]
 
 
 @overload_method(MyDummyType, 'length')
@@ -581,6 +593,10 @@ class TestHighLevelExtending(TestCase):
         # this will call add(Number, Number) as MyDummy implicitly casts to Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
+    def test_getitem(self):
+        pyfunc = call_getitem
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(MyDummy(), 321), 321 + 123)
 
     def test_no_cpython_wrapper(self):
         """

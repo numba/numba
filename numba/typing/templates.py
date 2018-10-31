@@ -4,7 +4,6 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from functools import reduce
 import operator
 import sys
 from types import MethodType
