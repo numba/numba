@@ -161,8 +161,6 @@ def get_array_index_type(ary, idx):
 
 @infer_global(operator.getitem)
 class GetItemBuffer(AbstractTemplate):
-    key = operator.getitem
-
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
