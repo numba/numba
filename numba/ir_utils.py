@@ -637,7 +637,7 @@ def is_pure(rhs, lives, call_table):
         returns the same result.  This is not the case for things
         like calls to numpy.random.
     """
-    if isinstance(rhs, ir.Expr)
+    if isinstance(rhs, ir.Expr):
         if rhs.op == 'call':
             func_name = rhs.func.name
             if func_name not in call_table or call_table[func_name] == []:
