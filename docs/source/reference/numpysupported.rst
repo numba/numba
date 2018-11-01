@@ -137,6 +137,8 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.conj`
+* :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`

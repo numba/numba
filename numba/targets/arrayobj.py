@@ -26,7 +26,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable, overload
+from numba.extending import register_jitable, overload, overload_method
 from . import quicksort, mergesort, slicing
 
 
@@ -2066,6 +2066,12 @@ def array_imag_part(context, builder, typ, value):
     else:
         raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
 
+@overload_method(types.Array, 'conj')
+@overload_method(types.Array, 'conjugate')
+def array_conj(arr):
+    def impl(arr):
+        return np.conj(arr)
+    return impl
 
 def array_complex_attr(context, builder, typ, value, attr):
     """
