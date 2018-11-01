@@ -289,6 +289,40 @@ class TestUnicode(BaseTest):
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
 
+    def test_pointless_slice(self, flags=no_pyobj_flags):
+        def pyfunc(a):
+            return a[:]
+        cfunc = njit(pyfunc)
+        args = ['a']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_walk_backwards(self, flags=no_pyobj_flags):
+        def pyfunc(a):
+            return a[::-1]
+        cfunc = njit(pyfunc)
+        args = ['a']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_stride_slice(self, flags=no_pyobj_flags):
+        def pyfunc(a):
+            return a[::2]
+        cfunc = njit(pyfunc)
+        args = ['a']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_basic_lt(self, flags=no_pyobj_flags):
+        def pyfunc(a, b):
+            return a < b
+        cfunc = njit(pyfunc)
+        args = ['abc','b']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_basic_gt(self, flags=no_pyobj_flags):
+        def pyfunc(a, b):
+            return a > b
+        cfunc = njit(pyfunc)
+        args = ['ab','b']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
 
 if __name__ == '__main__':
     unittest.main()
