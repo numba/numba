@@ -4,6 +4,7 @@ import copy
 import warnings
 import numpy as np
 
+import numba
 from numba import unittest_support as unittest
 from numba.transforms import find_setupwiths, with_lifting
 from numba.withcontexts import bypass_context, call_context, objmode_context
@@ -317,7 +318,14 @@ class TestLiftObj(MemoryLeak, TestCase):
                 bar(ival)
             return ival + 1
 
+        def foo_nonglobal(ival):
+            ival += 1
+            with numba.objmode:
+                bar(ival)
+            return ival + 1
+
         self.assert_equal_return_and_stdout(foo, 123)
+        self.assert_equal_return_and_stdout(foo_nonglobal, 123)
 
     def test_lift_objmode_array_in(self):
         def bar(arr):
@@ -359,8 +367,14 @@ class TestLiftObj(MemoryLeak, TestCase):
                 y = inverse(x)
             return x, y
 
+        def foo_nonglobal(x):
+            with numba.objmode(y="float64"):
+                y = inverse(x)
+            return x, y
+
         arg = 123
         self.assert_equal_return_and_stdout(foo, arg)
+        self.assert_equal_return_and_stdout(foo_nonglobal, arg)
 
     def test_lift_objmode_return_array(self):
         def inverse(x):

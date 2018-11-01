@@ -97,6 +97,14 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUGINFO
+
+   if sets to non-zero, enable debug for the full application by setting
+   the default value of the ``debug`` option in ``jit``. Beware that
+   enabling debug info significantly increases the memory consumption
+   for each compiled function.
+   Default value equals to the value of `NUMBA_ENABLE_PROFILING`.
+
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
    If set to non-zero, print out debugging information about type inference.
@@ -105,6 +113,11 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out information about operation of the
    :ref:`JIT compilation cache <jit-cache>`.
+
+.. envvar:: NUMBA_ENABLE_PROFILING
+
+   Enables JIT events of LLVM in order to support profiling of jitted functions.
+   This option is automatically enabled under certain profilers.
 
 .. envvar:: NUMBA_TRACE
 

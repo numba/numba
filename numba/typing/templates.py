@@ -340,9 +340,6 @@ def make_overload_template(func, overload_func, jit_options):
     func_name = getattr(func, '__name__', str(func))
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
-    # XXX: temporary
-    if func is operator.getitem:
-        func = 'getitem'
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options)
     return type(base)(name, (base,), dct)

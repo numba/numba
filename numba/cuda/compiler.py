@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 
 
+import os
 from functools import reduce, wraps
 import operator
 import sys
@@ -582,9 +583,18 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                exccls, exc_args = self.call_helper.get_exception(code)
+                exccls, exc_args, loc = self.call_helper.get_exception(code)
+                # Prefix the exception message with the source location
+                if loc is None:
+                    locinfo = ''
+                else:
+                    sym, filepath, lineno = loc
+                    filepath = os.path.relpath(filepath)
+                    locinfo = 'In function %r, file %s, line %s, ' % (
+                        sym, filepath, lineno,
+                        )
                 # Prefix the exception message with the thread position
-                prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
                 if exc_args:
                     exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
                 else:

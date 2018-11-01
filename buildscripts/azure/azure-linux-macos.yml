@@ -1,6 +1,7 @@
 parameters:
   name: ''
   vmImage: ''
+  matrix: []
 
 jobs:
 - job: ${{ parameters.name }}
@@ -9,18 +10,12 @@ jobs:
   strategy:
     maxParallel: 11
     matrix:
-      py27_np15:
-        PYTHON: '2.7'
-        NUMPY: '1.15' 
-        CONDA_ENV: 'travisci'
-      py37_np15:
-        PYTHON: '3.7'
-        NUMPY: '1.15' 
-        CONDA_ENV: 'travisci'
+      ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
     - script: |
-        if [ "$(uname)" == "Linux" ]; then sudo apt-get install -y libc6-dev-i386; fi
+        # Sleep 10 seconds because of race condition with background apt process
+        if [ "$(uname)" == "Linux" ] && [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then sudo apt-get install -y libc6-dev-i386; fi
         echo "Installing Miniconda"
         buildscripts/incremental/install_miniconda.sh
         export PATH=$HOME/miniconda3/bin:$PATH

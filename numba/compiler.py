@@ -443,7 +443,8 @@ class BasePipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               self.flags, self.locals,
-                              lifted=tuple(withs), lifted_from=None)
+                              lifted=tuple(withs), lifted_from=None,
+                              pipeline_class=type(self))
             raise _EarlyPipelineCompletion(cres)
 
     def stage_objectmode_frontend(self):
@@ -905,15 +906,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, library=None):
+               locals, lifted=(), lifted_from=None, library=None,
+               pipeline_class=Pipeline):
     """
     Compile a function with the given IR.
 
     For internal use only.
     """
 
-    pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+    pipeline = pipeline_class(typingctx, targetctx, library,
+                              args, return_type, flags, locals)
     return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
                                lifted_from=lifted_from)
 
@@ -1019,14 +1021,15 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline, noalias=flags.noalias)
 
-    lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper(flags.release_gil)
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+    with targetctx.push_code_library(library):
+        lower = lowering.Lower(targetctx, library, fndesc, interp)
+        lower.lower()
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper(flags.release_gil)
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
@@ -1045,14 +1048,15 @@ def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
         interp
         )
-    lower = pylowering.PyLower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper()
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
+    with targetctx.push_code_library(library):
+        lower = pylowering.PyLower(targetctx, library, fndesc, interp)
+        lower.lower()
+        if not flags.no_cpython_wrapper:
+            lower.create_cpython_wrapper()
+        env = lower.env
+        call_helper = lower.call_helper
+        has_dynamic_globals = lower.has_dynamic_globals
+        del lower
 
     if flags.no_compile:
         return _LowerResult(fndesc, call_helper, cfunc=None, env=env,

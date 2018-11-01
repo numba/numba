@@ -154,12 +154,13 @@ static void unload_tbb(void)
 {
     if(tsi)
     {
-        delete tg;
-        tg = NULL;
         if(_DEBUG)
         {
             puts("Unloading TBB");
         }
+        tg->wait();
+        delete tg;
+        tg = NULL;
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
         tsi->terminate(); // no blocking terminate is needed here
         tbb::set_assertion_handler(orig);

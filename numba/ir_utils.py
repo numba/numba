@@ -1774,6 +1774,25 @@ def fill_callee_epilogue(block, outputs):
     return block
 
 
+def find_global_value(func_ir, var):
+    """Check if a variable is a global value, and return the value,
+    or raise GuardException otherwise.
+    """
+    dfn = func_ir.get_definition(var)
+    if isinstance(dfn, ir.Global):
+        return dfn.value
+
+    if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
+        prev_val = find_global_value(func_ir, dfn.value)
+        try:
+            val = getattr(prev_val, dfn.attr)
+            return val
+        except KeyError:
+            raise GuardException
+
+    raise GuardException
+
+
 def raise_on_unsupported_feature(func_ir):
     """
     Helper function to walk IR and raise if it finds op codes
