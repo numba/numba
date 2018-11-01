@@ -219,6 +219,7 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
+        raise NotImplementedError("unsupported unicode kind")
         pass    # FIXME: wchar?
 
 
@@ -267,16 +268,6 @@ def _cmp_region(a, a_offset, b, b_offset, n):
             return 1
 
     return 0
-
-
-@njit
-def _cmp(a, b):
-    if len(a) < len(b):
-        return -1
-    elif len(a) > len(b):
-        return 1
-    else:
-        return _cmp_region(a, b)
 
 
 @njit

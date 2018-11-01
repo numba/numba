@@ -1135,7 +1135,7 @@ class PythonAPI(object):
         The ``ok`` is i1 value that is set if ok.
         The ``buffer`` is a i8* of the output buffer.
         The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
-        The ``kind`` is a i64 (int64) of the Unicode kind constant
+        The ``kind`` is a i32 (int32) of the Unicode kind constant
         """
         if PYVERSION >= (3, 3):
             p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
@@ -1174,9 +1174,9 @@ class PythonAPI(object):
 
     def string_from_kind_and_data(self, kind, string, size):
         fnty = Type.function(self.pyobj, [Type.int(), self.cstring, self.py_ssize_t])
-        if PYVERSION >= (3, 3):
-            fname = "PyUnicode_FromKindAndData"
-            fn = self._get_function(fnty, name=fname)
+        assert PYVERSION >= (3, 3), 'unsupported in this python-version'
+        fname = "PyUnicode_FromKindAndData"
+        fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
 
     def bytes_from_string_and_size(self, string, size):
