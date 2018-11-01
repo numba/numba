@@ -388,7 +388,25 @@ def unicode_endswith(a, b):
 
 ### String creation
 @njit
-def normalize_str_idx(idx, length, is_start=True):
+def normalize_str_idx(idx, length, is_start=True, do_raise=True):
+    """
+    Parameters
+    ----------
+    idx : int or None
+        the index
+    length : int
+        the string length
+    is_start : bool; optional with defaults to True
+        Is it the *start* or the *stop* of the slice?
+    do_raise : bool; optional with defaults to True
+        Whether to raise IndexError or clip the index to valid range.
+        No raise when normalizing slice object.
+
+    Returns
+    -------
+    norm_idx : int
+        normalized index
+    """
     if idx is None:
         if is_start:
             return 0
@@ -397,9 +415,19 @@ def normalize_str_idx(idx, length, is_start=True):
     elif idx < 0:
         idx += length
 
-    if idx < 0 or idx >= length:
-        raise IndexError("string index out of range")
+    if do_raise:
+        if idx < 0 or idx >= length:
+            raise IndexError("string index out of range")
+    else:
+        idx = max(idx, 0)
+        idx = min(idx, length)
+
     return idx
+
+
+@njit
+def normalize_str_idx_no_raise(idx, length, is_start=True):
+    return normalize_str_idx(idx, length, is_start=is_start, do_raise=False)
 
 
 @overload(operator.getitem)
@@ -414,9 +442,9 @@ def unicode_getitem(s, idx):
             return getitem_char
         elif idx == types.slice2_type:
             def getitem_slice2(s, slice_idx):
-                start = normalize_str_idx(
+                start = normalize_str_idx_no_raise(
                     slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx(
+                stop = normalize_str_idx_no_raise(
                     slice_idx.stop, len(s), is_start=False)
                 new_len = stop - start
                 if new_len <= 0:
@@ -429,14 +457,18 @@ def unicode_getitem(s, idx):
             return getitem_slice2
         elif idx == types.slice3_type:
             def getitem_slice3(s, slice_idx):
-                start = normalize_str_idx(
+                start = normalize_str_idx_no_raise(
                     slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx(
+                stop = normalize_str_idx_no_raise(
                     slice_idx.stop, len(s), is_start=False)
                 step = slice_idx.step
 
                 if step == 0:
                     raise ValueError('slice step cannot be zero')
+
+                # Adjust start if step is negative and start matches length
+                if step < 0 and start == len(s):
+                    start -= 1
 
                 span = stop - start
 

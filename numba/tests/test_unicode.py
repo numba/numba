@@ -215,6 +215,21 @@ class TestUnicode(BaseTest):
                                  cfunc(s, i),
                                  "'%s'[%d]?" % (s, i))
 
+    def test_getitem_error(self):
+        self.disable_leak_check()
+
+        pyfunc = getitem_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            with self.assertRaises(IndexError) as raises:
+                pyfunc(s, len(s))
+            self.assertIn('string index out of range', str(raises.exception))
+
+            with self.assertRaises(IndexError) as raises:
+                cfunc(s, len(s))
+            self.assertIn('string index out of range', str(raises.exception))
+
     def test_slice2(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
@@ -227,6 +242,18 @@ class TestUnicode(BaseTest):
                                      cfunc(s, sl),
                                      "'%s'[%d:%d]?" % (s, i, j))
 
+    def test_slice2_error(self):
+        pyfunc = getitem_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            for i in [-2, -1, len(s), len(s) + 1]:
+                for j in [-2, -1, len(s), len(s) + 1]:
+                    sl = slice(i, j)
+                    self.assertEqual(pyfunc(s, sl),
+                                     cfunc(s, sl),
+                                     "'%s'[%d:%d]?" % (s, i, j))
+
     def test_slice3(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
@@ -234,6 +261,19 @@ class TestUnicode(BaseTest):
         for s in UNICODE_EXAMPLES:
             for i in range(-len(s), len(s)):
                 for j in range(-len(s), len(s)):
+                    for k in [-2, -1, 1, 2]:
+                        sl = slice(i, j, k)
+                        self.assertEqual(pyfunc(s, sl),
+                                         cfunc(s, sl),
+                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_slice3_error(self):
+        pyfunc = getitem_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            for i in [-2, -1, len(s), len(s) + 1]:
+                for j in [-2, -1, len(s), len(s) + 1]:
                     for k in [-2, -1, 1, 2]:
                         sl = slice(i, j, k)
                         self.assertEqual(pyfunc(s, sl),
