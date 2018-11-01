@@ -220,7 +220,6 @@ def _set_code_point(a, i, ch):
         set_uint32(a._data, i, ch)
     else:
         raise NotImplementedError("unsupported unicode kind")
-        pass    # FIXME: wchar?
 
 
 @njit
