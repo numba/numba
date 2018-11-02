@@ -379,8 +379,9 @@ def unicode_endswith(a, b):
 
 
 ### String creation
+
 @njit
-def normalize_str_idx(idx, length, is_start=True, do_raise=True):
+def normalize_str_idx(idx, length, is_start=True):
     """
     Parameters
     ----------
@@ -390,9 +391,6 @@ def normalize_str_idx(idx, length, is_start=True, do_raise=True):
         the string length
     is_start : bool; optional with defaults to True
         Is it the *start* or the *stop* of the slice?
-    do_raise : bool; optional with defaults to True
-        Whether to raise IndexError or clip the index to valid range.
-        No raise when normalizing slice object.
 
     Returns
     -------
@@ -407,23 +405,16 @@ def normalize_str_idx(idx, length, is_start=True, do_raise=True):
     elif idx < 0:
         idx += length
 
-    if do_raise:
-        if idx < 0 or idx >= length:
-            raise IndexError("string index out of range")
-    else:
-        idx = max(idx, 0)
-        idx = min(idx, length)
+    if idx < 0 or idx >= length:
+        raise IndexError("string index out of range")
 
     return idx
 
 
-@njit
-def normalize_str_idx_no_raise(idx, length, is_start=True):
-    return normalize_str_idx(idx, length, is_start=is_start, do_raise=False)
-
-
 @intrinsic
-def _fix_slice3(typingctx, sliceobj, length):
+def _normalize_slice(typingctx, sliceobj, length):
+    """Fix slice object.
+    """
     from numba.targets import slicing
     sig = sliceobj(sliceobj, length)
 
@@ -433,13 +424,14 @@ def _fix_slice3(typingctx, sliceobj, length):
         slice = context.make_helper(builder, slicetype, sliceobj)
         slicing.guard_invalid_slice(context, builder, slicetype, slice)
         slicing.fix_slice(builder, slice, length)
-        # result_size = slicing.get_slice_length(builder, slice)
         return slice._getvalue()
 
     return sig, codegen
 
 @intrinsic
 def _slice_span(typingctx, sliceobj):
+    """Compute the span from the given slice object.
+    """
     from numba.targets import slicing
     sig = types.intp(sliceobj)
 
@@ -463,24 +455,9 @@ def unicode_getitem(s, idx):
                 _set_code_point(ret, 0, _get_code_point(s, idx))
                 return ret
             return getitem_char
-        elif idx == types.slice2_type:
-            def getitem_slice2(s, slice_idx):
-                start = normalize_str_idx_no_raise(
-                    slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx_no_raise(
-                    slice_idx.stop, len(s), is_start=False)
-                new_len = stop - start
-                if new_len <= 0:
-                    ret = _empty_string(s._kind, 0)
-                else:
-                    ret = _empty_string(s._kind, new_len)
-                    for i in range(new_len):
-                        _set_code_point(ret, i, _get_code_point(s, start + i))
-                return ret
-            return getitem_slice2
-        elif idx == types.slice3_type:
-            def getitem_slice3(s, slice_idx):
-                slice_idx = _fix_slice3(slice_idx, len(s))
+        elif isinstance(idx, types.SliceType):
+            def getitem_slice(s, slice_idx):
+                slice_idx = _normalize_slice(slice_idx, len(s))
                 span = _slice_span(slice_idx)
                 ret = _empty_string(s._kind, span)
                 cur = slice_idx.start
@@ -488,7 +465,7 @@ def unicode_getitem(s, idx):
                     _set_code_point(ret, i, _get_code_point(s, cur))
                     cur += slice_idx.step
                 return ret
-            return getitem_slice3
+            return getitem_slice
 
 
 @overload(operator.add)
