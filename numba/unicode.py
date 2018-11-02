@@ -24,6 +24,7 @@ from numba.pythonapi import (
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
     )
+from numba.targets import slicing
 
 
 ### DATA MODEL
@@ -415,7 +416,6 @@ def normalize_str_idx(idx, length, is_start=True):
 def _normalize_slice(typingctx, sliceobj, length):
     """Fix slice object.
     """
-    from numba.targets import slicing
     sig = sliceobj(sliceobj, length)
 
     def codegen(context, builder, sig, args):
@@ -432,7 +432,6 @@ def _normalize_slice(typingctx, sliceobj, length):
 def _slice_span(typingctx, sliceobj):
     """Compute the span from the given slice object.
     """
-    from numba.targets import slicing
     sig = types.intp(sliceobj)
 
     def codegen(context, builder, sig, args):
