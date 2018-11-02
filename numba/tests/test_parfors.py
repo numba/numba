@@ -1358,6 +1358,22 @@ class TestParfors(TestParforsBase):
         A = np.arange(n)
         self.check(test_impl, A)
 
+    @skip_unsupported
+    def test_no_hoisting_with_member_function_call(self):
+        def test_impl(X):
+            n = X.shape[0]
+            acc = 0
+            for i in prange(n):
+                R = {1, 2, 3}
+                R.add(i)
+                tmp = 0
+                for x in R:
+                    tmp += x
+                acc += tmp
+            return acc
+
+        self.check(test_impl, np.random.ranf(128))
+
 
 class TestPrangeBase(TestParforsBase):
 
