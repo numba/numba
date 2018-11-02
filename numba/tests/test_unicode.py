@@ -6,6 +6,7 @@
 from __future__ import print_function
 
 import sys
+from itertools import permutations
 
 from numba import njit
 import numba.unittest_support as unittest
@@ -86,6 +87,12 @@ UNICODE_EXAMPLES = [
 
 UNICODE_ORDERING_EXAMPLES = [
     '',
+    'a'
+    'aa',
+    'aaa',
+    'b',
+    'aab',
+    'ab',
     'asc',
     'ascih',
     'ascii',
@@ -135,19 +142,18 @@ class TestUnicode(BaseTest):
                 )
 
         # Check comparison to adjacent
-        for a in UNICODE_ORDERING_EXAMPLES[:-1]:
-            for b in UNICODE_ORDERING_EXAMPLES[1:]:
-                self.assertEqual(
-                    pyfunc(a, b),
-                    cfunc(a, b),
-                    '%s: "%s", "%s"' % (usecase.__name__, a, b),
-                    )
-                # and reversed
-                self.assertEqual(
-                    pyfunc(b, a),
-                    cfunc(b, a),
-                    '%s: "%s", "%s"' % (usecase.__name__, b, a),
-                    )
+        for a, b in permutations(UNICODE_ORDERING_EXAMPLES, r=2):
+            self.assertEqual(
+                pyfunc(a, b),
+                cfunc(a, b),
+                '%s: "%s", "%s"' % (usecase.__name__, a, b),
+                )
+            # and reversed
+            self.assertEqual(
+                pyfunc(b, a),
+                cfunc(b, a),
+                '%s: "%s", "%s"' % (usecase.__name__, b, a),
+                )
 
     def test_lt(self, flags=no_pyobj_flags):
         self._check_ordering_op(lt_usecase)
@@ -314,15 +320,16 @@ class TestUnicode(BaseTest):
         def pyfunc(a, b):
             return a < b
         cfunc = njit(pyfunc)
-        args = ['abc','b']
+        args = ['ab', 'b']
         self.assertEqual(pyfunc(*args), cfunc(*args))
 
     def test_basic_gt(self, flags=no_pyobj_flags):
         def pyfunc(a, b):
             return a > b
         cfunc = njit(pyfunc)
-        args = ['ab','b']
+        args = ['ab', 'b']
         self.assertEqual(pyfunc(*args), cfunc(*args))
+
 
 if __name__ == '__main__':
     unittest.main()

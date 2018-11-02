@@ -302,12 +302,13 @@ def unicode_eq(a, b):
 def unicode_lt(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def lt_impl(a, b):
-            if len(a) > len(b):
-                return False
-            elif len(a) < len(b):
+            minlen = min(len(a), len(b))
+            eqcode = _cmp_region(a, 0, b, 0, minlen)
+            if eqcode == -1:
                 return True
-            else:
-                return _cmp_region(a, 0, b, 0, len(a)) == -1
+            elif eqcode == 0:
+                return len(a) < len(b)
+            return False
         return lt_impl
 
 
@@ -315,11 +316,13 @@ def unicode_lt(a, b):
 def unicode_gt(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def gt_impl(a, b):
-            if len(a) > len(b):
+            minlen = min(len(a), len(b))
+            eqcode = _cmp_region(a, 0, b, 0, minlen)
+            if eqcode == 1:
                 return True
-            elif len(a) < len(b):
-                return False
-            return _cmp_region(a, 0, b, 0, len(a)) == 1
+            elif eqcode == 0:
+                return len(a) > len(b)
+            return False
         return gt_impl
 
 
@@ -327,12 +330,7 @@ def unicode_gt(a, b):
 def unicode_le(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def le_impl(a, b):
-            if len(a) > len(b):
-                return False
-            elif len(a) < len(b):
-                return True
-            ret = _cmp_region(a, 0, b, 0, len(a))
-            return (ret == -1) or (ret == 0)
+            return not (a > b)
         return le_impl
 
 
@@ -340,12 +338,7 @@ def unicode_le(a, b):
 def unicode_ge(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def ge_impl(a, b):
-            if len(a) > len(b):
-                return True
-            elif len(a) < len(b):
-                return False
-            ret = _cmp_region(a, 0, b, 0, len(a))
-            return (ret == 1) or (ret == 0)
+            return not (a < b)
         return ge_impl
 
 
