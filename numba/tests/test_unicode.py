@@ -103,10 +103,6 @@ UNICODE_ORDERING_EXAMPLES = [
 ]
 
 
-# FIXME
-UNICODE_EXAMPLES = [x for x in UNICODE_EXAMPLES]
-UNICODE_ORDERING_EXAMPLES = [x for x in UNICODE_ORDERING_EXAMPLES]
-
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
