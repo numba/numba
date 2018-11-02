@@ -1094,6 +1094,18 @@ class FunctionIR(object):
 
 # A stub for undefined global reference
 class UndefinedType(object):
+
+    _singleton = None
+
+    def __new__(cls):
+        obj = cls._singleton
+        if obj is not None:
+            return obj
+        else:
+            obj = object.__new__(cls)
+            cls._singleton = obj
+        return obj
+
     def __repr__(self):
         return "Undefined"
 
