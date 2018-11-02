@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 import sys
 import platform
 
+import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, config
@@ -47,7 +48,7 @@ class CPUContext(BaseContext):
         # Add ARM ABI functions from libgcc_s
         if platform.machine() == 'armv7l':
             ll.load_library_permanently('libgcc_s.so.1')
-        
+
         # Map external C functions.
         externals.c_math_functions.install(self)
 
