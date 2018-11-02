@@ -422,6 +422,37 @@ def normalize_str_idx_no_raise(idx, length, is_start=True):
     return normalize_str_idx(idx, length, is_start=is_start, do_raise=False)
 
 
+@intrinsic
+def _fix_slice3(typingctx, sliceobj, length):
+    from numba.targets import slicing
+    sig = sliceobj(sliceobj, length)
+
+    def codegen(context, builder, sig, args):
+        [slicetype, lengthtype] = sig.args
+        [sliceobj, length] = args
+        slice = context.make_helper(builder, slicetype, sliceobj)
+        slicing.guard_invalid_slice(context, builder, slicetype, slice)
+        slicing.fix_slice(builder, slice, length)
+        # result_size = slicing.get_slice_length(builder, slice)
+        return slice._getvalue()
+
+    return sig, codegen
+
+@intrinsic
+def _slice_span(typingctx, sliceobj):
+    from numba.targets import slicing
+    sig = types.intp(sliceobj)
+
+    def codegen(context, builder, sig, args):
+        [slicetype] = sig.args
+        [sliceobj] = args
+        slice = context.make_helper(builder, slicetype, sliceobj)
+        result_size = slicing.get_slice_length(builder, slice)
+        return result_size
+
+    return sig, codegen
+
+
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
@@ -449,29 +480,13 @@ def unicode_getitem(s, idx):
             return getitem_slice2
         elif idx == types.slice3_type:
             def getitem_slice3(s, slice_idx):
-                start = normalize_str_idx_no_raise(
-                    slice_idx.start, len(s), is_start=True)
-                stop = normalize_str_idx_no_raise(
-                    slice_idx.stop, len(s), is_start=False)
-                step = slice_idx.step
-
-                if step == 0:
-                    raise ValueError('slice step cannot be zero')
-
-                # Adjust start if step is negative and start matches length
-                if step < 0 and start == len(s):
-                    start -= 1
-
-                span = stop - start
-
-                if (step > 0 and span <= 0) or (step < 0 and span >= 0):
-                    ret = _empty_string(s._kind, 0)
-                else:
-                    new_len = (span + span % step) // step
-                    ret = _empty_string(s._kind, new_len)
-                    for i in range(new_len):
-                        _set_code_point(
-                            ret, i, _get_code_point(s, start + step * i))
+                slice_idx = _fix_slice3(slice_idx, len(s))
+                span = _slice_span(slice_idx)
+                ret = _empty_string(s._kind, span)
+                cur = slice_idx.start
+                for i in range(span):
+                    _set_code_point(ret, i, _get_code_point(s, cur))
+                    cur += slice_idx.step
                 return ret
             return getitem_slice3
 
