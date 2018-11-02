@@ -1702,6 +1702,31 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
+@overload(np.clip)
+def np_clip(a, a_min, a_max, out=None):
+    def np_clip_impl(a, a_min, a_max, out=None):
+        if a_min is None and a_max is None:
+            raise ValueError("array_clip: must set either max or min")
+        if out is None:
+            out = np.empty_like(a)
+        for i in range(len(a)):
+            if a_min is not None and a[i] < a_min:
+                out[i] = a_min
+            elif a_max is not None and a[i] > a_max:
+                out[i] = a_max
+            else:
+                out[i] = a[i]
+        return out
+    return np_clip_impl
+
+
+@overload_method(types.Array, 'clip')
+def array_clip(a, a_min=None, a_max=None, out=None):
+    def impl(a, a_min=None, a_max=None, out=None):
+        return np.clip(a, a_min, a_max, out)
+    return impl
+
+
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.
