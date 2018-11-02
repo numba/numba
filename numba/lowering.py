@@ -158,7 +158,8 @@ class BaseLower(object):
 
     def return_exception(self, exc_class, exc_args=None, loc=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args,
-                                       loc=loc)
+                                       loc=loc,
+                                       func_name=self.func_ir.func_id.func_name)
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.

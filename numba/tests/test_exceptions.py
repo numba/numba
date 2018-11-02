@@ -218,6 +218,24 @@ class TestRaising(TestCase):
     def test_assert_statement_nopython(self):
         self.check_assert_statement(flags=no_pyobj_flags)
 
+    def check_raise_from_exec_string(self, flags):
+        # issue #3428
+        f_text = "def f(a):\n  assert a != 1"
+        loc = {}
+        exec(f_text, {}, loc)
+        pyfunc = loc['f']
+        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cres.entry_point
+        cfunc(2)
+        self.check_against_python(flags, pyfunc, cfunc, AssertionError, 1)
+
+    def test_assert_from_exec_string_objmode(self):
+        self.check_raise_from_exec_string(flags=force_pyobj_flags)
+
+    def test_assert_from_exec_string_nopython(self):
+        self.check_raise_from_exec_string(flags=no_pyobj_flags)
+
+
 
 if __name__ == '__main__':
     unittest.main()
