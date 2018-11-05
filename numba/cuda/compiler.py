@@ -411,15 +411,15 @@ class CachedCUFunction(object):
             msg = ('cannot pickle CUDA kernel function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
-        args = (self.__class__, self.entry_name, self.ptx, self.linking)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking, self.max_registers)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, entry_name, ptx, linking):
+    def _rebuild(cls, entry_name, ptx, linking, max_registers):
         """
         Rebuild an instance.
         """
-        return cls(entry_name, ptx, linking)
+        return cls(entry_name, ptx, linking, max_registers)
 
 
 class CUDAKernel(CUDAKernelBase):
