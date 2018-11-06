@@ -187,7 +187,7 @@ class BaseContext(object):
         """
         # Prefer user definition first
         try:
-            res = self._resolve_user_function_type(func, args, kws, literals)
+            res = self._resolve_user_function_type(func, args, kws)
         except errors.TypingError as e:
             # Capture any typing error
             last_exception = e
