@@ -499,8 +499,44 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
             cls._inject(backend, backend_guard)
 
 
+TestThreadingLayerSelection.generate()
+
+
+@parfors_skip_unsupported
+@skip_unless_py3
+class TestMiscBackendIssues(ThreadLayerTestHelper):
+    """
+    Checks fixes for the issues with threading backends implementation
+    """
+    _DEBUG = False
+
+    @skip_no_omp
+    def test_omp_stack_overflow(self):
+        """
+        Tests that OMP does not overflow stack
+        """
+        runme = """if 1:
+            from numba import vectorize, threading_layer
+            import numpy as np
+
+            @vectorize(['f4(f4,f4,f4,f4,f4,f4,f4,f4)'], target='parallel')
+            def foo(a, b, c, d, e, f, g, h):
+                return a+b+c+d+e+f+g+h
+
+            x = np.ones(2**20, np.float32)
+            foo(*([x]*8))
+            print("@%s@" % threading_layer())
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "omp"
+        env['OMP_STACKSIZE'] = "100K"
+        out, err = self.run_cmd(cmdline, env=env)
+        if self._DEBUG:
+            print(out, err)
+        self.assertIn("@omp@", out)
+
     @skip_no_tbb
-    @skip_unless_py3
     def test_single_thread_tbb(self):
         """
         Tests that TBB works well with single thread
@@ -508,14 +544,16 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
         """
         runme = """if 1:
             from numba import njit, prange, threading_layer
+
             @njit(parallel=True)
             def foo(n):
                 acc = 0
                 for i in prange(n):
                     acc += i
                 return acc
+
             foo(100)
-            print(threading_layer())
+            print("@%s@" % threading_layer())
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
@@ -524,10 +562,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline, env=env)
         if self._DEBUG:
             print(out, err)
-        assert out.strip() == "tbb"
-
-
-TestThreadingLayerSelection.generate()
+        self.assertIn("@tbb@", out)
 
 
 # 32bit or windows py27 (not that this runs on windows)

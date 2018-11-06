@@ -171,14 +171,17 @@ def array_cumsum(a, *args):
 def array_cumsum_kws(a, axis):
     return a.cumsum(axis=axis)
 
-
 def array_real(a):
     return np.real(a)
-
 
 def array_imag(a):
     return np.imag(a)
 
+def array_conj(a):
+    return a.conj()
+
+def array_conjugate(a):
+    return a.conjugate()
 
 def np_unique(a):
     return np.unique(a)
@@ -186,7 +189,6 @@ def np_unique(a):
 
 def array_dot(a, b):
     return a.dot(b)
-
 
 def array_dot_chain(a, b):
     return a.dot(b).dot(b)
@@ -891,6 +893,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         x, y = np.meshgrid(x, x)
         z = x + 1j*y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_conj(self):
+        for pyfunc in [array_conj, array_conjugate]:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            x = np.linspace(-10, 10)
+            np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+            x, y = np.meshgrid(x, x)
+            z = x + 1j*y
+            np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_unique(self):
         pyfunc = np_unique

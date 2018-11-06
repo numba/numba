@@ -186,7 +186,8 @@ class MinimalCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
+                        func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -196,8 +197,12 @@ class MinimalCallConv(BaseCallConv):
 
         # Build excinfo struct
         if loc is not None:
-            f1 = loc._raw_function_name()
-            locinfo = (f1, loc.filename, loc.line)
+            fname = loc._raw_function_name()
+            if fname is None:
+                # could be exec(<string>) or REPL, try func_name
+                fname = func_name
+
+            locinfo = (fname, loc.filename, loc.line)
             if None in locinfo:
                 locinfo = None
         else:
@@ -347,7 +352,8 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None, loc=None):
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
+                        func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -358,7 +364,12 @@ class CPUCallConv(BaseCallConv):
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if loc is not None:
-            locinfo = (loc._raw_function_name(), loc.filename, loc.line)
+            fname = loc._raw_function_name()
+            if fname is None:
+                # could be exec(<string>) or REPL, try func_name
+                fname = func_name
+
+            locinfo = (fname, loc.filename, loc.line)
             if None in locinfo:
                 locinfo = None
         else:

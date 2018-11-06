@@ -14,6 +14,7 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import operator
 import contextlib
 import itertools
 from pprint import pprint
@@ -341,7 +342,7 @@ class StaticGetItemConstraint(object):
         self.value = value
         self.index = index
         if index_var is not None:
-            self.fallback = IntrinsicCallConstraint(target, 'getitem',
+            self.fallback = IntrinsicCallConstraint(target, operator.getitem,
                                                     (value, index_var), {},
                                                     None, loc)
         else:
@@ -451,7 +452,7 @@ class CallConstraint(object):
             if not a.is_precise():
                 # Getitem on non-precise array is allowed to
                 # support array-comprehension
-                if fnty == 'getitem' and isinstance(pos_args[0], types.Array):
+                if fnty == operator.getitem and isinstance(pos_args[0], types.Array):
                     pass
                 # Otherwise, don't compute type yet
                 else:
@@ -506,7 +507,7 @@ class CallConstraint(object):
 
     def refine(self, typeinfer, updated_type):
         # Is getitem?
-        if self.func == 'getitem':
+        if self.func == operator.getitem:
             aryty = typeinfer.typevars[self.args[0].name].getone()
             # is array not precise?
             if _is_array_not_precise(aryty):
@@ -1321,8 +1322,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
             self.calls.append((inst.value, constraint))
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, 'getitem', expr.value,
-                                       expr.index)
+            self.typeof_intrinsic_call(
+                inst, target, operator.getitem, expr.value, expr.index,
+                )
         elif expr.op == 'getattr':
             constraint = GetAttrConstraint(target.name, attr=expr.attr,
                                            value=expr.value, loc=inst.loc,

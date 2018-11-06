@@ -59,7 +59,11 @@ class Loc(object):
 
     def _raw_function_name(self):
         defn = self._find_definition()
-        return self._defmatcher.match(defn.strip()).groups()[0]
+        if defn:
+            return self._defmatcher.match(defn.strip()).groups()[0]
+        else:
+            # Probably exec(<string>) or REPL.
+            return None
 
     def _get_lines(self):
         if self.lines is None:
@@ -130,7 +134,7 @@ class Loc(object):
 
         # if in the REPL source may not be available
         if not ret:
-            ret = "<source missing, REPL in use?>"
+            ret = "<source missing, REPL/exec in use?>"
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
         tmp = err % (self._get_path(), self.line, _termcolor.code(''.join(ret)))

@@ -101,47 +101,50 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
-    #pragma omp parallel for
-    for(ptrdiff_t r = 0; r < size; r++)
+    #pragma omp parallel
     {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
-        memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-        count_space[0] = 1;
-
-        if(_DEBUG)
+        #pragma omp for
+        for(ptrdiff_t r = 0; r < size; r++)
         {
-            printf("THREAD %p:", count_space);
-            printf("count_space: ");
-            for(size_t j = 0; j < arg_len; j++)
-                printf("%ld, ", count_space[j]);
-            printf("\n");
-        }
-        for(size_t j = 0; j < array_count; j++)
-        {
-            char * base = args[j];
-            size_t step = steps[j];
-            ptrdiff_t offset = step * r;
-            array_arg_space[j] = base + offset;
+            memcpy(count_space, dimensions, arg_len * sizeof(size_t));
+            count_space[0] = 1;
 
-            if(0&&_DEBUG)
+            if(_DEBUG)
             {
-                printf("Index %lu\n", j);
-                printf("-->Got base %p\n", (void *)base);
-                printf("-->Got step %lu\n", step);
-                printf("-->Got offset %ld\n", offset);
-                printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+                printf("THREAD %p:", count_space);
+                printf("count_space: ");
+                for(size_t j = 0; j < arg_len; j++)
+                    printf("%ld, ", count_space[j]);
+                printf("\n");
             }
-        }
-
-        if(_DEBUG)
-        {
-            printf("array_arg_space: ");
             for(size_t j = 0; j < array_count; j++)
-                printf("%p, ", (void *)array_arg_space[j]);
-            printf("\n");
+            {
+                char * base = args[j];
+                size_t step = steps[j];
+                ptrdiff_t offset = step * r;
+                array_arg_space[j] = base + offset;
+
+                if(0&&_DEBUG)
+                {
+                    printf("Index %lu\n", j);
+                    printf("-->Got base %p\n", (void *)base);
+                    printf("-->Got step %lu\n", step);
+                    printf("-->Got offset %ld\n", offset);
+                    printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+                }
+            }
+
+            if(_DEBUG)
+            {
+                printf("array_arg_space: ");
+                for(size_t j = 0; j < array_count; j++)
+                    printf("%p, ", (void *)array_arg_space[j]);
+                printf("\n");
+            }
+            func(array_arg_space, count_space, steps, data);
         }
-        func(array_arg_space, count_space, steps, data);
     }
 }
 
