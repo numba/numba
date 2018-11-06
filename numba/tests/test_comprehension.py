@@ -13,6 +13,7 @@ from numba.compiler import compile_isolated
 from numba import types, utils, jit, types
 from numba.errors import TypingError, LoweringError
 from .support import tag
+from numba.tests.support import captured_stdout
 
 from .test_parfors import _windows_py27, _32bit
 
@@ -460,6 +461,27 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertIn("setitem: array({}, 1d, C)[0] = complex128".format(types.intp),
                       str(raises.exception))
 
+    def test_array_comp_shuffle_sideeffect(self):
+        nelem = 100
+
+        @jit(nopython=True)
+        def foo():
+            numbers = np.array([i for i in range(nelem)])
+            np.random.shuffle(numbers)
+            print(numbers)
+
+        with captured_stdout() as gotbuf:
+            foo()
+        got = gotbuf.getvalue().strip()
+
+        with captured_stdout() as expectbuf:
+            print(np.array([i for i in range(nelem)]))
+        expect = expectbuf.getvalue().strip()
+
+        # For a large enough array, the chances of shuffle to not move any
+        # element is tiny enough.
+        self.assertNotEqual(got, expect)
+        self.assertRegexpMatches(got, r'\[\d+(\s+\d+)+\]')
 
 
 if __name__ == '__main__':
