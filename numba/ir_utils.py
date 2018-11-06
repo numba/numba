@@ -586,7 +586,7 @@ remove_call_handlers = []
 
 def remove_dead_random_call(rhs, lives, call_list):
     if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
-        return call_list[0] != 'seed'
+        return call_list[0] not in {'seed', 'shuffle'}
     return False
 
 remove_call_handlers.append(remove_dead_random_call)
