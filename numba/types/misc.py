@@ -102,10 +102,6 @@ class LiteralStr(Literal, Dummy):
     pass
 
 
-class LiteralSlice(Literal):
-    pass
-
-
 def unliteral(lit_type):
     if hasattr(lit_type, '__unliteral__'):
         return lit_type.__unliteral__()
@@ -375,6 +371,14 @@ class SliceType(Type):
     @property
     def key(self):
         return self.members
+
+
+class LiteralSlice(Literal, SliceType):
+    def __init__(self, value):
+        self._literal_init(value)
+        name = 'Lit[slice]({})'.format(value)
+        members = 2 if value.step is None else 3
+        SliceType.__init__(self, name=name, members=members)
 
 
 class ClassInstanceType(Type):
