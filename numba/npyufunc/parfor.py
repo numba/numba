@@ -472,7 +472,7 @@ def unwrap_loop_body(loop_body):
     last_label = max(loop_body.keys())
     loop_body[last_label].body = loop_body[last_label].body[:-1]
 
-def compute_def_once_block(block, def_once, def_more):
+def compute_def_once_block(block, def_once, def_more, getattr_taken):
     assignments = block.find_insts(ir.Assign)
     for one_assign in assignments:
         a_def = one_assign.target.name
@@ -484,18 +484,27 @@ def compute_def_once_block(block, def_once, def_more):
         else:
             def_once.add(a_def)
 
-def compute_def_once_internal(loop_body, def_once, def_more):
+        rhs = one_assign.value
+        if isinstance(rhs, ir.Expr) and rhs.op == 'getattr' and rhs.value.name in def_once:
+            getattr_taken[a_def] = rhs.value.name
+        if isinstance(rhs, ir.Expr) and rhs.op == 'call' and rhs.func.name in getattr_taken:
+            base_obj = getattr_taken[rhs.func.name]
+            def_more.add(base_obj)
+            def_once.remove(base_obj)
+
+def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken):
     for label, block in loop_body.items():
-        compute_def_once_block(block, def_once, def_more)
+        compute_def_once_block(block, def_once, def_more, getattr_taken)
         for inst in block.body:
             if isinstance(inst, parfor.Parfor):
-                compute_def_once_block(inst.init_block, def_once, def_more)
-                compute_def_once_internal(inst.loop_body, def_once, def_more)
+                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken)
+                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken)
 
 def compute_def_once(loop_body):
     def_once = set()
     def_more = set()
-    compute_def_once_internal(loop_body, def_once, def_more)
+    getattr_taken = {}
+    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken)
     return def_once
 
 def find_vars(var, varset):
