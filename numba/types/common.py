@@ -51,7 +51,8 @@ class Buffer(IterableType, ArrayCompatible):
             raise TypeError("Buffer dtype cannot be buffer")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-        self.dtype = dtype
+        from .misc import unliteral
+        self.dtype = unliteral(dtype)
         self.ndim = ndim
         self.layout = layout
         if readonly:

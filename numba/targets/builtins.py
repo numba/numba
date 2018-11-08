@@ -52,6 +52,7 @@ def generic_is(context, builder, sig, args):
 
 
 @lower_builtin(operator.eq, types.Literal, types.Literal)
+@lower_builtin(operator.eq, types.LiteralInt, types.LiteralInt)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -61,7 +62,7 @@ def const_eq_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.ne, types.Literal, types.Literal)
+@lower_builtin(operator.ne, types.LiteralStr, types.LiteralStr)
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0

@@ -556,6 +556,10 @@ def _implement_integer_operators():
         lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(uint_abs_impl)
 
+    lower_builtin(operator.lt, types.LiteralInt, types.LiteralInt)(int_slt_impl)
+    lower_builtin(operator.gt, types.LiteralInt, types.LiteralInt)(int_slt_impl)
+    lower_builtin(operator.le, types.LiteralInt, types.LiteralInt)(int_slt_impl)
+    lower_builtin(operator.ge, types.LiteralInt, types.LiteralInt)(int_slt_impl)
     for ty in types.signed_domain:
         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
         lower_builtin(operator.le, ty, ty)(int_sle_impl)

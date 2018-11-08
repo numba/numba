@@ -37,34 +37,15 @@ class RawPointer(Opaque):
     """
 
 
-# class Const(Dummy):
-#     """
-#     A compile-time constant, for (internal) use when a type is needed for
-#     lookup.
-#     """
-
-#     def __init__(self, value):
-#         self.value = value
-#         # We want to support constants of non-hashable values, therefore
-#         # fall back on the value's id() if necessary.
-#         try:
-#             hash(value)
-#         except TypeError:
-#             self._key = id(value)
-#         else:
-#             self._key = value
-#         super(Const, self).__init__("const(%r)" % (value,))
-
-#     @property
-#     def key(self):
-#         return type(self.value), self._key
-
-
 class _LiteralTypeError(TypeError):
     pass
 
 
-class Literal(Dummy):
+
+
+class Literal(Type):
+    ctor_map = {}
+
     @staticmethod
     def from_value(value):
         """Create a Literal  instance for the type of value.
@@ -72,18 +53,26 @@ class Literal(Dummy):
         raises _LiteralTypeError if *value* is not of a supported type
         """
         assert not isinstance(value, Literal)
-        if isinstance(value, int) and type(value) in (int, bool):
-            return LiteralInt(value)
-        elif type(value) is str:
+        ty = type(value)
+        if ty is str:
             return LiteralStr(value)
-        elif type(value) is slice:
+        elif ty is slice:
             return LiteralSlice(value)
         else:
-            fmt = "cannot create literal from type {}"
-            raise _LiteralTypeError(fmt.format(type(value)))
+            try:
+                ctor = Literal.ctor_map[ty]
+            except KeyError:
+                raise _LiteralTypeError(ty)
+            else:
+                return ctor(value)
 
     def __init__(self, value):
-        self._value = value
+        self._literal_init(value)
+        fmt = "Lit[{}]({})"
+        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+
+    def _literal_init(self, value):
+        self._literal_value = value
         # We want to support constants of non-hashable values, therefore
         # fall back on the value's id() if necessary.
         try:
@@ -92,12 +81,11 @@ class Literal(Dummy):
             self._key = id(value)
         else:
             self._key = value
-        fmt = "Lit[{}]({})"
-        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+
 
     @property
     def value(self):
-        return self._value
+        return self._literal_value
 
     @property
     def key(self):
@@ -110,27 +98,7 @@ class Literal(Dummy):
         return ctx.resolve_value_type(self.value)
 
 
-class LiteralInt(Literal):
-    def can_convert_to(self, typingctx, other):
-        conv = typingctx.can_convert(self.value_type, other)
-        if conv is not None:
-            return max(conv, Conversion.promote)
-
-    # def can_convert_from(self, typingctx, other):
-    #     conv = typingctx.can_convert(other, self.value_type)
-    #     if conv is not None:
-    #         return max(conv, Conversion.promote)
-
-    # def unify(self, typingctx, other):
-    #     return typingctx.unify_pairs(self.value_type, other)
-
-    # def instanceof(self, cls):
-    #     from . import Integer, Number
-
-    #     return issubclass(cls, Integer) or cls is Number
-
-
-class LiteralStr(Literal):
+class LiteralStr(Literal, Dummy):
     pass
 
 

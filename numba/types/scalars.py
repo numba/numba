@@ -5,6 +5,7 @@ import enum
 import numpy as np
 
 from .abstract import *
+from .misc import Literal
 from .. import npdatetime, utils
 from ..typeconv import Conversion
 
@@ -15,16 +16,28 @@ class Boolean(Hashable):
         return bool(value)
 
 
+def parse_integer_bitwidth(name):
+    for prefix in ('int', 'uint'):
+        if name.startswith(prefix):
+            bitwidth = int(name[len(prefix):])
+    return bitwidth
+
+
+def parse_integer_signed(name):
+    signed = name.startswith('int')
+    return signed
+
+
 @utils.total_ordering
 class Integer(Number):
-    def __init__(self, *args, **kws):
-        super(Integer, self).__init__(*args, **kws)
-        # Determine bitwidth
-        for prefix in ('int', 'uint'):
-            if self.name.startswith(prefix):
-                bitwidth = int(self.name[len(prefix):])
+    def __init__(self, name, bitwidth=None, signed=None):
+        super(Integer, self).__init__(name)
+        if bitwidth is None:
+            bitwidth = parse_integer_bitwidth(name)
+        if signed is None:
+            signed = parse_integer_signed(name)
         self.bitwidth = bitwidth
-        self.signed = self.name.startswith('int')
+        self.signed = signed
 
     @classmethod
     def from_bitwidth(cls, bitwidth, signed=True):
@@ -61,6 +74,23 @@ class Integer(Number):
         else:
             return 0
 
+
+class LiteralInt(Literal, Integer):
+    bitwidth = 64
+    signed = True
+
+    def __init__(self, value):
+        self._literal_init(value)
+        name = 'Lit[int]({})'.format(value)
+        Integer.__init__(self, name=name, bitwidth=64, signed=True)
+
+    def can_convert_to(self, typingctx, other):
+        conv = typingctx.can_convert(self.value_type, other)
+        if conv is not None:
+            return max(conv, Conversion.promote)
+
+
+Literal.ctor_map[int] = LiteralInt
 
 @utils.total_ordering
 class Float(Number):
