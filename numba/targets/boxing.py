@@ -30,8 +30,8 @@ def unbox_boolean(typ, obj, c):
 
 @box(types.LiteralInt)
 def box_literal_integer(typ, val, c):
-    val = c.context.cast(c.builder, val, typ, typ.value_type)
-    return c.box(typ.value_type, val)
+    val = c.context.cast(c.builder, val, typ, typ.literal_type)
+    return c.box(typ.literal_type, val)
 
 
 @box(types.Integer)

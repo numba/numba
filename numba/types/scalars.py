@@ -85,7 +85,7 @@ class LiteralInt(Literal, Integer):
         Integer.__init__(self, name=name, bitwidth=64, signed=True)
 
     def can_convert_to(self, typingctx, other):
-        conv = typingctx.can_convert(self.value_type, other)
+        conv = typingctx.can_convert(self.literal_type, other)
         if conv is not None:
             return max(conv, Conversion.promote)
 

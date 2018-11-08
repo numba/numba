@@ -41,8 +41,6 @@ class _LiteralTypeError(TypeError):
     pass
 
 
-
-
 class Literal(Type):
     ctor_map = {}
 
@@ -54,17 +52,12 @@ class Literal(Type):
         """
         assert not isinstance(value, Literal)
         ty = type(value)
-        if ty is str:
-            return LiteralStr(value)
-        elif ty is slice:
-            return LiteralSlice(value)
+        try:
+            ctor = Literal.ctor_map[ty]
+        except KeyError:
+            raise _LiteralTypeError(ty)
         else:
-            try:
-                ctor = Literal.ctor_map[ty]
-            except KeyError:
-                raise _LiteralTypeError(ty)
-            else:
-                return ctor(value)
+            return ctor(value)
 
     def __init__(self, value):
         self._literal_init(value)
@@ -84,28 +77,31 @@ class Literal(Type):
 
 
     @property
-    def value(self):
+    def literal_value(self):
         return self._literal_value
 
     @property
     def key(self):
-        return type(self.value), self._key
+        return type(self.literal_value), self._key
 
     @property
-    def value_type(self):
+    def literal_type(self):
         from numba import typing
         ctx = typing.Context()
-        return ctx.resolve_value_type(self.value)
+        return ctx.resolve_value_type(self.literal_value)
 
 
 class LiteralStr(Literal, Dummy):
     pass
 
 
+Literal.ctor_map[str] = LiteralStr
+
+
 def unliteral(lit_type):
     if hasattr(lit_type, '__unliteral__'):
         return lit_type.__unliteral__()
-    return getattr(lit_type, 'value_type', lit_type)
+    return getattr(lit_type, 'literal_type', lit_type)
 
 
 def literal(value):
@@ -379,6 +375,9 @@ class LiteralSlice(Literal, SliceType):
         name = 'Lit[slice]({})'.format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
+
+
+Literal.ctor_map[slice] = LiteralSlice
 
 
 class ClassInstanceType(Type):

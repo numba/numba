@@ -68,6 +68,10 @@ _parfors_unsupported = _32bit or _windows_py27
 
 _HAVE_OS_FORK = not _windows
 
+skip_slow_test = unittest.skipIf(
+    'NUMBA_NO_SLOW_TEST' in os.environ,
+    'slow-test disabled',
+    )
 
 # some functions to jit
 
@@ -213,6 +217,7 @@ if not _windows:
 default_proc_impl = compile_factory(*_get_mp_classes('default'))
 
 
+@skip_slow_test
 class TestParallelBackendBase(TestCase):
     """
     Base class for testing the parallel backends
@@ -286,7 +291,7 @@ class TestParallelBackendBase(TestCase):
 
 _specific_backends = config.THREADING_LAYER in ('omp', 'tbb', 'workqueue')
 
-
+@skip_slow_test
 @unittest.skipUnless(_specific_backends, "Threading layer not explicit")
 class TestParallelBackend(TestParallelBackendBase):
     """ These are like the numba.tests.test_threadsafety tests but designed
@@ -323,7 +328,7 @@ class TestParallelBackend(TestParallelBackendBase):
 
 TestParallelBackend.generate()
 
-
+@skip_slow_test
 class TestSpecificBackend(TestParallelBackendBase):
     """
     This is quite contrived, for each test in the TestParallelBackend tests it
@@ -460,7 +465,7 @@ class ThreadLayerTestHelper(TestCase):
             timeout.cancel()
         return out.decode(), err.decode()
 
-
+@skip_slow_test
 @parfors_skip_unsupported
 class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
@@ -501,7 +506,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 
 TestThreadingLayerSelection.generate()
 
-
+@skip_slow_test
 @parfors_skip_unsupported
 @skip_unless_py3
 class TestMiscBackendIssues(ThreadLayerTestHelper):
@@ -566,6 +571,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
 
 # 32bit or windows py27 (not that this runs on windows)
+@skip_slow_test
 @parfors_skip_unsupported
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(ThreadLayerTestHelper):

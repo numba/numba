@@ -56,7 +56,7 @@ def generic_is(context, builder, sig, args):
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
-    if arg1.value == arg2.value:
+    if arg1.literal_value == arg2.literal_value:
         val = 1
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -66,7 +66,7 @@ def const_eq_impl(context, builder, sig, args):
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
-    if arg1.value != arg2.value:
+    if arg1.literal_value != arg2.literal_value:
         val = 1
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)

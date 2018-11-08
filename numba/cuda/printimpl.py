@@ -45,7 +45,7 @@ def real_print_impl(ty, context, builder, val):
 
 @print_item.register(types.LiteralStr)
 def const_print_impl(ty, context, builder, sigval):
-    pyval = ty.value
+    pyval = ty.literal_value
     assert isinstance(pyval, str)  # Ensured by lowering
     rawfmt = "%s"
     val = context.insert_string_const_addrspace(builder, pyval)

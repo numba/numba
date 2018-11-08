@@ -56,7 +56,7 @@ def to_fixed_tuple(typingctx, array, length):
         raise TypingError("Not supported on array.ndim={}".format(array.ndim))
 
     # Determine types
-    tuple_size = int(length.value)
+    tuple_size = int(length.literal_value)
     tuple_type = types.UniTuple(dtype=array.dtype, count=tuple_size)
     sig = tuple_type(array, length)
 

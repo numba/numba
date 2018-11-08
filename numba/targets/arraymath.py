@@ -89,7 +89,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     if not isinstance(axis, types.Literal):
         raise RequireLiteralValue('axis argument must be a constant')
     # Get the value of the axis constant.
-    axis_value = axis.value
+    axis_value = axis.literal_value
     # The length of the indexing tuple to be output.
     nd = len(shape_tuple)
 
@@ -187,7 +187,7 @@ def array_sum_axis(context, builder, sig, args):
     const_axis_val = 0
     if isinstance(ty_axis, types.Literal):
         # this special-cases for constant axis
-        const_axis_val = ty_axis.value
+        const_axis_val = ty_axis.literal_value
         # fix negative axis
         if const_axis_val < 0:
             const_axis_val = ty_array.ndim + const_axis_val
@@ -2021,7 +2021,7 @@ _searchsorted_right = register_jitable(_searchsorted(_le))
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
-    side_val = getattr(side, 'value', side)
+    side_val = getattr(side, 'literal_value', side)
     if side_val == 'left':
         loop_impl = _searchsorted_left
     elif side_val == 'right':

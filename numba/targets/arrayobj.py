@@ -4660,7 +4660,7 @@ def np_sort(context, builder, sig, args):
 @lower_builtin(np.argsort, types.Array, types.LiteralStr)
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
-    sort_func = get_sort_func(kind=kind.value,
+    sort_func = get_sort_func(kind=kind.literal_value,
                               is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 

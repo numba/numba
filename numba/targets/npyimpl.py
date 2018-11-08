@@ -583,7 +583,7 @@ def _make_dtype_object(typingctx, desc):
 
     if isinstance(desc, types.Literal):
         # Convert the str description into np.dtype then to numba type.
-        nb_type = from_dtype(np.dtype(desc.value))
+        nb_type = from_dtype(np.dtype(desc.literal_value))
         return from_nb_type(nb_type)
     elif isinstance(desc, types.functions.NumberClass):
         thestr = str(desc.dtype)

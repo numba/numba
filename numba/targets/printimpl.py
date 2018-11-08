@@ -20,7 +20,7 @@ def print_item_impl(context, builder, sig, args):
     Print a single constant value.
     """
     ty, = sig.args
-    val = ty.value
+    val = ty.literal_value
 
     pyapi = context.get_python_api(builder)
 
