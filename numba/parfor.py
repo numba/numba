@@ -1432,8 +1432,7 @@ class ParforPass(object):
             getitem_call = ir.Expr.getitem(target, index, loc)
             subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
             self.typemap[subarr_var.name] = subarr_typ
-            self.calltypes[getitem_call] = signature(subarr_typ, arr_typ,
-                                                     index_typ)
+            self.calltypes[getitem_call] = self._type_getitem((arr_typ, index_typ))
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
         else:
@@ -1502,6 +1501,10 @@ class ParforPass(object):
         if config.DEBUG_ARRAY_OPT == 1:
             parfor.dump()
         return parfor
+
+    def _type_getitem(self, args):
+        fnty = operator.getitem
+        return self.typingctx.resolve_function_type(fnty, tuple(args), {})
 
     def _is_supported_npycall(self, expr):
         """check if we support parfor translation for

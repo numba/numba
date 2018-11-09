@@ -166,7 +166,7 @@ class GetItemBuffer(AbstractTemplate):
         [ary, idx] = args
         out = get_array_index_type(ary, idx)
         if out is not None:
-            return signature(out.result, ary, idx)
+            return signature(out.result, ary, out.index)
 
 @infer
 class SetItemBuffer(AbstractTemplate):
