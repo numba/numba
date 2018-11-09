@@ -39,7 +39,7 @@ def get_array_index_type(ary, idx):
 
     # Walk indices
     for ty in idx:
-        ty = types.unliteral(ty)
+        # ty = types.unliteral(ty)
         if ty is types.ellipsis:
             if ellipsis_met:
                 raise TypeError("only one ellipsis allowed in array index "
@@ -165,7 +165,7 @@ class GetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
-        idx = types.unliteral(idx)
+        # idx = types.unliteral(idx)
         out = get_array_index_type(ary, idx)
         if out is not None:
             return signature(out.result, ary, out.index)
@@ -177,7 +177,7 @@ class SetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        idx = types.unliteral(idx)
+        # idx = types.unliteral(idx)
         if not isinstance(ary, types.Buffer):
             return
         if not ary.mutable:

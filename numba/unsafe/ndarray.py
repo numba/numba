@@ -35,7 +35,7 @@ def empty_inferred(typingctx, shape):
     # make function signature
     nd = len(shape)
     array_ty = types.Array(ndim=nd, layout='C', dtype=types.undefined)
-    sig = array_ty(types.unliteral(shape))
+    sig = array_ty(shape)
     return sig, codegen
 
 

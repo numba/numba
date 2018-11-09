@@ -67,8 +67,8 @@ def wrap_index(typingctx, idx, size):
     where idx > size due to the way indices are calculated
     during slice/range analysis.
     """
-    idx = types.unliteral(idx)
-    size = types.unliteral(size)
+    # idx = types.unliteral(idx)
+    # size = types.unliteral(size)
     if idx != size:
         raise ValueError("Argument types for wrap_index must match")
 
@@ -291,35 +291,6 @@ class EquivSet(object):
         return new_set
 
 
-
-class UnliteralProxy(collections.MutableMapping):
-    def __init__(self, wrapped):
-        self._wrapped = wrapped
-
-    def __getitem__(self, key):
-        be4 = self._wrapped[key]
-        if not isinstance(be4, types.LiteralStr):
-            out = types.unliteral(be4)
-        else:
-            out = be4
-        return out
-
-    def __setitem__(self, key, val):
-        self._wrapped[key] = val
-
-    def __delitem__(self, key):
-        del self._wrapped[key]
-
-    def __contains__(self, key):
-        return key in self._wrapped
-
-    def __len__(self):
-        return len(self._wrapped)
-
-    def __iter__(self):
-        return iter(self._wrapped)
-
-
 class ShapeEquivSet(EquivSet):
 
     """Just like EquivSet, except that it accepts only numba IR variables
@@ -335,7 +306,7 @@ class ShapeEquivSet(EquivSet):
         that maps variable names to their types, and it will not be modified.
         Optional keyword arguments are for internal use only.
         """
-        self.typemap = UnliteralProxy(typemap)
+        self.typemap = typemap
         # defs maps variable name to an int, where
         # 1 means the variable is defined only once, and numbers greater
         # than 1 means defined more than onces.
@@ -869,7 +840,7 @@ class ArrayAnalysis(object):
     def __init__(self, context, func_ir, typemap, calltypes):
         self.context = context
         self.func_ir = func_ir
-        self.typemap = UnliteralProxy(typemap)
+        self.typemap = typemap
         self.calltypes = calltypes
 
         # EquivSet of variables, indexed by block number
