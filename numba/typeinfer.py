@@ -104,13 +104,9 @@ class TypeVar(object):
     def get(self):
         return (self.type,) if self.type is not None else ()
 
-    def getone(self, get_literals=False):
+    def getone(self):
         if self.type is None:
             raise TypingError("Undecided type {}".format(self))
-        if self.literal_value is not NOTSET and get_literals:
-            maybe_lit = types.maybe_literal(self.literal_value)
-            if maybe_lit is not None:
-                return maybe_lit
         return self.type
 
     def __len__(self):
@@ -147,7 +143,6 @@ class ConstraintNetwork(object):
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    show_error(e)
                     errors.append(e)
                 except Exception:
                     msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
@@ -156,20 +151,8 @@ class ConstraintNetwork(object):
                                                sep='--%<' + '-' * 76),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    show_error(e)
                     errors.append(e)
         return errors
-
-
-def show_error(e):
-    if False:
-        import traceback
-        import sys
-        print('-' * 80, file=sys.stderr)
-        traceback.print_exc(file=sys.stderr, chain=False)
-        # print(e, file=sys.stderr)
-        print('=' * 80, file=sys.stderr)
-
 
 
 class Propagate(object):
@@ -366,7 +349,7 @@ class StaticGetItemConstraint(object):
         return self.fallback and self.fallback.get_call_signature()
 
 
-def fold_arg_vars(typevars, args, vararg, kws, get_literals=False):
+def fold_arg_vars(typevars, args, vararg, kws):
     """
     Fold and resolve the argument variables of a function call.
     """
@@ -381,7 +364,7 @@ def fold_arg_vars(typevars, args, vararg, kws, get_literals=False):
     if not all(a.defined for a in argtypes):
         return
 
-    args = tuple(a.getone(get_literals=get_literals) for a in argtypes)
+    args = tuple(a.getone() for a in argtypes)
 
     pos_args = args[:n_pos_args]
     if vararg is not None:
@@ -441,6 +424,7 @@ class CallConstraint(object):
     def resolve(self, typeinfer, typevars, fnty):
         assert fnty
         context = typeinfer.context
+
         r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
         if r is None:
             # Cannot resolve call type until all argument types are known
