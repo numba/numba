@@ -41,56 +41,6 @@ class _LiteralTypeError(TypeError):
     pass
 
 
-class Literal(Type):
-    ctor_map = {}
-
-    @staticmethod
-    def from_value(value):
-        """Create a Literal  instance for the type of value.
-
-        raises _LiteralTypeError if *value* is not of a supported type
-        """
-        assert not isinstance(value, Literal)
-        ty = type(value)
-        try:
-            ctor = Literal.ctor_map[ty]
-        except KeyError:
-            raise _LiteralTypeError(ty)
-        else:
-            return ctor(value)
-
-    def __init__(self, value):
-        self._literal_init(value)
-        fmt = "Lit[{}]({})"
-        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
-
-    def _literal_init(self, value):
-        self._literal_value = value
-        # We want to support constants of non-hashable values, therefore
-        # fall back on the value's id() if necessary.
-        try:
-            hash(value)
-        except TypeError:
-            self._key = id(value)
-        else:
-            self._key = value
-
-
-    @property
-    def literal_value(self):
-        return self._literal_value
-
-    @property
-    def key(self):
-        return type(self.literal_value), self._key
-
-    @property
-    def literal_type(self):
-        from numba import typing
-        ctx = typing.Context()
-        return ctx.resolve_value_type(self.literal_value)
-
-
 class LiteralStr(Literal, Dummy):
     pass
 
@@ -107,12 +57,19 @@ def unliteral(lit_type):
 def literal(value):
     """Returns a Literal instance or raise _LiteralTypeError
     """
-    return Literal.from_value(value)
+    assert not isinstance(value, Literal)
+    ty = type(value)
+    try:
+        ctor = Literal.ctor_map[ty]
+    except KeyError:
+        raise _LiteralTypeError(ty)
+    else:
+        return ctor(value)
 
 
 def maybe_literal(value):
     try:
-        return Literal.from_value(value)
+        return literal(value)
     except _LiteralTypeError:
         return
 
@@ -121,7 +78,7 @@ def try_literal(value):
     """Returns a Literal instance if the type of value is supported
     """
     try:
-        return Literal.from_value(value)
+        return literal(value)
     except _LiteralTypeError:
         return Omitted(value)
 

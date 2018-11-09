@@ -5,7 +5,6 @@ import enum
 import numpy as np
 
 from .abstract import *
-from .misc import Literal
 from .. import npdatetime, utils
 from ..typeconv import Conversion
 
@@ -76,18 +75,22 @@ class Integer(Number):
 
 
 class LiteralInt(Literal, Integer):
-    bitwidth = 64
-    signed = True
-
     def __init__(self, value):
         self._literal_init(value)
         name = 'Lit[int]({})'.format(value)
-        Integer.__init__(self, name=name, bitwidth=64, signed=True)
+        basetype = self.literal_type
+        Integer.__init__(
+            self,
+            name=name,
+            bitwidth=basetype.bitwidth,
+            signed=basetype.signed,
+            )
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
         if conv is not None:
             return max(conv, Conversion.promote)
+
 
 
 Literal.ctor_map[int] = LiteralInt

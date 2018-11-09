@@ -280,7 +280,6 @@ def number_constructor(context, builder, sig, args):
 # Constants
 
 @lower_constant(types.Dummy)
-# @lower_constant(types.LiteralInt)
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()

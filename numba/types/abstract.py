@@ -390,3 +390,39 @@ class ArrayCompatible(Type):
     @cached_property
     def dtype(self):
         return self.as_array.dtype
+
+
+class Literal(Type):
+    ctor_map = {}
+    _literal_type_cache = None
+
+    def __init__(self, value):
+        self._literal_init(value)
+        fmt = "Lit[{}]({})"
+        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+
+    def _literal_init(self, value):
+        self._literal_value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
+        try:
+            hash(value)
+        except TypeError:
+            self._key = id(value)
+        else:
+            self._key = value
+
+    @property
+    def literal_value(self):
+        return self._literal_value
+
+    @property
+    def literal_type(self):
+        if self._literal_type_cache is None:
+            from numba import typing
+            ctx = typing.Context()
+            res = ctx.resolve_value_type(self.literal_value)
+            self._literal_type_cache = res
+
+        return self._literal_type_cache
+

@@ -193,7 +193,6 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     """
 
     def __init__(self, dtype, count):
-        from .misc import Literal
         self.dtype = dtype
         self.count = count
         name = "tuple(%s x %d)" % (dtype, count)
