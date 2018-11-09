@@ -482,7 +482,7 @@ def register_binary_operator_kernel(op, kernel, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
         # Unwrap the literal types
         oldargtys = sig.args
-        newtys = tuple(types.unliteral(a) for a in sig.args)
+        newtys = tuple(a for a in sig.args)
         sig = sig.replace(args=newtys)
         args = [context.cast(builder, args[i], oldargtys[i], newtys[i])
                 for i in range(len(args))]
