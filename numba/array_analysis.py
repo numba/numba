@@ -67,8 +67,6 @@ def wrap_index(typingctx, idx, size):
     where idx > size due to the way indices are calculated
     during slice/range analysis.
     """
-    # idx = types.unliteral(idx)
-    # size = types.unliteral(size)
     if idx != size:
         raise ValueError("Argument types for wrap_index must match")
 

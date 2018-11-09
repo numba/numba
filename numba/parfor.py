@@ -886,7 +886,6 @@ class ParforPass(object):
                     value = instr.value
                     target_typ = self.typemap[target.name]
                     index_typ = self.typemap[index.name]
-                    # value_typ = types.unliteral(self.typemap[value.name])
                     value_typ = self.typemap[value.name]
                     if isinstance(target_typ, types.npytypes.Array):
                         if (isinstance(index_typ, types.npytypes.Array) and
@@ -1434,7 +1433,7 @@ class ParforPass(object):
             subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
             self.typemap[subarr_var.name] = subarr_typ
             self.calltypes[getitem_call] = signature(subarr_typ, arr_typ,
-                                                     types.unliteral(index_typ))
+                                                     index_typ)
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
             target = subarr_var
         else:
@@ -1489,7 +1488,7 @@ class ParforPass(object):
             self.typemap[value_var.name] = value_typ.dtype
             getitem_call = ir.Expr.getitem(value, index_var, loc)
             self.calltypes[getitem_call] = signature(
-                value_typ.dtype, value_typ, types.unliteral(index_var_typ))
+                value_typ.dtype, value_typ, index_var_typ)
             true_block.body.append(ir.Assign(getitem_call, value_var, loc))
         else:
             value_var = value

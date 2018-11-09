@@ -533,7 +533,6 @@ def normalize_1d_index(index):
     Normalize the *index* type (an integer or slice) for indexing a 1D
     sequence.
     """
-    # index = types.unliteral(index)
     if isinstance(index, types.SliceType):
         return index
 
@@ -608,7 +607,6 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
-        # idx = types.unliteral(idx)
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):

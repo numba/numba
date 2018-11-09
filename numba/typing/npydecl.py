@@ -513,9 +513,6 @@ class NdConstructor(CallableTemplate):
 
     def generic(self):
         def typer(shape, dtype=None):
-            # if shape != types.unliteral(shape):
-            #     # Shape must be unliteral'ed
-            #     return
             if dtype is None:
                 nb_dtype = types.double
             else:
