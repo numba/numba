@@ -74,13 +74,28 @@ def correlate(a, v):
 def convolve(a, v):
     return np.convolve(a, v)
 
-def tri(N, M=None, k=0):
+def tri_n(N):
+    return np.tri(N)
+
+def tri_n_m(N, M=None):
+    return np.tri(N, M)
+
+def tri_n_k(N, k=0):
+    return np.tri(N, k)
+
+def tri_n_m_k(N, M=None, k=0):
     return np.tri(N, M, k)
 
-def tril(m, k=0):
+def tril_m(m):
+    return np.tril(m)
+
+def tril_m_k(m, k=0):
     return np.tril(m, k)
 
-def triu(m, k=0):
+def triu_m(m):
+    return np.triu(m)
+
+def triu_m_k(m, k=0):
     return np.triu(m, k)
 
 def vander(x, N=None, increasing=False):
@@ -656,8 +671,65 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = ((2, 3), (4, 5))
         _check_1d(x)
 
-    def test_tri_basic(self):
-        pyfunc = tri
+    def test_tri_n_basic(self):
+        pyfunc = tri_n
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
+
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
+
+    def test_tri_n_m_basic(self):
+        pyfunc = tri_n_m
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
+
+        def m_variations():
+            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
+
+        # N and M supplied, k defaulted
+        for n in n_variations():
+            for m in m_variations():
+                params = {'N': n, 'M': m}
+                _check(params)
+
+    def test_tri_n_k_basic(self):
+        pyfunc = tri_n_k
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        def n_variations():
+            return np.arange(-4, 8)  # number of rows
+
+        def k_variations():
+            return np.arange(-10, 10)  # offset
+
+        # N supplied, M and k defaulted
+        for n in n_variations():
+            params = {'N': n}
+            _check(params)
+
+        # N and k supplied, M defaulted
+        for n in n_variations():
+            for k in k_variations():
+                params = {'N': n, 'k': k}
+                _check(params)
+
+    def test_tri_n_m_k_basic(self):
+        pyfunc = tri_n_m_k
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -695,7 +767,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     _check(params)
 
     def test_tri_exceptions(self):
-        pyfunc = tri
+        pyfunc = tri_n_m_k
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -709,7 +781,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for k in 1.5, True, np.inf, [1, 2]:
             _check(k)
 
-    def _triangular_matrix_tests(self, pyfunc):
+    def _triangular_matrix_tests_m(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def _check(arr):
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            # TODO: Contiguity of result not consistent with numpy
+            self.assertEqual(got.dtype, expected.dtype)
+            np.testing.assert_array_equal(got, expected)
+
+        return self._triangular_matrix_tests_inner(self, pyfunc, _check)
+
+    def _triangular_matrix_tests_m_k(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 
         def _check(arr):
@@ -723,6 +807,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 # TODO: Contiguity of result not consistent with numpy
                 self.assertEqual(got.dtype, expected.dtype)
                 np.testing.assert_array_equal(got, expected)
+
+        return self._triangular_matrix_tests_inner(self, pyfunc, _check)
+
+    @staticmethod
+    def _triangular_matrix_tests_inner(self, pyfunc, _check):
 
         def check_odd(a):
             _check(a)
@@ -765,16 +854,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         assert "k must be an integer" in str(raises.exception)
 
     def test_tril_basic(self):
-        self._triangular_matrix_tests(tril)
+        self._triangular_matrix_tests_m(tril_m)
+        self._triangular_matrix_tests_m_k(tril_m_k)
 
     def test_tril_exceptions(self):
-        self._triangular_matrix_exceptions(tril)
+        self._triangular_matrix_exceptions(tril_m_k)
 
     def test_triu_basic(self):
-        self._triangular_matrix_tests(triu)
+        self._triangular_matrix_tests_m(triu_m)
+        self._triangular_matrix_tests_m_k(triu_m_k)
 
     def test_triu_exceptions(self):
-        self._triangular_matrix_exceptions(triu)
+        self._triangular_matrix_exceptions(triu_m_k)
 
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
         # as NumPy uses a different algorithm, we do not expect to match outputs exactly...
