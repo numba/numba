@@ -300,7 +300,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        cache_key = self.context, args, tuple(kws.items())
+        cache_key = self.context, tuple(args), tuple(kws.items())
         try:
             disp = self._impl_cache[cache_key]
         except KeyError:

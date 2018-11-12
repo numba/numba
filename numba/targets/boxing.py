@@ -1034,3 +1034,12 @@ def box_unsupported(typ, val, c):
     c.pyapi.err_set_string("PyExc_TypeError", msg)
     res = c.pyapi.get_null_object()
     return res
+
+
+@box(types.Const)
+def box(typ, val, c):
+    # Const type contains the python object of the constant value,
+    # which we can directly return.
+    retval = typ.value
+    # Serialize the value into the IR
+    return c.pyapi.unserialize(c.pyapi.serialize_object(retval))

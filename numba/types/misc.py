@@ -445,3 +445,9 @@ class ContextManager(Callable, Phantom):
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
+
+
+class UnicodeType(Type):
+    def __init__(self, name):
+        super(UnicodeType, self).__init__(name)
+
