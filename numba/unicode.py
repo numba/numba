@@ -220,11 +220,14 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
-        raise NotImplementedError("unsupported unicode kind")
+        raise AssertionError("Unexpected unicode representation in _set_code_point")
 
 
 @njit
 def _pick_kind(kind1, kind2):
+    if kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND:
+        raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
+
     if kind1 == PY_UNICODE_1BYTE_KIND:
         return kind2
     elif kind1 == PY_UNICODE_2BYTE_KIND:
@@ -235,7 +238,7 @@ def _pick_kind(kind1, kind2):
     elif kind1 == PY_UNICODE_4BYTE_KIND:
         return kind1
     else:
-        return PY_UNICODE_4BYTE_KIND    # FIXME: wchar
+        raise AssertionError("Unexpected unicode representation in _pick_kind")
 
 
 @njit
@@ -246,8 +249,10 @@ def _kind_to_byte_width(kind):
         return 2
     elif kind == PY_UNICODE_4BYTE_KIND:
         return 4
+    elif kind == PY_UNICODE_WCHAR_KIND:
+        raise AssertionError("PY_UNICODE_WCHAR_KIND string encountered")
     else:
-        return 4    # FIXME: wchar
+        raise AssertionError("Unexpected unicode encoding encounter")
 
 
 @njit
