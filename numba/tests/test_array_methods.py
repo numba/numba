@@ -969,25 +969,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_clip(self):
-        a = np.linspace(-10, 10, 101)
-        pyout = np.empty_like(a)
-        cout = np.empty_like(a)
+        for a in (np.linspace(-10, 10, 101),
+                  np.linspace(-10, 10, 40).reshape(5, 2, 4)):
+            for pyfunc in [np_clip, array_clip]:
+                cfunc = jit(nopython=True)(pyfunc)
 
-        for pyfunc in [np_clip, array_clip]:
-            cfunc = jit(nopython=True)(pyfunc)
+                with self.assertRaises(ValueError):
+                    pyfunc(a, None, None)
+                with self.assertRaises(ValueError):
+                    cfunc(a, None, None)
 
-            with self.assertRaises(ValueError):
-                pyfunc(a, None, None)
-            # with self.assertRaises(ValueError):
-            #     cfunc(a, None, None)
+                np.testing.assert_equal(pyfunc(a, 0, None), cfunc(a, 0, None))
+                np.testing.assert_equal(pyfunc(a, None, 0), cfunc(a, None, 0))
 
-            # np.testing.assert_equal(pyfunc(a, 0, None), cfunc(a, 0, None))
-            # np.testing.assert_equal(pyfunc(a, None, 0), cfunc(a, None, 0))
+                np.testing.assert_equal(pyfunc(a, -5, 5), cfunc(a, -5, 5))
 
-            np.testing.assert_equal(pyfunc(a, -5, 5), cfunc(a, -5, 5))
-            np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
-                                    cfunc(a, -5, 5, cout))
-            np.testing.assert_equal(pyout, cout)
+                pyout = np.empty_like(a)
+                cout = np.empty_like(a)
+                np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
+                                        cfunc(a, -5, 5, cout))
+                np.testing.assert_equal(pyout, cout)
 
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
