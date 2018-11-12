@@ -186,6 +186,18 @@ class TestOperations(TestCase):
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
 
+        # test negative indexing
+        for i in range(len(tup) + 1):
+            self.assertPreciseEqual(cr.entry_point(tup, -i), tup[-i])
+
+        # oob indexes, +ve then -ve
+        with self.assertRaises(IndexError) as raises:
+            cr.entry_point(tup, len(tup))
+        self.assertEqual("tuple index out of range", str(raises.exception))
+        with self.assertRaises(IndexError) as raises:
+            cr.entry_point(tup, -(len(tup) + 1))
+        self.assertEqual("tuple index out of range", str(raises.exception))
+
         # Test empty tuple
         cr = compile_isolated(pyfunc,
                               [types.UniTuple(types.int64, 0), types.int64])

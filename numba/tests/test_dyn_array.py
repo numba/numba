@@ -873,6 +873,13 @@ class TestNdEye(BaseTest):
             return np.eye(n)
         self.check_outputs(func, [(1,), (3,)])
 
+    def test_eye_n_dtype(self):
+        # check None option, dtype class, instance of dtype class
+        for dt in (None, np.complex128, np.complex64(1)):
+            def func(n, dtype=dt):
+                return np.eye(n, dtype=dtype)
+            self.check_outputs(func, [(1,), (3,)])
+
     def test_eye_n_m(self):
         def func(n, m):
             return np.eye(n, m)

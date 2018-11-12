@@ -17,6 +17,7 @@ from numba.runtime import rtsys
 from numba.compiler_lock import global_compiler_lock
 from . import fastmathpass
 
+
 # Keep those structures in sync with _dynfunc.c.
 
 class ClosureBody(cgutils.Structure):
@@ -54,6 +55,10 @@ class CPUContext(BaseContext):
 
         # Initialize NRT runtime
         rtsys.initialize(self)
+
+        # Initialize additional implementations
+        if utils.PY3:
+            import numba.unicode
 
     def load_additional_registries(self):
         # Add target specific implementations

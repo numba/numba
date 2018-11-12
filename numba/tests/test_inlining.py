@@ -1,11 +1,15 @@
 from __future__ import print_function, absolute_import
 
 import re
+import numpy as np
 
 from .support import TestCase, override_config, captured_stdout
+import numba
 from numba import unittest_support as unittest
-from numba import jit, types
-
+from numba import jit, njit, types
+from numba.ir_utils import guard, find_callname
+from numba.inline_closurecall import inline_closure_call
+from .test_parfors import skip_unsupported
 
 @jit((types.int32,), nopython=True)
 def inner(a):
@@ -20,6 +24,41 @@ def outer_simple(a):
 
 def outer_multiple(a):
     return inner(a) * more(a)
+
+@njit
+def __dummy__():
+    return
+
+class InlineTestPipeline(numba.compiler.BasePipeline):
+    """compiler pipeline for testing inlining after optimization
+    """
+    def define_pipelines(self, pm):
+        name = 'inline_test'
+        pm.create_pipeline(name)
+        self.add_preprocessing_stage(pm)
+        self.add_with_handling_stage(pm)
+        self.add_pre_typing_stage(pm)
+        self.add_typing_stage(pm)
+        pm.add_stage(self.stage_pre_parfor_pass, "Preprocessing for parfors")
+        if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+        if self.flags.auto_parallel.enabled:
+            pm.add_stage(self.stage_parfor_pass, "convert to parfors")
+        pm.add_stage(self.stage_inline_test_pass, "inline test")
+        pm.add_stage(self.stage_ir_legalization,
+                "ensure IR is legal prior to lowering")
+        self.add_lowering_stage(pm)
+        self.add_cleanup_stage(pm)
+
+    def stage_inline_test_pass(self):
+        # assuming the function has one block with one call inside
+        assert len(self.func_ir.blocks) == 1
+        block = list(self.func_ir.blocks.values())[0]
+        for i, stmt in enumerate(block.body):
+            if guard(find_callname,self.func_ir, stmt.value) is not None:
+                inline_closure_call(self.func_ir, {}, block, i, lambda: None,
+                    self.typingctx, (), self.typemap, self.calltypes)
+                break
 
 
 class TestInlining(TestCase):
@@ -73,6 +112,17 @@ class TestInlining(TestCase):
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
+    @skip_unsupported
+    def test_inline_call_after_parfor(self):
+        # replace the call to make sure inlining doesn't cause label conflict
+        # with parfor body
+        def test_impl(A):
+            __dummy__()
+            return A.sum()
+        j_func = njit(parallel=True, pipeline_class=InlineTestPipeline)(
+                                                                    test_impl)
+        A = np.arange(10)
+        self.assertEqual(test_impl(A), j_func(A))
 
 if __name__ == '__main__':
     unittest.main()

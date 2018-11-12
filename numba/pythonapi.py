@@ -14,6 +14,13 @@ from numba import config
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
+if PYVERSION >= (3,3):
+    PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
+    PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
+    PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+
+
 class _Registry(object):
 
     def __init__(self):
@@ -173,6 +180,11 @@ class PythonAPI(object):
             self.py_hash_t = self.py_ssize_t
         else:
             self.py_hash_t = self.long
+        if PYVERSION >= (3,3):
+            self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
+            self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
+            self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
+            self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -1117,6 +1129,31 @@ class PythonAPI(object):
 
         return (ok, buffer, self.builder.load(p_length))
 
+    def string_as_string_size_and_kind(self, strobj):
+        """
+        Returns a tuple of ``(ok, buffer, length, kind)``.
+        The ``ok`` is i1 value that is set if ok.
+        The ``buffer`` is a i8* of the output buffer.
+        The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
+        The ``kind`` is a i32 (int32) of the Unicode kind constant
+        """
+        if PYVERSION >= (3, 3):
+            p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
+            p_kind = cgutils.alloca_once(self.builder, Type.int())
+            fnty = Type.function(self.cstring, [self.pyobj,
+                                                self.py_ssize_t.as_pointer(),
+                                                Type.int().as_pointer()])
+            fname = "numba_extract_unicode"
+            fn = self._get_function(fnty, name=fname)
+
+            buffer = self.builder.call(fn, [strobj, p_length, p_kind])
+            ok = self.builder.icmp_unsigned('!=',
+                                            ir.Constant(buffer.type, None),
+                                            buffer)
+            return (ok, buffer, self.builder.load(p_length), self.builder.load(p_kind))
+        else:
+            assert False, 'not supported on Python < 3.3'
+
     def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
@@ -1134,6 +1171,13 @@ class PythonAPI(object):
             fname = "PyString_FromString"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string])
+
+    def string_from_kind_and_data(self, kind, string, size):
+        fnty = Type.function(self.pyobj, [Type.int(), self.cstring, self.py_ssize_t])
+        assert PYVERSION >= (3, 3), 'unsupported in this python-version'
+        fname = "PyUnicode_FromKindAndData"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [kind, string, size])
 
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
@@ -1190,6 +1234,25 @@ class PythonAPI(object):
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
                                       ndim, writable, dtypeptr])
+
+    def nrt_meminfo_new_from_pyobject(self, data, pyobj):
+        """
+        Allocate a new MemInfo with data payload borrowed from a python
+        object.
+        """
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [cgutils.voidptr_t, cgutils.voidptr_t],
+            )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name="NRT_meminfo_new_from_pyobject",
+            )
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [data, pyobj])
 
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt

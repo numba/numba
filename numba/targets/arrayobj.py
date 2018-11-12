@@ -3427,52 +3427,44 @@ def numpy_identity(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.eye, types.Integer)
-def numpy_eye(context, builder, sig, args):
+def _eye_none_handler(N, M):
+    pass
 
-    def eye(n):
-        return np.identity(n)
+@extending.overload(_eye_none_handler)
+def _eye_none_handler_impl(N, M):
+    if isinstance(M, types.NoneType):
+        def impl(N, M):
+            return N
+    else:
+        def impl(N, M):
+            return M
+    return impl
 
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+@extending.overload(np.eye)
+def numpy_eye(N, M=None, k=0, dtype=float):
 
-@lower_builtin(np.eye, types.Integer, types.Integer)
-def numpy_eye(context, builder, sig, args):
+    if dtype is None or isinstance(dtype, types.NoneType):
+        dt = np.dtype(float)
+    elif isinstance(dtype, (types.DTypeSpec, types.Number)):
+        # dtype or instance of dtype
+        dt = as_dtype(getattr(dtype, 'dtype', dtype))
+    else:
+        dt = np.dtype(dtype)
 
-    def eye(n, m):
-        return np.eye(n, m, 0, np.float64)
-
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-@lower_builtin(np.eye, types.Integer, types.Integer,
-           types.Integer)
-def numpy_eye(context, builder, sig, args):
-
-    def eye(n, m, k):
-        return np.eye(n, m, k, np.float64)
-
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-@lower_builtin(np.eye, types.Integer, types.Integer,
-           types.Integer, types.DTypeSpec)
-def numpy_eye(context, builder, sig, args):
-
-    def eye(n, m, k, dtype):
-        arr = np.zeros((n, m), dtype)
+    def impl(N, M=None, k=0, dtype=float):
+        _M =  _eye_none_handler(N, M)
+        arr = np.zeros((N, _M), dt)
         if k >= 0:
-            d = min(n, m - k)
+            d = min(N, _M - k)
             for i in range(d):
                 arr[i, i + k] = 1
         else:
-            d = min(n + k, m)
+            d = min(N + k, _M)
             for i in range(d):
                 arr[i - k, i] = 1
         return arr
+    return impl
 
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.diag, types.Array)
 def numpy_diag(context, builder, sig, args):
