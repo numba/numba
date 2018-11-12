@@ -3,7 +3,9 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
-from ..errors import TypingError
+from ..errors import TypingError, LiteralTypeError
+
+
 
 class PyObject(Dummy):
     """
@@ -37,10 +39,6 @@ class RawPointer(Opaque):
     """
 
 
-class _LiteralTypeError(TypeError):
-    pass
-
-
 class LiteralStr(Literal, Dummy):
     pass
 
@@ -58,14 +56,14 @@ def unliteral(lit_type):
 
 
 def literal(value):
-    """Returns a Literal instance or raise _LiteralTypeError
+    """Returns a Literal instance or raise LiteralTypeError
     """
     assert not isinstance(value, Literal)
     ty = type(value)
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:
-        raise _LiteralTypeError(ty)
+        raise LiteralTypeError(ty)
     else:
         return ctor(value)
 
@@ -75,17 +73,8 @@ def maybe_literal(value):
     """
     try:
         return literal(value)
-    except _LiteralTypeError:
+    except LiteralTypeError:
         return
-
-
-def try_literal(value):
-    """Returns a Literal instance if the type of value is supported
-    """
-    try:
-        return literal(value)
-    except _LiteralTypeError:
-        return Omitted(value)
 
 
 class Omitted(Opaque):

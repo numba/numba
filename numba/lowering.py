@@ -11,7 +11,8 @@ from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError, new_error_context, TypingError
+from .errors import (LoweringError, new_error_context, TypingError,
+                     LiteralTypeError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
 from . import debuginfo
@@ -548,21 +549,21 @@ class Lower(BaseLower):
                 return None
 
         res = try_static_impl(
-            (types.try_literal(static_lhs), types.try_literal(static_rhs)),
+            (_lit_or_omitted(static_lhs), _lit_or_omitted(static_rhs)),
             (static_lhs, static_rhs),
             )
         if res is not None:
             return cast_result(res)
 
         res = try_static_impl(
-            (types.try_literal(static_lhs), rty),
+            (_lit_or_omitted(static_lhs), rty),
             (static_lhs, rhs),
             )
         if res is not None:
             return cast_result(res)
 
         res = try_static_impl(
-            (lty, types.try_literal(static_rhs)),
+            (lty, _lit_or_omitted(static_rhs)),
             (lhs, static_rhs),
             )
         if res is not None:
@@ -986,7 +987,7 @@ class Lower(BaseLower):
             signature = typing.signature(
                 resty,
                 self.typeof(expr.value.name),
-                types.try_literal(expr.index),
+                _lit_or_omitted(expr.index),
                 )
             try:
                 # Both get_function() and the returned implementation can
@@ -1135,3 +1136,13 @@ class Lower(BaseLower):
             return
 
         self.context.nrt.decref(self.builder, typ, val)
+
+
+def _lit_or_omitted(value):
+    """Returns a Literal instance if the type of value is supported;
+    otherwise, return `Omitted(value)`.
+    """
+    try:
+        return types.literal(value)
+    except LiteralTypeError:
+        return types.Omitted(value)

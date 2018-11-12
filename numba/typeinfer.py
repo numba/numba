@@ -376,7 +376,7 @@ def fold_arg_vars(typevars, args, vararg, kws):
             if not isinstance(const_val, tuple):
                 raise TypeError(errmsg % (args[-1],))
             # Append the elements in the const tuple to the positional args
-            pos_args += args[-1].literal_value
+            pos_args += const_val
         # Handle non-constant
         elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
@@ -1166,7 +1166,6 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
-        # XXX
         if inst.value.use_literal_type:
             lit = types.maybe_literal(value=const)
         else:

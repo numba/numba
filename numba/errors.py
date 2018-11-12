@@ -569,6 +569,10 @@ class RequireLiteralValue(TypingError):
     pass
 
 
+class LiteralTypeError(TypingError):
+    pass
+
+
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 
