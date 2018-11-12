@@ -47,11 +47,12 @@ class Buffer(IterableType, ArrayCompatible):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        from .misc import unliteral
+
         if isinstance(dtype, Buffer):
             raise TypeError("Buffer dtype cannot be buffer")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-        from .misc import unliteral
         self.dtype = unliteral(dtype)
         self.ndim = ndim
         self.layout = layout

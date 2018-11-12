@@ -653,10 +653,11 @@ class Arg(object):
 
 
 class Const(object):
-    def __init__(self, value, loc, const=True):
+    def __init__(self, value, loc, use_literal_type=True):
         self.value = value
         self.loc = loc
-        self.const = const
+        # Note: need better way to tell if this
+        self.use_literal_type = use_literal_type
 
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)

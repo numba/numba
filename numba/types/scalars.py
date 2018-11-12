@@ -92,8 +92,8 @@ class LiteralInt(Literal, Integer):
             return max(conv, Conversion.promote)
 
 
-
 Literal.ctor_map[int] = LiteralInt
+
 
 @utils.total_ordering
 class Float(Number):

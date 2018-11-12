@@ -371,12 +371,12 @@ def fold_arg_vars(typevars, args, vararg, kws):
         errmsg = "*args in function call should be a tuple, got %s"
         # Handle constant literal used for `*args`
         if isinstance(args[-1], types.Literal):
-            const_val = args[-1].value
+            const_val = args[-1].literal_value
             # Is the constant value a tuple?
             if not isinstance(const_val, tuple):
                 raise TypeError(errmsg % (args[-1],))
             # Append the elements in the const tuple to the positional args
-            pos_args += args[-1].value
+            pos_args += args[-1].literal_value
         # Handle non-constant
         elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
@@ -1167,7 +1167,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
         # XXX
-        if inst.value.const:
+        if inst.value.use_literal_type:
             lit = types.maybe_literal(value=const)
         else:
             lit = None

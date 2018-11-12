@@ -3135,7 +3135,7 @@ def parfor_typeinfer(parfor, typeinferer):
     first_block = min(blocks.keys())
     loc = blocks[first_block].loc
     # XXX
-    index_assigns = [ir.Assign(ir.Const(1, loc=loc, const=False), v, loc) for v in index_vars]
+    index_assigns = [ir.Assign(ir.Const(1, loc=loc, use_literal_type=False), v, loc) for v in index_vars]
     save_first_block_body = blocks[first_block].body
     blocks[first_block].body = index_assigns + blocks[first_block].body
     typeinferer.blocks = blocks

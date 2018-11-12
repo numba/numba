@@ -23,7 +23,6 @@ class Signature(object):
     __slots__ = 'return_type', 'args', 'recvr', 'pysig'
 
     def __init__(self, return_type, args, recvr, pysig=None):
-        assert all(isinstance(t, types.Type) for t in args), args
         if isinstance(args, list):
             args = tuple(args)
         self.return_type = return_type

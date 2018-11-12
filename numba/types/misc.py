@@ -49,6 +49,9 @@ Literal.ctor_map[str] = LiteralStr
 
 
 def unliteral(lit_type):
+    """
+    Get base type from Literal type.
+    """
     if hasattr(lit_type, '__unliteral__'):
         return lit_type.__unliteral__()
     return getattr(lit_type, 'literal_type', lit_type)
@@ -68,6 +71,8 @@ def literal(value):
 
 
 def maybe_literal(value):
+    """Get a Literal type for the value or None.
+    """
     try:
         return literal(value)
     except _LiteralTypeError:

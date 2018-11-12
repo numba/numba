@@ -1066,13 +1066,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # loadvars for loop_ranges
     def load_range(v):
         if isinstance(v, ir.Var):
-            # Handle literal types
-            ty = lowerer.fndesc.typemap[v.name]
-            if isinstance(ty, types.Literal):
-                if isinstance(ty, types.LiteralInt):
-                    return context.get_constant(types.uintp, ty.literal_value)
-                else:
-                    raise TypeError("unsupported literal for loop range", ty)
             return lowerer.loadvar(v.name)
         else:
             return context.get_constant(types.uintp, v)

@@ -202,15 +202,17 @@ class BoundFunction(Callable, Opaque):
         return self.typing_key
 
     def get_call_type(self, context, args, kws):
-        from numba import types
         template = self.template(context)
         e = None
+        # Try with Literal
         try:
             out = template.apply(args, kws)
         except Exception as e:
             out = None
+        # If that doesn't work, remove literals
         if out is None:
-            args = [types.unliteral(a) for a in args]
+            args = [unliteral(a) for a in args]
+            kws = {k: unliteral(v) for k, v in kws.items()}
             out = template.apply(args, kws)
         if out is None and e is not None:
             raise e
