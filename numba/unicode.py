@@ -250,9 +250,9 @@ def _kind_to_byte_width(kind):
     elif kind == PY_UNICODE_4BYTE_KIND:
         return 4
     elif kind == PY_UNICODE_WCHAR_KIND:
-        raise AssertionError("PY_UNICODE_WCHAR_KIND string encountered")
+        raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
     else:
-        raise AssertionError("Unexpected unicode encoding encounter")
+        raise AssertionError("Unexpected unicode encoding encountered")
 
 
 @njit
