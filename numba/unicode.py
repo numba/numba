@@ -14,7 +14,7 @@ from numba.extending import (
     overload_method,
     intrinsic,
     )
-from numba.targets.imputils import lower_constant
+from numba.targets.imputils import lower_constant, lower_cast
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -46,6 +46,29 @@ class UnicodeModel(models.StructModel):
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+
+
+### CAST
+
+
+@lower_cast(types.LiteralStr, types.unicode_type)
+def cast_from_literal(context, builder, fromty, toty, val):
+    strobj = fromty.literal_value
+    pyapi = context.get_python_api(builder)
+    obj = pyapi.unserialize(pyapi.serialize_object(strobj))
+
+    ok, data, length, kind = pyapi.string_as_string_size_and_kind(obj)
+    uni_str = cgutils.create_struct_proxy(toty)(context, builder)
+    uni_str.data = data
+    uni_str.length = length
+    uni_str.kind = kind
+    uni_str.meminfo = pyapi.nrt_meminfo_new_from_pyobject(
+        data,  # the borrowed data pointer
+        obj,   # the owner pyobject; the call will incref it.
+    )
+    uni_str.parent = obj
+
+    return uni_str._getvalue()
 
 
 ### CONSTANT

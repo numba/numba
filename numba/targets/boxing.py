@@ -1042,10 +1042,10 @@ def box_unsupported(typ, val, c):
     return res
 
 
-@box(types.Const)
+@box(types.Literal)
 def box(typ, val, c):
     # Const type contains the python object of the constant value,
     # which we can directly return.
-    retval = typ.value
+    retval = typ.literal_value
     # Serialize the value into the IR
     return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
