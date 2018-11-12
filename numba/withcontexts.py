@@ -156,6 +156,9 @@ class _ObjModeContextType(WithContext):
         - with-block cannot use incoming function object.
         - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` \
           such that the execution will leave the with-block immediately.
+        - with-block cannot contain `with` statements.
+        - random number generator states do not synchronize; i.e. \
+          nopython-mode and object-mode uses different RNG states.
 
     .. note:: When used outside of no-python mode, the context-manager has no
         effect.
