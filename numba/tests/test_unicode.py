@@ -328,11 +328,72 @@ class TestUnicode(BaseTest):
 
     def test_literal_concat(self):
         def pyfunc(x):
-            return 'abc' + 'b123' + x + 'IO'
+            abc = 'abc'
+            if len(x):
+                return abc + 'b123' + x + 'IO'
+            else:
+                return x + abc + '123' + x
 
         cfunc = njit(pyfunc)
         args = ['x']
         self.assertEqual(pyfunc(*args), cfunc(*args))
+        args = ['']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_literal_comparison(self):
+        def pyfunc(option):
+            x = 'a123'
+            y = 'aa12'
+            if option == '==':
+                return x == y
+            elif option == '!=':
+                return x != y
+            elif option == '<':
+                return x < y
+            elif option == '>':
+                return x > y
+            elif option == '<=':
+                return x <= y
+            elif option == '>=':
+                return x >= y
+            else:
+                return None
+
+        cfunc = njit(pyfunc)
+        for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
+            args = [cmpop]
+            self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_literal_len(self):
+        def pyfunc():
+            return len('abc')
+        cfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
+
+    def test_literal_getitem(self):
+        def pyfunc(which):
+            return 'abc'[which]
+        cfunc = njit(pyfunc)
+        for a in [-1, 0, 1, slice(1, None), slice(None, -1)]:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_literal_in(self):
+        def pyfunc(x):
+            return x in '9876zabiuh'
+
+        cfunc = njit(pyfunc)
+        for a in ['a', '9', '1', '', '8uha', '987']:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_literal_xyzwith(self):
+        def pyfunc(x, y):
+            return 'abc'.startswith(x), 'cde'.endswith(y)
+
+        cfunc = njit(pyfunc)
+        for args in permutations('abcdefg', r=2):
+            self.assertEqual(pyfunc(*args), cfunc(*args))
 
 
 if __name__ == '__main__':
