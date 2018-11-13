@@ -5,28 +5,26 @@ import numpy as np
 from numba import config, cuda, jit
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 
-
-def foo(ary):
-    x = cuda.threadIdx.x
-    if x == 1:
-        # NOTE: indexing with a out-of-bounds constant can fail at
-        # compile-time instead (because the getitem is rewritten as a static_getitem)
-        # XXX: -1 is actually a valid index for a non-empty tuple...
-        ary.shape[-x]
-
-
 class TestException(SerialMixin, unittest.TestCase):
     def test_exception(self):
+        def foo(ary):
+            x = cuda.threadIdx.x
+            if x == 2:
+                # NOTE: indexing with a out-of-bounds constant can fail at
+                # compile-time instead (because the getitem is rewritten as a
+                # static_getitem)
+                ary.shape[-x]
+
         unsafe_foo = cuda.jit(foo)
         safe_foo = cuda.jit(debug=True)(foo)
 
         if not config.ENABLE_CUDASIM:
             # Simulator throws exceptions regardless of debug
             # setting
-            unsafe_foo[1, 2](np.array([0, 1]))
+            unsafe_foo[1, 3](np.array([0, 1]))
 
         with self.assertRaises(IndexError) as cm:
-            safe_foo[1, 2](np.array([0, 1]))
+            safe_foo[1, 3](np.array([0, 1]))
         self.assertIn("tuple index out of range", str(cm.exception))
 
     def test_user_raise(self):
