@@ -326,6 +326,14 @@ class TestUnicode(BaseTest):
         args = ['ab', 'b']
         self.assertEqual(pyfunc(*args), cfunc(*args))
 
+    def test_literal_concat(self):
+        def pyfunc(x):
+            return 'abc' + 'b123' + x + 'IO'
+
+        cfunc = njit(pyfunc)
+        args = ['x']
+        self.assertEqual(pyfunc(*args), cfunc(*args))
+
 
 if __name__ == '__main__':
     unittest.main()

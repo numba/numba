@@ -25,6 +25,7 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
     )
 from numba.targets import slicing
+from numba._helperlib import c_helpers
 
 
 ### DATA MODEL
@@ -51,23 +52,36 @@ make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
 ### CAST
 
 
+def compile_time_get_string_data(obj):
+    from ctypes import (
+        CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
+        cast, c_ubyte,
+    )
+
+    extract_unicode_fn = c_helpers['extract_unicode']
+    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int))
+    fn = proto(extract_unicode_fn)
+    length = c_ssize_t()
+    kind = c_int()
+    data = fn(obj, byref(length), byref(kind))
+    length = length.value
+    kind = kind.value
+    nbytes = (length + 1) * _kind_to_byte_width(kind)
+    out = (c_ubyte * nbytes).from_address(data)
+    return bytes(out), length, kind
+
+
 @lower_cast(types.LiteralStr, types.unicode_type)
 def cast_from_literal(context, builder, fromty, toty, val):
-    strobj = fromty.literal_value
-    pyapi = context.get_python_api(builder)
-    obj = pyapi.unserialize(pyapi.serialize_object(strobj))
+    literal_string = fromty.literal_value
 
-    ok, data, length, kind = pyapi.string_as_string_size_and_kind(obj)
+    databytes, length, kind = compile_time_get_string_data(literal_string)
+    mod = builder.module
+    gv = context.insert_const_bytes(mod, databytes)
     uni_str = cgutils.create_struct_proxy(toty)(context, builder)
-    uni_str.data = data
-    uni_str.length = length
-    uni_str.kind = kind
-    uni_str.meminfo = pyapi.nrt_meminfo_new_from_pyobject(
-        data,  # the borrowed data pointer
-        obj,   # the owner pyobject; the call will incref it.
-    )
-    uni_str.parent = obj
-
+    uni_str.data = gv
+    uni_str.length = uni_str.length.type(length)
+    uni_str.kind = uni_str.kind.type(kind)
     return uni_str._getvalue()
 
 
