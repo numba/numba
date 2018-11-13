@@ -30,5 +30,12 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
+        conda install -y flake8
+        flake8 numba
+      displayName: 'Flake8'
+      condition: eq(variables['RUN_FLAKE8'], 'yes')
+
+    - script: |
+        export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'
