@@ -362,7 +362,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
             args = [cmpop]
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
 
     def test_literal_len(self):
         def pyfunc():
@@ -376,7 +377,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for a in [-1, 0, 1, slice(1, None), slice(None, -1)]:
             args = [a]
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
 
     def test_literal_in(self):
         def pyfunc(x):
@@ -385,7 +387,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for a in ['a', '9', '1', '', '8uha', '987']:
             args = [a]
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
 
     def test_literal_xyzwith(self):
         def pyfunc(x, y):
@@ -393,7 +396,18 @@ class TestUnicode(BaseTest):
 
         cfunc = njit(pyfunc)
         for args in permutations('abcdefg', r=2):
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
+
+    def test_literal_find(self):
+        def pyfunc(x):
+            return 'abc'.find(x), x.find('a')
+
+        cfunc = njit(pyfunc)
+        for a in ['ab']:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
 
 
 if __name__ == '__main__':
