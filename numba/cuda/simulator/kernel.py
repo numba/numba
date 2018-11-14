@@ -48,13 +48,19 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False, extensions=[]):
+    def __init__(self, fn, device, fastmath=False,
+                 impl_kind='direct', extensions=[]):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
-        self.extensions = list(extensions) # defensive copy
+        self.extensions = list(extensions)  # defensive copy
         # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
         # memory.
+
+        if impl_kind != 'direct':
+            raise NotImplementedError("Only direct implementations are "
+                                      "available for simulator kernels")
+
         self[1, 1, 0, 0]
 
     def __call__(self, *args):

@@ -116,8 +116,11 @@ class DeviceFunctionTemplate(object):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
-        self.impl_kind = impl_kind
         self._compileinfos = {}
+
+        if impl_kind != 'direct':
+            raise NotImplementedError("Only direct implementations are "
+                                      "supported for device functions")
 
     def __reduce__(self):
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
@@ -137,7 +140,7 @@ class DeviceFunctionTemplate(object):
         this object.
         """
         if args not in self._compileinfos:
-            impl = get_implementation(self.py_func, self.impl_kind, *args)
+            impl = get_implementation(self.py_func, 'direct', *args)
             cres = compile_cuda(impl, None, args, debug=self.debug,
                                 inline=self.inline)
             first_definition = not self._compileinfos
@@ -157,8 +160,8 @@ class DeviceFunctionTemplate(object):
         return cres.signature
 
 
-def compile_device_template(pyfunc, debug=False, inline=False,
-                            impl_kind='direct'):
+def compile_device_template(pyfunc, debug=False,
+                            inline=False, impl_kind='direct'):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
@@ -181,8 +184,8 @@ def compile_device_template(pyfunc, debug=False, inline=False,
 
 def compile_device(pyfunc, return_type, args, inline=True,
                    debug=False, impl_kind='direct'):
-    return DeviceFunction(pyfunc, return_type, args, inline=True,
-                          debug=False, impl_kind=impl_kind)
+    return DeviceFunction(pyfunc, return_type, args,
+                          inline=inline, debug=debug, impl_kind=impl_kind)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -212,12 +215,16 @@ class DeviceFunction(object):
         self.args = args
         self.inline = True
         self.debug = False
-        self.impl_kind = impl_kind
 
-        impl = get_implementation(self.py_func, impl_kind, *self.args)
+        if impl_kind != 'direct':
+            raise NotImplementedError("Only direct implementations are "
+                                      "supported for device functions")
+
+        impl = get_implementation(self.py_func, 'device', *self.args)
         cres = compile_cuda(impl, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
+
         # Register
         class device_function_template(ConcreteTemplate):
             key = self
@@ -249,7 +256,6 @@ class ExternFunction(object):
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig
-
 
 
 class ForAll(object):

@@ -13,8 +13,8 @@ def jitdevice(func, link=[], debug=None, inline=False, impl_kind='direct'):
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug, inline=inline,
-                                   impl_kind=impl_kind)
+    return compile_device_template(func, debug=debug,
+                                   inline=inline, impl_kind=impl_kind)
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
@@ -51,10 +51,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        registers per thread. Useful for increasing occupancy.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-
-    if device is True and impl_kind != 'direct':
-        raise NotImplementedError("Can only use direct implementations "
-                                  "for device functions")
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
