@@ -3,13 +3,10 @@ ignore =
     E20,   # Extra space in brackets
     E231,E241,  # Multiple spaces around ","
     E26,   # Comments
-    E4,    # Import formatting
-    E721,  # Comparing types instead of isinstance
     E731,  # Assigning lambda expression
     E741,  # Ambiguous variable names
     W503,  # line break before binary operator
     W504,  # line break after binary operator
-    F811,  # redefinition of unused 'loop' from line 10
 max-line-length = 120
 
 exclude =
