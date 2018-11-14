@@ -41,7 +41,7 @@ jobs:
         NUMPY: '1.11'
         CONDA_ENV: travisci
         RUN_COVERAGE: yes
-        FLAKE8: yes
+        RUN_FLAKE8: yes
       py36_np112_doc:      
         PYTHON: '3.6'
         NUMPY: '1.12'
