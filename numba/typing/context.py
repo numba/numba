@@ -185,11 +185,31 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if func not in self._functions:
-            # It's not a known function type, perhaps it's a global?
-            functy = self._lookup_global(func)
-            if functy is not None:
-                func = functy
+        # Prefer user definition first
+        try:
+            res = self._resolve_user_function_type(func, args, kws, literals)
+        except errors.TypingError as e:
+            # Capture any typing error
+            last_exception = e
+            res = None
+        else:
+            last_exception = None
+
+        # Return early we there's a working user function
+        if res is not None:
+            return res
+
+        # Check builtin functions
+        res = self._resolve_builtin_function_type(func, args, kws)
+
+        # Re-raise last_exception if no function type has been found
+        if res is None and last_exception is not None:
+            raise last_exception
+
+        return res
+
+    def _resolve_builtin_function_type(self, func, args, kws):
+        # NOTE: we should reduce usage of this
         if func in self._functions:
             # Note: Duplicating code with types.Function.get_call_type().
             #       *defns* are CallTemplates.
@@ -198,6 +218,12 @@ class BaseContext(object):
                 res = defn.apply(args, kws)
                 if res is not None:
                     return res
+
+    def _resolve_user_function_type(self, func, args, kws, literals=None):
+        # It's not a known function type, perhaps it's a global?
+        functy = self._lookup_global(func)
+        if functy is not None:
+            func = functy
 
         if isinstance(func, types.Type):
             # If it's a type, it may support a __call__ method
@@ -208,7 +234,9 @@ class BaseContext(object):
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
-            return func.get_call_type_with_literals(self, args, kws, literals)
+            return func.get_call_type_with_literals(
+                self, args, kws, literals,
+                )
 
     def _get_attribute_templates(self, typ):
         """

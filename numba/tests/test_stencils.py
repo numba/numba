@@ -2479,6 +2479,17 @@ class TestManyStencils(TestStencilBase):
                 'neighborhood': (
                     (-3, 0), (-3, 0)), 'standard_indexing': 'b', 'cval': 1.5})
 
+    def test_basic91(self):
+        """ Issue #3454, const(int) == const(int) evaluating incorrectly. """
+        def kernel(a):
+            b = 0
+            if(2 == 0):
+                b = 2
+            return a[0, 0] + b
+
+        a = np.arange(10. * 20.).reshape(10, 20)
+        self.check(kernel, a)
+
 
 if __name__ == "__main__":
     unittest.main()

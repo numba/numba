@@ -6,6 +6,7 @@ import itertools
 import os
 import linecache
 import pprint
+import re
 import sys
 import warnings
 from numba import config, errors
@@ -23,11 +24,13 @@ class Loc(object):
     """Source location
 
     """
+    _defmatcher = re.compile('def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None):
         self.filename = filename
         self.line = line
         self.col = col
+        self.lines = None # the source lines from the linecache
 
     @classmethod
     def from_function_id(cls, func_id):
@@ -43,7 +46,34 @@ class Loc(object):
         else:
             return "%s (%s)" % (self.filename, self.line)
 
-    def strformat(self, nlines_up=2):
+    def _find_definition(self):
+        # try and find a def, go backwards from error line
+        fn_name = None
+        lines = self._get_lines()
+        for x in reversed(lines[:self.line - 1]):
+            if 'def ' in x:
+                fn_name = x
+                break
+
+        return fn_name
+
+    def _raw_function_name(self):
+        defn = self._find_definition()
+        if defn:
+            return self._defmatcher.match(defn.strip()).groups()[0]
+        else:
+            # Probably exec(<string>) or REPL.
+            return None
+
+    def _get_lines(self):
+        if self.lines is None:
+
+            self.lines = linecache.getlines(self._get_path())
+
+        return self.lines
+
+    def _get_path(self):
+        path = None
         try:
             # Try to get a relative path
             # ipython/jupyter input just returns as self.filename
@@ -53,8 +83,12 @@ class Loc(object):
             # relative path.
             # This may happen on windows if the drive is different
             path = os.path.abspath(self.filename)
+        return path
 
-        lines = linecache.getlines(path)
+
+    def strformat(self, nlines_up=2):
+
+        lines = self._get_lines()
 
         ret = [] # accumulates output
         if lines and self.line:
@@ -100,10 +134,10 @@ class Loc(object):
 
         # if in the REPL source may not be available
         if not ret:
-            ret = "<source missing, REPL in use?>"
+            ret = "<source missing, REPL/exec in use?>"
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
-        tmp = err % (path, self.line, _termcolor.code(''.join(ret)))
+        tmp = err % (self._get_path(), self.line, _termcolor.code(''.join(ret)))
         return tmp
 
     def with_lineno(self, line, col=None):
@@ -1064,6 +1098,18 @@ class FunctionIR(object):
 
 # A stub for undefined global reference
 class UndefinedType(object):
+
+    _singleton = None
+
+    def __new__(cls):
+        obj = cls._singleton
+        if obj is not None:
+            return obj
+        else:
+            obj = object.__new__(cls)
+            cls._singleton = obj
+        return obj
+
     def __repr__(self):
         return "Undefined"
 

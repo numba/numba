@@ -193,8 +193,8 @@ def iternext_unituple(context, builder, sig, args, result):
         builder.store(nidx, iterval.index)
 
 
-@lower_builtin('getitem', types.UniTuple, types.intp)
-@lower_builtin('getitem', types.NamedUniTuple, types.intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -231,6 +231,10 @@ def getitem_unituple(context, builder, sig, args):
             ki = context.get_constant(types.intp, i)
             bbi = builder.append_basic_block("switch.%d" % i)
             switch.add_case(ki, bbi)
+            # handle negative indexing, create case (-tuple.count + i) to
+            # reference same block as i
+            kin = context.get_constant(types.intp, -tupty.count + i)
+            switch.add_case(kin, bbi)
             with builder.goto_block(bbi):
                 value = builder.extract_value(tup, i)
                 builder.branch(bbend)

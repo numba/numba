@@ -623,21 +623,6 @@ def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@infer_global(np.eye)
-class NdEye(CallableTemplate):
-
-    def generic(self):
-        def typer(N, M=None, k=None, dtype=None):
-            if dtype is None:
-                nb_dtype = types.float64
-            else:
-                nb_dtype = _parse_dtype(dtype)
-            if nb_dtype is not None:
-                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
-
-        return typer
-
-
 @infer_global(np.arange)
 class NdArange(AbstractTemplate):
 

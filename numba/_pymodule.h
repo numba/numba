@@ -5,6 +5,7 @@
 
 #include <Python.h>
 #include <structmember.h>
+#include <frameobject.h>
 
 #if PY_MAJOR_VERSION >= 3
   #define MOD_ERROR_VAL NULL

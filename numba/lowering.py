@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import weakref
 import time
 from collections import namedtuple, deque
+import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
@@ -13,7 +14,7 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
 from .errors import LoweringError, new_error_context, TypingError
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo, utils
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -28,12 +29,11 @@ class Environment(_dynfunc.Environment):
 
     @classmethod
     def from_fndesc(cls, fndesc):
-        mod = fndesc.lookup_module()
         try:
             # Avoid creating new Env
             return cls._memo[fndesc.env_name]
         except KeyError:
-            inst = cls(mod.__dict__)
+            inst = cls(fndesc.lookup_globals())
             inst.env_name = fndesc.env_name
             cls._memo[fndesc.env_name] = inst
             return inst
@@ -157,8 +157,10 @@ class BaseLower(object):
         Called before lowering a block.
         """
 
-    def return_exception(self, exc_class, exc_args=None):
-        self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
+    def return_exception(self, exc_class, exc_args=None, loc=None):
+        self.call_conv.return_user_exc(self.builder, exc_class, exc_args,
+                                       loc=loc,
+                                       func_name=self.func_ir.func_id.func_name)
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
@@ -434,9 +436,9 @@ class Lower(BaseLower):
     def lower_static_raise(self, inst):
         if inst.exc_class is None:
             # Reraise
-            self.return_exception(None)
+            self.return_exception(None, loc=self.loc)
         else:
-            self.return_exception(inst.exc_class, inst.exc_args)
+            self.return_exception(inst.exc_class, inst.exc_args, loc=self.loc)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -571,7 +573,12 @@ class Lower(BaseLower):
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
-        impl = self.context.get_function("getitem", signature)
+        # Get implementation of getitem
+        op = operator.getitem
+        fnop = self.context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(fnop, signature)
+
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
                    self.typeof(index.name))
@@ -832,7 +839,7 @@ class Lower(BaseLower):
                 # Prepend the self reference
                 argvals = [the_self] + list(argvals)
 
-            res = impl(self.builder, argvals)
+            res = impl(self.builder, argvals, self.loc)
 
             libs = getattr(impl, "libs", ())
             for lib in libs:
@@ -927,7 +934,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.return_exception(ValueError)
+                    self.return_exception(ValueError, loc=self.loc)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -938,7 +945,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.return_exception(ValueError)
+                self.return_exception(ValueError, loc=self.loc)
 
             self.decref(ty.iterator_type, iterobj)
             return tup

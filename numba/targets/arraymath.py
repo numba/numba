@@ -721,54 +721,76 @@ if numpy_version >= (1, 12):
 # Median and partitioning
 
 @register_jitable
-def _partition(A, low, high):
-    mid = (low + high) >> 1
-    # NOTE: the pattern of swaps below for the pivot choice and the
-    # partitioning gives good results (i.e. regular O(n log n))
-    # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
-    # risk breaking this property.
-
-    # Use median of three {low, middle, high} as the pivot
-    if A[mid] < A[low]:
-        A[low], A[mid] = A[mid], A[low]
-    if A[high] < A[mid]:
-        A[high], A[mid] = A[mid], A[high]
-    if A[mid] < A[low]:
-        A[low], A[mid] = A[mid], A[low]
-    pivot = A[mid]
-
-    A[high], A[mid] = A[mid], A[high]
-    i = low
-    j = high - 1
-    while True:
-        while i < high and A[i] < pivot:
-            i += 1
-        while j >= low and pivot < A[j]:
-            j -= 1
-        if i >= j:
-            break
-        A[i], A[j] = A[j], A[i]
-        i += 1
-        j -= 1
-    # Put the pivot back in its final place (all items before `i`
-    # are smaller than the pivot, all items at/after `i` are larger)
-    A[i], A[high] = A[high], A[i]
-    return i
+def less_than(a, b):
+    return a < b
 
 @register_jitable
-def _select(arry, k, low, high):
-    """
-    Select the k'th smallest element in array[low:high + 1].
-    """
-    i = _partition(arry, low, high)
-    while i != k:
-        if i < k:
-            low = i + 1
-            i = _partition(arry, low, high)
+def nan_aware_less_than(a, b):
+    if np.isnan(a):
+        return False
+    else:
+        if np.isnan(b):
+            return True
         else:
-            high = i - 1
-            i = _partition(arry, low, high)
-    return arry[k]
+            return a < b
+
+def _partition_factory(pivotimpl):
+    def _partition(A, low, high):
+        mid = (low + high) >> 1
+        # NOTE: the pattern of swaps below for the pivot choice and the
+        # partitioning gives good results (i.e. regular O(n log n))
+        # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
+        # risk breaking this property.
+
+        # Use median of three {low, middle, high} as the pivot
+        if pivotimpl(A[mid], A[low]):
+            A[low], A[mid] = A[mid], A[low]
+        if pivotimpl(A[high], A[mid]):
+            A[high], A[mid] = A[mid], A[high]
+        if pivotimpl(A[mid], A[low]):
+            A[low], A[mid] = A[mid], A[low]
+        pivot = A[mid]
+
+        A[high], A[mid] = A[mid], A[high]
+        i = low
+        j = high - 1
+        while True:
+            while i < high and pivotimpl(A[i], pivot):
+                i += 1
+            while j >= low and pivotimpl(pivot, A[j]):
+                j -= 1
+            if i >= j:
+                break
+            A[i], A[j] = A[j], A[i]
+            i += 1
+            j -= 1
+        # Put the pivot back in its final place (all items before `i`
+        # are smaller than the pivot, all items at/after `i` are larger)
+        A[i], A[high] = A[high], A[i]
+        return i
+    return _partition
+
+_partition = register_jitable(_partition_factory(less_than))
+_partition_w_nan = register_jitable(_partition_factory(nan_aware_less_than))
+
+def _select_factory(partitionimpl):
+    def _select(arry, k, low, high):
+        """
+        Select the k'th smallest element in array[low:high + 1].
+        """
+        i = partitionimpl(arry, low, high)
+        while i != k:
+            if i < k:
+                low = i + 1
+                i = partitionimpl(arry, low, high)
+            else:
+                high = i - 1
+                i = partitionimpl(arry, low, high)
+        return arry[k]
+    return _select
+
+_select = register_jitable(_select_factory(_partition))
+_select_w_nan = register_jitable(_select_factory(_partition_w_nan))
 
 @register_jitable
 def _select_two(arry, k, low, high):
@@ -966,6 +988,82 @@ if numpy_version >= (1, 9):
             return _median_inner(temp_arry, n)
 
         return nanmedian_impl
+
+@register_jitable
+def np_partition_impl_inner(a, kth_array):
+
+    # allocate and fill empty array rather than copy a and mutate in place
+    # as the latter approach fails to preserve strides
+    out = np.empty_like(a)
+
+    idx = np.ndindex(a.shape[:-1])  # Numpy default partition axis is -1
+    for s in idx:
+        arry = a[s].copy()
+        low = 0
+        high = len(arry) - 1
+
+        for kth in kth_array:
+            _select_w_nan(arry, kth, low, high)
+            low = kth  # narrow span of subsequent partition
+
+        out[s] = arry
+    return out
+
+@register_jitable
+def valid_kths(a, kth):
+    """
+    Returns a sorted, unique array of kth values which serve
+    as indexers for partitioning the input array, a.
+
+    If the absolute value of any of the provided values
+    is greater than a.shape[-1] an exception is raised since
+    we are partitioning along the last axis (per Numpy default
+    behaviour).
+
+    Values less than 0 are transformed to equivalent positive
+    index values.
+    """
+    kth_array = _asarray(kth).astype(np.int64)  # cast boolean to int, where relevant
+
+    if kth_array.ndim != 1:
+        raise ValueError('kth must be scalar or 1-D')
+        # numpy raises ValueError: object too deep for desired array
+
+    if np.any(np.abs(kth_array) >= a.shape[-1]):
+        raise ValueError("kth out of bounds")
+
+    out = np.empty_like(kth_array)
+
+    for index, val in np.ndenumerate(kth_array):
+        if val < 0:
+            out[index] = val + a.shape[-1]  # equivalent positive index
+        else:
+            out[index] = val
+
+    return np.unique(out)
+
+@overload(np.partition)
+def np_partition(a, kth):
+
+    if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
+        raise TypeError('The first argument must be an array-like')
+
+    if isinstance(a, types.Array) and a.ndim == 0:
+        raise TypeError('The first argument must be at least 1-D (found 0-D)')
+
+    kthdt = getattr(kth, 'dtype', kth)
+    if not isinstance(kthdt, (types.Boolean, types.Integer)):  # bool gets cast to int subsequently
+        raise TypeError('Partition index must be integer')
+
+    def np_partition_impl(a, kth):
+        a_tmp = _asarray(a)
+        if a_tmp.size == 0:
+            return a_tmp.copy()
+        else:
+            kth_array = valid_kths(a_tmp, kth)
+            return np_partition_impl_inner(a_tmp, kth_array)
+
+    return np_partition_impl
 
 #----------------------------------------------------------------------------
 # Building matrices
@@ -1195,6 +1293,214 @@ def np_vander(x, N=None, increasing=False):
         return np_vander_impl
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
+
+#----------------------------------------------------------------------------
+# Statistics
+
+@register_jitable
+def row_wise_average(a):
+    assert a.ndim == 2
+
+    m, n = a.shape
+    out = np.empty((m, 1), dtype=a.dtype)
+
+    for i in range(m):
+        out[i, 0] = np.sum(a[i, :]) / n
+
+    return out
+
+@register_jitable
+def np_cov_impl_inner(X, bias, ddof):
+
+    # determine degrees of freedom
+    if ddof is None:
+        if bias:
+            ddof = 0
+        else:
+            ddof = 1
+
+    # determine the normalization factor
+    fact = X.shape[1] - ddof
+
+    # numpy warns if less than 0 and floors at 0
+    fact = max(fact, 0.0)
+
+    # de-mean
+    X -= row_wise_average(X)
+
+    # calculate result - requires blas
+    c = np.dot(X, np.conj(X.T))
+    c *= np.true_divide(1, fact)
+    return c
+
+def _prepare_cov_input_inner():
+    pass
+
+@overload(_prepare_cov_input_inner)
+def _prepare_cov_input_impl(m, y, rowvar, dtype):
+    if y in (None, types.none):
+        def _prepare_cov_input_inner(m, y, rowvar, dtype):
+            m_arr = np.atleast_2d(_asarray(m))
+
+            if not rowvar:
+                m_arr = m_arr.T
+
+            return m_arr
+    else:
+        def _prepare_cov_input_inner(m, y, rowvar, dtype):
+            m_arr = np.atleast_2d(_asarray(m))
+            y_arr = np.atleast_2d(_asarray(y))
+
+            # transpose if asked to and not a (1, n) vector - this looks
+            # wrong as you might end up transposing one and not the other,
+            # but it's what numpy does
+            if not rowvar:
+                if m_arr.shape[0] != 1:
+                    m_arr = m_arr.T
+                if y_arr.shape[0] != 1:
+                    y_arr = y_arr.T
+
+            m_rows, m_cols = m_arr.shape
+            y_rows, y_cols = y_arr.shape
+
+            if m_cols != y_cols:
+                raise ValueError("m and y have incompatible dimensions")
+
+            # allocate and fill output array
+            out = np.empty((m_rows + y_rows, m_cols), dtype=dtype)
+            out[:m_rows, :] = m_arr
+            out[-y_rows:, :] = y_arr
+
+            return out
+
+    return _prepare_cov_input_inner
+
+@register_jitable
+def _handle_m_dim_change(m):
+    if m.ndim == 2 and m.shape[0] == 1:
+        msg = ("2D array containing a single row is unsupported due to "
+               "ambiguity in type inference. To use numpy.cov in this case "
+               "simply pass the row as a 1D array, i.e. m[0].")
+        raise RuntimeError(msg)
+
+_handle_m_dim_nop = register_jitable(lambda x: x)
+
+def determine_dtype(array_like):
+    array_like_dt = np.float64
+    if isinstance(array_like, types.Array):
+        array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, (types.UniTuple, types.Tuple)):
+        coltypes = set()
+        for val in array_like:
+            if hasattr(val, 'count'):
+                [coltypes.add(v) for v in val]
+            else:
+                coltypes.add(val)
+        if len(coltypes) > 1:
+            array_like_dt = np.promote_types(*[as_dtype(ty) for ty in coltypes])
+        elif len(coltypes) == 1:
+            array_like_dt = as_dtype(coltypes.pop())
+
+    return array_like_dt
+
+def check_dimensions(array_like, name):
+    if isinstance(array_like, types.Array):
+        if array_like.ndim > 2:
+            raise TypeError("{0} has more than 2 dimensions".format(name))
+    elif isinstance(array_like, types.Sequence):
+        if isinstance(array_like.key[0], types.Sequence):
+            if isinstance(array_like.key[0].key[0], types.Sequence):
+                raise TypeError("{0} has more than 2 dimensions".format(name))
+
+@register_jitable
+def _handle_ddof(ddof):
+    if not np.isfinite(ddof):
+        raise ValueError('Cannot convert non-finite ddof to integer')
+    if ddof - int(ddof) != 0:
+        raise ValueError('ddof must be integral value')
+
+_handle_ddof_nop = register_jitable(lambda x: x)
+
+@register_jitable
+def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER):
+    _M_DIM_HANDLER(m)
+    _DDOF_HANDLER(ddof)
+    return _prepare_cov_input_inner(m, y, rowvar, dtype)
+
+if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
+    @overload(np.cov)
+    def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
+
+        # reject problem if m and / or y are more than 2D
+        check_dimensions(m, 'm')
+        check_dimensions(y, 'y')
+
+        # reject problem if ddof invalid (either upfront if type is
+        # obviously invalid, or later if value found to be non-integral)
+        if ddof in (None, types.none):
+            _DDOF_HANDLER = _handle_ddof_nop
+        else:
+            if isinstance(ddof, (types.Integer, types.Boolean)):
+                _DDOF_HANDLER = _handle_ddof_nop
+            elif isinstance(ddof, types.Float):
+                _DDOF_HANDLER = _handle_ddof
+            else:
+                raise TypingError('ddof must be a real numerical scalar type')
+
+        # special case for 2D array input with 1 row of data - select
+        # handler function which we'll call later when we have access
+        # to the shape of the input array
+        _M_DIM_HANDLER = _handle_m_dim_nop
+        if isinstance(m, types.Array):
+            _M_DIM_HANDLER = _handle_m_dim_change
+
+        # infer result dtype
+        m_dt = determine_dtype(m)
+        y_dt = determine_dtype(y)
+        dtype = np.result_type(m_dt, y_dt, np.float64)
+
+        def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
+            X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
+
+            if np.any(np.array(X.shape) == 0):
+                return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
+            else:
+                return np_cov_impl_inner(X, bias, ddof)
+
+        def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
+            X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
+
+            if np.any(np.array(X.shape) == 0):
+                variance = np.nan
+            else:
+                variance = np_cov_impl_inner(X, bias, ddof).flat[0]
+
+            return np.array(variance)
+
+        # identify up front if output is 0D
+        if isinstance(m, types.Array) and m.ndim == 1:
+            if y in (None, types.none):
+                return np_cov_impl_single_variable
+
+        if isinstance(m, types.BaseTuple):
+            if all(isinstance(x, (types.Number, types.Boolean)) for x in m.types):
+                if y in (None, types.none):
+                    return np_cov_impl_single_variable
+            else:
+                if len(m.types) == 1 and isinstance(m.types[0], types.BaseTuple):
+                    if y in (None, types.none):
+                        return np_cov_impl_single_variable
+
+        if isinstance(m, (types.Number, types.Boolean)):
+            if y in (None, types.none):
+                return np_cov_impl_single_variable
+
+        if isinstance(m, types.Sequence):
+            if not isinstance(m.key[0], types.Sequence) and y in (None, types.none):
+                return np_cov_impl_single_variable
+
+        # otherwise assume it's 2D and we're good to go
+        return np_cov_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations

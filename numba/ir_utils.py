@@ -586,7 +586,7 @@ remove_call_handlers = []
 
 def remove_dead_random_call(rhs, lives, call_list):
     if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
-        return call_list[0] != 'seed'
+        return call_list[0] not in {'seed', 'shuffle'}
     return False
 
 remove_call_handlers.append(remove_dead_random_call)
@@ -637,19 +637,22 @@ def is_pure(rhs, lives, call_table):
         returns the same result.  This is not the case for things
         like calls to numpy.random.
     """
-    if isinstance(rhs, ir.Expr) and rhs.op == 'call':
-        func_name = rhs.func.name
-        if func_name not in call_table or call_table[func_name] == []:
-            return False
-        call_list = call_table[func_name]
-        if (call_list == [slice] or
-            call_list == ['log', numpy] or
-            call_list == ['empty', numpy]):
-            return True
-        for f in is_pure_extensions:
-            if f(rhs, lives, call_list):
+    if isinstance(rhs, ir.Expr):
+        if rhs.op == 'call':
+            func_name = rhs.func.name
+            if func_name not in call_table or call_table[func_name] == []:
+                return False
+            call_list = call_table[func_name]
+            if (call_list == [slice] or
+                call_list == ['log', numpy] or
+                call_list == ['empty', numpy]):
                 return True
-        return False
+            for f in is_pure_extensions:
+                if f(rhs, lives, call_list):
+                    return True
+            return False
+        elif rhs.op == 'getiter' or rhs.op == 'iternext':
+            return False
     if isinstance(rhs, ir.Yield):
         return False
     return True
@@ -1542,7 +1545,7 @@ def get_ir_of_code(glbls, fcode):
     # hack parameter name .0 for Python 3 versions < 3.6
     if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
         co_varnames = list(fcode.co_varnames)
-        if co_varnames[0] == ".0":
+        if len(co_varnames) > 0 and co_varnames[0] == ".0":
             co_varnames[0] = "implicit0"
         fcode = pytypes.CodeType(
             fcode.co_argcount,

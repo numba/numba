@@ -161,6 +161,54 @@ The error message "Can't unify return type from the following types:
 tuple(int64 x 1), int64" should be read as "Numba cannot find a type that
 can safely represent a 1-tuple of integer and an integer".
 
+.. _code-has-untyped-list:
+
+My code has an untyped list problem
+===================================
+
+As :ref:`noted previously <code-doesnt-compile>` the first part of Numba
+compiling your code involves working out what the types of all the variables
+are. In the case of lists, a list must contain items that are of the same type
+or can be empty if the type can be inferred from some later operation. What is
+not possible is to have a list which is defined as empty and has no inferable
+type (i.e. an untyped list).
+
+For example, this is using a list of a known type::
+
+    from numba import jit
+    @jit(nopython=True)
+    def f():
+        return [1, 2, 3] # this list is defined on construction with `int` type
+
+This is using an empty list, but the type can be inferred::
+
+    from numba import jit
+    @jit(nopython=True)
+    def f(x):
+        tmp = [] # defined empty
+        for i in range(x):
+            tmp.append(i) # list type can be inferred from the type of `i`
+        return tmp
+
+This is using an empty list and the type cannot be inferred::
+
+    from numba import jit
+    @jit(nopython=True)
+    def f(x):
+        tmp = [] # defined empty
+        return (tmp, x) # ERROR: the type of `tmp` is unknown
+
+Whilst slightly contrived, if you need an empty list and the type cannot be
+inferred but you know what type you want the list to be, this "trick" can be
+used to instruct the typing mechanism::
+
+    from numba import jit
+    import numpy as np
+    @jit(nopython=True)
+    def f(x):
+        # define empty list, but instruct that the type is np.complex64
+        tmp = [np.complex64(x) for x in range(0)]
+        return (tmp, x) # the type of `tmp` is known, but it is still empty
 
 The compiled code is too slow
 =============================

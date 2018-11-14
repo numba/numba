@@ -26,7 +26,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import register_jitable, overload
+from numba.extending import register_jitable, overload, overload_method
 from . import quicksort, mergesort, slicing
 
 
@@ -402,8 +402,8 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
         return load_item(context, builder, aryty, dataptr)
 
 
-@lower_builtin('getitem', types.Buffer, types.Integer)
-@lower_builtin('getitem', types.Buffer, types.SliceType)
+@lower_builtin(operator.getitem, types.Buffer, types.Integer)
+@lower_builtin(operator.getitem, types.Buffer, types.SliceType)
 def getitem_arraynd_intp(context, builder, sig, args):
     """
     Basic indexing with an integer or a slice.
@@ -419,7 +419,7 @@ def getitem_arraynd_intp(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('getitem', types.Buffer, types.BaseTuple)
+@lower_builtin(operator.getitem, types.Buffer, types.BaseTuple)
 def getitem_array_tuple(context, builder, sig, args):
     """
     Basic or advanced indexing with a tuple.
@@ -1028,7 +1028,7 @@ def fancy_getitem(context, builder, sig, args,
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
 
-@lower_builtin('getitem', types.Buffer, types.Array)
+@lower_builtin(operator.getitem, types.Buffer, types.Array)
 def fancy_getitem_array(context, builder, sig, args):
     """
     Advanced or basic indexing with an array.
@@ -1337,8 +1337,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem(source_indices):
             idx, = source_indices
-            getitem_impl = context.get_function('getitem',
-                                                signature(src_dtype, srcty, types.intp))
+            getitem_impl = context.get_function(
+                operator.getitem,
+                signature(src_dtype, srcty, types.intp),
+                )
             return getitem_impl(builder, (src, idx))
 
         def src_cleanup():
@@ -2064,6 +2066,12 @@ def array_imag_part(context, builder, typ, value):
     else:
         raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
 
+@overload_method(types.Array, 'conj')
+@overload_method(types.Array, 'conjugate')
+def array_conj(arr):
+    def impl(arr):
+        return np.conj(arr)
+    return impl
 
 def array_complex_attr(context, builder, typ, value, attr):
     """
@@ -2983,7 +2991,7 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     flatiter.iternext_specific(context, builder, arrty, arr, result)
 
 
-@lower_builtin('getitem', types.NumpyFlatType, types.Integer)
+@lower_builtin(operator.getitem, types.NumpyFlatType, types.Integer)
 def iternext_numpy_getitem(context, builder, sig, args):
     flatiterty = sig.args[0]
     flatiter, index = args
@@ -3419,52 +3427,44 @@ def numpy_identity(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.eye, types.Integer)
-def numpy_eye(context, builder, sig, args):
+def _eye_none_handler(N, M):
+    pass
 
-    def eye(n):
-        return np.identity(n)
+@extending.overload(_eye_none_handler)
+def _eye_none_handler_impl(N, M):
+    if isinstance(M, types.NoneType):
+        def impl(N, M):
+            return N
+    else:
+        def impl(N, M):
+            return M
+    return impl
 
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+@extending.overload(np.eye)
+def numpy_eye(N, M=None, k=0, dtype=float):
 
-@lower_builtin(np.eye, types.Integer, types.Integer)
-def numpy_eye(context, builder, sig, args):
+    if dtype is None or isinstance(dtype, types.NoneType):
+        dt = np.dtype(float)
+    elif isinstance(dtype, (types.DTypeSpec, types.Number)):
+        # dtype or instance of dtype
+        dt = as_dtype(getattr(dtype, 'dtype', dtype))
+    else:
+        dt = np.dtype(dtype)
 
-    def eye(n, m):
-        return np.eye(n, m, 0, np.float64)
-
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-@lower_builtin(np.eye, types.Integer, types.Integer,
-           types.Integer)
-def numpy_eye(context, builder, sig, args):
-
-    def eye(n, m, k):
-        return np.eye(n, m, k, np.float64)
-
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-@lower_builtin(np.eye, types.Integer, types.Integer,
-           types.Integer, types.DTypeSpec)
-def numpy_eye(context, builder, sig, args):
-
-    def eye(n, m, k, dtype):
-        arr = np.zeros((n, m), dtype)
+    def impl(N, M=None, k=0, dtype=float):
+        _M =  _eye_none_handler(N, M)
+        arr = np.zeros((N, _M), dt)
         if k >= 0:
-            d = min(n, m - k)
+            d = min(N, _M - k)
             for i in range(d):
                 arr[i, i + k] = 1
         else:
-            d = min(n + k, m)
+            d = min(N + k, _M)
             for i in range(d):
                 arr[i - k, i] = 1
         return arr
+    return impl
 
-    res = context.compile_internal(builder, eye, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(np.diag, types.Array)
 def numpy_diag(context, builder, sig, args):
@@ -3919,7 +3919,7 @@ def _get_borrowing_getitem(context, seqty):
     Return a getitem() implementation that doesn't incref its result.
     """
     retty = seqty.dtype
-    getitem_impl = context.get_function('getitem',
+    getitem_impl = context.get_function(operator.getitem,
                                         signature(retty, seqty, types.intp))
     def wrap(builder, args):
         ret = getitem_impl(builder, args)

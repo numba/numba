@@ -4,7 +4,6 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from functools import reduce
 import operator
 import sys
 from types import MethodType
@@ -301,7 +300,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        cache_key = self.context, args, tuple(kws.items())
+        cache_key = self.context, tuple(args), tuple(kws.items())
         try:
             disp = self._impl_cache[cache_key]
         except KeyError:

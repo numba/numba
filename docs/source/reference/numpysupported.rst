@@ -137,6 +137,8 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.conj`
+* :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`
@@ -263,6 +265,7 @@ The following top-level functions are supported:
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.correlate` (only the 2 first arguments)
+* :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
@@ -286,6 +289,7 @@ The following top-level functions are supported:
 * :class:`numpy.nditer` (only the first argument)
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
+* :func:`numpy.partition` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roots`

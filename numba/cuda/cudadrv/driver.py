@@ -1211,7 +1211,13 @@ class MemoryPointer(object):
                 raise RuntimeError('size cannot be negative')
             pointer = drvapi.cu_device_ptr(base)
             view = MemoryPointer(self.context, pointer, size, owner=self.owner)
-        return OwnedPointer(weakref.proxy(self.owner), view)
+
+        if isinstance(self.owner, (MemoryPointer, OwnedPointer)):
+            # Owned by a numba-managed memory segment, take an owned reference
+            return OwnedPointer(weakref.proxy(self.owner), view)
+        else:
+            # Owned by external alloc, return view with same external owner
+            return view
 
     @property
     def device_ctypes_pointer(self):
@@ -1540,7 +1546,7 @@ FILE_EXTENSION_MAP = {
 
 
 class Linker(object):
-    def __init__(self):
+    def __init__(self, max_registers=0):
         logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -1552,6 +1558,8 @@ class Linker(object):
             enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
             enums.CU_JIT_LOG_VERBOSE: c_void_p(1),
         }
+        if max_registers:
+            options[enums.CU_JIT_MAX_REGISTERS] = c_void_p(max_registers)
 
         raw_keys = list(options.keys()) + [enums.CU_JIT_TARGET_FROM_CUCONTEXT]
         raw_values = list(options.values())

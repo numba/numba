@@ -5,6 +5,7 @@ import copy
 import os
 import sys
 from itertools import permutations, takewhile
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -241,6 +242,7 @@ class BaseContext(object):
         self.special_ops = {}
         self.cached_internal_func = {}
         self._pid = None
+        self._codelib_stack = []
 
         self.data_model_manager = datamodel.default_manager
 
@@ -776,7 +778,8 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_subroutine_no_cache(self, builder, impl, sig, locals={}, flags=None):
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
+                                     flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
@@ -804,23 +807,36 @@ class BaseContext(object):
             codegen.add_linking_library(cres.library)
             return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}):
+    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
+                           caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
         Return a placeholder object that's callable from another Numba
         function.
+
+        If *caching* evaluates True, the function keeps the compiled function
+        for reuse in *.cached_internal_func*.
         """
         cache_key = (impl.__code__, sig, type(self.error_model))
-        if impl.__closure__:
-            # XXX This obviously won't work if a cell's value is
-            # unhashable.
-            cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        ty = self.cached_internal_func.get(cache_key)
-        if ty is None:
-            cres = self.compile_subroutine_no_cache(builder, impl, sig,
-                                                    locals=locals)
+        if not caching:
+            cached = None
+        else:
+            if impl.__closure__:
+                # XXX This obviously won't work if a cell's value is
+                # unhashable.
+                cache_key += tuple(c.cell_contents for c in impl.__closure__)
+            cached = self.cached_internal_func.get(cache_key)
+        if cached is None:
+            cres = self._compile_subroutine_no_cache(builder, impl, sig,
+                                                     locals=locals,
+                                                     flags=flags)
+            lib = cres.library
             ty = types.NumbaFunction(cres.fndesc, sig)
-            self.cached_internal_func[cache_key] = ty
+            self.cached_internal_func[cache_key] = ty, lib
+
+        ty, lib = self.cached_internal_func[cache_key]
+        # Allow inlining the function inside callers.
+        self.active_code_library.add_linking_library(lib)
         return ty
 
     def compile_internal(self, builder, impl, sig, args, locals={}):
@@ -1064,6 +1080,22 @@ class BaseContext(object):
         """
         return lc.Module(name)
 
+    @property
+    def active_code_library(self):
+        """Get the active code library
+        """
+        return self._codelib_stack[-1]
+
+    @contextmanager
+    def push_code_library(self, lib):
+        """Push the active code library for the context
+        """
+        self._codelib_stack.append(lib)
+        try:
+            yield
+        finally:
+            self._codelib_stack.pop()
+
 
 class _wrap_impl(object):
     """
@@ -1077,8 +1109,13 @@ class _wrap_impl(object):
         self._context = context
         self._sig = sig
 
-    def __call__(self, builder, args):
-        return self._imp(self._context, builder, self._sig, args)
+    def __call__(self, builder, args, loc=None):
+        try:
+            # 98 % of cases will use this branch as they will not need location
+            # information to proceed.
+            return self._imp(self._context, builder, self._sig, args)
+        except TypeError:
+            return self._imp(self._context, builder, self._sig, args, loc=loc)
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

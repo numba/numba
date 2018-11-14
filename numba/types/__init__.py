@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import struct
 
 import numpy as np
+from numba import utils
 
 from .abstract import *
 from .containers import *
@@ -22,7 +23,10 @@ none = NoneType('none')
 ellipsis = EllipsisType('...')
 Any = Phantom('any')
 undefined = Undefined('undefined')
-string = Opaque('str')
+py2_string_type = Opaque('str')
+unicode_type = UnicodeType('unicode_type')
+string = unicode_type if utils.PY3 else py2_string_type
+
 code_type = Opaque('code')
 pyfunc_type = Opaque('pyfunc')
 

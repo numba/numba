@@ -256,7 +256,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
-    max_label = max(func_ir.blocks.keys())
+    max_label = max(ir_utils._max_label, max(func_ir.blocks.keys()))
     callee_blocks = add_offset_to_labels(callee_blocks, max_label + 1)
     callee_blocks = simplify_CFG(callee_blocks)
     callee_ir.blocks = callee_blocks

@@ -34,6 +34,7 @@ from .support import (TestCase, tag, temp_directory, import_dynamic,
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
+from .test_linalg import needs_lapack
 
 import llvmlite.binding as ll
 
@@ -388,6 +389,135 @@ class TestDispatcher(BaseTest):
         # show that deserializing creates a new object
         newer_foo = pickle.loads(serialized_foo)
         self.assertIs(ref(), None)
+
+    @needs_lapack
+    def test_misaligned_array_dispatch(self):
+        # for context see issue #2937
+        def foo(a):
+            return np.linalg.matrix_power(a, 1)
+
+        jitfoo = jit(nopython=True)(foo)
+
+        n = 64
+        r = int(np.sqrt(n))
+        dt = np.int8
+        count = np.complex128().itemsize // dt().itemsize
+
+        tmp = np.arange(n * count + 1, dtype=dt)
+
+        # create some arrays as Cartesian production of:
+        # [F/C] x [aligned/misaligned]
+        C_contig_aligned = tmp[:-1].view(np.complex128).reshape(r, r)
+        C_contig_misaligned = tmp[1:].view(np.complex128).reshape(r, r)
+        F_contig_aligned = C_contig_aligned.T
+        F_contig_misaligned = C_contig_misaligned.T
+
+        # checking routine
+        def check(name, a):
+            a[:, :] = np.arange(n, dtype=np.complex128).reshape(r, r)
+            expected = foo(a)
+            got = jitfoo(a)
+            np.testing.assert_allclose(expected, got)
+
+        # The checks must be run in this order to create the dispatch key
+        # sequence that causes invalid dispatch noted in #2937.
+        # The first two should hit the cache as they are aligned, supported
+        # order and under 5 dimensions. The second two should end up in the
+        # fallback path as they are misaligned.
+        check("C_contig_aligned", C_contig_aligned)
+        check("F_contig_aligned", F_contig_aligned)
+        check("C_contig_misaligned", C_contig_misaligned)
+        check("F_contig_misaligned", F_contig_misaligned)
+
+    def test_immutability_in_array_dispatch(self):
+
+        # RO operation in function
+        def foo(a):
+            return np.sum(a)
+
+        jitfoo = jit(nopython=True)(foo)
+
+        n = 64
+        r = int(np.sqrt(n))
+        dt = np.int8
+        count = np.complex128().itemsize // dt().itemsize
+
+        tmp = np.arange(n * count + 1, dtype=dt)
+
+        # create some arrays as Cartesian production of:
+        # [F/C] x [aligned/misaligned]
+        C_contig_aligned = tmp[:-1].view(np.complex128).reshape(r, r)
+        C_contig_misaligned = tmp[1:].view(np.complex128).reshape(r, r)
+        F_contig_aligned = C_contig_aligned.T
+        F_contig_misaligned = C_contig_misaligned.T
+
+        # checking routine
+        def check(name, a, disable_write_bit=False):
+            a[:, :] = np.arange(n, dtype=np.complex128).reshape(r, r)
+            if disable_write_bit:
+                a.flags.writeable = False
+            expected = foo(a)
+            got = jitfoo(a)
+            np.testing.assert_allclose(expected, got)
+
+        # all of these should end up in the fallback path as they have no write
+        # bit set
+        check("C_contig_aligned", C_contig_aligned, disable_write_bit=True)
+        check("F_contig_aligned", F_contig_aligned, disable_write_bit=True)
+        check("C_contig_misaligned", C_contig_misaligned,
+              disable_write_bit=True)
+        check("F_contig_misaligned", F_contig_misaligned,
+              disable_write_bit=True)
+
+    @needs_lapack
+    def test_misaligned_high_dimension_array_dispatch(self):
+
+        def foo(a):
+            return np.linalg.matrix_power(a[0, 0, 0, 0, :, :], 1)
+
+        jitfoo = jit(nopython=True)(foo)
+
+        def check_properties(arr, layout, aligned):
+            self.assertEqual(arr.flags.aligned, aligned)
+            if layout == "C":
+                self.assertEqual(arr.flags.c_contiguous, True)
+            if layout == "F":
+                self.assertEqual(arr.flags.f_contiguous, True)
+
+        n = 729
+        r = 3
+        dt = np.int8
+        count = np.complex128().itemsize // dt().itemsize
+
+        tmp = np.arange(n * count + 1, dtype=dt)
+
+        # create some arrays as Cartesian production of:
+        # [F/C] x [aligned/misaligned]
+        C_contig_aligned = tmp[:-1].view(np.complex128).\
+            reshape(r, r, r, r, r, r)
+        check_properties(C_contig_aligned, 'C', True)
+        C_contig_misaligned = tmp[1:].view(np.complex128).\
+            reshape(r, r, r, r, r, r)
+        check_properties(C_contig_misaligned, 'C', False)
+        F_contig_aligned = C_contig_aligned.T
+        check_properties(F_contig_aligned, 'F', True)
+        F_contig_misaligned = C_contig_misaligned.T
+        check_properties(F_contig_misaligned, 'F', False)
+
+        # checking routine
+        def check(name, a):
+            a[:, :] = np.arange(n, dtype=np.complex128).\
+                reshape(r, r, r, r, r, r)
+            expected = foo(a)
+            got = jitfoo(a)
+            np.testing.assert_allclose(expected, got)
+
+        # these should all hit the fallback path as the cache is only for up to
+        # 5 dimensions
+        check("F_contig_misaligned", F_contig_misaligned)
+        check("C_contig_aligned", C_contig_aligned)
+        check("F_contig_aligned", F_contig_aligned)
+        check("C_contig_misaligned", C_contig_misaligned)
 
 
 class TestSignatureHandling(BaseTest):
