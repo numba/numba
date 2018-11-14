@@ -246,7 +246,7 @@ static
 void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws)
 {
     explain_issue(dispatcher, args, kws, "_explain_ambiguous",
-                  "Ambigous overloading");
+                  "Ambiguous overloading");
 }
 
 static
