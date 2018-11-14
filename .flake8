@@ -81,6 +81,7 @@ exclude =
     numba/rewrites/registry.py
     numba/rewrites/macros.py
     numba/rewrites/static_binop.py
+    numba/rewrites/ir_print.py
     numba/types/abstract.py
     numba/types/functions.py
     numba/types/misc.py
