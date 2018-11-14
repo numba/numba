@@ -1084,7 +1084,7 @@ def _tri_impl(N, M, k):
 def np_tri(N, M=None, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, types.Integer):
+    if not isinstance(k, (int, types.Integer)):
         raise TypeError('k must be an integer')
 
     def tri_impl(N, M=None, k=0):
@@ -1119,7 +1119,7 @@ def np_tril_impl_2d(m, k=0):
 def my_tril(m, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, types.Integer):
+    if not isinstance(k, (int, types.Integer)):
         raise TypeError('k must be an integer')
 
     def np_tril_impl_1d(m, k=0):
@@ -1151,7 +1151,7 @@ def np_triu_impl_2d(m, k=0):
 def my_triu(m, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, types.Integer):
+    if not isinstance(k, (int, types.Integer)):
         raise TypeError('k must be an integer')
 
     def np_triu_impl_1d(m, k=0):
