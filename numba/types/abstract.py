@@ -393,7 +393,10 @@ class Literal(Type):
     # *ctor_map* is a dictionary mapping Python types to Literal subclasses
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
+    # To add new Literal subclass, register a new mapping to this dict.
     ctor_map = {}
+
+    # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
 
     def __init__(self, value):
