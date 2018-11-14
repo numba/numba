@@ -72,7 +72,7 @@ CR_FIELDS = ["typing_context",
              "call_helper",
              "environment",
              "has_dynamic_globals",
-             "diagnostics",]
+             "metadata",]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
@@ -292,7 +292,11 @@ class BasePipeline(object):
         self.typemap = None
         self.calltypes = None
         self.type_annotation = None
+        self.metadata = {} # holds arbitrary inter-pipeline stage meta data
+
+        # parfor diagnostics info, add to metadata
         self.parfor_diagnostics = ParforDiagnostics()
+        self.metadata['parfor_diagnostics'] = self.parfor_diagnostics
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -675,7 +679,7 @@ class BasePipeline(object):
             fndesc=lowered.fndesc,
             environment=lowered.env,
             has_dynamic_globals=lowered.has_dynamic_globals,
-            diagnostics={'parfors': self.parfor_diagnostics},
+            metadata=self.metadata,
             )
 
     def stage_objectmode_backend(self):
@@ -719,7 +723,7 @@ class BasePipeline(object):
         signature = typing.signature(types.pyobject, *args)
         self.cr = compile_result(typing_context=self.typingctx,
                                  target_context=self.targetctx,
-                                 entry_point=self.func_id.func,
+                                 entry_point=self.func_id.func, 
                                  typing_error=self.status.fail_reason,
                                  type_annotation="<Interpreter mode function>",
                                  signature=signature,

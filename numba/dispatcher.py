@@ -691,7 +691,7 @@ class Dispatcher(_DispatcherBase):
         """
         def dump(sig):
             ol = self.overloads[sig]
-            pfdiag = ol.diagnostics.get('parfors', None)
+            pfdiag = ol.metadata.get('parfor_diagnostics', None)
             if pfdiag is None:
                 msg = "No parfors diagnostic available, is 'parallel=True' set?"
                 raise ValueError(msg)
@@ -700,6 +700,15 @@ class Dispatcher(_DispatcherBase):
             dump(signature)
         else:
             [dump(sig) for sig in self.signatures]
+
+    def get_metadata(self, signature=None):
+        """
+        Obtain the compilation metadata for a given signature.
+        """
+        if signature is not None:
+            return self.overloads[sig].metadata
+        else:
+            return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
 
 
 class LiftedCode(_DispatcherBase):
