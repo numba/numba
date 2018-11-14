@@ -167,9 +167,9 @@ def array_sum(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.LiteralInt)
+@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.LiteralInt)
+@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
     """
     The third parameter to gen_index_tuple that generates the indexing

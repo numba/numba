@@ -28,7 +28,7 @@ def unbox_boolean(typ, obj, c):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
-@box(types.LiteralInt)
+@box(types.IntegerLiteral)
 def box_literal_integer(typ, val, c):
     val = c.context.cast(c.builder, val, typ, typ.literal_type)
     return c.box(typ.literal_type, val)

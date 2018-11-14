@@ -39,11 +39,11 @@ class RawPointer(Opaque):
     """
 
 
-class LiteralStr(Literal, Dummy):
+class StringLiteral(Literal, Dummy):
     pass
 
 
-Literal.ctor_map[str] = LiteralStr
+Literal.ctor_map[str] = StringLiteral
 
 
 def unliteral(lit_type):
@@ -320,7 +320,7 @@ class SliceType(Type):
         return self.members
 
 
-class LiteralSlice(Literal, SliceType):
+class SliceLiteral(Literal, SliceType):
     def __init__(self, value):
         self._literal_init(value)
         name = 'Lit[slice]({})'.format(value)
@@ -328,7 +328,7 @@ class LiteralSlice(Literal, SliceType):
         SliceType.__init__(self, name=name, members=members)
 
 
-Literal.ctor_map[slice] = LiteralSlice
+Literal.ctor_map[slice] = SliceLiteral
 
 
 class ClassInstanceType(Type):

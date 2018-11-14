@@ -74,10 +74,10 @@ class Integer(Number):
             return 0
 
 
-class LiteralInt(Literal, Integer):
+class IntegerLiteral(Literal, Integer):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Lit[int]({})'.format(value)
+        name = 'Literal[int]({})'.format(value)
         basetype = self.literal_type
         Integer.__init__(
             self,
@@ -92,7 +92,7 @@ class LiteralInt(Literal, Integer):
             return max(conv, Conversion.promote)
 
 
-Literal.ctor_map[int] = LiteralInt
+Literal.ctor_map[int] = IntegerLiteral
 
 
 @utils.total_ordering

@@ -53,6 +53,9 @@ make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
 
 
 def compile_time_get_string_data(obj):
+    """Get string data from a python string for use at compile-time to embed
+    the string data into the LLVM module.
+    """
     from ctypes import (
         CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
         cast, c_ubyte,
@@ -64,6 +67,8 @@ def compile_time_get_string_data(obj):
     length = c_ssize_t()
     kind = c_int()
     data = fn(obj, byref(length), byref(kind))
+    if data is None:
+        raise ValueError("cannot extract unicode data from the given string")
     length = length.value
     kind = kind.value
     nbytes = (length + 1) * _kind_to_byte_width(kind)
@@ -71,7 +76,7 @@ def compile_time_get_string_data(obj):
     return bytes(out), length, kind
 
 
-@lower_cast(types.LiteralStr, types.unicode_type)
+@lower_cast(types.StringLiteral, types.unicode_type)
 def cast_from_literal(context, builder, fromty, toty, val):
     literal_string = fromty.literal_value
 

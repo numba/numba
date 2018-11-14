@@ -1786,7 +1786,7 @@ class ArrayAnalysis(object):
 
         msg = "Sizes of {} do not match on {}".format(', '.join(arg_names), loc)
         msg_val = ir.Const(msg, loc)
-        msg_typ = types.LiteralStr(msg)
+        msg_typ = types.StringLiteral(msg)
         msg_var = ir.Var(scope, mk_unique_var("msg"), loc)
         self.typemap[msg_var.name] = msg_typ
         argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])

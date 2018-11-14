@@ -383,12 +383,22 @@ class ArrayCompatible(Type):
 
 
 class Literal(Type):
+    """Base class for Literal types.
+    Literal types contains the original Python value in the type.
+
+    A literal type should always be constructed from the `literal(val)`
+    function.
+    """
+
+    # *ctor_map* is a dictionary mapping Python types to Literal subclasses
+    # for constructing a numba type for a given Python type.
+    # It is used in `literal(val)` function.
     ctor_map = {}
     _literal_type_cache = None
 
     def __init__(self, value):
         self._literal_init(value)
-        fmt = "Lit[{}]({})"
+        fmt = "Literal[{}]({})"
         super(Literal, self).__init__(fmt.format(type(value).__name__, value))
 
     def _literal_init(self, value):

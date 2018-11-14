@@ -416,7 +416,7 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_argsort(self, ary, args, kws):
         assert not args
         kwargs = dict(kws)
-        kind = kwargs.pop('kind', types.LiteralStr('quicksort'))
+        kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -506,7 +506,7 @@ class DTypeAttr(AttributeTemplate):
             val = 'i'
         else:
             return None  # other types not supported yet
-        return types.LiteralStr(val)
+        return types.StringLiteral(val)
 
 @infer
 class StaticGetItemArray(AbstractTemplate):

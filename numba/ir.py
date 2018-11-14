@@ -656,7 +656,7 @@ class Const(object):
     def __init__(self, value, loc, use_literal_type=True):
         self.value = value
         self.loc = loc
-        # Note: need better way to tell if this
+        # Note: need better way to tell if this is a literal or not.
         self.use_literal_type = use_literal_type
 
     def __repr__(self):

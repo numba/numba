@@ -94,7 +94,7 @@ class TestTypingError(unittest.TestCase):
 
         expected = (
             "Invalid use of Function(<built-in function mul>) with argument(s) of type(s): (tuple({0} x 1), {1})"
-            .format(str(types.intp), types.LiteralInt(2)))
+            .format(str(types.intp), types.IntegerLiteral(2)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("[1] During: typing of", str(raises.exception))
 
