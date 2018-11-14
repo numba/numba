@@ -2,7 +2,8 @@ from __future__ import print_function, absolute_import, division
 from numba import config, sigutils, types
 from warnings import warn
 from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel, compile_device_template)
+                       AutoJitCUDAKernel, compile_device_template,
+                       get_implementation)
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -107,7 +108,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
-
         if device:
             def device_jit(func):
                 return compile_device(func, restype, argtypes,
@@ -117,9 +117,9 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             return device_jit
         else:
             def kernel_jit(func):
+                impl = get_implementation(func, impl_kind, *argtypes)
                 kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                        impl_kind=impl_kind, inline=inline,
-                                        fastmath=fastmath)
+                                        inline=inline, fastmath=fastmath)
 
                 # Force compilation for the current context
                 if bind:
@@ -127,13 +127,12 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
 
                 return kernel
 
-
-
             return kernel_jit
 
 
 def autojit(*args, **kwargs):
-    warn('autojit is deprecated and will be removed in a future release. Use jit instead.')
+    warn('autojit is deprecated and will be removed '
+         'in a future release. Use jit instead.')
     return jit(*args, **kwargs)
 
 
@@ -149,4 +148,3 @@ def convert_types(restype, argtypes):
         argtypes, restype = sigutils.normalize_signature(restype)
 
     return restype, argtypes
-
