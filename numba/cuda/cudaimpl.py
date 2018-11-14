@@ -116,6 +116,11 @@ def ptx_cmem_arylike(context, builder, sig, args):
     gv.global_constant = True
     gv.initializer = constary
 
+    # Preserve the underlying alignment
+    lldtype = context.get_data_type(aryty.dtype)
+    align = context.get_abi_sizeof(lldtype)
+    gv.align = 2 ** (align - 1).bit_length()
+
     # Convert to generic address-space
     conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
     addrspaceptr = gv.bitcast(Type.pointer(Type.int(8), addrspace))
