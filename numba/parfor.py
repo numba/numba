@@ -19,6 +19,7 @@ import os
 import linecache
 import textwrap
 import copy
+import inspect
 from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
@@ -885,7 +886,11 @@ class ParforDiagnostics(object):
             path = os.path.abspath(filename)
 
         if print_source_listing:
-            lines = linecache.getlines(path)
+            func_name = self.func_ir.func_id.func
+            try:
+                lines = inspect.getsource(func_name).splitlines()
+            except OSError: # generated function
+                lines = None
             if lines:
                 src_width = max([len(x) for x in lines])
                 map_line_to_pf = defaultdict(list) # parfors can alias lines
@@ -900,7 +905,7 @@ class ParforDiagnostics(object):
                 width = src_width + (1 + max_pf_per_line * (len(str(count)) + 2))
                 newlines = []
                 newlines.append('\n')
-                newlines.append('Parallel loop listing for file %s' % filename)
+                newlines.append('Parallel loop listing for %s' % purpose_str)
                 newlines.append(width * '-' + '|loop #ID')
                 fmt = '{0:{1}}| {2}'
                 for no, line in enumerate(lines):
@@ -1226,6 +1231,8 @@ class ParforDiagnostics(object):
                         if stmt:
                             print("loop #%s has the following hoisted:" % pf_id)
                             [print("  %s" % y) for y in stmt]
+                    else:
+                        print_wrapped('No instruction hoisting found')
                 else:
                     print_wrapped('No instruction hoisting found')
                 print_wrapped(80 * '-')
