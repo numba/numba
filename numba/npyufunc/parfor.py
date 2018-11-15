@@ -516,7 +516,8 @@ def find_vars(var, varset):
     varset.add(var.name)
     return var
 
-def _hoist_internal(inst, dep_on_param, call_table, hoisted, typemap):
+def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
+                    typemap):
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
@@ -527,11 +528,15 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, typemap):
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
             dep_on_param += [inst.target.name]
         return True
-    elif config.DEBUG_ARRAY_OPT == 1:
+    else:
         if len(diff) > 0:
-            print("Instruction", inst, " could not be hoisted because of a dependency.")
+            not_hoisted.append((inst, "dependency"))
+            if config.DEBUG_ARRAY_OPT == 1:
+                print("Instruction", inst, " could not be hoisted because of a dependency.")
         else:
-            print("Instruction", inst, " could not be hoisted because it isn't pure.")
+            not_hoisted.append((inst, "not pure"))
+            if config.DEBUG_ARRAY_OPT == 1:
+                print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
 def find_setitems_block(setitems, block):
@@ -549,6 +554,7 @@ def find_setitems_body(setitems, loop_body):
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
+    not_hoisted = []
 
     def_once = compute_def_once(loop_body)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
@@ -562,7 +568,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, typemap):
+                                   hoisted, not_hoisted, typemap):
                     # don't add this instruction to the block since it is
                     # hoisted
                     continue
@@ -575,7 +581,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     if (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, typemap):
+                                           hoisted, not_hoisted, typemap):
                             # don't add this instuction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
@@ -583,7 +589,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
 
             new_block.append(inst)
         block.body = new_block
-    return hoisted
+    return hoisted, not_hoisted
 
 def redtyp_is_scalar(redtype):
     return not isinstance(redtype, types.npytypes.Array)
@@ -925,13 +931,14 @@ def _create_gufunc_for_parfor_body(
         _print_body(loop_body)
 
     wrapped_blocks = wrap_loop_body(loop_body)
-    hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
+    hoisted, not_hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
     start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
     start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
     unwrap_loop_body(loop_body)
 
     # store hoisted into diagnostics
-    lowerer.diagnostics.hoist_info[parfor.id] = hoisted
+    lowerer.diagnostics.hoist_info[parfor.id] = {'hoisted': hoisted,
+                                                 'not_hoisted': not_hoisted}
 
     if config.DEBUG_ARRAY_OPT:
         print("After hoisting")

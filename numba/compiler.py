@@ -723,7 +723,7 @@ class BasePipeline(object):
         signature = typing.signature(types.pyobject, *args)
         self.cr = compile_result(typing_context=self.typingctx,
                                  target_context=self.targetctx,
-                                 entry_point=self.func_id.func, 
+                                 entry_point=self.func_id.func,
                                  typing_error=self.status.fail_reason,
                                  type_annotation="<Interpreter mode function>",
                                  signature=signature,

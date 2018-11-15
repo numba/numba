@@ -908,7 +908,9 @@ class ParforDiagnostics(object):
                 newlines.append('Parallel loop listing for %s' % purpose_str)
                 newlines.append(width * '-' + '|loop #ID')
                 fmt = '{0:{1}}| {2}'
-                for no, line in enumerate(lines):
+                # why are these off by 1?
+                lstart = max(0, self.func_ir.loc.line - 1)
+                for no, line in enumerate(lines, lstart):
                     pf_ids = map_line_to_pf.get(no, None)
                     if pf_ids is not None:
                         pfstr = '#' + ', '.join(pf_ids)
@@ -924,6 +926,7 @@ class ParforDiagnostics(object):
                 print('\n'.join(newlines))
             else:
                 print("No source available")
+
 #---------- these are used a lot here on in
         sword = '+--'
         parfors = self.get_parfors() # this is the mutated parfors
@@ -1197,7 +1200,8 @@ class ParforDiagnostics(object):
             if print_allocation_hoist: 
                 found = False
                 print('Allocation hoisting:')
-                for pf_id, stmt in self.hoist_info.items():
+                for pf_id, data in self.hoist_info.items():
+                    stmt = data.get('hoisted', [])
                     for inst in stmt:
                         if isinstance(inst.value, ir.Expr):
                             try:
@@ -1226,14 +1230,25 @@ class ParforDiagnostics(object):
             if print_instruction_hoist:
                 print("")
                 print('Instruction hoisting:')
+                hoist_info_printed = False
                 if self.hoist_info:
-                    for pf_id, stmt in self.hoist_info.items():
-                        if stmt:
-                            print("loop #%s has the following hoisted:" % pf_id)
-                            [print("  %s" % y) for y in stmt]
-                    else:
-                        print_wrapped('No instruction hoisting found')
-                else:
+                    for pf_id, data in self.hoist_info.items():
+                        hoisted = data.get('hoisted', None)
+                        not_hoisted = data.get('not_hoisted', None)
+                        if not hoisted and not not_hoisted:
+                            print("loop #%s has nothing to hoist." % pf_id)
+                            continue
+
+                        print("loop #%s:" % pf_id)
+                        if hoisted:
+                            print("  Has the following hoisted:")
+                            [print("    %s" % y) for y in hoisted]
+                            hoist_info_printed = True
+                        if not_hoisted:
+                            print("  Failed to hoist the following:")
+                            [print("    %s: %s" % (y, x)) for x, y in not_hoisted]
+                            hoist_info_printed = True
+                if not hoist_info_printed:
                     print_wrapped('No instruction hoisting found')
                 print_wrapped(80 * '-')
 
