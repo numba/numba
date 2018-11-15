@@ -111,6 +111,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  typing_error=None,
                  call_helper=None,
                  has_dynamic_globals=False,  # by definition
+                 metadata=None, # Do not store, arbitrary and potentially large!
                  )
         return cr
 

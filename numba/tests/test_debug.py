@@ -288,7 +288,8 @@ class TestParforsDebug(TestCase):
 
             # Check the Parallel for-loop <index> is produced from <pattern>
             # works first
-            pattern = ('ones function', ('prange', 'user'))
+            pattern = ("('ones function', 'NumPy mapping')",
+                       ('prange', 'user', ''))
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
             for i, trials, lpattern in zip(bounds, parallel_loop_output,
                                            pattern):
