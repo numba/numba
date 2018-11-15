@@ -220,7 +220,7 @@ class DeviceFunction(object):
             raise NotImplementedError("Only direct implementations are "
                                       "supported for device functions")
 
-        impl = get_implementation(self.py_func, 'device', *self.args)
+        impl = get_implementation(self.py_func, 'direct', *self.args)
         cres = compile_cuda(impl, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
