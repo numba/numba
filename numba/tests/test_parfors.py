@@ -323,8 +323,11 @@ def get_optimized_numba_ir(test_func, args, **kws):
             return_type=tp.return_type,
             html_output=config.HTML)
 
+        diagnostics = numba.parfor.ParforDiagnostics()
+
         preparfor_pass = numba.parfor.PreParforPass(
-            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options)
+            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options,
+            swapped=diagnostics.replaced_fns)
         preparfor_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
@@ -333,7 +336,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
         flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx, options, flags)
+            tp.typingctx, options, flags, diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 

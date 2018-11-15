@@ -18,6 +18,7 @@ import sys, math
 import os
 import linecache
 import textwrap
+import copy
 from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
@@ -647,11 +648,12 @@ class ParforDiagnostics(object):
         self._get_parfors(self.func_ir.blocks, parfors_list)
         return parfors_list
 
-    def compute_graph_info(self, a):
+    def compute_graph_info(self, _a):
         """
         compute adjacency list of the fused loops
         and find the roots in of the lists
         """
+        a = copy.deepcopy(_a)
         if a == {}:
             return [], set()
 
@@ -667,8 +669,16 @@ class ParforDiagnostics(object):
             roots = set()
 
         # populate rest of adjacency list
+        not_roots = set()
         for x in range(max(set(a.keys()).union(vtx)) + 1):
-            a[x] = a.get(x, [])
+            val = a.get(x)
+            if val is not None:
+                a[x] = val
+            elif val is []:
+                not_roots.add(x) # debug only
+            else:
+                a[x] = []
+
 
         # fold adjacency list into an actual list ordered
         # by vtx
@@ -676,7 +686,7 @@ class ParforDiagnostics(object):
         for x in sorted(a.keys()):
             l.append(a[x])
 
-        return l, roots
+        return l, roots #, not_roots
 
     def get_stats(self, fadj, nadj, root):
         """
@@ -848,6 +858,8 @@ class ParforDiagnostics(object):
                         r_pattern = '%s %s' % (replfn, '(internal parallel version)')
                     elif pattern[1] == 'user':
                         r_pattern = "user defined prange"
+                    elif pattern[1] == 'pndindex':
+                        r_pattern = "internal pndindex" #FIXME: trace this!
                     else:
                         assert 0
             fmt = 'Parallel for-loop #%s: is produced from %s:\n    %s\n \n'
@@ -884,7 +896,7 @@ class ParforDiagnostics(object):
                         match_line = self.sort_pf_by_line(k, parfors_simple)
                         map_line_to_pf[match_line].append(str(k))
 
-                max_pf_per_line = max([len(x) for x in map_line_to_pf.values()])
+                max_pf_per_line = max([1] + [len(x) for x in map_line_to_pf.values()])
                 width = src_width + (1 + max_pf_per_line * (len(str(count)) + 2))
                 newlines = []
                 newlines.append('\n')
@@ -907,7 +919,6 @@ class ParforDiagnostics(object):
                 print('\n'.join(newlines))
             else:
                 print("No source available")
-
 #---------- these are used a lot here on in
         sword = '+--'
         parfors = self.get_parfors() # this is the mutated parfors
@@ -925,8 +936,6 @@ class ParforDiagnostics(object):
                 msg = "Performing sequential lowering of loops...\n"
                 print_wrapped(msg)
                 print_wrapped(_termwidth * '-')
-
-
         # if there are some parfors, print information about them!
         if n_parfors > -1:
             def dump_graph_indented(a, root_msg, node_msg):
@@ -953,6 +962,7 @@ class ParforDiagnostics(object):
             if self.fusion_info != {}:
                 if print_fusion_summary:
                     print_wrapped("\n \nFused loop summary:\n")
+
                     dump_graph_indented(self.fusion_info, 'has the following loops fused into it:', '(fused)')
 
             if print_fusion_summary:
@@ -1238,7 +1248,8 @@ class PreParforPass(object):
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
-    def __init__(self, func_ir, typemap, calltypes, typingctx, options, swapped):
+    def __init__(self, func_ir, typemap, calltypes, typingctx, options,
+                 swapped={}):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1379,7 +1390,8 @@ class ParforPass(object):
     stage.
     """
 
-    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx, options, flags, diagnostics):
+    def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
+                 options, flags, diagnostics=ParforDiagnostics()):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1993,7 +2005,13 @@ class ParforPass(object):
         assert len(call) > 0
         kind = 'user', ''
         if call[0] == 'internal_prange' or call[0] == internal_prange:
-            kind = 'internal', (self.swapped_fns[func_var][0], self.swapped_fns[func_var][-1])
+            try:
+                kind = 'internal', (self.swapped_fns[func_var][0], self.swapped_fns[func_var][-1])
+            except KeyError:
+                # FIXME: Fix this issue... the code didn't manage to trace the
+                # swapout for func_var so set the kind as internal so that the
+                # transform can occur, it's just not tracked
+                kind = 'internal', ('', '')
         elif call[0] == 'pndindex' or call[0] == pndindex:
             kind = 'pndindex', ''
         return kind
@@ -2255,7 +2273,8 @@ class ParforPass(object):
         body_block.body.append(value_assign)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,)), self.flags)
+                        ('{} function'.format(call_name,), 'NumPy mapping'),
+                        self.flags)
 
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         self.calltypes[setitem_node] = signature(
@@ -2356,7 +2375,8 @@ class ParforPass(object):
             ])
 
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set, ('{} function'.format(call_name),), self.flags)
+                        equiv_set, ('{} function'.format(call_name),
+                                    'reduction'), self.flags)
         return parfor
 
 
@@ -2397,7 +2417,6 @@ class ParforPass(object):
 
     def fuse_recursive_parfor(self, parfor, equiv_set):
         blocks = wrap_parfor_blocks(parfor)
-        # print("in fuse_recursive parfor for ", parfor.id)
         maximize_fusion(self.func_ir, blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
