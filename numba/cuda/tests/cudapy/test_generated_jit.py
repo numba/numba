@@ -1,9 +1,7 @@
 from __future__ import print_function, absolute_import, division
-from functools import wraps
 import numpy as np
 from numba import cuda, generated_jit
 from numba.cuda.testing import unittest, SerialMixin
-from numba.cuda.testing import skip_on_cudasim
 
 
 class TestCudaGeneratedJit(SerialMixin, unittest.TestCase):
@@ -57,7 +55,6 @@ class TestCudaGeneratedJit(SerialMixin, unittest.TestCase):
 
                 array[i] += 1
 
-            @wraps(kernel)
             def _kernel(array):
                 device_add(array)
 
