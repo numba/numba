@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
-from ..errors import TypingError, LiteralTypeError
+from ..errors import TypingError, LiteralTypingError
 
 
 
@@ -56,14 +56,14 @@ def unliteral(lit_type):
 
 
 def literal(value):
-    """Returns a Literal instance or raise LiteralTypeError
+    """Returns a Literal instance or raise LiteralTypingError
     """
     assert not isinstance(value, Literal)
     ty = type(value)
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:
-        raise LiteralTypeError(ty)
+        raise LiteralTypingError(ty)
     else:
         return ctor(value)
 
@@ -73,7 +73,7 @@ def maybe_literal(value):
     """
     try:
         return literal(value)
-    except LiteralTypeError:
+    except LiteralTypingError:
         return
 
 
@@ -323,7 +323,7 @@ class SliceType(Type):
 class SliceLiteral(Literal, SliceType):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Lit[slice]({})'.format(value)
+        name = 'Literal[slice]({})'.format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
 

@@ -916,7 +916,7 @@ class Enumerate(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         it = args[0]
-        if len(args) > 1 and not isinstance(args[1], types.Number):
+        if len(args) > 1 and not isinstance(args[1], types.Integer):
             raise TypeError("Only integers supported as start value in "
                             "enumerate")
         elif len(args) > 2:

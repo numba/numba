@@ -563,13 +563,17 @@ class InternalError(NumbaError):
 
 
 class RequireLiteralValue(TypingError):
-    """For signaling a function typing require constant value for some of
-    its arguments.
+    """
+    For signalling that a function's typing requires a constant value for
+    some of its arguments.
     """
     pass
 
 
-class LiteralTypeError(TypingError):
+class LiteralTypingError(TypingError):
+    """
+    Failure in typing a Literal type
+    """
     pass
 
 

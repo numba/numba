@@ -384,7 +384,7 @@ class ArrayCompatible(Type):
 
 class Literal(Type):
     """Base class for Literal types.
-    Literal types contains the original Python value in the type.
+    Literal types contain the original Python value in the type.
 
     A literal type should always be constructed from the `literal(val)`
     function.

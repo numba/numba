@@ -12,7 +12,7 @@ from llvmlite import ir as llvmir
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import (LoweringError, new_error_context, TypingError,
-                     LiteralTypeError)
+                     LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
 from . import debuginfo
@@ -1144,5 +1144,5 @@ def _lit_or_omitted(value):
     """
     try:
         return types.literal(value)
-    except LiteralTypeError:
+    except LiteralTypingError:
         return types.Omitted(value)

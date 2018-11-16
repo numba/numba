@@ -124,7 +124,6 @@ class BaseFunction(Callable):
             temp = temp_cls(context)
             for support_literals in [True, False]:
                 try:
-                    #if temp.support_literals:
                     if support_literals:
                         sig = temp.apply(args, kws)
                     else:
