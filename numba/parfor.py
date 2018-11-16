@@ -16,7 +16,6 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys, math
 import os
-import linecache
 import textwrap
 import copy
 import inspect
@@ -800,33 +799,25 @@ class ParforDiagnostics(object):
         print_instruction_hoist = False
         print_internal = False
 
-        if level == 1:
+        # each level switches on progressively more output
+        if level in (1, 2, 3, 4):
             print_source_listing = True
             print_post_optimised = True
-        elif level == 2:
-            print_source_listing = True
-            print_pre_optimised = True
-            print_post_optimised = True
-        elif level == 3:
-            print_source_listing = True
-            print_fusion_summary = True
-            print_loopnest_rewrite = True
-            print_pre_optimised = True
-            print_post_optimised = True
-            print_allocation_hoist = True
-        elif level == 4:
-            print_loop_search = True
-            print_source_listing = True
-            print_fusion_search = True
-            print_fusion_summary = True
-            print_loopnest_rewrite = True
-            print_pre_optimised = True
-            print_post_optimised = True
-            print_allocation_hoist = True
-            print_instruction_hoist = True
-            print_internal = True
         else:
             raise ValueError("Report level unknown, should be one of 1, 2, 3, 4")
+
+        if level in (2, 3, 4):
+            print_pre_optimised = True
+
+        if level == 3:
+            print_fusion_summary = True
+            print_loopnest_rewrite = True
+            print_allocation_hoist = True
+
+        if level == 4:
+            print_fusion_search = True
+            print_instruction_hoist = True
+            print_internal = True
 
         if purpose == 'internal' and not print_internal:
             return
