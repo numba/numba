@@ -47,7 +47,7 @@ class _ResolutionFailures(object):
         explain = self._context.explain_function_type(self._function_type)
         msgbuf.append(explain)
         for i, (temp, error) in enumerate(self._failures):
-            msgbuf.append("In definition {}:".format(i))
+            msgbuf.append(_termcolor.errmsg("In definition {}:".format(i)))
             msgbuf.append(_termcolor.highlight('{}{}'.format(
                 indent, self.format_error(error))))
             loc = self.get_loc(temp, error)
@@ -138,7 +138,9 @@ class BaseFunction(Callable):
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         return sig
                     else:
-                        failures.add_error(temp_cls, "All templates rejected")
+                        haslit= '' if support_literals else 'out'
+                        msg = "All templates rejected with%s literals." % haslit
+                        failures.add_error(temp_cls, msg)
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "
