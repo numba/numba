@@ -3149,7 +3149,7 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
 # -----------------------------------------------------------------------------
 # Numpy array constructors
 
-def _empty_nd_impl(context, builder, arrtype, shapes):
+def _empty_nd_impl(context, builder, arrtype, shapes, shapety=None):
     """Utility function used for allocating a new array during LLVM code
     generation (lowering).  Given a target context, builder, array
     type, and a tuple or list of lowered dimension sizes, returns a
@@ -3162,20 +3162,38 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     itemsize = context.get_constant(types.intp, get_itemsize(context, arrtype))
 
     # compute array length
+    maxbits = types.intp.bitwidth
+    cast_shapes = []
+    if shapety is None:
+        [cast_shapes.append(x) for x in shapes]
+    else: # typed shapes
+        if isinstance(shapety, types.BaseTuple):
+            for i in range(shapety.count):
+                ty = shapety[i]
+                if ty.bitwidth > maxbits:
+                    msg = ("Type %s given in shape would lead to allocation "
+                           "potentially exceeding intp size" % ty)
+                    raise ValueError(msg)
+                val = shapes[i]
+                cast_shapes.append(context.cast(builder, val, ty, types.intp))
+        else:
+            cast_shapes.append(context.cast(builder, shapes[0], shapety,
+                                            types.intp))
+
     arrlen = context.get_constant(types.intp, 1)
-    for s in shapes:
+    for s in cast_shapes:
         arrlen = builder.mul(arrlen, s)
 
     if arrtype.ndim == 0:
         strides = ()
     elif arrtype.layout == 'C':
         strides = [itemsize]
-        for dimension_size in reversed(shapes[1:]):
+        for dimension_size in reversed(cast_shapes[1:]):
             strides.append(builder.mul(strides[-1], dimension_size))
         strides = tuple(reversed(strides))
     elif arrtype.layout == 'F':
         strides = [itemsize]
-        for dimension_size in shapes[:-1]:
+        for dimension_size in cast_shapes[:-1]:
             strides.append(builder.mul(strides[-1], dimension_size))
         strides = tuple(strides)
     else:
@@ -3191,7 +3209,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
-    shape_array = cgutils.pack_array(builder, shapes, ty=intp_t)
+    shape_array = cgutils.pack_array(builder, cast_shapes, ty=intp_t)
     strides_array = cgutils.pack_array(builder, strides, ty=intp_t)
 
     populate_array(ary,
@@ -3241,7 +3259,8 @@ def _parse_empty_args(context, builder, sig, args):
     arrshapetype = sig.args[0]
     arrshape = args[0]
     arrtype = sig.return_type
-    return arrtype, _parse_shape(context, builder, arrshapetype, arrshape)
+    return arrtype, _parse_shape(context, builder, arrshapetype, arrshape), \
+           arrshapetype
 
 
 def _parse_empty_like_args(context, builder, sig, args):
@@ -3261,8 +3280,8 @@ def _parse_empty_like_args(context, builder, sig, args):
 @lower_builtin(np.empty, types.Any)
 @lower_builtin(np.empty, types.Any, types.Any)
 def numpy_empty_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    arrtype, shapes, shapety = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes, shapety)
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
 @lower_builtin(np.empty_like, types.Any)
@@ -3276,8 +3295,8 @@ def numpy_empty_like_nd(context, builder, sig, args):
 @lower_builtin(np.zeros, types.Any)
 @lower_builtin(np.zeros, types.Any, types.Any)
 def numpy_zeros_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    arrtype, shapes, shapety = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes, shapety)
     _zero_fill_array(context, builder, ary)
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 

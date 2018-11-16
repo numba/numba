@@ -11,8 +11,8 @@ from numba.errors import TypingError
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
+from numba.config import IS_32BITS
 from .support import MemoryLeakMixin, TestCase, tag
-
 
 nrtjit = njit(_nrt=True, nogil=True)
 
@@ -104,6 +104,27 @@ class TestDynArray(NrtRefCtTest, TestCase):
         np.testing.assert_equal(123, arr)
         del arr
 
+    def test_empty_1d_typed_arg(self):
+        @nrtjit
+        def foo(n):
+            arr = np.empty(np.int8(n))
+            for i in range(n):
+                arr[i] = i
+
+            return arr
+
+        n = 3
+        arr = foo(n)
+        self.assert_array_nrt_refct(arr, 1)
+        np.testing.assert_equal(np.arange(n), arr)
+        self.assertEqual(arr.size, n)
+        self.assertEqual(arr.shape, (n,))
+        self.assertEqual(arr.dtype, np.dtype(np.float64))
+        self.assertEqual(arr.strides, (np.dtype(np.float64).itemsize,))
+        arr.fill(123)  # test writability
+        np.testing.assert_equal(123, arr)
+        del arr
+
     def test_empty_2d(self):
         def pyfunc(m, n):
             arr = np.empty((m, n), np.int32)
@@ -152,6 +173,55 @@ class TestDynArray(NrtRefCtTest, TestCase):
         self.assertEqual(expected_arr.strides, got_arr.strides)
 
         del got_arr
+
+    @tag('important')
+    def test_empty2d_typed_tuple_arg(self):
+        def pyfunc(m, n):
+            arr = np.empty((m, n), np.int32)
+            for i in range(m):
+                for j in range(n):
+                    arr[i, j] = i + j
+
+            return arr
+
+        cfunc = nrtjit(pyfunc)
+        m = np.int8(4)
+        n = np.int16(3)
+        expected_arr = pyfunc(m, n)
+        got_arr = cfunc(m, n)
+        self.assert_array_nrt_refct(got_arr, 1)
+        np.testing.assert_equal(expected_arr, got_arr)
+
+        self.assertEqual(expected_arr.size, got_arr.size)
+        self.assertEqual(expected_arr.shape, got_arr.shape)
+        self.assertEqual(expected_arr.strides, got_arr.strides)
+
+        del got_arr
+
+    @tag('important')
+    @unittest.skipUnless(IS_32BITS, "32 bit only test")
+    def test_empty2d_typed_tuple_arg_overflow(self):
+        def pyfunc(m, n):
+            arr = np.empty((m, n), np.int32)
+            for i in range(m):
+                for j in range(n):
+                    arr[i, j] = i + j
+
+            return arr
+
+        cfunc = nrtjit(pyfunc)
+        m = np.int64(4)
+        n = np.int64(3)
+
+        self.disable_leak_check()
+
+        msg = ("Type int64 given in shape would lead to allocation "
+                "potentially exceeding intp size")
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(m, n)
+
+        self.assertIn(msg, str(raises.exception))
 
     @tag('important')
     def test_empty_2d_sliced(self):
@@ -594,6 +664,12 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc(n)
         self.check_1d(func)
 
+    def test_1d_typed_value(self):
+        pyfunc = self.pyfunc
+        def func(n):
+            return pyfunc(np.int8(n))
+        self.check_1d(func)
+
     def test_1d_dtype(self):
         pyfunc = self.pyfunc
         def func(n):
@@ -612,6 +688,12 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n))
+        self.check_2d(func)
+
+    def test_2d_typed_tuple(self):
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((np.int8(m), np.int16(n)))
         self.check_2d(func)
 
     @tag('important')
