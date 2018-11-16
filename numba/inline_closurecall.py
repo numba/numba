@@ -517,7 +517,6 @@ def _find_iter_range(func_ir, range_iter_var, swapped):
     require(isinstance(func_def, ir.Global) and func_def.value == range)
     nargs = len(range_def.args)
     swapping = [('"array comprehension"', 'closure of'), range_def.func.loc]
-    #[callname, repl_func.__name__, func_def, block.body[i].loc]
     if nargs == 1:
         swapped[range_def.func.name] = swapping
         stop = get_definition(func_ir, range_def.args[0], lhs_only=True)
