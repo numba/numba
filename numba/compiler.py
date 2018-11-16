@@ -12,7 +12,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
-from numba.parfor import PreParforPass, ParforPass, Parfor
+from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
@@ -71,7 +71,8 @@ CR_FIELDS = ["typing_context",
              "library",
              "call_helper",
              "environment",
-             "has_dynamic_globals"]
+             "has_dynamic_globals",
+             "metadata",]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
@@ -110,6 +111,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  typing_error=None,
                  call_helper=None,
                  has_dynamic_globals=False,  # by definition
+                 metadata=None, # Do not store, arbitrary and potentially large!
                  )
         return cr
 
@@ -291,6 +293,11 @@ class BasePipeline(object):
         self.typemap = None
         self.calltypes = None
         self.type_annotation = None
+        self.metadata = {} # holds arbitrary inter-pipeline stage meta data
+
+        # parfor diagnostics info, add to metadata
+        self.parfor_diagnostics = ParforDiagnostics()
+        self.metadata['parfor_diagnostics'] = self.parfor_diagnostics
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -524,8 +531,10 @@ class BasePipeline(object):
             self.func_ir,
             self.type_annotation.typemap,
             self.type_annotation.calltypes, self.typingctx,
-            self.flags.auto_parallel
+            self.flags.auto_parallel,
+            self.parfor_diagnostics.replaced_fns
             )
+
         preparfor_pass.run()
 
     def stage_parfor_pass(self):
@@ -536,7 +545,7 @@ class BasePipeline(object):
         assert self.func_ir
         parfor_pass = ParforPass(self.func_ir, self.type_annotation.typemap,
             self.type_annotation.calltypes, self.return_type, self.typingctx,
-            self.flags.auto_parallel, self.flags)
+            self.flags.auto_parallel, self.flags, self.parfor_diagnostics)
         parfor_pass.run()
 
         if config.WARNINGS:
@@ -570,7 +579,8 @@ class BasePipeline(object):
         # Ensure we have an IR and type information.
         assert self.func_ir
         inline_pass = InlineClosureCallPass(self.func_ir,
-                                            self.flags.auto_parallel)
+                                            self.flags.auto_parallel,
+                                            self.parfor_diagnostics.replaced_fns)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)
@@ -603,6 +613,14 @@ class BasePipeline(object):
             with open(config.HTML, 'w') as fout:
                 self.type_annotation.html_annotate(fout)
 
+    def stage_dump_diagnostics(self):
+        if self.flags.auto_parallel.enabled:
+            if config.PARALLEL_DIAGNOSTICS:
+                if self.parfor_diagnostics is not None:
+                    self.parfor_diagnostics.dump(config.PARALLEL_DIAGNOSTICS)
+                else:
+                    raise RuntimeError("Diagnostics failed.")
+
     def backend_object_mode(self):
         """
         Object mode compilation
@@ -631,7 +649,8 @@ class BasePipeline(object):
                 self.typemap,
                 self.return_type,
                 self.calltypes,
-                self.flags)
+                self.flags,
+                self.metadata)
 
     def _backend(self, lowerfn, objectmode):
         """
@@ -661,6 +680,7 @@ class BasePipeline(object):
             fndesc=lowered.fndesc,
             environment=lowered.env,
             has_dynamic_globals=lowered.has_dynamic_globals,
+            metadata=self.metadata,
             )
 
     def stage_objectmode_backend(self):
@@ -788,6 +808,7 @@ class BasePipeline(object):
         pm.add_stage(self.stage_ir_legalization,
                      "ensure IR is legal prior to lowering")
         self.add_lowering_stage(pm)
+        pm.add_stage(self.stage_dump_diagnostics, "dump diagnostics")
         self.add_cleanup_stage(pm)
 
     def define_objectmode_pipeline(self, pm, name='object'):
@@ -1015,14 +1036,15 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
 
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
-                          calltypes, flags):
+                          calltypes, flags, metadata):
     # Lowering
     fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline, noalias=flags.noalias)
 
     with targetctx.push_code_library(library):
-        lower = lowering.Lower(targetctx, library, fndesc, interp)
+        lower = lowering.Lower(targetctx, library, fndesc, interp,
+                               metadata=metadata)
         lower.lower()
         if not flags.no_cpython_wrapper:
             lower.create_cpython_wrapper(flags.release_gil)

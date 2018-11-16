@@ -16,10 +16,11 @@ from functools import reduce
 import numpy as np
 from numpy.random import randn
 import operator
+from collections import defaultdict
 
 import numba
 from numba import unittest_support as unittest
-from .support import TestCase
+from .support import TestCase, captured_stdout
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing
 from numba.targets import cpu
@@ -323,8 +324,11 @@ def get_optimized_numba_ir(test_func, args, **kws):
             return_type=tp.return_type,
             html_output=config.HTML)
 
+        diagnostics = numba.parfor.ParforDiagnostics()
+
         preparfor_pass = numba.parfor.PreParforPass(
-            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options)
+            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options,
+            swapped=diagnostics.replaced_fns)
         preparfor_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
@@ -333,7 +337,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
         flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx, options, flags)
+            tp.typingctx, options, flags, diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
@@ -2554,6 +2558,126 @@ class TestParforsMisc(TestCase):
 
         # make sure the cache is set to false, cf. NullCache
         self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
+
+
+@skip_unsupported
+class TestParforsDiagnostics(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    def assert_fusion_equivalence(self, got, expected):
+        a = self._fusion_equivalent(got)
+        b = self._fusion_equivalent(expected)
+        self.assertEqual(a, b)
+
+    def _fusion_equivalent(self, thing):
+        # parfors indexes the Parfors class instance id's from whereever the
+        # internal state happens to be. To assert fusion equivalence we just
+        # check that the relative difference between fusion adjacency lists
+        # is the same. For example:
+        # {3: [2, 1]} is the same as {13: [12, 11]}
+        # this function strips the indexing etc out returning something suitable
+        # for checking equivalence
+        new = defaultdict(list)
+        min_key = min(thing.keys())
+        for k in sorted(thing.keys()):
+            new[k - min_key] = [x - min_key for x in thing[k]]
+        return new
+
+    def assert_diagnostics(self, diagnostics, parfors_count=None,
+                           fusion_info=None, nested_fusion_info=None,
+                           replaced_fns=None):
+        if parfors_count is not None:
+            self.assertEqual(parfors_count, diagnostics.count_parfors())
+        if fusion_info is not None:
+            self.assert_fusion_equivalence(fusion_info, diagnostics.fusion_info)
+        if nested_fusion_info is not None:
+            self.assert_fusion_equivalence(nested_fusion_info,
+                                           diagnostics.nested_fusion_info)
+        if replaced_fns is not None:
+            repl = diagnostics.replaced_fns.values()
+            for x in replaced_fns:
+                for replaced in repl:
+                    if replaced[0] == x:
+                        break
+                else:
+                    msg = "Replacement for %s was not found. Had %s" % (x, repl)
+                    raise AssertionError(msg)
+        # just make sure that the dump() function doesn't have an issue!
+        with captured_stdout():
+            diagnostics.dump(4)
+
+    def test_array_expr(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n)
+            b = np.zeros(n)
+            return a + b
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=1,
+                                fusion_info = {3: [4, 5]})
+
+    def test_prange(self):
+        def test_impl():
+            n = 10
+            a = np.empty(n)
+            for i in prange(n):
+                a[i] = i * 10
+            return a
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=1)
+
+    def test_nested_prange(self):
+        def test_impl():
+            n = 10
+            a = np.empty((n, n))
+            for i in prange(n):
+                for j in prange(n):
+                    a[i, j] = i * 10 + j
+            return a
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=2,
+                                nested_fusion_info={2: [1]})
+
+    def test_function_replacement(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n)
+            b = np.argmin(a)
+            return b
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=1,
+                                fusion_info={2: [3]},
+                                replaced_fns = [('argmin', 'numpy'),])
+
+    def test_reduction(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n + 1) # prevent fusion
+            acc = 0
+            for i in prange(n):
+                acc += a[i]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=2)
+
 
 if __name__ == "__main__":
     unittest.main()
