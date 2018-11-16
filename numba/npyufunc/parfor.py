@@ -937,8 +937,9 @@ def _create_gufunc_for_parfor_body(
     unwrap_loop_body(loop_body)
 
     # store hoisted into diagnostics
-    lowerer.diagnostics.hoist_info[parfor.id] = {'hoisted': hoisted,
-                                                 'not_hoisted': not_hoisted}
+    diagnostics = lowerer.metadata['parfor_diagnostics']
+    diagnostics.hoist_info[parfor.id] = {'hoisted': hoisted,
+                                         'not_hoisted': not_hoisted}
 
     if config.DEBUG_ARRAY_OPT:
         print("After hoisting")

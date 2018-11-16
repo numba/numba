@@ -650,7 +650,7 @@ class BasePipeline(object):
                 self.return_type,
                 self.calltypes,
                 self.flags,
-                self.parfor_diagnostics)
+                self.metadata)
 
     def _backend(self, lowerfn, objectmode):
         """
@@ -1036,7 +1036,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
 
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
-                          calltypes, flags, parfor_diagnostics):
+                          calltypes, flags, metadata):
     # Lowering
     fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
@@ -1044,7 +1044,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 
     with targetctx.push_code_library(library):
         lower = lowering.Lower(targetctx, library, fndesc, interp,
-                               diagnostics=parfor_diagnostics)
+                               metadata=metadata)
         lower.lower()
         if not flags.no_cpython_wrapper:
             lower.create_cpython_wrapper(flags.release_gil)

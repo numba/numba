@@ -2558,5 +2558,63 @@ class TestParforsMisc(TestCase):
         # make sure the cache is set to false, cf. NullCache
         self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
 
+
+class TestParforsDiagnostics(TestParforsBase):
+
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    def assert_diagnostics(self, diagnostics, parfors_count=None,
+                           fusion_info=None, nested_fusion_info=None,
+                           replaced_fns=None):
+        if parfors_count is not None:
+            self.assertEqual(parfors_count, diagnostics.count_parfors())
+        if fusion_info is not None:
+            self.assertEqual(fusion_info, diagnostics.fusion_info)
+        if nested_fusion_info is not None:
+            self.assertEqual(nested_fusion_info, diagnostics.nested_fusion_info)
+
+    def test_array_expr(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n)
+            b = np.zeros(n)
+            return a + b
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=1,
+                                fusion_info = {3: [4, 5]})
+
+    def test_prange(self):
+        def test_impl():
+            n = 10
+            a = np.empty(n)
+            for i in prange(n):
+                a[i] = i * 10
+            return a
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=1)
+
+    def test_nested_prange(self):
+        def test_impl():
+            n = 10
+            a = np.empty(n, n)
+            for i in prange(n):
+                for j in prange(n):
+                    a[i, j] = i * 10 + j
+            return a
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        diagnostics.dump()
+        self.assert_diagnostics(diagnostics, parfors_count=1)
+
 if __name__ == "__main__":
     unittest.main()
