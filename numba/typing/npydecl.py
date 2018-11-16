@@ -413,7 +413,7 @@ for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as convertors to the equivalent Numba types
+# Register np.int8, etc. as converters to the equivalent Numba types
 np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
 np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
