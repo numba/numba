@@ -2560,6 +2560,7 @@ class TestParforsMisc(TestCase):
         self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
 
 
+@skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
