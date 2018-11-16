@@ -291,7 +291,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
             if config.DEBUG_ARRAY_OPT_RUNTIME:
                 res_print_str = "res_print"
-                strconsttyp = types.Const(res_print_str)
+                strconsttyp = types.StringLiteral(res_print_str)
                 lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                 assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
                                                target=lhs, loc=loc)
@@ -330,7 +330,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                 if config.DEBUG_ARRAY_OPT_RUNTIME:
                     res_print_str = "one_res_print"
-                    strconsttyp = types.Const(res_print_str)
+                    strconsttyp = types.StringLiteral(res_print_str)
                     lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
                                                target=lhs, loc=loc)
@@ -898,7 +898,7 @@ def _create_gufunc_for_parfor_body(
 
                     # Make constant string
                     strval = "{} =".format(inst.target.name)
-                    strconsttyp = types.Const(strval)
+                    strconsttyp = types.StringLiteral(strval)
 
                     lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),

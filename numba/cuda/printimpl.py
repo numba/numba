@@ -26,6 +26,7 @@ def print_item(ty, context, builder, val):
 
 
 @print_item.register(types.Integer)
+@print_item.register(types.IntegerLiteral)
 def int_print_impl(ty, context, builder, val):
     if ty in types.unsigned_domain:
         rawfmt = "%llu"
@@ -42,9 +43,9 @@ def real_print_impl(ty, context, builder, val):
     lld = context.cast(builder, val, ty, types.float64)
     return "%f", [lld]
 
-@print_item.register(types.Const)
+@print_item.register(types.StringLiteral)
 def const_print_impl(ty, context, builder, sigval):
-    pyval = ty.value
+    pyval = ty.literal_value
     assert isinstance(pyval, str)  # Ensured by lowering
     rawfmt = "%s"
     val = context.insert_string_const_addrspace(builder, pyval)

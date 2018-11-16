@@ -117,6 +117,9 @@ build_c_helpers_dict(void)
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
 
+    /* Unicode string support */
+    declmethod(extract_unicode);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"

@@ -166,7 +166,7 @@ class TestArrayAnalysis(TestCase):
                 fn = func_ir.get_definition(expr.func.name)
                 if isinstance(fn, ir.Global) and fn.name == 'assert_equiv':
                     typ = typemap[expr.args[0].name]
-                    if typ.value.startswith(msg):
+                    if typ.literal_value.startswith(msg):
                         return True
         return False
 

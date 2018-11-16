@@ -36,10 +36,10 @@ class PrintItem(AbstractTemplate):
 
 @infer_global(abs)
 class Abs(ConcreteTemplate):
-    int_cases = [signature(ty, ty) for ty in types.signed_domain]
-    real_cases = [signature(ty, ty) for ty in types.real_domain]
+    int_cases = [signature(ty, ty) for ty in sorted(types.signed_domain)]
+    real_cases = [signature(ty, ty) for ty in sorted(types.real_domain)]
     complex_cases = [signature(ty.underlying_float, ty)
-                     for ty in types.complex_domain]
+                     for ty in sorted(types.complex_domain)]
     cases = int_cases + real_cases + complex_cases
 
 
@@ -443,7 +443,7 @@ class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (arg1, arg2) = args
-        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+        if isinstance(arg1, types.Literal) and isinstance(arg2, types.Literal):
             return signature(types.boolean, arg1, arg2)
 
 
@@ -916,7 +916,7 @@ class Enumerate(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         it = args[0]
-        if len(args) > 1 and not args[1] in types.integer_domain:
+        if len(args) > 1 and not isinstance(args[1], types.Integer):
             raise TypeError("Only integers supported as start value in "
                             "enumerate")
         elif len(args) > 2:

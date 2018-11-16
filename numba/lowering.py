@@ -11,7 +11,8 @@ from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError, new_error_context, TypingError
+from .errors import (LoweringError, new_error_context, TypingError,
+                     LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
 from . import debuginfo
@@ -547,18 +548,24 @@ class Lower(BaseLower):
             except NotImplementedError:
                 return None
 
-        res = try_static_impl((types.Const(static_lhs), types.Const(static_rhs)),
-                              (static_lhs, static_rhs))
+        res = try_static_impl(
+            (_lit_or_omitted(static_lhs), _lit_or_omitted(static_rhs)),
+            (static_lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((types.Const(static_lhs), rty),
-                              (static_lhs, rhs))
+        res = try_static_impl(
+            (_lit_or_omitted(static_lhs), rty),
+            (static_lhs, rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((lty, types.Const(static_rhs)),
-                              (lhs, static_rhs))
+        res = try_static_impl(
+            (lty, _lit_or_omitted(static_rhs)),
+            (lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
@@ -662,7 +669,7 @@ class Lower(BaseLower):
             if i in inst.consts:
                 pyval = inst.consts[i]
                 if isinstance(pyval, str):
-                    pos_tys[i] = types.Const(pyval)
+                    pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
         fixed_sig.pysig = sig.pysig
@@ -977,8 +984,11 @@ class Lower(BaseLower):
             return res
 
         elif expr.op == "static_getitem":
-            signature = typing.signature(resty, self.typeof(expr.value.name),
-                                         types.Const(expr.index))
+            signature = typing.signature(
+                resty,
+                self.typeof(expr.value.name),
+                _lit_or_omitted(expr.index),
+                )
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
@@ -1126,3 +1136,13 @@ class Lower(BaseLower):
             return
 
         self.context.nrt.decref(self.builder, typ, val)
+
+
+def _lit_or_omitted(value):
+    """Returns a Literal instance if the type of value is supported;
+    otherwise, return `Omitted(value)`.
+    """
+    try:
+        return types.literal(value)
+    except LiteralTypingError:
+        return types.Omitted(value)

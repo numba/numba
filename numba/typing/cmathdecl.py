@@ -2,12 +2,13 @@ import cmath
 
 from numba import types, utils
 from numba.typing.templates import (AbstractTemplate, ConcreteTemplate,
-                                    signature, Registry, bound_function)
+                                    signature, Registry)
 
 registry = Registry()
 infer_global = registry.register_global
 
 # TODO: support non-complex arguments (floats and ints)
+
 
 @infer_global(cmath.acos)
 @infer_global(cmath.acosh)
@@ -25,13 +26,14 @@ infer_global = registry.register_global
 @infer_global(cmath.tan)
 @infer_global(cmath.tanh)
 class CMath_unary(ConcreteTemplate):
-    cases = [signature(tp, tp) for tp in types.complex_domain]
+    cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
 
 
 @infer_global(cmath.isinf)
 @infer_global(cmath.isnan)
 class CMath_predicate(ConcreteTemplate):
-    cases = [signature(types.boolean, tp) for tp in types.complex_domain]
+    cases = [signature(types.boolean, tp) for tp in
+             sorted(types.complex_domain)]
 
 
 if utils.PYVERSION >= (3, 2):
@@ -43,9 +45,9 @@ if utils.PYVERSION >= (3, 2):
 @infer_global(cmath.log)
 class Cmath_log(ConcreteTemplate):
     # unary cmath.log()
-    cases = [signature(tp, tp) for tp in types.complex_domain]
+    cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
     # binary cmath.log()
-    cases += [signature(tp, tp, tp) for tp in types.complex_domain]
+    cases += [signature(tp, tp, tp) for tp in sorted(types.complex_domain)]
 
 
 @infer_global(cmath.phase)

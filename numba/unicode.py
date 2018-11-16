@@ -14,7 +14,7 @@ from numba.extending import (
     overload_method,
     intrinsic,
     )
-from numba.targets.imputils import lower_constant
+from numba.targets.imputils import lower_constant, lower_cast
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -25,6 +25,7 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
     )
 from numba.targets import slicing
+from numba._helperlib import c_helpers
 
 
 ### DATA MODEL
@@ -46,6 +47,47 @@ class UnicodeModel(models.StructModel):
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+
+
+### CAST
+
+
+def compile_time_get_string_data(obj):
+    """Get string data from a python string for use at compile-time to embed
+    the string data into the LLVM module.
+    """
+    from ctypes import (
+        CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
+        cast, c_ubyte,
+    )
+
+    extract_unicode_fn = c_helpers['extract_unicode']
+    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int))
+    fn = proto(extract_unicode_fn)
+    length = c_ssize_t()
+    kind = c_int()
+    data = fn(obj, byref(length), byref(kind))
+    if data is None:
+        raise ValueError("cannot extract unicode data from the given string")
+    length = length.value
+    kind = kind.value
+    nbytes = (length + 1) * _kind_to_byte_width(kind)
+    out = (c_ubyte * nbytes).from_address(data)
+    return bytes(out), length, kind
+
+
+@lower_cast(types.StringLiteral, types.unicode_type)
+def cast_from_literal(context, builder, fromty, toty, val):
+    literal_string = fromty.literal_value
+
+    databytes, length, kind = compile_time_get_string_data(literal_string)
+    mod = builder.module
+    gv = context.insert_const_bytes(mod, databytes)
+    uni_str = cgutils.create_struct_proxy(toty)(context, builder)
+    uni_str.data = gv
+    uni_str.length = uni_str.length.type(length)
+    uni_str.kind = uni_str.kind.type(kind)
+    return uni_str._getvalue()
 
 
 ### CONSTANT

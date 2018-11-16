@@ -68,12 +68,13 @@ class _FailedFirstRunner(object):
         print("Running {} tests".format(len(tests)))
         print('Flags', flags)
         result = run_tests([prog] + flags + tests, **kwds)
-        # Save failed
-        if not self.last_failed:
+        # Update failed tests records
+        if not self.last_failed or len(tests) == len(failed_tests):
             self.save_failed_tests(result, all_tests)
         return result.wasSuccessful()
 
     def save_failed_tests(self, result, all_tests):
+        print("Saving failed tests to {}".format(self.cache_filename))
         cache = []
         # Find failed tests
         failed = set()

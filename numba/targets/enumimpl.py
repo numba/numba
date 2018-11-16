@@ -68,12 +68,12 @@ def enum_class_getattr(context, builder, ty, val, attr):
     return context.get_constant_generic(builder, ty.dtype, member.value)
 
 
-@lower_builtin('static_getitem', types.EnumClass, types.Const)
+@lower_builtin('static_getitem', types.EnumClass, types.StringLiteral)
 def enum_class_getitem(context, builder, sig, args):
     """
     Return an enum member by index name.
     """
     enum_cls_typ, idx = sig.args
-    member = enum_cls_typ.instance_class[idx.value]
+    member = enum_cls_typ.instance_class[idx.literal_value]
     return context.get_constant_generic(builder, enum_cls_typ.dtype,
                                         member.value)

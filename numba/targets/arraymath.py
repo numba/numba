@@ -25,7 +25,7 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from .linalg import ensure_blas
 
 from numba.extending import intrinsic
-from numba.errors import RequireConstValue, TypingError
+from numba.errors import RequireLiteralValue, TypingError
 
 def _check_blas():
     # Checks if a BLAS is available so e.g. dot will work
@@ -86,10 +86,10 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     in the axis dimension and 'axis' is that dimension.  For this to work,
     axis has to be a const.
     """
-    if not isinstance(axis, types.Const):
-        raise RequireConstValue('axis argument must be a constant')
+    if not isinstance(axis, types.Literal):
+        raise RequireLiteralValue('axis argument must be a constant')
     # Get the value of the axis constant.
-    axis_value = axis.value
+    axis_value = axis.literal_value
     # The length of the indexing tuple to be output.
     nd = len(shape_tuple)
 
@@ -167,9 +167,9 @@ def array_sum(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.Const)
+@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.Const)
+@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
     """
     The third parameter to gen_index_tuple that generates the indexing
@@ -185,9 +185,9 @@ def array_sum_axis(context, builder, sig, args):
     [ty_array, ty_axis] = sig.args
     is_axis_const = False
     const_axis_val = 0
-    if isinstance(ty_axis, types.Const):
+    if isinstance(ty_axis, types.Literal):
         # this special-cases for constant axis
-        const_axis_val = ty_axis.value
+        const_axis_val = ty_axis.literal_value
         # fix negative axis
         if const_axis_val < 0:
             const_axis_val = ty_array.ndim + const_axis_val
@@ -2021,7 +2021,7 @@ _searchsorted_right = register_jitable(_searchsorted(_le))
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
-    side_val = getattr(side, 'value', side)
+    side_val = getattr(side, 'literal_value', side)
     if side_val == 'left':
         loop_impl = _searchsorted_left
     elif side_val == 'right':

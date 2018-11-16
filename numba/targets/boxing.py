@@ -28,6 +28,12 @@ def unbox_boolean(typ, obj, c):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
+@box(types.IntegerLiteral)
+def box_literal_integer(typ, val, c):
+    val = c.context.cast(c.builder, val, typ, typ.literal_type)
+    return c.box(typ.literal_type, val)
+
+
 @box(types.Integer)
 def box_integer(typ, val, c):
     if typ.signed:
@@ -1036,10 +1042,10 @@ def box_unsupported(typ, val, c):
     return res
 
 
-@box(types.Const)
+@box(types.Literal)
 def box(typ, val, c):
     # Const type contains the python object of the constant value,
     # which we can directly return.
-    retval = typ.value
+    retval = typ.literal_value
     # Serialize the value into the IR
     return c.pyapi.unserialize(c.pyapi.serialize_object(retval))

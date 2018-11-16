@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
-from .misc import Undefined
+from .misc import Undefined, unliteral
 from ..typeconv import Conversion
 
 
@@ -156,6 +156,9 @@ class BaseAnonymousTuple(BaseTuple):
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
+
+    def __unliteral__(self):
+        return BaseTuple.from_types([unliteral(t) for t in self])
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):
@@ -316,6 +319,7 @@ class List(MutableSequence):
     mutable = True
 
     def __init__(self, dtype, reflected=False):
+        dtype = unliteral(dtype)
         self.dtype = dtype
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"

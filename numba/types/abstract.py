@@ -380,3 +380,52 @@ class ArrayCompatible(Type):
     @cached_property
     def dtype(self):
         return self.as_array.dtype
+
+
+class Literal(Type):
+    """Base class for Literal types.
+    Literal types contain the original Python value in the type.
+
+    A literal type should always be constructed from the `literal(val)`
+    function.
+    """
+
+    # *ctor_map* is a dictionary mapping Python types to Literal subclasses
+    # for constructing a numba type for a given Python type.
+    # It is used in `literal(val)` function.
+    # To add new Literal subclass, register a new mapping to this dict.
+    ctor_map = {}
+
+    # *_literal_type_cache* is used to cache the numba type of the given value.
+    _literal_type_cache = None
+
+    def __init__(self, value):
+        self._literal_init(value)
+        fmt = "Literal[{}]({})"
+        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+
+    def _literal_init(self, value):
+        self._literal_value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
+        try:
+            hash(value)
+        except TypeError:
+            self._key = id(value)
+        else:
+            self._key = value
+
+    @property
+    def literal_value(self):
+        return self._literal_value
+
+    @property
+    def literal_type(self):
+        if self._literal_type_cache is None:
+            from numba import typing
+            ctx = typing.Context()
+            res = ctx.resolve_value_type(self.literal_value)
+            self._literal_type_cache = res
+
+        return self._literal_type_cache
+

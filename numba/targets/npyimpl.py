@@ -167,7 +167,7 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif tyinp in types.number_domain | set([types.boolean]):
+    elif types.unliteral(tyinp) in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
         raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
@@ -574,9 +574,9 @@ def _make_dtype_object(typingctx, desc):
 
         return sig, codegen
 
-    if isinstance(desc, types.Const):
+    if isinstance(desc, types.Literal):
         # Convert the str description into np.dtype then to numba type.
-        nb_type = from_dtype(np.dtype(desc.value))
+        nb_type = from_dtype(np.dtype(desc.literal_value))
         return from_nb_type(nb_type)
     elif isinstance(desc, types.functions.NumberClass):
         thestr = str(desc.dtype)
@@ -588,7 +588,7 @@ def _make_dtype_object(typingctx, desc):
 def numpy_dtype(desc):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(desc, (types.Const, types.functions.NumberClass)):
+    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
         def imp(desc):
             return _make_dtype_object(desc)
         return imp

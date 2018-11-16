@@ -3,7 +3,8 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
-from ..errors import TypingError
+from ..errors import TypingError, LiteralTypingError
+
 
 
 class PyObject(Dummy):
@@ -38,27 +39,42 @@ class RawPointer(Opaque):
     """
 
 
-class Const(Dummy):
-    """
-    A compile-time constant, for (internal) use when a type is needed for
-    lookup.
-    """
+class StringLiteral(Literal, Dummy):
+    pass
 
-    def __init__(self, value):
-        self.value = value
-        # We want to support constants of non-hashable values, therefore
-        # fall back on the value's id() if necessary.
-        try:
-            hash(value)
-        except TypeError:
-            self._key = id(value)
-        else:
-            self._key = value
-        super(Const, self).__init__("const(%r)" % (value,))
 
-    @property
-    def key(self):
-        return type(self.value), self._key
+Literal.ctor_map[str] = StringLiteral
+
+
+def unliteral(lit_type):
+    """
+    Get base type from Literal type.
+    """
+    if hasattr(lit_type, '__unliteral__'):
+        return lit_type.__unliteral__()
+    return getattr(lit_type, 'literal_type', lit_type)
+
+
+def literal(value):
+    """Returns a Literal instance or raise LiteralTypingError
+    """
+    assert not isinstance(value, Literal)
+    ty = type(value)
+    try:
+        ctor = Literal.ctor_map[ty]
+    except KeyError:
+        raise LiteralTypingError(ty)
+    else:
+        return ctor(value)
+
+
+def maybe_literal(value):
+    """Get a Literal type for the value or None.
+    """
+    try:
+        return literal(value)
+    except LiteralTypingError:
+        return
 
 
 class Omitted(Opaque):
@@ -191,7 +207,7 @@ class Optional(Type):
 
     def __init__(self, typ):
         assert not isinstance(typ, (Optional, NoneType))
-        self.type = typ
+        self.type = unliteral(typ)
         name = "?%s" % typ
         super(Optional, self).__init__(name)
 
@@ -302,6 +318,17 @@ class SliceType(Type):
     @property
     def key(self):
         return self.members
+
+
+class SliceLiteral(Literal, SliceType):
+    def __init__(self, value):
+        self._literal_init(value)
+        name = 'Literal[slice]({})'.format(value)
+        members = 2 if value.step is None else 3
+        SliceType.__init__(self, name=name, members=members)
+
+
+Literal.ctor_map[slice] = SliceLiteral
 
 
 class ClassInstanceType(Type):

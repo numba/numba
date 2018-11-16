@@ -281,7 +281,7 @@ class EnumModel(ProxyModel):
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
 @register_default(types.NoneType)
-@register_default(types.Const)
+@register_default(types.StringLiteral)
 @register_default(types.EllipsisType)
 @register_default(types.Function)
 @register_default(types.Type)
@@ -328,6 +328,7 @@ class MemInfoModel(OpaqueModel):
 
 
 @register_default(types.Integer)
+@register_default(types.IntegerLiteral)
 class IntegerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         be_type = ir.IntType(fe_type.bitwidth)

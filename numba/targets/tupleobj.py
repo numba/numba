@@ -246,7 +246,8 @@ def getitem_unituple(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('static_getitem', types.BaseTuple, types.Const)
+@lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
