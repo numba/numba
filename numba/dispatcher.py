@@ -706,7 +706,7 @@ class Dispatcher(_DispatcherBase):
         Obtain the compilation metadata for a given signature.
         """
         if signature is not None:
-            return self.overloads[sig].metadata
+            return self.overloads[signature].metadata
         else:
             return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
 
