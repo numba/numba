@@ -751,10 +751,11 @@ class ParforDiagnostics(object):
                     # something that is not an in internal parfor
                     tmp = []
                     for adj in graphs:
-                        for k in adj[pf_id]:
-                            tmp.append(self.sort_pf_by_line(k, parfors_simple))
-                        if tmp:
-                            return max(0, min(tmp) - 1)
+                        if adj: # graph may be empty, e.g. no nesting
+                            for k in adj[pf_id]:
+                                tmp.append(self.sort_pf_by_line(k, parfors_simple))
+                            if tmp:
+                                return max(0, min(tmp) - 1)
                     # second run through the parfor block to see if there's
                     # and reference to a line number in the user source
                     for blk in pf.loop_body.values():
