@@ -74,6 +74,12 @@ def enumerate_start_usecase():
         result += i * j
     return result
 
+def enumerate_invalid_start_usecase():
+    result = 0
+    for i, j in enumerate((1., 2.5, 3.), 3.14159):
+        result += i * j
+    return result
+
 def filter_usecase(x, filter_func):
     return filter(filter_func, x)
 
@@ -414,6 +420,21 @@ class TestBuiltins(TestCase):
 
     def test_enumerate_start_npm(self):
         self.test_enumerate_start(flags=no_pyobj_flags)
+
+    def test_enumerate_start_invalid_start_type(self):
+        pyfunc = enumerate_invalid_start_usecase
+        cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        with self.assertRaises(TypeError) as raises:
+            cr.entry_point()
+        msg = "'float' object cannot be interpreted as an integer"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_enumerate_start_invalid_start_type_npm(self):
+        pyfunc = enumerate_invalid_start_usecase
+        with self.assertRaises(errors.TypingError) as raises:
+            cr = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        msg = "Only integers supported as start value in enumerate"
+        self.assertIn(msg, str(raises.exception))
 
     def test_filter(self, flags=enable_pyobj_flags):
         pyfunc = filter_usecase
