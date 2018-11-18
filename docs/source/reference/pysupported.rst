@@ -159,14 +159,14 @@ byte character width in memory.  When strings of different encodings are
 combined (as in concatenation), the resulting string automatically uses the
 larger character width of the two input strings.  String slices also use the
 same character width as the original string, even if the slice could be
-represented with a narrower character width.  These details are invisible to
-the user, of course.
+represented with a narrower character width.  (These details are invisible to
+the user, of course.)
 
 The following functions, attributes and methods are currently supported:
 
 * ``len()``
 * ``+`` (concatenation of strings)
-* ``in``, ``.contains()`` (substring search)
+* ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
@@ -175,6 +175,11 @@ The following functions, attributes and methods are currently supported:
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
+
+.. warning::
+    The performance of the substring search operations (``in``,
+    ``.contains()`` and ``find()``) is poor in version 0.41 and will be improved in
+    version 0.42.
 
 
 tuple
