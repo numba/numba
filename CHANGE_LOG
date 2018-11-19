@@ -3,8 +3,6 @@ Version 0.41.0
 
 This release adds the following major features:
 
-* Official ARMv7 (Raspberry Pi 2/3/3+) support - Now building conda packages
-  compatible with Berryconda
 * Diagnostics showing the optimizations done by ParallelAccelerator
 * Support for profiling Numba-compiled functions in Intel VTune
 * Additional NumPy functions: partition, nancumsum, nancumprod, ediff1d, cov,
