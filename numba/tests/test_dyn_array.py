@@ -7,7 +7,7 @@ import random
 import threading
 
 from numba import unittest_support as unittest
-from numba.errors import TypingError
+from numba.errors import TypingError, LoweringError
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
@@ -218,7 +218,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         msg = ("Type int64 given in shape would lead to allocation "
                 "potentially exceeding intp size")
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             cfunc(m, n)
 
         self.assertIn(msg, str(raises.exception))
