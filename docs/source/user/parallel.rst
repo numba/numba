@@ -398,8 +398,8 @@ The report is split into the following sections:
     any optimization has taken place, but with loops associated with their final
     parallel region (this is to make before/after optimization output directly
     comparable). Multiple parallel regions may exist if there are loops which
-    cannot be fused, in this case each region will still execute in parallel,
-    each running in the sequence presented. From the example:
+    cannot be fused, in this case code within each region will execute in
+    parallel, but each parallel region will run sequentially. From the example:
 
     .. code-block:: text
 
