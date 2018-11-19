@@ -15,7 +15,7 @@ build:
   missing_dso_whitelist:
     # optional dependency: required only when omp is chosen as the backend for
     # the threading layer
-    - lib/libiomp5.dylib
+    - lib/libiomp5.dylib # [osx]
 
 requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
