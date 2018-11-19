@@ -12,7 +12,8 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typing
+from numba import jit, types, errors, typing, compiler
+from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
@@ -29,7 +30,7 @@ from numba.extending import (typeof_impl, type_callable,
                              get_cython_function_address
                              )
 from numba.typing.templates import (
-    ConcreteTemplate, signature, infer)
+    ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
@@ -364,6 +365,21 @@ def non_boxable_bad_usecase():
     return return_non_boxable()
 
 
+def mk_func_input(f):
+    pass
+
+
+@infer_global(mk_func_input)
+class MkFuncTyping(AbstractTemplate):
+    def generic(self, args, kws):
+        assert isinstance(args[0], types.MakeFunctionLiteral)
+        return signature(types.none, *args)
+
+
+def mk_func_test_impl():
+    mk_func_input(lambda a: a)
+
+
 class TestLowLevelExtending(TestCase):
     """
     Test the low-level two-tier extension API.
@@ -393,6 +409,17 @@ class TestLowLevelExtending(TestCase):
         pyfunc = get_dummy
         cr = compile_isolated(pyfunc, (), types.float64)
         self.assertPreciseEqual(cr.entry_point(), 42.0)
+
+    def test_mk_func_literal(self):
+        """make sure make_function is passed to typer class as a literal
+        """
+        test_ir = compiler.run_frontend(mk_func_test_impl)
+        typingctx = cpu_target.typing_context
+        typingctx.refresh()
+        typemap, _, _ = compiler.type_inference_stage(
+            typingctx, test_ir, (), None)
+        self.assertTrue(any(isinstance(a, types.MakeFunctionLiteral)
+                            for a in typemap.values()))
 
 
 class TestPandasLike(TestCase):
