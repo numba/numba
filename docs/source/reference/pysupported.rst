@@ -148,10 +148,10 @@ str
 ---
 
 Numba supports (Unicode) strings in Python 3.  Strings can be passed into
-:term:`nopython mode` as arguments, as well as constructed and returned from :term:`nopython mode`.
-As in Python, slices (even of length 1) return a new, reference counted
-string.  Optimized code paths for efficiently accessing single characters may
-be introduced in the future.
+:term:`nopython mode` as arguments, as well as constructed and returned from
+:term:`nopython mode`. As in Python, slices (even of length 1) return a new,
+reference counted string.  Optimized code paths for efficiently accessing
+single characters may be introduced in the future.
 
 The in-memory representation is the same as was introduced in Python 3.4, with
 each string having a tag to indicate whether the string is using a 1, 2, or 4
