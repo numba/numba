@@ -1113,7 +1113,7 @@ class ParforDiagnostics(object):
                             else:
                                 print_wrapped(msg + ')')
                                 print_g(fadj_, nadj_, k, depth + 1)
-                                summary[region_id]['serialized'] += 1
+                            summary[region_id]['serialized'] += 1
 
                     if nadj_[theroot] != []:
                         print_wrapped("Parallel region %s:" % region_id)
