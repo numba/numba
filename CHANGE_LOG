@@ -68,12 +68,14 @@ Fixes:
 * PR #3429: Fixes raising of user defined exceptions for exec(<string>).
 * PR #3432: Fix error due to function naming in CI in py2.7 
 * PR #3444: Fixed TBB's single thread execution and test added for #3440
+* PR #3449: Allow matching non-array objects in find_callname()
 * PR #3455: Change getiter and iternext to not be pure. Resolves #3425
 * PR #3467: Make ir.UndefinedType singleton class.
 * PR #3478: Fix np.random.shuffle sideeffect
 * PR #3487: Raise unsupported for kwargs given to `print()`  5 - Ready to merge
 * PR #3488: Remove dead script.  5 - Ready to merge
 * PR #3498: Fix stencil support for boolean as return type
+* PR #3511: Fix handling make_function literals (regression of #3414)
 
 Documentation Updates:
 
@@ -86,6 +88,8 @@ Documentation Updates:
 * PR #3452: Fix broken link and mark up problem. 
 * PR #3484: Size Numba logo in docs in em units. Fixes #3313
 * PR #3502: just two typos
+* PR #3506: Document string support
+* PR #3513: Documentation for parallel diagnostics.
 
 Contributors:
 
