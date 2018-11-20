@@ -971,7 +971,7 @@ def box_dtype(typ, val, c):
 
 @unbox(types.DType)
 def unbox_dtype(typ, obj, c):
-    raise NotImplementedError("dtype unboxing unsupported")
+    raise NotImplementedError("dtype unboxing unsupported ")
 
 
 @box(types.PyObject)
