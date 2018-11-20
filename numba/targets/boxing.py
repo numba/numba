@@ -969,6 +969,10 @@ def box_dtype(typ, val, c):
     np_dtype = numpy_support.as_dtype(typ.dtype)
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
+@unbox(types.DType)
+def unbox_dtype(typ, obj, c):
+    raise NotImplementedError("dtype unboxing unsupported")
+
 
 @box(types.PyObject)
 @box(types.Object)

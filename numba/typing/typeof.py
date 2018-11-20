@@ -79,6 +79,29 @@ def typeof_ctypes_function(val, c):
     if is_ctypes_funcptr(val):
         return make_function_type(val)
 
+
+def _generate_dtype_value_map():
+    """ Generate a {np.int32: types.DType(type.int32)} map """
+    dt_val_map = {}
+
+    for dt in (dtv for vl in np.sctypes.values() for dtv in vl):
+        try:
+            t = numpy_support.from_dtype(np.dtype(dt))
+        except NotImplementedError as e:
+            # Types such as float16, float128 and complex256
+            assert dt == e.message
+        except TypeError as e:
+            # Primarily np.void
+            assert dt == np.void
+        else:
+            dt_val_map[dt] = types.DType(t)
+
+    return dt_val_map
+
+
+_npy_dtype_values = _generate_dtype_value_map()
+
+
 @typeof_impl.register(type)
 def typeof_type(val, c):
     """
@@ -88,6 +111,12 @@ def typeof_type(val, c):
         return types.ExceptionClass(val)
     if issubclass(val, tuple) and hasattr(val, "_asdict"):
         return types.NamedTupleClass(val)
+
+    try:
+        return _npy_dtype_values[val]
+    except KeyError:
+        pass
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
