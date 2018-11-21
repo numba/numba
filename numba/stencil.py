@@ -542,6 +542,14 @@ class StencilFunc(object):
                 out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
                             out_name, shape_name, return_type_name)
             func_text += "    " + out_init
+        else: # result is present, if cval is set then use it
+            if "cval" in self.options:
+                cval = self.options["cval"]
+                if return_type.dtype != typing.typeof.typeof(cval):
+                    raise ValueError(
+                        "cval type does not match stencil return type.")
+                out_init = "{}[:] = {}\n".format(out_name, cval)
+                func_text += "    " + out_init
 
         offset = 1
         # Add the loop nests to the new function.
