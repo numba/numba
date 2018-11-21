@@ -1839,6 +1839,31 @@ def np_unique(a):
     return np_unique_impl
 
 
+@overload(np.repeat)
+def np_repeat(a, repeats):
+    def np_repeat_impl(a, repeats):
+        a = a.ravel()
+        shape = a.shape
+        n = shape[0]
+        return_size = n*repeats
+        to_return = np.empty(return_size)
+        # if a.ndim > 1:
+        #     to_return = np.zeros((return_size, shape[1]))
+        # else:
+        #     to_return = np.zeros(return_size)
+        for i in range(n):
+            count = 1
+            ind = i*repeats
+            to_return[ind] = a[i]
+            while count < repeats:
+                ind_in = ind+count
+                to_return[ind_in] = a[i]
+                count += 1
+        return to_return
+
+    return np_repeat_impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
