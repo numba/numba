@@ -80,6 +80,7 @@ class BaseLower(object):
     """
 
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
+        import ipdb; ipdb.set_trace()
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
@@ -457,7 +458,8 @@ class Lower(BaseLower):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
             res = self.context.cast(self.builder, val, oty, ty)
-            self.incref(ty, res)
+            if not isinstance(ty, types.BoundFunction):
+                self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Arg):
@@ -967,7 +969,7 @@ class Lower(BaseLower):
                 casted = self.context.cast(self.builder, val, ty, resty.this)
                 res = self.context.get_bound_function(self.builder, casted,
                                                       resty.this)
-                self.incref(resty, res)
+                # self.incref(resty, res)
                 return res
             else:
                 impl = self.context.get_getattr(ty, expr.attr)
@@ -982,7 +984,7 @@ class Lower(BaseLower):
 
                 # Cast the attribute type to the expected output type
                 res = self.context.cast(self.builder, res, attrty, resty)
-            return res
+                return res
 
         elif expr.op == "static_getitem":
             signature = typing.signature(
@@ -1099,6 +1101,11 @@ class Lower(BaseLower):
         Delete the given variable.
         """
         fetype = self.typeof(name)
+
+        if isinstance(fetype, types.BoundFunction):
+            # don't delete BoundFunction objects since they are just references to the
+            # class instance which is tracked separatelly
+            return
 
         # Define if not already (may happen if the variable is deleted
         # at the beginning of a loop, but only set later in the loop)

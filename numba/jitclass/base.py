@@ -75,11 +75,11 @@ def ctor({args}):
 
 def _getargs(fn):
     """
-    Returns list of positional and keyword argument names in order. 
+    Returns list of positional and keyword argument names in order.
     """
     sig = utils.pysignature(fn)
     params = sig.parameters
-    args = [k for k, v in params.items() 
+    args = [k for k, v in params.items()
             if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
     return args
 

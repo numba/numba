@@ -101,7 +101,7 @@ def remove_unnecessary_nrt_usage(function, context, fndesc):
     If rewrite has happen, this function return True. Otherwise, return False.
     """
     dmm = context.data_model_manager
-    if _legalize(function.module, dmm, fndesc):
+    if _legalize(function.module, dmm, fndesc) or True:
         _rewrite_function(function)
         return True
     else:
