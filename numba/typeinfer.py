@@ -20,8 +20,10 @@ import contextlib
 import itertools
 from pprint import pprint
 from collections import OrderedDict, defaultdict
+import traceback
+import _operator
 
-from numba import ir, types, utils, config, typing
+from numba import ir, types, utils, config, typing, six
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
@@ -435,6 +437,168 @@ def _is_array_not_precise(arrty):
     """
     return isinstance(arrty, types.Array) and not arrty.is_precise()
 
+def types2usersig(in_args, in_kwargs):
+    from numba.types.misc import unliteral
+    args = []
+    for a in in_args:
+        args.append("{}".format(str(unliteral(a))))
+
+    args += ["%s=%s" % (k, v) for k, v in sorted(in_kwargs.items())]
+    return ', '.join(args)
+
+def create_hint(key, args, bound=False):
+    """
+    key - the offending typing key
+    args - the offending arguments as a list of already formatted strings
+    """
+    # see if hinting is turned off, in which case, return an empty string
+    if not config.SHOW_HINTS:
+        return ''
+
+    from numba.targets.registry import cpu_target
+    from numba.scripts.generate_lower_listing import \
+        gather_function_info, format_signature
+    import numpy as np
+    import inspect
+    from numba.six import exec_
+    cpu_backend = cpu_target.target_context
+    cpu_backend.refresh()
+    fninfo = gather_function_info(cpu_backend)
+    explain_known = []
+    try:
+        impls = fninfo[key]
+        if not impls:
+            # bail out
+            raise ValueError("no function info for %s" % key)
+        known_sigs = [x['sig'] for x in impls]
+        # see if its a numpy function from the loaded module
+        name = getattr(key, '__name__', key)
+        # numpy and builtins share some names, like np.add and builtin add
+        # check for builtin first
+        is_decl_builtin = False
+        if type(key).__name__ == 'builtin_function_or_method':
+            is_decl_builtin = True
+
+
+        def get_mod_via_inst(lookfor, template):
+            split = lookfor.split('.')
+            mod = '.'.join(split[:-1])
+            func = split[-1]
+            txt=template % (mod, mod, func)
+            lcls = {}
+            exec_(txt, {}, lcls)
+            inst = lcls['z']
+            if isinstance(inst, str):
+                return inst
+            return inspect.getmodule(lcls['z'])
+
+        lookfor = impls[0]['fn']
+        module = inspect.getmodule(lookfor)
+        if module is None:
+            try:
+                import_template = "import %s\nz = %s.%s\n"
+                module = get_mod_via_inst(lookfor, import_template)
+            except Exception as e:
+                try:
+                    define_template = "'%s'\nz = %s.__module__\n'%s'"
+                    module = get_mod_via_inst(lookfor, define_template)
+                except Exception as e:
+                    # might be a numpy submodule, and numba refers to np.ndarray
+                    # as 'array' internally, so try 'np.nd' prefix too
+                    if lookfor.startswith('array.'):
+                        pat = 'np.nd{}'
+                    else:
+                        pat = 'numpy.{}'
+                    import_template = "import %s\nz = %s.%s\n"
+                    try:
+                        module = get_mod_via_inst(pat.format(lookfor),
+                                                  import_template)
+                    except Exception as e:
+                        pass
+
+        is_np_func = module == np
+
+        hintmsg = ("\nHINT: Given argument type(s) were ({}) and the {} '{}' is "
+                   "supported for the following argument type(s):\n")
+        userargs = args
+
+        def format_signature(sig):
+            def fmt(c):
+                try:
+                    return c.__name__
+                except AttributeError:
+                    return repr(c).strip('\'"')
+            out = tuple(map(fmt, sig))
+            return '({0})'.format(', '.join(out))
+
+        strip = False or bound
+        if is_np_func:
+            # it's definitely a NumPy function
+            msg = hintmsg.format(userargs, 'NumPy function', 'numpy.%s' % name)
+            prefix = 'numpy.'
+        else:
+            # see if it's a numpy.ndarray function from the loaded module
+            ndarray_meth = None
+            if isinstance(key, str):
+                if 'array.' in key:
+                    name = key[key.find('.') + 1:len(key)]
+                    ndarray_meth = getattr(np.ndarray, name, None)
+
+            if ndarray_meth is not None:
+                msg = hintmsg.format(userargs,
+                                     'NumPy ndarray method',
+                                     'numpy.ndarray.%s' % name)
+                prefix = 'numpy.ndarray.'
+                strip = True
+            else:
+                # it's from another module, see if it can be found
+                opmsg = "function '%s'" % name
+                is_builtin = isinstance(module, str) and module == "builtins"
+                if is_builtin:
+                    prefix = module
+                    opmsg += " from"
+                else:
+                    prefix = getattr(module, '__name__', "")
+                    if prefix is not "":
+                        opmsg += " from the module"
+                msg = hintmsg.format(userargs, opmsg, prefix)
+                # add the `.` for use in the found definitions output
+                if prefix is not "":
+                    prefix += "."
+                # is builtin so no prefix required on function list, also strip
+                if is_builtin:
+                    prefix = ""
+                    strip = True
+                # {static,}{set,get}item need stripping
+                if 'item' in name:
+                    strip = True
+
+        # operator binops shoudn't strip, it's confusing
+        if module is _operator:
+            strip = False
+
+        explain_known.append(_termcolor.indicate(msg))
+
+        lim = 1 if strip else 0 # strip off first arg if asked
+        for x in known_sigs:
+            msg = " * {}{}{}".format(prefix, name, format_signature(x[lim:]))
+            explain_known.append(_termcolor.indicate(msg))
+
+        explain_known.append("\n")
+        url = 'http://numba.pydata.org/numba-doc/latest/reference/envvars.html'
+        experimental = ('NOTE: Hinting is experimental, you can switch it off '
+                        'by setting the environment variable NUMBA_SHOW_HINTS '
+                        'to 0 or by adding "show_hints: 0" to your '
+                        '.numba_config.yaml configuration file. See %s for '
+                        'details of both.') % url
+        explain_known.append(_termcolor.indicate(experimental))
+        explain_known.append("\n")
+
+
+    except Exception as e:
+        pass # can't provide a hint, this is ok, it's just a hint
+    return explain_known
+
 
 class CallConstraint(object):
     """Constraint for calling functions.
@@ -479,25 +643,26 @@ class CallConstraint(object):
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
 
+        is_boundfunc_ty = isinstance(fnty, types.BoundFunction)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
             # Arguments are invalid => explain why
-            headtemp = "Invalid use of {0} with parameters ({1})"
-            args = [str(a) for a in pos_args]
-            args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
-            head = headtemp.format(fnty, ', '.join(map(str, args)))
+            headtemp = "Invalid use of {0} with argument(s): ({1})"
+            args = types2usersig(pos_args, kw_args)
+            head = headtemp.format(fnty, args)
             desc = context.explain_function_type(fnty)
-            msg = '\n'.join([head, desc])
+            key = fnty.key[0]
+            explain_known = list(create_hint(key, args, bound=is_boundfunc_ty))
+            msg = '\n'.join([head, desc] + explain_known)
             raise TypingError(msg)
 
         typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
 
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
-        if (isinstance(fnty, types.BoundFunction)
-                and sig.recvr is not None
-                and sig.recvr != fnty.this):
+        if (is_boundfunc_ty and sig.recvr is not None
+            and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
             if refined_this is not None and refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
@@ -664,9 +829,10 @@ class StaticSetItemConstraint(SetItemRefinement):
                                                            self.index, valty)
             if sig is None:
                 sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+
             if sig is None:
-                raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
-                                  (targetty, self.index, valty), loc=self.loc)
+                raise TypingError("Cannot resolve setitem: %s[%r] = %s.\n %s" %
+                                  (targetty, self.index, valty, z), loc=self.loc)
             self.signature = sig
             self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 

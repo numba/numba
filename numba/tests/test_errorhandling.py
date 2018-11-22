@@ -202,6 +202,69 @@ class TestConstantInferenceErrorHandling(unittest.TestCase):
         self.assertIn(msg1, str(raises.exception))
         self.assertIn(msg2, str(raises.exception))
 
+class TestLowerableHinting(unittest.TestCase):
+    # NOTE, this will all fail, this is deliberate and with view of
+    # demonstrating hinting.
+
+    def test_1(self):
+        # np.linalg.norm is from an @overload, this checks the type hinting
+        # fall through does nothing in the case it can't work out the hint
+        @njit
+        def foo():
+            tmp = np.linalg.norm('a')
+
+        foo()
+
+    def test_2(self):
+        # this checks 'getitem', bound via @infer_global(operator.getitem)
+        @njit
+        def foo(x):
+            return x[7.12]
+
+        foo(np.array([10]))
+
+    def test_3(self):
+        # this checks
+        @njit
+        def foo():
+            a = np.array([1,2,3,4,5], dtype=np.int32)
+            a.view(dtype=np.float32)
+
+        foo()
+
+    def test_4(self):
+        # this checks 'getitem' on a list type
+        @njit
+        def foo(x):
+            x[8.3]
+            return x
+
+        foo([1,2,3])
+
+    def test_5(self):
+        # checks 'array.reshape' maps to np.ndarray.reshape correctly
+        @njit
+        def foo(x):
+            np.zeros(4,).reshape((9.8,))
+
+        foo([1,2,3])
+
+    def test_6(self):
+        # checks a numpy function bound with @infer_global(np.sinc)
+        @njit
+        def foo():
+            np.sinc([1,])
+
+        foo()
+
+    def test_7(self):
+        # checks a method on set
+        @njit
+        def foo():
+            a = {1,2,3}
+            a.add('a')
+
+        foo()
 
 if __name__ == '__main__':
     unittest.main()

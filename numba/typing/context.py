@@ -180,12 +180,16 @@ class BaseContext(object):
             desc.append(msg.format(func=func))
 
         if defns:
-            desc = ['Known signatures:']
+            desc = ['Known concrete type signatures:']
             for sig in defns:
                 desc.append(' * {0}'.format(sig))
+        else:
+            desc.append('\nNo concrete type signatures were found.')
 
         if param:
-            desc.append(' * parameterized')
+            msg = ('\nIn addition, undetermined parameterised signatures were '
+                   'found.')
+            desc.append(msg)
 
         return '\n'.join(desc)
 

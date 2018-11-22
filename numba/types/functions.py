@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import traceback
 import inspect
 import sys
+from collections import defaultdict
 
 from .abstract import *
 from .common import *
@@ -21,7 +22,7 @@ class _ResolutionFailures(object):
         self._function_type = function_type
         self._args = args
         self._kwargs = kwargs
-        self._failures = []
+        self._failures = defaultdict(list)
 
     def __len__(self):
         return len(self._failures)
@@ -34,29 +35,38 @@ class _ResolutionFailures(object):
         error : Exception or str
             Error message
         """
-        self._failures.append((calltemplate, error))
+        isexc = isinstance(error, Exception)
+        errclazz = '%s: ' % type(error).__name__ if isexc else ''
+
+        key = "{}{}".format(errclazz, str(error))
+        self._failures[key].append(calltemplate)
 
     def format(self):
         """Return a formatted error message from all the gathered errors.
         """
+
+        from numba.typeinfer import create_hint, types2usersig
         indent = ' ' * 4
-        args = [str(a) for a in self._args]
-        args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
-        headtmp = 'Invalid use of {} with argument(s) of type(s): ({})'
-        msgbuf = [headtmp.format(self._function_type, ', '.join(args))]
+        headtmp = 'Invalid use of {} with argument(s) of type(s): ({}).\n'
+        sigargs = types2usersig(self._args, self._kwargs)
+        msgbuf = [headtmp.format(self._function_type, sigargs)]
+
+        for k, v in self._failures.items():
+            fmt = "There were {} definitions(s) that responded with:\n"
+            msgbuf.append(_termcolor.errmsg(fmt.format(len(v))))
+            msgbuf.append(_termcolor.highlight("{}{}\n".format(indent, k)))
+
         explain = self._context.explain_function_type(self._function_type)
-        msgbuf.append(explain)
-        for i, (temp, error) in enumerate(self._failures):
-            msgbuf.append(_termcolor.errmsg("In definition {}:".format(i)))
-            msgbuf.append(_termcolor.highlight('{}{}'.format(
-                indent, self.format_error(error))))
-            loc = self.get_loc(temp, error)
-            if loc:
-                msgbuf.append('{}raised from {}'.format(indent, loc))
+        msgbuf.append(_termcolor.errmsg(explain))
+        msgbuf.append("")
+
+        explain_known = create_hint(self._function_type.key[0], sigargs)
 
         likely_cause = ("This error is usually caused by passing an argument "
                         "of a type that is unsupported by the named function.")
         msgbuf.append(_termcolor.errmsg(likely_cause))
+        if explain_known:
+            msgbuf.extend(explain_known)
         return '\n'.join(msgbuf)
 
     def format_error(self, error):
@@ -74,7 +84,6 @@ class _ResolutionFailures(object):
             # traceback is unavailable in py2
             frame = traceback.extract_tb(error.__traceback__)[-1]
             return "{}:{}".format(frame[0], frame[1])
-
 
 class BaseFunction(Callable):
     """
@@ -173,7 +182,7 @@ class BoundFunction(Callable, Opaque):
         self.template = newcls
         self.typing_key = self.template.key
         self.this = this
-        name = "%s(%s for %s)" % (self.__class__.__name__,
+        name = "%s(method '%s' for type '%s')" % (self.__class__.__name__,
                                   self.typing_key, self.this)
         super(BoundFunction, self).__init__(name)
 
