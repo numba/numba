@@ -234,6 +234,11 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_sqrt_npm(self):
         self.check_unary_func(sqrt_usecase, no_pyobj_flags)
+        # issue #3499, check large complex128 values, values cross the float32
+        # representation limit threshold
+        values = [-10 ** i for i in range(36, 41)]
+        self.run_unary(sqrt_usecase, [types.complex128],
+                       values, flags=no_pyobj_flags)
 
     # Trigonometric functions
 
