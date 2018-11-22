@@ -146,6 +146,14 @@ def _fix_up_private_attr(clsname, spec):
         out[k] = v
     return out
 
+def _add_linking_libs(context, call):
+    """
+    Add the required libs for the callable to allow inlining.
+    """
+    cg = context.codegen()
+    for lib in getattr(call, "libs", ()):
+        cg.add_linking_library(lib)
+
 
 def register_class_type(cls, spec, class_ctor, builder):
     """
@@ -235,6 +243,7 @@ class ConstructorTemplate(templates.AbstractTemplate):
         # Redirect resolution to __init__
         instance_type = self.key.instance_type
         ctor = instance_type.jitmethods['__init__']
+        # _add_linking_libs(self.context, ctor)
         boundargs = (instance_type.get_reference_type(),) + args
         disp_type = types.Dispatcher(ctor)
         sig = disp_type.get_call_type(self.context, boundargs, kws)
@@ -297,18 +306,15 @@ class ClassBuilder(object):
                 self.implemented_methods.add(meth)
 
     def _implement_method(self, registry, attr):
-        libs = None
-
         @registry.lower((types.ClassInstanceType, attr),
                         types.ClassInstanceType, types.VarArg(types.Any))
         def imp(context, builder, sig, args):
-            nonlocal libs
             instance_type = sig.args[0]
             method = instance_type.jitmethods[attr]
             disp_type = types.Dispatcher(method)
             call = context.get_function(disp_type, sig)
-            imp.libs = getattr(call, "libs", ())
             out = call(builder, args)
+            _add_linking_libs(context, call)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
 
@@ -369,6 +375,7 @@ def attr_impl(context, builder, typ, value, attr):
         sig = dispatcher.get_call_type(context.typing_context, [typ], {})
         call = context.get_function(dispatcher, sig)
         out = call(builder, [value])
+        _add_linking_libs(context, call)
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
     raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
@@ -408,7 +415,7 @@ def attr_impl(context, builder, sig, args, attr):
                                       (typ, valty), {})
         call = context.get_function(disp_type, sig)
         call(builder, (target, val))
-
+        _add_linking_libs(context, call)
     else:
         raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
 
@@ -473,6 +480,7 @@ def ctor_impl(context, builder, sig, args):
     init = inst_typ.jitmethods['__init__']
     disp_type = types.Dispatcher(init)
     call = context.get_function(disp_type, types.void(*init_sig))
+    _add_linking_libs(context, call)
     realargs = [inst_struct._getvalue()] + list(args)
     call(builder, realargs)
 

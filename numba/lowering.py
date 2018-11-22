@@ -80,7 +80,6 @@ class BaseLower(object):
     """
 
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
-        import ipdb; ipdb.set_trace()
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
