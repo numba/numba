@@ -297,16 +297,21 @@ class ClassBuilder(object):
                 self.implemented_methods.add(meth)
 
     def _implement_method(self, registry, attr):
+        libs = None
+
         @registry.lower((types.ClassInstanceType, attr),
                         types.ClassInstanceType, types.VarArg(types.Any))
         def imp(context, builder, sig, args):
+            nonlocal libs
             instance_type = sig.args[0]
             method = instance_type.jitmethods[attr]
             disp_type = types.Dispatcher(method)
             call = context.get_function(disp_type, sig)
+            imp.libs = getattr(call, "libs", ())
             out = call(builder, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
+
 
 
 @templates.infer_getattr
