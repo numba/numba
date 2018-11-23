@@ -248,7 +248,6 @@ def pinned(*arylist):
                                       mapped=False)
         pmlist.append(pm)
     yield
-    del pmlist
 
 
 @require_context
@@ -269,10 +268,14 @@ def mapped(*arylist, **kws):
     for ary, pm in zip(arylist, pmlist):
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
-    if len(devarylist) == 1:
-        yield devarylist[0]
-    else:
-        yield devarylist
+    try:
+        if len(devarylist) == 1:
+            yield devarylist[0]
+        else:
+            yield devarylist
+    finally:
+        for ary in pmlist:
+            ary.free()
 
 
 def event(timing=True):
