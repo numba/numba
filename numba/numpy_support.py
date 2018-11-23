@@ -34,6 +34,23 @@ FROM_DTYPE = {
 
     np.dtype('complex64'): types.complex64,
     np.dtype('complex128'): types.complex128,
+
+    np.bool: types.boolean,
+    np.int8: types.int8,
+    np.int16: types.int16,
+    np.int32: types.int32,
+    np.int64: types.int64,
+
+    np.uint8: types.uint8,
+    np.uint16: types.uint16,
+    np.uint32: types.uint32,
+    np.uint64: types.uint64,
+
+    np.float32: types.float32,
+    np.float64: types.float64,
+
+    np.complex64: types.complex64,
+    np.complex128: types.complex128,
 }
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
@@ -87,20 +104,26 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if dtype.fields is None:
+    if getattr(dtype, "fields", None) is not None:
+        return from_struct_dtype(dtype)
+
+    try:
+        return FROM_DTYPE[dtype]
+    except KeyError:
         try:
-            return FROM_DTYPE[dtype]
-        except KeyError:
-            if dtype.char in 'SU':
+            char = getattr(dtype, 'char')
+        except AttributeError:
+            pass
+        else:
+            if char in 'SU':
                 return _from_str_dtype(dtype)
-            if dtype.char in 'mM':
+            if char in 'mM':
                 return _from_datetime_dtype(dtype)
-            if dtype.char in 'V':
+            if char in 'V':
                 subtype = from_dtype(dtype.subdtype[0])
                 return types.NestedArray(subtype, dtype.shape)
-            raise NotImplementedError(dtype)
-    else:
-        return from_struct_dtype(dtype)
+
+    raise NotImplementedError(dtype)
 
 
 _as_dtype_letters = {
@@ -134,6 +157,8 @@ def as_dtype(nbtype):
     if isinstance(nbtype, types.EnumMember):
         return as_dtype(nbtype.dtype)
     if isinstance(nbtype, types.npytypes.DType):
+        return as_dtype(nbtype.dtype)
+    if isinstance(nbtype, types.npytypes.ValueDType):
         return as_dtype(nbtype.dtype)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
