@@ -1362,14 +1362,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
+        for x in (np.nan, -np.inf, 3.142, 0):
+            params = {'x': x}
+            _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 11), "corrcoef extreme value handling fixed Numpy 1.11+")
+    @needs_blas
+    def test_corrcoef_edge_case_extreme_values(self):
+        pyfunc = corrcoef
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
+
         # extreme values
         x = ((1e-100, 1e100), (1e100, 1e-100))
         params = {'x': x}
         _check(params)
 
-        for x in (np.nan, -np.inf, 3.142):
-            params = {'x': x}
-            _check(params)
+        # Note
+        # ----
+        # Numpy 1.10 output is:
+        # [[ 0. -0.]
+        #  [-0.  0.]]
+        #
+        # Numpy 1.11+ output is:
+        # [[ 1. -1.]
+        #  [-1.  1.]]
+        #
+        # Numba implementation replicates Numpy 1.11+ behaviour
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
