@@ -2678,6 +2678,18 @@ class TestParforsDiagnostics(TestParforsBase):
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
 
+    def test_setitem(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n)
+            a[:] = 7
+            return a
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=2)
+
 
 if __name__ == "__main__":
     unittest.main()
