@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import, division
 import math
 import operator
 import sys
+import numpy as np
 
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
@@ -20,11 +21,13 @@ lower = registry.lower
 
 
 # Helpers, shared with cmathimpl.
-FLT_MAX = 3.4028234663852886E+38
-FLT_MIN = 1.1754943508222875E-38
+_NP_FLT_FINFO = np.finfo(np.dtype('float32'))
+FLT_MAX = _NP_FLT_FINFO.max
+FLT_MIN = _NP_FLT_FINFO.min
 
-DBL_MAX = 1.7976931348623157E+308
-DBL_MIN = 2.2250738585072014E-308
+_NP_DBL_FINFO = np.finfo(np.dtype('float64'))
+DBL_MAX = _NP_DBL_FINFO.max
+DBL_MIN = _NP_DBL_FINFO.min
 
 FLOAT_ABS_MASK = 0x7fffffff
 FLOAT_SIGN_MASK = 0x80000000
