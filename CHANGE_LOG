@@ -76,6 +76,10 @@ Fixes:
 * PR #3488: Remove dead script.
 * PR #3498: Fix stencil support for boolean as return type
 * PR #3511: Fix handling make_function literals (regression of #3414)
+* PR #3514: Add missing unicode != unicode
+* PR #3527: Fix complex math sqrt implementation for large -ve values
+* PR #3530: This adds arg an check for the pattern supplied to Parfors.
+* PR #3536: Sets list dtor linkage to `linkonce_odr` to fix visibility in AOT
 
 Documentation Updates:
 
@@ -91,6 +95,7 @@ Documentation Updates:
 * PR #3502: just two typos
 * PR #3506: Document string support
 * PR #3513: Documentation for parallel diagnostics.
+* PR #3526: Fix 5 min guide with respect to @njit decl
 
 Contributors:
 
