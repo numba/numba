@@ -23,11 +23,11 @@ lower = registry.lower
 # Helpers, shared with cmathimpl.
 _NP_FLT_FINFO = np.finfo(np.dtype('float32'))
 FLT_MAX = _NP_FLT_FINFO.max
-FLT_MIN = _NP_FLT_FINFO.min
+FLT_MIN = _NP_FLT_FINFO.tiny
 
 _NP_DBL_FINFO = np.finfo(np.dtype('float64'))
 DBL_MAX = _NP_DBL_FINFO.max
-DBL_MIN = _NP_DBL_FINFO.min
+DBL_MIN = _NP_DBL_FINFO.tiny
 
 FLOAT_ABS_MASK = 0x7fffffff
 FLOAT_SIGN_MASK = 0x80000000
