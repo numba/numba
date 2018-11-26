@@ -36,13 +36,11 @@ def gen_impl(const_args):
     char_ptr = Type.pointer(Type.int(8))
     zero_i32t = int32_t(0)
 
-    @intrinsic(support_literals=True)
+    @intrinsic
     def gdb_internal(tyctx):
         function_sig = types.void()
 
         def codegen(cgctx, builder, signature, args):
-            pyapi = cgctx.get_python_api(builder)
-
             mod = builder.module
             pid = cgutils.alloca_once(builder, int32_t, size=1)
 
@@ -53,8 +51,15 @@ def gen_impl(const_args):
             intfmt = cgctx.insert_const_string(mod, '%d')
             gdb_str = cgctx.insert_const_string(mod, config.GDB_BINARY)
             attach_str = cgctx.insert_const_string(mod, 'attach')
-            cmdlang = [cgctx.insert_const_string(
-                mod, x.value) for x in const_args]
+
+            new_args = []
+            # add break point command to known location
+            new_args.extend(['-ex', 'break numba_gdb_breakpoint'])
+            # continue, then next next to get out of the breakpoint
+            new_args.extend(['-ex', 'c', '-ex', 'n', '-ex', 'n'])
+            # then run the user defined args if any
+            new_args.extend([x.literal_value for x in const_args])
+            cmdlang = [cgctx.insert_const_string(mod, x) for x in new_args]
 
             # insert getpid, getpid is always successful, call without concern!
             fnty = ir.FunctionType(int32_t, tuple())
@@ -77,6 +82,11 @@ def gen_impl(const_args):
             # insert sleep
             fnty = ir.FunctionType(int32_t, (int32_t,))
             sleep = mod.get_or_insert_function(fnty, "sleep")
+
+            # insert break point
+            fnty = ir.FunctionType(ir.VoidType(), tuple())
+            breakpoint = mod.get_or_insert_function(fnty,
+                                                    "numba_gdb_breakpoint")
 
             # do the work
             parent_pid = builder.call(getpid, tuple())
@@ -103,7 +113,6 @@ def gen_impl(const_args):
             with builder.if_else(is_child) as (then, orelse):
                 with then:
                     # is child
-                    my_pid = builder.call(getpid, tuple())
                     nullptr = Constant.null(char_ptr)
                     gdb_str_ptr = builder.gep(
                         gdb_str, [zero_i32t], inbounds=True)
@@ -111,12 +120,17 @@ def gen_impl(const_args):
                         attach_str, [zero_i32t], inbounds=True)
                     cgutils.printf(
                         builder, "Attaching to PID: %s\n", pidstr_ptr)
-                    builder.call(execl, (gdb_str_ptr, gdb_str_ptr,
-                                         attach_str_ptr, pidstr_ptr, *cmdlang,
-                                         nullptr))
+                    buf = (
+                        gdb_str_ptr,
+                        gdb_str_ptr,
+                        attach_str_ptr,
+                        pidstr_ptr)
+                    buf = buf + tuple(cmdlang) + (nullptr,)
+                    builder.call(execl, buf)
                 with orelse:
                     # is parent
-                    builder.call(sleep, (int32_t(2),))
+                    builder.call(sleep, (int32_t(10),))
+                    builder.call(breakpoint, tuple())
 
             return cgctx.get_constant(types.none, None)
         return function_sig, codegen

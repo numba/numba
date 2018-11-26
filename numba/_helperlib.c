@@ -1080,6 +1080,15 @@ numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind) {
 #endif
 }
 
+
+/*
+ * defined break point for gdb
+ */
+NUMBA_EXPORT_FUNC(void)
+numba_gdb_breakpoint(void) {
+  /* does nothing */
+}
+
 /*
  * Define bridge for all math functions
  */

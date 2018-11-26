@@ -120,6 +120,9 @@ build_c_helpers_dict(void)
     /* Unicode string support */
     declmethod(extract_unicode);
 
+    /* for gdb breakpoint */
+    declmethod(gdb_breakpoint);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"
