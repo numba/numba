@@ -506,6 +506,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # The parallel patterns this parfor was generated from and their options
         # for example, a parfor could be from the stencil pattern with
         # the neighborhood option
+        assert len(pattern) > 1
         self.patterns = [pattern]
         self.flags = flags
         # if True, this parfor shouldn't be lowered sequentially even with the
@@ -2166,7 +2167,7 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(
                  scope, index_vars, body_block)
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('setitem',), self.flags)
+                        ('setitem', ''), self.flags)
         if shape:
             # slice subarray
             parfor.loop_body = {body_label: body_block}

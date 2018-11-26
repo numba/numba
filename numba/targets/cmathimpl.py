@@ -207,7 +207,17 @@ def polar_impl(x, y, x_is_finite, y_is_finite):
 @lower(cmath.sqrt, types.Complex)
 def sqrt_impl(context, builder, sig, args):
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
-    THRES = mathimpl.FLT_MAX / (1 + math.sqrt(2))
+
+    SQRT2 = 1.414213562373095048801688724209698079E0
+    ONE_PLUS_SQRT2 = (1. + SQRT2)
+    theargflt = sig.args[0].underlying_float
+    # Get a type specific maximum value so scaling for overflow is based on that
+    MAX = mathimpl.DBL_MAX if theargflt.bitwidth == 64 else mathimpl.FLT_MAX
+    # THRES will be double precision, should not impact typing as it's just
+    # used for comparison, there *may* be a few values near THRES which
+    # deviate from e.g. NumPy due to rounding that occurs in the computation
+    # of this value in the case of a 32bit argument.
+    THRES = MAX / ONE_PLUS_SQRT2
 
     def sqrt_impl(z):
         """cmath.sqrt(z)"""

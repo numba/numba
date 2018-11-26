@@ -279,7 +279,7 @@ class ListInstance(_ListPayloadMixin):
         if not fn.is_declaration:
             # End early if the dtor is already defined
             return fn
-        fn.linkage = 'internal'
+        fn.linkage = 'linkonce_odr'
         # Populate the dtor
         builder = ir.IRBuilder(fn.append_basic_block())
         base_ptr = fn.args[0]  # void*
