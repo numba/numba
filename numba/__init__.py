@@ -11,7 +11,7 @@ import warnings
 from . import config, errors, _runtests as runtests, types
 
 # Re-export typeof
-from .special import typeof, prange, pndindex, gdb
+from .special import typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init
 
 # Re-export error classes
 from .errors import *
@@ -53,6 +53,8 @@ __all__ = """
     typeof
     prange
     gdb
+    gdb_breakpoint
+    gdb_init
     stencil
     vectorize
     objmode

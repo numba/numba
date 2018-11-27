@@ -19,5 +19,10 @@ class prange(object):
 def gdb(*args):
     pass
 
+def gdb_breakpoint():
+    pass
 
-__all__ = ['typeof', 'prange', 'pndindex', 'gdb']
+def gdb_init():
+    pass
+
+__all__ = ['typeof', 'prange', 'pndindex', 'gdb', 'gdb_breakpoint', 'gdb_init']
