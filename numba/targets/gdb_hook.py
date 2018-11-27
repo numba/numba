@@ -11,8 +11,7 @@ from numba.extending import overload, intrinsic
 
 _path = os.path.dirname(__file__)
 
-@overload(gdb)
-def hook_gdb(*args):
+def _confirm_gdb():
     if not sys.platform.startswith('linux'):
         raise RuntimeError('gdb is only available on linux')
     gdbloc = config.GDB_BINARY
@@ -23,6 +22,10 @@ def hook_gdb(*args):
                )
         raise RuntimeError(msg % config.GDB_BINARY)
 
+@overload(gdb)
+def hook_gdb(*args):
+
+    _confirm_gdb()
     gdbimpl = gen_gdb_impl(args, True)
 
     def impl(*args):
@@ -31,16 +34,9 @@ def hook_gdb(*args):
 
 @overload(gdb_init)
 def hook_gdb_init(*args):
-    if not sys.platform.startswith('linux'):
-        raise RuntimeError('gdb is only available on linux')
-    gdbloc = config.GDB_BINARY
-    if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
-        msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
-               ' binary location can be set using Numba configuration, see: '
-               'http://numba.pydata.org/numba-doc/latest/reference/envvars.html'
-               )
-        raise RuntimeError(msg % config.GDB_BINARY)
-    gdbimpl = gen_gdb_impl(args, True)
+    _confirm_gdb()
+    gdbimpl = gen_gdb_impl(args, False)
+
     def impl(*args):
         gdbimpl()
     return impl

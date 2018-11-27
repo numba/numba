@@ -61,7 +61,7 @@ class TestGdbBinding(TestCase):
                                  stderr=subprocess.PIPE,
                                  env=env,
                                  shell=True)
-        # finish in 10s or kill it, there's no work being done
+        # finish in 20s or kill it, there's no work being done
         def kill():
             popen.stdout.flush()
             popen.stderr.flush()
