@@ -17,12 +17,29 @@ class prange(object):
         return range(*args)
 
 def gdb(*args):
+    """
+    Calling this function will invoke gdb and attach it to the current process
+    at the call site. Arguments are strings in the gdb command language syntax
+    which will be executed by gdb once initialisation has occurred.
+    """
     pass
 
 def gdb_breakpoint():
+    """
+    Calling this function will inject a breakpoint at the call site that is
+    recognised by both `gdb` and `gdb_init`, this is to allow breaking at
+    multiple points. gdb will stop in the user defined code just after the frame
+    employed by the breakpoint returns.
+    """
     pass
 
-def gdb_init():
+def gdb_init(*args):
+    """
+    Calling this function will invoke gdb and attach it to the current process
+    at the call site, then continue executing the process under gdb's control.
+    Arguments are strings in the gdb command language syntax which will be
+    executed by gdb once initialisation has occurred.
+    """
     pass
 
 __all__ = ['typeof', 'prange', 'pndindex', 'gdb', 'gdb_breakpoint', 'gdb_init']

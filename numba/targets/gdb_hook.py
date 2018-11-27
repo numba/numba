@@ -40,7 +40,7 @@ def hook_gdb_init(*args):
                'http://numba.pydata.org/numba-doc/latest/reference/envvars.html'
                )
         raise RuntimeError(msg % config.GDB_BINARY)
-    gdbimpl = gen_gdb_impl(args, False)
+    gdbimpl = gen_gdb_impl(args, True)
     def impl(*args):
         gdbimpl()
     return impl
@@ -134,7 +134,7 @@ def init_gdb_codegen(cgctx, builder, signature, args, const_args, do_break=False
             attach_str_ptr = builder.gep(
                 attach_str, [zero_i32t], inbounds=True)
             cgutils.printf(
-                builder, "Attaching to PID: %s\n", pidstr_ptr)
+                builder, "Attaching to PID: %s\n", pidstr)
             buf = (
                 gdb_str_ptr,
                 gdb_str_ptr,
