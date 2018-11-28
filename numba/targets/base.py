@@ -4,6 +4,7 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
+import functools
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 
@@ -1116,20 +1117,36 @@ class _wrap_impl(object):
     """
 
     def __init__(self, imp, context, sig):
-        self._imp = imp
+        self._imp = _wrap_missing_loc(imp)
         self._context = context
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        try:
-            # 98 % of cases will use this branch as they will not need location
-            # information to proceed.
-            return self._imp(self._context, builder, self._sig, args)
-        except TypeError:
-            return self._imp(self._context, builder, self._sig, args, loc=loc)
+        return self._imp(self._context, builder, self._sig, args, loc=loc)
 
     def __getattr__(self, item):
         return getattr(self._imp, item)
 
     def __repr__(self):
         return "<wrapped %s>" % self._imp
+
+
+def _has_loc(fn):
+    """Does function *fn* take ``loc`` argument?
+    """
+    sig = utils.pysignature(fn)
+    return 'loc' in sig.parameters
+
+
+def _wrap_missing_loc(fn):
+    """Wrap function for missing ``loc`` keyword argument.
+    Otherwise, return the original *fn*.
+    """
+    if not _has_loc(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            kwargs.pop('loc')     # drop unused loc
+            return fn(*args, **kwargs)
+        return wrapper
+    else:
+        return fn
