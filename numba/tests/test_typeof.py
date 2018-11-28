@@ -271,10 +271,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     @tag('important')
     def test_dtype_values(self):
-        self.assertEqual(typeof(np.int64), types.ValueDType(types.int64))
-        self.assertEqual(typeof(np.float64), types.ValueDType(types.float64))
-        self.assertEqual(typeof(np.int32), types.ValueDType(types.int32))
-        self.assertEqual(typeof(np.int8), types.ValueDType(types.int8))
+        self.assertEqual(typeof(np.int64), types.NumberClass(types.int64))
+        self.assertEqual(typeof(np.float64), types.NumberClass(types.float64))
+        self.assertEqual(typeof(np.int32), types.NumberClass(types.int32))
+        self.assertEqual(typeof(np.int8), types.NumberClass(types.int8))
 
     @tag('important')
     def test_ctypes(self):
