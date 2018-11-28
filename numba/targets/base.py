@@ -4,7 +4,6 @@ from collections import namedtuple, defaultdict
 import copy
 import os
 import sys
-import functools
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 
@@ -1143,7 +1142,6 @@ def _wrap_missing_loc(fn):
     Otherwise, return the original *fn*.
     """
     if not _has_loc(fn):
-        @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             kwargs.pop('loc')     # drop unused loc
             return fn(*args, **kwargs)
