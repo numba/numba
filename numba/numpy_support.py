@@ -34,23 +34,6 @@ FROM_DTYPE = {
 
     np.dtype('complex64'): types.complex64,
     np.dtype('complex128'): types.complex128,
-
-    np.bool: types.boolean,
-    np.int8: types.int8,
-    np.int16: types.int16,
-    np.int32: types.int32,
-    np.int64: types.int64,
-
-    np.uint8: types.uint8,
-    np.uint16: types.uint16,
-    np.uint32: types.uint32,
-    np.uint64: types.uint64,
-
-    np.float32: types.float32,
-    np.float64: types.float64,
-
-    np.complex64: types.complex64,
-    np.complex128: types.complex128,
 }
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
@@ -104,7 +87,9 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if getattr(dtype, "fields", None) is not None:
+    if type(dtype) == type and issubclass(dtype, np.generic):
+        dtype = np.dtype(dtype)
+    elif getattr(dtype, "fields", None) is not None:
         return from_struct_dtype(dtype)
 
     try:
@@ -133,6 +118,7 @@ _as_dtype_letters = {
     types.UnicodeCharSeq: 'U',
 }
 
+
 def as_dtype(nbtype):
     """
     Return a numpy dtype instance corresponding to the given Numba type.
@@ -158,7 +144,7 @@ def as_dtype(nbtype):
         return as_dtype(nbtype.dtype)
     if isinstance(nbtype, types.npytypes.DType):
         return as_dtype(nbtype.dtype)
-    if isinstance(nbtype, types.npytypes.ValueDType):
+    if isinstance(nbtype, types.NumberClass):
         return as_dtype(nbtype.dtype)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))

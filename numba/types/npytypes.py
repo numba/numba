@@ -113,33 +113,6 @@ class DType(DTypeSpec, Opaque):
         return res.copy(dtype=self.dtype)
 
 
-class ValueDType(DTypeSpec, Opaque):
-    """
-    Type class associated with the type attribute of an `np.dtype`
-
-
-    i.e. :code:`assert type(np.int32) == type`
-
-    """
-    def __init__(self, dtype):
-        assert isinstance(dtype, Type)
-        self._dtype = dtype
-        name = "value-dtype(%s)" % (dtype,)
-        super(DTypeSpec, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.dtype
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    def __getitem__(self, arg):
-        res = super(ValueDType, self).__getitem__(arg)
-        return res.copy(dtype=self.dtype)
-
-
 class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
     Type class for `ndarray.flat()` objects.

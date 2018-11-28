@@ -69,6 +69,7 @@ def generated_usecase(x, y=5):
             return x - y
     return impl
 
+
 def bad_generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
         def impl(x):
@@ -80,13 +81,10 @@ def bad_generated_usecase(x, y=5):
 
 
 def dtype_generated_usecase(a, b, dtype=None):
-    NoneTypes = (types.misc.NoneType, types.misc.Omitted)
-
-    if isinstance(dtype, NoneTypes):
+    if isinstance(dtype, (types.misc.NoneType, types.misc.Omitted)):
         out_dtype = np.result_type(*(np.dtype(ary.dtype.name)
-                                   for ary in (a, b)
-                                   if not isinstance(ary, NoneTypes)))
-    elif isinstance(dtype, (types.DType, types.ValueDType)):
+                                   for ary in (a, b)))
+    elif isinstance(dtype, (types.DType, types.NumberClass)):
         out_dtype = as_dtype(dtype)
     else:
         raise TypeError("Unhandled Type %s" % type(dtype))
@@ -648,8 +646,9 @@ class TestGeneratedDispatcher(TestCase):
         f = generated_jit(nopython=True)(dtype_generated_usecase)
         a = np.ones((10,), dtype=np.float32)
         b = np.ones((10,), dtype=np.float64)
-        f(a, b)
-        f(a, b, dtype=np.int32)
+        self.assertEqual(f(a, b).dtype, np.float64)
+        self.assertEqual(f(a, b, dtype=np.dtype('int32')).dtype, np.int32)
+        self.assertEqual(f(a, b, dtype=np.int32).dtype, np.int32)
 
     def test_signature_errors(self):
         """

@@ -90,13 +90,8 @@ def typeof_type(val, c):
     if issubclass(val, tuple) and hasattr(val, "_asdict"):
         return types.NamedTupleClass(val)
 
-    try:
-        tp = numpy_support.from_dtype(val)
-    except NotImplementedError:
-        pass
-    else:
-        return types.ValueDType(tp)
-
+    if issubclass(val, np.generic):
+        return types.NumberClass(numpy_support.from_dtype(val))
 
 
 @typeof_impl.register(bool)
