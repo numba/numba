@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 import numpy as np
+import numba
 from numba import cuda, generated_jit
 from numba.cuda.testing import unittest, SerialMixin
 
@@ -87,10 +88,9 @@ class TestCudaGeneratedJit(SerialMixin, unittest.TestCase):
         array = np.zeros(200, dtype=np.float64)
         array = cuda.to_device(array)
 
-        ex_regex = ("Only direct implementations "
-                    "are supported for device functions")
+        ex_regex = ".*generated_jit not supported for device functions"
 
-        with self.assertRaisesRegexp(NotImplementedError, ex_regex):
+        with self.assertRaisesRegexp(numba.errors.TypingError, ex_regex):
             kernel[(1, 1, 1), (200, 1, 1)](array)
 
 

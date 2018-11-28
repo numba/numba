@@ -7,14 +7,13 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
 from .simulator.kernel import FakeCUDAKernel
 
 
-def jitdevice(func, link=[], debug=None, inline=False, impl_kind='direct'):
+def jitdevice(func, link=[], debug=None, inline=False):
     """Wrapper for device-jit.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug,
-                                   inline=inline, impl_kind=impl_kind)
+    return compile_device_template(func, debug=debug, inline=inline)
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
@@ -55,6 +54,9 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
+    if device and impl_kind == "generated":
+        raise ValueError("generated_jit not supported for device functions")
+
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
@@ -62,7 +64,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                 def autojitwrapper(func):
                     return FakeCUDAKernel(func, device=device,
                                           fastmath=fastmath,
-                                          impl_kind=impl_kind,
                                           debug=debug)
             else:
                 def autojitwrapper(func):
@@ -78,11 +79,9 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath,
-                                      impl_kind=impl_kind,
                                       debug=debug)
             elif device:
-                return jitdevice(func_or_sig, debug=debug,
-                                 impl_kind=impl_kind, **kws)
+                return jitdevice(func_or_sig, debug=debug, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
@@ -95,7 +94,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device,
                                       fastmath=fastmath,
-                                      impl_kind=impl_kind,
                                       debug=debug)
             return jitwrapper
 
@@ -107,8 +105,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         if device:
             def device_jit(func):
                 return compile_device(func, restype, argtypes,
-                                      inline=inline, impl_kind=impl_kind,
-                                      debug=debug)
+                                      inline=inline, debug=debug)
 
             return device_jit
         else:

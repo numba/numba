@@ -112,15 +112,11 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
 class DeviceFunctionTemplate(object):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug, inline, impl_kind):
+    def __init__(self, pyfunc, debug, inline):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
         self._compileinfos = {}
-
-        if impl_kind != 'direct':
-            raise NotImplementedError("Only direct implementations are "
-                                      "supported for device functions")
 
     def __reduce__(self):
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
@@ -160,15 +156,13 @@ class DeviceFunctionTemplate(object):
         return cres.signature
 
 
-def compile_device_template(pyfunc, debug=False,
-                            inline=False, impl_kind='direct'):
+def compile_device_template(pyfunc, debug=False, inline=False):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
     from .descriptor import CUDATargetDesc
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline,
-                                 impl_kind=impl_kind)
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
 
     class device_function_template(AbstractTemplate):
         key = dft
@@ -182,10 +176,9 @@ def compile_device_template(pyfunc, debug=False,
     return dft
 
 
-def compile_device(pyfunc, return_type, args, inline=True,
-                   debug=False, impl_kind='direct'):
+def compile_device(pyfunc, return_type, args, inline=True, debug=False):
     return DeviceFunction(pyfunc, return_type, args,
-                          inline=inline, debug=debug, impl_kind=impl_kind)
+                          inline=inline, debug=debug)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -209,19 +202,13 @@ def declare_device_function(name, restype, argtypes):
 
 class DeviceFunction(object):
 
-    def __init__(self, pyfunc, return_type, args, inline, debug, impl_kind):
+    def __init__(self, pyfunc, return_type, args, inline, debug):
         self.py_func = pyfunc
         self.return_type = return_type
         self.args = args
         self.inline = True
         self.debug = False
-
-        if impl_kind != 'direct':
-            raise NotImplementedError("Only direct implementations are "
-                                      "supported for device functions")
-
-        impl = get_implementation(self.py_func, 'direct', *self.args)
-        cres = compile_cuda(impl, self.return_type, self.args,
+        cres = compile_cuda(pyfunc, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
 
@@ -881,12 +868,12 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             defn.inspect_types(file=file)
 
     @classmethod
-    def _rebuild(cls, func_reduced, bind, targetoptions, config):
+    def _rebuild(cls, func_reduced, bind, targetoptions, impl_kind, config):
         """
         Rebuild an instance.
         """
         func = serialize._rebuild_function(*func_reduced)
-        instance = cls(func, bind, targetoptions)
+        instance = cls(func, bind, targetoptions, impl_kind)
         instance._deserialize_config(config)
         return instance
 
@@ -899,5 +886,5 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         func_reduced = serialize._reduce_function(self.py_func, glbls)
         config = self._serialize_config()
         args = (self.__class__, func_reduced, self.bind, self.targetoptions,
-                config)
+                self.impl_kind, config)
         return (serialize._rebuild_reduction, args)
