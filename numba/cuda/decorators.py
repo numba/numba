@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import, division
 from numba import config, sigutils, types
+from numba.generate_impl import generate_implementation
 from warnings import warn
 from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel, compile_device_template,
-                       get_implementation)
+                       AutoJitCUDAKernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -64,7 +64,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                 def autojitwrapper(func):
                     return FakeCUDAKernel(func, device=device,
                                           fastmath=fastmath,
-                                          debug=debug)
+                                          debug=debug,
+                                          impl_kind=impl_kind)
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device,
@@ -79,7 +80,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             if config.ENABLE_CUDASIM:
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath,
-                                      debug=debug)
+                                      debug=debug,
+                                      impl_kind=impl_kind)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, **kws)
             else:
@@ -94,7 +96,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device,
                                       fastmath=fastmath,
-                                      debug=debug)
+                                      debug=debug,
+                                      impl_kind=impl_kind)
             return jitwrapper
 
         restype, argtypes = convert_types(func_or_sig, argtypes)
@@ -110,7 +113,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             return device_jit
         else:
             def kernel_jit(func):
-                impl = get_implementation(func, impl_kind, *argtypes)
+                impl = generate_implementation(func, impl_kind, *argtypes)
                 kernel = compile_kernel(func, argtypes, link=link, debug=debug,
                                         inline=inline, fastmath=fastmath)
 

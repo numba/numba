@@ -12,7 +12,7 @@ from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
-
+from numba.generate_impl import generate_implementation
 
 """
 Global variable to keep track of the current "kernel context", i.e the
@@ -53,20 +53,19 @@ class FakeCUDAKernel(object):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
+        self._impl_kind = impl_kind
         self.extensions = list(extensions)  # defensive copy
         # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
         # memory.
 
-        if impl_kind != 'direct':
-            raise NotImplementedError("Only direct implementations are "
-                                      "available for simulator kernels")
-
         self[1, 1, 0, 0]
 
     def __call__(self, *args):
+        impl = generate_implementation(self.fn, self._impl_kind, *args)
+
         if self._device:
-            with swapped_cuda_module(self.fn, _get_kernel_context()):
-                return self.fn(*args)
+            with swapped_cuda_module(impl, _get_kernel_context()):
+                return impl(*args)
 
         fake_cuda_module = FakeCUDAModule(self.grid_dim, self.block_dim,
                                           self.dynshared_size)
@@ -94,15 +93,14 @@ class FakeCUDAKernel(object):
                     return arg
 
             fake_args = [fake_arg(arg) for arg in args]
-            with swapped_cuda_module(self.fn, fake_cuda_module):
+            with swapped_cuda_module(impl, fake_cuda_module):
                 # Execute one block at a time
                 for grid_point in np.ndindex(*self.grid_dim):
-                    bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
+                    bm = BlockManager(impl, self.grid_dim, self.block_dim)
                     bm.run(grid_point, *fake_args)
 
             for wb in retr:
                 wb()
-
 
     def __getitem__(self, configuration):
         self.grid_dim, self.block_dim = \

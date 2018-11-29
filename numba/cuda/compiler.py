@@ -22,36 +22,7 @@ from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
-
-
-def get_implementation(py_func, impl_kind, *args):
-    if impl_kind == "direct":
-        return py_func
-    elif impl_kind == "generated":
-        impl = py_func(*args)
-        # Check the generating function and implementation signatures are
-        # compatible, otherwise compiling would fail later.
-        pysig = utils.pysignature(py_func)
-        implsig = utils.pysignature(impl)
-        ok = len(pysig.parameters) == len(implsig.parameters)
-        if ok:
-            for pyparam, implparam in zip(pysig.parameters.values(),
-                                          implsig.parameters.values()):
-                # We allow the implementation to omit default values, but
-                # if it mentions them, they should have the same value...
-                if (pyparam.name != implparam.name or
-                    pyparam.kind != implparam.kind or
-                    (implparam.default is not implparam.empty and
-                     implparam.default != pyparam.default)):
-                    ok = False
-        if not ok:
-            raise TypeError("generated implementation %s should be compatible "
-                            "with signature '%s', but has signature '%s'"
-                            % (impl, pysig, implsig))
-        return impl
-
-    raise ValueError("Invalid implementation kind %s" % impl_kind)
-
+from numba.generate_impl import generate_implementation
 
 
 @global_compiler_lock
@@ -136,7 +107,7 @@ class DeviceFunctionTemplate(object):
         this object.
         """
         if args not in self._compileinfos:
-            impl = get_implementation(self.py_func, 'direct', *args)
+            impl = generate_implementation(self.py_func, 'direct', *args)
             cres = compile_cuda(impl, None, args, debug=self.debug,
                                 inline=self.inline)
             first_definition = not self._compileinfos
@@ -822,7 +793,8 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             if 'link' not in self.targetoptions:
                 self.targetoptions['link'] = ()
 
-            impl = get_implementation(self.py_func, self.impl_kind, *argtypes)
+            impl = generate_implementation(self.py_func, self.impl_kind,
+                                           *argtypes)
             kernel = compile_kernel(impl, argtypes,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
