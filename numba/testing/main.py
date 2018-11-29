@@ -158,21 +158,40 @@ class NumbaTestProgram(unittest.main):
         return parser
 
     def _handle_tags(self, argv, tagstr):
-        if tagstr in argv:
-            posn = argv.index(tagstr)
+        found = None
+        for x in argv:
+            if tagstr in x:
+                if found is None:
+                    found = x
+                else:
+                    raise ValueError("argument %s supplied repeatedly" % tagstr)
+
+        if found is not None:
+            posn = argv.index(found)
             try:
-                tag_args = argv[posn + 1]
-                # see if next arg is "end options"
-                if tag_args.startswith('-'):
-                    raise ValueError("invalid tag specified")
-                attr = tagstr[2:].replace('-', '_')
-                setattr(self, attr, tag_args)
-                argv.remove(tag_args)
-                argv.remove(tagstr)
+                if found == tagstr: # --tagstr <arg>
+                    tag_args = argv[posn + 1].strip()
+                    argv.remove(tag_args)
+                else: # --tagstr=<arg>
+                    if '=' in found:
+                        tag_args =  found.split('=')[1].strip()
+                    else:
+                        raise AssertionError('unreachable')
             except IndexError:
                 # at end of arg list, raise
                 msg = "%s requires at least one tag to be specified"
                 raise ValueError(msg % tagstr)
+            # see if next arg is "end options" or some other flag
+            if tag_args.startswith('-'):
+                raise ValueError("tag starts with '-', probably a syntax error")
+            # see if tag is something like "=<tagname>" which is likely a syntax
+            # error of form `--tags =<tagname>`, note the space prior to `=`.
+            if '=' in tag_args:
+                msg = "%s argument contains '=', probably a syntax error"
+                raise ValueError(msg % tagstr)
+            attr = tagstr[2:].replace('-', '_')
+            setattr(self, attr, tag_args)
+            argv.remove(found)
 
 
     def parseArgs(self, argv):
