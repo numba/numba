@@ -56,6 +56,7 @@ class DUFuncLowerer(object):
     def __init__(self, dufunc):
         self.kernel = make_dufunc_kernel(dufunc)
         self.libs = []
+        self.__name__ = '.'.join([self.__class__.__name__, str(dufunc)])
 
     def __call__(self, context, builder, sig, args):
         from ..targets import npyimpl

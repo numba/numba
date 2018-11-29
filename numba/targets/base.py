@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from collections import namedtuple, defaultdict
 import copy
+import functools
 import os
 import sys
 from itertools import permutations, takewhile
@@ -1142,6 +1143,7 @@ def _wrap_missing_loc(fn):
     Otherwise, return the original *fn*.
     """
     if not _has_loc(fn):
+        @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             kwargs.pop('loc')     # drop unused loc
             return fn(*args, **kwargs)
