@@ -1267,7 +1267,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
-        m = self.rnd.randn(1050).reshape(150, 7)
+        m = self.rnd.randn(105).reshape(15, 7)
         y_choices = None, m[::-1]
         rowvar_choices = False, True
         bias_choices = False, True
@@ -1284,7 +1284,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
-        x = self.rnd.randn(1050).reshape(150, 7)
+        x = self.rnd.randn(105).reshape(15, 7)
         y_choices = None, x[::-1]
         rowvar_choices = False, True
 
@@ -1366,7 +1366,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {'x': x}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 11), "corrcoef extreme value handling fixed Numpy 1.11+")
+    @unittest.skipUnless(np_version >= (1, 11), "behaviour per Numpy 1.11+")
     @needs_blas
     def test_corrcoef_edge_case_extreme_values(self):
         pyfunc = corrcoef

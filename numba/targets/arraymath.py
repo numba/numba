@@ -1428,25 +1428,23 @@ def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER)
     return _prepare_cov_input_inner(m, y, rowvar, dtype)
 
 def scalar_result_expected(mandatory_input, optional_input):
+    opt_is_none = optional_input in (None, types.none)
+
     if isinstance(mandatory_input, types.Array) and mandatory_input.ndim == 1:
-        if optional_input in (None, types.none):
-            return True
+        return opt_is_none
 
     if isinstance(mandatory_input, types.BaseTuple):
         if all(isinstance(x, (types.Number, types.Boolean)) for x in mandatory_input.types):
-            if optional_input in (None, types.none):
-                return True
+            return opt_is_none
         else:
             if len(mandatory_input.types) == 1 and isinstance(mandatory_input.types[0], types.BaseTuple):
-                if optional_input in (None, types.none):
-                    return True
+                return opt_is_none
 
     if isinstance(mandatory_input, (types.Number, types.Boolean)):
-        if optional_input in (None, types.none):
-            return True
+        return opt_is_none
 
     if isinstance(mandatory_input, types.Sequence):
-        if not isinstance(mandatory_input.key[0], types.Sequence) and optional_input in (None, types.none):
+        if not isinstance(mandatory_input.key[0], types.Sequence) and opt_is_none:
             return True
 
     return False
@@ -1459,7 +1457,7 @@ def _clip_corr(x):
 def _clip_complex(x):
     real = _clip_corr(x.real)
     imag = _clip_corr(x.imag)
-    return real + 1j*imag
+    return real + 1j * imag
 
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
