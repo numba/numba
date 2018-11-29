@@ -2,7 +2,6 @@ from __future__ import print_function
 
 from collections import namedtuple, defaultdict
 import copy
-import functools
 import os
 import sys
 from itertools import permutations, takewhile
@@ -1143,10 +1142,22 @@ def _wrap_missing_loc(fn):
     Otherwise, return the original *fn*.
     """
     if not _has_loc(fn):
-        @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             kwargs.pop('loc')     # drop unused loc
             return fn(*args, **kwargs)
+
+        # Copy the following attributes from the wrapped.
+        # Following similar implementation as functools.wraps but
+        # ignore attributes if not available (i.e fix py2.7)
+        attrs = '__name__', 'libs'
+        for attr in attrs:
+            try:
+                val = getattr(fn, attr)
+            except AttributeError:
+                pass
+            else:
+                setattr(wrapper, attr, val)
+
         return wrapper
     else:
         return fn
