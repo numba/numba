@@ -157,37 +157,60 @@ class NumbaTestProgram(unittest.main):
                             help='Profile the test run')
         return parser
 
+    def _handle_tags(self, argv, tagstr):
+        if tagstr in argv:
+            posn = argv.index(tagstr)
+            try:
+                tag_args = argv[posn + 1]
+                # see if next arg is "end options"
+                if tag_args.startswith('-'):
+                    raise ValueError("invalid tag specified")
+                attr = tagstr[2:].replace('-', '_')
+                setattr(self, attr, tag_args)
+                argv.remove(tag_args)
+                argv.remove(tagstr)
+            except IndexError:
+                # at end of arg list, raise
+                msg = "%s requires at least one tag to be specified"
+                raise ValueError(msg % tagstr)
+
+
     def parseArgs(self, argv):
         if '-l' in argv:
             argv.remove('-l')
             self.list = True
-        if PYVERSION < (3, 4) and '-m' in argv:
-            # We want '-m' to work on all versions, emulate this option.
-            dashm_posn = argv.index('-m')
-            # the default number of processes to use
-            nprocs = multiprocessing.cpu_count()
-            # see what else is in argv
-            # ensure next position is safe for access
-            try:
-                m_option = argv[dashm_posn + 1]
-                # see if next arg is "end options"
-                if m_option != '--':
-                    #try and parse the next arg as an int
-                    try:
-                        nprocs = int(m_option)
-                    except BaseException:
-                        msg = ('Expected an integer argument to '
-                               'option `-m`, found "%s"')
-                        raise ValueError(msg % m_option)
-                    # remove the value of the option
-                    argv.remove(m_option)
-                # else end options, use defaults
-            except IndexError:
-                # at end of arg list, use defaults
-                pass
+        if PYVERSION < (3, 4):
+            if '-m' in argv:
+                # We want '-m' to work on all versions, emulate this option.
+                dashm_posn = argv.index('-m')
+                # the default number of processes to use
+                nprocs = multiprocessing.cpu_count()
+                # see what else is in argv
+                # ensure next position is safe for access
+                try:
+                    m_option = argv[dashm_posn + 1]
+                    # see if next arg is "end options"
+                    if m_option != '--':
+                        #try and parse the next arg as an int
+                        try:
+                            nprocs = int(m_option)
+                        except BaseException:
+                            msg = ('Expected an integer argument to '
+                                'option `-m`, found "%s"')
+                            raise ValueError(msg % m_option)
+                        # remove the value of the option
+                        argv.remove(m_option)
+                    # else end options, use defaults
+                except IndexError:
+                    # at end of arg list, use defaults
+                    pass
 
-            self.multiprocess = nprocs
-            argv.remove('-m')
+                self.multiprocess = nprocs
+                argv.remove('-m')
+
+            # handle tags
+            self._handle_tags(argv, '--tags')
+            self._handle_tags(argv, '--exclude-tags')
 
         super(NumbaTestProgram, self).parseArgs(argv)
 
@@ -294,20 +317,18 @@ def _choose_tagged_tests(tests, tags, mode='include'):
             func = func.im_func
         except AttributeError:
             pass
-        try:
-            # only include the test if the tags *are* present
-            if mode == 'include' and func.tags & tags:
-                selected.append(test)
 
-            elif mode == 'exclude':
-                # only include the test if the tags *are not* present
-                if not func.tags & tags:
-                    selected.append(test)
-            else:
-                raise ValueError("Invalid 'mode' supplied: %s." % mode)
-        except AttributeError:
-            # Test method doesn't have any tags
-            pass
+        found_tags = getattr(func, 'tags', None)
+        # only include the test if the tags *are* present
+        if mode == 'include':
+            if found_tags is not None and found_tags & tags:
+                selected.append(test)
+        elif mode == 'exclude':
+            # only include the test if the tags *are not* present
+            if found_tags is None or not (found_tags & tags):
+                selected.append(test)
+        else:
+            raise ValueError("Invalid 'mode' supplied: %s." % mode)
     return unittest.TestSuite(selected)
 
 
