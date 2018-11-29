@@ -10,7 +10,7 @@ import sys
 
 import numpy as np
 
-from numba import jit, generated_jit, types
+from numba import jit, generated_jit, types, prange
 
 from numba.tests.ctypes_usecases import c_sin
 from numba.tests.support import TestCase, captured_stderr
@@ -156,3 +156,9 @@ class _TestModule(TestCase):
 def self_test():
     mod = sys.modules[__name__]
     _TestModule().check_module(mod)
+
+
+
+@jit(parallel=True, cache=True, nopython=True)
+def parfor_usecase(ary):
+    return ary * ary + ary

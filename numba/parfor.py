@@ -991,7 +991,7 @@ class ParforDiagnostics(object):
 #---------- compute various properties and orderings in the data for subsequent use
 
             # ensure adjacency lists are the same size for both sets of info
-            # (nests and fusion may not traverse the same space, for 
+            # (nests and fusion may not traverse the same space, for
             # convenience [] is used as a condition to halt recursion)
             fadj, froots = self.compute_graph_info(self.fusion_info)
             nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
@@ -1190,7 +1190,7 @@ class ParforDiagnostics(object):
             if print_allocation_hoist or print_instruction_hoist:
                 print_wrapped('Loop invariant code motion'.center(80, '-'))
 
-            if print_allocation_hoist: 
+            if print_allocation_hoist:
                 found = False
                 print('Allocation hoisting:')
                 for pf_id, data in self.hoist_info.items():

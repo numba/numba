@@ -1202,12 +1202,12 @@ class TestParfors(TestParforsBase):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
             for i in prange(10):
-                out[0] = 2 * out[0] 
+                out[0] = 2 * out[0]
             return out[0]
 
         out = np.ones(1)
         self.check(test_impl, out)
-        
+
     @skip_unsupported
     @needs_blas
     def test_parfor_generate_fuse(self):
@@ -1274,10 +1274,10 @@ class TestParfors(TestParforsBase):
 
             for i in numba.prange(n):
                 result1 += tmp
-                
+
             for i in numba.prange(n):
                 result1 += tmp
-                
+
             return result1
 
         self.check(test_impl, 100)
@@ -2538,26 +2538,27 @@ class TestParforsMisc(TestCase):
     def test_warn_if_cache_set(self):
 
         def pyfunc():
-            return
+            arr = np.ones(100)
+            for i in prange(arr.size):
+                arr[i] += i
+            return arr
+
+        cfunc = njit(parallel=True, cache=True)(pyfunc)
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
-            cfunc = njit(parallel=True, cache=True)(pyfunc)
             cfunc()
 
         self.assertEqual(len(raised_warnings), 1)
-
         warning_obj = raised_warnings[0]
-
-        expected_msg = ("Caching is not available when the 'parallel' target "
-                        "is in use. Caching is now being disabled to allow "
-                        "execution to continue.")
-
-        # check warning message appeared
+        expected_msg = ("as it uses dynamic globals "
+                        "(such as ctypes pointers and large global arrays)")
         self.assertIn(expected_msg, str(warning_obj.message))
 
-        # make sure the cache is set to false, cf. NullCache
-        self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
+        # Make sure the dynamic globals flag is set
+        has_dynamic_globals = [cres.has_dynamic_globals
+                               for cres in cfunc.overloads.values()]
+        self.assertEqual(has_dynamic_globals, [True])
 
 
 @skip_unsupported

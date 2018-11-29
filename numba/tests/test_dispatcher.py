@@ -34,6 +34,7 @@ from .support import (TestCase, tag, temp_directory, import_dynamic,
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
+from numba import parfor
 from .test_linalg import needs_lapack
 
 import llvmlite.binding as ll
@@ -1318,6 +1319,29 @@ class TestCache(BaseCacheUsecasesTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
+
+
+class TestSequentialParForsCache(BaseCacheUsecasesTest):
+    def setUp(self):
+        super(TestSequentialParForsCache, self).setUp()
+        # Turn on sequential parfor lowering
+        parfor.sequential_parfor_lowering = True
+
+    def tearDown(self):
+        super(TestSequentialParForsCache, self).tearDown()
+        # Turn off sequential parfor lowering
+        parfor.sequential_parfor_lowering = False
+
+    def test_caching(self):
+        mod = self.import_module()
+        self.check_pycache(0)
+        f = mod.parfor_usecase
+        ary = np.ones(10)
+        self.assertPreciseEqual(f(ary), ary * ary + ary)
+        dynamic_globals = [cres.has_dynamic_globals
+                           for cres in f.overloads.values()]
+        self.assertEqual(dynamic_globals, [False])
+        self.check_pycache(2)  # 1 index, 1 data
 
 
 class TestCacheWithCpuSetting(BaseCacheUsecasesTest):
