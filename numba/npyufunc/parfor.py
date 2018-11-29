@@ -1366,7 +1366,15 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
-    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    # Use the dynamic address of the kernel so the backend knows this module
+    # cannot be cached.
+    fnptr = cres.target_context.add_dynamic_addr(
+        builder,
+        wrapper_ptr,
+        info="parallel gufunc kernel",
+        )
+    fn = builder.bitcast(fnptr, fnty.as_pointer())
+
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "before calling kernel %p\n", fn)
     result = builder.call(fn, [args, shapes, steps, data])
