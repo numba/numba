@@ -182,7 +182,7 @@ Other things of interest:
 Numba has quite a few decorators, we've seen ``@jit``, but there's
 also:
 
-* ``@njit`` - this is an alias for ``@jit(python=True)`` as it is so commonly
+* ``@njit`` - this is an alias for ``@jit(nopython=True)`` as it is so commonly
   used!
 * ``@vectorize`` - produces NumPy ``ufunc`` s (with all the ``ufunc`` methods
   supported). :ref:`Docs are here <vectorize>`.
