@@ -108,6 +108,7 @@ class NumbaTestProgram(unittest.main):
     multiprocess = False
     list = False
     tags = None
+    exclude_tags = None
     random_select = None
     random_seed = 42
 
@@ -145,6 +146,9 @@ class NumbaTestProgram(unittest.main):
                             help='List tests without running them')
         parser.add_argument('--tags', dest='tags', type=str,
                             help='Comma-separated list of tags to select '
+                                 'a subset of the test suite')
+        parser.add_argument('--exclude-tags', dest='exclude_tags', type=str,
+                            help='Comma-separated list of tags to de-select '
                                  'a subset of the test suite')
         parser.add_argument('--random', dest='random_select', type=float,
                             help='Random proportion of tests to select')
@@ -195,7 +199,11 @@ class NumbaTestProgram(unittest.main):
 
         if self.tags:
             tags = [s.strip() for s in self.tags.split(',')]
-            self.test = _choose_tagged_tests(self.test, tags)
+            self.test = _choose_tagged_tests(self.test, tags, mode='include')
+
+        if self.exclude_tags:
+            tags = [s.strip() for s in self.exclude_tags.split(',')]
+            self.test = _choose_tagged_tests(self.test, tags, mode='exclude')
 
         if self.random_select:
             self.test = _choose_random_tests(self.test, self.random_select,
@@ -270,9 +278,11 @@ def _flatten_suite(test):
         return [test]
 
 
-def _choose_tagged_tests(tests, tags):
+def _choose_tagged_tests(tests, tags, mode='include'):
     """
-    Select tests that are tagged with at least one of the given tags.
+    Select tests that are tagged/not tagged with at least one of the given tags.
+    Set mode to 'include' to include the tests with tags, or 'exclude' to
+    exclude the tests with the tags.
     """
     selected = []
     tags = set(tags)
@@ -285,8 +295,16 @@ def _choose_tagged_tests(tests, tags):
         except AttributeError:
             pass
         try:
-            if func.tags & tags:
+            # only include the test if the tags *are* present
+            if mode == 'include' and func.tags & tags:
                 selected.append(test)
+
+            elif mode == 'exclude':
+                # only include the test if the tags *are not* present
+                if not func.tags & tags:
+                    selected.append(test)
+            else:
+                raise ValueError("Invalid 'mode' supplied: %s." % mode)
         except AttributeError:
             # Test method doesn't have any tags
             pass
