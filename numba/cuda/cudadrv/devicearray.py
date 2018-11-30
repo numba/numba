@@ -181,28 +181,29 @@ class DeviceNDArrayBase(object):
         sentry_contiguous(self)
         stream = self._default_stream(stream)
 
+        self_core, ary_core = array_core(self), array_core(ary)
         if _driver.is_device_memory(ary):
             sentry_contiguous(ary)
 
-            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
+            if self_core.flags['C_CONTIGUOUS'] != ary_core.flags['C_CONTIGUOUS']:
                 raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
-                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
-                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
+                    'C' if ary_core.flags['C_CONTIGUOUS'] else 'F',
+                    'C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 ))
 
             sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
         else:
-            # Ensure same contiguous-nous. Only copies (host-side)
-            # if necessary (e.g. it needs to materialize a strided view)
-            ary = np.array(
-                ary,
-                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+            # Ensure same contiguity. Only makes a host-side copy if necessary
+            # (i.e., in order to materialize a writable strided view)
+            ary_core = np.array(
+                ary_core,
+                order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=False)
+                copy=not ary_core.flags['WRITEABLE'])
 
-            sz = min(_driver.host_memory_size(ary), self.alloc_size)
-            _driver.host_to_device(self, ary, sz, stream=stream)
+            sz = min(_driver.host_memory_size(ary_core), self.alloc_size)
+            _driver.host_to_device(self, ary_core, sz, stream=stream)
 
     @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
@@ -618,6 +619,24 @@ def from_record_like(rec, stream=0, gpu_data=None):
     return DeviceRecord(rec.dtype, stream=stream, gpu_data=gpu_data)
 
 
+def array_core(ary):
+    """
+    Extract the repeated core of a broadcast array.
+
+    Broadcast arrays are by definition non-contiguous due to repeated
+    dimensions, i.e., dimensions with stride 0. In order to ascertain memory
+    contiguity and copy the underlying data from such arrays, we must create
+    a view without the repeated dimensions.
+
+    """
+    if not ary.strides:
+        return ary
+    core_index = []
+    for stride in ary.strides:
+        core_index.append(0 if stride == 0 else slice(None))
+    return ary[tuple(core_index)]
+
+
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             "be transferred as a single memory region. Please "
                             "ensure contiguous buffer with numpy "
@@ -625,13 +644,9 @@ errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
 
 
 def sentry_contiguous(ary):
-    if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
-        if ary.strides[0] == 0:
-            # Broadcasted, ensure inner contiguous
-            return sentry_contiguous(ary[0])
-
-        else:
-            raise ValueError(errmsg_contiguous_buffer)
+    core = array_core(ary)
+    if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
+        raise ValueError(errmsg_contiguous_buffer)
 
 
 def auto_device(obj, stream=0, copy=True):
@@ -662,4 +677,3 @@ def auto_device(obj, stream=0, copy=True):
         if copy:
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
-
