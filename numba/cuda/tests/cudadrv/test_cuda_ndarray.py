@@ -223,6 +223,27 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         d.copy_to_device(cuda.to_device(a_f))
         self.assertTrue(np.all(d.copy_to_host() == a_f))
 
+    def test_devicearray_broadcast_host_copy(self):
+        broadsize = 4
+        coreshape = (2, 3)
+        coresize = np.prod(coreshape)
+        core_c = np.arange(coresize).reshape(coreshape, order='C')
+        core_f = np.arange(coresize).reshape(coreshape, order='F')
+        for dim in range(len(coreshape)):
+            newindex = (slice(None),) * dim + (np.newaxis,)
+            broadshape = coreshape[:dim] + (broadsize,) + coreshape[dim:]
+            broad_c = np.broadcast_to(core_c[newindex], broadshape)
+            broad_f = np.broadcast_to(core_f[newindex], broadshape)
+            dbroad_c = cuda.to_device(broad_c)
+            dbroad_f = cuda.to_device(broad_f)
+            np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_c)
+            np.testing.assert_array_equal(dbroad_f.copy_to_host(), broad_f)
+            # Also test copying across different core orderings
+            dbroad_c.copy_to_device(broad_f)
+            dbroad_f.copy_to_device(broad_c)
+            np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_f)
+            np.testing.assert_array_equal(dbroad_f.copy_to_host(), broad_c)
+
     def test_devicearray_contiguous_host_strided(self):
         a_c = np.arange(10)
         d = cuda.to_device(a_c)
@@ -239,6 +260,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertEqual(
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
+        
 
 if __name__ == '__main__':
     unittest.main()
