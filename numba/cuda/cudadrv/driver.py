@@ -906,6 +906,15 @@ def _alloc_finalizer(context, handle, size):
 
 
 def _hostalloc_finalizer(context, handle, size, mapped):
+    """
+    Finalize page-locked host memory allocated by `context.memhostalloc`.
+
+    This memory is managed by CUDA, and finalization entails deallocation. The
+    issues noted in `_pin_finalizer` are not relevant in this case, and the
+    finalization is placed in the `context.deallocations` queue along with
+    finalization of device objects.
+
+    """
     allocations = context.allocations
     deallocations = context.deallocations
     if not mapped:
@@ -920,6 +929,18 @@ def _hostalloc_finalizer(context, handle, size, mapped):
 
 
 def _pin_finalizer(context, handle, mapped):
+    """
+    Finalize temporary page-locking of host memory by `context.mempin`.
+
+    This applies to memory not otherwise managed by CUDA. Page-locking can
+    be requested multiple times on the same memory, and must therefore be
+    lifted as soon as finalization is requested, otherwise subsequent calls to
+    `mempin` may fail with `CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED`, leading
+    to unexpected behavior for the context managers `cuda.{pinned,mapped}`.
+    This function therefore carries out finalization immediately, bypassing the
+    `context.deallocations` queue.
+
+    """
     allocations = context.allocations
 
     def core():

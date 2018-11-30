@@ -274,6 +274,9 @@ def mapped(*arylist, **kws):
         else:
             yield devarylist
     finally:
+        # When exiting from `with cuda.mapped(*arrs) as mapped_arrs:`, the name
+        # `mapped_arrs` stays in scope, blocking automatic unmapping based on
+        # reference count. We therefore invoke the finalizer manually.
         for ary in pmlist:
             ary.free()
 
