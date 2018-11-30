@@ -26,7 +26,7 @@ import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
-from numba import array_analysis, postproc, typeinfer
+from numba import array_analysis, postproc, typeinfer, utils
 from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
