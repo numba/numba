@@ -36,7 +36,7 @@ nrt_flags = Flags()
 nrt_flags.set("nrt")
 
 
-tag = testing.make_tag_decorator(['important'])
+tag = testing.make_tag_decorator(['important', 'long_running'])
 
 
 class CompilationCache(object):

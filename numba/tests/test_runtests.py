@@ -82,12 +82,27 @@ class TestCase(unittest.TestCase):
         self.check_testsuite_size(
             ['--random', '0.1', 'numba.tests.npyufunc'], 5)
 
-    @unittest.skipIf(sys.version_info < (3, 4),
-                     "'--tags' only supported on Python 3.4 or higher")
-    def test_tags(self):
-        self.check_testsuite_size(
-            ['--tags', 'important', 'numba.tests.npyufunc'], 20,
-            )
+    def test_include_exclude_tags(self):
+        def get_count(arg_list):
+            lines = self.get_testsuite_listing(arg_list)
+            self.assertIn('tests found', lines[-1])
+            count = int(lines[-1].split()[0])
+            self.assertTrue(count > 0)
+            return count
+
+        tags = ['long_running', 'long_running, important']
+
+        for tag in tags:
+            total = get_count(['numba.tests'])
+            included = get_count(['--tags', tag, 'numba.tests'])
+            excluded = get_count(['--exclude-tags', tag, 'numba.tests'])
+            self.assertEqual(total, included + excluded)
+
+            # check syntax with `=` sign in
+            total = get_count(['numba.tests'])
+            included = get_count(['--tags=%s' % tag, 'numba.tests'])
+            excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
+            self.assertEqual(total, included + excluded)
 
 
 if __name__ == '__main__':
