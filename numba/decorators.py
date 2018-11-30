@@ -131,15 +131,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
 
-    if options.get('parallel'):
-        uns1 = sys.platform.startswith('win32') and sys.version_info[:2] == (2, 7)
-        uns2 = sys.maxsize <= 2 ** 32
-        if uns1 or uns2:
-            msg = ("The 'parallel' target is not currently supported on "
-                   "Windows operating systems when using Python 2.7, or "
-                   "on 32 bit hardware.")
-            raise RuntimeError(msg)
-
     # Handle signature
     if signature_or_function is None:
         # No signature, no function

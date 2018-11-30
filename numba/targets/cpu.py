@@ -185,11 +185,31 @@ class CPUContext(BaseContext):
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
 
+
+
+def ensure_parallel_support():
+    """Check if the platform supports parallel=True and raise if it is not.
+    """
+    is_win32 = config.IS_WIN32
+    is_py2 = not utils.IS_PY3
+    is_32bit = config.IS_32BITS
+    uns1 = is_win32 and is_py2
+    uns2 = is_32bit
+    if uns1 or uns2:
+        msg = ("The 'parallel' target is not currently supported on "
+            "Windows operating systems when using Python 2.7, or "
+            "on 32 bit hardware.")
+        raise RuntimeError(msg)
+
+
 class ParallelOptions(object):
     """
     Options for controlling auto parallelization.
     """
     def __init__(self, value):
+        if value:
+            ensure_parallel_support()
+
         if isinstance(value, bool):
             self.enabled = value
             self.comprehension = value
