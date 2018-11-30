@@ -82,6 +82,8 @@ class FakeCUDAArray(object):
     def copy_to_host(self, ary=None, stream=0):
         if ary is None:
             ary = np.empty_like(self._ary)
+        else:
+            check_array_compatibility(self, ary)
         # NOTE: np.copyto() introduced in Numpy 1.7
         try:
             np.copyto(ary, self._ary)
@@ -98,24 +100,21 @@ class FakeCUDAArray(object):
         whereas this expects the size of the arrays to be equal.
         '''
         sentry_contiguous(self)
+        self_core, ary_core = array_core(self), array_core(ary)
         if isinstance(ary, FakeCUDAArray):
             sentry_contiguous(ary)
-
-            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
-                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
-                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
-                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
-                ))
+            check_array_compatibility(self_core, ary_core)
         else:
-            ary = np.array(
-                ary,
-                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+            ary_core = np.array(
+                ary_core,
+                order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
                 copy=False)
+            check_array_compatibility(self_core, ary_core)
         try:
-            np.copyto(self._ary, ary)
+            np.copyto(self_core._ary, ary_core)
         except AttributeError:
-            self._ary[:] = ary
+            self_core._ary[:] = ary_core
 
     def to_host(self):
         warn('to_host() is deprecated and will be removed')
@@ -152,21 +151,74 @@ class FakeCUDAArray(object):
             for a in np.split(self._ary, range(section, len(self), section))
         ]
 
+
+def array_core(ary):
+    """
+    Extract the repeated core of a broadcast array.
+
+    Broadcast arrays are by definition non-contiguous due to repeated
+    dimensions, i.e., dimensions with stride 0. In order to ascertain memory
+    contiguity and copy the underlying data from such arrays, we must create
+    a view without the repeated dimensions.
+
+    """
+    if not ary.strides:
+        return ary
+    core_index = []
+    for stride in ary.strides:
+        core_index.append(0 if stride == 0 else slice(None))
+    return ary[tuple(core_index)]
+
+
 def sentry_contiguous(ary):
-    if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
-        if ary.strides[0] == 0:
-            # Broadcasted, ensure inner contiguous
-            return sentry_contiguous(ary[0])
-        else:
-            raise ValueError(errmsg_contiguous_buffer)
+    core = array_core(ary)
+    if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
+        raise ValueError(errmsg_contiguous_buffer)
+
+
+def squeezed_shape_and_strides(ary):
+    """
+    Squeeze out trivial dimensions from an array's shape and strides tuples.
+
+    Trivial dimensions, i.e., dimensions of length one, do not affect the
+    compatibility of array shapes. This function returns shape and strides
+    tuples where dimensions of length one have been dropped.
+
+    """
+    sqshape, sqstrides = [], []
+    for length, stride in zip(ary.shape, ary.strides):
+        if length != 1:
+            sqshape.append(length)
+            sqstrides.append(stride)
+    return tuple(sqshape), tuple(sqstrides)
+
+
+def check_array_compatibility(ary1, ary2):
+    if ary1.dtype != ary2.dtype:
+        raise TypeError('incompatible dtype: %s vs. %s' %
+                        (ary1.dtype, ary2.dtype))
+    sqshape1, sqstrides1 = squeezed_shape_and_strides(ary1)
+    sqshape2, sqstrides2 = squeezed_shape_and_strides(ary2)
+    if sqshape1 != sqshape2:
+        raise ValueError('incompatible shape: %s vs. %s' %
+                         (ary1.shape, ary2.shape))
+    if sqstrides1 != sqstrides2:
+        raise ValueError('incompatible strides: %s vs. %s' %
+                         (ary1.strides, ary2.strides))
 
 
 def to_device(ary, stream=0, copy=True, to=None):
     sentry_contiguous(ary)
     if to is None:
-        return FakeCUDAArray(np.array(
-            ary,
-            order='C' if ary.flags['C_CONTIGUOUS'] else 'F', copy=True))
+        buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
+        return FakeCUDAArray(
+            np.ndarray(
+                buffer=np.copy(array_core(ary)).view(buffer_dtype),
+                dtype=ary.dtype,
+                shape=ary.shape,
+                strides=ary.strides,
+            ),
+        )
     else:
         to.copy_to_device(ary, stream=stream)
 
