@@ -206,7 +206,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_f))
         self.assertEqual(
-            "Can't copy F-contiguous array to a C-contiguous array",
+            "incompatible strides: {} vs. {}".format(a_c.strides, a_f.strides),
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_c))
@@ -217,7 +217,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_c))
         self.assertEqual(
-            "Can't copy C-contiguous array to a F-contiguous array",
+            "incompatible strides: {} vs. {}".format(a_f.strides, a_c.strides),
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_f))

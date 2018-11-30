@@ -184,15 +184,8 @@ class DeviceNDArrayBase(object):
         self_core, ary_core = array_core(self), array_core(ary)
         if _driver.is_device_memory(ary):
             sentry_contiguous(ary)
-
-            if self_core.flags['C_CONTIGUOUS'] != ary_core.flags['C_CONTIGUOUS']:
-                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
-                    'C' if ary_core.flags['C_CONTIGUOUS'] else 'F',
-                    'C' if self_core.flags['C_CONTIGUOUS'] else 'F',
-                ))
-
-            sz = min(self.alloc_size, ary.alloc_size)
-            _driver.device_to_device(self, ary, sz, stream=stream)
+            check_array_compatibility(self_core, ary_core)
+            _driver.device_to_device(self, ary, self.alloc_size, stream=stream)
         else:
             # Ensure same contiguity. Only makes a host-side copy if necessary
             # (i.e., in order to materialize a writable strided view)
@@ -201,9 +194,8 @@ class DeviceNDArrayBase(object):
                 order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
                 copy=not ary_core.flags['WRITEABLE'])
-
-            sz = min(_driver.host_memory_size(ary_core), self.alloc_size)
-            _driver.host_to_device(self, ary_core, sz, stream=stream)
+            check_array_compatibility(self_core, ary_core)
+            _driver.host_to_device(self, ary_core, self.alloc_size, stream=stream)
 
     @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
@@ -232,20 +224,7 @@ class DeviceNDArrayBase(object):
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
-            if ary.dtype != self.dtype:
-                raise TypeError('incompatible dtype')
-
-            if ary.shape != self.shape:
-                scalshapes = (), (1,)
-                if not (ary.shape in scalshapes and self.shape in scalshapes):
-                    raise TypeError('incompatible shape; device %s; host %s' %
-                                    (self.shape, ary.shape))
-            if ary.strides != self.strides:
-                scalstrides = (), (self.dtype.itemsize,)
-                if not (ary.strides in scalstrides and
-                                self.strides in scalstrides):
-                    raise TypeError('incompatible strides; device %s; host %s' %
-                                    (self.strides, ary.strides))
+            check_array_compatibility(self, ary)
             hostary = ary
 
         assert self.alloc_size >= 0, "Negative memory size"
@@ -677,3 +656,34 @@ def auto_device(obj, stream=0, copy=True):
         if copy:
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
+
+
+def squeezed_shape_and_strides(ary):
+    """
+    Squeeze out trivial dimensions from an array's shape and strides tuples.
+
+    Trivial dimensions, i.e., dimensions of length one, do not affect the
+    compatibility of array shapes. This function returns shape and strides
+    tuples where dimensions of length one have been dropped.
+
+    """
+    sqshape, sqstrides = [], []
+    for length, stride in zip(ary.shape, ary.strides):
+        if length != 1:
+            sqshape.append(length)
+            sqstrides.append(stride)
+    return tuple(sqshape), tuple(sqstrides)
+
+
+def check_array_compatibility(ary1, ary2):
+    if ary1.dtype != ary2.dtype:
+        raise TypeError('incompatible dtype: %s vs. %s' %
+                        (ary1.dtype, ary2.dtype))
+    sqshape1, sqstrides1 = squeezed_shape_and_strides(ary1)
+    sqshape2, sqstrides2 = squeezed_shape_and_strides(ary2)
+    if sqshape1 != sqshape2:
+        raise ValueError('incompatible shape: %s vs. %s' %
+                         (ary1.shape, ary2.shape))
+    if sqstrides1 != sqstrides2:
+        raise ValueError('incompatible strides: %s vs. %s' %
+                         (ary1.strides, ary2.strides))
