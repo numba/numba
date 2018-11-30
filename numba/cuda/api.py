@@ -256,16 +256,14 @@ def mapped(*arylist, **kws):
     """A context manager for temporarily mapping a sequence of host ndarrays.
     """
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
-    pmlist = []
     stream = kws.get('stream', 0)
+    pmlist = []
+    devarylist = []
     for ary in arylist:
         pm = current_context().mempin(ary, driver.host_pointer(ary),
                                     driver.host_memory_size(ary),
                                     mapped=True)
         pmlist.append(pm)
-
-    devarylist = []
-    for ary, pm in zip(arylist, pmlist):
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
     try:
@@ -277,8 +275,8 @@ def mapped(*arylist, **kws):
         # When exiting from `with cuda.mapped(*arrs) as mapped_arrs:`, the name
         # `mapped_arrs` stays in scope, blocking automatic unmapping based on
         # reference count. We therefore invoke the finalizer manually.
-        for ary in pmlist:
-            ary.free()
+        for pm in pmlist:
+            pm.free()
 
 
 def event(timing=True):
