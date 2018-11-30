@@ -224,6 +224,33 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertTrue(np.all(d.copy_to_host() == a_f))
 
     def test_devicearray_broadcast_host_copy(self):
+        try:
+            broadcast_to = np.broadcast_to
+        except AttributeError:
+            # numpy<1.10 doesn't have broadcast_to. The following implements
+            # a limited broadcast_to that only works along already existing
+            # dimensions of length 1.
+            def broadcast_to(arr, new_shape):
+                new_strides = []
+                for new_length, length, stride in zip(
+                    new_shape, arr.shape, arr.strides
+                ):
+                    if length == 1 and new_length > 1:
+                        new_strides.append(0)
+                    elif new_length == length:
+                        new_strides.append(stride)
+                    else:
+                        raise ValueError(
+                            "cannot broadcast shape {} to shape {}"
+                            .format(arr.shape, new_shape)
+                        )
+                return np.ndarray(
+                    buffer=np.squeeze(arr),
+                    dtype=arr.dtype,
+                    shape=new_shape,
+                    strides=tuple(new_strides),
+                )
+
         broadsize = 4
         coreshape = (2, 3)
         coresize = np.prod(coreshape)
@@ -232,8 +259,8 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         for dim in range(len(coreshape)):
             newindex = (slice(None),) * dim + (np.newaxis,)
             broadshape = coreshape[:dim] + (broadsize,) + coreshape[dim:]
-            broad_c = np.broadcast_to(core_c[newindex], broadshape)
-            broad_f = np.broadcast_to(core_f[newindex], broadshape)
+            broad_c = broadcast_to(core_c[newindex], broadshape)
+            broad_f = broadcast_to(core_f[newindex], broadshape)
             dbroad_c = cuda.to_device(broad_c)
             dbroad_f = cuda.to_device(broad_f)
             np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_c)
