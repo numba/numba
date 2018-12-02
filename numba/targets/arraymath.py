@@ -1294,6 +1294,52 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
+
+def myoverload(arg):
+    pass
+
+@overload(myoverload)
+def myoverload_impl(arg):
+    literal_val = getattr(arg, 'literal_value', None)
+
+    print(literal_val)
+    print('hello')
+
+
+@overload(np.trim_zeros)
+def np_trim_zeros(filt, trim='fb'):
+
+    if isinstance(filt, types.Array):
+        if filt.ndim != 1:
+            msg = 'filt must be 1D (the input you provided was %sD)' % filt.ndim
+            raise TypingError(msg)
+
+    def np_trim_zeros_impl(filt, trim='fb'):
+        filt_arr = _asarray(filt)
+
+        idx_min = 0
+        idx_max = len(filt_arr)
+
+        if trim == '':
+            trim = 'fb'
+
+        if np.any(np.array([trim[i] == 'f' for i in range(len(trim))])):
+            idx_min = np.argmax(filt_arr != 0)
+
+        if np.any(np.array([trim[i] == 'F' for i in range(len(trim))])):
+            idx_min = np.argmax(filt_arr != 0)
+
+        if np.any(np.array([trim[i] == 'b' for i in range(len(trim))])):
+            idx_max = len(filt_arr) - np.argmax(filt_arr[::-1] != 0)
+
+        if np.any(np.array([trim[i] == 'B' for i in range(len(trim))])):
+            idx_max = len(filt_arr) - np.argmax(filt_arr[::-1] != 0)
+
+        return filt_arr[idx_min:idx_max]
+
+    return np_trim_zeros_impl
+
+
 #----------------------------------------------------------------------------
 # Statistics
 

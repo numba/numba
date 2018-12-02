@@ -110,6 +110,12 @@ def cov(m, y=None, rowvar=True, bias=False, ddof=None):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def trim_zeros_1(filt):
+    return np.trim_zeros(filt)
+
+def trim_zeros_2(filt, trim='fb'):
+    return np.trim_zeros(filt, trim)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1470,6 +1476,56 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
+
+    def trim_zero_arrays(self):
+        yield np.array([0, 0, 1, 2, 3, 4, 0])
+        yield np.array([0, 0, 1, 0, 2, 3, 4, 0])
+        yield np.array([0, 0, 1, 0, 2, 3, 0, 4, 0])
+        yield np.array([0, 0, np.nan, 0, np.inf, 0, 1, 3, 0, 2, 1, 0, 0])
+
+    def test_trim_zeros_1_basic(self):
+        pyfunc = trim_zeros_1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a in self.trim_zero_arrays():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_trim_zeros_2_basic(self):
+        pyfunc = trim_zeros_2
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        for a in self.trim_zero_arrays():
+            params = {'filt': a}
+            _check(params)
+
+            # second arg supplied
+            for trim in 'f', 'fb', 'b', 'F', 'FB', 'B', 'fB', 'Fb', 'barf':
+                params['trim'] = trim
+                _check(params)
+
+    def test_trim_zeros_2_exceptions(self):
+        pyfunc = trim_zeros_2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(15).reshape(3, 5)
+
+        with self.assertTypingError() as e:
+            cfunc(a)
+
+        msg = "filt must be 1D (the input you provided was 2D"
+        assert msg in str(e.exception)
+
+        a = np.arange(10)
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, trim='f_b')
+
+        assert str(e.exception) == "trim must be one of 'fb', 'f' or 'b'"
 
 
 class TestNPMachineParameters(TestCase):
