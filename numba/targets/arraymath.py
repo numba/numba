@@ -1317,13 +1317,17 @@ def np_trim_zeros(filt, trim='fb'):
             msg = 'filt must be 1D (the input you provided was %sD)' % filt.ndim
             raise TypingError(msg)
 
+    DEFAULT_TRIM = False
+    if isinstance(trim, str) and trim == 'fb':
+        DEFAULT_TRIM = True
+
     def np_trim_zeros_impl(filt, trim='fb'):
         filt_arr = _asarray(filt)
 
         if len(filt_arr) == 0:
             return filt
 
-        if trim == '':
+        if DEFAULT_TRIM:
             trim = 'fb'
 
         if trim_front(trim):

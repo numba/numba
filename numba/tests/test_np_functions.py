@@ -1523,18 +1523,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def trim_values():
             # trim can be any word at all - the presence or absence
             # of 'f' or 'b' (regardless of case) control trimming behaviour
+            yield ''
             for char_combo in itertools.combinations_with_replacement('BFG', 3):
                 word = ''.join(char_combo)
                 for word_with_case in map(''.join, itertools.product(*zip(word.upper(), word.lower()))):
                     yield word_with_case
 
         for a in self.trim_zero_arrays():
-            params = {'filt': a}
-            _check(params)
-
-            # second arg supplied
             for trim in trim_values():
-                params['trim'] = trim
+                params = {'filt': a, 'trim': trim}
                 _check(params)
 
     def test_trim_zeros_exceptions(self):
