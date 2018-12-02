@@ -1294,7 +1294,6 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
-
 @register_jitable
 def check_word_contains(word, *chars):
     for char in chars:
