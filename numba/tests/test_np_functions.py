@@ -1479,7 +1479,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def trim_zero_arrays(self):
         yield np.array([0, 0, 1, 2, 3, 4, 0])
-        yield np.array([0, 0, 1, 0, 2, 3, 4, 0])
+        yield [0, 0, 1, 0, 2, 3, 4, 0]
         yield np.array([0, 0, 1, 0, 2, 3, 0, 4, 0])
         yield np.array([0, 0, np.nan, 0, np.inf, 0, 1, 3, 0, 2, 1, 0, 0])
 
@@ -1492,17 +1492,41 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
+    def test_trim_zeros_1_fails_with_tuple_input(self):
+        pyfunc = trim_zeros_1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = (0, 0, 1, 0, 2, 3, 0, 4, 0)
+
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertPreciseEqual(expected, got)
+
+        # return filt[idx_min:idx_max]
+        # ^
+        #
+        # Invalid use of Function(<built-in function getitem>)
+        # with argument(s) of type(s): (tuple(int64 x 9), slice<a:b>)
+
     def test_trim_zeros_2_basic(self):
         pyfunc = trim_zeros_2
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
+
+        def trim_values():
+            # trim can be any word at all - the presence or absence
+            # of 'f' or 'b' (regardless of case) control trimming behaviour
+            for char_combo in itertools.combinations_with_replacement('BFG', 3):
+                word = ''.join(char_combo)
+                for word_with_case in map(''.join, itertools.product(*zip(word.upper(), word.lower()))):
+                    yield word_with_case
 
         for a in self.trim_zero_arrays():
             params = {'filt': a}
             _check(params)
 
             # second arg supplied
-            for trim in 'f', 'fb', 'b', 'F', 'FB', 'B', 'fB', 'Fb', 'barf':
+            for trim in trim_values():
                 params['trim'] = trim
                 _check(params)
 
@@ -1520,12 +1544,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "filt must be 1D (the input you provided was 2D"
         assert msg in str(e.exception)
-
-        a = np.arange(10)
-        with self.assertRaises(ValueError) as e:
-            cfunc(a, trim='f_b')
-
-        assert str(e.exception) == "trim must be one of 'fb', 'f' or 'b'"
 
 
 class TestNPMachineParameters(TestCase):

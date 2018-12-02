@@ -1295,50 +1295,48 @@ def np_vander(x, N=None, increasing=False):
         return np_vander_seq_impl
 
 
-def myoverload(arg):
-    pass
+@register_jitable
+def check_word_contains(word, *chars):
+    for char in chars:
+        if np.any(np.array([word[i] == char for i in range(len(word))])):
+            return True
+    return False
 
-@overload(myoverload)
-def myoverload_impl(arg):
-    literal_val = getattr(arg, 'literal_value', None)
+@register_jitable
+def trim_front(trim):
+    return check_word_contains(trim, 'F', 'f')
 
-    print(literal_val)
-    print('hello')
-
+@register_jitable
+def trim_back(trim):
+    return check_word_contains(trim, 'B', 'b')
 
 @overload(np.trim_zeros)
 def np_trim_zeros(filt, trim='fb'):
 
     if isinstance(filt, types.Array):
-        if filt.ndim != 1:
+        if filt.ndim > 1:
             msg = 'filt must be 1D (the input you provided was %sD)' % filt.ndim
             raise TypingError(msg)
 
     def np_trim_zeros_impl(filt, trim='fb'):
         filt_arr = _asarray(filt)
 
-        idx_min = 0
-        idx_max = len(filt_arr)
-
         if trim == '':
             trim = 'fb'
 
-        if np.any(np.array([trim[i] == 'f' for i in range(len(trim))])):
+        if trim_front(trim):
             idx_min = np.argmax(filt_arr != 0)
+        else:
+            idx_min = 0
 
-        if np.any(np.array([trim[i] == 'F' for i in range(len(trim))])):
-            idx_min = np.argmax(filt_arr != 0)
-
-        if np.any(np.array([trim[i] == 'b' for i in range(len(trim))])):
+        if trim_back(trim):
             idx_max = len(filt_arr) - np.argmax(filt_arr[::-1] != 0)
+        else:
+            idx_max = len(filt_arr)
 
-        if np.any(np.array([trim[i] == 'B' for i in range(len(trim))])):
-            idx_max = len(filt_arr) - np.argmax(filt_arr[::-1] != 0)
-
-        return filt_arr[idx_min:idx_max]
+        return filt[idx_min:idx_max]
 
     return np_trim_zeros_impl
-
 
 #----------------------------------------------------------------------------
 # Statistics
