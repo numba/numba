@@ -1321,6 +1321,9 @@ def np_trim_zeros(filt, trim='fb'):
     def np_trim_zeros_impl(filt, trim='fb'):
         filt_arr = _asarray(filt)
 
+        if len(filt_arr) == 0:
+            return filt
+
         if trim == '':
             trim = 'fb'
 

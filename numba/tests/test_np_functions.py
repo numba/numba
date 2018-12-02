@@ -1477,11 +1477,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
-    def trim_zero_arrays(self):
+    @staticmethod
+    def trim_zero_arrays():
         yield np.array([0, 0, 1, 2, 3, 4, 0])
         yield [0, 0, 1, 0, 2, 3, 4, 0]
         yield np.array([0, 0, 1, 0, 2, 3, 0, 4, 0])
         yield np.array([0, 0, np.nan, 0, np.inf, 0, 1, 3, 0, 2, 1, 0, 0])
+        yield np.array([])
 
     def test_trim_zeros_1_basic(self):
         pyfunc = trim_zeros_1
@@ -1492,12 +1494,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
-    def test_trim_zeros_1_fails_with_tuple_input(self):
+    @unittest.skip('pending discussion with Core dev')
+    def test_trim_zeros_1_failures_with_tuple_input(self):
         pyfunc = trim_zeros_1
         cfunc = jit(nopython=True)(pyfunc)
 
         a = (0, 0, 1, 0, 2, 3, 0, 4, 0)
-
         expected = pyfunc(a)
         got = cfunc(a)
         self.assertPreciseEqual(expected, got)
@@ -1507,6 +1509,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         #
         # Invalid use of Function(<built-in function getitem>)
         # with argument(s) of type(s): (tuple(int64 x 9), slice<a:b>)
+
+        a = ()
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertPreciseEqual(expected, got)
 
     def test_trim_zeros_2_basic(self):
         pyfunc = trim_zeros_2
@@ -1530,8 +1537,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 params['trim'] = trim
                 _check(params)
 
-    def test_trim_zeros_2_exceptions(self):
-        pyfunc = trim_zeros_2
+    def test_trim_zeros_exceptions(self):
+        pyfunc = trim_zeros_1
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -1542,7 +1549,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc(a)
 
-        msg = "filt must be 1D (the input you provided was 2D"
+        msg = "filt must be 1D (the input you provided was 2D)"
         assert msg in str(e.exception)
 
 
