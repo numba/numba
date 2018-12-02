@@ -1297,7 +1297,7 @@ def np_vander(x, N=None, increasing=False):
 @register_jitable
 def check_word_contains(word, *chars):
     for char in chars:
-        if np.any(np.array([word[i] == char for i in range(len(word))])):
+        if char in word:
             return True
     return False
 
