@@ -1,3 +1,121 @@
+Version 0.41.0
+--------------
+
+This release adds the following major features:
+
+* Diagnostics showing the optimizations done by ParallelAccelerator
+* Support for profiling Numba-compiled functions in Intel VTune
+* Additional NumPy functions: partition, nancumsum, nancumprod, ediff1d, cov,
+  conj, conjugate, tri, tril, triu
+* Initial support for Python 3 Unicode strings
+
+General Enhancements:
+
+* PR #1968: armv7 support
+* PR #2983: invert mapping b/w binop operators and the operator module #2297 
+* PR #3160: First attempt at parallel diagnostics
+* PR #3307: Adding NUMBA_ENABLE_PROFILING envvar, enabling jit event
+* PR #3320: Support for np.partition 
+* PR #3324: Support for np.nancumsum and np.nancumprod 
+* PR #3325: Add location information to exceptions.
+* PR #3337: Support for np.ediff1d
+* PR #3345: Support for np.cov
+* PR #3348: Support user pipeline class in with lifting
+* PR #3363: string support
+* PR #3373: Improve error message for empty imprecise lists.
+* PR #3375: Enable overload(operator.getitem)
+* PR #3402: Support negative indexing in tuple.
+* PR #3414: Refactor Const type
+* PR #3416: Optimized usage of alloca out of the loop 
+* PR #3424: Updates for llvmlite 0.26
+* PR #3462: Add support for `np.conj/np.conjugate`.
+* PR #3480: np.tri, np.tril, np.triu - default optional args
+* PR #3481: Permit dtype argument as sole kwarg in np.eye
+
+CUDA Enhancements:
+
+* PR #3399: Add max_registers Option to cuda.jit
+
+Continuous Integration / Testing:
+
+* PR #3303: CI with Azure Pipelines
+* PR #3309: Workaround race condition with apt 
+* PR #3371: Fix issues with Azure Pipelines
+* PR #3362: Fix #3360: `RuntimeWarning: 'numba.runtests' found in sys.modules`
+* PR #3374: Disable openmp in wheel building
+* PR #3404: Azure Pipelines templates 
+* PR #3419: Fix cuda tests and error reporting in test discovery
+* PR #3491: Prevent faulthandler installation on armv7l
+* PR #3493: Fix CUDA test that used negative indexing behaviour that's fixed.
+* PR #3495: Start Flake8 checking of Numba source
+
+Fixes:
+
+* PR #2950: Fix dispatcher to only consider contiguous-ness.
+* PR #3124: Fix 3119, raise for 0d arrays in reductions
+* PR #3228: Reduce redundant module linking
+* PR #3329: Fix AOT on windows.
+* PR #3335: Fix memory management of __cuda_array_interface__ views.
+* PR #3340: Fix typo in error name.
+* PR #3365: Fix the default unboxing logic
+* PR #3367: Allow non-global reference to objmode() context-manager
+* PR #3381: Fix global reference in objmode for dynamically created function
+* PR #3382: CUDA_ERROR_MISALIGNED_ADDRESS Using Multiple Const Arrays
+* PR #3384: Correctly handle very old versions of colorama 
+* PR #3394: Add 32bit package guard for non-32bit installs
+* PR #3397: Fix with-objmode warning
+* PR #3403 Fix label offset in call inline after parfor pass
+* PR #3429: Fixes raising of user defined exceptions for exec(<string>).
+* PR #3432: Fix error due to function naming in CI in py2.7 
+* PR #3444: Fixed TBB's single thread execution and test added for #3440
+* PR #3449: Allow matching non-array objects in find_callname()
+* PR #3455: Change getiter and iternext to not be pure. Resolves #3425
+* PR #3467: Make ir.UndefinedType singleton class.
+* PR #3478: Fix np.random.shuffle sideeffect
+* PR #3487: Raise unsupported for kwargs given to `print()`
+* PR #3488: Remove dead script.
+* PR #3498: Fix stencil support for boolean as return type
+* PR #3511: Fix handling make_function literals (regression of #3414)
+* PR #3514: Add missing unicode != unicode
+* PR #3527: Fix complex math sqrt implementation for large -ve values
+* PR #3530: This adds arg an check for the pattern supplied to Parfors.
+* PR #3536: Sets list dtor linkage to `linkonce_odr` to fix visibility in AOT
+
+Documentation Updates:
+
+* PR #3316: Update 0.40 changelog with additional PRs
+* PR #3318: Tweak spacing to avoid search box wrapping onto second line 
+* PR #3321: Add note about memory leaks with exceptions to docs. Fixes #3263 
+* PR #3322: Add FAQ on CUDA + fork issue. Fixes #3315. 
+* PR #3343: Update docs for argsort, kind kwarg partially supported. 
+* PR #3357: Added mention of njit in 5minguide.rst 
+* PR #3434: Fix parallel reduction example in docs.
+* PR #3452: Fix broken link and mark up problem. 
+* PR #3484: Size Numba logo in docs in em units. Fixes #3313
+* PR #3502: just two typos
+* PR #3506: Document string support
+* PR #3513: Documentation for parallel diagnostics.
+* PR #3526: Fix 5 min guide with respect to @njit decl
+
+Contributors:
+
+* Alex Ford
+* Andreas Sodeur 
+* Anton Malakhov
+* Daniel Stender
+* Ehsan Totoni (core dev)
+* Henry Schreiner
+* Marcel Bargull
+* Matt Cooper
+* Nick White
+* Nicolas Hug
+* rjenc29
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+
+
 Version 0.40.1
 --------------
 

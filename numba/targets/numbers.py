@@ -253,10 +253,10 @@ def int_power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.pow, types.Integer, types.Const)
-@lower_builtin(operator.ipow, types.Integer, types.Const)
-@lower_builtin(operator.pow, types.Float, types.Const)
-@lower_builtin(operator.ipow, types.Float, types.Const)
+@lower_builtin(operator.pow, types.Integer, types.IntegerLiteral)
+@lower_builtin(operator.ipow, types.Integer, types.IntegerLiteral)
+@lower_builtin(operator.pow, types.Float, types.IntegerLiteral)
+@lower_builtin(operator.ipow, types.Float, types.IntegerLiteral)
 def static_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b a constant integer
@@ -521,23 +521,6 @@ lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
 lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
 lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
 
-@lower_builtin(operator.eq, types.Const, types.Const)
-def const_eq_impl(context, builder, sig, args):
-    arg1, arg2 = sig.args
-    val = 0
-    if arg1.value == arg2.value:
-        val = 1
-    res = ir.Constant(ir.IntType(1), val)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@lower_builtin(operator.ne, types.Const, types.Const)
-def const_eq_impl(context, builder, sig, args):
-    arg1, arg2 = sig.args
-    val = 0
-    if arg1.value!=arg2.value:
-        val = 1
-    res = ir.Constant(ir.IntType(1), val)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 def _implement_integer_operators():
     ty = types.Integer
@@ -573,6 +556,10 @@ def _implement_integer_operators():
         lower_builtin(pow, types.Float, ty)(int_power_impl)
         lower_builtin(abs, ty)(uint_abs_impl)
 
+    lower_builtin(operator.lt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+    lower_builtin(operator.gt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+    lower_builtin(operator.le, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+    lower_builtin(operator.ge, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
     for ty in types.signed_domain:
         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
         lower_builtin(operator.le, ty, ty)(int_sle_impl)
@@ -1317,22 +1304,16 @@ def hash_complex(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
-@lower_cast(types.Integer, types.Const)
-def integer_to_constant(context, builder, fromty, toty, val):
-    # Perform runtime check to ensure that the runtime value
-    # matches the expected constant.
-    # The violation would imply an internal error.
-    # The runtime checking logic cannot be tested automatically.
-    # The easiest way to test is to change the comparison from `!=` to `==`
-    # so that the exception will raise when the expection is met.
-    const = context.get_constant(fromty, toty.value)
-    matches = builder.icmp_unsigned('!=', val, const)
-    with cgutils.if_unlikely(builder, matches):
-        # Raise RuntimeError about the assumption violation
-        usermsg = "numba constant integer assumption violated"
-        errmsg = "{}: expecting {}".format(usermsg, toty.value)
-        context.call_conv.return_user_exc(builder, RuntimeError, (errmsg,))
-    return cgutils.get_null_value(context.get_value_type(toty))
+@lower_cast(types.IntegerLiteral, types.Integer)
+@lower_cast(types.IntegerLiteral, types.Float)
+@lower_cast(types.IntegerLiteral, types.Complex)
+def literal_int_to_number(context, builder, fromty, toty, val):
+    lit = context.get_constant_generic(
+        builder,
+        fromty.literal_type,
+        fromty.literal_value,
+        )
+    return context.cast(builder, lit, fromty.literal_type, toty)
 
 
 @lower_cast(types.Integer, types.Integer)
@@ -1410,6 +1391,15 @@ def boolean_to_any(context, builder, fromty, toty, val):
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
+
+@lower_cast(types.IntegerLiteral, types.Boolean)
+def literal_int_to_boolean(context, builder, fromty, toty, val):
+    lit = context.get_constant_generic(
+        builder,
+        fromty.literal_type,
+        fromty.literal_value,
+        )
+    return context.is_true(builder, fromty.literal_type, lit)
 
 #-------------------------------------------------------------------------------
 # Constants

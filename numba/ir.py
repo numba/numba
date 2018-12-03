@@ -59,7 +59,11 @@ class Loc(object):
 
     def _raw_function_name(self):
         defn = self._find_definition()
-        return self._defmatcher.match(defn.strip()).groups()[0]
+        if defn:
+            return self._defmatcher.match(defn.strip()).groups()[0]
+        else:
+            # Probably exec(<string>) or REPL.
+            return None
 
     def _get_lines(self):
         if self.lines is None:
@@ -130,7 +134,7 @@ class Loc(object):
 
         # if in the REPL source may not be available
         if not ret:
-            ret = "<source missing, REPL in use?>"
+            ret = "<source missing, REPL/exec in use?>"
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
         tmp = err % (self._get_path(), self.line, _termcolor.code(''.join(ret)))
@@ -649,9 +653,11 @@ class Arg(object):
 
 
 class Const(object):
-    def __init__(self, value, loc):
+    def __init__(self, value, loc, use_literal_type=True):
         self.value = value
         self.loc = loc
+        # Note: need better way to tell if this is a literal or not.
+        self.use_literal_type = use_literal_type
 
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)
@@ -1094,6 +1100,18 @@ class FunctionIR(object):
 
 # A stub for undefined global reference
 class UndefinedType(object):
+
+    _singleton = None
+
+    def __new__(cls):
+        obj = cls._singleton
+        if obj is not None:
+            return obj
+        else:
+            obj = object.__new__(cls)
+            cls._singleton = obj
+        return obj
+
     def __repr__(self):
         return "Undefined"
 

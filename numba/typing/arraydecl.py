@@ -159,10 +159,8 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@infer
+@infer_global(operator.getitem)
 class GetItemBuffer(AbstractTemplate):
-    key = "getitem"
-
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
@@ -402,7 +400,7 @@ class ArrayAttribute(AttributeTemplate):
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("reshape({0}) is not supported".format(
-                    ', '.join(args)))
+                    ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
@@ -418,7 +416,7 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_argsort(self, ary, args, kws):
         assert not args
         kwargs = dict(kws)
-        kind = kwargs.pop('kind', types.Const('quicksort'))
+        kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -508,7 +506,7 @@ class DTypeAttr(AttributeTemplate):
             val = 'i'
         else:
             return None  # other types not supported yet
-        return types.Const(val)
+        return types.StringLiteral(val)
 
 @infer
 class StaticGetItemArray(AbstractTemplate):
@@ -554,7 +552,7 @@ class StaticSetItemRecord(AbstractTemplate):
         if isinstance(record, types.Record) and isinstance(idx, str):
             expectedty = record.typeof(idx)
             if self.context.can_convert(value, expectedty) is not None:
-                return signature(types.void, record, types.Const(idx), value)
+                return signature(types.void, record, types.literal(idx), value)
 
 
 @infer_getattr

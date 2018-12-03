@@ -290,6 +290,12 @@ def expected_failure_for_function_arg(fn):
 
 class TestLiftObj(MemoryLeak, TestCase):
 
+    def setUp(self):
+        warnings.simplefilter("error", errors.NumbaWarning)
+
+    def tearDown(self):
+        warnings.resetwarnings()
+
     def assert_equal_return_and_stdout(self, pyfunc, *args):
         py_args = copy.deepcopy(args)
         c_args = copy.deepcopy(args)
@@ -513,8 +519,13 @@ class TestLiftObj(MemoryLeak, TestCase):
                     with objmode_context():
                         print(x)
             return x
-        x = np.array([1, 2, 3])
-        self.assert_equal_return_and_stdout(foo, x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            njit(foo)(123)
+        # Check that an error occurred in with-lifting in objmode
+        pat = ("During: resolving callee type: "
+               "type\(ObjModeLiftedWith\(<.*>\)\)")
+        self.assertRegexpMatches(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
@@ -725,13 +736,28 @@ class TestLiftObj(MemoryLeak, TestCase):
         msg = "Does not support with-context that contain branches"
         self.assertIn(msg, str(raises.exception))
 
+    @unittest.expectedFailure
     def test_case20_rng_works_ok(self):
         def foo(x):
             np.random.seed(0)
             y = np.random.rand()
             with objmode_context(z="float64"):
+                # It's known that the random state does not sync
                 z = np.random.rand()
-            return x + z
+            return x + z + y
+
+        x = np.array([1, 2, 3])
+        self.assert_equal_return_and_stdout(foo, x)
+
+    def test_case21_rng_seed_works_ok(self):
+        def foo(x):
+            np.random.seed(0)
+            y = np.random.rand()
+            with objmode_context(z="float64"):
+                # Similar to test_case20_rng_works_ok but call seed
+                np.random.seed(0)
+                z = np.random.rand()
+            return x + z + y
 
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)

@@ -413,7 +413,7 @@ for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as convertors to the equivalent Numba types
+# Register np.int8, etc. as converters to the equivalent Numba types
 np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
 np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
@@ -621,21 +621,6 @@ class NdIdentity(AbstractTemplate):
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
-
-
-@infer_global(np.eye)
-class NdEye(CallableTemplate):
-
-    def generic(self):
-        def typer(N, M=None, k=None, dtype=None):
-            if dtype is None:
-                nb_dtype = types.float64
-            else:
-                nb_dtype = _parse_dtype(dtype)
-            if nb_dtype is not None:
-                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
-
-        return typer
 
 
 @infer_global(np.arange)
@@ -1226,7 +1211,8 @@ class DiagCtor(CallableTemplate):
                     rdim = 1
                 else:
                     return None
-                return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
+                if isinstance(k, (int, types.Integer)):
+                    return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
 
 

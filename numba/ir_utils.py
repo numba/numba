@@ -586,7 +586,7 @@ remove_call_handlers = []
 
 def remove_dead_random_call(rhs, lives, call_list):
     if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
-        return call_list[0] != 'seed'
+        return call_list[0] not in {'seed', 'shuffle'}
     return False
 
 remove_call_handlers.append(remove_dead_random_call)
@@ -637,19 +637,22 @@ def is_pure(rhs, lives, call_table):
         returns the same result.  This is not the case for things
         like calls to numpy.random.
     """
-    if isinstance(rhs, ir.Expr) and rhs.op == 'call':
-        func_name = rhs.func.name
-        if func_name not in call_table or call_table[func_name] == []:
-            return False
-        call_list = call_table[func_name]
-        if (call_list == [slice] or
-            call_list == ['log', numpy] or
-            call_list == ['empty', numpy]):
-            return True
-        for f in is_pure_extensions:
-            if f(rhs, lives, call_list):
+    if isinstance(rhs, ir.Expr):
+        if rhs.op == 'call':
+            func_name = rhs.func.name
+            if func_name not in call_table or call_table[func_name] == []:
+                return False
+            call_list = call_table[func_name]
+            if (call_list == [slice] or
+                call_list == ['log', numpy] or
+                call_list == ['empty', numpy]):
                 return True
-        return False
+            for f in is_pure_extensions:
+                if f(rhs, lives, call_list):
+                    return True
+            return False
+        elif rhs.op == 'getiter' or rhs.op == 'iternext':
+            return False
     if isinstance(rhs, ir.Yield):
         return False
     return True
@@ -1020,7 +1023,7 @@ def find_topo_order(blocks, cfg = None):
 call_table_extensions = {}
 
 
-def get_call_table(blocks, call_table=None, reverse_call_table=None):
+def get_call_table(blocks, call_table=None, reverse_call_table=None, topological_ordering=True):
     """returns a dictionary of call variables and their references.
     """
     # call_table example: c = np.zeros becomes c:["zeroes", np]
@@ -1030,8 +1033,12 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None):
     if reverse_call_table is None:
         reverse_call_table = {}
 
-    topo_order = find_topo_order(blocks)
-    for label in reversed(topo_order):
+    if topological_ordering:
+        order = find_topo_order(blocks)
+    else:
+        order = list(blocks.keys())
+    
+    for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
                 lhs = inst.target.name
@@ -1388,11 +1395,12 @@ def build_definitions(blocks, definitions=None):
 build_defs_extensions = {}
 
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
-    """Check if a call expression is calling a numpy function, and
-    return the callee's function name and module name (both are strings),
-    or raise GuardException. For array attribute calls such as 'a.f(x)'
-    when 'a' is a numpy array, the array variable 'a' is returned
-    in place of the module name.
+    """Try to find a call expression's function and module names and return
+    them as strings for unbounded calls. If the call is a bounded call, return
+    the self object instead of module name. Raise GuardException if failed.
+
+    Providing typemap can make the call matching more accurate in corner cases
+    such as bounded call on an object which is inside another object.
     """
     require(isinstance(expr, ir.Expr) and expr.op == 'call')
     callee = expr.func
@@ -1443,7 +1451,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             attrs.append(callee_def.attr)
             if typemap and obj.name in typemap:
                 typ = typemap[obj.name]
-                if isinstance(typ, types.npytypes.Array):
+                if not isinstance(typ, types.Module):
                     return attrs[0], obj
             callee_def = definition_finder(func_ir, obj)
         else:
@@ -1538,7 +1546,7 @@ def get_ir_of_code(glbls, fcode):
     # hack parameter name .0 for Python 3 versions < 3.6
     if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
         co_varnames = list(fcode.co_varnames)
-        if co_varnames[0] == ".0":
+        if len(co_varnames) > 0 and co_varnames[0] == ".0":
             co_varnames[0] = "implicit0"
         fcode = pytypes.CodeType(
             fcode.co_argcount,
@@ -1577,8 +1585,9 @@ def get_ir_of_code(glbls, fcode):
     rewrites.rewrite_registry.apply('before-inference',
                                     DummyPipeline(ir), ir)
     # call inline pass to handle cases like stencils and comprehensions
+    swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
-        ir, numba.targets.cpu.ParallelOptions(False))
+        ir, numba.targets.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
     from numba import postproc
     post_proc = postproc.PostProcessor(ir)

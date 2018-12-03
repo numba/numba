@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 
 
+import os
 from functools import reduce, wraps
 import operator
 import sys
@@ -57,7 +58,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[]):
+                   fastmath=False, extensions=[], max_registers=None):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -73,7 +74,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         debug=debug,
                         call_helper=cres.call_helper,
                         fastmath=fastmath,
-                        extensions=extensions)
+                        extensions=extensions,
+                        max_registers=max_registers)
     return cukern
 
 
@@ -363,12 +365,13 @@ class CachedCUFunction(object):
     Uses device ID as key for cache.
     """
 
-    def __init__(self, entry_name, ptx, linking):
+    def __init__(self, entry_name, ptx, linking, max_registers):
         self.entry_name = entry_name
         self.ptx = ptx
         self.linking = linking
         self.cache = {}
         self.ccinfos = {}
+        self.max_registers = max_registers
 
     def get(self):
         cuctx = get_context()
@@ -378,7 +381,7 @@ class CachedCUFunction(object):
             ptx = self.ptx.get()
 
             # Link
-            linker = driver.Linker()
+            linker = driver.Linker(max_registers=self.max_registers)
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
@@ -409,15 +412,15 @@ class CachedCUFunction(object):
             msg = ('cannot pickle CUDA kernel function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
-        args = (self.__class__, self.entry_name, self.ptx, self.linking)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking, self.max_registers)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, entry_name, ptx, linking):
+    def _rebuild(cls, entry_name, ptx, linking, max_registers):
         """
         Rebuild an instance.
         """
-        return cls(entry_name, ptx, linking)
+        return cls(entry_name, ptx, linking, max_registers)
 
 
 class CUDAKernel(CUDAKernelBase):
@@ -428,7 +431,7 @@ class CUDAKernel(CUDAKernelBase):
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
-                 extensions=[]):
+                 extensions=[], max_registers=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -439,7 +442,7 @@ class CUDAKernel(CUDAKernelBase):
                                 fma=True))
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
-        cufunc = CachedCUFunction(name, ptx, link)
+        cufunc = CachedCUFunction(name, ptx, link, max_registers)
         # populate members
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -582,9 +585,18 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                exccls, exc_args = self.call_helper.get_exception(code)
+                exccls, exc_args, loc = self.call_helper.get_exception(code)
+                # Prefix the exception message with the source location
+                if loc is None:
+                    locinfo = ''
+                else:
+                    sym, filepath, lineno = loc
+                    filepath = os.path.relpath(filepath)
+                    locinfo = 'In function %r, file %s, line %s, ' % (
+                        sym, filepath, lineno,
+                        )
                 # Prefix the exception message with the thread position
-                prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
                 if exc_args:
                     exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
                 else:

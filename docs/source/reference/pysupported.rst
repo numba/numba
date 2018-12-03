@@ -144,6 +144,44 @@ The following attributes and methods are supported:
 * ``.real``
 * ``.imag``
 
+str
+---
+
+Numba supports (Unicode) strings in Python 3.  Strings can be passed into
+:term:`nopython mode` as arguments, as well as constructed and returned from
+:term:`nopython mode`. As in Python, slices (even of length 1) return a new,
+reference counted string.  Optimized code paths for efficiently accessing
+single characters may be introduced in the future.
+
+The in-memory representation is the same as was introduced in Python 3.4, with
+each string having a tag to indicate whether the string is using a 1, 2, or 4
+byte character width in memory.  When strings of different encodings are
+combined (as in concatenation), the resulting string automatically uses the
+larger character width of the two input strings.  String slices also use the
+same character width as the original string, even if the slice could be
+represented with a narrower character width.  (These details are invisible to
+the user, of course.)
+
+The following functions, attributes and methods are currently supported:
+
+* ``len()``
+* ``+`` (concatenation of strings)
+* ``in``, ``.contains()``
+* ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
+* ``.startswith()``
+* ``.endswith()``
+* ``.find()``
+
+Additional operations as well as support for Python 2 strings / Python 3 bytes
+will be added in a future version of Numba.  Python 2 Unicode objects will
+likely never be supported.
+
+.. warning::
+    The performance of the substring search operations (``in``,
+    ``.contains()`` and ``find()``) is poor in version 0.41 and will be improved in
+    version 0.42.
+
+
 tuple
 -----
 

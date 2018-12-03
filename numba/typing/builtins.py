@@ -17,7 +17,6 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
 
 @infer_global(print)
 class Print(AbstractTemplate):
-
     def generic(self, args, kws):
         for a in args:
             sig = self.context.resolve_function_type("print_item", (a,), {})
@@ -37,16 +36,15 @@ class PrintItem(AbstractTemplate):
 
 @infer_global(abs)
 class Abs(ConcreteTemplate):
-    int_cases = [signature(ty, ty) for ty in types.signed_domain]
-    real_cases = [signature(ty, ty) for ty in types.real_domain]
+    int_cases = [signature(ty, ty) for ty in sorted(types.signed_domain)]
+    real_cases = [signature(ty, ty) for ty in sorted(types.real_domain)]
     complex_cases = [signature(ty.underlying_float, ty)
-                     for ty in types.complex_domain]
+                     for ty in sorted(types.complex_domain)]
     cases = int_cases + real_cases + complex_cases
 
 
 @infer_global(slice)
 class Slice(ConcreteTemplate):
-    key = slice
     cases = [
         signature(types.slice2_type),
         signature(types.slice2_type, types.none, types.none),
@@ -168,64 +166,58 @@ class BinOp(ConcreteTemplate):
 
 @infer_global(operator.add)
 class BinOpAdd(BinOp):
-    key = operator.add
+    pass
 
 
 @infer_global(operator.iadd)
 class BinOpAdd(BinOp):
-    key = operator.iadd
+    pass
 
 
 @infer_global(operator.sub)
 class BinOpSub(BinOp):
-    key = operator.sub
+    pass
 
 
 @infer_global(operator.isub)
 class BinOpSub(BinOp):
-    key = operator.isub
+    pass
 
 
 @infer_global(operator.mul)
 class BinOpMul(BinOp):
-    key = operator.mul
+    pass
 
 
 @infer_global(operator.imul)
 class BinOpMul(BinOp):
-    key = operator.imul
+    pass
 
 if not IS_PY3:
     @infer_global(operator.div)
     class BinOpDiv(BinOp):
-        key = operator.div
+        pass
 
 
     @infer_global(operator.idiv)
     class BinOpDiv(BinOp):
-        key = operator.idiv
+        pass
 
 
 @infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
-    key = operator.mod
-
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @infer_global(operator.imod)
 class BinOpMod(ConcreteTemplate):
-    key = operator.imod
-
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @infer_global(operator.truediv)
 class BinOpTrueDiv(ConcreteTemplate):
-    key = operator.truediv
-
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
@@ -234,8 +226,6 @@ class BinOpTrueDiv(ConcreteTemplate):
 
 @infer_global(operator.itruediv)
 class BinOpTrueDiv(ConcreteTemplate):
-    key = operator.itruediv
-
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
@@ -244,16 +234,12 @@ class BinOpTrueDiv(ConcreteTemplate):
 
 @infer_global(operator.floordiv)
 class BinOpFloorDiv(ConcreteTemplate):
-    key = operator.floordiv
-
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @infer_global(operator.ifloordiv)
 class BinOpFloorDiv(ConcreteTemplate):
-    key = operator.ifloordiv
-
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
@@ -266,8 +252,6 @@ class DivMod(ConcreteTemplate):
 
 @infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
-    key = operator.pow
-
     cases = list(integer_binop_cases)
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
@@ -282,8 +266,6 @@ class BinOpPower(ConcreteTemplate):
 
 @infer_global(operator.ipow)
 class BinOpPower(ConcreteTemplate):
-    key = operator.ipow
-
     cases = list(integer_binop_cases)
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
@@ -298,8 +280,8 @@ class BinOpPower(ConcreteTemplate):
 
 @infer_global(pow)
 class PowerBuiltin(BinOpPower):
-    key = pow
     # TODO add 3 operand version
+    pass
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
@@ -323,22 +305,21 @@ class BitwiseShiftOperation(ConcreteTemplate):
 
 @infer_global(operator.lshift)
 class BitwiseLeftShift(BitwiseShiftOperation):
-    key = operator.lshift
-
+    pass
 
 @infer_global(operator.ilshift)
 class BitwiseLeftShift(BitwiseShiftOperation):
-    key = operator.ilshift
+    pass
 
 
 @infer_global(operator.rshift)
 class BitwiseRightShift(BitwiseShiftOperation):
-    key = operator.rshift
+    pass
 
 
 @infer_global(operator.irshift)
 class BitwiseRightShift(BitwiseShiftOperation):
-    key = operator.ilshift
+    pass
 
 
 class BitwiseLogicOperation(BinOp):
@@ -349,32 +330,32 @@ class BitwiseLogicOperation(BinOp):
 
 @infer_global(operator.and_)
 class BitwiseAnd(BitwiseLogicOperation):
-    key = operator.and_
+    pass
 
 
 @infer_global(operator.iand)
 class BitwiseAnd(BitwiseLogicOperation):
-    key = operator.iand
+    pass
 
 
 @infer_global(operator.or_)
 class BitwiseOr(BitwiseLogicOperation):
-    key = operator.or_
+    pass
 
 
 @infer_global(operator.ior)
 class BitwiseOr(BitwiseLogicOperation):
-    key = operator.ior
+    pass
 
 
 @infer_global(operator.xor)
 class BitwiseXor(BitwiseLogicOperation):
-    key = operator.xor
+    pass
 
 
 @infer_global(operator.ixor)
 class BitwiseXor(BitwiseLogicOperation):
-    key = operator.ixor
+    pass
 
 
 # Bitwise invert and negate are special: we must not upcast the operand
@@ -383,8 +364,6 @@ class BitwiseXor(BitwiseLogicOperation):
 
 @infer_global(operator.invert)
 class BitwiseInvert(ConcreteTemplate):
-    key = operator.invert
-
     # Note Numba follows the Numpy semantics of returning a bool,
     # while Python returns an int.  This makes it consistent with
     # np.invert() and makes array expressions correct.
@@ -393,6 +372,7 @@ class BitwiseInvert(ConcreteTemplate):
     cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
 
     unsafe_casting = False
+
 
 class UnaryOp(ConcreteTemplate):
     cases = [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
@@ -404,17 +384,16 @@ class UnaryOp(ConcreteTemplate):
 
 @infer_global(operator.neg)
 class UnaryNegate(UnaryOp):
-    key = operator.neg
+    pass
 
 
 @infer_global(operator.pos)
 class UnaryPositive(UnaryOp):
-   key = operator.pos
+   pass
 
 
 @infer_global(operator.not_)
 class UnaryNot(ConcreteTemplate):
-    key = operator.not_
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
@@ -436,40 +415,46 @@ class UnorderedCmpOp(ConcreteTemplate):
 
 @infer_global(operator.lt)
 class CmpOpLt(OrderedCmpOp):
-    key = operator.lt
+    pass
+
 
 @infer_global(operator.le)
 class CmpOpLe(OrderedCmpOp):
-    key = operator.le
+    pass
+
 
 @infer_global(operator.gt)
 class CmpOpGt(OrderedCmpOp):
-    key = operator.gt
+    pass
+
 
 @infer_global(operator.ge)
 class CmpOpGe(OrderedCmpOp):
-    key = operator.ge
+    pass
+
 
 @infer_global(operator.eq)
 class CmpOpEq(UnorderedCmpOp):
-    key = operator.eq
+    pass
+
 
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
-    key = operator.eq
     def generic(self, args, kws):
         assert not kws
         (arg1, arg2) = args
-        if isinstance(arg1, types.Const) and isinstance(arg2, types.Const):
+        if isinstance(arg1, types.Literal) and isinstance(arg2, types.Literal):
             return signature(types.boolean, arg1, arg2)
+
 
 @infer_global(operator.ne)
 class ConstOpNotEq(ConstOpEq):
-    key = operator.ne
+    pass
+
 
 @infer_global(operator.ne)
 class CmpOpNe(UnorderedCmpOp):
-    key = operator.ne
+    pass
 
 
 class TupleCompare(AbstractTemplate):
@@ -484,34 +469,39 @@ class TupleCompare(AbstractTemplate):
             else:
                 return signature(types.boolean, lhs, rhs)
 
+
 @infer_global(operator.eq)
 class TupleEq(TupleCompare):
-    key = operator.eq
+    pass
+
 
 @infer_global(operator.ne)
 class TupleNe(TupleCompare):
-    key = operator.ne
+    pass
+
 
 @infer_global(operator.ge)
 class TupleGe(TupleCompare):
-    key = operator.ge
+    pass
+
 
 @infer_global(operator.gt)
 class TupleGt(TupleCompare):
-    key = operator.gt
+    pass
+
 
 @infer_global(operator.le)
 class TupleLe(TupleCompare):
-    key = operator.le
+    pass
+
 
 @infer_global(operator.lt)
 class TupleLt(TupleCompare):
-    key = operator.lt
+    pass
+
 
 @infer_global(operator.add)
 class TupleAdd(AbstractTemplate):
-    key = operator.add
-
     def generic(self, args, kws):
         if len(args) == 2:
             a, b = args
@@ -530,12 +520,12 @@ class CmpOpIdentity(AbstractTemplate):
 
 @infer_global(operator.is_)
 class CmpOpIs(CmpOpIdentity):
-    key = operator.is_
+    pass
 
 
 @infer_global(operator.is_not)
 class CmpOpIsNot(CmpOpIdentity):
-    key = operator.is_not
+    pass
 
 
 def normalize_1d_index(index):
@@ -550,10 +540,8 @@ def normalize_1d_index(index):
         return types.intp if index.signed else types.uintp
 
 
-@infer
+@infer_global(operator.getitem)
 class GetItemCPointer(AbstractTemplate):
-    key = "getitem"
-
     def generic(self, args, kws):
         assert not kws
         ptr, idx = args
@@ -574,8 +562,6 @@ class SetItemCPointer(AbstractTemplate):
 
 @infer_global(len)
 class Len(AbstractTemplate):
-    key = len
-
     def generic(self, args, kws):
         assert not kws
         (val,) = args
@@ -586,8 +572,6 @@ class Len(AbstractTemplate):
 
 @infer_global(tuple)
 class TupleConstructor(AbstractTemplate):
-    key = tuple
-
     def generic(self, args, kws):
         assert not kws
         # empty tuple case
@@ -601,8 +585,6 @@ class TupleConstructor(AbstractTemplate):
 
 @infer_global(operator.contains)
 class Contains(AbstractTemplate):
-    key = operator.contains
-
     def generic(self, args, kws):
         assert not kws
         (seq, val) = args
@@ -612,8 +594,6 @@ class Contains(AbstractTemplate):
 
 @infer_global(operator.truth)
 class TupleBool(AbstractTemplate):
-    key = operator.truth
-
     def generic(self, args, kws):
         assert not kws
         (val,) = args
@@ -936,7 +916,7 @@ class Enumerate(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         it = args[0]
-        if len(args) > 1 and not args[1] in types.integer_domain:
+        if len(args) > 1 and not isinstance(args[1], types.Integer):
             raise TypeError("Only integers supported as start value in "
                             "enumerate")
         elif len(args) > 2:
@@ -1025,10 +1005,13 @@ class MinValInfer(AbstractTemplate):
         assert isinstance(args[0], (types.DType, types.NumberClass))
         return signature(args[0].dtype, *args)
 
+
 #------------------------------------------------------------------------------
 
-from numba.extending import (typeof_impl, type_callable, models, register_model,
-                                make_attribute_wrapper)
+from numba.extending import (
+    typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
+    )
+
 
 class IndexValue(object):
     """
@@ -1041,16 +1024,19 @@ class IndexValue(object):
     def __repr__(self):
         return 'IndexValue(%f, %f)' % (self.index, self.value)
 
+
 class IndexValueType(types.Type):
     def __init__(self, val_typ):
         self.val_typ = val_typ
         super(IndexValueType, self).__init__(
                                     name='IndexValueType({})'.format(val_typ))
 
+
 @typeof_impl.register(IndexValue)
 def typeof_index(val, c):
     val_typ = typeof_impl(val.value, c)
     return IndexValueType(val_typ)
+
 
 @type_callable(IndexValue)
 def type_index_value(context):
@@ -1058,6 +1044,7 @@ def type_index_value(context):
         if ind == types.intp or ind == types.uintp:
             return IndexValueType(mval)
     return typer
+
 
 @register_model(IndexValueType)
 class IndexValueModel(models.StructModel):
@@ -1067,6 +1054,7 @@ class IndexValueModel(models.StructModel):
             ('value', fe_type.val_typ),
             ]
         models.StructModel.__init__(self, dmm, fe_type, members)
+
 
 make_attribute_wrapper(IndexValueType, 'index', 'index')
 make_attribute_wrapper(IndexValueType, 'value', 'value')

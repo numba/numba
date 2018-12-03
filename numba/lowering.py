@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import weakref
 import time
 from collections import namedtuple, deque
+import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
@@ -10,10 +11,11 @@ from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-from .errors import LoweringError, new_error_context, TypingError
+from .errors import (LoweringError, new_error_context, TypingError,
+                     LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo, utils
+from . import debuginfo
 
 
 class Environment(_dynfunc.Environment):
@@ -77,13 +79,14 @@ class BaseLower(object):
     Lower IR to LLVM
     """
 
-    def __init__(self, context, library, fndesc, func_ir):
+    def __init__(self, context, library, fndesc, func_ir, metadata=None):
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
         self.func_ir = func_ir
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
+        self.metadata = metadata
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -157,7 +160,8 @@ class BaseLower(object):
 
     def return_exception(self, exc_class, exc_args=None, loc=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args,
-                                       loc=loc)
+                                       loc=loc,
+                                       func_name=self.func_ir.func_id.func_name)
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
@@ -545,18 +549,24 @@ class Lower(BaseLower):
             except NotImplementedError:
                 return None
 
-        res = try_static_impl((types.Const(static_lhs), types.Const(static_rhs)),
-                              (static_lhs, static_rhs))
+        res = try_static_impl(
+            (_lit_or_omitted(static_lhs), _lit_or_omitted(static_rhs)),
+            (static_lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((types.Const(static_lhs), rty),
-                              (static_lhs, rhs))
+        res = try_static_impl(
+            (_lit_or_omitted(static_lhs), rty),
+            (static_lhs, rhs),
+            )
         if res is not None:
             return cast_result(res)
 
-        res = try_static_impl((lty, types.Const(static_rhs)),
-                              (lhs, static_rhs))
+        res = try_static_impl(
+            (lty, _lit_or_omitted(static_rhs)),
+            (lhs, static_rhs),
+            )
         if res is not None:
             return cast_result(res)
 
@@ -570,7 +580,12 @@ class Lower(BaseLower):
     def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
-        impl = self.context.get_function("getitem", signature)
+        # Get implementation of getitem
+        op = operator.getitem
+        fnop = self.context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(fnop, signature)
+
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
                    self.typeof(index.name))
@@ -655,7 +670,7 @@ class Lower(BaseLower):
             if i in inst.consts:
                 pyval = inst.consts[i]
                 if isinstance(pyval, str):
-                    pos_tys[i] = types.Const(pyval)
+                    pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
         fixed_sig.pysig = sig.pysig
@@ -970,8 +985,11 @@ class Lower(BaseLower):
             return res
 
         elif expr.op == "static_getitem":
-            signature = typing.signature(resty, self.typeof(expr.value.name),
-                                         types.Const(expr.index))
+            signature = typing.signature(
+                resty,
+                self.typeof(expr.value.name),
+                _lit_or_omitted(expr.index),
+                )
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
@@ -1119,3 +1137,13 @@ class Lower(BaseLower):
             return
 
         self.context.nrt.decref(self.builder, typ, val)
+
+
+def _lit_or_omitted(value):
+    """Returns a Literal instance if the type of value is supported;
+    otherwise, return `Omitted(value)`.
+    """
+    try:
+        return types.literal(value)
+    except LiteralTypingError:
+        return types.Omitted(value)

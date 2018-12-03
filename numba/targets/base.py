@@ -432,6 +432,16 @@ class BaseContext(object):
         gv = self.insert_unique_const(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
+    def insert_const_bytes(self, mod, bytes, name=None):
+        """
+        Insert constant *byte* (a `bytes` object) into module *mod*.
+        """
+        stringtype = GENERIC_POINTER
+        name = ".bytes.%s" % (name or hash(bytes))
+        text = cgutils.make_bytearray(bytes)
+        gv = self.insert_unique_const(mod, name, text)
+        return Constant.bitcast(gv, stringtype)
+
     def insert_unique_const(self, mod, name, val):
         """
         Insert a unique internal constant named *name*, with LLVM value
@@ -512,6 +522,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
+        assert sig is not None
         sig = sig.as_function()
         if isinstance(fn, (types.Function, types.BoundFunction,
                            types.Dispatcher)):

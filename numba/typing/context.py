@@ -180,24 +180,55 @@ class BaseContext(object):
 
         return '\n'.join(desc)
 
-    def resolve_function_type(self, func, args, kws, literals=None):
+    def resolve_function_type(self, func, args, kws):
         """
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if func not in self._functions:
-            # It's not a known function type, perhaps it's a global?
-            functy = self._lookup_global(func)
-            if functy is not None:
-                func = functy
+        # Prefer user definition first
+        try:
+            res = self._resolve_user_function_type(func, args, kws)
+        except errors.TypingError as e:
+            # Capture any typing error
+            last_exception = e
+            res = None
+        else:
+            last_exception = None
+
+        # Return early we there's a working user function
+        if res is not None:
+            return res
+
+        # Check builtin functions
+        res = self._resolve_builtin_function_type(func, args, kws)
+
+        # Re-raise last_exception if no function type has been found
+        if res is None and last_exception is not None:
+            raise last_exception
+
+        return res
+
+    def _resolve_builtin_function_type(self, func, args, kws):
+        # NOTE: we should reduce usage of this
         if func in self._functions:
             # Note: Duplicating code with types.Function.get_call_type().
             #       *defns* are CallTemplates.
             defns = self._functions[func]
             for defn in defns:
-                res = defn.apply(args, kws)
-                if res is not None:
-                    return res
+                for support_literals in [True, False]:
+                    if support_literals:
+                        res = defn.apply(args, kws)
+                    else:
+                        fixedargs = [types.unliteral(a) for a in args]
+                        res = defn.apply(fixedargs, kws)
+                    if res is not None:
+                        return res
+
+    def _resolve_user_function_type(self, func, args, kws, literals=None):
+        # It's not a known function type, perhaps it's a global?
+        functy = self._lookup_global(func)
+        if functy is not None:
+            func = functy
 
         if isinstance(func, types.Type):
             # If it's a type, it may support a __call__ method
@@ -208,7 +239,7 @@ class BaseContext(object):
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
-            return func.get_call_type_with_literals(self, args, kws, literals)
+            return func.get_call_type(self, args, kws)
 
     def _get_attribute_templates(self, typ):
         """
@@ -228,10 +259,20 @@ class BaseContext(object):
         Resolve getting the attribute *attr* (a string) on the Numba type.
         The attribute's type is returned, or None if resolution failed.
         """
-        for attrinfo in self._get_attribute_templates(typ):
-            ret = attrinfo.resolve(typ, attr)
-            if ret is not None:
-                return ret
+        def core(typ):
+            for attrinfo in self._get_attribute_templates(typ):
+                ret = attrinfo.resolve(typ, attr)
+                if ret is not None:
+                    return ret
+
+        out = core(typ)
+        if out is not None:
+            return out
+
+        # Try again without literals
+        out = core(types.unliteral(typ))
+        if out is not None:
+            return out
 
         if isinstance(typ, types.Module):
             attrty = self.resolve_module_constants(typ, attr)
@@ -559,7 +600,6 @@ class BaseContext(object):
             Fallback to stable, deterministic sort.
             """
             return getattr(obj, 'bitwidth', 0)
-
         typelist = sorted(typelist, key=keyfunc)
         unified = typelist[0]
         for tp in typelist[1:]:
@@ -600,6 +640,11 @@ class BaseContext(object):
         if conv is not None and conv <= Conversion.safe:
             # Can convert from second to first
             return first
+
+        if isinstance(first, types.Literal) or isinstance(second, types.Literal):
+            first = types.unliteral(first)
+            second = types.unliteral(second)
+            return self.unify_pairs(first, second)
 
         # Cannot unify
         return None

@@ -7,7 +7,7 @@ from numba import typing
 from numba.cgutils import unpack_tuple
 from numba.extending import intrinsic
 from numba.targets.imputils import impl_ret_new_ref
-from numba.errors import RequireConstValue, TypingError
+from numba.errors import RequireLiteralValue, TypingError
 
 from .tuple import tuple_setitem
 
@@ -49,14 +49,14 @@ def to_fixed_tuple(typingctx, array, length):
     - No boundchecking.
       If *length* is longer than *array.size*, the behavior is undefined.
     """
-    if not isinstance(length, types.Const):
-        raise RequireConstValue('*length* argument must be a constant')
+    if not isinstance(length, types.IntegerLiteral):
+        raise RequireLiteralValue('*length* argument must be a constant')
 
     if array.ndim != 1:
         raise TypingError("Not supported on array.ndim={}".format(array.ndim))
 
     # Determine types
-    tuple_size = int(length.value)
+    tuple_size = int(length.literal_value)
     tuple_type = types.UniTuple(dtype=array.dtype, count=tuple_size)
     sig = tuple_type(array, length)
 

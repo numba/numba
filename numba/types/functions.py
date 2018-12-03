@@ -6,6 +6,7 @@ import sys
 
 from .abstract import *
 from .common import *
+from .misc import unliteral
 from numba.ir import Loc
 from numba import errors
 
@@ -46,7 +47,7 @@ class _ResolutionFailures(object):
         explain = self._context.explain_function_type(self._function_type)
         msgbuf.append(explain)
         for i, (temp, error) in enumerate(self._failures):
-            msgbuf.append("In definition {}:".format(i))
+            msgbuf.append(_termcolor.errmsg("In definition {}:".format(i)))
             msgbuf.append(_termcolor.highlight('{}{}'.format(
                 indent, self.format_error(error))))
             loc = self.get_loc(temp, error)
@@ -115,27 +116,31 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        return self.get_call_type_with_literals(context, args, kws,
-                                                literals=None)
+        return self.get_call_type_with_literals(context, args, kws)
 
-    def get_call_type_with_literals(self, context, args, kws, literals):
+    def get_call_type_with_literals(self, context, args, kws, literals=None):
         failures = _ResolutionFailures(context, self, args, kws)
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            try:
-                if literals is not None and temp.support_literals:
-                    sig = temp.apply(*literals)
+            for support_literals in [True, False]:
+                try:
+                    if support_literals:
+                        sig = temp.apply(args, kws)
+                    else:
+                        nolitargs = tuple([unliteral(a) for a in args])
+                        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+                        sig = temp.apply(nolitargs, nolitkws)
+                except Exception as e:
+                    sig = None
+                    failures.add_error(temp_cls, e)
                 else:
-                    sig = temp.apply(args, kws)
-            except Exception as e:
-                sig = None
-                failures.add_error(temp_cls, e)
-            else:
-                if sig is not None:
-                    self._impl_keys[sig.args] = temp.get_impl_key(sig)
-                    return sig
-                else:
-                    failures.add_error(temp_cls, "All templates rejected")
+                    if sig is not None:
+                        self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                        return sig
+                    else:
+                        haslit= '' if support_literals else 'out'
+                        msg = "All templates rejected with%s literals." % haslit
+                        failures.add_error(temp_cls, msg)
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "
@@ -198,7 +203,21 @@ class BoundFunction(Callable, Opaque):
         return self.typing_key
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        template = self.template(context)
+        e = None
+        # Try with Literal
+        try:
+            out = template.apply(args, kws)
+        except Exception as e:
+            out = None
+        # If that doesn't work, remove literals
+        if out is None:
+            args = [unliteral(a) for a in args]
+            kws = {k: unliteral(v) for k, v in kws.items()}
+            out = template.apply(args, kws)
+        if out is None and e is not None:
+            raise e
+        return out
 
     def get_call_type_with_literals(self, context, args, kws, literals):
         if literals is not None and self.template.support_literals:
@@ -210,6 +229,9 @@ class BoundFunction(Callable, Opaque):
         sigs = getattr(self.template, 'cases', [])
         is_param = hasattr(self.template, 'generic')
         return sigs, is_param
+
+class MakeFunctionLiteral(Literal, Opaque):
+    pass
 
 
 class WeakType(Type):

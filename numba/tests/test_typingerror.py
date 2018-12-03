@@ -93,8 +93,8 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
 
         expected = (
-            "Invalid use of Function(<built-in function mul>) with argument(s) of type(s): (tuple({0} x 1), {0})"
-            .format(str(types.intp)))
+            "Invalid use of Function(<built-in function mul>) with argument(s) of type(s): (tuple({0} x 1), {1})"
+            .format(str(types.intp), types.IntegerLiteral(2)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("[1] During: typing of", str(raises.exception))
 
@@ -153,6 +153,29 @@ class TestTypingError(unittest.TestCase):
 
         errmsg = str(raises.exception)
         self.assertIn("setitem: array(float64, 1d, C)[0] = complex128", errmsg)
+
+    def test_template_rejection_error_message_cascade(self):
+        from numba import njit
+        @njit
+        def foo():
+            z = 1
+            for a, b in enumerate(z):
+                pass
+            return z
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        errmsg = str(raises.exception)
+        expected = "All templates rejected with%s literals."
+        for x in ['', 'out']:
+            self.assertIn(expected % x, errmsg)
+
+        ctx_lines = [x for x in errmsg.splitlines() if "] During" in x ]
+        search = [r'\[1\] During: resolving callee type: Function.*enumerate',
+                  r'\[2\] During: typing of call .*test_typingerror.py']
+        for i, x in enumerate(search):
+            self.assertTrue(re.search(x, ctx_lines[i]))
+
 
 class TestArgumentTypingError(unittest.TestCase):
     """

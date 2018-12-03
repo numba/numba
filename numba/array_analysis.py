@@ -110,7 +110,7 @@ def assert_equiv(typingctx, *val):
         assert(len(args) == 1)  # it is a vararg tuple
         tup = cgutils.unpack_tuple(builder, args[0])
         tup_type = sig.args[0]
-        msg = sig.args[0][0].value
+        msg = sig.args[0][0].literal_value
 
         def unpack_shapes(a, aty):
             if isinstance(aty, types.ArrayCompatible):
@@ -1786,7 +1786,7 @@ class ArrayAnalysis(object):
 
         msg = "Sizes of {} do not match on {}".format(', '.join(arg_names), loc)
         msg_val = ir.Const(msg, loc)
-        msg_typ = types.Const(msg)
+        msg_typ = types.StringLiteral(msg)
         msg_var = ir.Var(scope, mk_unique_var("msg"), loc)
         self.typemap[msg_var.name] = msg_typ
         argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])

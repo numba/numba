@@ -659,6 +659,9 @@ class pyStencilGenerator:
             """
             Generates an ast.Num of value `value`
             """
+            # pretend bools are ints, ast has no boolean literal support
+            if isinstance(value, bool):
+                return ast.Num(int(value))
             if abs(value) >= 0:
                 return ast.Num(value)
             else:
@@ -2479,6 +2482,36 @@ class TestManyStencils(TestStencilBase):
                 'neighborhood': (
                     (-3, 0), (-3, 0)), 'standard_indexing': 'b', 'cval': 1.5})
 
+    def test_basic91(self):
+        """ Issue #3454, const(int) == const(int) evaluating incorrectly. """
+        def kernel(a):
+            b = 0
+            if(2 == 0):
+                b = 2
+            return a[0, 0] + b
+
+        a = np.arange(10. * 20.).reshape(10, 20)
+        self.check(kernel, a)
+
+    def test_basic92(self):
+        """ Issue #3497, bool return type evaluating incorrectly. """
+        def kernel(a):
+            return (a[-1, -1] ^ a[-1, 0] ^ a[-1, 1] ^
+                    a[0, -1]  ^ a[0, 0]  ^ a[0, 1]  ^
+                    a[1, -1]  ^ a[1, 0]  ^ a[1, 1])
+
+        A = np.array(np.arange(20) % 2).reshape(4, 5).astype(np.bool_)
+        self.check(kernel, A)
+
+    def test_basic93(self):
+        """ Issue #3497, bool return type evaluating incorrectly. """
+        def kernel(a):
+            return (a[-1, -1] ^ a[-1, 0] ^ a[-1, 1] ^
+                    a[0, -1]  ^ a[0, 0]  ^ a[0, 1]  ^
+                    a[1, -1]  ^ a[1, 0]  ^ a[1, 1])
+
+        A = np.array(np.arange(20) % 2).reshape(4, 5).astype(np.bool_)
+        self.check(kernel, A, options={'cval': True})
 
 if __name__ == "__main__":
     unittest.main()

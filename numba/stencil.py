@@ -529,18 +529,18 @@ class StencilFunc(object):
         # then us numpy.full if the user specified a cval stencil decorator option
         # or np.zeros if they didn't to allocate the array.
         if result is None:
+            return_type_name = numpy_support.as_dtype(
+                               return_type.dtype).type.__name__
             if "cval" in self.options:
                 cval = self.options["cval"]
                 if return_type.dtype != typing.typeof.typeof(cval):
                     raise ValueError(
                         "cval type does not match stencil return type.")
-
                 out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval, return_type.dtype)
-
+                            out_name, shape_name, cval, return_type_name)
             else:
                 out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
-                            out_name, shape_name, return_type.dtype)
+                            out_name, shape_name, return_type_name)
             func_text += "    " + out_init
 
         offset = 1

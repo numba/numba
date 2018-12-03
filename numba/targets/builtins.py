@@ -50,6 +50,28 @@ def generic_is(context, builder, sig, args):
     else:
         return cgutils.false_bit
 
+
+@lower_builtin(operator.eq, types.Literal, types.Literal)
+@lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
+def const_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.literal_value == arg2.literal_value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(operator.ne, types.StringLiteral, types.StringLiteral)
+def const_ne_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    val = 0
+    if arg1.literal_value != arg2.literal_value:
+        val = 1
+    res = ir.Constant(ir.IntType(1), val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 #-------------------------------------------------------------------------------
 
 @lower_getattr_generic(types.DeferredType)
@@ -81,7 +103,7 @@ def deferred_to_any(context, builder, fromty, toty, val):
 
 #------------------------------------------------------------------------------
 
-@lower_builtin('getitem', types.CPointer, types.Integer)
+@lower_builtin(operator.getitem, types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
     base_ptr, idx = args
     elem_ptr = builder.gep(base_ptr, [idx])

@@ -37,9 +37,10 @@ class SequenceBool(AbstractTemplate):
         if isinstance(val, (types.Sequence)):
             return signature(types.boolean, val)
 
-@infer
+
+@infer_global(operator.getitem)
 class GetItemSequence(AbstractTemplate):
-    key = "getitem"
+    key = operator.getitem
 
     def generic(self, args, kws):
         seq, idx = args
@@ -65,7 +66,7 @@ class SetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 if not self.context.can_convert(value, seq.dtype):
                     msg = "invalid setitem with value of {} to element of {}"
-                    raise errors.TypingError(msg.format(value, seq.dtype))
+                    raise errors.TypingError(msg.format(types.unliteral(value), seq.dtype))
                 return signature(types.none, seq, idx, seq.dtype)
 
 

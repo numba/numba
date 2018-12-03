@@ -116,7 +116,7 @@ select_overload(PyObject* self, PyObject* args)
     delete [] ovsigs;
 
     if (matches > 1) {
-        PyErr_SetString(PyExc_TypeError, "Ambigous overloading");
+        PyErr_SetString(PyExc_TypeError, "Ambiguous overloading");
         return NULL;
     } else if (matches == 0) {
         PyErr_SetString(PyExc_TypeError, "No compatible overload");

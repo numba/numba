@@ -562,9 +562,17 @@ class InternalError(NumbaError):
         self.old_exception = exception
 
 
-class RequireConstValue(TypingError):
-    """For signaling a function typing require constant value for some of
-    its arguments.
+class RequireLiteralValue(TypingError):
+    """
+    For signalling that a function's typing requires a constant value for
+    some of its arguments.
+    """
+    pass
+
+
+class LiteralTypingError(TypingError):
+    """
+    Failure in typing a Literal type
     """
     pass
 

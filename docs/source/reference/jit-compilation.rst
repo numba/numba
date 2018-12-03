@@ -61,7 +61,7 @@ JIT functions
    compile the function in :term:`nopython mode`, otherwise a compilation
    warning will be printed.
 
-.. _jit-decorator-cache:
+   .. _jit-decorator-cache:
 
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
@@ -71,7 +71,7 @@ JIT functions
    user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
    platforms).
 
-.. _jit-decorator-parallel:
+   .. _jit-decorator-parallel:
 
    If true, *parallel* enables the automatic parallelization of a number of
    common Numpy constructs as well as the fusion of adjacent parallel 
@@ -86,7 +86,7 @@ JIT functions
    always persisted to disk.  When a function cannot be cached, a
    warning is emitted; use :envvar:`NUMBA_WARNINGS` to see it.
 
-.. _jit-decorator-fastmath:
+   .. _jit-decorator-fastmath:
 
    If true, *fastmath* enables the use of otherwise unsafe floating point
    transforms as described in the
@@ -211,6 +211,18 @@ Dispatcher objects
       a global or closure variable was frozen by your function and its value
       in Python has changed.  Since compiling isn't cheap, this is mainly
       for testing and interactive use.
+
+   .. method:: parallel_diagnostics(signature=None, level=1)
+
+      Print parallel diagnostic information for the given signature. If no
+      signature is present it is printed for all known signatures. ``level`` is
+      used to adjust the verbosity, ``level=1`` (default) is minimum verbosity,
+      levels 2, 3, and 4 provide increasing levels of verbosity.
+
+   .. method:: get_metadata(signature=None)
+
+      Obtain the compilation metadata for a given signature. This is useful for
+      developers of Numba and Numba extensions.
 
 
 Vectorized functions (ufuncs and DUFuncs)
