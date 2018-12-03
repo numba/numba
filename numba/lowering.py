@@ -982,7 +982,7 @@ class Lower(BaseLower):
 
                 # Cast the attribute type to the expected output type
                 res = self.context.cast(self.builder, res, attrty, resty)
-            return res
+                return res
 
         elif expr.op == "static_getitem":
             signature = typing.signature(
