@@ -150,9 +150,8 @@ def _add_linking_libs(context, call):
     """
     Add the required libs for the callable to allow inlining.
     """
-    cg = context.codegen()
     for lib in getattr(call, "libs", ()):
-        cg.add_linking_library(lib)
+        context.active_code_library.add_linking_library(lib)
 
 
 def register_class_type(cls, spec, class_ctor, builder):
@@ -243,7 +242,6 @@ class ConstructorTemplate(templates.AbstractTemplate):
         # Redirect resolution to __init__
         instance_type = self.key.instance_type
         ctor = instance_type.jitmethods['__init__']
-        # _add_linking_libs(self.context, ctor)
         boundargs = (instance_type.get_reference_type(),) + args
         disp_type = types.Dispatcher(ctor)
         sig = disp_type.get_call_type(self.context, boundargs, kws)
