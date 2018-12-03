@@ -1244,7 +1244,7 @@ class ArrayAnalysis(object):
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
-        require(expr.immutable_fn in INPLACE_BINARY_MAP_OP)
+        require(expr.fn in INPLACE_BINARY_MAP_OP)
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
