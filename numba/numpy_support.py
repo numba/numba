@@ -95,18 +95,15 @@ def from_dtype(dtype):
     try:
         return FROM_DTYPE[dtype]
     except KeyError:
-        try:
-            char = getattr(dtype, 'char')
-        except AttributeError:
-            pass
-        else:
-            if char in 'SU':
-                return _from_str_dtype(dtype)
-            if char in 'mM':
-                return _from_datetime_dtype(dtype)
-            if char in 'V':
-                subtype = from_dtype(dtype.subdtype[0])
-                return types.NestedArray(subtype, dtype.shape)
+        char = dtype.char
+
+        if char in 'SU':
+            return _from_str_dtype(dtype)
+        if char in 'mM':
+            return _from_datetime_dtype(dtype)
+        if char in 'V':
+            subtype = from_dtype(dtype.subdtype[0])
+            return types.NestedArray(subtype, dtype.shape)
 
     raise NotImplementedError(dtype)
 
