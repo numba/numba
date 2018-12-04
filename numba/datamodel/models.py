@@ -172,7 +172,7 @@ class BooleanModel(DataModel):
         return self._bit_type
 
     def get_data_type(self):
-        return self._byte_type
+        return self._bit_type
 
     def get_return_type(self):
         return self.get_data_type()
