@@ -980,7 +980,7 @@ def box_number_class(typ, val, c):
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
 @unbox(types.NumberClass)
-def unbox_dtype(typ, val, c):
+def unbox_number_class(typ, val, c):
     return NativeValue(c.context.get_dummy_value())
 
 
