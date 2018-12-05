@@ -1335,12 +1335,16 @@ def np_trim_zeros(filt, trim='fb'):
         else:
             idx_min = 0
 
+        idx_max = len(filt_arr) - 1
         if trim_back(trim):
-            idx_max = len(filt_arr) - np.argmax(filt_arr[::-1] != 0)
-        else:
-            idx_max = len(filt_arr)
+            idx_max -= np.argmax(filt_arr[::-1] != 0)
 
-        return filt[idx_min:idx_max]
+        if trim_front(trim) or trim_back(trim):
+            if idx_min == 0 and idx_max == len(filt_arr) - 1:
+                if np.all(filt_arr == 0):
+                    idx_max = -1
+
+        return filt[idx_min:idx_max + 1]
 
     return np_trim_zeros_impl
 

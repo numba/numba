@@ -1484,6 +1484,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         yield np.array([0, 0, 1, 0, 2, 3, 0, 4, 0])
         yield np.array([0, 0, np.nan, 0, np.inf, 0, 1, 3, 0, 2, 1, 0, 0])
         yield np.array([])
+        yield np.zeros(5)
+        yield np.array([0, 0, 0, 0, 1])
+        yield np.array([1, 0, 0, 0, 0])
 
     def test_trim_zeros_1_basic(self):
         pyfunc = trim_zeros_1
@@ -1493,27 +1496,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
-
-    @unittest.skip('pending discussion with Core dev')
-    def test_trim_zeros_1_failures_with_tuple_input(self):
-        pyfunc = trim_zeros_1
-        cfunc = jit(nopython=True)(pyfunc)
-
-        a = (0, 0, 1, 0, 2, 3, 0, 4, 0)
-        expected = pyfunc(a)
-        got = cfunc(a)
-        self.assertPreciseEqual(expected, got)
-
-        # return filt[idx_min:idx_max]
-        # ^
-        #
-        # Invalid use of Function(<built-in function getitem>)
-        # with argument(s) of type(s): (tuple(int64 x 9), slice<a:b>)
-
-        a = ()
-        expected = pyfunc(a)
-        got = cfunc(a)
-        self.assertPreciseEqual(expected, got)
 
     def test_trim_zeros_2_basic(self):
         pyfunc = trim_zeros_2
