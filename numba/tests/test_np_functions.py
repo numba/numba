@@ -110,6 +110,9 @@ def cov(m, y=None, rowvar=True, bias=False, ddof=None):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def roll(a, shift):
+    return np.roll(a, shift)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1469,6 +1472,43 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.array((True, True, False)))
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
+        assert msg in str(e.exception)
+
+    def test_roll_basic(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(7)
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+            yield [1.1, 2.2, 3.3]
+            yield (True, False, True)
+            yield np.array([])
+            yield (9,)
+            yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
+            yield np.array([])
+            yield ()
+
+        def shift_variations():
+            return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+
+        for a in a_variations():
+            for shift in shift_variations():
+                expected = pyfunc(a, shift)
+                got = cfunc(a, shift)
+                self.assertPreciseEqual(expected, got)
+
+    def test_roll_exceptions(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.arange(10), 1.1)
+
+        msg = "shift must be an integer"
         assert msg in str(e.exception)
 
 

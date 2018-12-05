@@ -292,6 +292,7 @@ The following top-level functions are supported:
 * :func:`numpy.partition` (only the 2 first arguments)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.roll` (only the 2 first arguments)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
