@@ -74,3 +74,9 @@ archstr=`uname -m`
 if [[ "$archstr" != 'armv7l' ]]; then
     if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
 fi
+
+# environment dump for debug
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"
