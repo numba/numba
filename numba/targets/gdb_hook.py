@@ -10,6 +10,7 @@ from numba.extending import overload, intrinsic
 
 _path = os.path.dirname(__file__)
 
+
 def _confirm_gdb():
     if not sys.platform.startswith('linux'):
         raise RuntimeError('gdb is only available on linux')
@@ -21,6 +22,7 @@ def _confirm_gdb():
                )
         raise RuntimeError(msg % config.GDB_BINARY)
 
+
 @overload(gdb)
 def hook_gdb(*args):
 
@@ -31,6 +33,7 @@ def hook_gdb(*args):
         gdbimpl()
     return impl
 
+
 @overload(gdb_init)
 def hook_gdb_init(*args):
     _confirm_gdb()
@@ -40,7 +43,9 @@ def hook_gdb_init(*args):
         gdbimpl()
     return impl
 
-def init_gdb_codegen(cgctx, builder, signature, args, const_args, do_break=False):
+
+def init_gdb_codegen(cgctx, builder, signature, args,
+                     const_args, do_break=False):
 
     int8_t = ir.IntType(8)
     int32_t = ir.IntType(32)
@@ -149,12 +154,14 @@ def gen_gdb_impl(const_args, do_break):
     @intrinsic
     def gdb_internal(tyctx):
         function_sig = types.void()
+
         def codegen(cgctx, builder, signature, args):
             init_gdb_codegen(cgctx, builder, signature, args, const_args,
                              do_break=do_break)
             return cgctx.get_constant(types.none, None)
         return function_sig, codegen
     return gdb_internal
+
 
 @overload(gdb_breakpoint)
 def hook_gdb_breakpoint():
@@ -164,14 +171,17 @@ def hook_gdb_breakpoint():
     if not sys.platform.startswith('linux'):
         raise RuntimeError('gdb is only available on linux')
     bp_impl = gen_bp_impl()
+
     def impl():
         bp_impl()
     return impl
+
 
 def gen_bp_impl():
     @intrinsic
     def bp_internal(tyctx):
         function_sig = types.void()
+
         def codegen(cgctx, builder, signature, args):
             mod = builder.module
             fnty = ir.FunctionType(ir.VoidType(), tuple())

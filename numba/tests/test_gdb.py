@@ -74,6 +74,7 @@ class TestGdbBindImpls(TestCase):
                 print(a, b, c, d)
         impl(10)
 
+
 @linux_only
 @needs_gdb
 class TestGdbBinding(TestCase):
@@ -95,6 +96,7 @@ class TestGdbBinding(TestCase):
                                  env=env,
                                  shell=True)
         # finish in 20s or kill it, there's no work being done
+
         def kill():
             popen.stdout.flush()
             popen.stderr.flush()
@@ -106,8 +108,8 @@ class TestGdbBinding(TestCase):
             retcode = popen.returncode
             if retcode != 0:
                 raise AssertionError(
-                "process failed with code %s: stderr follows\n%s\n" %
-                (retcode, err.decode()))
+                    "process failed with code %s: stderr follows\n%s\n" %
+                    (retcode, err.decode()))
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -128,7 +130,7 @@ class TestGdbBinding(TestCase):
         thecls = TestGdbBindImpls.__name__
         # strip impl
         assert name.endswith('_impl')
-        methname = name.replace('_impl','')
+        methname = name.replace('_impl', '')
         injected_method = '%s.%s.%s' % (themod, thecls, name)
 
         def test_template(self):
@@ -139,14 +141,15 @@ class TestGdbBinding(TestCase):
             self.assertTrue('ERROR' not in e)
         setattr(cls, methname, test_template)
 
-
     @classmethod
     def generate(cls):
         for name in dir(TestGdbBindImpls):
             if name.startswith('test_gdb'):
                 cls._inject(name)
 
+
 TestGdbBinding.generate()
+
 
 @linux_only
 @needs_gdb
@@ -171,7 +174,7 @@ class TestGdbMisc(TestCase):
             self.assertIn(msg_head, str(raises.exception))
 
         for g1, g2 in permutations([gdb, gdb_init]):
-            func  = gen(g1, g2)
+            func = gen(g1, g2)
             check(func)
 
         @njit
@@ -187,4 +190,3 @@ class TestGdbMisc(TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
