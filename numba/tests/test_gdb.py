@@ -7,8 +7,9 @@ import os
 import subprocess
 import sys
 import threading
+from itertools import permutations
 
-from numba import njit, gdb, gdb_init, gdb_breakpoint, prange, testing, config
+from numba import njit, gdb, gdb_init, gdb_breakpoint, prange, config, errors
 from numba import unittest_support as unittest
 
 from .support import (TestCase, override_env_config, captured_stdout, tag)
@@ -26,6 +27,14 @@ needs_gdb = unittest.skipUnless(_has_gdb, "gdb binary is required")
 
 @linux_only
 class TestGdbBindImpls(TestCase):
+    """
+    Contains unit test implementations for gdb binding testing. Test must be
+    decorated with `@needs_gdb_harness` to prevent their running under normal
+    test conditions, the test methods must also end with `_impl` to be
+    considered for execution. The tests themselves are invoked by the
+    `TestGdbBinding` test class through the parsing of this class for test
+    methods and then running the discovered tests in a separate process.
+    """
 
     @needs_gdb_harness
     def test_gdb_cmd_lang_impl(self):
@@ -52,7 +61,7 @@ class TestGdbBindImpls(TestCase):
 
     @parfors_skip_unsupported
     @needs_gdb_harness
-    def test_gdb_split_init_and_break_impl_w_parallel(self):
+    def test_gdb_split_init_and_break_w_parallel_impl(self):
         @njit(debug=True, parallel=True)
         def impl(a):
             gdb_init('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
@@ -68,6 +77,11 @@ class TestGdbBindImpls(TestCase):
 @linux_only
 @needs_gdb
 class TestGdbBinding(TestCase):
+    """
+    This test class is used to generate tests which will run the test cases
+    defined in TestGdbBindImpls in isolated subprocesses, this is for safety
+    in case something goes awry.
+    """
 
     # test mutates env
     _numba_parallel_test_ = False
@@ -102,6 +116,8 @@ class TestGdbBinding(TestCase):
     def run_test_in_separate_process(self, test, **kwargs):
         env_copy = os.environ.copy()
         env_copy['NUMBA_OPT'] = '1'
+        # Set GDB_TEST to permit the execution of tests decorated with
+        # @needs_gdb_harness
         env_copy['GDB_TEST'] = '1'
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(' '.join(cmdline), env_copy, **kwargs)
@@ -111,6 +127,7 @@ class TestGdbBinding(TestCase):
         themod = TestGdbBindImpls.__module__
         thecls = TestGdbBindImpls.__name__
         # strip impl
+        assert name.endswith('_impl')
         methname = name.replace('_impl','')
         injected_method = '%s.%s.%s' % (themod, thecls, name)
 
@@ -130,6 +147,43 @@ class TestGdbBinding(TestCase):
                 cls._inject(name)
 
 TestGdbBinding.generate()
+
+@linux_only
+@needs_gdb
+class TestGdbMisc(TestCase):
+
+    def test_call_gdb_twice(self):
+        def gen(f1, f2):
+            @njit
+            def impl():
+                a = 1
+                f1()
+                b = 2
+                f2()
+                return a + b
+            return impl
+
+        msg_head = "Calling either numba.gdb() or numba.gdb_init() more than"
+
+        def check(func):
+            with self.assertRaises(errors.UnsupportedError) as raises:
+                func()
+            self.assertIn(msg_head, str(raises.exception))
+
+        for g1, g2 in permutations([gdb, gdb_init]):
+            func  = gen(g1, g2)
+            check(func)
+
+        @njit
+        def use_globals():
+            a = 1
+            gdb()
+            b = 2
+            gdb_init()
+            return a + b
+
+        check(use_globals)
+
 
 if __name__ == '__main__':
     unittest.main()
