@@ -230,7 +230,6 @@ class DIBuilder(AbstractDIBuilder):
             'isDefinition': True,
             'scopeLine': line,
             'isOptimized': True,
-            'variables': self.module.add_metadata([]),
             'unit': self.dicompileunit,
         }, is_distinct=True)
 
