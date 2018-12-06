@@ -1854,7 +1854,7 @@ def raise_on_unsupported_feature(func_ir):
                 # check global function
                 found = val == numba.gdb or val == numba.gdb_init
                 if not found: # freevar bind to intrinsic
-                    found = val._name == "gdb_internal"
+                    found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
 

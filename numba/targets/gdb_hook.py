@@ -4,7 +4,6 @@ import os
 import sys
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Constant, Type
 
 from numba import gdb, gdb_init, gdb_breakpoint, types, utils, cgutils, config
 from numba.extending import overload, intrinsic
@@ -46,7 +45,7 @@ def init_gdb_codegen(cgctx, builder, signature, args, const_args, do_break=False
     int8_t = ir.IntType(8)
     int32_t = ir.IntType(32)
     intp_t = ir.IntType(utils.MACHINE_BITS)
-    char_ptr = Type.pointer(Type.int(8))
+    char_ptr = ir.PointerType(ir.IntType(8))
     zero_i32t = int32_t(0)
 
     mod = builder.module
@@ -124,7 +123,7 @@ def init_gdb_codegen(cgctx, builder, signature, args, const_args, do_break=False
     with builder.if_else(is_child) as (then, orelse):
         with then:
             # is child
-            nullptr = Constant.null(char_ptr)
+            nullptr = ir.Constant(char_ptr, None)
             gdb_str_ptr = builder.gep(
                 gdb_str, [zero_i32t], inbounds=True)
             attach_str_ptr = builder.gep(
