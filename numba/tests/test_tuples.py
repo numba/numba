@@ -442,6 +442,24 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
 
+    def test_literal_unification(self):
+        @jit(nopython=True)
+        def Data1(value):
+            return Rect(value, 0)
+
+        @jit(nopython=True)
+        def call(i, j):
+            if j == 0:
+                result = Data1(i)
+            else:
+                result = Rect(i, j)
+
+            return result
+
+        r = call(1, 1)
+        print(r)
+
+
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
     def test_tuple_add(self):
@@ -585,6 +603,8 @@ class TestTupleBuild(TestCase):
         check(lambda a: tuple(a), (4, 5))
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
+
+
 
 if __name__ == '__main__':
     unittest.main()
