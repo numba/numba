@@ -102,6 +102,17 @@ class MemoryView(Buffer):
     """
 
 
+def is_homogeneous(*tys):
+    """Are the types homogeneous?
+    """
+    if tys:
+        first, tys = tys[0], tys[1:]
+        return not any(t != first for t in tys)
+    else:
+        # *tys* is empty.
+        return False
+
+
 class BaseTuple(ConstSized, Hashable):
     """
     The base class for all tuple types (with a known size).
@@ -112,27 +123,23 @@ class BaseTuple(ConstSized, Hashable):
         """
         Instantiate the right tuple type for the given element types.
         """
-        homogeneous = False
-        if tys:
-            first = tys[0]
-            for ty in tys[1:]:
-                if ty != first:
-                    break
-            else:
-                homogeneous = True
-
         if pyclass is not None and pyclass is not tuple:
             # A subclass => is it a namedtuple?
             assert issubclass(pyclass, tuple)
             if hasattr(pyclass, "_asdict"):
+                tys = tuple(map(unliteral, tys))
+                homogeneous = is_homogeneous(*tys)
                 if homogeneous:
-                    return NamedUniTuple(first, len(tys), pyclass)
+                    return NamedUniTuple(tys[0], len(tys), pyclass)
                 else:
                     return NamedTuple(tys, pyclass)
-        if homogeneous:
-            return UniTuple(first, len(tys))
         else:
-            return Tuple(tys)
+            # non-named tuple
+            homogeneous = is_homogeneous(*tys)
+            if homogeneous:
+                return UniTuple(tys[0], len(tys))
+            else:
+                return Tuple(tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
