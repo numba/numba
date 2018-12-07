@@ -379,9 +379,9 @@ class TestSpecificBackend(TestParallelBackendBase):
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
         injected_test = "test_%s_%s_%s" % (p, name, backend)
-        # Mark as important for appveyor
+        # Mark as long_running
         setattr(cls, injected_test,
-                tag("important")(backend_guard(test_template)))
+                tag('long_running')(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):

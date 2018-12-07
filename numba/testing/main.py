@@ -108,6 +108,7 @@ class NumbaTestProgram(unittest.main):
     multiprocess = False
     list = False
     tags = None
+    exclude_tags = None
     random_select = None
     random_seed = 42
 
@@ -146,6 +147,9 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--tags', dest='tags', type=str,
                             help='Comma-separated list of tags to select '
                                  'a subset of the test suite')
+        parser.add_argument('--exclude-tags', dest='exclude_tags', type=str,
+                            help='Comma-separated list of tags to de-select '
+                                 'a subset of the test suite')
         parser.add_argument('--random', dest='random_select', type=float,
                             help='Random proportion of tests to select')
         parser.add_argument('--profile', dest='profile',
@@ -153,37 +157,79 @@ class NumbaTestProgram(unittest.main):
                             help='Profile the test run')
         return parser
 
+    def _handle_tags(self, argv, tagstr):
+        found = None
+        for x in argv:
+            if tagstr in x:
+                if found is None:
+                    found = x
+                else:
+                    raise ValueError("argument %s supplied repeatedly" % tagstr)
+
+        if found is not None:
+            posn = argv.index(found)
+            try:
+                if found == tagstr: # --tagstr <arg>
+                    tag_args = argv[posn + 1].strip()
+                    argv.remove(tag_args)
+                else: # --tagstr=<arg>
+                    if '=' in found:
+                        tag_args =  found.split('=')[1].strip()
+                    else:
+                        raise AssertionError('unreachable')
+            except IndexError:
+                # at end of arg list, raise
+                msg = "%s requires at least one tag to be specified"
+                raise ValueError(msg % tagstr)
+            # see if next arg is "end options" or some other flag
+            if tag_args.startswith('-'):
+                raise ValueError("tag starts with '-', probably a syntax error")
+            # see if tag is something like "=<tagname>" which is likely a syntax
+            # error of form `--tags =<tagname>`, note the space prior to `=`.
+            if '=' in tag_args:
+                msg = "%s argument contains '=', probably a syntax error"
+                raise ValueError(msg % tagstr)
+            attr = tagstr[2:].replace('-', '_')
+            setattr(self, attr, tag_args)
+            argv.remove(found)
+
+
     def parseArgs(self, argv):
         if '-l' in argv:
             argv.remove('-l')
             self.list = True
-        if PYVERSION < (3, 4) and '-m' in argv:
-            # We want '-m' to work on all versions, emulate this option.
-            dashm_posn = argv.index('-m')
-            # the default number of processes to use
-            nprocs = multiprocessing.cpu_count()
-            # see what else is in argv
-            # ensure next position is safe for access
-            try:
-                m_option = argv[dashm_posn + 1]
-                # see if next arg is "end options"
-                if m_option != '--':
-                    #try and parse the next arg as an int
-                    try:
-                        nprocs = int(m_option)
-                    except BaseException:
-                        msg = ('Expected an integer argument to '
-                               'option `-m`, found "%s"')
-                        raise ValueError(msg % m_option)
-                    # remove the value of the option
-                    argv.remove(m_option)
-                # else end options, use defaults
-            except IndexError:
-                # at end of arg list, use defaults
-                pass
+        if PYVERSION < (3, 4):
+            if '-m' in argv:
+                # We want '-m' to work on all versions, emulate this option.
+                dashm_posn = argv.index('-m')
+                # the default number of processes to use
+                nprocs = multiprocessing.cpu_count()
+                # see what else is in argv
+                # ensure next position is safe for access
+                try:
+                    m_option = argv[dashm_posn + 1]
+                    # see if next arg is "end options"
+                    if m_option != '--':
+                        #try and parse the next arg as an int
+                        try:
+                            nprocs = int(m_option)
+                        except BaseException:
+                            msg = ('Expected an integer argument to '
+                                'option `-m`, found "%s"')
+                            raise ValueError(msg % m_option)
+                        # remove the value of the option
+                        argv.remove(m_option)
+                    # else end options, use defaults
+                except IndexError:
+                    # at end of arg list, use defaults
+                    pass
 
-            self.multiprocess = nprocs
-            argv.remove('-m')
+                self.multiprocess = nprocs
+                argv.remove('-m')
+
+            # handle tags
+            self._handle_tags(argv, '--tags')
+            self._handle_tags(argv, '--exclude-tags')
 
         super(NumbaTestProgram, self).parseArgs(argv)
 
@@ -195,7 +241,11 @@ class NumbaTestProgram(unittest.main):
 
         if self.tags:
             tags = [s.strip() for s in self.tags.split(',')]
-            self.test = _choose_tagged_tests(self.test, tags)
+            self.test = _choose_tagged_tests(self.test, tags, mode='include')
+
+        if self.exclude_tags:
+            tags = [s.strip() for s in self.exclude_tags.split(',')]
+            self.test = _choose_tagged_tests(self.test, tags, mode='exclude')
 
         if self.random_select:
             self.test = _choose_random_tests(self.test, self.random_select,
@@ -270,9 +320,11 @@ def _flatten_suite(test):
         return [test]
 
 
-def _choose_tagged_tests(tests, tags):
+def _choose_tagged_tests(tests, tags, mode='include'):
     """
-    Select tests that are tagged with at least one of the given tags.
+    Select tests that are tagged/not tagged with at least one of the given tags.
+    Set mode to 'include' to include the tests with tags, or 'exclude' to
+    exclude the tests with the tags.
     """
     selected = []
     tags = set(tags)
@@ -284,12 +336,18 @@ def _choose_tagged_tests(tests, tags):
             func = func.im_func
         except AttributeError:
             pass
-        try:
-            if func.tags & tags:
+
+        found_tags = getattr(func, 'tags', None)
+        # only include the test if the tags *are* present
+        if mode == 'include':
+            if found_tags is not None and found_tags & tags:
                 selected.append(test)
-        except AttributeError:
-            # Test method doesn't have any tags
-            pass
+        elif mode == 'exclude':
+            # only include the test if the tags *are not* present
+            if found_tags is None or not (found_tags & tags):
+                selected.append(test)
+        else:
+            raise ValueError("Invalid 'mode' supplied: %s." % mode)
     return unittest.TestSuite(selected)
 
 

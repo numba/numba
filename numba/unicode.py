@@ -346,6 +346,14 @@ def unicode_eq(a, b):
         return eq_impl
 
 
+@overload(operator.ne)
+def unicode_ne(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def ne_impl(a, b):
+            return not (a == b)
+        return ne_impl
+
+
 @overload(operator.lt)
 def unicode_lt(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):

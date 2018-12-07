@@ -326,6 +326,31 @@ class TestUnicode(BaseTest):
         args = ['ab', 'b']
         self.assertEqual(pyfunc(*args), cfunc(*args))
 
+    def test_comparison(self):
+        def pyfunc(option, x, y):
+            if option == '==':
+                return x == y
+            elif option == '!=':
+                return x != y
+            elif option == '<':
+                return x < y
+            elif option == '>':
+                return x > y
+            elif option == '<=':
+                return x <= y
+            elif option == '>=':
+                return x >= y
+            else:
+                return None
+
+        cfunc = njit(pyfunc)
+
+        for x, y in permutations(UNICODE_ORDERING_EXAMPLES, r=2):
+            for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
+                args = [cmpop, x, y]
+                self.assertEqual(pyfunc(*args), cfunc(*args),
+                                msg='failed on {}'.format(args))
+
     def test_literal_concat(self):
         def pyfunc(x):
             abc = 'abc'
