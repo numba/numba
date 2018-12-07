@@ -746,12 +746,12 @@ presented for brevity):
     (gdb) l
     3       @njit(debug=True)
     4       def foo(a):
-    5           gdb_init() # instruct Numba to attach gdb at this location 
+    5           gdb_init() # instruct Numba to attach gdb at this location
     6           b = a + 1
-    7           gdb_breakpoint() # instruct gdb to break at this location 
+    7           gdb_breakpoint() # instruct gdb to break at this location
     8           c = a * 2.34
     9           d = (a, b, c)
-    10          gdb_breakpoint() # and to break again at this location 
+    10          gdb_breakpoint() # and to break again at this location
     11          print(a, b, c, d)
     12
     (gdb) p b
