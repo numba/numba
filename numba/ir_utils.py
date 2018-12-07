@@ -1852,7 +1852,9 @@ def raise_on_unsupported_feature(func_ir):
                     continue
 
                 # check global function
-                found = val == numba.gdb or val == numba.gdb_init
+                found = False
+                if isinstance(val, pytypes.FunctionType):
+                    found = val == numba.gdb or val == numba.gdb_init
                 if not found: # freevar bind to intrinsic
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
