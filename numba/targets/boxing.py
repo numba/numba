@@ -969,6 +969,20 @@ def box_dtype(typ, val, c):
     np_dtype = numpy_support.as_dtype(typ.dtype)
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
+@unbox(types.DType)
+def unbox_dtype(typ, val, c):
+    return NativeValue(c.context.get_dummy_value())
+
+
+@box(types.NumberClass)
+def box_number_class(typ, val, c):
+    np_dtype = numpy_support.as_dtype(typ.dtype)
+    return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+
+@unbox(types.NumberClass)
+def unbox_number_class(typ, val, c):
+    return NativeValue(c.context.get_dummy_value())
+
 
 @box(types.PyObject)
 @box(types.Object)

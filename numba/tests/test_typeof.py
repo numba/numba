@@ -270,6 +270,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(dtype), types.DType(rec_ty))
 
     @tag('important')
+    def test_dtype_values(self):
+        self.assertEqual(typeof(np.int64), types.NumberClass(types.int64))
+        self.assertEqual(typeof(np.float64), types.NumberClass(types.float64))
+        self.assertEqual(typeof(np.int32), types.NumberClass(types.int32))
+        self.assertEqual(typeof(np.int8), types.NumberClass(types.int8))
+
+    @tag('important')
     def test_ctypes(self):
         ty_cos = typeof(c_cos)
         ty_sin = typeof(c_sin)

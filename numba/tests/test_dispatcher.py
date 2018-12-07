@@ -32,6 +32,7 @@ from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
 from .support import (TestCase, tag, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log, captured_stdout)
+from numba.numpy_support import as_dtype
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
@@ -70,6 +71,7 @@ def generated_usecase(x, y=5):
             return x - y
     return impl
 
+
 def bad_generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
         def impl(x):
@@ -78,6 +80,21 @@ def bad_generated_usecase(x, y=5):
         def impl(x, y=6):
             return x - y
     return impl
+
+
+def dtype_generated_usecase(a, b, dtype=None):
+    if isinstance(dtype, (types.misc.NoneType, types.misc.Omitted)):
+        out_dtype = np.result_type(*(np.dtype(ary.dtype.name)
+                                   for ary in (a, b)))
+    elif isinstance(dtype, (types.DType, types.NumberClass)):
+        out_dtype = as_dtype(dtype)
+    else:
+        raise TypeError("Unhandled Type %s" % type(dtype))
+
+    def _fn(a, b, dtype=None):
+        return np.ones(a.shape, dtype=out_dtype)
+
+    return _fn
 
 
 class BaseTest(TestCase):
@@ -627,6 +644,16 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j), 5 + 1j)
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
+
+
+    @tag('important')
+    def test_generated_dtype(self):
+        f = generated_jit(nopython=True)(dtype_generated_usecase)
+        a = np.ones((10,), dtype=np.float32)
+        b = np.ones((10,), dtype=np.float64)
+        self.assertEqual(f(a, b).dtype, np.float64)
+        self.assertEqual(f(a, b, dtype=np.dtype('int32')).dtype, np.int32)
+        self.assertEqual(f(a, b, dtype=np.int32).dtype, np.int32)
 
     def test_signature_errors(self):
         """
