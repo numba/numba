@@ -2,7 +2,7 @@ GPU Reduction
 ==============
 
 Writing a reduction algorithm for CUDA GPU can be tricky.  Numba provides a
-``@reduce`` decorator for converting simple binary operation into a reduction
+``@reduce`` decorator for converting a simple binary operation into a reduction
 kernel.
 
 ``@reduce``
