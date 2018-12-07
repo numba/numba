@@ -485,9 +485,16 @@ Using Numba's direct ``gdb`` bindings in ``nopython``  mode
 ===========================================================
 
 Numba (version 0.42.0 and later) has some additional functions relating to
-``gdb`` support for CPUs that make it easier to debug programs.
+``gdb`` support for CPUs that make it easier to debug programs. All the ``gdb``
+related functions described in the following work in the same manner
+irrespective of whether they are called from the standard CPython interpreter or
+code compiled in either :term:`nopython mode` or :term:`object mode`.
 
 .. note:: This feature is experimental!
+
+.. warning:: This feature does unexpected things if used from Jupyter or
+             alongside the ``pdb`` module. It's behaviour is harmless, just hard
+             to predict!
 
 Set up
 ------
@@ -498,13 +505,19 @@ environment variable if desired.
 Basic ``gdb`` support
 ---------------------
 
-The most simple function for adding ``gdb`` support is :func:`numba.gdb`, this
-may be called from inside any ``nopython`` mode function and at the call
-location will:
+.. warning:: Calling :func:`numba.gdb` and/or :func:`numba.gdb_init` more than
+             once in the same program is not advisable, unexpected things may
+             happen. If multiple breakpoints are desired within a program,
+             launch ``gdb`` once via :func:`numba.gdb` or :func:`numba.gdb_init`
+             and then use :func:`numba.gdb_breakpoint` to register additional
+             breakpoint locations.
+
+The most simple function for adding ``gdb`` support is :func:`numba.gdb`, which,
+at the call location, will:
 
 * launch ``gdb`` and attach it to the running process.
-* create a breakpoint at the site of the ``gdb()`` function call, the attached
-  ``gdb`` will pause execution here awaiting user input.
+* create a breakpoint at the site of the :func:`numba.gdb()` function call, the
+  attached ``gdb`` will pause execution here awaiting user input.
 
 use of this functionality is best motivated by example, continuing with the
 example used above:
