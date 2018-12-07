@@ -16,13 +16,29 @@ class prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+def _gdb_python_call_gen(func_name, *args):
+    # generates a call to a function containing a compiled in gdb command,
+    # this is to make `numba.gdb*` work in the interpreter.
+    import numba
+    fn = getattr(numba, func_name)
+    argstr = ','.join(['"%s"' for _ in args]) % args
+    defn = """def _gdb_func_injection():\n\t%s(%s)\n
+    """ % (func_name, argstr)
+    print('-'*80)
+    print(defn)
+    print('-'*80)
+    l = {}
+    numba.six.exec_(defn, {func_name: fn}, l)
+    return numba.njit(l['_gdb_func_injection'])
+
 def gdb(*args):
     """
     Calling this function will invoke gdb and attach it to the current process
     at the call site. Arguments are strings in the gdb command language syntax
     which will be executed by gdb once initialisation has occurred.
     """
-    pass
+    _gdb_python_call_gen('gdb', *args)()
+
 
 def gdb_breakpoint():
     """
@@ -31,7 +47,8 @@ def gdb_breakpoint():
     multiple points. gdb will stop in the user defined code just after the frame
     employed by the breakpoint returns.
     """
-    pass
+    _gdb_python_call_gen('gdb_breakpoint')()
+
 
 def gdb_init(*args):
     """
@@ -40,6 +57,7 @@ def gdb_init(*args):
     Arguments are strings in the gdb command language syntax which will be
     executed by gdb once initialisation has occurred.
     """
-    pass
+    _gdb_python_call_gen('gdb_init', *args)()
+
 
 __all__ = ['typeof', 'prange', 'pndindex', 'gdb', 'gdb_breakpoint', 'gdb_init']
