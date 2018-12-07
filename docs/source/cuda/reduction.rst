@@ -22,7 +22,7 @@ Example::
     got = sum_reduce(A)   # cuda sum reduction
     assert expect == got
 
-User can also use a lambda function::
+Lambda functions can also be used here::
 
     sum_reduce = cuda.reduce(lambda a, b: a + b)
 
