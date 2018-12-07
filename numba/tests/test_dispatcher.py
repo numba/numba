@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import errno
 import multiprocessing
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,7 @@ from .test_linalg import needs_lapack
 
 import llvmlite.binding as ll
 
+_is_armv7l = platform.machine() == 'armv7l'
 
 def dummy(x):
     return x
@@ -391,6 +393,7 @@ class TestDispatcher(BaseTest):
         self.assertIs(ref(), None)
 
     @needs_lapack
+    @unittest.skipIf(_is_armv7l, "Unaligned loads unsupported")
     def test_misaligned_array_dispatch(self):
         # for context see issue #2937
         def foo(a):
@@ -429,6 +432,7 @@ class TestDispatcher(BaseTest):
         check("C_contig_misaligned", C_contig_misaligned)
         check("F_contig_misaligned", F_contig_misaligned)
 
+    @unittest.skipIf(_is_armv7l, "Unaligned loads unsupported")
     def test_immutability_in_array_dispatch(self):
 
         # RO operation in function
@@ -470,6 +474,7 @@ class TestDispatcher(BaseTest):
               disable_write_bit=True)
 
     @needs_lapack
+    @unittest.skipIf(_is_armv7l, "Unaligned loads unsupported")
     def test_misaligned_high_dimension_array_dispatch(self):
 
         def foo(a):
