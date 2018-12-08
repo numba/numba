@@ -110,9 +110,6 @@ def cov(m, y=None, rowvar=True, bias=False, ddof=None):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
-def ptp(a):
-    return np.ptp(a)
-
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1472,45 +1469,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.array((True, True, False)))
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
-        assert msg in str(e.exception)
-
-    def test_ptp_basic(self):
-        pyfunc = ptp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        def a_variations():
-            yield np.arange(10)
-            yield np.array([-1.1, np.nan, 2.2])
-            yield np.array([-np.inf, 5])
-            yield (4, 2, 5)
-            yield (1,)
-            yield np.full(5, 5)
-            yield np.linspace(-10, 10, 16).reshape(4, 2, 2)
-            real = np.arange(3, 8)
-            #yield real + 1j * real
-
-
-        for a in a_variations():
-            _check({'a': a})
-
-    def test_ptp_exceptions(self):
-        pyfunc = ptp
-        cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        with self.assertTypingError() as e:
-            cfunc(np.array((True, True, False)))
-
-        msg = "Boolean dtype is unsupported (as per NumPy)"
-        assert msg in str(e.exception)
-
-        with self.assertRaises(ValueError) as e:
-            cfunc(np.array([]))
-
-        msg = "zero-size array reduction not possible"
         assert msg in str(e.exception)
 
 
