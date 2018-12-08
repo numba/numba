@@ -1505,6 +1505,52 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.ptp)
+def np_ptp(a):
+
+    if hasattr(a, 'dtype'):
+        if isinstance(a.dtype, types.Boolean):
+            raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+            # Numpy raises a TypeError here
+
+    def np_ptp_impl(a):
+        arr = _asarray(a)
+        if len(arr) == 0:
+            raise ValueError('zero-size array reduction not possible')
+        if np.any(np.isnan(arr)):
+            return np.nan
+        return np.max(arr) - np.min(arr)
+
+    def np_ptp_impl_int(a):
+        arr = _asarray(a)
+        if len(arr) == 0:
+            raise ValueError('zero-size array reduction not possible')
+        return np.max(arr) - np.min(arr)
+
+    if hasattr(a, 'dtype'):
+        if np.issubdtype(as_dtype(a.dtype), np.integer):
+            return np_ptp_impl_int
+
+    return np_ptp_impl
+
+        # a_flat = a.flat
+        # a_min = a_flat[0]
+        # a_max = a_flat[0]
+        #
+        # for i in range(1, a.size):
+        #     val = a_flat[i]
+        #     #if np.isnan(val):
+        #     #    return np.nan
+        #     if val > a_max:
+        #         a_max = val
+        #     if val < a_min:
+        #         a_min = val
+        #
+        # return a_max - a_min
+
+    return np_ptp_impl
+
+
 @register_jitable
 def _fill_diagonal_params(a, wrap):
     if a.ndim == 2:
