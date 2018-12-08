@@ -84,11 +84,7 @@ class FakeCUDAArray(object):
             ary = np.empty_like(self._ary)
         else:
             check_array_compatibility(self, ary)
-        # NOTE: np.copyto() introduced in Numpy 1.7
-        try:
-            np.copyto(ary, self._ary)
-        except AttributeError:
-            ary[:] = self._ary
+        np.copyto(ary, self._ary)
         return ary
 
     def copy_to_device(self, ary, stream=0):
@@ -111,10 +107,7 @@ class FakeCUDAArray(object):
                 subok=True,
                 copy=False)
             check_array_compatibility(self_core, ary_core)
-        try:
-            np.copyto(self_core._ary, ary_core)
-        except AttributeError:
-            self_core._ary[:] = ary_core
+        np.copyto(self_core._ary, ary_core)
 
     def to_host(self):
         warn('to_host() is deprecated and will be removed')
