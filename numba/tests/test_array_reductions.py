@@ -128,6 +128,9 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def array_ptp_global(a):
+    return np.ptp(a)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -664,6 +667,56 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nancumsum_basic(self):
         self.check_cumulative(array_nancumsum)
         self.check_nan_cumulative(array_nancumsum)
+
+    def test_ptp_basic(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.array([-1.1, np.nan, 2.2])
+            yield np.array([-np.inf, 5])
+            yield (4, 2, 5)
+            yield (1,)
+            yield np.full(5, 5)
+            a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
+            yield a
+            yield np.asfortranarray(a)
+
+        for a in a_variations():
+            check(a)
+
+    def test_ptp_exceptions(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Boolean dtype is unsupported (as per NumPy)"
+        assert msg in str(e.exception)
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([]))
+
+        msg = "zero-size array reduction not possible"
+        assert msg in str(e.exception)
+
+        with self.assertTypingError() as e:
+            real = np.arange(3, 8)
+            a = real + 1j * real
+            cfunc(a)
+
+        msg = "Complex dtype not supported"
+        assert msg in str(e.exception)
 
     @classmethod
     def install_generated_tests(cls):
