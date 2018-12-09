@@ -717,24 +717,6 @@ if numpy_version >= (1, 12):
 
             return nancumsum_impl
 
-@register_jitable
-def np_ptp_inner(arr):
-    if len(arr) == 0:
-        raise ValueError('zero-size array reduction not possible')
-
-    a_flat = arr.flat
-    a_min = a_flat[0]
-    a_max = a_flat[0]
-
-    for i in range(1, arr.size):
-        val = a_flat[i]
-        if val > a_max:
-            a_max = val
-        if val < a_min:
-            a_min = val
-
-    return a_max - a_min
-
 @overload(np.ptp)
 def np_ptp(a):
 
