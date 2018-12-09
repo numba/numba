@@ -684,9 +684,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield (4, 2, 5)
             yield (1,)
             yield np.full(5, 5)
+            yield [2.2, -2.3, 0.1]
             a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
             yield a
             yield np.asfortranarray(a)
+            yield 6
+            yield 6.5
+            yield -np.inf
+            yield 1 + 4j
 
         for a in a_variations():
             check(a)
