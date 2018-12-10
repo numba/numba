@@ -120,15 +120,15 @@ call_context = _CallContextType()
 class _ObjModeContextType(WithContext):
     """Creates a contextmanager to be used inside jitted functions to enter
     *object-mode* for using interpreter features.  The body of the with-context
-    is lifted into a function that is compiled into *object-mode*.  This
-    transformation process is limitated and cannot process all possible
+    is lifted into a function that is compiled in *object-mode*.  This
+    transformation process is limited and cannot process all possible
     Python code.  However, users can wrap complicated logic in another
     Python function, which will then be executed by the interpreter.
 
     Use this as a function that takes keyword arguments only.
     The argument names must correspond to the output variables from the
     with-block.  Their respective values are strings representing the expected
-    types.  When exiting the with-context, the output variables are casted
+    types.  When exiting the with-context, the output variables are cast
     to the expected nopython types according to the annotation.  This process
     is the same as passing Python objects into arguments of a nopython
     function.
@@ -140,20 +140,20 @@ class _ObjModeContextType(WithContext):
 
         def bar(x):
             # This code is executed by the interpreter.
-            return np.asarray(list(reversed(x.tolist()))
+            return np.asarray(list(reversed(x.tolist())))
 
         @njit
         def foo():
-            x = np.arange(5)
+            y = np.arange(5)
             with objmode(y='intp[:]'):  # annotate return type
                 # this region is executed by object-mode.
-                y += bar(x)
+                y += bar(y)
             return y
 
-    .. note:: Known limitation:
+    .. note:: Known limitations:
 
-        - with-block cannot use incoming list object.
-        - with-block cannot use incoming function object.
+        - with-block cannot use incoming list objects.
+        - with-block cannot use incoming function objects.
         - with-block cannot ``yield``, ``break``, ``return`` or ``raise`` \
           such that the execution will leave the with-block immediately.
         - with-block cannot contain `with` statements.
