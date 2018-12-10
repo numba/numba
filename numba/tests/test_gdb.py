@@ -28,12 +28,14 @@ long_running = tag('long_running')
 _dbg_njit = njit(debug=True)
 _dbg_jit = jit(forceobj=True, debug=True)
 
+
 def impl_gdb_call(a):
     gdb('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
     b = a + 1
     c = a * 2.34
     d = (a, b, c)
     print(a, b, c, d)
+
 
 def impl_gdb_call_w_bp(a):
     gdb_init('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
@@ -42,6 +44,7 @@ def impl_gdb_call_w_bp(a):
     d = (a, b, c)
     gdb_breakpoint()
     print(a, b, c, d)
+
 
 def impl_gdb_split_init_and_break_w_parallel(a):
     gdb_init('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
@@ -52,6 +55,7 @@ def impl_gdb_split_init_and_break_w_parallel(a):
         d = (a, b, c)
         gdb_breakpoint()
         print(a, b, c, d)
+
 
 @linux_only
 class TestGdbBindImpls(TestCase):
