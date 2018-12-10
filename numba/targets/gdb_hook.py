@@ -146,7 +146,7 @@ def init_gdb_codegen(cgctx, builder, signature, args,
             # is parent
             builder.call(sleep, (int32_t(10),))
             # if breaking is desired, break now
-            if do_break == True:
+            if do_break is True:
                 builder.call(breakpoint, tuple())
 
 
