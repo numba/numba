@@ -169,33 +169,15 @@ def sentry_contiguous(ary):
         raise ValueError(errmsg_contiguous_buffer)
 
 
-def squeezed_shape_and_strides(ary):
-    """
-    Squeeze out trivial dimensions from an array's shape and strides tuples.
-
-    Trivial dimensions, i.e., dimensions of length one, do not affect the
-    compatibility of array shapes. This function returns shape and strides
-    tuples where dimensions of length one have been dropped.
-
-    """
-    sqshape, sqstrides = [], []
-    for length, stride in zip(ary.shape, ary.strides):
-        if length != 1:
-            sqshape.append(length)
-            sqstrides.append(stride)
-    return tuple(sqshape), tuple(sqstrides)
-
-
 def check_array_compatibility(ary1, ary2):
+    ary1sq, ary2sq = ary1.squeeze(), ary2.squeeze()
     if ary1.dtype != ary2.dtype:
         raise TypeError('incompatible dtype: %s vs. %s' %
                         (ary1.dtype, ary2.dtype))
-    sqshape1, sqstrides1 = squeezed_shape_and_strides(ary1)
-    sqshape2, sqstrides2 = squeezed_shape_and_strides(ary2)
-    if sqshape1 != sqshape2:
+    if ary1sq.shape != ary2sq.shape:
         raise ValueError('incompatible shape: %s vs. %s' %
                          (ary1.shape, ary2.shape))
-    if sqstrides1 != sqstrides2:
+    if ary1sq.strides != ary2sq.strides:
         raise ValueError('incompatible strides: %s vs. %s' %
                          (ary1.strides, ary2.strides))
 
