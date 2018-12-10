@@ -144,10 +144,11 @@ class _ObjModeContextType(WithContext):
 
         @njit
         def foo():
-            y = np.arange(5)
+            x = np.arange(5)
+            y = np.zeros_like(x)
             with objmode(y='intp[:]'):  # annotate return type
                 # this region is executed by object-mode.
-                y += bar(y)
+                y += bar(x)
             return y
 
     .. note:: Known limitations:
