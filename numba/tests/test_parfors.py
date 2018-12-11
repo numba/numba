@@ -22,7 +22,7 @@ import numba
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout
 from numba import njit, prange, stencil, inline_closurecall
-from numba import compiler, typing
+from numba import compiler, typing, errors
 from numba.targets import cpu
 from numba import types
 from numba.targets.registry import cpu_target
@@ -38,6 +38,7 @@ from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+
 
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
@@ -581,8 +582,7 @@ class TestParfors(TestParforsBase):
         This test is in place until issues with the 'parallel'
         target on Windows with Python 2.7 / 32 bit hardware are fixed.
         """
-
-        with self.assertRaises(RuntimeError) as raised:
+        with self.assertRaises(errors.UnsupportedParforsError) as raised:
             @njit(parallel=True)
             def ddot(a, v):
                 return np.dot(a, v)
@@ -2028,6 +2028,7 @@ class TestPrange(TestPrangeBase):
         self.assertIn(expected_msg, str(warning_obj.message))
 
 
+@skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
 
