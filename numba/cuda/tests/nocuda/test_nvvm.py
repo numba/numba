@@ -25,6 +25,39 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
         ptx = nvvm.llvm_to_ptx(llvmir)
         self.assertIn("foo", ptx.decode('ascii'))
 
+    def test_nvvm_memset_fixup(self):
+        """
+        Test llvm.memset changes in llvm7.
+        In LLVM7 the alignment parameter can be implicitly provided as
+        an attribute to pointer in the first argument.
+        """
+        def foo(x):
+            # Triggers a generation of llvm.memset
+            for i in range(x.size):
+                x[i] = 0
+
+        cukern = compile_kernel(foo, args=(types.int32[::1],), link=())
+        original = cukern._func.ptx.llvmir
+        self.assertIn("call void @llvm.memset", original)
+        fixed = nvvm.llvm39_to_34_ir(original)
+        self.assertIn("call void @llvm.memset", fixed)
+        # Check original IR
+        for ln in original.splitlines():
+            if 'call void @llvm.memset' in ln:
+                # Missing i32 4 in the 2nd last argument
+                self.assertRegexpMatches(
+                    ln,
+                    r'i64 %\d+, i1 false\)'.replace(' ', r'\s+'),
+                )
+        # Check fixed IR
+        for ln in fixed.splitlines():
+            if 'call void @llvm.memset' in ln:
+                # The i32 4 is the alignment
+                self.assertRegexpMatches(
+                    ln,
+                    r'i32 4, i1 false\)'.replace(' ', r'\s+'),
+                )
+
 
 if __name__ == '__main__':
     unittest.main()
