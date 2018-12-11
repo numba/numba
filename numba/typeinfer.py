@@ -963,7 +963,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 msg = ("Cannot infer the type of variable '%s'%s, "
                       "have imprecise type: %s. %s")
                 istmp = " (temporary variable)" if var.startswith('$') else ""
-                loc = getattr(offender, 'loc', 'unknown location')
+                loc = getattr(offender, 'loc', ir.unknown_loc)
                 # is this an untyped list? try and provide help
                 extra_msg = diagnose_imprecision(offender)
                 raise TypingError(msg % (var, istmp, tp, extra_msg), loc)

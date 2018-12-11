@@ -72,6 +72,40 @@ class TestMiscErrorHandling(unittest.TestCase):
         a = np.array([1.0],dtype=np.float64)
         fn(a) # should not raise
 
+    def test_use_of_ir_unknown_loc(self):
+        # for context see # 3390
+        import numba
+        class TestPipeline(numba.compiler.BasePipeline):
+            def define_pipelines(self, pm):
+                pm.create_pipeline('test_loc')
+                self.add_preprocessing_stage(pm)
+                self.add_with_handling_stage(pm)
+                self.add_pre_typing_stage(pm)
+                # remove dead before type inference so that the Arg node is removed
+                # and the location of the arg cannot be found
+                pm.add_stage(self.rm_dead_stage,
+                            "remove dead before type inference for testing")
+                self.add_typing_stage(pm)
+                self.add_optimization_stage(pm)
+                pm.add_stage(self.stage_ir_legalization,
+                            "ensure IR is legal prior to lowering")
+                self.add_lowering_stage(pm)
+                self.add_cleanup_stage(pm)
+
+            def rm_dead_stage(self):
+                numba.ir_utils.remove_dead(
+                    self.func_ir.blocks, self.func_ir.arg_names, self.func_ir)
+
+        @numba.jit(pipeline_class=TestPipeline)
+        def f(a):
+            return 0
+
+        with self.assertRaises(errors.TypingError) as raises:
+            f(iter([1,2]))  # use a type that Numba doesn't recognize
+
+        expected = 'File "unknown location", line 0:'
+        self.assertIn(expected, str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
