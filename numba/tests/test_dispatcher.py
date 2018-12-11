@@ -36,6 +36,7 @@ from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
 from numba import parfor
 from .test_linalg import needs_lapack
+from .support import skip_parfors_unsupported
 
 import llvmlite.binding as ll
 
@@ -1321,6 +1322,7 @@ class TestCache(BaseCacheUsecasesTest):
         self.assertIn("cache hits = 1", err.strip())
 
 
+@skip_parfors_unsupported
 class TestSequentialParForsCache(BaseCacheUsecasesTest):
     def setUp(self):
         super(TestSequentialParForsCache, self).setUp()

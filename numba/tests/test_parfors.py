@@ -35,16 +35,16 @@ from numba import ir
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
-from .support import tag, override_env_config
+from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_unsupported = skip_parfors_unsupported
 test_disabled = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
