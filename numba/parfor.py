@@ -1265,7 +1265,6 @@ class PreParforPass(object):
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
                  swapped={}):
-        ensure_parallel_support()
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1408,7 +1407,6 @@ class ParforPass(object):
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
                  options, flags, diagnostics=ParforDiagnostics()):
-        ensure_parallel_support()
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes

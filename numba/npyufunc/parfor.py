@@ -25,15 +25,13 @@ from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
-from numba.parfor import print_wrapped
+from numba.parfor import print_wrapped, ensure_parallel_support
 
 import warnings
 from ..errors import ParallelSafetyWarning
 
 
 def _lower_parfor_parallel(lowerer, parfor):
-    from .parallel import get_thread_count
-
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -46,6 +44,9 @@ def _lower_parfor_parallel(lowerer, parfor):
        the reduction function across the reduction arrays to produce
        the final reduction values.
     """
+    from .parallel import get_thread_count
+
+    ensure_parallel_support()
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
     # We copy the typemap here because for race condition variable we'll
