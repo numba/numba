@@ -273,7 +273,8 @@ class StencilPass(object):
             if "cval" in stencil_func.options: # do out[:] = cval
                 cval = stencil_func.options["cval"]
                 # TODO: Loosen this restriction to adhere to casting rules.
-                if return_type.dtype != typing.typeof.typeof(cval):
+                cval_ty = typing.typeof.typeof(cval)
+                if not self.typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise ValueError(msg)
 
@@ -283,6 +284,9 @@ class StencilPass(object):
                     if fn == slice:
                         slice_template = tmplt
                         break
+                else:
+                    raise RuntimeError("No template for 'slice' could be found")
+
                 self.typemap[slice_var.name] = slice_template
                 slice_g = ir.Global('slice', slice, loc)
                 slice_assigned = ir.Assign(slice_g, slice_var, loc)
@@ -292,7 +296,7 @@ class StencilPass(object):
 
                 # inputs to slice
                 inputs = []
-                for x in range(2):
+                for _ in range(2):
                     none_const_val = ir.Const(None, loc)
                     none_const_var = ir.Var(scope, mk_unique_var("$none_const"),
                                             loc)

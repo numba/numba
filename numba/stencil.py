@@ -545,9 +545,10 @@ class StencilFunc(object):
         else: # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
-                if return_type.dtype != typing.typeof.typeof(cval):
-                    raise ValueError(
-                        "cval type does not match stencil return type.")
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
+                    msg = "cval type does not match stencil return type."
+                    raise ValueError(msg)
                 out_init = "{}[:] = {}\n".format(out_name, cval)
                 func_text += "    " + out_init
 
