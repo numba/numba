@@ -87,20 +87,25 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if dtype.fields is None:
-        try:
-            return FROM_DTYPE[dtype]
-        except KeyError:
-            if dtype.char in 'SU':
-                return _from_str_dtype(dtype)
-            if dtype.char in 'mM':
-                return _from_datetime_dtype(dtype)
-            if dtype.char in 'V':
-                subtype = from_dtype(dtype.subdtype[0])
-                return types.NestedArray(subtype, dtype.shape)
-            raise NotImplementedError(dtype)
-    else:
+    if type(dtype) == type and issubclass(dtype, np.generic):
+        dtype = np.dtype(dtype)
+    elif getattr(dtype, "fields", None) is not None:
         return from_struct_dtype(dtype)
+
+    try:
+        return FROM_DTYPE[dtype]
+    except KeyError:
+        char = dtype.char
+
+        if char in 'SU':
+            return _from_str_dtype(dtype)
+        if char in 'mM':
+            return _from_datetime_dtype(dtype)
+        if char in 'V':
+            subtype = from_dtype(dtype.subdtype[0])
+            return types.NestedArray(subtype, dtype.shape)
+
+    raise NotImplementedError(dtype)
 
 
 _as_dtype_letters = {
@@ -109,6 +114,7 @@ _as_dtype_letters = {
     types.CharSeq: 'S',
     types.UnicodeCharSeq: 'U',
 }
+
 
 def as_dtype(nbtype):
     """
@@ -132,6 +138,10 @@ def as_dtype(nbtype):
     if isinstance(nbtype, types.Record):
         return nbtype.dtype
     if isinstance(nbtype, types.EnumMember):
+        return as_dtype(nbtype.dtype)
+    if isinstance(nbtype, types.npytypes.DType):
+        return as_dtype(nbtype.dtype)
+    if isinstance(nbtype, types.NumberClass):
         return as_dtype(nbtype.dtype)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))

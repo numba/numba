@@ -6,6 +6,7 @@ from itertools import product, cycle
 import sys
 import warnings
 from numbers import Number, Integral
+import platform
 
 import numpy as np
 
@@ -14,6 +15,8 @@ from numba import jit, errors
 from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
+
+_is_armv7l = platform.machine() == 'armv7l'
 
 try:
     import scipy.linalg.cython_lapack
@@ -82,10 +85,33 @@ class TestProduct(TestCase):
             self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
             del got, expected
 
+
+    def _aligned_copy(self, arr):
+        # This exists for armv7l because NumPy wants aligned arrays for the
+        # `out` arg of functions, but np.empty/np.copy doesn't seem to always
+        # produce them, in particular for complex dtypes
+        size = (arr.size + 1) * arr.itemsize + 1
+        datasize = arr.size * arr.itemsize
+        tmp = np.empty(size, dtype=np.uint8)
+        for i in range(arr.itemsize + 1):
+            new = tmp[i : i + datasize].view(dtype=arr.dtype)
+            if new.flags.aligned:
+                break
+        else:
+            raise Exception("Could not obtain aligned array")
+        if arr.flags.c_contiguous:
+            new = np.reshape(new, arr.shape, order='C')
+        else:
+            new = np.reshape(new, arr.shape, order='F')
+        new[:] = arr[:]
+        assert new.flags.aligned
+        return new
+
     def check_func_out(self, pyfunc, cfunc, args, out):
+        copier = self._aligned_copy if _is_armv7l else np.copy
         with self.assertNoNRTLeak():
-            expected = np.copy(out)
-            got = np.copy(out)
+            expected = copier(out)
+            got = copier(out)
             self.assertIs(pyfunc(*args, out=expected), expected)
             self.assertIs(cfunc(*args, out=got), got)
             self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)

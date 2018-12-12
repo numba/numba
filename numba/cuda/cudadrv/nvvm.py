@@ -546,6 +546,8 @@ re_annotations = re.compile(r"\bnonnull\b")
 
 re_unsupported_keywords = re.compile(r"\b(local_unnamed_addr|writeonly)\b")
 
+re_parenthesized_list = re.compile(r"\((.*)\)")
+
 
 def llvm39_to_34_ir(ir):
     """
@@ -633,12 +635,47 @@ def llvm39_to_34_ir(ir):
             # no !range metadata on calls
             line = re_range.sub('', line).rstrip(',')
 
+            if '@llvm.memset' in line:
+                line = re_parenthesized_list.sub(
+                    _replace_llvm_memset_usage,
+                    line,
+                    )
+        if 'declare' in line:
+            if '@llvm.memset' in line:
+                line = re_parenthesized_list.sub(
+                    _replace_llvm_memset_declaration,
+                    line,
+                    )
+
         # Remove unknown annotations
         line = re_annotations.sub('', line)
 
         buf.append(line)
 
     return '\n'.join(buf)
+
+
+def _replace_llvm_memset_usage(m):
+    """Replace `llvm.memset` usage for llvm7+.
+
+    Used as functor for `re.sub.
+    """
+    params = list(m.group(1).split(','))
+    align = re.search(r'align (\d+)', params[0]).group(1)
+    params.insert(-1, 'i32 {}'.format(align))
+    out = ', '.join(params)
+    return '({})'.format(out)
+
+
+def _replace_llvm_memset_declaration(m):
+    """Replace `llvm.memset` declaration for llvm7+.
+
+    Used as functor for `re.sub.
+    """
+    params = list(m.group(1).split(','))
+    params.insert(-1, 'i32')
+    out = ', '.join(params)
+    return '({})'.format(out)
 
 
 def set_cuda_kernel(lfunc):
