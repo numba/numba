@@ -443,22 +443,31 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             self.assertPreciseEqual(got, expected)
 
     def test_literal_unification(self):
+        # Test for #3565.
+        : Rect(int, LiteralInt) in the unpatched
+        # code.  A unification error occurs when `result`
+        # The patch enforces that namedtuple cannot have
+        # literal types as members.
         @jit(nopython=True)
         def Data1(value):
-            return Rect(value, 0)
+            return Rect(value, -321)
 
         @jit(nopython=True)
         def call(i, j):
             if j == 0:
+                # In the error, `result` is typed to `Rect(int, LiteralInt)`
+                # because of the `-321` literal.  This doesn't match the
+                # `result` type in the other branch.
                 result = Data1(i)
             else:
+                # `result` is typed to be `Rect(int, int)`
                 result = Rect(i, j)
-
             return result
 
-        r = call(1, 1)
-        print(r)
-
+        r = call(123, 1321)
+        self.assertEqual(r, Rect(width=123, height=1321))
+        r = call(123, 0)
+        self.assertEqual(r, Rect(width=123, height=-321))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
