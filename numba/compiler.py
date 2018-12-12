@@ -470,6 +470,106 @@ class BasePipeline(object):
         self.calltypes = defaultdict(lambda: types.pyobject)
         self.return_type = types.pyobject
 
+    def stage_dead_branch_prune(self):
+        """
+        This prunes dead branches, a dead branch is one which is derivable as
+        not taken at compile time purely based on const/literal evaluation.
+        """
+        func_ir = self.func_ir
+        # find *all* branches
+        branches = []
+        for idx, blk in func_ir.blocks.items():
+            tmp = [_ for _ in blk.find_insts(cls=ir.Branch)]
+            store = dict()
+            for branch in tmp:
+                store['branch'] = branch
+                expr = blk.find_variable_assignment(branch.cond.name)
+                if expr is not None:
+                    val = expr.value
+                    if isinstance(val, ir.Expr) and val.op == 'binop':
+                        store['op'] = val
+                        args = [val.lhs, val.rhs]
+                        store['args'] = args
+                        store['block'] = blk
+                        branches.append(store)
+        # This looks for branches where:
+        # an arg of the condition is in input args and const/literal
+        # an arg of the condition is a const/literal
+        # if the condition is met it will remove blocks that are not reached and
+        # patch up the branch
+        prune = []
+        for branch in branches:
+            is_input_arg = False
+            const_arg_val = False
+            for arg in branch['args']:
+                if arg.name in func_ir.arg_names:
+                    # it's an argument to the function
+                    is_input_arg = arg.name
+                    continue
+                for idx, blk in func_ir.blocks.items():
+                    found = blk.find_variable_assignment(arg.name)
+                    if found is not None and isinstance(found.value, ir.Const):
+                        const_arg_val = found.value.value
+                        continue
+
+            if is_input_arg is not False and const_arg_val is not False:
+                idx = func_ir.arg_names.index(is_input_arg)
+                input_arg_ty = self.args[idx]
+                proceed = False
+
+                # comparing None ?
+                lhs_cond = isinstance(input_arg_ty, types.NoneType)
+                rhs_cond = const_arg_val is None
+
+                if lhs_cond and rhs_cond:
+                    proceed = True
+                else:
+                    # comparing known types?
+                    # is it ommitted
+                    lhs_cond = getattr(input_arg_ty, 'value', None)
+
+                    # is it a literal
+                    if lhs_cond is None:
+                        lhs_cond = getattr(input_arg_ty, 'literal_value', None)
+
+                    rhs_cond = const_arg_val
+                    if lhs_cond is not None and rhs_cond:
+                        proceed = True
+
+                if not proceed:
+                    continue # try next branch inst
+
+                take_truebr = branch['op'].fn(lhs_cond, rhs_cond)
+                cond = branch['branch']
+                if take_truebr:
+                    keep = cond.truebr
+                    kill = cond.falsebr
+                else:
+                    keep = cond.falsebr
+                    kill = cond.truebr
+
+                # rip out dead blocks
+                from numba.analysis import compute_cfg_from_blocks
+                cfg = compute_cfg_from_blocks(func_ir.blocks)
+                dom = cfg.dominators()
+                backbone = cfg.backbone()
+                rem = []
+                for idx, doms in dom.items():
+                    if kill in doms and kill not in backbone:
+                        #print("KILLING", idx)
+                        rem.append(idx)
+                for x in rem:
+                    func_ir.blocks.pop(x)
+
+                # fix up branch location, it's now just a jump
+                jmp = ir.Jump(keep, loc=cond.loc)
+                branch['block'].body[-1] = jmp
+
+        if config.DEBUG or config.DUMP_IR:
+            print('branch_pruned_ir'.center(80, '-'))
+            print(func_ir.dump())
+            print('end branch_pruned_ir'.center(80, '-'))
+
     def stage_nopython_frontend(self):
         """
         Type inference and legalization
@@ -763,6 +863,7 @@ class BasePipeline(object):
                 pm.add_stage(self.stage_preserve_ir,
                              "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
 
