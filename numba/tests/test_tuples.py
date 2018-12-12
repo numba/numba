@@ -444,10 +444,6 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
 
     def test_literal_unification(self):
         # Test for #3565.
-        : Rect(int, LiteralInt) in the unpatched
-        # code.  A unification error occurs when `result`
-        # The patch enforces that namedtuple cannot have
-        # literal types as members.
         @jit(nopython=True)
         def Data1(value):
             return Rect(value, -321)
