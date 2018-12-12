@@ -1207,7 +1207,7 @@ class TestParfors(TestParforsBase):
 
         out = np.ones(1)
         self.check(test_impl, out)
-        
+
     @skip_unsupported
     @needs_blas
     def test_parfor_generate_fuse(self):
@@ -1274,10 +1274,10 @@ class TestParfors(TestParforsBase):
 
             for i in numba.prange(n):
                 result1 += tmp
-                
+
             for i in numba.prange(n):
                 result1 += tmp
-                
+
             return result1
 
         self.check(test_impl, 100)
@@ -2415,6 +2415,16 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, 10, np.ones(10))
 
+    @skip_unsupported
+    def test_parfor_slice18(self):
+        # issue 3534
+        def test_impl():
+            a = np.zeros(10)
+            a[1:8] = np.arange(0, 7)
+            y = a[3]
+            return y
+
+        self.check(test_impl)
 
 class TestParforsOptions(TestParforsBase):
 
@@ -2528,7 +2538,7 @@ class TestParforsBitMask(TestParforsBase):
             self.check(test_impl, a, b, c)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
-class TestParforsMisc(TestCase):
+class TestParforsMisc(TestParforsBase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """
@@ -2558,6 +2568,21 @@ class TestParforsMisc(TestCase):
 
         # make sure the cache is set to false, cf. NullCache
         self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
+
+    @skip_unsupported
+    def test_statement_reordering_respects_aliasing(self):
+        def impl():
+            a = np.zeros(10)
+            a[1:8] = np.arange(0, 7)
+            print('a[3]:', a[3])
+            print('a[3]:', a[3])
+            return a
+
+        cres = self.compile_parallel(impl, ())
+        with captured_stdout() as stdout:
+            cres.entry_point()
+        for line in stdout.getvalue().splitlines():
+            self.assertEqual('a[3]: 2.0', line)
 
 
 @skip_unsupported
