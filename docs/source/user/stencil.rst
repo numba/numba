@@ -136,6 +136,10 @@ simple expressions if possible. For example::
 Stencil decorator options
 =========================
 
+While the stencil decorator may be augmented in the future to
+provide additional mechanisms for border handling, at the moment
+the stencil decorator currently supports only one option.
+
 .. _stencil-neighborhood:
 
 ``neighborhood``
@@ -167,10 +171,10 @@ specified neighborhood, **the behavior is undefined.**
 
 .. _stencil-mode:
 
-``mode``
+``func_or_mode``
 --------
 
-The optional mode parameter controls how the border of the output array
+The optional func_or_mode parameter controls how the border of the output array
 is handled.  Currently, there is only one supported value, ``"constant"``.
 In ``constant`` mode, the stencil kernel is not applied in cases where
 the kernel would access elements outside the valid range of the input
@@ -182,7 +186,7 @@ to a constant value, as specified by the ``cval`` parameter.
 
 The optional cval parameter defaults to zero but can be set to any
 desired value, which is then used for the border of the output array
-if the mode parameter is set to ``constant``.  The cval parameter is
+if the func_or_mode parameter is set to ``constant``.  The cval parameter is
 ignored in all other modes.  The type of the cval parameter must match
 the return type of the stencil kernel.  If the user wishes the output
 array to be constructed from a particular type then they should ensure
