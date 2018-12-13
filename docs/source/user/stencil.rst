@@ -136,10 +136,6 @@ simple expressions if possible. For example::
 Stencil decorator options
 =========================
 
-While the stencil decorator may be augmented in the future to
-provide additional mechanisms for border handling, at the moment
-the stencil decorator currently supports only one option.
-
 .. _stencil-neighborhood:
 
 ``neighborhood``
