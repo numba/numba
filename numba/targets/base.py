@@ -822,8 +822,7 @@ class BaseContext(object):
                            caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
-        Return a placeholder object that's callable from another Numba
-        function.
+        Return an instance of CompileResult.
 
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
@@ -841,22 +840,20 @@ class BaseContext(object):
             cres = self._compile_subroutine_no_cache(builder, impl, sig,
                                                      locals=locals,
                                                      flags=flags)
-            lib = cres.library
-            ty = types.NumbaFunction(cres.fndesc, sig)
-            self.cached_internal_func[cache_key] = ty, lib
+            self.cached_internal_func[cache_key] = cres
 
-        ty, lib = self.cached_internal_func[cache_key]
+        cres = self.cached_internal_func[cache_key]
         # Allow inlining the function inside callers.
-        self.active_code_library.add_linking_library(lib)
-        return ty
+        self.active_code_library.add_linking_library(cres.library)
+        return cres
 
     def compile_internal(self, builder, impl, sig, args, locals={}):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
-        ty = self.compile_subroutine(builder, impl, sig, locals)
-        return self.call_internal(builder, ty.fndesc, sig, args)
+        cres = self.compile_subroutine(builder, impl, sig, locals)
+        return self.call_internal(builder, cres.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
         """

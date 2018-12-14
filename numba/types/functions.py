@@ -371,26 +371,6 @@ class ExternalFunction(Function):
         return self.symbol, self.sig
 
 
-class NumbaFunction(Function):
-    """
-    A named native function with the Numba calling convention
-    (resolvable by LLVM).
-    For internal use only.
-    """
-
-    def __init__(self, fndesc, sig):
-        from .. import typing
-        self.fndesc = fndesc
-        self.sig = sig
-        template = typing.make_concrete_template(fndesc.qualname,
-                                                 fndesc.qualname, [sig])
-        super(NumbaFunction, self).__init__(template)
-
-    @property
-    def key(self):
-        return self.fndesc.unique_name, self.sig
-
-
 class NamedTupleClass(Callable, Opaque):
     """
     Type class for namedtuple classes.

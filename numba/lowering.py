@@ -696,10 +696,6 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.ExternalFunction):
             res = self._lower_call_ExternalFunction(fnty, expr, signature)
 
-        elif isinstance(fnty, types.NumbaFunction):
-            # Handle a compiled Numba function
-            res = self._lower_call_NumbaFunction(fnty)
-
         elif isinstance(fnty, types.ExternalFunctionPointer):
             res = self._lower_call_ExternalFunctionPointer(fnty, expr, signature)
 
@@ -842,6 +838,7 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
+        raise RuntimeError(str(fnty))
         return self.context.call_internal(
             self.builder, fnty.fndesc, fnty.sig, argvals,
         )
