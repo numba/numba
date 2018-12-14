@@ -346,7 +346,7 @@ class Array(object):
                     newshape.append(length)
                     newstrides.append(stride)
         else:
-            if isinstance(axis, int):
+            if not isinstance(axis, tuple):
                 axis = (axis,)
             for ax in axis:
                 if self.shape[ax] != 1:
