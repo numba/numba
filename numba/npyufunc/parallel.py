@@ -230,7 +230,21 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
 
 
 _backend_init_thread_lock = threadRLock()
-_backend_init_process_lock = procRLock()
+try:
+    _backend_init_process_lock = procRLock()
+except OSError as e:
+    # probably lack of /dev/shm for semaphore writes, warn the user
+    msg =("Could not obtain multiprocessing lock due to OS level error: %s\n"
+          "*** The responsibility of ensuring multiprocessing safe access to "
+          "this initialization sequence/module import is deferred to the user! "
+          "***\n")
+    warnings.warn(msg % str(e))
+    from contextlib import contextmanager
+    @contextmanager
+    def nop():
+        yield
+    _backend_init_process_lock = nop()
+
 _is_initialized = False
 
 # this is set by _launch_threads
