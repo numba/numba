@@ -535,7 +535,6 @@ class ShapeEquivSet(EquivSet):
             for x in self.ind_to_var[j]:
                 if x.name in names:
                     varlist.append(x)
-            assert(len(varlist) > 0)
             ind_to_var[i] = varlist
         newset.ind_to_var = ind_to_var
         return newset
