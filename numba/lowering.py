@@ -7,7 +7,6 @@ import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
-from llvmlite import ir as llvmir
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
@@ -43,8 +42,8 @@ class Environment(_dynfunc.Environment):
         return _rebuild_env, (
             self.globals['__name__'],
             self.consts,
-            self.env_name
-            )
+            self.env_name,
+        )
 
     def __del__(self):
         if utils is None or utils.IS_PY3:
@@ -168,7 +167,7 @@ class BaseLower(object):
         """
         # Define global for the environment and initialize it to NULL
         envname = self.context.get_env_name(self.fndesc)
-        gvenv = self.context.declare_env_global(self.module, envname)
+        self.context.declare_env_global(self.module, envname)
 
     def lower(self):
         # Emit the Env into the module
@@ -295,6 +294,7 @@ class BaseLower(object):
 
 # Dictionary mapping instruction class to its lowering function.
 lower_extensions = {}
+
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
@@ -496,7 +496,7 @@ class Lower(BaseLower):
 
         # cast the local val to the type yielded
         yret = self.context.cast(self.builder, val, typ,
-                                    self.gentype.yield_type)
+                                 self.gentype.yield_type)
 
         # get the return repr of yielded value
         retval = self.context.get_return_value(self.builder, typ, yret)
@@ -552,21 +552,21 @@ class Lower(BaseLower):
         res = try_static_impl(
             (_lit_or_omitted(static_lhs), _lit_or_omitted(static_rhs)),
             (static_lhs, static_rhs),
-            )
+        )
         if res is not None:
             return cast_result(res)
 
         res = try_static_impl(
             (_lit_or_omitted(static_lhs), rty),
             (static_lhs, rhs),
-            )
+        )
         if res is not None:
             return cast_result(res)
 
         res = try_static_impl(
             (lty, _lit_or_omitted(static_rhs)),
             (lhs, static_rhs),
-            )
+        )
         if res is not None:
             return cast_result(res)
 
@@ -732,7 +732,7 @@ class Lower(BaseLower):
                     native = self.pyapi.to_native_value(
                         fnty.dispatcher.output_types,
                         ret_obj,
-                        )
+                    )
                     output = native.value
 
                     # Release objs
@@ -989,7 +989,7 @@ class Lower(BaseLower):
                 resty,
                 self.typeof(expr.value.name),
                 _lit_or_omitted(expr.index),
-                )
+            )
             try:
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
