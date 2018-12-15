@@ -724,8 +724,6 @@ def np_ptp(a):
         if isinstance(a.dtype, types.Boolean):
             raise TypeError("Boolean dtype is unsupported (as per NumPy)")
             # Numpy raises a TypeError here
-        if np.issubdtype(as_dtype(a.dtype), np.complex):
-            raise TypingError('Complex dtype not supported')
 
     def np_ptp_impl(a):
         arr = _asarray(a)
@@ -765,10 +763,25 @@ def np_ptp(a):
 
         return a_max - a_min
 
-    # array-like handling
-    if hasattr(a, 'dtype'):
-        if np.issubdtype(as_dtype(a.dtype), np.integer):
-            return np_ptp_impl_int
+    def np_ptp_impl_complex(a):
+        arr = _asarray(a)
+        if len(arr) == 0:
+            raise ValueError('zero-size array reduction not possible')
+
+        real_nan = np.isnan(a.real)
+        imag_nan = np.isnan(a.imag)
+
+        if np.any(real_nan) or np.any(imag_nan):
+            return np.nan + 0j
+
+        else:
+            retained_min = a[a.real == np.min(a.real)]
+            r_min = retained_min[retained_min.imag == np.min(retained_min.imag)].flat[0]
+
+            retained_max = a[a.real == np.max(a.real)]
+            r_max = retained_max[retained_max.imag == np.max(retained_max.imag)].flat[0]
+
+            return r_max - r_min
 
     # scalar handling
     if isinstance(a, types.Integer):
@@ -777,6 +790,13 @@ def np_ptp(a):
         return np_ptp_impl
     elif isinstance(a, types.Complex):
         return lambda x: 0j
+
+    # array-like handling
+    if hasattr(a, 'dtype'):
+        if np.issubdtype(as_dtype(a.dtype), np.integer):
+            return np_ptp_impl_int
+        if np.issubdtype(as_dtype(a.dtype), np.dtype(complex).type):
+            return np_ptp_impl_complex
 
     return np_ptp_impl
 

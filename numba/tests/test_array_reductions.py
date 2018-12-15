@@ -696,6 +696,36 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in a_variations():
             check(a)
 
+    def test_ptp_complex(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def make_array(real_nan=False, imag_nan=False):
+            real = np.linspace(-4, 4, 25)
+            if real_nan:
+                real[4:9] = np.nan
+            imag = np.linspace(-5, 5, 25)
+            if imag_nan:
+                imag[7:12] = np.nan
+            return real + 1j * imag
+
+        comp = make_array()
+        check(comp)
+
+        comp = make_array(real_nan=True)
+        check(comp)
+
+        comp = make_array(imag_nan=True)
+        check(comp)
+
+        comp = make_array(real_nan=True, imag_nan=True)
+        check(comp)
+
     def test_ptp_exceptions(self):
         pyfunc = array_ptp_global
         cfunc = jit(nopython=True)(pyfunc)
@@ -713,14 +743,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             cfunc(np.array([]))
 
         msg = "zero-size array reduction not possible"
-        assert msg in str(e.exception)
-
-        with self.assertTypingError() as e:
-            real = np.arange(3, 8)
-            a = real + 1j * real
-            cfunc(a)
-
-        msg = "Complex dtype not supported"
         assert msg in str(e.exception)
 
     @classmethod
