@@ -717,18 +717,24 @@ if numpy_version >= (1, 12):
 
             return nancumsum_impl
 
+@register_jitable
+def prepare_ptp_input(a):
+    arr = _asarray(a)
+    if len(arr) == 0:
+        raise ValueError('zero-size array reduction not possible')
+    else:
+        return arr
+
 @overload(np.ptp)
 def np_ptp(a):
 
     if hasattr(a, 'dtype'):
         if isinstance(a.dtype, types.Boolean):
-            raise TypeError("Boolean dtype is unsupported (as per NumPy)")
-            # Numpy raises a TypeError here
+            raise TypingError("Boolean dtype is unsupported (as per NumPy)")
+            # Numpy raises a TypeError
 
     def np_ptp_impl(a):
-        arr = _asarray(a)
-        if len(arr) == 0:
-            raise ValueError('zero-size array reduction not possible')
+        arr = prepare_ptp_input(a)
 
         a_flat = arr.flat
         a_min = np.inf
@@ -746,9 +752,7 @@ def np_ptp(a):
         return a_max - a_min
 
     def np_ptp_impl_int(a):
-        arr = _asarray(a)
-        if len(arr) == 0:
-            raise ValueError('zero-size array reduction not possible')
+        arr = prepare_ptp_input(a)
 
         a_flat = arr.flat
         a_min = a_flat[0]
@@ -764,24 +768,32 @@ def np_ptp(a):
         return a_max - a_min
 
     def np_ptp_impl_complex(a):
-        arr = _asarray(a)
-        if len(arr) == 0:
-            raise ValueError('zero-size array reduction not possible')
+        arr = prepare_ptp_input(a)
 
         real_nan = np.isnan(a.real)
         imag_nan = np.isnan(a.imag)
 
         if np.any(real_nan) or np.any(imag_nan):
             return np.nan + 0j
-
         else:
-            retained_min = a[a.real == np.min(a.real)]
-            r_min = retained_min[retained_min.imag == np.min(retained_min.imag)].flat[0]
+            a_flat = arr.flat
+            a_min = a_flat[0]
+            a_max = a_flat[0]
 
-            retained_max = a[a.real == np.max(a.real)]
-            r_max = retained_max[retained_max.imag == np.max(retained_max.imag)].flat[0]
+            for i in range(1, arr.size):
+                val = a_flat[i]
 
-            return r_max - r_min
+                if val.real > a_max.real:
+                    a_max = val
+                elif val.real == a_max.real and val.imag > a_max.imag:
+                    a_max = val
+
+                if val.real < a_min.real:
+                    a_min = val
+                elif val.real == a_min.real and val.imag < a_min.imag:
+                    a_min = val
+
+            return a_max - a_min
 
     # scalar handling
     if isinstance(a, types.Integer):

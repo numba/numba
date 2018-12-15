@@ -712,7 +712,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             imag = np.linspace(-5, 5, 25)
             if imag_nan:
                 imag[7:12] = np.nan
-            return real + 1j * imag
+            return (real + 1j * imag).reshape(5, 5)
 
         comp = make_array()
         check(comp)
@@ -724,6 +724,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(comp)
 
         comp = make_array(real_nan=True, imag_nan=True)
+        check(comp)
+
+        real = np.ones(8)
+        imag = np.arange(-4, 4)
+        comp = real + 1j * imag
+        check(comp)
+        comp = real - 1j * imag
+        check(comp)
+
+        comp = np.full((4, 4), fill_value=(1 - 1j))
         check(comp)
 
     def test_ptp_exceptions(self):
