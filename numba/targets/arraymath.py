@@ -1296,7 +1296,7 @@ def np_vander(x, N=None, increasing=False):
 
 
 #----------------------------------------------------------------------------
-# Mathematical function
+# Mathematical functions
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, out_dtype):
