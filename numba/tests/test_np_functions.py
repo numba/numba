@@ -113,6 +113,8 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def interp(x, xp, fp):
+    return np.interp(x, xp, fp)
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1540,6 +1542,88 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.array((True, True, False)))
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
+        assert msg in str(e.exception)
+
+    def test_interp_basic(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        x = np.linspace(-5, 5, 25)
+        xp = np.arange(-4, 8)
+        fp = xp + 1.5
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.arange(-4, 8)
+        xp = x + 1
+        fp = x + 2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = (2.2, 3.3, -5.0)
+        xp = (2, 3, 4)
+        fp = (5, 6, 7)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = ((2.2, 3.3, -5.0), (1.2, 1.3, 4.0))
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1]).reshape(3, 2, order='F')
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = 1
+        xp = [0, 1, 2]
+        fp = (3, 4, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([])
+        xp = [0, 1, 2]
+        fp = (3, 4, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = 1
+        xp = np.arange(3)
+        fp = np.arange(3) + 1j
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+    def test_interp_exceptions(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        x = np.array([1, 2, 3])
+        xp = np.array([])
+        fp = np.array([])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "array of sample points is empty"
+        assert msg in str(e.exception)
+
+        x = 1
+        xp = np.array([1, 2, 3])
+        fp = np.array([1, 2])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "fp and xp are not of the same length."
+        assert msg in str(e.exception)
+
+        x = 1
+        xp = np.arange(6).reshape(3, 2)
+        fp = np.arange(6).reshape(3, 2)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "xp and fp must both be 1D"
         assert msg in str(e.exception)
 
 

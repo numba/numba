@@ -1294,6 +1294,57 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
+
+#----------------------------------------------------------------------------
+# Mathematical function
+
+@register_jitable
+def np_interp_impl_inner(x, xp, fp, out_dtype):
+    x_arr = _asarray(x)
+    xp_arr = _asarray(xp)
+    fp_arr = _asarray(fp)
+
+    if len(xp_arr) == 0:
+        raise ValueError('array of sample points is empty')
+
+    if len(xp_arr) != len(fp_arr):
+        raise ValueError('fp and xp are not of the same length.')
+
+    out = np.empty(x_arr.shape, dtype=out_dtype)
+
+    for i in range(x_arr.size):
+        if x_arr.flat[i] <= xp_arr[0]:
+            out.flat[i] = fp_arr[0]
+        elif x_arr.flat[i] >= xp_arr[-1]:
+            out.flat[i] = fp_arr[-1]
+        else:
+            idx = np.searchsorted(xp_arr, x_arr.flat[i])
+            f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
+            out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])
+
+    return out
+
+@overload(np.interp)
+def np_interp(x, xp, fp):
+
+    for param in xp, fp:
+        if hasattr(param, 'ndim') and param.ndim > 1:
+            raise TypingError('xp and fp must both be 1D')
+
+    fp_dt = determine_dtype(fp)
+    dtype = np.result_type(fp_dt, np.float64)
+
+    def np_interp_impl(x, xp, fp):
+        return np_interp_impl_inner(x, xp, fp, dtype)
+
+    def np_interp_scalar_impl(x, xp, fp):
+        return np_interp_impl_inner(x, xp, fp, dtype).flat[0]
+
+    if isinstance(x, types.Number):
+        return np_interp_scalar_impl
+
+    return np_interp_impl
+
 #----------------------------------------------------------------------------
 # Statistics
 
