@@ -1334,8 +1334,7 @@ def np_interp(x, xp, fp):
             raise TypingError('xp and fp must both be 1D')
 
     complex_dtype_msg = (
-        "Cannot cast array data from dtype('complex128') "
-        "to dtype('float64') according to the rule 'safe'"
+        "Cannot cast array data from complex dtype to float64 dtype"
     )
 
     if hasattr(xp, 'dtype'):

@@ -1584,11 +1584,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = (3, 4, 5)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        for x in range(-2, 4):
-            xp = np.arange(3) + 0.01
-            fp = np.arange(3) + 1j
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
-
         x = np.linspace(0, 25, 60).reshape(3, 4, 5)
         xp = np.arange(20)
         fp = xp - 10
@@ -1607,6 +1602,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.rnd.shuffle(xp)
             _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+    @unittest.skipUnless(np_version >= (1, 12), "complex dtype handling changed Numpy 1.12+")
+    def test_interp_complex_egde_case(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        for x in range(-2, 4):
+            xp = np.arange(3) + 0.01
+            fp = np.arange(3) + 1j
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # note: in versions of NumPy prior to 1.12, this test causes
+        # Numpy to raise: TypeError: Cannot cast array data from
+        # dtype('complex128')  to dtype('float64') according to the
+        # rule 'safe'
 
     def test_interp_exceptions(self):
         pyfunc = interp
@@ -1653,8 +1664,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         complex_dtype_msg = (
-            "Cannot cast array data from dtype('complex128') "
-            "to dtype('float64') according to the rule 'safe'"
+            "Cannot cast array data from complex dtype "
+            "to float64 dtype"
         )
         assert complex_dtype_msg in str(e.exception)
 
