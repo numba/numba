@@ -285,6 +285,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
