@@ -1294,7 +1294,6 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
-
 #----------------------------------------------------------------------------
 # Mathematical functions
 
@@ -1313,11 +1312,14 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
     out = np.empty(x_arr.shape, dtype=out_dtype)
 
     for i in range(x_arr.size):
-        if x_arr.flat[i] <= xp_arr[0]:
-            out.flat[i] = fp_arr[0]
-        elif x_arr.flat[i] >= xp_arr[-1]:
+        if x_arr.flat[i] > xp_arr[-1]:
             out.flat[i] = fp_arr[-1]
+        elif x_arr.flat[i] < xp_arr[0]:
+            out.flat[i] = fp_arr[0]
         else:
+            # using searchsorted looks unwise as there's nothing
+            # which requires xp to actually be sorted at this point
+            # but we replicate NumPy behaviour in this regard
             idx = np.searchsorted(xp_arr, x_arr.flat[i])
             f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
             out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])

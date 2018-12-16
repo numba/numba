@@ -1574,20 +1574,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.arange(-5, 5)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        x = 1
-        xp = [0, 1, 2]
-        fp = (3, 4, 5)
-        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        for x in range(-2, 4):
+            xp = [0, 1, 2]
+            fp = (3, 4, 5)
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
 
         x = np.array([])
         xp = [0, 1, 2]
         fp = (3, 4, 5)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        x = 1
-        xp = np.arange(3)
-        fp = np.arange(3) + 1j
+        for x in range(-2, 4):
+            xp = np.arange(3) + 0.01
+            fp = np.arange(3) + 1j
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(0, 25, 60).reshape(3, 4, 5)
+        xp = np.arange(20)
+        fp = xp - 10
         _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.nan
+        xp = np.full(5, np.nan)
+        fp = np.full(5, np.nan)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # xp not sorted
+        for x in np.arange(-4, 10):
+            xp = np.array([5, 4, 3, 2, 1])
+            fp = np.array([1, 2, 3, 4, 5])
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+            self.rnd.shuffle(xp)
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
 
     def test_interp_exceptions(self):
         pyfunc = interp
