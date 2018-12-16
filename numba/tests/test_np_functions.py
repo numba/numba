@@ -1626,6 +1626,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "xp and fp must both be 1D"
         assert msg in str(e.exception)
 
+        x = 1 + 1j
+        xp = np.arange(6)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        complex_dtype_msg = (
+            "Cannot cast array data from dtype('complex128') "
+            "to dtype('float64') according to the rule 'safe'"
+        )
+        assert complex_dtype_msg in str(e.exception)
+
+        x = 1
+        xp = np.arange(6) + 1j
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        assert complex_dtype_msg in str(e.exception)
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
