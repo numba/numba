@@ -1604,7 +1604,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params={'x': x, 'xp': xp, 'fp': fp})
 
     @unittest.skipUnless(np_version >= (1, 12), "complex dtype handling changed Numpy 1.12+")
-    def test_interp_complex_egde_case(self):
+    def test_interp_complex_edge_case(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
