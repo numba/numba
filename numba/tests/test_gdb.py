@@ -207,6 +207,7 @@ TestGdbBinding.generate()
 @needs_gdb
 class TestGdbMisc(TestCase):
 
+    @long_running
     def test_call_gdb_twice(self):
         def gen(f1, f2):
             @njit
