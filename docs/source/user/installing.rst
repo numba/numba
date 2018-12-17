@@ -16,6 +16,7 @@ Our supported platforms are:
 * OS X 10.9 and later (64-bit)
 * NVIDIA GPUs of compute capability 2.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
+* ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 
 :ref:`numba-parallel` is only available on 64-bit platforms,
 and is not supported in Python 2.7 on Windows.
@@ -89,22 +90,24 @@ Then:
 See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
 sample notebooks.
 
+
+Installing on Linux ARMv7 Platforms
+-----------------------------------
+
+`Berryconda <https://https://github.com/jjhelmus/berryconda>`_ is a
+conda-based Python distribution for the Raspberry Pi.  We are now uploading
+packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
+ARMv7-based boards, which currently incudes the the Raspberry Pi 2 and 3,
+but not the Pi 1 or Zero.  These can be installed using conda from the
+``numba`` channel::
+
+    $ conda install -c numba numba
+
+Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
+not been tested.
+
+
 .. Hide this until we have the conda packages available
-    Installing on Linux ARMv7 Platforms
-    -----------------------------------
-
-    `Berryconda <https://https://github.com/jjhelmus/berryconda>`_ is a
-    conda-based Python distribution for the Raspberry Pi.  We are now uploading
-    packages to the ``numba`` channel on Anaconda Cloud for ARMv7-based boards,
-    which currently incudes the the Raspberry Pi 2 and 3, but not the Pi 1 or
-    Zero.  These can be installed using conda from the ``numba`` channel::
-
-        $ conda install -c numba numba
-
-    Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
-    not been tested.
-
-
     Installing on Linux ARMv8 (AArch64) Platforms
     ---------------------------------------------
 
