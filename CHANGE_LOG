@@ -11,7 +11,7 @@ Here are some enhancements from contributed PRs:
 - #3532. Daniel Wennberg improved the ``cuda.{pinned, mapped}`` API so that
   the associated memory is released immediately at the exit of the context
   manager.
-- #3531. Dimitri Vorona enabled the inlining of jitclass method.
+- #3531. Dimitri Vorona enabled the inlining of jitclass methods.
 - #3516. Simon Perkins added the support for passing numpy dtypes (i.e.
   ``np.dtype("int32")``) and their type constructor into (i.e. ``np.int32``)
   a jitted function.
