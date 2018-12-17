@@ -173,7 +173,7 @@ specified neighborhood, **the behavior is undefined.**
 .. _stencil-mode:
 
 ``func_or_mode``
---------
+----------------
 
 The optional ``func_or_mode`` parameter controls how the border of the output array
 is handled.  Currently, there is only one supported value, ``"constant"``.
