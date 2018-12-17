@@ -3932,7 +3932,7 @@ class ReduceInfer(AbstractTemplate):
 
 
 def ensure_parallel_support():
-    """Check if the platform supports parallel=True and raise if it is not.
+    """Check if the platform supports parallel=True and raise if it does not.
     """
     is_win32 = config.IS_WIN32
     is_py2 = not utils.IS_PY3

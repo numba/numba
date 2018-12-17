@@ -158,7 +158,6 @@ def self_test():
     _TestModule().check_module(mod)
 
 
-
 @jit(parallel=True, cache=True, nopython=True)
 def parfor_usecase(ary):
     return ary * ary + ary
