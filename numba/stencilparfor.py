@@ -280,39 +280,22 @@ class StencilPass(object):
 
                 # get slice ref
                 slice_var = ir.Var(scope, mk_unique_var("$py_g_var"), loc)
-                for fn, tmplt in numba.typing.templates.builtin_registry.globals:
-                    if fn == slice:
-                        slice_template = tmplt
-                        break
-                else:
-                    raise RuntimeError("No template for 'slice' could be found")
-
-                self.typemap[slice_var.name] = slice_template
+                slice_fn_ty = self.typingctx.resolve_value_type(slice)
+                self.typemap[slice_var.name] = slice_fn_ty
                 slice_g = ir.Global('slice', slice, loc)
                 slice_assigned = ir.Assign(slice_g, slice_var, loc)
                 init_block.body.append(slice_assigned)
 
-                noneinst = types.NoneType('none')
+                sig = self.typingctx.resolve_function_type(slice_fn_ty,
+                                                           (types.none,) * 2,
+                                                           {})
 
-                # inputs to slice
-                inputs = []
-                for _ in range(2):
-                    none_const_val = ir.Const(None, loc)
-                    none_const_var = ir.Var(scope, mk_unique_var("$none_const"),
-                                            loc)
-                    self.typemap[none_const_var.name] = noneinst
-                    none_const_assign = ir.Assign(none_const_val,
-                                                  none_const_var, loc)
-                    init_block.body.append(none_const_assign)
-                    inputs.append(none_const_var)
-
-                # call to get slice(None, None)
-                callexpr = ir.Expr.call(func=slice_var, args=inputs, kws=(),
+                callexpr = ir.Expr.call(func=slice_var, args=(), kws=(),
                                         loc=loc)
-                #(none, none) -> slice<a:b>
-                sig = signature(types.slice2_type, noneinst, noneinst)
+
                 self.calltypes[callexpr] = sig
-                slice_inst_var = ir.Var(scope, mk_unique_var("$slice_inst"), loc)
+                slice_inst_var = ir.Var(scope, mk_unique_var("$slice_inst"),
+                                        loc)
                 self.typemap[slice_inst_var.name] = types.slice2_type
                 slice_assign = ir.Assign(callexpr, slice_inst_var, loc)
                 init_block.body.append(slice_assign)
