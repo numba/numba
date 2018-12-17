@@ -1856,7 +1856,7 @@ def raise_on_unsupported_feature(func_ir):
                 # check global function
                 found = False
                 if isinstance(val, pytypes.FunctionType):
-                    found = val == numba.gdb or val == numba.gdb_init
+                    found = val in {numba.gdb, numba.gdb_init}
                 if not found: # freevar bind to intrinsic
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
@@ -1873,4 +1873,3 @@ def raise_on_unsupported_feature(func_ir):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
-    pass
