@@ -10,10 +10,14 @@ from numba.extending import overload, intrinsic
 
 _path = os.path.dirname(__file__)
 
+_platform = sys.platform
+_unix_like = (_platform.startswith('linux') or
+              _platform.startswith('darwin') or
+              ('bsd' in _platform))
 
 def _confirm_gdb():
-    if not sys.platform.startswith('linux'):
-        raise RuntimeError('gdb is only available on linux')
+    if not (not _unix_like):
+        raise RuntimeError('gdb support is only available on unix-like systems')
     gdbloc = config.GDB_BINARY
     if not (os.path.exists(gdbloc) and os.path.isfile(gdbloc)):
         msg = ('Is gdb present? Location specified (%s) does not exist. The gdb'
@@ -25,7 +29,6 @@ def _confirm_gdb():
 
 @overload(gdb)
 def hook_gdb(*args):
-
     _confirm_gdb()
     gdbimpl = gen_gdb_impl(args, True)
 

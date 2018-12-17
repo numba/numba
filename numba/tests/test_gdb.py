@@ -14,9 +14,15 @@ from numba import unittest_support as unittest
 
 from .support import (TestCase, captured_stdout, tag)
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
-from .test_parfors import linux_only
 
-_linux = sys.platform.startswith('linux')
+_platform = sys.platform
+
+_unix_like = (_platform.startswith('linux') or
+              _platform.startswith('darwin') or
+              ('bsd' in _platform))
+
+unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
+not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
 
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
@@ -57,7 +63,7 @@ def impl_gdb_split_init_and_break_w_parallel(a):
         print(a, b, c, d)
 
 
-@linux_only
+@unix_only
 class TestGdbBindImpls(TestCase):
     """
     Contains unit test implementations for gdb binding testing. Test must be
@@ -118,7 +124,7 @@ class TestGdbBindImpls(TestCase):
             _dbg_jit(impl_gdb_split_init_and_break_w_parallel)(10)
 
 
-@linux_only
+@unix_only
 @needs_gdb
 class TestGdbBinding(TestCase):
     """
@@ -197,7 +203,7 @@ class TestGdbBinding(TestCase):
 TestGdbBinding.generate()
 
 
-@linux_only
+@unix_only
 @needs_gdb
 class TestGdbMisc(TestCase):
 
@@ -232,6 +238,21 @@ class TestGdbMisc(TestCase):
             return a + b
 
         check(use_globals)
+
+
+@not_unix
+class TestGdbExceptions(TestCase):
+
+    def test_call_gdb(self):
+        def nop_compiler(x): return x
+        for compiler in [nop_compiler, jit(forceobj=True), njit]:
+            for meth in [gdb, gdb_init]:
+                def python_func():
+                    meth()
+                with self.assertRaises(errors.TypingError) as raises:
+                    compiler(python_func)()
+                msg = "gdb support is only available on unix-like systems"
+                self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
