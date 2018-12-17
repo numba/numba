@@ -502,6 +502,17 @@ Numba's ``gdb`` related functions make use of a ``gdb`` binary, the location and
 name of this binary can be configured via the :envvar:`NUMBA_GDB_BINARY`
 environment variable if desired.
 
+.. note:: Numba's ``gdb`` support requires the ability for ``gdb`` to attach to
+          another process. On some systems (notably Ubuntu Linux) default
+          security restrictions placed on ``ptrace`` prevent this from being
+          possible. This restriction is enforced at the system level by the
+          Linux security module `Yama`. Documentation for this module and the
+          security implications of making changes to its behaviour can be found
+          in the `Linux Kernel documentation <https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst>`_.
+          The `Ubuntu Linux security documentation <https://wiki.ubuntu.com/Security/Features#ptrace>`_
+          discusses how to adjust the behaviour of `Yama` on with regards to
+          ``ptrace_scope`` so as to permit the required behaviour.
+
 Basic ``gdb`` support
 ---------------------
 
