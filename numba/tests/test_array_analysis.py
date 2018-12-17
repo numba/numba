@@ -873,5 +873,19 @@ class TestArrayAnalysisParallelRequired(TestCase):
         except IndexError:
             self.fail("test_bug2537 raised IndexError!")
 
+    @skip_unsupported
+    def test_global_namedtuple(self):
+        Row = namedtuple('Row', ['A'])
+        row = Row(3)
+
+        def test_impl():
+            rr = row
+            res = rr.A
+            if res == 2:
+                res = 3
+            return res
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
 if __name__ == '__main__':
     unittest.main()
