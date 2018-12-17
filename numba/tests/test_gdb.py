@@ -245,7 +245,8 @@ class TestGdbMisc(TestCase):
 class TestGdbExceptions(TestCase):
 
     def test_call_gdb(self):
-        def nop_compiler(x): return x
+        def nop_compiler(x):
+            return x
         for compiler in [nop_compiler, jit(forceobj=True), njit]:
             for meth in [gdb, gdb_init]:
                 def python_func():

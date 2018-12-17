@@ -15,6 +15,7 @@ _unix_like = (_platform.startswith('linux') or
               _platform.startswith('darwin') or
               ('bsd' in _platform))
 
+
 def _confirm_gdb():
     if not _unix_like:
         raise RuntimeError('gdb support is only available on unix-like systems')
