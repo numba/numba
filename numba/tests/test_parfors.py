@@ -2426,6 +2426,16 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_unsupported
+    def test_parfor_slice19(self):
+        # issues #3561 and #3554, empty slice binop
+        def test_impl(X):
+            X[:0] += 1
+            return X
+
+        self.check(test_impl, np.ones(10))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
