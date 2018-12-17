@@ -73,6 +73,10 @@ class Numpy_rules_ufunc(AbstractTemplate):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
+        if not all(output.mutable for output in explicit_outputs):
+            msg = "ufunc '{0}' called with an explicit output that is read-only"
+            raise TypingError(msg=msg.format(ufunc.__name__))
+
         # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.ArrayCompatible) else x
                       for x in args]
