@@ -815,7 +815,7 @@ class BaseContext(object):
                                             locals=locals)
 
             # Allow inlining the function inside callers.
-            codegen.add_linking_library(cres.library)
+            self.active_code_library.add_linking_library(cres.library)
             return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
@@ -1103,6 +1103,13 @@ class BaseContext(object):
             yield
         finally:
             self._codelib_stack.pop()
+
+    def add_linking_libs(self, libs):
+        """Add list of linking librarys to the *active_code_library*.
+        """
+        colib = self.active_code_library
+        for lib in libs:
+            colib.add_linking_library(lib)
 
 
 class _wrap_impl(object):

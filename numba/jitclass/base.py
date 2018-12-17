@@ -150,8 +150,9 @@ def _add_linking_libs(context, call):
     """
     Add the required libs for the callable to allow inlining.
     """
-    for lib in getattr(call, "libs", ()):
-        context.active_code_library.add_linking_library(lib)
+    libs = getattr(call, "libs", ())
+    if libs:
+        context.add_linking_libs(libs)
 
 
 def register_class_type(cls, spec, class_ctor, builder):
