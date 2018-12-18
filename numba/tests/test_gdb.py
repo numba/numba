@@ -8,9 +8,10 @@ import sys
 import threading
 from itertools import permutations
 
-from numba import njit, gdb, gdb_init, gdb_breakpoint, prange, config, errors
+from numba import njit, gdb, gdb_init, gdb_breakpoint, prange, errors
 from numba import jit
 from numba import unittest_support as unittest
+from numba.targets.gdb_hook import _confirm_gdb
 
 from .support import (TestCase, captured_stdout, tag)
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
@@ -26,9 +27,16 @@ not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
 
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
-_gdbloc = config.GDB_BINARY
-_has_gdb = (os.path.exists(_gdbloc) and os.path.isfile(_gdbloc))
-needs_gdb = unittest.skipUnless(_has_gdb, "gdb binary is required")
+
+# check if gdb is present and working
+try:
+    _confirm_gdb()
+    _HAVE_GDB = True
+except Exception:
+    _HAVE_GDB = False
+
+_msg = "functioning gdb with correct ptrace permissions is required"
+needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
 long_running = tag('long_running')
 
 _dbg_njit = njit(debug=True)
