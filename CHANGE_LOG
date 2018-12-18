@@ -1,10 +1,11 @@
 Version 0.42.0
 --------------
 
-In this release, the major features are:
+In this release the major features are:
 
-- Launching and attaching the GDB debugger from within a jitted function.
-- Upgrading to LLVM 7.
+- The capability to launch and attach the GDB debugger from within a jitted
+  function.
+- The upgrading of LLVM to version 7.0.0.
 
 Here are some enhancements from contributed PRs:
 
@@ -13,9 +14,9 @@ Here are some enhancements from contributed PRs:
   manager.
 - #3531. Dimitri Vorona enabled the inlining of jitclass methods.
 - #3516. Simon Perkins added the support for passing numpy dtypes (i.e.
-  ``np.dtype("int32")``) and their type constructor into (i.e. ``np.int32``)
+  ``np.dtype("int32")``) and their type constructor (i.e. ``np.int32``) into
   a jitted function.
-- #3509. Rob Ennis added support of ``np.corrcoef``.
+- #3509. Rob Ennis added support for ``np.corrcoef``.
 
 A regression issue (#3554, #3461) relating to making an empty slice in parallel
 mode is resolved by #3558.
