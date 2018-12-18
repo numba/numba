@@ -534,6 +534,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
     }
 
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    self->exact_match_required |= self->can_compile;
+
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,

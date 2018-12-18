@@ -51,8 +51,6 @@ class Flags(utils.ConfigOptions):
         'error_model': 'python',
         'fastmath': False,
         'noalias': False,
-        # exact match will compile a new function unless there's an exact match!
-        'exact_match_required': False,
     }
 
 
