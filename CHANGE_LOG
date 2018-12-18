@@ -22,43 +22,43 @@ mode is resolved by #3558.
 
 General Enhancements:
 
-* PR #3611: gdb test guard needs to ack ptrace permissions
-* PR #3606: Improve the accuracy of error message wording for undefined type.
-* PR #3605: Add guard for writing to read only arrays from ufunc calls
-* PR #3597: Warn users if threading backend init unsafe.
-* PR #3596: Fix Array Analysis for Global Namedtuples
-* PR #3587: Fix llvm.memset usage changes in llvm7
-* PR #3583: Use `ir.unknown_loc` for unknown `Loc`, as #3390 with tests
-* PR #3580: Use alias information when determining whether it is safe to
-  reorder statements.
-* PR #3577: Fix example and docs typos for `objmode` context manager.
-* PR #3576: Add special copy routine for NumPy out arrays
-* PR #3567: Fix unifying literal types in namedtuple
-* PR #3566: Skip alignment tests on armv7l.
-* PR #3558: Fixes array analysis for inplace binary operators.
-* PR #3549: ParallelAccelerator caching improvements
-* PR #3544: Add `long_running` test flag and feature to exclude tests.
-* PR #3543: Avoid implementation error being hidden by the try-except
-* PR #3538: Avoid future C-level assertion error due to invalid visibility
-* PR #3531: Fix jitclass method inlining and avoid unnecessary increfs
-* PR #3520: Fix @stencil ignoring cval if out kwarg supplied.
-* PR #3516: Typeof dtype values
-* PR #3509: Support for np.corrcoef
-* PR #3437: Changes to accommodate LLVM 7.0.x
 * PR #3392: Launch and attach gdb directly from Numba.
+* PR #3437: Changes to accommodate LLVM 7.0.x
+* PR #3509: Support for np.corrcoef
+* PR #3516: Typeof dtype values
+* PR #3520: Fix @stencil ignoring cval if out kwarg supplied.
+* PR #3531: Fix jitclass method inlining and avoid unnecessary increfs
+* PR #3538: Avoid future C-level assertion error due to invalid visibility
+* PR #3543: Avoid implementation error being hidden by the try-except
+* PR #3544: Add `long_running` test flag and feature to exclude tests.
+* PR #3549: ParallelAccelerator caching improvements
+* PR #3558: Fixes array analysis for inplace binary operators.
+* PR #3566: Skip alignment tests on armv7l.
+* PR #3567: Fix unifying literal types in namedtuple
+* PR #3576: Add special copy routine for NumPy out arrays
+* PR #3577: Fix example and docs typos for `objmode` context manager.
+  reorder statements.
+* PR #3580: Use alias information when determining whether it is safe to
+* PR #3583: Use `ir.unknown_loc` for unknown `Loc`, as #3390 with tests
+* PR #3587: Fix llvm.memset usage changes in llvm7
+* PR #3596: Fix Array Analysis for Global Namedtuples
+* PR #3597: Warn users if threading backend init unsafe.
+* PR #3605: Add guard for writing to read only arrays from ufunc calls
+* PR #3606: Improve the accuracy of error message wording for undefined type.
+* PR #3611: gdb test guard needs to ack ptrace permissions
 
 CUDA Enhancements:
 
-* PR #3578: Align cuda and cuda simulator kwarg names.
-* PR #3552: Handle broadcast arrays correctly in host->device transfer.
 * PR #3532: Unregister temporarily pinned host arrays at once
+* PR #3552: Handle broadcast arrays correctly in host->device transfer.
+* PR #3578: Align cuda and cuda simulator kwarg names.
 
 Documentation Updates:
 
-* PR #3594: Changing `@stencil` docs to correctly reflect `func_or_mode` param
-* PR #3581: Fixing minor typo in `reference/types.rst`
-* PR #3570: Minor documentation fixes for numba.cuda
 * PR #3545: Fix @njit description in 5 min guide
+* PR #3570: Minor documentation fixes for numba.cuda
+* PR #3581: Fixing minor typo in `reference/types.rst`
+* PR #3594: Changing `@stencil` docs to correctly reflect `func_or_mode` param
 
 Contributors:
 
