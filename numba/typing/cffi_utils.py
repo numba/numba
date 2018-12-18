@@ -7,8 +7,10 @@ from __future__ import print_function, division, absolute_import
 
 from types import BuiltinFunctionType
 import ctypes
+import numpy as np
 
 from numba import types
+from numba import numpy_support
 from numba.errors import TypingError
 from . import templates
 
@@ -113,6 +115,20 @@ def map_type(cffi_type):
             return types.CPointer(map_type(pointee))
     elif kind == 'array':
         return map_type(cffi_type.item)
+    elif kind == 'struct':
+        fields = {
+            'names': [],
+            'formats': [],
+            'offsets': [],
+            'itemsize': ffi.sizeof(cffi_type),
+        }
+        for k, v in cffi_type.fields:
+            # TODO guard .bitsize, .bitshift, .flags
+            dtype = numpy_support.as_dtype(map_type(v.type))
+            fields['names'].append(k)
+            fields['formats'].append(dtype)
+            fields['offsets'].append(v.offset)
+        return numpy_support.from_dtype(np.dtype(fields))
     else:
         result = _type_map().get(cffi_type)
         if result is None:
