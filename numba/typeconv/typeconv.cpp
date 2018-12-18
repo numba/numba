@@ -109,19 +109,23 @@ TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
 
 int TypeManager::selectOverload(const Type sig[], const Type ovsigs[],
                                 int &selected,
-                                int sigsz, int ovct, bool allow_unsafe) const {
+                                int sigsz, int ovct, bool allow_unsafe,
+                                bool exact_match_required
+                               ) const {
     int count;
     if (ovct <= 16) {
         Rating ratings[16];
         int candidates[16];
         count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                allow_unsafe, ratings, candidates);
+                                allow_unsafe, exact_match_required, ratings,
+                                candidates);
     }
     else {
         Rating *ratings = new Rating[ovct];
         int *candidates = new int[ovct];
         count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                allow_unsafe, ratings, candidates);
+                                allow_unsafe, exact_match_required, ratings,
+                                candidates);
         delete [] ratings;
         delete [] candidates;
     }
@@ -130,8 +134,8 @@ int TypeManager::selectOverload(const Type sig[], const Type ovsigs[],
 
 int TypeManager::_selectOverload(const Type sig[], const Type ovsigs[],
                                  int &selected, int sigsz, int ovct,
-                                 bool allow_unsafe, Rating ratings[],
-                                 int candidates[]) const {
+                                 bool allow_unsafe, bool exact_match_required,
+                                 Rating ratings[], int candidates[]) const {
     // Generate rating table
     // Use a penalize scheme.
     int nb_candidates = 0;
@@ -143,7 +147,8 @@ int TypeManager::_selectOverload(const Type sig[], const Type ovsigs[],
         for (int j = 0; j < sigsz; ++j) {
             TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
             if (tcc == TCC_FALSE ||
-                (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe)) {
+                (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe) ||
+                (tcc != TCC_EXACT && exact_match_required)) {
                 // stop the loop early
                 goto _incompatible;
             }

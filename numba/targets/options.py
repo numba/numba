@@ -72,6 +72,9 @@ class TargetOptions(object):
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
 
+        if kws.pop('exact_match_required', False):
+            flags.set('exact_match_required')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

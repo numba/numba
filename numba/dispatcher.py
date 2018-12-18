@@ -166,7 +166,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func, pysig, can_fallback):
+    def __init__(self, arg_count, py_func, pysig, can_fallback,
+                 exact_match_required):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
@@ -191,7 +192,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         arg_count, self._fold_args,
                                         argnames, defargs,
                                         can_fallback,
-                                        has_stararg)
+                                        has_stararg,
+                                        exact_match_required)
 
         self.doc = py_func.__doc__
         self._compiling_counter = _CompilingCounter()
@@ -541,7 +543,10 @@ class Dispatcher(_DispatcherBase):
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
         can_fallback = not targetoptions.get('nopython', False)
-        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback)
+        exact_match_required = targetoptions.get('exact_match_required', False)
+
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
+                                 exact_match_required)
 
         functools.update_wrapper(self, py_func)
 

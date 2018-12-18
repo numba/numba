@@ -232,6 +232,7 @@ class CPUTargetOptions(TargetOptions):
         "fastmath": bool,
         "error_model": str,
         "parallel": ParallelOptions,
+        "exact_match_required": bool,
     }
 
 

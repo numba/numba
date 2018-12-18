@@ -165,6 +165,7 @@ class FunctionTemplate(object):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
+    exact_match_required = False
 
     # Whether the typing support literals
     support_literals = False
@@ -175,6 +176,7 @@ class FunctionTemplate(object):
     def _select(self, cases, args, kws):
         options = {
             'unsafe_casting': self.unsafe_casting,
+            'exact_match_required': self.exact_match_required,
         }
         selected = self.context.resolve_overload(self.key, cases, args, kws,
                                                  **options)
