@@ -434,9 +434,12 @@ class CallConstraint(object):
         # Check argument to be precise
         for a in itertools.chain(pos_args, kw_args.values()):
             if not a.is_precise():
+                # Allow array of undefined dtype
+                if isinstance(a, types.Array):
+                    pass
                 # Getitem on non-precise array is allowed to
                 # support array-comprehension
-                if fnty == operator.getitem and isinstance(pos_args[0], types.Array):
+                elif fnty == operator.getitem and isinstance(pos_args[0], types.Array):
                     pass
                 # Otherwise, don't compute type yet
                 else:
