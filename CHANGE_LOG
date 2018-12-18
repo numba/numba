@@ -22,6 +22,7 @@ mode is resolved by #3558.
 
 General Enhancements:
 
+* PR #3611: gdb test guard needs to ack ptrace permissions
 * PR #3606: Improve the accuracy of error message wording for undefined type.
 * PR #3605: Add guard for writing to read only arrays from ufunc calls
 * PR #3597: Warn users if threading backend init unsafe.
