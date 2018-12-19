@@ -18,9 +18,9 @@ from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
 _platform = sys.platform
 
-_unix_like = (_platform.startswith('linux') or
-              _platform.startswith('darwin') or
-              ('bsd' in _platform))
+_unix_like = (_platform.startswith('linux')
+              or _platform.startswith('darwin')
+              or ('bsd' in _platform))
 
 unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
 not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
@@ -158,7 +158,7 @@ class TestGdbBinding(TestCase):
             popen.stdout.flush()
             popen.stderr.flush()
             popen.kill()
-        timeout = threading.Timer(20., kill)
+        timeout = threading.Timer(120., kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -196,10 +196,17 @@ class TestGdbBinding(TestCase):
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
+
+        decs = []
         if 'quick' in name:
-            setattr(cls, methname, test_template)
-        else:
-            setattr(cls, methname, long_running(test_template))
+            decs.append(long_running)
+        if 'parallel' in name:
+            decs.append(parfors_skip_unsupported)
+
+        for dec in decs:
+            test_template = dec(test_template)
+
+        setattr(cls, methname, test_template)
 
     @classmethod
     def generate(cls):

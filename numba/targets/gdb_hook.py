@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 import os
+import platform
 import sys
 
 from llvmlite import ir
@@ -11,9 +12,15 @@ from numba.extending import overload, intrinsic
 _path = os.path.dirname(__file__)
 
 _platform = sys.platform
-_unix_like = (_platform.startswith('linux') or
-              _platform.startswith('darwin') or
-              ('bsd' in _platform))
+_unix_like = (_platform.startswith('linux')
+              or _platform.startswith('darwin')
+              or ('bsd' in _platform))
+
+_is_armv7l = platform.machine() == 'armv7l'
+
+# RPi has a slower CPU, increase wait time for parent,
+# about 15s seems ok on 1.4GHz clock
+_WAIT_TIME = 15 if _is_armv7l else 10
 
 
 def _confirm_gdb():
@@ -170,7 +177,7 @@ def init_gdb_codegen(cgctx, builder, signature, args,
             builder.call(execl, buf)
         with orelse:
             # is parent
-            builder.call(sleep, (int32_t(10),))
+            builder.call(sleep, (int32_t(_WAIT_TIME),))
             # if breaking is desired, break now
             if do_break is True:
                 builder.call(breakpoint, tuple())
