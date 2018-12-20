@@ -33,7 +33,7 @@ Short Term: 2019H1
   * Trap more unsupported features earlier in pipeline (especially things that parfors can’t handle)
   * Error messages
   * Diagnostic tools for debugging and understanding performance
-  * Better on-boarding for new users and contributors (new homepage, revise docs, more examples)
+  * Better on-boarding for new users and contributors (revise docs, more examples)
 
 * Begin refactoring existing features that cause common bug reports:
 
