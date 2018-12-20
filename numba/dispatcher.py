@@ -543,10 +543,9 @@ class Dispatcher(_DispatcherBase):
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
         can_fallback = not targetoptions.get('nopython', False)
-        exact_match_required = targetoptions.get('exact_match_required', False)
 
         _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
-                                 exact_match_required)
+                                 exact_match_required=False)
 
         functools.update_wrapper(self, py_func)
 
@@ -735,7 +734,8 @@ class LiftedCode(_DispatcherBase):
         _DispatcherBase.__init__(self, self.func_ir.arg_count,
                                  self.func_ir.func_id.func,
                                  self.func_ir.func_id.pysig,
-                                 can_fallback=True)
+                                 can_fallback=True,
+                                 exact_match_required=False)
 
     def get_source_location(self):
         """Return the starting line number of the loop.

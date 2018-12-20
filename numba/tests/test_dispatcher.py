@@ -543,6 +543,33 @@ class TestDispatcher(BaseTest):
         check("F_contig_aligned", F_contig_aligned)
         check("C_contig_misaligned", C_contig_misaligned)
 
+    def test_dispatch_recompiles_for_scalars(self):
+        # for context #3612, essentially, compiling a lambda x:x for a
+        # numerically wide type (everything can be converted to a complex128)
+        # and then calling again with e.g. an int32 would lead to the int32
+        # being converted to a complex128 whereas it ought to compile an int32
+        # specialization.
+        def foo(x):
+            return x
+
+        # jit and compile on dispatch for 3 scalar types, expect 3 signatures
+        jitfoo = jit(nopython=True)(foo)
+        jitfoo(np.complex128(1 + 2j))
+        jitfoo(np.int32(10))
+        jitfoo(np.bool_(False))
+        self.assertEqual(len(jitfoo.signatures), 3)
+        expected_sigs = [(types.complex128,), (types.int32,), (types.bool_,)]
+        self.assertEqual(jitfoo.signatures, expected_sigs)
+
+        # now jit with signatures so recompilation is forbidden
+        # expect 1 signature and type conversion
+        jitfoo = jit([(types.complex128,)], nopython=True)(foo)
+        jitfoo(np.complex128(1 + 2j))
+        jitfoo(np.int32(10))
+        jitfoo(np.bool_(False))
+        self.assertEqual(len(jitfoo.signatures), 1)
+        expected_sigs = [(types.complex128,)]
+        self.assertEqual(jitfoo.signatures, expected_sigs)
 
 class TestSignatureHandling(BaseTest):
     """
