@@ -82,10 +82,17 @@ class ConstantInference(object):
         if expr.kws or expr.vararg:
             self._fail(expr)
         # Check supported callables
-        if (func in (slice,) or
-            (isinstance(func, type) and issubclass(func, BaseException))):
+        if func in (slice,):
+                return func(*args)
+
+        if isinstance(func, type) and issubclass(func, BaseException):
             args = [self.infer_constant(a.name) for a in expr.args]
-            return func(*args)
+            # If the exception class is user defined it may implement a ctor
+            # that does not pass the args to the super. Therefore return the raw
+            # class and the args so this can be instantiated at the call
+            # site in the way the user source expects it to be
+            return func, args
+
         self._fail(expr)
 
     def _infer_getattr(self, value, expr):
