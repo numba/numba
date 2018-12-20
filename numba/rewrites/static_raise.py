@@ -21,8 +21,11 @@ class RewriteConstRaises(Rewrite):
         """
         Break down constant exception.
         """
-        if isinstance(const, BaseException):
-            return const.__class__, const.args
+        if isinstance(const, tuple): # it's a tuple(exception class, args)
+            if not self._is_exception_type(const[0]):
+                raise NotImplementedError("unsupported exception constant %r"
+                                          % (const[0],))
+            return const[0], tuple(const[1])
         elif self._is_exception_type(const):
             return const, None
         else:

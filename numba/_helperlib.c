@@ -885,7 +885,7 @@ numba_do_raise(PyObject *exc_packed)
         /* Unpack a (class/inst/tuple, arguments, location) tuple. */
         if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
             Py_DECREF(exc_packed);
-            goto raise_error;
+            goto raise_error_w_loc;
         }
 
         if (exc == Py_None) {
@@ -919,13 +919,13 @@ numba_do_raise(PyObject *exc_packed)
         Py_XINCREF(loc);
         if (PyExceptionClass_Check(exc)) {
             /* It is a class, type used here just as a tmp var */
-            type = PyObject_CallObject(exc, NULL);
+            type = PyObject_CallObject(exc, value);
             if (type == NULL)
-                goto raise_error;
+                goto raise_error_w_loc;
             if (!PyExceptionInstance_Check(type)) {
                 PyErr_SetString(PyExc_TypeError,
                                 "exceptions must derive from BaseException");
-                goto raise_error;
+                goto raise_error_w_loc;
             }
             /* all ok, set type to the exc */
             Py_DECREF(type);
@@ -937,20 +937,9 @@ numba_do_raise(PyObject *exc_packed)
             Py_DECREF(exc_packed);
             PyErr_SetString(PyExc_TypeError,
                             "exceptions must derive from BaseException");
-            goto raise_error;
+            goto raise_error_w_loc;
         }
 
-        /* for injecting a frame into the traceback with location info in it */
-        if (loc != Py_None && PyTuple_Check(loc)) {
-            pos = 0;
-            function_name = PyTuple_GET_ITEM(loc, pos);
-            function_name_str = PyString_AsString(function_name);
-            pos = 1;
-            filename = PyTuple_GET_ITEM(loc, pos);
-            filename_str = PyString_AsString(filename);
-            pos = 2;
-            lineno = PyTuple_GET_ITEM(loc, pos);
-        }
         /* as this branch is exited:
          * - type should be an exception class
          * - value should be the args for the exception class instantiation
@@ -986,7 +975,7 @@ numba_do_raise(PyObject *exc_packed)
         /* exc should be an exception class or an instance of an exception */
         if (PyExceptionClass_Check(exc)) {
             type = exc;
-            value = PyObject_CallObject(exc, NULL);
+            value = PyObject_CallObject(exc, value);
             if (value == NULL)
                 goto raise_error;
             if (!PyExceptionInstance_Check(value)) {
@@ -1012,9 +1001,19 @@ numba_do_raise(PyObject *exc_packed)
 
     PyErr_SetObject(type, value);
 
-    /* instance is instantiated, if loc is present add a frame for it */
-    if(loc && loc != Py_None)
+raise_error_w_loc:
+    /* instance is instantiated/internal exception is raised, if loc is present
+     * add a frame for it into the traceback */
+    if(loc && loc != Py_None && PyTuple_Check(loc))
     {
+        pos = 0;
+        function_name = PyTuple_GET_ITEM(loc, pos);
+        function_name_str = PyString_AsString(function_name);
+        pos = 1;
+        filename = PyTuple_GET_ITEM(loc, pos);
+        filename_str = PyString_AsString(filename);
+        pos = 2;
+        lineno = PyTuple_GET_ITEM(loc, pos);
         traceback_add(function_name_str, filename_str, \
                       (int)PyLong_AsLong(lineno));
     }
