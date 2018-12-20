@@ -285,13 +285,6 @@ class BaseLower(object):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
 
-    @property
-    def has_dynamic_globals(self):
-        """
-        If true, then can't cache LLVM module accross process calls.
-        """
-        return self.library.has_dynamic_globals
-
 
 # Dictionary mapping instruction class to its lowering function.
 lower_extensions = {}

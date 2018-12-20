@@ -1374,7 +1374,7 @@ class TestSequentialParForsCache(BaseCacheUsecasesTest):
         f = mod.parfor_usecase
         ary = np.ones(10)
         self.assertPreciseEqual(f(ary), ary * ary + ary)
-        dynamic_globals = [cres.has_dynamic_globals
+        dynamic_globals = [cres.library.has_dynamic_globals
                            for cres in f.overloads.values()]
         self.assertEqual(dynamic_globals, [False])
         self.check_pycache(2)  # 1 index, 1 data
