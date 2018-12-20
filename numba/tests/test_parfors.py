@@ -2577,7 +2577,7 @@ class TestParforsMisc(TestParforsBase):
         self.assertIn(expected_msg, str(warning_obj.message))
 
         # Make sure the dynamic globals flag is set
-        has_dynamic_globals = [cres.has_dynamic_globals
+        has_dynamic_globals = [cres.library.has_dynamic_globals
                                for cres in cfunc.overloads.values()]
         self.assertEqual(has_dynamic_globals, [True])
 

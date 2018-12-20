@@ -1128,16 +1128,18 @@ class TestCache(BaseCacheUsecasesTest):
         # a warning.
         mod = self.import_module()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+        for f in [mod.use_c_sin, mod.use_c_sin_nest1, mod.use_c_sin_nest2]:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always', NumbaWarning)
 
-            f = mod.use_c_sin
-            self.assertPreciseEqual(f(0.0), 0.0)
-            self.check_pycache(0)
+                self.assertPreciseEqual(f(0.0), 0.0)
+                self.check_pycache(0)
 
-        self.assertEqual(len(w), 1)
-        self.assertIn('Cannot cache compiled function "use_c_sin"',
-                      str(w[0].message))
+            self.assertEqual(len(w), 1)
+            self.assertIn(
+                'Cannot cache compiled function "{}"'.format(f.__name__),
+                str(w[0].message),
+                )
 
     def test_closure(self):
         mod = self.import_module()
@@ -1372,7 +1374,7 @@ class TestSequentialParForsCache(BaseCacheUsecasesTest):
         f = mod.parfor_usecase
         ary = np.ones(10)
         self.assertPreciseEqual(f(ary), ary * ary + ary)
-        dynamic_globals = [cres.has_dynamic_globals
+        dynamic_globals = [cres.library.has_dynamic_globals
                            for cres in f.overloads.values()]
         self.assertEqual(dynamic_globals, [False])
         self.check_pycache(2)  # 1 index, 1 data
