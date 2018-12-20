@@ -25,11 +25,16 @@ class UDEArgsToSuper(Exception):
         self.value0 = value0
 
     def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
         same = True
-        same |= self.__class__ == other.__class__
         same |= self.args == other.args
         same |= self.value0 == other.value0
         return same
+
+    def __hash__(self):
+        return hash((super(UDEArgsToSuper).__hash__(), self.value0))
+
 
 class UDENoArgSuper(Exception):
     def __init__(self, arg, value0):
@@ -38,12 +43,18 @@ class UDENoArgSuper(Exception):
         self.value0 = value0
 
     def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
         same = True
-        same |= self.__class__ == other.__class__
         same |= self.args == other.args
         same |= self.deferarg == other.deferarg
         same |= self.value0 == other.value0
         return same
+
+    def __hash__(self):
+        return hash((super(UDENoArgSuper).__hash__(), self.deferarg,
+                    self.value0))
+
 
 def raise_class(exc):
     def raiser(i):
