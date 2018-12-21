@@ -433,7 +433,7 @@ class CallConstraint(object):
 
         # Check argument to be precise
         for a in itertools.chain(pos_args, kw_args.values()):
-            # Disallow non-precise type except array of undefined dtype
+            # Forbids imprecise type except array of undefined dtype
             if not a.is_precise() and not isinstance(a, types.Array):
                 return
 
