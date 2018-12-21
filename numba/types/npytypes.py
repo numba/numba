@@ -87,7 +87,11 @@ class Record(Type):
 
 class DType(DTypeSpec, Opaque):
     """
-    Type class for Numpy dtypes.
+    Type class associated with the `np.dtype`.
+
+    i.e. :code:`assert type(np.dtype('int32')) == np.dtype`
+
+    np.dtype('int32')
     """
 
     def __init__(self, dtype):

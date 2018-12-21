@@ -193,6 +193,9 @@ def array_dot(a, b):
 def array_dot_chain(a, b):
     return a.dot(b).dot(b)
 
+def array_ctor(n, dtype):
+    return np.ones(n, dtype=dtype)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -932,6 +935,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         a = np.arange(16.).reshape(4, 4)
         np.testing.assert_equal(pyfunc(a, a), cfunc(a, a))
+
+    def test_array_ctor_with_dtype_arg(self):
+        # Test using np.dtype and np.generic (i.e. np.dtype.type) has args
+        pyfunc = array_ctor
+        cfunc = jit(nopython=True)(pyfunc)
+        n = 2
+        args = n, np.int32
+        np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+        args = n, np.dtype('int32')
+        np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+        args = n, np.float32
+        np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+        args = n, np.dtype('f4')
+        np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
 
 
 class TestArrayComparisons(TestCase):

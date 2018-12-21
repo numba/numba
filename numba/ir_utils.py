@@ -1395,11 +1395,12 @@ def build_definitions(blocks, definitions=None):
 build_defs_extensions = {}
 
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
-    """Check if a call expression is calling a numpy function, and
-    return the callee's function name and module name (both are strings),
-    or raise GuardException. For array attribute calls such as 'a.f(x)'
-    when 'a' is a numpy array, the array variable 'a' is returned
-    in place of the module name.
+    """Try to find a call expression's function and module names and return
+    them as strings for unbounded calls. If the call is a bounded call, return
+    the self object instead of module name. Raise GuardException if failed.
+
+    Providing typemap can make the call matching more accurate in corner cases
+    such as bounded call on an object which is inside another object.
     """
     require(isinstance(expr, ir.Expr) and expr.op == 'call')
     callee = expr.func
@@ -1450,7 +1451,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             attrs.append(callee_def.attr)
             if typemap and obj.name in typemap:
                 typ = typemap[obj.name]
-                if isinstance(typ, types.npytypes.Array):
+                if not isinstance(typ, types.Module):
                     return attrs[0], obj
             callee_def = definition_finder(func_ir, obj)
         else:

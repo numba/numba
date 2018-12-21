@@ -278,8 +278,15 @@ class TestCC(BasePYCCTest):
             if has_blas:
                 res = lib.vector_dot(4)
                 self.assertPreciseEqual(res, 30.0)
+            # test argsort
+            val = np.float64([2., 5., 1., 3., 4.])
+            res = lib.np_argsort(val)
+            expected = np.argsort(val)
+            self.assertPreciseEqual(res, expected)
 
             code = """if 1:
+                from numpy.testing import assert_equal
+                from numpy import float64, argsort
                 res = lib.zero_scalar(1)
                 assert res == 0.0
                 res = lib.zeros(3)
@@ -287,6 +294,10 @@ class TestCC(BasePYCCTest):
                 if %(has_blas)s:
                     res = lib.vector_dot(4)
                     assert res == 30.0
+                val = float64([2., 5., 1., 3., 4.])
+                res = lib.np_argsort(val)
+                expected = argsort(val)
+                assert_equal(res, expected)
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 

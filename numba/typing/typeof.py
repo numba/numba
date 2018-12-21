@@ -79,6 +79,7 @@ def typeof_ctypes_function(val, c):
     if is_ctypes_funcptr(val):
         return make_function_type(val)
 
+
 @typeof_impl.register(type)
 def typeof_type(val, c):
     """
@@ -88,6 +89,10 @@ def typeof_type(val, c):
         return types.ExceptionClass(val)
     if issubclass(val, tuple) and hasattr(val, "_asdict"):
         return types.NamedTupleClass(val)
+
+    if issubclass(val, np.generic):
+        return types.NumberClass(numpy_support.from_dtype(val))
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
@@ -197,6 +202,7 @@ def _typeof_enum_class(val, c):
 def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)
     return types.DType(tp)
+
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):

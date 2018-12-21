@@ -6,6 +6,7 @@ import os
 import sys
 
 from llvmlite import ir
+from llvmlite.binding import Linkage
 import llvmlite.llvmpy.core as lc
 
 from numba import cgutils
@@ -183,8 +184,11 @@ class _ModuleCompiler(object):
         library.finalize()
         for fn in library.get_defined_functions():
             if fn.name not in self.dll_exports:
-                fn.visibility = "hidden"
-
+                if fn.linkage in {Linkage.private, Linkage.internal}:
+                    # Private/Internal linkage must have "default" visibility
+                    fn.visibility = "default"
+                else:
+                    fn.visibility = 'hidden'
         return library
 
     def write_llvm_bitcode(self, output, wrap=False, **kws):

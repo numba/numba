@@ -178,6 +178,12 @@ These variables influence what is printed out during compilation of
    parallel for-loops and how many are fused together, which are associated
    with the ``parallel=True`` jit decorator option.
 
+.. envvar:: NUMBA_PARALLEL_DIAGNOSTICS
+
+   If set to an integer value between 1 and 4 (inclusive) diagnostic information
+   about parallel transforms undertaken by Numba will be written to STDOUT. The
+   higher the value set the more detailed the information produced.
+
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembler code of compiled functions.

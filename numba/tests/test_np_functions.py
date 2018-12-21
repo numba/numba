@@ -107,6 +107,9 @@ def partition(a, kth):
 def cov(m, y=None, rowvar=True, bias=False, ddof=None):
     return np.cov(m, y, rowvar, bias, ddof)
 
+def corrcoef(x, y=None, rowvar=True):
+    return np.corrcoef(x, y, rowvar)
+
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
@@ -1212,14 +1215,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                cfunc(m, ddof=ddof)
             self.assertIn('ddof must be integral value', str(raises.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
-    @needs_blas
-    def test_cov_basic(self):
-        pyfunc = cov
+    def corr_corrcoef_basic(self, pyfunc, first_arg_name):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
-        def m_variations():
+        def input_variations():
             # array inputs
             yield np.array([[0, 2], [1, 1], [2, 0]]).T
             yield self.rnd.randn(100).reshape(5, 20)
@@ -1248,8 +1248,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield ()
 
         # all inputs other than the first are defaulted
-        for m in m_variations():
-            _check({'m': m})
+        for input_arr in input_variations():
+            _check({first_arg_name: input_arr})
+
+    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
+    @needs_blas
+    def test_corrcoef_basic(self):
+        pyfunc = corrcoef
+        self.corr_corrcoef_basic(pyfunc, first_arg_name='x')
+
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
+    def test_cov_basic(self):
+        pyfunc = cov
+        self.corr_corrcoef_basic(pyfunc, first_arg_name='m')
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
@@ -1258,7 +1270,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
-        m = self.rnd.randn(1050).reshape(150, 7)
+        m = self.rnd.randn(105).reshape(15, 7)
         y_choices = None, m[::-1]
         rowvar_choices = False, True
         bias_choices = False, True
@@ -1268,73 +1280,132 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {'m': m, 'y': y, 'ddof': ddof, 'bias': bias, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
-    def test_cov_edge_cases(self):
-        pyfunc = cov
+    def test_corrcoef_explicit_arguments(self):
+        pyfunc = corrcoef
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
+
+        x = self.rnd.randn(105).reshape(15, 7)
+        y_choices = None, x[::-1]
+        rowvar_choices = False, True
+
+        for y, rowvar in itertools.product(y_choices, rowvar_choices):
+            params = {'x': x, 'y': y, 'rowvar': rowvar}
+            _check(params)
+
+    def cov_corrcoef_edge_cases(self, pyfunc, first_arg_name):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
         # some of these examples borrowed from numpy doc string examples:
         # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L2199-L2231
-        # some borrowed from TestCov:
+        # some borrowed from TestCov and TestCorrCoef:
         # https://github.com/numpy/numpy/blob/80d3a7a/numpy/lib/tests/test_function_base.py
         m = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
-        params = {'m': m, 'y': y}
-        _check(params)
-
-        m = np.array([[0, 2], [1, 1], [2, 0]]).T
-        params = {'m': m, 'ddof': 5}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         m = np.array([1, 2, 3])  # test case modified such that m is 1D
         y = np.array([[1j, 2j, 3j]])
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         m = np.array([1, 2, 3])
         y = (1j, 2j, 3j)
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
-        params = {'m': y, 'y': m}  # flip real and complex inputs
+        params = {first_arg_name: y, 'y': m}  # flip real and complex inputs
         _check(params)
 
         m = np.array([1, 2, 3])
         y = (1j, 2j, 3)  # note last item is not complex
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
-        params = {'m': y, 'y': m}  # flip real and complex inputs
+        params = {first_arg_name: y, 'y': m}  # flip real and complex inputs
         _check(params)
 
         m = np.array([])
         y = np.array([])
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         m = 1.1
         y = 2.2
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         m = self.rnd.randn(10, 3)
         y = np.array([-2.1, -1, 4.3]).reshape(1, 3) / 10
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         # The following tests pass with numpy version >= 1.10, but fail with 1.9
         m = np.array([-2.1, -1, 4.3])
         y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
-        params = {'m': m, 'y': y}
+        params = {first_arg_name: m, 'y': y}
         _check(params)
 
         for rowvar in False, True:
             m = np.array([-2.1, -1, 4.3])
             y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])
-            params = {'m': m, 'y': y, 'rowvar': rowvar}
+            params = {first_arg_name: m, 'y': y, 'rowvar': rowvar}
             _check(params)
-            params = {'m': y, 'y': m, 'rowvar': rowvar}  # swap m and y
+            params = {first_arg_name: y, 'y': m, 'rowvar': rowvar}  # swap m and y
             _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
+    @needs_blas
+    def test_corrcoef_edge_cases(self):
+        pyfunc = corrcoef
+        self.cov_corrcoef_edge_cases(pyfunc, first_arg_name='x')
+
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
+
+        for x in (np.nan, -np.inf, 3.142, 0):
+            params = {'x': x}
+            _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 11), "behaviour per Numpy 1.11+")
+    @needs_blas
+    def test_corrcoef_edge_case_extreme_values(self):
+        pyfunc = corrcoef
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
+
+        # extreme values
+        x = ((1e-100, 1e100), (1e100, 1e-100))
+        params = {'x': x}
+        _check(params)
+
+        # Note
+        # ----
+        # Numpy 1.10 output is:
+        # [[ 0. -0.]
+        #  [-0.  0.]]
+        #
+        # Numpy 1.11+ output is:
+        # [[ 1. -1.]
+        #  [-1.  1.]]
+        #
+        # Numba implementation replicates Numpy 1.11+ behaviour
+
+    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @needs_blas
+    def test_cov_edge_cases(self):
+        pyfunc = cov
+        self.cov_corrcoef_edge_cases(pyfunc, first_arg_name='m')
+
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
+
+        # invalid ddof
+        m = np.array([[0, 2], [1, 1], [2, 0]]).T
+        params = {'m': m, 'ddof': 5}
+        _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas

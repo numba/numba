@@ -1447,6 +1447,38 @@ def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER)
     _DDOF_HANDLER(ddof)
     return _prepare_cov_input_inner(m, y, rowvar, dtype)
 
+def scalar_result_expected(mandatory_input, optional_input):
+    opt_is_none = optional_input in (None, types.none)
+
+    if isinstance(mandatory_input, types.Array) and mandatory_input.ndim == 1:
+        return opt_is_none
+
+    if isinstance(mandatory_input, types.BaseTuple):
+        if all(isinstance(x, (types.Number, types.Boolean)) for x in mandatory_input.types):
+            return opt_is_none
+        else:
+            if len(mandatory_input.types) == 1 and isinstance(mandatory_input.types[0], types.BaseTuple):
+                return opt_is_none
+
+    if isinstance(mandatory_input, (types.Number, types.Boolean)):
+        return opt_is_none
+
+    if isinstance(mandatory_input, types.Sequence):
+        if not isinstance(mandatory_input.key[0], types.Sequence) and opt_is_none:
+            return True
+
+    return False
+
+@register_jitable
+def _clip_corr(x):
+    return np.where(np.fabs(x) > 1, np.sign(x), x)
+
+@register_jitable
+def _clip_complex(x):
+    real = _clip_corr(x.real)
+    imag = _clip_corr(x.imag)
+    return real + 1j * imag
+
 if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
@@ -1497,30 +1529,42 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 
             return np.array(variance)
 
-        # identify up front if output is 0D
-        if isinstance(m, types.Array) and m.ndim == 1:
-            if y in (None, types.none):
-                return np_cov_impl_single_variable
+        if scalar_result_expected(m, y):
+            return np_cov_impl_single_variable
+        else:
+            return np_cov_impl
 
-        if isinstance(m, types.BaseTuple):
-            if all(isinstance(x, (types.Number, types.Boolean)) for x in m.types):
-                if y in (None, types.none):
-                    return np_cov_impl_single_variable
-            else:
-                if len(m.types) == 1 and isinstance(m.types[0], types.BaseTuple):
-                    if y in (None, types.none):
-                        return np_cov_impl_single_variable
+    @overload(np.corrcoef)
+    def np_corrcoef(x, y=None, rowvar=True):
 
-        if isinstance(m, (types.Number, types.Boolean)):
-            if y in (None, types.none):
-                return np_cov_impl_single_variable
+        x_dt = determine_dtype(x)
+        y_dt = determine_dtype(y)
+        dtype = np.result_type(x_dt, y_dt, np.float64)
 
-        if isinstance(m, types.Sequence):
-            if not isinstance(m.key[0], types.Sequence) and y in (None, types.none):
-                return np_cov_impl_single_variable
+        if dtype == np.complex:
+            clip_fn = _clip_complex
+        else:
+            clip_fn = _clip_corr
 
-        # otherwise assume it's 2D and we're good to go
-        return np_cov_impl
+        def np_corrcoef_impl(x, y=None, rowvar=True):
+            c = np.cov(x, y, rowvar)
+            d = np.diag(c)
+            stddev = np.sqrt(d.real)
+
+            for i in range(c.shape[0]):
+                c[i, :] /= stddev
+                c[:, i] /= stddev
+
+            return clip_fn(c)
+
+        def np_corrcoef_impl_single_variable(x, y=None, rowvar=True):
+            c = np.cov(x, y, rowvar)
+            return c / c
+
+        if scalar_result_expected(x, y):
+            return np_corrcoef_impl_single_variable
+        else:
+            return np_corrcoef_impl
 
 #----------------------------------------------------------------------------
 # Element-wise computations

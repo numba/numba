@@ -230,6 +230,9 @@ class BoundFunction(Callable, Opaque):
         is_param = hasattr(self.template, 'generic')
         return sigs, is_param
 
+class MakeFunctionLiteral(Literal, Opaque):
+    pass
+
 
 class WeakType(Type):
     """

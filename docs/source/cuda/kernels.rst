@@ -111,7 +111,7 @@ to know which array element(s) it is responsible for (complex algorithms
 may define more complex responsibilities, but the underlying principle
 is the same).
 
-One way is for the thread to determines its position in the grid and block
+One way is for the thread to determine its position in the grid and block
 and manually compute the corresponding array position::
 
     @cuda.jit
