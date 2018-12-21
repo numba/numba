@@ -1554,7 +1554,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
             yield [1.1, 2.2, 3.3]
             yield (True, False, True)
-            yield np.array([])
+            yield False
+            yield 4
             yield (9,)
             yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
             yield np.array([])
@@ -1576,11 +1577,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        with self.assertTypingError() as e:
-            cfunc(np.arange(10), 1.1)
+        for shift in 1.1, (1, 2):
+            with self.assertTypingError() as e:
+                cfunc(np.arange(10), shift)
 
-        msg = "shift must be an integer"
-        assert msg in str(e.exception)
+            msg = "shift must be an integer"
+            assert msg in str(e.exception)
 
 
 class TestNPMachineParameters(TestCase):

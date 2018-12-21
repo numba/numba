@@ -1312,7 +1312,10 @@ def np_roll(a, shift):
 
         return out
 
-    return np_roll_impl
+    if isinstance(a, (types.Number, types.Boolean)):
+        return lambda a, shift: np.array(a)
+    else:
+        return np_roll_impl
 
 #----------------------------------------------------------------------------
 # Statistics
