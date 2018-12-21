@@ -688,6 +688,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
             yield a
             yield np.asfortranarray(a)
+            yield a[::-1]
+            np.random.RandomState(0).shuffle(a)
+            yield a
             yield 6
             yield 6.5
             yield -np.inf
@@ -714,23 +717,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 imag[7:12] = np.nan
             return (real + 1j * imag).reshape(5, 5)
 
-        comp = make_array()
-        check(comp)
-
-        comp = make_array(real_nan=True)
-        check(comp)
-
-        comp = make_array(imag_nan=True)
-        check(comp)
-
-        comp = make_array(real_nan=True, imag_nan=True)
-        check(comp)
+        for real_nan, imag_nan in product([True, False], repeat=2):
+            comp = make_array(real_nan, imag_nan)
+            check(comp)
 
         real = np.ones(8)
         imag = np.arange(-4, 4)
         comp = real + 1j * imag
         check(comp)
         comp = real - 1j * imag
+        check(comp)
+
+        comp = np.full((4, 4), fill_value=(1 - 1j))
         check(comp)
 
         comp = np.full((4, 4), fill_value=(1 - 1j))
@@ -747,13 +745,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             cfunc(np.array((True, True, False)))
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         with self.assertRaises(ValueError) as e:
             cfunc(np.array([]))
 
         msg = "zero-size array reduction not possible"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
     @classmethod
     def install_generated_tests(cls):
