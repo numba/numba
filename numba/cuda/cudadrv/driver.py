@@ -696,9 +696,8 @@ class Context(object):
 
         self._attempt_allocation(allocator)
 
-        _memory_finalizer = _make_mem_finalizer(driver.cuMemFree, bytesize)
-        mem = AutoFreePointer(weakref.proxy(self), ptr, bytesize,
-                              _memory_finalizer(self, ptr))
+        finalizer = _alloc_finalizer(self, ptr, bytesize)
+        mem = AutoFreePointer(weakref.proxy(self), ptr, bytesize, finalizer)
         self.allocations[ptr.value] = mem
         return mem.own()
 
@@ -722,17 +721,14 @@ class Context(object):
 
         owner = None
 
-        if mapped:
-            _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost,
-                                                       bytesize)
-            finalizer = _hostalloc_finalizer(self, pointer)
-            mem = MappedMemory(weakref.proxy(self), owner, pointer,
-                               bytesize, finalizer=finalizer)
+        finalizer = _hostalloc_finalizer(self, pointer, bytesize, mapped)
 
+        if mapped:
+            mem = MappedMemory(weakref.proxy(self), owner, pointer, bytesize,
+                               finalizer=finalizer)
             self.allocations[mem.handle.value] = mem
             return mem.own()
         else:
-            finalizer = _pinnedalloc_finalizer(self.deallocations, pointer)
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
                                finalizer=finalizer)
             return mem
@@ -760,18 +756,16 @@ class Context(object):
         else:
             allocator()
 
+        finalizer = _pin_finalizer(self, pointer, mapped)
+
         if mapped:
-            _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister,
-                                                    size)
-            finalizer = _mapped_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
                                finalizer=finalizer)
             self.allocations[mem.handle.value] = mem
             return mem.own()
         else:
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
-                               finalizer=_pinned_finalizer(self.deallocations,
-                                                           pointer))
+                               finalizer=finalizer)
             return mem
 
     def memunpin(self, pointer):
@@ -899,32 +893,60 @@ def load_module_image(context, image):
                   _module_finalizer(context, handle))
 
 
-def _make_mem_finalizer(dtor, bytesize):
-    def mem_finalize(context, handle):
-        allocations = context.allocations
-        deallocations = context.deallocations
+def _alloc_finalizer(context, handle, size):
+    allocations = context.allocations
+    deallocations = context.deallocations
 
-        def core():
-            if allocations:
-                del allocations[handle.value]
-
-            deallocations.add_item(dtor, handle, size=bytesize)
-
-        return core
-
-    return mem_finalize
-
-
-def _pinnedalloc_finalizer(deallocs, handle):
     def core():
-        deallocs.add_item(driver.cuMemFreeHost, handle)
+        if allocations:
+            del allocations[handle.value]
+        deallocations.add_item(driver.cuMemFree, handle, size)
 
     return core
 
 
-def _pinned_finalizer(deallocs, handle):
+def _hostalloc_finalizer(context, handle, size, mapped):
+    """
+    Finalize page-locked host memory allocated by `context.memhostalloc`.
+
+    This memory is managed by CUDA, and finalization entails deallocation. The
+    issues noted in `_pin_finalizer` are not relevant in this case, and the
+    finalization is placed in the `context.deallocations` queue along with
+    finalization of device objects.
+
+    """
+    allocations = context.allocations
+    deallocations = context.deallocations
+    if not mapped:
+        size = _SizeNotSet
+
     def core():
-        deallocs.add_item(driver.cuMemHostUnregister, handle)
+        if mapped and allocations:
+            del allocations[handle.value]
+        deallocations.add_item(driver.cuMemFreeHost, handle, size)
+
+    return core
+
+
+def _pin_finalizer(context, handle, mapped):
+    """
+    Finalize temporary page-locking of host memory by `context.mempin`.
+
+    This applies to memory not otherwise managed by CUDA. Page-locking can
+    be requested multiple times on the same memory, and must therefore be
+    lifted as soon as finalization is requested, otherwise subsequent calls to
+    `mempin` may fail with `CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED`, leading
+    to unexpected behavior for the context managers `cuda.{pinned,mapped}`.
+    This function therefore carries out finalization immediately, bypassing the
+    `context.deallocations` queue.
+
+    """
+    allocations = context.allocations
+
+    def core():
+        if mapped and allocations:
+            del allocations[handle.value]
+        driver.cuMemHostUnregister(handle)
 
     return core
 
@@ -1237,7 +1259,7 @@ class AutoFreePointer(MemoryPointer):
         self.refct -= 1
 
 
-class MappedMemory(MemoryPointer):
+class MappedMemory(AutoFreePointer):
     __cuda_memory__ = True
 
     def __init__(self, context, owner, hostpointer, size,

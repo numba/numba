@@ -954,7 +954,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             if not tv.defined:
                 offender = find_offender(name)
                 val = getattr(offender, 'value', 'unknown operation')
-                loc = getattr(offender, 'loc', 'unknown location')
+                loc = getattr(offender, 'loc', ir.unknown_loc)
                 msg = "Undefined variable '%s', operation: %s, location: %s"
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
@@ -963,7 +963,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 msg = ("Cannot infer the type of variable '%s'%s, "
                       "have imprecise type: %s. %s")
                 istmp = " (temporary variable)" if var.startswith('$') else ""
-                loc = getattr(offender, 'loc', 'unknown location')
+                loc = getattr(offender, 'loc', ir.unknown_loc)
                 # is this an untyped list? try and provide help
                 extra_msg = diagnose_imprecision(offender)
                 raise TypingError(msg % (var, istmp, tp, extra_msg), loc)
@@ -1039,7 +1039,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                     break
 
                     for name, offender in returns.items():
-                        loc = getattr(offender, 'loc', 'unknown location')
+                        loc = getattr(offender, 'loc', ir.unknown_loc)
                         msg = ("Return of: IR name '%s', type '%s', "
                                "location: %s")
                         interped = msg % (name, atype, loc.strformat())
@@ -1330,8 +1330,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                               src=expr.value.name,
                                               loc=inst.loc))
         elif expr.op == 'make_function':
-            self.lock_type(target.name, types.pyfunc_type, loc=inst.loc,
-                                                            literal_value=expr)
+            self.lock_type(target.name, types.MakeFunctionLiteral(expr),
+                           loc=inst.loc, literal_value=expr)
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

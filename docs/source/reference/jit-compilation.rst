@@ -212,6 +212,18 @@ Dispatcher objects
       in Python has changed.  Since compiling isn't cheap, this is mainly
       for testing and interactive use.
 
+   .. method:: parallel_diagnostics(signature=None, level=1)
+
+      Print parallel diagnostic information for the given signature. If no
+      signature is present it is printed for all known signatures. ``level`` is
+      used to adjust the verbosity, ``level=1`` (default) is minimum verbosity,
+      levels 2, 3, and 4 provide increasing levels of verbosity.
+
+   .. method:: get_metadata(signature=None)
+
+      Obtain the compilation metadata for a given signature. This is useful for
+      developers of Numba and Numba extensions.
+
 
 Vectorized functions (ufuncs and DUFuncs)
 -----------------------------------------

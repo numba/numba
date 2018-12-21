@@ -264,6 +264,8 @@ The following top-level functions are supported:
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
+* :func:`numpy.corrcoef` (only the 3 first arguments, requires NumPy >= 1.10 and
+  SciPy >= 0.16; extreme value handling per NumPy 1.11+)
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
 * :func:`numpy.diag`

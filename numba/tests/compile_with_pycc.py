@@ -90,6 +90,10 @@ if has_blas:
 def zeros(n):
     return np.zeros(n)
 
+# requires list dtor, #issue3535
+@cc_nrt.export('np_argsort', 'intp[:](float64[:])')
+def np_argsort(arr):
+    return np.argsort(arr)
 
 #
 # Legacy API
