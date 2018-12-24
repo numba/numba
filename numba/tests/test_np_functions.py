@@ -1580,6 +1580,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([3.142, np.nan, np.inf, -np.inf, 5])
         _check({'y': y})
 
+        y = np.arange(20) + np.linspace(0, 10, 20) * 1j
+        _check({'y': y})
+
     def test_np_trapz_x_basic(self):
         pyfunc = np_trapz_x
         cfunc = jit(nopython=True)(pyfunc)
@@ -1629,6 +1632,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = y + 1.1
         _check({'y': y, 'x': x})
 
+        y = np.arange(20)
+        x = y + np.linspace(0, 10, 20) * 1j
+        _check({'y': y, 'x': x})
+
     def test_np_trapz_dx_basic(self):
         pyfunc = np_trapz_dx
         cfunc = jit(nopython=True)(pyfunc)
@@ -1666,6 +1673,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         r = cfunc(np.exp(-.5 * x ** 2) / np.sqrt(2 * np.pi), dx=0.1)
         # check integral of normal equals 1
         np.testing.assert_almost_equal(r, 1, 7)
+
+        y = np.arange(20)
+        dx = 1j
+        _check({'y': y, 'dx': dx})
 
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx

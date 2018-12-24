@@ -1222,8 +1222,8 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
         return np_ediff1d_impl
 
 @register_jitable
-def np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx):
-    out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+def np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype):
+    out = np.empty(y_arr.shape[:-1], dtype=dtype)
     for idx in np.ndindex(y_arr.shape[:-1]):
         y_idx = y_arr[idx]
         out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * dx
@@ -1233,19 +1233,24 @@ def np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx):
 @overload(np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
+    y_dt = determine_dtype(y)
+    x_dt = determine_dtype(x)
+    dx_dt = determine_dtype(dx)
+    dtype = np.result_type(x_dt, y_dt, dx_dt, np.float64)
+
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
-        y_arr = np.atleast_2d(_asarray(y)).astype(np.float64)
+        y_arr = np.atleast_2d(_asarray(y)).astype(dtype)
         if not np.isfinite(dx):
             return np.nan
-        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx)[0]
+        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)[0]
 
     def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx)
+        y_arr = _asarray(y).astype(dtype)
+        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)
 
     def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        x_arr = _asarray(dx).astype(np.float64)
+        y_arr = _asarray(y).astype(dtype)
+        x_arr = _asarray(dx).astype(dtype)
         if len(x_arr) == 1:
             x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
             return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
@@ -1255,8 +1260,8 @@ def np_trapz(y, x=None, dx=1.0):
             return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
 
     def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        x_arr = _asarray(dx).astype(np.float64)
+        y_arr = _asarray(y).astype(dtype)
+        x_arr = _asarray(dx).astype(dtype)
 
         if x_arr.shape[-1] != y_arr.shape[-1] - 1:
             raise ValueError('Boom 5')
@@ -1270,8 +1275,8 @@ def np_trapz(y, x=None, dx=1.0):
         return out
 
     def np_trapz_impl_scalar(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        x_arr = _asarray(x).astype(np.float64)
+        y_arr = _asarray(y).astype(dtype)
+        x_arr = _asarray(x).astype(dtype)
 
         if len(y_arr) == 0:
             return 0.0
@@ -1288,10 +1293,10 @@ def np_trapz(y, x=None, dx=1.0):
             raise ValueError('Boom 2')
 
     def np_trapz_impl(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        x_arr = _asarray(x).astype(np.float64)
+        y_arr = _asarray(y).astype(dtype)
+        x_arr = _asarray(x).astype(dtype)
 
-        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
             y_idx = y_arr[idx]
 
@@ -1306,13 +1311,13 @@ def np_trapz(y, x=None, dx=1.0):
         return out
 
     def np_trapz_impl_x_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        x_arr = _asarray(x).astype(np.float64)
+        y_arr = _asarray(y).astype(dtype)
+        x_arr = _asarray(x).astype(dtype)
 
         if y_arr.shape != x_arr.shape:
             raise ValueError('Boom 4')
 
-        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
             y_idx = y_arr[idx]
             x_idx = x_arr[idx]
@@ -1338,13 +1343,6 @@ def np_trapz(y, x=None, dx=1.0):
                 return np_trapz_impl
         else:
             return np_trapz_impl_scalar
-
-    # TODO
-    # Reduce repetition
-    # Sensible exception messages
-    # Do not force everything into float / add some complex tests
-
-
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
@@ -1514,6 +1512,8 @@ def determine_dtype(array_like):
     array_like_dt = np.float64
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, types.Number):
+        array_like_dt = as_dtype(array_like)
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
         for val in array_like:
