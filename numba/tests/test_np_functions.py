@@ -1662,6 +1662,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = np.arange(40).reshape(4, 5, 2)
         _check({'y': y, 'dx': dx})
 
+        x = np.arange(-10, 10, .1)
+        r = cfunc(np.exp(-.5 * x ** 2) / np.sqrt(2 * np.pi), dx=0.1)
+        # check integral of normal equals 1
+        np.testing.assert_almost_equal(r, 1, 7)
+
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)
