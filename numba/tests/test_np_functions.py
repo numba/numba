@@ -1646,6 +1646,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = [1, 4, 5, 6]
         _check({'y': y, 'dx': dx})
 
+        y = np.linspace(-2, 5, 10)
+        dx = np.nan
+        _check({'y': y, 'dx': dx})
+
+        y = np.linspace(-2, 5, 10)
+        dx = np.inf
+        _check({'y': y, 'dx': dx})
+
+        y = np.linspace(-2, 5, 10)
+        dx = np.linspace(-2, 5, 9)
+        _check({'y': y, 'dx': dx}, abs_tol=1e-14)  # why is abs_tol needed here?
+
+        y = np.arange(60).reshape(4, 5, 3)
+        dx = np.arange(40).reshape(4, 5, 2)
+        _check({'y': y, 'dx': dx})
+
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)
@@ -1663,6 +1679,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             y = [1, 2, 3, 4, 5]
             x = [4, 5, 6, 7, 8]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = np.arange(60).reshape(4, 5, 3)
+            self.rnd.shuffle(y)
+            x = y * 1.1
+            x[2, 2, 2] = np.nan
             _check({'y': y, 'x': x, 'dx': dx})
 
 

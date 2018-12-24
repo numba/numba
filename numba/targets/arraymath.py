@@ -1235,6 +1235,8 @@ def np_trapz(y, x=None, dx=1.0):
 
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
         y_arr = np.atleast_2d(_asarray(y)).astype(np.float64)
+        if not np.isfinite(dx):
+            return np.nan
         return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx)[0]
 
     def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
@@ -1251,6 +1253,21 @@ def np_trapz(y, x=None, dx=1.0):
             raise ValueError('Boom')
         else:
             return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
+
+    def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = _asarray(dx).astype(np.float64)
+
+        if x_arr.shape[-1] != y_arr.shape[-1] - 1:
+            raise ValueError('Boom 5')
+
+        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        for idx in np.ndindex(y_arr.shape[:-1]):
+            y_idx = y_arr[idx]
+            x_idx = x_arr[idx]
+            out[idx] = 0.5 * ((y_idx[1:] + y_idx[:-1]) @ x_idx)
+
+        return out
 
     def np_trapz_impl_scalar(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
@@ -1309,6 +1326,8 @@ def np_trapz(y, x=None, dx=1.0):
                 return np_trapz_impl_x_none_dx_scalar_multi_dim
             else:
                 return np_trapz_impl_x_none_dx_scalar
+        elif isinstance(dx, types.Array) and dx.ndim > 1:
+            return np_trapz_impl_x_none_dx_array_like_multi_dim
         else:
             return np_trapz_impl_x_none_dx_array_like
     else:
@@ -1321,10 +1340,9 @@ def np_trapz(y, x=None, dx=1.0):
             return np_trapz_impl_scalar
 
     # TODO
-    # Handle multi dimensional case generally
     # Reduce repetition
     # Sensible exception messages
-    # Do not force everything into float / use some complex tests
+    # Do not force everything into float / add some complex tests
 
 
 
