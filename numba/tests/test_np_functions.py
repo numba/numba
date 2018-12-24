@@ -1573,7 +1573,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check({'y': y}, abs_tol=1e-13)
 
         self.rnd.shuffle(y)
-        _check({'y': y})
+        _check({'y': y}, abs_tol=1e-13)
 
         y = np.array([])
         _check({'y': y})
@@ -1709,6 +1709,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             x = y * 1.1
             x[2, 2, 2] = np.nan
             _check({'y': y, 'x': x, 'dx': dx})
+
+    @needs_blas
+    def test_np_trapz_x_dx_exceptions(self):
+        pyfunc = np_trapz_x_dx
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        y = [1, 2, 3, 4, 5]
+        dx = 1.0
+
+        for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
+            with self.assertRaises(ValueError) as e:
+                cfunc(**{'y': y, 'x': x, 'dx': dx})
+
+            msg = ("First argument 'y' has shape which is"
+                   "incompatible with second argument 'x'")
+
+            self.assertIn(msg, str(e.exception))
+
+        y = [1, 2, 3, 4, 5]
+        x = None
+        dx = np.array([1.0, 2.0])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(**{'y': y, 'x': x, 'dx': dx})
+
+        msg = ("Shape of third argument 'dx' incompatible"
+               "with first argument 'y'")
+
+        self.assertIn(msg, str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

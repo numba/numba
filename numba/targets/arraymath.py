@@ -1254,9 +1254,11 @@ def np_trapz(y, x=None, dx=1.0):
         if len(x_arr) == 1:
             return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
         elif len(x_arr) != len(y_arr) - 1:
-            raise ValueError('Boom')
+            msg = ("Shape of third argument 'dx' incompatible"
+                   "with first argument 'y'")
+            raise ValueError(msg)
         else:
-            return 0.5 * (y_arr[1:] + y_arr[:-1]) @ x_arr
+            return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), x_arr)
 
     def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
@@ -1269,7 +1271,7 @@ def np_trapz(y, x=None, dx=1.0):
         for idx in np.ndindex(y_arr.shape[:-1]):
             y_idx = y_arr[idx]
             x_idx = x_arr[idx]
-            out[idx] = 0.5 * (y_idx[1:] + y_idx[:-1]) @ x_idx
+            out[idx] = 0.5 * np.dot((y_idx[1:] + y_idx[:-1]), x_idx)
 
         return out
 
@@ -1285,9 +1287,11 @@ def np_trapz(y, x=None, dx=1.0):
         elif len(x_arr) == 2:
             return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * (x_arr[1] - x_arr[0])
         elif len(x_arr) == len(y_arr):
-            return 0.5 * (y_arr[1:] + y_arr[:-1]) @ np.diff(x_arr)
+            return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), np.diff(x_arr))
         else:
-            raise ValueError('Boom 2')
+            msg = ("First argument 'y' has shape which is"
+                   "incompatible with second argument 'x'")
+            raise ValueError(msg)
 
     def np_trapz_impl(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
@@ -1300,7 +1304,7 @@ def np_trapz(y, x=None, dx=1.0):
             if len(x_arr) == 2:
                 out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * (x_arr[1] - x_arr[0])
             elif len(x_arr) == y_arr.shape[-1]:
-                out[idx] = 0.5 * (y_idx[1:] + y_idx[:-1]) @ np.diff(x_arr)
+                out[idx] = 0.5 * np.dot((y_idx[1:] + y_idx[:-1]), np.diff(x_arr))
             else:
                 raise ValueError('Boom 3')
 
@@ -1317,7 +1321,7 @@ def np_trapz(y, x=None, dx=1.0):
         for idx in np.ndindex(y_arr.shape[:-1]):
             y_idx = y_arr[idx]
             x_idx = x_arr[idx]
-            out[idx] = 0.5 * (y_idx[1:] + y_idx[:-1]) @ np.diff(x_idx)
+            out[idx] = 0.5 * np.dot((y_idx[1:] + y_idx[:-1]), np.diff(x_idx))
 
         return out
 
