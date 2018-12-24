@@ -113,6 +113,18 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def np_trapz(y):
+    return np.trapz(y)
+
+def np_trapz_x(y, x):
+    return np.trapz(y, x)
+
+def np_trapz_dx(y, dx):
+    return np.trapz(y, dx=dx)
+
+def np_trapz_x_dx(y, x, dx):
+    return np.trapz(y, x, dx)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1541,6 +1553,74 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
+
+    def test_np_trapz_basic(self):
+        pyfunc = np_trapz
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        _check({'y': y})
+
+        y = [3, 1, 2, 2, 2]
+        _check({'y': y})
+
+    def test_np_trapz_x_basic(self):
+        pyfunc = np_trapz_x
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        x = [4, 6, 8]
+        _check({'y': y, 'x': x})
+
+        y = [1, 2, 3, 4, 5]
+        x = [4, 6]
+        _check({'y': y, 'x': x})
+
+        y = [1, 2, 3, 4, 5]
+        x = [4, 5, 6, 7, 8]
+        _check({'y': y, 'x': x})
+
+    def test_np_trapz_dx_basic(self):
+        pyfunc = np_trapz_dx
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        dx = 2
+        _check({'y': y, 'dx': dx})
+
+        y = [1, 2, 3, 4, 5]
+        dx = [1, 4]
+        _check({'y': y, 'dx': dx})
+
+        y = [1, 2, 3, 4, 5]
+        dx = [1, 4, 5, 6]
+        _check({'y': y, 'dx': dx})
+
+        y = [1, 2, 3, 4, 5]
+        dx = [1, 4, 5, 6, 7]
+        _check({'y': y, 'dx': dx})
+
+    def test_np_trapz_x_dx_basic(self):
+        pyfunc = np_trapz_x_dx
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # dx should be ignored
+        for dx in (None, 2, np.array([1, 2, 3, 4, 5])):
+            y = [1, 2, 3]
+            x = [4, 6, 8]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = [1, 2, 3, 4, 5]
+            x = [4, 6]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = [1, 2, 3, 4, 5]
+            x = [4, 5, 6, 7, 8]
+            _check({'y': y, 'x': x, 'dx': dx})
 
 
 class TestNPMachineParameters(TestCase):

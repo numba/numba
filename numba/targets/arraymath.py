@@ -1221,6 +1221,61 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
 
         return np_ediff1d_impl
 
+
+
+@overload(np.trapz)
+def np_trapz(y, x=None, dx=1.0):
+
+
+
+    def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = np.full(len(y_arr) - 1, fill_value=dx, dtype=np.float64)
+        return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
+
+    def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = _asarray(dx).astype(np.float64)
+        if len(x_arr) == 1:
+            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
+            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+        elif len(x_arr) != len(y_arr) - 1:
+            raise ValueError('Boom')
+        else:
+            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
+
+    def np_trapz_impl(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = _asarray(x).astype(np.float64)
+
+        if len(x_arr) == 1:
+            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
+            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+        elif len(x_arr) == 2:
+            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=(x_arr[1] - x_arr[0]))
+            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+        elif len(x_arr) == len(y_arr):
+            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ np.diff(x_arr))
+        else:
+            raise ValueError('Boom 2')
+
+    if x in (None, types.none):
+        if isinstance(dx, types.Number):
+            return np_trapz_impl_x_none_dx_scalar
+        else:
+            return np_trapz_impl_x_none_dx_array_like
+    else:
+        return np_trapz_impl
+
+
+
+
+
+
+
+
+
+
 @register_jitable
 def _np_vander(x, N, increasing, out):
     """
