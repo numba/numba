@@ -1228,8 +1228,17 @@ def np_trapz(y, x=None, dx=1.0):
 
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
-        x_arr = np.full(len(y_arr) - 1, fill_value=dx, dtype=np.float64)
-        return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
+        return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * dx
+
+    def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+
+        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        for idx in np.ndindex(y.shape[:-1]):
+            y_idx = y_arr[idx]
+            out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * dx
+
+        return out
 
     def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
@@ -1259,7 +1268,10 @@ def np_trapz(y, x=None, dx=1.0):
 
     if x in (None, types.none):
         if isinstance(dx, (float, int, types.Number)):
-            return np_trapz_impl_x_none_dx_scalar
+            if isinstance(y, types.Array) and y.ndim > 1:
+                return np_trapz_impl_x_none_dx_scalar_multi_dim
+            else:
+                return np_trapz_impl_x_none_dx_scalar
         else:
             return np_trapz_impl_x_none_dx_array_like
     else:

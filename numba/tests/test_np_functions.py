@@ -1562,10 +1562,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = [1, 2, 3]
         _check({'y': y})
 
-        y = [3, 1, 2, 2, 2]
+        y = (3, 1, 2, 2, 2)
         _check({'y': y})
 
         y = np.arange(15).reshape(3, 5)
+        _check({'y': y})
+
+        y = np.linspace(-10, 10, 60).reshape(4, 3, 5)
+        _check({'y': y})
+
+        self.rnd.shuffle(y)
+        _check({'y': y})
+
+        y = np.array([])
+        _check({'y': y})
+
+        y = np.array([3.142, np.nan, np.inf, -np.inf, 5])
         _check({'y': y})
 
     def test_np_trapz_x_basic(self):
