@@ -1252,8 +1252,7 @@ def np_trapz(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
         x_arr = _asarray(dx).astype(dtype)
         if len(x_arr) == 1:
-            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
-            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
         elif len(x_arr) != len(y_arr) - 1:
             raise ValueError('Boom')
         else:
@@ -1282,11 +1281,9 @@ def np_trapz(y, x=None, dx=1.0):
             return 0.0
 
         if len(x_arr) == 1:
-            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
-            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
         elif len(x_arr) == 2:
-            x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=(x_arr[1] - x_arr[0]))
-            return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr_broadcast)
+            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * (x_arr[1] - x_arr[0])
         elif len(x_arr) == len(y_arr):
             return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ np.diff(x_arr))
         else:
@@ -1301,8 +1298,7 @@ def np_trapz(y, x=None, dx=1.0):
             y_idx = y_arr[idx]
 
             if len(x_arr) == 2:
-                x_arr_broadcast = np.full(len(y_idx) - 1, fill_value=(x_arr[1] - x_arr[0]))
-                out[idx] = 0.5 * (y_idx[1:] + y_idx[:-1]) @ x_arr_broadcast
+                out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * (x_arr[1] - x_arr[0])
             elif len(x_arr) == y_arr.shape[-1]:
                 out[idx] = 0.5 * ((y_idx[1:] + y_idx[:-1]) @ np.diff(x_arr))
             else:
