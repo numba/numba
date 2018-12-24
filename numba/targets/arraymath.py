@@ -1226,8 +1226,6 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
 @overload(np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
-
-
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
         x_arr = np.full(len(y_arr) - 1, fill_value=dx, dtype=np.float64)
@@ -1260,7 +1258,7 @@ def np_trapz(y, x=None, dx=1.0):
             raise ValueError('Boom 2')
 
     if x in (None, types.none):
-        if isinstance(dx, types.Number):
+        if isinstance(dx, (float, int, types.Number)):
             return np_trapz_impl_x_none_dx_scalar
         else:
             return np_trapz_impl_x_none_dx_array_like
