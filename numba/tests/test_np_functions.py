@@ -1554,6 +1554,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
+    @needs_blas
     def test_np_trapz_basic(self):
         pyfunc = np_trapz
         cfunc = jit(nopython=True)(pyfunc)
@@ -1569,7 +1570,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check({'y': y})
 
         y = np.linspace(-10, 10, 60).reshape(4, 3, 5)
-        _check({'y': y})
+        _check({'y': y}, abs_tol=1e-13)
 
         self.rnd.shuffle(y)
         _check({'y': y})
@@ -1586,6 +1587,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([], dtype=np.complex128)
         _check({'y': y})
 
+    @needs_blas
     def test_np_trapz_x_basic(self):
         pyfunc = np_trapz_x
         cfunc = jit(nopython=True)(pyfunc)
@@ -1639,6 +1641,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = y + np.linspace(0, 10, 20) * 1j
         _check({'y': y, 'x': x})
 
+    @needs_blas
     def test_np_trapz_dx_basic(self):
         pyfunc = np_trapz_dx
         cfunc = jit(nopython=True)(pyfunc)
@@ -1666,7 +1669,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         y = np.linspace(-2, 5, 10)
         dx = np.linspace(-2, 5, 9)
-        _check({'y': y, 'dx': dx}, abs_tol=1e-14)  # why is abs_tol needed here?
+        _check({'y': y, 'dx': dx}, abs_tol=1e-13)
 
         y = np.arange(60).reshape(4, 5, 3)
         dx = np.arange(40).reshape(4, 5, 2)
@@ -1681,6 +1684,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = 1j
         _check({'y': y, 'dx': dx})
 
+    @needs_blas
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)
