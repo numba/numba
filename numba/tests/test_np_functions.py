@@ -1590,11 +1590,43 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check({'y': y, 'x': x})
 
         y = [1, 2, 3, 4, 5]
-        x = [4, 6]
+        x = (4, 6)
         _check({'y': y, 'x': x})
 
-        y = [1, 2, 3, 4, 5]
+        y = (1, 2, 3, 4, 5)
         x = [4, 5, 6, 7, 8]
+        _check({'y': y, 'x': x})
+
+        y = np.array([1, 2, 3, 4, 5])
+        x = [4, 4]
+        _check({'y': y, 'x': x})
+
+        y = np.array([])
+        x = np.array([2, 3])
+        _check({'y': y, 'x': x})
+
+        y = (1, 2, 3, 4, 5)
+        x = None
+        _check({'y': y, 'x': x})
+
+        y = np.arange(20).reshape(5, 4)
+        x = np.array([4, 5])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(20).reshape(5, 4)
+        x = np.array([4, 5, 6, 7])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        x = np.array([4, 5])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        x = np.array([4, 5, 7])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        x = y + 1.1
         _check({'y': y, 'x': x})
 
     def test_np_trapz_dx_basic(self):

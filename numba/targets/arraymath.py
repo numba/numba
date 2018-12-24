@@ -1221,24 +1221,25 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
 
         return np_ediff1d_impl
 
+@register_jitable
+def np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx):
+    out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+    for idx in np.ndindex(y_arr.shape[:-1]):
+        y_idx = y_arr[idx]
+        out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * dx
 
+    return out
 
 @overload(np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(np.float64)
-        return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * dx
+        y_arr = np.atleast_2d(_asarray(y)).astype(np.float64)
+        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx)[0]
 
     def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
-
-        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
-        for idx in np.ndindex(y.shape[:-1]):
-            y_idx = y_arr[idx]
-            out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * dx
-
-        return out
+        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx)
 
     def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
@@ -1251,9 +1252,12 @@ def np_trapz(y, x=None, dx=1.0):
         else:
             return 0.5 * ((y_arr[1:] + y_arr[:-1]) @ x_arr)
 
-    def np_trapz_impl(y, x=None, dx=1.0):
+    def np_trapz_impl_scalar(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(np.float64)
         x_arr = _asarray(x).astype(np.float64)
+
+        if len(y_arr) == 0:
+            return 0.0
 
         if len(x_arr) == 1:
             x_arr_broadcast = np.full(len(y_arr) - 1, fill_value=x_arr[0])
@@ -1266,6 +1270,39 @@ def np_trapz(y, x=None, dx=1.0):
         else:
             raise ValueError('Boom 2')
 
+    def np_trapz_impl(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = _asarray(x).astype(np.float64)
+
+        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        for idx in np.ndindex(y_arr.shape[:-1]):
+            y_idx = y_arr[idx]
+
+            if len(x_arr) == 2:
+                x_arr_broadcast = np.full(len(y_idx) - 1, fill_value=(x_arr[1] - x_arr[0]))
+                out[idx] = 0.5 * (y_idx[1:] + y_idx[:-1]) @ x_arr_broadcast
+            elif len(x_arr) == y_arr.shape[-1]:
+                out[idx] = 0.5 * ((y_idx[1:] + y_idx[:-1]) @ np.diff(x_arr))
+            else:
+                raise ValueError('Boom 3')
+
+        return out
+
+    def np_trapz_impl_x_multi_dim(y, x=None, dx=1.0):
+        y_arr = _asarray(y).astype(np.float64)
+        x_arr = _asarray(x).astype(np.float64)
+
+        if y_arr.shape != x_arr.shape:
+            raise ValueError('Boom 4')
+
+        out = np.empty(y_arr.shape[:-1], dtype=np.float64)
+        for idx in np.ndindex(y_arr.shape[:-1]):
+            y_idx = y_arr[idx]
+            x_idx = x_arr[idx]
+            out[idx] = 0.5 * ((y_idx[1:] + y_idx[:-1]) @ np.diff(x_idx))
+
+        return out
+
     if x in (None, types.none):
         if isinstance(dx, (float, int, types.Number)):
             if isinstance(y, types.Array) and y.ndim > 1:
@@ -1275,14 +1312,19 @@ def np_trapz(y, x=None, dx=1.0):
         else:
             return np_trapz_impl_x_none_dx_array_like
     else:
-        return np_trapz_impl
+        if isinstance(y, types.Array) and y.ndim > 1:
+            if isinstance(x, types.Array) and x.ndim > 1:
+                return np_trapz_impl_x_multi_dim
+            else:
+                return np_trapz_impl
+        else:
+            return np_trapz_impl_scalar
 
-
-
-
-
-
-
+    # TODO
+    # Handle multi dimensional case generally
+    # Reduce repetition
+    # Sensible exception messages
+    # Do not force everything into float / use some complex tests
 
 
 
