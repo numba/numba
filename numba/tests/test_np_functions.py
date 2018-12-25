@@ -1645,6 +1645,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = np.array([1 + 1j, 1 + 2j])
         _check({'y': y, 'x': x})
 
+    @unittest.skip('NumPy behaviour questionable')
+    def test_trapz_numpy_questionable(self):
+        pyfunc = np_trapz
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # passes (NumPy and Numba return 2.0)
+        y = np.array([True, False, True, True]).astype(np.int)
+        _check({'y': y})
+
+        # fails (NumPy returns 1.5; Numba returns 2.0)
+        y = np.array([True, False, True, True])
+        _check({'y': y})
+
     @needs_blas
     def test_np_trapz_dx_basic(self):
         pyfunc = np_trapz_dx
@@ -1767,6 +1781,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(**{'y': y, 'x': None, 'dx': dx})
 
         self.assertIn(msg, str(e.exception))
+
+        y = 5
+        with self.assertTypingError() as e:
+            cfunc(**{'y': y, 'x': None, 'dx': 1.0})
+
+        self.assertIn('y cannot be a scalar', str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

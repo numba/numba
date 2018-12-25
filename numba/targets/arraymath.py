@@ -1331,6 +1331,9 @@ def np_trapz(y, x=None, dx=1.0):
 
         return out
 
+    if isinstance(y, (types.Number, types.Boolean)):
+        raise TypingError('y cannot be a scalar')
+
     if x in (None, types.none):
         if isinstance(dx, (float, int, types.Number)):
             if isinstance(y, types.Array) and y.ndim > 1:
