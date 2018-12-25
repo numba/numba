@@ -1263,10 +1263,10 @@ def np_trapz(y, x=None, dx=1.0):
         x_arr = _asarray(dx).astype(dtype)
         if len(x_arr) == 1:
             return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
-        elif len(x_arr) != len(y_arr) - 1:
-            raise ValueError(Y_DX_MSG)
-        else:
+        elif len(x_arr) == len(y_arr) - 1:
             return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), x_arr)
+        else:
+            raise ValueError(Y_DX_MSG)
 
     def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
@@ -1283,7 +1283,7 @@ def np_trapz(y, x=None, dx=1.0):
 
         return out
 
-    def np_trapz_impl_scalar(y, x=None, dx=1.0):
+    def np_trapz_impl_x_y_non_arr(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
         x_arr = _asarray(x).astype(dtype)
 
@@ -1299,7 +1299,7 @@ def np_trapz(y, x=None, dx=1.0):
         else:
             raise ValueError(Y_X_MSG)
 
-    def np_trapz_impl(y, x=None, dx=1.0):
+    def np_trapz_impl_x(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
         x_arr = _asarray(x).astype(dtype)
 
@@ -1349,9 +1349,9 @@ def np_trapz(y, x=None, dx=1.0):
             if isinstance(x, types.Array) and x.ndim > 1:
                 return np_trapz_impl_x_multi_dim
             else:
-                return np_trapz_impl
+                return np_trapz_impl_x
         else:
-            return np_trapz_impl_scalar
+            return np_trapz_impl_x_y_non_arr
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
