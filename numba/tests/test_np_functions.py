@@ -1720,26 +1720,47 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         y = [1, 2, 3, 4, 5]
-        dx = 1.0
+        msg = ("First argument 'y' has shape which is"
+               "incompatible with second argument 'x'")
 
         for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
             with self.assertRaises(ValueError) as e:
-                cfunc(**{'y': y, 'x': x, 'dx': dx})
-
-            msg = ("First argument 'y' has shape which is"
-                   "incompatible with second argument 'x'")
+                cfunc(**{'y': y, 'x': x, 'dx': 1.0})
 
             self.assertIn(msg, str(e.exception))
 
+        y = np.arange(60).reshape(3, 4, 5)
+        x = np.arange(36).reshape(3, 4, 3)
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(**{'y': y, 'x': x, 'dx': 1.0})
+
+        self.assertIn(msg, str(e.exception))
+
+        y = np.arange(60).reshape(3, 4, 5)
+        x = np.array([4, 5, 6, 7])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(**{'y': y, 'x': x, 'dx': 1.0})
+
+        self.assertIn(msg, str(e.exception))
+
         y = [1, 2, 3, 4, 5]
-        x = None
         dx = np.array([1.0, 2.0])
 
         with self.assertRaises(ValueError) as e:
-            cfunc(**{'y': y, 'x': x, 'dx': dx})
+            cfunc(**{'y': y, 'x': None, 'dx': dx})
 
         msg = ("Shape of third argument 'dx' incompatible"
                "with first argument 'y'")
+
+        self.assertIn(msg, str(e.exception))
+
+        y = np.arange(60).reshape(3, 4, 5)
+        dx = np.arange(60).reshape(3, 4, 5)
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(**{'y': y, 'x': None, 'dx': dx})
 
         self.assertIn(msg, str(e.exception))
 

@@ -1238,6 +1238,16 @@ def np_trapz(y, x=None, dx=1.0):
     dx_dt = determine_dtype(dx)
     dtype = np.result_type(x_dt, y_dt, dx_dt, np.float64)
 
+    Y_DX_MSG = (
+        "Shape of third argument 'dx' incompatible"
+        "with first argument 'y'"
+    )
+
+    Y_X_MSG = (
+        "First argument 'y' has shape which is"
+        "incompatible with second argument 'x'"
+    )
+
     def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
         y_arr = np.atleast_2d(_asarray(y)).astype(dtype)
         if not np.isfinite(dx):
@@ -1254,9 +1264,7 @@ def np_trapz(y, x=None, dx=1.0):
         if len(x_arr) == 1:
             return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
         elif len(x_arr) != len(y_arr) - 1:
-            msg = ("Shape of third argument 'dx' incompatible"
-                   "with first argument 'y'")
-            raise ValueError(msg)
+            raise ValueError(Y_DX_MSG)
         else:
             return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), x_arr)
 
@@ -1265,7 +1273,7 @@ def np_trapz(y, x=None, dx=1.0):
         x_arr = _asarray(dx).astype(dtype)
 
         if x_arr.shape[-1] != y_arr.shape[-1] - 1:
-            raise ValueError('Boom 5')
+            raise ValueError(Y_DX_MSG)
 
         out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
@@ -1289,9 +1297,7 @@ def np_trapz(y, x=None, dx=1.0):
         elif len(x_arr) == len(y_arr):
             return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), np.diff(x_arr))
         else:
-            msg = ("First argument 'y' has shape which is"
-                   "incompatible with second argument 'x'")
-            raise ValueError(msg)
+            raise ValueError(Y_X_MSG)
 
     def np_trapz_impl(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
@@ -1306,7 +1312,7 @@ def np_trapz(y, x=None, dx=1.0):
             elif len(x_arr) == y_arr.shape[-1]:
                 out[idx] = 0.5 * np.dot((y_idx[1:] + y_idx[:-1]), np.diff(x_arr))
             else:
-                raise ValueError('Boom 3')
+                raise ValueError(Y_X_MSG)
 
         return out
 
@@ -1315,7 +1321,7 @@ def np_trapz(y, x=None, dx=1.0):
         x_arr = _asarray(x).astype(dtype)
 
         if y_arr.shape != x_arr.shape:
-            raise ValueError('Boom 4')
+            raise ValueError(Y_X_MSG)
 
         out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
