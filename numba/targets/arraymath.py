@@ -1261,10 +1261,12 @@ def np_trapz(y, x=None, dx=1.0):
     def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
         x_arr = _asarray(dx).astype(dtype)
+        y_diff = y_arr[1:] + y_arr[:-1]
+
         if len(x_arr) == 1:
-            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
+            return 0.5 * np.sum(y_diff) * x_arr[0]
         elif len(x_arr) == len(y_arr) - 1:
-            return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), x_arr)
+            return 0.5 * np.dot(y_diff, x_arr)
         else:
             raise ValueError(Y_DX_MSG)
 
@@ -1286,16 +1288,16 @@ def np_trapz(y, x=None, dx=1.0):
     def np_trapz_impl_x_y_non_arr(y, x=None, dx=1.0):
         y_arr = _asarray(y).astype(dtype)
         x_arr = _asarray(x).astype(dtype)
+        y_diff = y_arr[1:] + y_arr[:-1]
 
         if len(y_arr) == 0:
             return 0.0
-
         if len(x_arr) == 1:
-            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * x_arr[0]
+            return 0.5 * np.sum(y_diff) * x_arr[0]
         elif len(x_arr) == 2:
-            return 0.5 * np.sum(y_arr[1:] + y_arr[:-1]) * (x_arr[1] - x_arr[0])
+            return 0.5 * np.sum(y_diff) * (x_arr[1] - x_arr[0])
         elif len(x_arr) == len(y_arr):
-            return 0.5 * np.dot((y_arr[1:] + y_arr[:-1]), np.diff(x_arr))
+            return 0.5 * np.dot(y_diff, np.diff(x_arr))
         else:
             raise ValueError(Y_X_MSG)
 
@@ -1306,11 +1308,12 @@ def np_trapz(y, x=None, dx=1.0):
         out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
             y_idx = y_arr[idx]
+            y_diff = y_idx[1:] + y_idx[:-1]
 
             if len(x_arr) == 2:
-                out[idx] = 0.5 * np.sum(y_idx[1:] + y_idx[:-1]) * (x_arr[1] - x_arr[0])
+                out[idx] = 0.5 * np.sum(y_diff) * (x_arr[1] - x_arr[0])
             elif len(x_arr) == y_arr.shape[-1]:
-                out[idx] = 0.5 * np.dot((y_idx[1:] + y_idx[:-1]), np.diff(x_arr))
+                out[idx] = 0.5 * np.dot(y_diff, np.diff(x_arr))
             else:
                 raise ValueError(Y_X_MSG)
 
