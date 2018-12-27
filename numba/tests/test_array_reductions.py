@@ -695,6 +695,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield 6.5
             yield -np.inf
             yield 1 + 4j
+            yield [2.2, np.nan]
+            yield [2.2, np.inf]
+            yield ((4.1, 2.0, -7.6), (4.3, 2.7, 5.2))
+            yield np.full(5, np.nan)
+            yield 1 + np.nan * 1j
+            yield np.nan + np.nan * 1j
+            yield np.nan
 
         for a in a_variations():
             check(a)
@@ -726,9 +733,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         comp = real + 1j * imag
         check(comp)
         comp = real - 1j * imag
-        check(comp)
-
-        comp = np.full((4, 4), fill_value=(1 - 1j))
         check(comp)
 
         comp = np.full((4, 4), fill_value=(1 - 1j))

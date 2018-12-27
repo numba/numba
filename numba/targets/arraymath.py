@@ -14,7 +14,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-from numba import types, cgutils, typing
+from numba import types, cgutils, typing, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
@@ -725,6 +725,61 @@ def prepare_ptp_input(a):
     else:
         return arr
 
+@register_jitable
+def less_than(a, b):
+    return a < b
+
+@register_jitable
+def greater_than(a, b):
+    return a > b
+
+def _compute_current_val_impl_gen(op):
+    def _compute_current_val_impl(current_val, val):
+        if isinstance(current_val, types.Complex):
+            # The sort order for complex numbers is lexicographic. If both the
+            # real and imaginary parts are non-nan then the order is determined
+            # by the real parts except when they are equal, in which case the
+            # order is determined by the imaginary parts.
+            # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877
+            def impl(current_val, val):
+                if op(val.real, current_val.real):
+                    return val
+                elif (val.real == current_val.real
+                    and op(val.imag, current_val.imag)):
+                    return val
+                return current_val
+        else:
+            def impl(current_val, val):
+                return val if op(val, current_val) else current_val
+        return impl
+    return _compute_current_val_impl
+
+_compute_a_max = generated_jit(_compute_current_val_impl_gen(greater_than))
+_compute_a_min = generated_jit(_compute_current_val_impl_gen(less_than))
+
+@generated_jit
+def _early_return(val):
+    UNUSED = 0
+    if isinstance(val, types.Complex):
+        def impl(val):
+            if np.isnan(val.real):
+                if np.isnan(val.imag):
+                    return True, np.nan + np.nan * 1j
+                else:
+                    return True, np.nan + 0j
+            else:
+                return False, UNUSED
+    elif isinstance(val, types.Float):
+        def impl(val):
+            if np.isnan(val):
+                return True, np.nan
+            else:
+                return False, UNUSED
+    else:
+        def impl(val):
+            return False, UNUSED
+    return impl
+
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -737,87 +792,23 @@ def np_ptp(a):
         arr = prepare_ptp_input(a)
 
         a_flat = arr.flat
-        a_min = np.inf
-        a_max = -np.inf
-
-        for i in range(arr.size):
-            val = a_flat[i]
-            if np.isnan(val):
-                return np.nan
-            if val > a_max:
-                a_max = val
-            if val < a_min:
-                a_min = val
-
-        return a_max - a_min
-
-    def np_ptp_impl_int(a):
-        arr = prepare_ptp_input(a)
-
-        a_flat = arr.flat
         a_min = a_flat[0]
         a_max = a_flat[0]
 
-        for i in range(1, arr.size):
+        for i in range(arr.size):
             val = a_flat[i]
-            if val > a_max:
-                a_max = val
-            if val < a_min:
-                a_min = val
+            take_branch, retval = _early_return(val)
+            if take_branch:
+                return retval
+            a_max = _compute_a_max(a_max, val)
+            a_min = _compute_a_min(a_min, val)
 
         return a_max - a_min
-
-    def np_ptp_impl_complex(a):
-        arr = prepare_ptp_input(a)
-
-        real_nan = np.isnan(a.real)
-        imag_nan = np.isnan(a.imag)
-
-        if np.any(real_nan) or np.any(imag_nan):
-            return np.nan + 0j
-        else:
-            a_flat = arr.flat
-            a_min = a_flat[0]
-            a_max = a_flat[0]
-
-            for i in range(1, arr.size):
-                val = a_flat[i]
-
-                if val.real > a_max.real:
-                    a_max = val
-                elif val.real == a_max.real and val.imag > a_max.imag:
-                    a_max = val
-
-                if val.real < a_min.real:
-                    a_min = val
-                elif val.real == a_min.real and val.imag < a_min.imag:
-                    a_min = val
-
-            return a_max - a_min
-
-    # scalar handling
-    if isinstance(a, types.Integer):
-        return np_ptp_impl_int
-    elif isinstance(a, types.Float):
-        return np_ptp_impl
-    elif isinstance(a, types.Complex):
-        return lambda x: 0j
-
-    # array-like handling
-    if hasattr(a, 'dtype'):
-        if np.issubdtype(as_dtype(a.dtype), np.integer):
-            return np_ptp_impl_int
-        if np.issubdtype(as_dtype(a.dtype), np.dtype(complex).type):
-            return np_ptp_impl_complex
 
     return np_ptp_impl
 
 #----------------------------------------------------------------------------
 # Median and partitioning
-
-@register_jitable
-def less_than(a, b):
-    return a < b
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -1716,7 +1707,7 @@ def _asarray_impl(x):
         return lambda x: x
     elif isinstance(x, (types.Sequence, types.Tuple)):
         return lambda x: np.array(x)
-    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+    elif isinstance(x, (types.Number, types.Boolean)):
         ty = as_dtype(x)
         return lambda x: np.array([x], dtype=ty)
 
