@@ -8,7 +8,7 @@ In this release the major features are:
 - The upgrading of LLVM to version 7.0.0.
 
 We added a draft of the project roadmap in the developer manual. The roadmap is
-for informational purposes only.  Priorities and resources change.
+for informational purposes only as priorities and resources may change.
 
 Here are some enhancements from contributed PRs:
 
