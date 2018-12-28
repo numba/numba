@@ -7,6 +7,9 @@ In this release the major features are:
   function.
 - The upgrading of LLVM to version 7.0.0.
 
+We added a draft of the project roadmap to the developer manual. The roadmap is
+for informational purposes only as priorities and resources may change.
+
 Here are some enhancements from contributed PRs:
 
 - #3532. Daniel Wennberg improved the ``cuda.{pinned, mapped}`` API so that
@@ -47,6 +50,7 @@ General Enhancements:
 * PR #3605: Add guard for writing to read only arrays from ufunc calls
 * PR #3606: Improve the accuracy of error message wording for undefined type.
 * PR #3611: gdb test guard needs to ack ptrace permissions
+* PR #3616: Skip gdb tests on ARM.
 
 CUDA Enhancements:
 
@@ -60,6 +64,7 @@ Documentation Updates:
 * PR #3570: Minor documentation fixes for numba.cuda
 * PR #3581: Fixing minor typo in `reference/types.rst`
 * PR #3594: Changing `@stencil` docs to correctly reflect `func_or_mode` param
+* PR #3617: Draft roadmap as of Dec 2018
 
 Contributors:
 
