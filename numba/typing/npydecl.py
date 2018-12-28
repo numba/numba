@@ -1146,11 +1146,16 @@ class Where(AbstractTemplate):
                         as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
-                if (cond.ndim == x.ndim == y.ndim):
-                    if x.layout == y.layout == cond.layout:
-                        retty = types.Array(retdty, x.ndim, x.layout)
-                    else:
-                        retty = types.Array(retdty, x.ndim, 'C')
+                if isinstance(x, types.Array) and isinstance(y, types.Array):
+                    if (cond.ndim == x.ndim == y.ndim):
+                        if x.layout == y.layout == cond.layout:
+                            retty = types.Array(retdty, x.ndim, x.layout)
+                        else:
+                            retty = types.Array(retdty, x.ndim, 'C')
+                        return signature(retty, *args)
+                else:
+                    # x and y both scalar
+                    retty = types.Array(retdty, cond.ndim, cond.layout)
                     return signature(retty, *args)
             else:
                 # scalar where()

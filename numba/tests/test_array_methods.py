@@ -639,6 +639,33 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for x in (0, 1, True, False, 2.5, 0j):
             check_scal(x)
 
+    def test_np_where_3_broadcast(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(got, expected)
+
+        def a_variations():
+            a = np.linspace(-2, 4, 20)
+            self.random.shuffle(a)
+            yield a
+            yield a.reshape(2, 5, 2)
+            yield a.reshape(4, 5, order='F')
+            yield a.reshape(2, 5, 2)[::-1]
+
+        for a in a_variations():
+            params = (a > 0, 0, 1)
+            check_ok(params)
+
+            params = (a < 0, np.nan, 1 + 4j)
+            check_ok(params)
+
+            params = (a > 1, True, False)
+            check_ok(params)
+
     def test_item(self):
         pyfunc = array_item
         cfunc = jit(nopython=True)(pyfunc)

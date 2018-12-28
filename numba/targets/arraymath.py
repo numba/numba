@@ -1898,12 +1898,43 @@ def array_where(context, builder, sig, args):
     res = context.compile_internal(builder, where_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@register_jitable
+def _where_inner(cond, x, y, res):
+    for idx, c in np.ndenumerate(cond):
+        res[idx] = x if c else y
+    return res
+
+def array_scalar_scalar_where(context, builder, sig, args):
+    """
+    np.where(array, scalar, scalar)
+    """
+    cond, x, y = sig.args
+    npty = np.promote_types(as_dtype(x), as_dtype(y))
+
+    if cond.layout == 'F':
+        def where_impl(cond, x, y):
+            res = np.asfortranarray(np.empty(cond.shape, dtype=npty))
+            return _where_inner(cond, x, y, res)
+    else:
+        def where_impl(cond, x, y):
+            res = np.empty(cond.shape, dtype=npty)
+            return _where_inner(cond, x, y, res)
+
+    res = context.compile_internal(builder, where_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+def instances_of(objects, class_info):
+    return all(isinstance(o, class_info) for o in objects)
 
 @lower_builtin(np.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
-    cond = sig.args[0]
+    cond, x, y = sig.args
+
     if isinstance(cond, types.Array):
-        return array_where(context, builder, sig, args)
+        if instances_of((x, y), types.Array):
+            return array_where(context, builder, sig, args)
+        if instances_of((x, y), (types.Number, types.Boolean)):
+            return array_scalar_scalar_where(context, builder, sig, args)
 
     def scalar_where_impl(cond, x, y):
         """
@@ -1918,7 +1949,6 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
-
 
 @overload(np.real)
 def np_real(a):
