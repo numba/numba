@@ -1548,47 +1548,89 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_extract_basic(self):
         pyfunc = extract
         cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
 
         a = np.arange(10)
-        cond = a > 3
-
-        one = pyfunc(cond, a)
-        print(one)
-        two = cfunc(cond, a)
-        print(two)
+        self.rnd.shuffle(a)
+        for threshold in range(-3, 13):
+            cond = a > threshold
+            _check({'condition': cond, 'arr': a})
 
         a = np.arange(60).reshape(4, 5, 3)
         cond = a > 11.2
+        _check({'condition': cond, 'arr': a})
 
-        one = pyfunc(cond, a)
-        print(one)
-        two = cfunc(cond, a)
-        print(two)
+        a = ((1, 2, 3), (3, 4, 5), (4, 5, 6))
+        cond = np.eye(3).flatten()
+        _check({'condition': cond, 'arr': a})
 
-        a = ((1, 2, 3), (3, 4, 5))
-        cond = np.ones(6)
-
-        one = pyfunc(cond, a)
-        print(one)
-        two = cfunc(cond, a)
-        print(two)
+        a = [1.1, 2.2, 3.3, 4.4]
+        cond = [1, 1, 0, 1]
+        _check({'condition': cond, 'arr': a})
 
         a = np.linspace(-2, 10, 6)
-        cond = np.ones(6).reshape(3, 2)
+        element_pool = (True, False, np.nan, -1, -1.0, -1.2, 1, 1.0, 1.5j)
+        for cond in itertools.combinations_with_replacement(element_pool, 4):
+            _check({'condition': cond, 'arr': a})
+            _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
 
-        one = pyfunc(cond, a)
-        print(one)
-        two = cfunc(cond, a)
-        print(two)
+        a = np.array([1, 2, 3])
+        cond = np.array([])
+        _check({'condition': cond, 'arr': a})
 
-        # this will fail
-        # a = np.linspace(-2, 10, 6)
-        # cond = 1.0
-        #
-        # one = pyfunc(cond, a)
-        # print(one)
-        # two = cfunc(cond, a)
-        # print(two)
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0])  # but [1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = [1, 0, 1, 0, 1, 0]  # but [1, 0, 1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.asfortranarray(np.arange(60).reshape(3, 4, 5))
+        cond = np.repeat((0, 1), 30)
+        _check({'condition': cond, 'arr': a})
+        _check({'condition': cond, 'arr': a[::-1]})
+
+        a = np.array(4)
+        for cond in 0, 1:
+            _check({'condition': cond, 'arr': a})
+
+        a = 1
+        cond = 1
+        _check({'condition': cond, 'arr': a})
+
+    def test_extract_exceptions(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.array([])
+        cond = np.array([1, 2, 3])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn('Cannot extract from an empty array', str(e.exception))
+
+        msg = 'condition shape inconsistent with arr shape'
+        a = np.array([[1, 2, 3], [1, 2, 3]])
+        cond = [1, 0, 1, 0, 1, 0, 1]
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn(msg, str(e.exception))
+
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0, 1])
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn(msg, str(e.exception))
+
+        a = np.array(60)  # note, this is 0D
+        cond = 0, 1
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn(msg, str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

@@ -2528,9 +2528,24 @@ def np_convolve(a, v):
 def np_extract(condition, arr):
 
     def np_extract_impl(condition, arr):
-        cond = _asarray(condition).flat
-        a = _asarray(arr).flat
-        out = [a[idx] for idx in range(len(a)) if cond[idx]]
+        cond = _asarray(condition)
+        a = _asarray(arr)
+
+        if a.size == 0:
+            raise ValueError('Cannot extract from an empty array')
+
+        # the below looks odd but replicates NumPy
+        msg = 'condition shape inconsistent with arr shape'
+        if a.ndim == 0 and cond.size > 1:
+            raise ValueError(msg)
+
+        if a.ndim == 1 and cond.size > a.size + 1:
+            raise ValueError(msg)
+
+        if a.ndim > 1 and cond.size > a.size:
+            raise ValueError(msg)
+
+        out = [a.flat[idx] for idx in range(min(a.size, cond.size)) if cond.flat[idx]]
         return np.array(out)
 
     return np_extract_impl
