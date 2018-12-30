@@ -2523,3 +2523,14 @@ def np_convolve(a, v):
             return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
 
     return impl
+
+@overload(np.extract)
+def np_extract(condition, arr):
+
+    def np_extract_impl(condition, arr):
+        cond = _asarray(condition).flat
+        a = _asarray(arr).flat
+        out = [a[idx] for idx in range(len(a)) if cond[idx]]
+        return np.array(out)
+
+    return np_extract_impl

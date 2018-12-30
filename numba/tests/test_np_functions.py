@@ -113,6 +113,9 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def extract(condition, arr):
+    return np.extract(condition, arr)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1541,6 +1544,51 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
+
+    def test_extract_basic(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(10)
+        cond = a > 3
+
+        one = pyfunc(cond, a)
+        print(one)
+        two = cfunc(cond, a)
+        print(two)
+
+        a = np.arange(60).reshape(4, 5, 3)
+        cond = a > 11.2
+
+        one = pyfunc(cond, a)
+        print(one)
+        two = cfunc(cond, a)
+        print(two)
+
+        a = ((1, 2, 3), (3, 4, 5))
+        cond = np.ones(6)
+
+        one = pyfunc(cond, a)
+        print(one)
+        two = cfunc(cond, a)
+        print(two)
+
+        a = np.linspace(-2, 10, 6)
+        cond = np.ones(6).reshape(3, 2)
+
+        one = pyfunc(cond, a)
+        print(one)
+        two = cfunc(cond, a)
+        print(two)
+
+        # this will fail
+        # a = np.linspace(-2, 10, 6)
+        # cond = 1.0
+        #
+        # one = pyfunc(cond, a)
+        # print(one)
+        # two = cfunc(cond, a)
+        # print(two)
 
 
 class TestNPMachineParameters(TestCase):
