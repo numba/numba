@@ -2547,7 +2547,7 @@ def np_asarray(a, dtype=None):
         else:
             def impl(a, dtype=None):
                 return np.array(a, dtype)
-    elif isinstance(a, (types.Float, types.Integer, types.Boolean)):
+    elif isinstance(a, (types.Number, types.Boolean)):
         dt_conv = a if _is_nonelike(dtype) else dtype
         ty = as_dtype(dt_conv)
         def impl(a, dtype=None):

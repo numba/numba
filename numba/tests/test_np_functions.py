@@ -1563,6 +1563,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             * tuples of lists
             * ndarrays
             """
+            yield 1j
+            yield 1.2
+            yield False
             yield 1
             yield [1, 2, 3]
             yield [(1, 2, 3), (1, 2, 3)]
