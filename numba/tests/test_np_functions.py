@@ -1702,6 +1702,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = 1j
         _check({'y': y, 'dx': dx})
 
+        y = np.arange(20)
+        dx = np.array([5])
+        _check({'y': y, 'dx': dx})
+
     @needs_blas
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx

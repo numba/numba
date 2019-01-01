@@ -1277,7 +1277,7 @@ def np_trapz(y, x=None, dx=1.0):
         y_average = pairwise_average(y_arr)
 
         if len(x_arr) == 1:
-            area_dx_scalar(y_average, x_arr[0])
+            return area_dx_scalar(y_average, x_arr[0])
         elif len(x_arr) == len(y_arr) - 1:
             return area_dx_array(y_average, x_arr)
         else:
