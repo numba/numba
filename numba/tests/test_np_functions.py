@@ -1738,7 +1738,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         y = [1, 2, 3, 4, 5]
-        msg = ("First argument 'y' has shape which is"
+        msg = ("First argument 'y' has shape which is "
                "incompatible with second argument 'x'")
 
         for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
@@ -1769,7 +1769,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(**{'y': y, 'x': None, 'dx': dx})
 
-        msg = ("Shape of third argument 'dx' incompatible"
+        msg = ("Shape of third argument 'dx' incompatible "
                "with first argument 'y'")
 
         self.assertIn(msg, str(e.exception))
