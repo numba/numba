@@ -7,6 +7,7 @@ from collections import namedtuple, defaultdict
 
 from numba import ir
 from numba.controlflow import CFGraph
+from numba import types
 
 #
 # Analysis related to variable lifetime
@@ -259,3 +260,179 @@ def find_top_level_loops(cfg):
     for loop in cfg.loops().values():
         if loop.header not in blocks_in_loop:
             yield loop
+
+# Functions to manipulate IR
+def dead_branch_prune(func_ir, called_args):
+    """
+    Removes dead branches based on constant inference from function args.
+    This directly mutates the IR.
+
+    func_ir is the IR
+    called_args are the actual arguments with which the function is called
+    """
+
+    DEBUG = 0
+
+    def find_branches(func_ir):
+        # find *all* branches
+        branches = []
+        for idx, blk in func_ir.blocks.items():
+            tmp = [_ for _ in blk.find_insts(cls=ir.Branch)]
+            store = dict()
+            for branch in tmp:
+                store['branch'] = branch
+                expr = blk.find_variable_assignment(branch.cond.name)
+                if expr is not None:
+                    val = expr.value
+                    if isinstance(val, ir.Expr) and val.op == 'binop':
+                        store['op'] = val
+                        args = [val.lhs, val.rhs]
+                        store['args'] = args
+                        store['block'] = blk
+                        branches.append(store)
+        return branches
+
+    def prune(func_ir, branch, all_branches, *conds):
+        # this prunes a given branch and fixes up the IR
+        lhs_cond, rhs_cond = conds
+        take_truebr = branch['op'].fn(lhs_cond, rhs_cond)
+        cond = branch['branch']
+        if take_truebr:
+            keep = cond.truebr
+            kill = cond.falsebr
+        else:
+            keep = cond.falsebr
+            kill = cond.truebr
+
+        cfg = compute_cfg_from_blocks(func_ir.blocks)
+        if DEBUG > 0:
+            print("Pruning %s" % kill, branch['branch'], lhs_cond, rhs_cond, branch['op'].fn)
+            if DEBUG > 1:
+                from pprint import pprint
+                cfg.dump()
+
+        # only prune branches to blocks that have a single access route, this is
+        # conservative
+        kill_count = 0
+        for targets in cfg._succs.values():
+            if kill in targets:
+                kill_count += 1
+                if kill_count > 1:
+                    if DEBUG > 0:
+                        print("prune rejected")
+                    return
+
+        # remove dominators that are not on the backbone
+        dom = cfg.dominators()
+        postdom = cfg.post_dominators()
+        backbone = cfg.backbone()
+        rem = []
+
+        for idx, doms in dom.items():
+            if kill in doms and kill not in backbone:
+                rem.append(idx)
+        if not rem:
+            if DEBUG > 0:
+                msg = "prune rejected no kill in dominators and not in backbone"
+                print(msg)
+            return
+
+        for x in rem:
+            func_ir.blocks.pop(x)
+
+        block = branch['block']
+        # remove computation of the branch condition, it's dead
+        branch_assign = block.find_variable_assignment(cond.cond.name)
+        block.body.remove(branch_assign)
+
+        # replace the branch with a direct jump
+        jmp = ir.Jump(keep, loc=cond.loc)
+        block.body[-1] = jmp
+
+    branches = find_branches(func_ir)
+    noldbranches = len(branches)
+    nnewbranches = 0
+
+    class Unknown(object):
+        pass
+
+    def get_const_val(func_ir, arg):
+        """
+        Resolves the arg to a const if there is a variable assignment like:
+        `$label = const(thing)`
+        """
+        possibles = []
+        for idx, blk in func_ir.blocks.items():
+            found = blk.find_variable_assignment(arg.name)
+            if found is not None and isinstance(found.value, ir.Const):
+                possibles.append(found.value.value)
+        # if there's more than one definition we don't know which const
+        # propagates to here
+        if len(possibles) == 1:
+            return possibles[0]
+        else:
+            return Unknown()
+
+    def resolve_input_arg_const(input_arg):
+        """
+        Resolves an input arg to a constant (if possible)
+        """
+        idx = func_ir.arg_names.index(input_arg)
+        input_arg_ty = called_args[idx]
+
+        # comparing to None?
+        if isinstance(input_arg_ty, types.NoneType):
+            return None
+
+        # is it a kwarg default
+        if isinstance(input_arg_ty, types.Omitted):
+            if isinstance(input_arg_ty.value, types.NoneType):
+                return None
+            else:
+                return input_arg_ty.value
+
+        # is it a literal
+        const = getattr(input_arg_ty, 'literal_value', None)
+        if const is not None:
+            return const
+
+        return Unknown()
+
+    # keep iterating until branch prune stabilizes
+    while(noldbranches != nnewbranches):
+        # This looks for branches where:
+        # an arg of the condition is in input args and const/literal
+        # an arg of the condition is a const/literal
+        # if the condition is met it will remove blocks that are not reached and
+        # patch up the branch
+        for branch in branches:
+            const_arg_val = False
+            const_conds = []
+            for arg in branch['args']:
+                resolved_const = Unknown()
+                if arg.name in func_ir.arg_names:
+                    # it's an e.g. literal argument to the function
+                    resolved_const = resolve_input_arg_const(arg.name)
+                else:
+                    # it's some const argument to the function
+                    resolved_const = get_const_val(func_ir, arg)
+
+                if not isinstance(resolved_const, Unknown):
+                    const_conds.append(resolved_const)
+
+            # lhs/rhs are consts
+            if len(const_conds) == 2:
+                if DEBUG > 1:
+                    print("before".center(80, '-'))
+                    print(func_ir.dump())
+
+                prune(func_ir, branch, branches, *const_conds)
+
+                if DEBUG > 1:
+                    print("after".center(80, '-'))
+                    print(func_ir.dump())
+
+        noldbranches = len(branches)
+        branches = find_branches(func_ir)
+        nnewbranches = len(branches)
+
