@@ -116,15 +116,12 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        return self.get_call_type_with_literals(context, args, kws)
-
-    def get_call_type_with_literals(self, context, args, kws, literals=None):
         failures = _ResolutionFailures(context, self, args, kws)
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            for support_literals in [True, False]:
+            for uselit in [True, False]:
                 try:
-                    if support_literals:
+                    if uselit:
                         sig = temp.apply(args, kws)
                     else:
                         nolitargs = tuple([unliteral(a) for a in args])
@@ -138,7 +135,7 @@ class BaseFunction(Callable):
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         return sig
                     else:
-                        haslit= '' if support_literals else 'out'
+                        haslit= '' if uselit else 'out'
                         msg = "All templates rejected with%s literals." % haslit
                         failures.add_error(temp_cls, msg)
 
@@ -218,12 +215,6 @@ class BoundFunction(Callable, Opaque):
         if out is None and e is not None:
             raise e
         return out
-
-    def get_call_type_with_literals(self, context, args, kws, literals):
-        if literals is not None:
-            return self.template(context).apply(*literals)
-        else:
-            return self.get_call_type(context, args, kws)
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
