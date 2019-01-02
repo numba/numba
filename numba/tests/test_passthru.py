@@ -5,10 +5,9 @@ from numba import cgutils
 from numba.extending import box, lower_builtin, NativeValue, type_callable, typeof_impl
 from numba.jitclass import _box
 from numba.runtime.nrt import rtsys
-import pytest
 from numba.jitclass.passthru import create_pass_thru_native, PassThruTypeBase, create_pass_thru_type
 from sys import getrefcount
-from unittest import expectedFailure,TestCase
+from unittest import TestCase
 
 
 @contextmanager
@@ -25,7 +24,7 @@ def check_numba_allocations(self, extra_allocations=0, refcount_changes={},**tra
     before = rtsys.get_allocation_stats()
 
     try:
-        yield track_refcounts.values()      # ATTN: this will be in 'random' order on older pythons
+        yield tuple(v for k, v in sorted(track_refcounts.items()))
 
         refcounts_after = {k: getrefcount(v) for k, v in track_refcounts.items()}
         for k, v in track_refcounts.items():
@@ -418,8 +417,8 @@ def double(x):
 
 
 def attr_access(o, *names):
-    body = ", ".join(f"o.{n}" for n in names)
-    f = jit(nopython=True)(eval(f"lambda o: ({body})"))
+    body = ", ".join("o.{}".format(n) for n in names)
+    f = jit(nopython=True)(eval("lambda o: ({})".format(body)))
 
     return f(o)
 
