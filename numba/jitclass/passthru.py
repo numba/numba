@@ -122,8 +122,20 @@ def unbox_pass_thru_type(typ, obj, context):
             #  obj was not unboxed before
             #  write pointer to the meminfo onto the Box atttributes and incref as Box dtor will decref once
             context.context.nrt.incref(context.builder, typ, pass_thru._getvalue())
-            _set_box_member(context.context, context.builder, obj, _box.box_meminfoptr_offset, context.builder.bitcast(pass_thru.meminfo, cgutils.voidptr_t))
-            _set_box_member(context.context, context.builder, obj, _box.box_dataptr_offset, context.builder.bitcast(pass_thru.data, cgutils.voidptr_t))
+            _set_box_member(
+                context.context,
+                context.builder,
+                obj,
+                _box.box_meminfoptr_offset,
+                context.builder.bitcast(pass_thru.meminfo, cgutils.voidptr_t)
+            )
+            _set_box_member(
+                context.context,
+                context.builder,
+                obj,
+                _box.box_dataptr_offset,
+                context.builder.bitcast(pass_thru.data, cgutils.voidptr_t)
+            )
 
             context.builder.store(native_payload.value, pass_thru.data)
 
@@ -132,7 +144,14 @@ def unbox_pass_thru_type(typ, obj, context):
             context.context.nrt.decref(context.builder, payload_type, native_payload.value)
 
     if _debug_print:
-        cgutils.printf(context.builder, "**** unboxed {} form pyobject %p to meminfo %p, py_refcount=%u, nrt_refcount=%u\n".format(typ), obj, pass_thru.meminfo, context.builder.load(obj), context.builder.load(pass_thru.meminfo))
+        cgutils.printf(
+            context.builder,
+            "**** unboxed {} form pyobject %p to meminfo %p, py_refcount=%u, nrt_refcount=%u\n".format(typ),
+            obj,
+            pass_thru.meminfo,
+            context.builder.load(obj),
+            context.builder.load(pass_thru.meminfo)
+        )
     is_error = cgutils.is_not_null(context.builder, context.pyapi.err_occurred())
 
     if native_payload.cleanup is not None:
@@ -153,7 +172,12 @@ def box_pass_thru_type(typ, val, context):
     parent = payload.parent
 
     if _debug_print:
-        cgutils.printf(context.builder, "**** boxing {} form pyobject %p, meminfo %p\n".format(typ), parent, val.meminfo)
+        cgutils.printf(
+            context.builder,
+            "**** boxing {} form pyobject %p, meminfo %p\n".format(typ),
+            parent,
+            val.meminfo
+        )
 
     with context.builder.if_else(cgutils.is_not_null(context.builder, parent)) as (python_created, no_python_created):
         with python_created:
@@ -162,16 +186,28 @@ def box_pass_thru_type(typ, val, context):
             bb_python_created = context.builder.basic_block
 
         with no_python_created:
-            # val was created on the native side
-            context.context.nrt.incref(context.builder, payload_type, payload._getvalue())     # aquire a new ref as the boxer will release one
+            # val was created on the native side, aquire a new ref as the boxer will release one
+            context.context.nrt.incref(context.builder, payload_type, payload._getvalue())
             new_parent = context.box(payload_type, payload._getvalue())
             payload.parent = new_parent
 
             # check we have successfully boxed the payload before trying to store something onto the pointer
             with context.builder.if_then(cgutils.is_not_null(context.builder, new_parent)):
                 # take the ref to the meminfo onto the Box
-                _set_box_member(context.context, context.builder, new_parent, _box.box_meminfoptr_offset, context.builder.bitcast(val.meminfo, cgutils.voidptr_t))
-                _set_box_member(context.context, context.builder, new_parent, _box.box_dataptr_offset, context.builder.bitcast(val.data, cgutils.voidptr_t))
+                _set_box_member(
+                    context.context,
+                    context.builder,
+                    new_parent,
+                    _box.box_meminfoptr_offset,
+                    context.builder.bitcast(val.meminfo, cgutils.voidptr_t)
+                )
+                _set_box_member(
+                    context.context,
+                    context.builder,
+                    new_parent,
+                    _box.box_dataptr_offset,
+                    context.builder.bitcast(val.data, cgutils.voidptr_t)
+                )
 
             bb_no_python_created = context.builder.basic_block
 
@@ -195,7 +231,6 @@ def box_pass_thru_type(typ, val, context):
                     context.builder, "**** failed to boxed {} to from %p\n".format(typ),
                     val.meminfo
                 )
-
 
     return obj
 
@@ -274,7 +309,10 @@ def create_pass_thru_type(typ, unbox_payload=unbox_passthru_payload):
         payload_type = type(name.replace('Type', 'PayloadType', 1), (PassThruPayloadType,), {})
 
         model = type(name.replace('Type', 'Model', 1), (PassThruModel,), dict(payload_type=payload_type))
-        payload_model = type(name.replace('Type', 'PayloadModel', 1), (PassThruPayloadModel,), dict(spec=typ.nopython_attrs))
+        payload_model = type(
+            name.replace('Type', 'PayloadModel', 1),
+            (PassThruPayloadModel,), dict(spec=typ.nopython_attrs)
+        )
 
         _passthru_types[typ] = payload_type, model, payload_model
 
@@ -367,7 +405,9 @@ def unbox_passthru_container_payload(typ, obj, context):
     return NativeValue(payload._getvalue(), is_error=is_error)
 
 
-PassThruContainerPayloadType = create_pass_thru_type(PassThruContainerType, unbox_payload=unbox_passthru_container_payload)
+PassThruContainerPayloadType = create_pass_thru_type(
+    PassThruContainerType, unbox_payload=unbox_passthru_container_payload
+)
 
 
 @lower_builtin(is_, types.Opaque, types.Opaque)
