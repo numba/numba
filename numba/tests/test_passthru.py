@@ -118,7 +118,6 @@ class PassThruContainerTest(TestCase):
             self.assertEqual(c3.obj['b'], 2)
             del c1, c2, c3, c4
 
-    @expectedFailure
     def test_hash(self):
         obj = dict(a=1)
 

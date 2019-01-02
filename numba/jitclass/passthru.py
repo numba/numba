@@ -345,7 +345,7 @@ class PassThruContainer(_box.Box):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
 
     def __hash__(self):
-        return hash(self.obj)
+        return id(self.obj)     # TODO: probably not the best choice but easy to implement on native side
 
 
 class PassThruContainerType(PassThruTypeBase):
@@ -399,6 +399,18 @@ def generic_passthru_eq(xty, yty):
                 return False
 
             return generic_passthru_any_eq
+
+
+@lower_builtin(hash, PassThruContainerType())
+def passthru_container_hash(context, builder, sig, args):
+    typ, = sig.args
+
+    val = cgutils.create_struct_proxy(typ)(context, builder, value=args[0])
+    payload = typ.get_payload(context, builder, val)
+    ptr = payload.wrapped_obj
+
+    ll_return_type = context.get_value_type(sig.return_type)
+    return builder.ptrtoint(ptr, ll_return_type)
 
 
 @typeof_impl.register(PassThruContainer)
