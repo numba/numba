@@ -77,7 +77,7 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
 
     return function_sig, codegen
 
-@intrinsic(support_literals=True)
+@intrinsic
 def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     """
     Generates a tuple that can be used to index a specific slice from an

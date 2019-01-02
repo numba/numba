@@ -220,7 +220,7 @@ class BoundFunction(Callable, Opaque):
         return out
 
     def get_call_type_with_literals(self, context, args, kws, literals):
-        if literals is not None and self.template.support_literals:
+        if literals is not None:
             return self.template(context).apply(*literals)
         else:
             return self.get_call_type(context, args, kws)
