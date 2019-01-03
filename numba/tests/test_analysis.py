@@ -1,16 +1,11 @@
 # Tests numba.analysis functions
 from __future__ import print_function, absolute_import, division
 
-from copy import deepcopy
-import numpy as np
-
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, run_frontend
-from numba import jit, njit, typeof, errors, types, utils, config, rewrites, ir
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.compiler import compile_isolated, run_frontend
+from numba import types, rewrites, ir
+from .support import TestCase, MemoryLeakMixin
 
 from numba.analysis import dead_branch_prune
-from numba.ir_utils import get_ir_of_code
 
 
 def compile_to_ir(func):
@@ -135,7 +130,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
 
         def impl(x):
             if x == 10:
-                z = 3.14159  # no effect
+                z = 3.14159 # noqa: F841 # no effect
 
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
@@ -202,7 +197,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             if x is None:
                 x_is_none_work = True
             else:
-                dead = 7
+                dead = 7 # noqa: F841 # no effect
 
             if x_is_none_work:
                 y = 10
@@ -237,7 +232,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             if x is None:
                 x_is_none_work = 100
             else:
-                dead = 7
+                dead = 7 # noqa: F841 # no effect
 
             if x_is_none_work == one_hundred:
                 y = 10
@@ -245,8 +240,6 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 y = -3
 
             return y, x_is_none_work
-
-        cfunc = njit(impl)
 
         self.assert_prune(impl, (types.NoneType('none'),), [False, None], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
@@ -260,8 +253,6 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             else:
                 y = 1.61803
             return y
-
-        cfunc = njit(impl)
 
         # no constant propagation so cannot prune
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
