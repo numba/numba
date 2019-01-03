@@ -2609,3 +2609,34 @@ def np_convolve(a, v):
             return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
 
     return impl
+
+def _is_nonelike(ty):
+    return (ty is None) or isinstance(ty, types.NoneType)
+
+@overload(np.asarray)
+def np_asarray(a, dtype=None):
+    impl = None
+    if isinstance(a, types.Array):
+        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+            def impl(a, dtype=None):
+                return a
+        else:
+            def impl(a, dtype=None):
+                return a.astype(dtype)
+    elif isinstance(a, (types.Sequence, types.Tuple)):
+        # Nested lists cannot be unpacked, therefore only single lists are
+        # permitted and these conform to Sequence and can be unpacked along on
+        # the same path as Tuple.
+        if _is_nonelike(dtype):
+            def impl(a, dtype=None):
+                return np.array(a)
+        else:
+            def impl(a, dtype=None):
+                return np.array(a, dtype)
+    elif isinstance(a, (types.Number, types.Boolean)):
+        dt_conv = a if _is_nonelike(dtype) else dtype
+        ty = as_dtype(dt_conv)
+        def impl(a, dtype=None):
+                return np.array(a, ty)
+
+    return impl
