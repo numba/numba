@@ -518,7 +518,8 @@ class StaticGetItemArray(AbstractTemplate):
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
             isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
-                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                ret = ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                return signature(ret, *args)
 
 
 @infer_getattr
@@ -540,7 +541,7 @@ class StaticGetItemRecord(AbstractTemplate):
         if isinstance(record, types.Record) and isinstance(idx, str):
             ret = record.typeof(idx)
             assert ret
-            return ret
+            return signature(ret, *args)
 
 @infer
 class StaticSetItemRecord(AbstractTemplate):

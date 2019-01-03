@@ -206,6 +206,10 @@ class AbstractTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         sig = generic(args, kws)
+        # Enforce that *generic()* must return None or Signature
+        if sig is not None:
+            if not isinstance(sig, Signature):
+                raise AssertionError("{} returned {}".format(self, type(sig)))
 
         # Unpack optional type if no matching signature
         if not sig and any(isinstance(x, types.Optional) for x in args):
