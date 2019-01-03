@@ -292,6 +292,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.partition` (only the 2 first arguments)
+* :func:`numpy.ptp` (only the first argument)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roots`
