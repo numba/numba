@@ -336,9 +336,12 @@ class StaticGetItemConstraint(object):
         with new_error_context("typing of static-get-item at {0}", self.loc):
             typevars = typeinfer.typevars
             for ty in typevars[self.value.name].get():
-                itemty = typeinfer.context.resolve_static_getitem(
-                            value=ty, index=self.index)
-                if itemty is not None:
+                sig = typeinfer.context.resolve_static_getitem(
+                    value=ty, index=self.index,
+                )
+
+                if sig is not None:
+                    itemty = sig.return_type
                     assert itemty.is_precise()
                     typeinfer.add_type(self.target, itemty, loc=self.loc)
                 elif self.fallback is not None:
