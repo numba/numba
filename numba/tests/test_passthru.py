@@ -8,7 +8,7 @@ from numba.jitclass import _box
 from numba.runtime.nrt import rtsys
 from numba.jitclass.passthru import create_pass_thru_native, PassThruTypeBase, create_pass_thru_type
 from sys import getrefcount
-from unittest import expectedFailure, TestCase
+from unittest import TestCase
 
 
 @contextmanager

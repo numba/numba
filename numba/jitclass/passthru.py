@@ -1,7 +1,9 @@
+from .. import cgutils, types
 from ..datamodel import default_manager as data_model_manager, models
-from ..extending import overload, register_model
+from ..extending import overload, register_model, type_callable
 from ..pythonapi import NativeValue, unbox, box
 from ..runtime.nrtdynmod import _debug_print
+from ..six import PY3
 from ..targets.imputils import lower_getattr, lower_builtin
 from ..typing.templates import infer_getattr, AttributeTemplate
 from ..typing.typeof import typeof_impl
@@ -9,10 +11,8 @@ from ..typing.typeof import typeof_impl
 from . import _box
 
 from operator import is_, eq
-
 from llvmlite import ir
 from llvmlite.llvmpy.core import Constant
-from .. import cgutils, types
 
 
 __all__ = ['PassThruContainer']
@@ -245,7 +245,7 @@ class PassThruPayloadType(types.Type):
         return self.passthru_type
 
 
-class PassThruTypeBase(types.Hashable):
+class PassThruTypeBase(types.Type):
     nopython_attrs = []
 
     def __init__(self):
@@ -383,7 +383,8 @@ class PassThruContainer(_box.Box):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
 
     def __hash__(self):
-        return id(self.obj)     # TODO: probably not the best choice but easy to implement on native side
+        # TODO: probably not the best choice but easy to implement on native side
+        return id(self.obj)
 
 
 class PassThruContainerType(PassThruTypeBase):
@@ -441,6 +442,15 @@ def generic_passthru_eq(xty, yty):
             return generic_passthru_any_eq
 
 
+@type_callable(hash)
+def type_hash_passthrucontainer(context):
+    def hash_passthrucontainer_typer(container):
+        if container is PassThruContainerType():
+            return types.intp if not PY3 else types.uintp
+
+    return hash_passthrucontainer_typer
+
+
 @lower_builtin(hash, PassThruContainerType())
 def passthru_container_hash(context, builder, sig, args):
     typ, = sig.args
@@ -450,7 +460,25 @@ def passthru_container_hash(context, builder, sig, args):
     ptr = payload.wrapped_obj
 
     ll_return_type = context.get_value_type(sig.return_type)
-    return builder.ptrtoint(ptr, ll_return_type)
+    ptr_as_int = builder.ptrtoint(ptr, ll_return_type)
+
+    if PY3:
+        # for py3 we have to emulate the cast to unsigned long from PyLong_FromVoidPtr
+        bb_not_casted = builder.basic_block
+
+        from sys import maxsize as MAXSIZE
+        with builder.if_then(cgutils.is_neg_int(builder, ptr_as_int)):
+            bb_casted = builder.basic_block
+            casted_res = builder.sub(ptr_as_int, context.get_constant(types.intp, MAXSIZE))
+
+        res = builder.phi(cgutils.intp_t)
+        res.add_incoming(ptr_as_int, bb_not_casted)
+        res.add_incoming(casted_res, bb_casted)
+
+        return res
+
+    else:
+        return ptr_as_int
 
 
 @typeof_impl.register(PassThruContainer)
