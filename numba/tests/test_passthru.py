@@ -8,11 +8,12 @@ from numba.jitclass import _box
 from numba.runtime.nrt import rtsys
 from numba.jitclass.passthru import create_pass_thru_native, PassThruTypeBase, create_pass_thru_type
 from sys import getrefcount
-from unittest import TestCase
+from unittest import expectedFailure, TestCase
 
 
 @contextmanager
-def check_numba_allocations(self, extra_allocations=0, refcount_changes={},**track_refcounts):
+def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, refcount_changes={}):
+    track_refcounts = create_tracked_objects()
     refcounts = {k: getrefcount(v) for k, v in track_refcounts.items()}
     for k, v in refcount_changes.items():
         refcounts[k] += v
@@ -25,7 +26,9 @@ def check_numba_allocations(self, extra_allocations=0, refcount_changes={},**tra
     before = rtsys.get_allocation_stats()
 
     try:
-        yield tuple(v for k, v in sorted(track_refcounts.items()))
+        tracked = tuple(v for k, v in sorted(track_refcounts.items()))
+        yield tracked
+        del tracked
 
         refcounts_after = {k: getrefcount(v) for k, v in track_refcounts.items()}
         for k, v in track_refcounts.items():
@@ -62,7 +65,7 @@ class PassThruContainerTest(TestCase):
 
             return c, a
 
-        with check_numba_allocations(self, c=PassThruContainer(obj)) as (c,):
+        with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             r, a = container_identity(c)
 
             self.assertIs(c, r)
@@ -82,7 +85,7 @@ class PassThruContainerTest(TestCase):
 
             return a
 
-        with check_numba_allocations(self, c=PassThruContainer(obj)) as (c,):
+        with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             a = forget_container(c)
 
             self.assertEqual(a, 1)
@@ -108,10 +111,14 @@ class PassThruContainerTest(TestCase):
 
         with check_numba_allocations(
                 self,
-                c1=PassThruContainer(obj1),
-                c2=PassThruContainer(obj1),
-                c3=PassThruContainer(obj2),
-                c4=PassThruContainer(obj2)
+                (
+                    lambda: dict(
+                        c1=PassThruContainer(obj1),
+                        c2=PassThruContainer(obj1),
+                        c3=PassThruContainer(obj2),
+                        c4=PassThruContainer(obj2)
+                    )
+                )
         ) as (c1, c2, c3, c4):
             a, A, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10 = container_eq(c1, c2, c3, c4)
 
@@ -134,7 +141,7 @@ class PassThruContainerTest(TestCase):
         def container_hash(c):
             return hash(c)
 
-        with check_numba_allocations(self, c=PassThruContainer(obj)) as (c,):
+        with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             res = container_hash(c)
 
             self.assertEqual(hash(c), res)
@@ -165,33 +172,33 @@ create_pass_thru_type(MyPassThruType)
 
 class MyPassThruTest(TestCase):
     def test_forget(self):
-        with check_numba_allocations(self, o=MyPassThru()) as (o,):
+        with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             _id = forget(o)
             self.assertEqual(_id, id(o.something_not_boxable) & (2**MACHINE_BITS - 1))
             del o
 
     def test_identity(self):
-        with check_numba_allocations(self, o=MyPassThru()) as (o,):
+        with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             o2 = identity(o)
             self.assertIs(o, o2)
             del o, o2
 
     def test_doubling(self):
-        with check_numba_allocations(self, o=MyPassThru()) as (o,):
+        with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             o2, o3 = double(o)
             self.assertIs(o, o2)
             self.assertIs(o, o3)
             del o, o2, o3
 
     def test_list_identity(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             l = [x, y, z]
             l2 = identity(l)
             self.assertIs(l, l2)
             del x, y, z, l, l2
 
     def test_list_create(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru()) as (x, y):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru()))) as (x, y):
             l = create_passthru_list(x, y)
 
             self.assertIs(l[0], x)
@@ -200,7 +207,7 @@ class MyPassThruTest(TestCase):
             del l, x, y
 
     def test_list_doubling(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             l = [x, y, z]
 
             l2, l3 = double(l)
@@ -324,7 +331,7 @@ def passthru_complex_constructor(context, builder, sig, args):
 
 class PassThruComplexTest(TestCase):
     def test_forget(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = PassThruComplex(42, x, [y, z])
 
             _id = forget(o)
@@ -332,7 +339,7 @@ class PassThruComplexTest(TestCase):
             del o, x, y, z
 
     def test_identity(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = PassThruComplex(42, x, [y, z])
 
             o2 = identity(o)
@@ -341,7 +348,7 @@ class PassThruComplexTest(TestCase):
             del o, o2, x, y, z
 
     def test_doubling(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = PassThruComplex(42, x, [y, z])
 
             o2, o3 = double(o)
@@ -351,7 +358,7 @@ class PassThruComplexTest(TestCase):
             del o, o2, o3, x, y, z
 
     def test_attr_access(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = PassThruComplex(42, x, [y, z])
 
             value, x2, (y2, z2) = attr_access(o, 'int_attr', 'passthru_attr', 'list_attr')
@@ -364,7 +371,7 @@ class PassThruComplexTest(TestCase):
             del o, x, x2, y, y2, z, z2
 
     def test_list_create(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o1 = PassThruComplex(42, x, [y, z])
             o2 = PassThruComplex(43, x, [y, z])
 
@@ -379,7 +386,7 @@ class PassThruComplexTest(TestCase):
             del l, o1, o2, x, y, z
 
     def test_native_create(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = create_passthru_complex_native(43, x, y, z)
 
             self.assertEqual(o.int_attr, 43)
@@ -390,7 +397,7 @@ class PassThruComplexTest(TestCase):
             del o, x, y, z
 
     def test_native_create_and_double(self):
-        with check_numba_allocations(self, x=MyPassThru(), y=MyPassThru(), z=MyPassThru()) as (x, y, z):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o1, o2 = create_passthru_complex_native_and_double(43, x, y, z)
 
             self.assertIs(o1, o2)
@@ -407,7 +414,7 @@ class PassThruComplexTest(TestCase):
 ########################################################################
 @jit(nopython=True)
 def forget(o):
-    with objmode(x='intp'):
+    with objmode(x='uintp'):
         # TODO: cannot get 32bit to work w/o truncation
         x = id(o.something_not_boxable) & (2**MACHINE_BITS - 1)
 
