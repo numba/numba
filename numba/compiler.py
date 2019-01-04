@@ -71,7 +71,6 @@ CR_FIELDS = ["typing_context",
              "library",
              "call_helper",
              "environment",
-             "has_dynamic_globals",
              "metadata",]
 
 
@@ -110,7 +109,6 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
-                 has_dynamic_globals=False,  # by definition
                  metadata=None, # Do not store, arbitrary and potentially large!
                  )
         return cr
@@ -121,7 +119,6 @@ _LowerResult = namedtuple("_LowerResult", [
     "call_helper",
     "cfunc",
     "env",
-    "has_dynamic_globals",
 ])
 
 
@@ -679,7 +676,6 @@ class BasePipeline(object):
             lifted=self.lifted,
             fndesc=lowered.fndesc,
             environment=lowered.env,
-            has_dynamic_globals=lowered.has_dynamic_globals,
             metadata=self.metadata,
             )
 
@@ -1050,20 +1046,17 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
             lower.create_cpython_wrapper(flags.release_gil)
         env = lower.env
         call_helper = lower.call_helper
-        has_dynamic_globals = lower.has_dynamic_globals
         del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
@@ -1077,14 +1070,11 @@ def py_lowering_stage(targetctx, library, interp, flags):
             lower.create_cpython_wrapper()
         env = lower.env
         call_helper = lower.call_helper
-        has_dynamic_globals = lower.has_dynamic_globals
         del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)

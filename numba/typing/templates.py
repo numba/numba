@@ -165,9 +165,7 @@ class FunctionTemplate(object):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
-
-    # Whether the typing support literals
-    support_literals = False
+    exact_match_required = False
 
     def __init__(self, context):
         self.context = context
@@ -175,6 +173,7 @@ class FunctionTemplate(object):
     def _select(self, cases, args, kws):
         options = {
             'unsafe_casting': self.unsafe_casting,
+            'exact_match_required': self.exact_match_required,
         }
         selected = self.context.resolve_overload(self.key, cases, args, kws,
                                                  **options)
@@ -572,7 +571,7 @@ def make_overload_method_template(typ, attr, overload_func):
                                             base=_OverloadMethodTemplate)
 
 
-def bound_function(template_key, support_literals=False):
+def bound_function(template_key):
     """
     Wrap an AttributeTemplate resolve_* method to allow it to
     resolve an instance method's signature rather than a instance attribute.
@@ -600,7 +599,6 @@ def bound_function(template_key, support_literals=False):
                         sig.recvr = ty
                     return sig
 
-            MethodTemplate.support_literals = support_literals
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper

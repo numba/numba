@@ -662,11 +662,9 @@ def generic_index(self, args, kws):
     assert not kws
     return signature(types.intp, recvr=self.this)
 
-def install_array_method(name, generic, support_literals=False):
+def install_array_method(name, generic):
     my_attr = {"key": "array." + name, "generic": generic}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
-    if support_literals:
-        temp_class.support_literals = support_literals
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
 
@@ -678,7 +676,7 @@ for fname in ["min", "max"]:
 
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("prod", generic_expand)
-install_array_method("sum", sum_expand, support_literals=True)
+install_array_method("sum", sum_expand)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:

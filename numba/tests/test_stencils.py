@@ -522,6 +522,61 @@ class TestStencil(TestStencilBase):
         cpfunc = self.compile_parallel(test_impl, (numba.float64[:],), stencil=False)
         self.assertNotIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
+    @skip_unsupported
+    def test_out_kwarg_w_cval(self):
+        """ Issue #3518, out kwarg did not work with cval."""
+        # test const value that matches the arg dtype, and one that can be cast
+        const_vals = [7, 7.0]
+
+        def kernel(a):
+            return (a[0, 0] - a[1, 0])
+
+        for const_val in const_vals:
+            stencil_fn = numba.stencil(kernel, cval=const_val)
+
+            def wrapped():
+                A = np.arange(12).reshape((3, 4))
+                ret = np.ones_like(A)
+                stencil_fn(A, out=ret)
+                return ret
+
+            # stencil function case
+            A = np.arange(12).reshape((3, 4))
+            expected = np.full_like(A, -4)
+            expected[-1, :] = const_val
+            ret = np.ones_like(A)
+            stencil_fn(A, out=ret)
+            np.testing.assert_almost_equal(ret, expected)
+
+            # wrapped function case, check njit, then njit(parallel=True)
+            impls = self.compile_all(wrapped,)
+            for impl in impls:
+                got = impl.entry_point()
+                np.testing.assert_almost_equal(got, expected)
+
+        # now check exceptions for cval dtype mismatch with out kwarg dtype
+        stencil_fn = numba.stencil(kernel, cval=1j)
+
+        def wrapped():
+            A = np.arange(12).reshape((3, 4))
+            ret = np.ones_like(A)
+            stencil_fn(A, out=ret)
+            return ret
+
+        A = np.arange(12).reshape((3, 4))
+        ret = np.ones_like(A)
+        with self.assertRaises(ValueError) as e:
+            stencil_fn(A, out=ret)
+        msg = "cval type does not match stencil return type."
+        self.assertIn(msg, str(e.exception))
+
+        for compiler in [self.compile_njit, self.compile_parallel]:
+            try:
+                compiler(wrapped,())
+            except(ValueError, LoweringError) as e:
+                self.assertIn(msg, str(e))
+            else:
+                raise AssertionError("Expected error was not raised")
 
 
 class pyStencilGenerator:

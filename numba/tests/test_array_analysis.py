@@ -123,7 +123,7 @@ class ArrayAnalysisTester(Pipeline):
 
         pm.add_stage(stage_array_analysis, "analyze array equivalences")
         if test_idempotence:
-            # Do another pass of array analysis to test idempontence
+            # Do another pass of array analysis to test idempotence
             pm.add_stage(stage_array_analysis, "analyze array equivalences")
 
         pm.finalize()
@@ -537,6 +537,23 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.without_assert('B', 'C')],
                                idempotent=False)
 
+        def test_9(m):
+            # issues #3461 and #3554, checks equivalence on empty slices
+            # and across binop
+            A = np.zeros((m))
+            B = A[:0] # B = array([], dtype=int64)
+            C = A[1:]
+            D = A[:-1:-1] # D = array([], dtype=int64)
+            E = B + D
+            F = E
+            F += 1 # F = array([], dtype=int64)
+            return A, C, F
+        self._compile_and_test(test_9, (types.intp,),
+                               equivs=[self.without_equiv('B', 'C'),
+                                       self.with_equiv('A', 'm'),
+                                       self.with_equiv('B', 'D'),
+                                       self.with_equiv('F', 'D'),],)
+
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
@@ -872,6 +889,20 @@ class TestArrayAnalysisParallelRequired(TestCase):
             njit(test_bug2537, parallel=True)(10)
         except IndexError:
             self.fail("test_bug2537 raised IndexError!")
+
+    @skip_unsupported
+    def test_global_namedtuple(self):
+        Row = namedtuple('Row', ['A'])
+        row = Row(3)
+
+        def test_impl():
+            rr = row
+            res = rr.A
+            if res == 2:
+                res = 3
+            return res
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
 
 if __name__ == '__main__':
     unittest.main()

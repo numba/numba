@@ -181,28 +181,21 @@ class DeviceNDArrayBase(object):
         sentry_contiguous(self)
         stream = self._default_stream(stream)
 
+        self_core, ary_core = array_core(self), array_core(ary)
         if _driver.is_device_memory(ary):
             sentry_contiguous(ary)
-
-            if self.flags['C_CONTIGUOUS'] != ary.flags['C_CONTIGUOUS']:
-                raise ValueError("Can't copy %s-contiguous array to a %s-contiguous array" % (
-                    'C' if ary.flags['C_CONTIGUOUS'] else 'F',
-                    'C' if self.flags['C_CONTIGUOUS'] else 'F',
-                ))
-
-            sz = min(self.alloc_size, ary.alloc_size)
-            _driver.device_to_device(self, ary, sz, stream=stream)
+            check_array_compatibility(self_core, ary_core)
+            _driver.device_to_device(self, ary, self.alloc_size, stream=stream)
         else:
-            # Ensure same contiguous-nous. Only copies (host-side)
-            # if necessary (e.g. it needs to materialize a strided view)
-            ary = np.array(
-                ary,
-                order='C' if self.flags['C_CONTIGUOUS'] else 'F',
+            # Ensure same contiguity. Only makes a host-side copy if necessary
+            # (i.e., in order to materialize a writable strided view)
+            ary_core = np.array(
+                ary_core,
+                order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=False)
-
-            sz = min(_driver.host_memory_size(ary), self.alloc_size)
-            _driver.host_to_device(self, ary, sz, stream=stream)
+                copy=not ary_core.flags['WRITEABLE'])
+            check_array_compatibility(self_core, ary_core)
+            _driver.host_to_device(self, ary_core, self.alloc_size, stream=stream)
 
     @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
@@ -231,20 +224,7 @@ class DeviceNDArrayBase(object):
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
-            if ary.dtype != self.dtype:
-                raise TypeError('incompatible dtype')
-
-            if ary.shape != self.shape:
-                scalshapes = (), (1,)
-                if not (ary.shape in scalshapes and self.shape in scalshapes):
-                    raise TypeError('incompatible shape; device %s; host %s' %
-                                    (self.shape, ary.shape))
-            if ary.strides != self.strides:
-                scalstrides = (), (self.dtype.itemsize,)
-                if not (ary.strides in scalstrides and
-                                self.strides in scalstrides):
-                    raise TypeError('incompatible strides; device %s; host %s' %
-                                    (self.strides, ary.strides))
+            check_array_compatibility(self, ary)
             hostary = ary
 
         assert self.alloc_size >= 0, "Negative memory size"
@@ -304,6 +284,34 @@ class DeviceNDArrayBase(object):
         ipch = devices.get_context().get_ipc_handle(self.gpu_data)
         desc = dict(shape=self.shape, strides=self.strides, dtype=self.dtype)
         return IpcArrayHandle(ipc_handle=ipch, array_desc=desc)
+
+    def squeeze(self, axis=None, stream=0):
+        """
+        Remove axes of size one from the array shape.
+
+        Parameters
+        ----------
+        axis : None or int or tuple of ints, optional
+            Subset of dimensions to remove. A `ValueError` is raised if an axis with
+            size greater than one is selected. If `None`, all axes with size one are
+            removed.
+        stream : cuda stream or 0, optional
+            Default stream for the returned view of the array.
+
+        Returns
+        -------
+        DeviceNDArray
+            Squeezed view into the array.
+
+        """
+        new_dummy, _ = self._dummy.squeeze(axis=axis)
+        return DeviceNDArray(
+            shape=new_dummy.shape,
+            strides=new_dummy.strides,
+            dtype=self.dtype,
+            stream=self._default_stream(stream),
+            gpu_data=self.gpu_data,
+        )
 
     def view(self, dtype):
         """Returns a new object by reinterpretting the dtype without making a
@@ -618,6 +626,24 @@ def from_record_like(rec, stream=0, gpu_data=None):
     return DeviceRecord(rec.dtype, stream=stream, gpu_data=gpu_data)
 
 
+def array_core(ary):
+    """
+    Extract the repeated core of a broadcast array.
+
+    Broadcast arrays are by definition non-contiguous due to repeated
+    dimensions, i.e., dimensions with stride 0. In order to ascertain memory
+    contiguity and copy the underlying data from such arrays, we must create
+    a view without the repeated dimensions.
+
+    """
+    if not ary.strides:
+        return ary
+    core_index = []
+    for stride in ary.strides:
+        core_index.append(0 if stride == 0 else slice(None))
+    return ary[tuple(core_index)]
+
+
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             "be transferred as a single memory region. Please "
                             "ensure contiguous buffer with numpy "
@@ -625,13 +651,9 @@ errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
 
 
 def sentry_contiguous(ary):
-    if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
-        if ary.strides[0] == 0:
-            # Broadcasted, ensure inner contiguous
-            return sentry_contiguous(ary[0])
-
-        else:
-            raise ValueError(errmsg_contiguous_buffer)
+    core = array_core(ary)
+    if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
+        raise ValueError(errmsg_contiguous_buffer)
 
 
 def auto_device(obj, stream=0, copy=True):
@@ -663,3 +685,15 @@ def auto_device(obj, stream=0, copy=True):
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
 
+
+def check_array_compatibility(ary1, ary2):
+    ary1sq, ary2sq = ary1.squeeze(), ary2.squeeze()
+    if ary1.dtype != ary2.dtype:
+        raise TypeError('incompatible dtype: %s vs. %s' %
+                        (ary1.dtype, ary2.dtype))
+    if ary1sq.shape != ary2sq.shape:
+        raise ValueError('incompatible shape: %s vs. %s' %
+                         (ary1.shape, ary2.shape))
+    if ary1sq.strides != ary2sq.strides:
+        raise ValueError('incompatible strides: %s vs. %s' %
+                         (ary1.strides, ary2.strides))

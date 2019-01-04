@@ -3,8 +3,9 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import float32
+from numba import float32, jit
 from numba.npyufunc import Vectorize
+from numba.errors import TypingError
 from ..support import tag, TestCase
 
 
@@ -99,6 +100,26 @@ class TestUFuncs(TestCase):
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
             self.assertPreciseEqual(ufunc(a, broadcasting_b),
                                     a + broadcasting_b)
+
+    def test_ufunc_exception_on_write_to_readonly(self):
+        z = np.ones(10)
+        z.flags.writeable = False # flip write bit
+
+        tests = []
+        expect = "ufunc 'sin' called with an explicit output that is read-only"
+        tests.append((jit(nopython=True), TypingError, expect))
+        tests.append((jit(nopython=False), ValueError,
+                      "output array is read-only"))
+
+        for dec, exc, msg in tests:
+            def test(x):
+                a = np.ones(x.shape, x.dtype) # do not copy RO attribute from x
+                np.sin(a, x)
+
+            with self.assertRaises(exc) as raises:
+                dec(test)(z)
+
+            self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':
