@@ -788,11 +788,11 @@ class Lower(BaseLower):
         )
 
     def _lower_call_ExternalFunctionPointer(self, fnty, expr, signature):
+        # Handle a C function pointer
         self.debug_print("# calling external function pointer")
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        # Handle a C function pointer
         pointer = self.loadvar(expr.func.name)
         # If the external function pointer uses libpython
         if fnty.requires_gil:

@@ -1105,7 +1105,7 @@ class BaseContext(object):
             self._codelib_stack.pop()
 
     def add_linking_libs(self, libs):
-        """Add list of linking librarys to the *active_code_library*.
+        """Add iterable of linking librarys to the *active_code_library*.
         """
         colib = self.active_code_library
         for lib in libs:
