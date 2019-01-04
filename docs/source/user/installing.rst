@@ -94,7 +94,7 @@ sample notebooks.
 Installing on Linux ARMv7 Platforms
 -----------------------------------
 
-`Berryconda <https://https://github.com/jjhelmus/berryconda>`_ is a
+`Berryconda <https://github.com/jjhelmus/berryconda>`_ is a
 conda-based Python distribution for the Raspberry Pi.  We are now uploading
 packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
 ARMv7-based boards, which currently incudes the the Raspberry Pi 2 and 3,
