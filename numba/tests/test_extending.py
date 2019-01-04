@@ -644,6 +644,57 @@ class TestHighLevelExtending(TestCase):
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
 
+    def test_typing_vs_impl_signature_mismatch_handling(self):
+        """
+        Tests that an overload which has a differing typing and implementing
+        signature raises an exception.
+        """
+        def myoverload(a, kw=None):
+            pass
+
+
+        def impl1(a, kw=12): # kwarg value is different
+            if kw > 10:
+                return 1
+            else:
+                return -1
+
+        def impl2(a, kwarg=None): # kwarg name is different
+            if kw > 10:
+                return 1
+            else:
+                return -1
+
+        def impl3(z, kw=None): # arg name is different
+            if kw > 10:
+                return 1
+            else:
+                return -1
+
+        # register all the overloads (all are bad!)
+        for inner in [impl1 ,impl2, impl3]:
+            def problem_factory(impl):
+                def _myoverload_impl(a, kw=None):
+                    return impl
+                return overload(myoverload)(_myoverload_impl)
+
+            problem_factory(inner)
+
+        @jit(nopython=True)
+        def foo(a, b):
+            myoverload(a, kw=b)
+
+        with self.assertRaises(errors.TypingError) as e:
+            foo(1, 2)
+
+        err_msg = e.exception.msg
+        expected = ['<Parameter "kw=None">', '<Parameter "kw=12">',
+                    '<Parameter "kwarg=None">', '<Parameter "z">']
+        diff_lines = ''.join([x for x in err_msg.splitlines() \
+                     if "Differing" in x])
+        for ex in expected:
+            self.assertIn(ex, diff_lines)
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]

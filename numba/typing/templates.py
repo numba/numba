@@ -6,6 +6,7 @@ from __future__ import print_function, division, absolute_import
 import functools
 import operator
 import sys
+import inspect
 from types import MethodType
 
 from .. import types, utils
@@ -309,6 +310,22 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 # No implementation => fail typing
                 self._impl_cache[cache_key] = None
                 return
+            # check that the pyfunc and the overload have the same signature!
+            typing_sig = inspect.signature(self._overload_func)
+            impl_sig = inspect.signature(pyfunc)
+            if typing_sig != impl_sig:
+                msg_impl = "%s(%s)" % (pyfunc, impl_sig)
+                msg_typi = "%s(%s)" % (self._overload_func, typing_sig)
+                def get_param(sig):
+                    return set([x for x in sig.parameters.values()])
+                impl_param = get_param(impl_sig)
+                typi_param = get_param(typing_sig)
+                difference = impl_param ^ typi_param
+                msg = ("Implementing function: %s does not have the same "
+                       "signature as Typing function: %s.\nDiffering items "
+                       "are as follows: %s" %
+                       (msg_impl, msg_typi, difference))
+                raise TypingError(msg)
             from numba import jit
             jitdecor = jit(nopython=True, **self._jit_options)
             disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
