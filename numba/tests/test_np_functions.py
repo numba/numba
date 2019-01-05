@@ -1640,7 +1640,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check({'y': y, 'x': x})
 
         y = np.arange(60).reshape(5, 4, 3)
+        self.rnd.shuffle(y)
         x = y + 1.1
+        self.rnd.shuffle(x)
         _check({'y': y, 'x': x})
 
         y = np.arange(20)
@@ -1797,7 +1799,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(**{'y': y, 'x': None, 'dx': 1.0})
 
         self.assertIn('y cannot be a scalar', str(e.exception))
-
 
     def test_asarray(self):
 

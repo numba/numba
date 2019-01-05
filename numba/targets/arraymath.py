@@ -1354,12 +1354,12 @@ def np_trapz(y, x=None, dx=1.0):
         return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)[0]
 
     def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
+        y_arr = np.asarray(y, dtype)
         return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)
 
     def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
-        x_arr = _asarray(dx).astype(dtype)
+        y_arr = np.asarray(y, dtype)
+        x_arr = np.asarray(dx, dtype)
         y_average = pairwise_average(y_arr)
 
         if len(x_arr) == 1:
@@ -1370,8 +1370,8 @@ def np_trapz(y, x=None, dx=1.0):
             raise ValueError(Y_DX_MSG)
 
     def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
-        x_arr = _asarray(dx).astype(dtype)
+        y_arr = np.asarray(y, dtype)
+        x_arr = np.asarray(dx, dtype)
 
         if x_arr.shape[-1] != y_arr.shape[-1] - 1:
             raise ValueError(Y_DX_MSG)
@@ -1386,8 +1386,8 @@ def np_trapz(y, x=None, dx=1.0):
         return out
 
     def np_trapz_impl_x_y_non_arr(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
-        x_arr = _asarray(x).astype(dtype)
+        y_arr = np.asarray(y, dtype)
+        x_arr = np.asarray(x, dtype)
         y_average = pairwise_average(y_arr)
 
         if len(y_arr) == 0:
@@ -1402,8 +1402,8 @@ def np_trapz(y, x=None, dx=1.0):
             raise ValueError(Y_X_MSG)
 
     def np_trapz_impl_x(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
-        x_arr = _asarray(x).astype(dtype)
+        y_arr = np.asarray(y, dtype)
+        x_arr = np.asarray(x, dtype)
 
         out = np.empty(y_arr.shape[:-1], dtype=dtype)
         for idx in np.ndindex(y_arr.shape[:-1]):
@@ -1420,8 +1420,8 @@ def np_trapz(y, x=None, dx=1.0):
         return out
 
     def np_trapz_impl_x_multi_dim(y, x=None, dx=1.0):
-        y_arr = _asarray(y).astype(dtype)
-        x_arr = _asarray(x).astype(dtype)
+        y_arr = np.asarray(y, dtype)
+        x_arr = np.asarray(x, dtype)
 
         if y_arr.shape != x_arr.shape:
             raise ValueError(Y_X_MSG)
@@ -1438,7 +1438,7 @@ def np_trapz(y, x=None, dx=1.0):
     if isinstance(y, (types.Number, types.Boolean)):
         raise TypingError('y cannot be a scalar')
 
-    if x in (None, types.none):
+    if _is_nonelike(x):
         if isinstance(dx, (float, int, types.Number)):
             if isinstance(y, types.Array) and y.ndim > 1:
                 return np_trapz_impl_x_none_dx_scalar_multi_dim
