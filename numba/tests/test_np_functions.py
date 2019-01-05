@@ -113,6 +113,12 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def asarray(a):
+    return np.asarray(a)
+
+def asarray_kws(a, dtype):
+    return np.asarray(a, dtype=dtype)
+
 def extract(condition, arr):
     return np.extract(condition, arr)
 
@@ -1631,6 +1637,73 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(cond, a)
         self.assertIn(msg, str(e.exception))
+
+    def test_asarray(self):
+
+        def input_variations():
+            """
+            To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html
+            Input data, in any form that can be converted to an array.
+            This includes:
+            * lists
+            * lists of tuples
+            * tuples
+            * tuples of tuples
+            * tuples of lists
+            * ndarrays
+            """
+            yield 1j
+            yield 1.2
+            yield False
+            yield 1
+            yield [1, 2, 3]
+            yield [(1, 2, 3), (1, 2, 3)]
+            yield (1, 2, 3)
+            yield ((1, 2, 3), (1, 2, 3))
+            yield ([1, 2, 3], [1, 2, 3])
+            yield np.array([])
+            yield np.arange(4)
+            yield np.arange(12).reshape(3, 4)
+            yield np.arange(12).reshape(3, 4).T
+
+        # used to check that if the input is already an array and the dtype is
+        # the same as that of the input/omitted then the array itself is
+        # returned.
+        def check_pass_through(jitted, expect_same, params):
+            returned = jitted(**params)
+            if expect_same:
+                self.assertTrue(returned is params['a'])
+            else:
+                self.assertTrue(returned is not params['a'])
+                # should be numerically the same, just different dtype
+                np.testing.assert_allclose(returned, params['a'])
+                self.assertTrue(returned.dtype == params['dtype'])
+
+        for pyfunc in [asarray, asarray_kws]:
+            cfunc = jit(nopython=True)(pyfunc)
+            _check = partial(self._check_output, pyfunc, cfunc)
+
+            for x in input_variations():
+                params = {'a': x}
+                if 'kws' in pyfunc.__name__:
+                    for dt in [None, np.complex128]:
+                        params['dtype'] = dt
+                        _check(params)
+                else:
+                    _check(params)
+
+                # check the behaviour over a dtype change (or not!)
+                x = np.arange(10, dtype=np.float32)
+                params = {'a': x}
+                if 'kws' in pyfunc.__name__:
+                    params['dtype'] = None
+                    check_pass_through(cfunc, True, params)
+                    params['dtype'] = np.complex128
+                    check_pass_through(cfunc, False, params)
+                    params['dtype'] = np.float32
+                    check_pass_through(cfunc, True, params)
+                else:
+                    check_pass_through(cfunc, True, params)
 
 
 class TestNPMachineParameters(TestCase):

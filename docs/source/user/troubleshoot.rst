@@ -481,6 +481,571 @@ Beware that enabling debug info significantly increases the memory consumption
 for each compiled function.  For large application, this may cause out-of-memory
 error.
 
+Using Numba's direct ``gdb`` bindings in ``nopython``  mode
+===========================================================
+
+Numba (version 0.42.0 and later) has some additional functions relating to
+``gdb`` support for CPUs that make it easier to debug programs. All the ``gdb``
+related functions described in the following work in the same manner
+irrespective of whether they are called from the standard CPython interpreter or
+code compiled in either :term:`nopython mode` or :term:`object mode`.
+
+.. note:: This feature is experimental!
+
+.. warning:: This feature does unexpected things if used from Jupyter or
+             alongside the ``pdb`` module. It's behaviour is harmless, just hard
+             to predict!
+
+Set up
+------
+Numba's ``gdb`` related functions make use of a ``gdb`` binary, the location and
+name of this binary can be configured via the :envvar:`NUMBA_GDB_BINARY`
+environment variable if desired.
+
+.. note:: Numba's ``gdb`` support requires the ability for ``gdb`` to attach to
+          another process. On some systems (notably Ubuntu Linux) default
+          security restrictions placed on ``ptrace`` prevent this from being
+          possible. This restriction is enforced at the system level by the
+          Linux security module `Yama`. Documentation for this module and the
+          security implications of making changes to its behaviour can be found
+          in the `Linux Kernel documentation <https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst>`_.
+          The `Ubuntu Linux security documentation <https://wiki.ubuntu.com/Security/Features#ptrace>`_
+          discusses how to adjust the behaviour of `Yama` on with regards to
+          ``ptrace_scope`` so as to permit the required behaviour.
+
+Basic ``gdb`` support
+---------------------
+
+.. warning:: Calling :func:`numba.gdb` and/or :func:`numba.gdb_init` more than
+             once in the same program is not advisable, unexpected things may
+             happen. If multiple breakpoints are desired within a program,
+             launch ``gdb`` once via :func:`numba.gdb` or :func:`numba.gdb_init`
+             and then use :func:`numba.gdb_breakpoint` to register additional
+             breakpoint locations.
+
+The most simple function for adding ``gdb`` support is :func:`numba.gdb`, which,
+at the call location, will:
+
+* launch ``gdb`` and attach it to the running process.
+* create a breakpoint at the site of the :func:`numba.gdb()` function call, the
+  attached ``gdb`` will pause execution here awaiting user input.
+
+use of this functionality is best motivated by example, continuing with the
+example used above:
+
+.. code-block:: python
+  :linenos:
+
+  from numba import njit, gdb
+
+  @njit(debug=True)
+  def foo(a):
+      b = a + 1
+      gdb() # instruct Numba to attach gdb at this location and pause execution
+      c = a * 2.34
+      d = (a, b, c)
+      print(a, b, c, d)
+
+  r= foo(123)
+  print(r)
+
+In the terminal (``...`` on a line by itself indicates output that is not
+presented for brevity):
+
+.. code-block:: none
+    :emphasize-lines: 1, 15, 20, 31, 33, 35, 37, 39
+
+    $ NUMBA_OPT=0 python demo_gdb.py
+    Attaching to PID: 27157
+    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    ...
+    Attaching to process 27157
+    ...
+    Reading symbols from <elided for brevity> ...done.
+    0x00007f0380c31550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
+    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
+    Breakpoint 1 at 0x7f036ac388f0: file numba/_helperlib.c, line 1090.
+    Continuing.
+
+    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) s
+    Single stepping until exit from function _ZN5numba7targets8gdb_hook8hook_gdb12$3clocals$3e8impl$242E5Tuple,
+    which has no line number information.
+    __main__::foo$241(long long) () at demo_gdb.py:7
+    7           c = a * 2.34
+    (gdb) l
+    2
+    3       @njit(debug=True)
+    4       def foo(a):
+    5           b = a + 1
+    6           gdb() # instruct Numba to attach gdb at this location and pause execution
+    7           c = a * 2.34
+    8           d = (a, b, c)
+    9           print(a, b, c, d)
+    10
+    11      r= foo(123)
+    (gdb) p a
+    $1 = 123
+    (gdb) p b
+    $2 = 124
+    (gdb) p c
+    $3 = 0
+    (gdb) n
+    8           d = (a, b, c)
+    (gdb) p c
+    $4 = 287.81999999999999
+
+It can be seen in the above example that execution of the code is paused at the
+location of the ``gdb()`` function call at end of the ``numba_gdb_breakpoint``
+function (this is the Numba internal symbol registered as breakpoint with
+``gdb``). Issuing a ``step`` at this point moves to the stack frame of the
+compiled Python source. From there, it can be seen that the variables ``a`` and
+``b`` have been evaluated but ``c`` has not, as demonstrated by printing their
+values, this is precisely as expected given the location of the ``gdb()`` call.
+Issuing a ``next`` then evaluates line ``7`` and ``c`` is assigned a value as
+demonstrated by the final print.
+
+Running with ``gdb`` enabled
+----------------------------
+
+The functionality provided by :func:`numba.gdb` (launch and attach ``gdb`` to
+the executing process and pause on a breakpoint) is also available as two
+separate functions:
+
+* :func:`numba.gdb_init` this function injects code at the call site to launch
+  and attach ``gdb`` to the executing process but does not pause execution.
+* :func:`numba.gdb_breakpoint` this function injects code at the call site that
+  will call the special ``numba_gdb_breakpoint`` function that is registered as
+  a breakpoint in Numba's ``gdb`` support. This is demonstrated in the next
+  section.
+
+This functionality enables more complex debugging capabilities. Again, motivated
+by example, debugging a 'segfault' (memory access violation signalling
+``SIGSEGV``):
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit, gdb_init
+    import numpy as np
+
+    @njit(debug=True)
+    def foo(a, index):
+        gdb_init() # instruct Numba to attach gdb at this location, but not to pause execution
+        b = a + 1
+        c = a * 2.34
+        d = c[index] # access an address that is a) invalid b) out of the page
+        print(a, b, c, d)
+
+    bad_index = int(1e9) # this index is invalid
+    z = np.arange(10)
+    r = foo(z, bad_index)
+    print(r)
+
+In the terminal (``...`` on a line by itself indicates output that is not
+presented for brevity):
+
+.. code-block:: none
+    :emphasize-lines: 1, 15, 17, 19, 21
+
+    $ python demo_gdb_segfault.py
+    Attaching to PID: 5444
+    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    ...
+    Attaching to process 5444
+    ...
+    Reading symbols from <elided for brevity> ...done.
+    0x00007f8d8010a550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
+    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
+    Breakpoint 1 at 0x7f8d6a1118f0: file numba/_helperlib.c, line 1090.
+    Continuing.
+
+    0x00007fa7b810a41f in __main__::foo$241(Array<long long, 1, C, mutable, aligned>, long long) () at demo_gdb_segfault.py:9
+    9           d = c[index] # access an address that is a) invalid b) out of the page
+    (gdb) p index
+    $1 = 1000000000
+    (gdb) p c
+    $2 = "p\202\017\364\371U\000\000\000\000\000\000\000\000\000\000\n\000\000\000\000\000\000\000\b\000\000\000\000\000\000\000\240\202\017\364\371U\000\000\n\000\000\000\000\000\000\000\b\000\000\000\000\000\000"
+    (gdb) whatis c
+    type = {i8*, i8*, i64, i64, double*, [1 x i64], [1 x i64]}
+    (gdb) x /32xb c
+    0x7ffd56195068: 0x70    0x82    0x0f    0xf4    0xf9    0x55    0x00    0x00
+    0x7ffd56195070: 0x00    0x00    0x00    0x00    0x00    0x00    0x00    0x00
+    0x7ffd56195078: 0x0a    0x00    0x00    0x00    0x00    0x00    0x00    0x00
+    0x7ffd56195080: 0x08    0x00    0x00    0x00    0x00    0x00    0x00    0x00
+
+
+In the ``gdb`` output it can be noted that the ``numba_gdb_breakpoint`` function
+was registered as a breakpoint (its symbol is in ``numba/_helperlib.c``),
+that a ``SIGSEGV`` signal was caught, and the line in which the access violation
+occurred is printed.
+
+Continuing the example as a debugging session demonstration, first ``index``
+can be printed, and it is evidently 1e9. Printing ``c`` gives a lot of bytes, so
+the type needs looking up. The type of ``c`` shows the layout for the array
+``c`` based on its ``DataModel`` (look in the Numba source
+``numba.datamodel.models`` for the layouts, the ``ArrayModel`` is presented
+below for ease).
+
+.. code-block:: python
+
+    class ArrayModel(StructModel):
+        def __init__(self, dmm, fe_type):
+            ndim = fe_type.ndim
+            members = [
+                ('meminfo', types.MemInfoPointer(fe_type.dtype)),
+                ('parent', types.pyobject),
+                ('nitems', types.intp),
+                ('itemsize', types.intp),
+                ('data', types.CPointer(fe_type.dtype)),
+                ('shape', types.UniTuple(types.intp, ndim)),
+                ('strides', types.UniTuple(types.intp, ndim)),
+            ]
+
+The type inspected from ``gdb``
+(``type = {i8*, i8*, i64, i64, double*, [1 x i64], [1 x i64]}``) corresponds
+directly to the members of the ``ArrayModel``. Given the segfault came from an
+invalid access it would be informative to check the number of items in the array
+and compare that to the index requested.
+
+Examining the memory of ``c``, (``x /32xb c``), the first 16 bytes are the two
+``i8*`` corresponding to the ``meminfo`` pointer and the ``parent``
+``pyobject``. The next two groups of 8 bytes are ``i64``/``intp`` types
+corresponding to ``nitems`` and ``itemsize`` respectively. Evidently their
+values are ``0x0a`` and ``0x08``, this makes sense as the input array ``a`` has
+10 elements and is of type ``int64`` which is 8 bytes wide. It's therefore clear
+that the segfault comes from an invalid access of index ``1000000000`` in an
+array containing ``10`` items.
+
+Adding breakpoints to code
+--------------------------
+
+The next example demonstrates using multiple breakpoints that are defined
+through the invocation of the :func:`numba.gdb_breakpoint` function:
+
+.. code-block:: python
+  :linenos:
+
+  from numba import njit, gdb_init, gdb_breakpoint
+
+  @njit(debug=True)
+  def foo(a):
+      gdb_init() # instruct Numba to attach gdb at this location
+      b = a + 1
+      gdb_breakpoint() # instruct gdb to break at this location
+      c = a * 2.34
+      d = (a, b, c)
+      gdb_breakpoint() # and to break again at this location
+      print(a, b, c, d)
+
+  r= foo(123)
+  print(r)
+
+In the terminal (``...`` on a line by itself indicates output that is not
+presented for brevity):
+
+.. code-block:: none
+    :emphasize-lines: 1, 17, 20, 31, 33, 35, 40, 42
+
+    $ NUMBA_OPT=0 python demo_gdb_breakpoints.py
+    Attaching to PID: 20366
+    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    ...
+    Attaching to process 20366
+    Reading symbols from <elided for brevity> ...done.
+    [Thread debugging using libthread_db enabled]
+    Using host libthread_db library "/lib64/libthread_db.so.1".
+    Reading symbols from /lib64/libc.so.6...Reading symbols from /usr/lib/debug/usr/lib64/libc-2.17.so.debug...done.
+    0x00007f631db5e550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
+    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
+    Breakpoint 1 at 0x7f6307b658f0: file numba/_helperlib.c, line 1090.
+    Continuing.
+
+    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) step
+    __main__::foo$241(long long) () at demo_gdb_breakpoints.py:8
+    8           c = a * 2.34
+    (gdb) l
+    3       @njit(debug=True)
+    4       def foo(a):
+    5           gdb_init() # instruct Numba to attach gdb at this location
+    6           b = a + 1
+    7           gdb_breakpoint() # instruct gdb to break at this location
+    8           c = a * 2.34
+    9           d = (a, b, c)
+    10          gdb_breakpoint() # and to break again at this location
+    11          print(a, b, c, d)
+    12
+    (gdb) p b
+    $1 = 124
+    (gdb) p c
+    $2 = 0
+    (gdb) continue
+    Continuing.
+
+    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) step
+    11          print(a, b, c, d)
+    (gdb) p c
+    $3 = 287.81999999999999
+
+From the ``gdb`` output it can be seen that execution paused at line 8 as a
+breakpoint was hit, and after a ``continue`` was issued, it broke again at line
+11 where the next breakpoint was hit.
+
+Debugging in parallel regions
+-----------------------------
+
+The follow example is quite involved, it executes with ``gdb`` instrumentation
+from the outset as per the example above, but it also uses threads and makes use
+of the breakpoint functionality. Further, the last iteration of the parallel
+section calls the function ``work``, which is actually just a binding to
+``glibc``'s ``free(3)`` in this case, but could equally be some involved
+function that is presenting a segfault for unknown reasons.
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit, prange, gdb_init, gdb_breakpoint
+    import ctypes
+
+    def get_free():
+        lib = ctypes.cdll.LoadLibrary('libc.so.6')
+        free_binding = lib.free
+        free_binding.argtypes = [ctypes.c_void_p,]
+        free_binding.restype = None
+        return free_binding
+
+    work = get_free()
+
+    @njit(debug=True, parallel=True)
+    def foo():
+        gdb_init() # instruct Numba to attach gdb at this location, but not to pause execution
+        counter = 0
+        n = 9
+        for i in prange(n):
+            if i > 3 and i < 8: # iterations 4, 5, 6, 7 will break here
+                gdb_breakpoint()
+
+            if i == 8: # last iteration segfaults
+                work(0xBADADD)
+
+            counter += 1
+        return counter
+
+    r = foo()
+    print(r)
+
+In the terminal (``...`` on a line by itself indicates output that is not
+presented for brevity), note the setting of ``NUMBA_NUM_THREADS`` to 4 to ensure
+that there are 4 threads running in the parallel section:
+
+.. code-block:: none
+    :emphasize-lines: 1, 19, 29, 44, 50, 56, 62, 69
+
+    $ NUMBA_NUM_THREADS=4 NUMBA_OPT=0 python demo_gdb_threads.py
+    Attaching to PID: 21462
+    ...
+    Attaching to process 21462
+    [New LWP 21467]
+    [New LWP 21468]
+    [New LWP 21469]
+    [New LWP 21470]
+    [Thread debugging using libthread_db enabled]
+    Using host libthread_db library "/lib64/libthread_db.so.1".
+    0x00007f59ec31756d in nanosleep () at ../sysdeps/unix/syscall-template.S:81
+    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
+    Breakpoint 1 at 0x7f59d631e8f0: file numba/_helperlib.c, line 1090.
+    Continuing.
+    [Switching to Thread 0x7f59d1fd1700 (LWP 21470)]
+
+    Thread 5 "python" hit Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) info threads
+    Id   Target Id         Frame
+    1    Thread 0x7f59eca2f740 (LWP 21462) "python" pthread_cond_wait@@GLIBC_2.3.2 ()
+        at ../nptl/sysdeps/unix/sysv/linux/x86_64/pthread_cond_wait.S:185
+    2    Thread 0x7f59d37d4700 (LWP 21467) "python" pthread_cond_wait@@GLIBC_2.3.2 ()
+        at ../nptl/sysdeps/unix/sysv/linux/x86_64/pthread_cond_wait.S:185
+    3    Thread 0x7f59d2fd3700 (LWP 21468) "python" pthread_cond_wait@@GLIBC_2.3.2 ()
+        at ../nptl/sysdeps/unix/sysv/linux/x86_64/pthread_cond_wait.S:185
+    4    Thread 0x7f59d27d2700 (LWP 21469) "python" numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    * 5    Thread 0x7f59d1fd1700 (LWP 21470) "python" numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    (gdb) thread apply 2-5 info locals
+
+    Thread 2 (Thread 0x7f59d37d4700 (LWP 21467)):
+    No locals.
+
+    Thread 3 (Thread 0x7f59d2fd3700 (LWP 21468)):
+    No locals.
+
+    Thread 4 (Thread 0x7f59d27d2700 (LWP 21469)):
+    No locals.
+
+    Thread 5 (Thread 0x7f59d1fd1700 (LWP 21470)):
+    sched$35 = '\000' <repeats 55 times>
+    counter__arr = '\000' <repeats 16 times>, "\001\000\000\000\000\000\000\000\b\000\000\000\000\000\000\000\370B]\"hU\000\000\001", '\000' <repeats 14 times>
+    counter = 0
+    (gdb) continue
+    Continuing.
+    [Switching to Thread 0x7f59d27d2700 (LWP 21469)]
+
+    Thread 4 "python" hit Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) continue
+    Continuing.
+    [Switching to Thread 0x7f59d1fd1700 (LWP 21470)]
+
+    Thread 5 "python" hit Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) continue
+    Continuing.
+    [Switching to Thread 0x7f59d27d2700 (LWP 21469)]
+
+    Thread 4 "python" hit Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    (gdb) continue
+    Continuing.
+
+    Thread 5 "python" received signal SIGSEGV, Segmentation fault.
+    [Switching to Thread 0x7f59d1fd1700 (LWP 21470)]
+    __GI___libc_free (mem=0xbadadd) at malloc.c:2935
+    2935      if (chunk_is_mmapped(p))                       /* release mmapped memory. */
+    (gdb) bt
+    #0  __GI___libc_free (mem=0xbadadd) at malloc.c:2935
+    #1  0x00007f59d37ded84 in $3cdynamic$3e::__numba_parfor_gufunc__0x7ffff80a61ae3e31$244(Array<unsigned long long, 1, C, mutable, aligned>, Array<long long, 1, C, mutable, aligned>) () at <string>:24
+    #2  0x00007f59d17ce326 in __gufunc__._ZN13$3cdynamic$3e45__numba_parfor_gufunc__0x7ffff80a61ae3e31$244E5ArrayIyLi1E1C7mutable7alignedE5ArrayIxLi1E1C7mutable7alignedE ()
+    #3  0x00007f59d37d7320 in thread_worker ()
+    from <path>/numba/numba/npyufunc/workqueue.cpython-37m-x86_64-linux-gnu.so
+    #4  0x00007f59ec626e25 in start_thread (arg=0x7f59d1fd1700) at pthread_create.c:308
+    #5  0x00007f59ec350bad in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:113
+
+In the output it can be seen that there are 4 threads launched and that they all
+break at the breakpoint, further that ``Thread 5`` receives a signal ``SIGSEGV``
+and that back tracing shows that it came from ``__GI___libc_free`` with the
+invalid address in ``mem``, as expected.
+
+Using the ``gdb`` command language
+----------------------------------
+Both the :func:`numba.gdb` and :func:`numba.gdb_init` functions accept unlimited
+string arguments which will be passed directly to ``gdb`` as command line
+arguments when it initializes, this makes it easy to set breakpoints on other
+functions and perform repeated debugging tasks without having to manually type
+them every time. For example, this code runs with ``gdb`` attached and sets a
+breakpoint on ``_dgesdd`` (say for example the arguments passed to the LAPACK's
+double precision divide and conqueror SVD function need debugging).
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit, gdb
+    import numpy as np
+
+    @njit(debug=True)
+    def foo(a):
+        # instruct Numba to attach gdb at this location and on launch, switch
+        # breakpoint pending on , and then set a breakpoint on the function
+        # _dgesdd, continue execution, and once the breakpoint is hit, backtrace
+        gdb('-ex', 'set breakpoint pending on',
+            '-ex', 'b dgesdd_',
+            '-ex','c',
+            '-ex','bt')
+        b = a + 10
+        u, s, vh = np.linalg.svd(b)
+        return s # just return singular values
+
+    z = np.arange(70.).reshape(10, 7)
+    r = foo(z)
+    print(r)
+
+In the terminal (``...`` on a line by itself indicates output that is not
+presented for brevity), note that no interaction is required to break and
+backtrace:
+
+.. code-block:: none
+    :emphasize-lines: 1
+
+    $ NUMBA_OPT=0 python demo_gdb_args.py
+    Attaching to PID: 22300
+    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    ...
+    Attaching to process 22300
+    Reading symbols from <py_env>/bin/python3.7...done.
+    0x00007f652305a550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
+    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
+    Breakpoint 1 at 0x7f650d0618f0: file numba/_helperlib.c, line 1090.
+    Continuing.
+
+    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
+    1090    }
+    Breakpoint 2 at 0x7f65102322e0 (2 locations)
+    Continuing.
+
+    Breakpoint 2, 0x00007f65182be5f0 in mkl_lapack.dgesdd_ ()
+    from <py_env>/lib/python3.7/site-packages/numpy/core/../../../../libmkl_rt.so
+    #0  0x00007f65182be5f0 in mkl_lapack.dgesdd_ ()
+    from <py_env>/lib/python3.7/site-packages/numpy/core/../../../../libmkl_rt.so
+    #1  0x00007f650d065b71 in numba_raw_rgesdd (kind=kind@entry=100 'd', jobz=<optimized out>, jobz@entry=65 'A', m=m@entry=10,
+        n=n@entry=7, a=a@entry=0x561c6fbb20c0, lda=lda@entry=10, s=0x561c6facf3a0, u=0x561c6fb680e0, ldu=10, vt=0x561c6fd375c0,
+        ldvt=7, work=0x7fff4c926c30, lwork=-1, iwork=0x7fff4c926c40, info=0x7fff4c926c20) at numba/_lapack.c:1277
+    #2  0x00007f650d06768f in numba_ez_rgesdd (ldvt=7, vt=0x561c6fd375c0, ldu=10, u=0x561c6fb680e0, s=0x561c6facf3a0, lda=10,
+        a=0x561c6fbb20c0, n=7, m=10, jobz=65 'A', kind=<optimized out>) at numba/_lapack.c:1307
+    #3  numba_ez_gesdd (kind=<optimized out>, jobz=<optimized out>, m=10, n=7, a=0x561c6fbb20c0, lda=10, s=0x561c6facf3a0,
+        u=0x561c6fb680e0, ldu=10, vt=0x561c6fd375c0, ldvt=7) at numba/_lapack.c:1477
+    #4  0x00007f650a3147a3 in numba::targets::linalg::svd_impl::$3clocals$3e::svd_impl$243(Array<double, 2, C, mutable, aligned>, omitted$28default$3d1$29) ()
+    #5  0x00007f650a1c0489 in __main__::foo$241(Array<double, 2, C, mutable, aligned>) () at demo_gdb_args.py:15
+    #6  0x00007f650a1c2110 in cpython::__main__::foo$241(Array<double, 2, C, mutable, aligned>) ()
+    #7  0x00007f650cd096a4 in call_cfunc ()
+    from <path>/numba/numba/_dispatcher.cpython-37m-x86_64-linux-gnu.so
+    ...
+
+
+How does the ``gdb`` binding work?
+----------------------------------
+For advanced users and debuggers of Numba applications it's important to know
+some of the internal implementation details of the outlined ``gdb`` bindings.
+The :func:`numba.gdb` and :func:`numba.gdb_init` functions work by injecting the
+following into the function's LLVM IR:
+
+* At the call site of the function first inject a call to ``getpid(3)`` to get
+  the PID of the executing process and store this for use later, then inject a
+  ``fork(3)`` call:
+
+  * In the parent:
+
+    * Inject a call ``sleep(3)`` (hence the pause whilst ``gdb`` loads).
+    * Inject a call to the ``numba_gdb_breakpoint`` function (only
+      :func:`numba.gdb` does this).
+
+  * In the child:
+
+    * Inject a call to ``execl(3)`` with the arguments
+      ``numba.config.GDB_BINARY``, the ``attach`` command and the PID recorded
+      earlier. Numba has a special ``gdb`` command file that contains
+      instructions to break on the symbol ``numba_gdb_breakpoint`` and then
+      ``finish``, this is to make sure that the program stops on the
+      breakpoint but the frame it stops in is the compiled Python frame (or
+      one ``step`` away from, depending on optimisation). This command file is
+      also added to the arguments and finally and any user specified arguments
+      are added.
+
+At the call site of a :func:`numba.gdb_breakpoint` a call is injected to the
+special ``numba_gdb_breakpoint`` symbol, which is already registered and
+instrumented as a place to break and ``finish`` immediately.
+
+As a result of this, a e.g. :func:`numba.gdb` call will cause a fork in the
+program, the parent will sleep whilst the child launches ``gdb`` and attaches it
+to the parent and tells the parent to continue. The launched ``gdb`` has the
+``numba_gdb_breakpoint`` symbol registered as a breakpoint and when the parent
+continues and stops sleeping it will immediately call ``numba_gdb_breakpoint``
+on which the child will break. Additional :func:`numba.gdb_breakpoint` calls
+create calls to the registered breakpoint hence the program will also break at
+these locations.
+
+
 Debugging CUDA Python code
 ==========================
 

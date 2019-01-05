@@ -360,6 +360,11 @@ class CPUCallConv(BaseCallConv):
         if exc_args is not None and not isinstance(exc_args, tuple):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
+        # None is indicative of no args, set the exc_args to an empty tuple
+        # as PyObject_CallObject(exc, exc_args) requires the second argument to
+        # be a tuple (or nullptr, but doing this makes it consistent)
+        if exc_args is None:
+            exc_args = tuple()
 
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
