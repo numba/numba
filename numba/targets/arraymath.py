@@ -2645,8 +2645,8 @@ def np_asarray(a, dtype=None):
 def np_extract(condition, arr):
 
     def np_extract_impl(condition, arr):
-        cond = _asarray(condition)
-        a = _asarray(arr)
+        cond = np.asarray(condition)
+        a = np.asarray(arr)
 
         if a.size == 0:
             raise ValueError('Cannot extract from an empty array')
