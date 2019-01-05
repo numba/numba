@@ -1387,7 +1387,7 @@ def np_roll(a, shift):
         raise TypingError('shift must be an integer')
 
     def np_roll_impl(a, shift):
-        arr = _asarray(a)
+        arr = np.asarray(a)
         out = np.empty(arr.shape, dtype=arr.dtype)
         # empty_like might result in different contiguity vs NumPy
 
@@ -1399,7 +1399,7 @@ def np_roll(a, shift):
         return out
 
     if isinstance(a, (types.Number, types.Boolean)):
-        return lambda a, shift: np.array(a)
+        return lambda a, shift: np.asarray(a)
     else:
         return np_roll_impl
 

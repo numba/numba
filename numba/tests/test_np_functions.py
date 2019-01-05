@@ -1590,7 +1590,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             msg = "shift must be an integer"
             assert msg in str(e.exception)
 
-
     def test_asarray(self):
 
         def input_variations():
