@@ -18,6 +18,7 @@ from numba import ir
 from numba import unittest_support as unittest
 import numpy as np
 from .matmul_usecase import needs_blas
+from .support import skip_parfors_unsupported
 
 
 def test_will_propagate(b, z, w):
@@ -149,6 +150,7 @@ class TestRemoveDead(unittest.TestCase):
 
         self.run_array_index_test(func)
 
+    @skip_parfors_unsupported
     @needs_blas
     def test_alias_ctypes(self):
         # use xxnrm2 to test call a C function with ctypes

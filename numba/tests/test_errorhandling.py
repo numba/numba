@@ -46,15 +46,15 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
 class TestUnsupportedReporting(unittest.TestCase):
 
     def test_unsupported_numpy_function(self):
-        # np.asarray(list) currently unsupported
+        # np.asanyarray(list) currently unsupported
         @njit
         def func():
-            np.asarray([1,2,3])
+            np.asanyarray([1,2,3])
 
         with self.assertRaises(errors.TypingError) as raises:
             func()
 
-        expected = "Use of unsupported NumPy function 'numpy.asarray'"
+        expected = "Use of unsupported NumPy function 'numpy.asanyarray'"
         self.assertIn(expected, str(raises.exception))
 
 

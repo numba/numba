@@ -433,14 +433,9 @@ class CallConstraint(object):
 
         # Check argument to be precise
         for a in itertools.chain(pos_args, kw_args.values()):
-            if not a.is_precise():
-                # Getitem on non-precise array is allowed to
-                # support array-comprehension
-                if fnty == operator.getitem and isinstance(pos_args[0], types.Array):
-                    pass
-                # Otherwise, don't compute type yet
-                else:
-                    return
+            # Forbids imprecise type except array of undefined dtype
+            if not a.is_precise() and not isinstance(a, types.Array):
+                return
 
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
@@ -955,7 +950,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 offender = find_offender(name)
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', ir.unknown_loc)
-                msg = "Undefined variable '%s', operation: %s, location: %s"
+                msg = ("Type of variable '%s' cannot be determined, operation:"
+                      " %s, location: %s")
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
             if not tp.is_precise():

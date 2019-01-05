@@ -2,6 +2,8 @@
 # Copyright (c) 2017 Intel Corporation
 # SPDX-License-Identifier: BSD-2-Clause
 #
+from __future__ import print_function, absolute_import
+
 import numpy
 
 import types as pytypes
@@ -1810,6 +1812,8 @@ def raise_on_unsupported_feature(func_ir):
     stage just prior to lowering to prevent LoweringErrors for known
     unsupported features.
     """
+    gdb_calls = [] # accumulate calls to gdb/gdb_init
+
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
             # This raises on finding `make_function`
@@ -1841,3 +1845,31 @@ def raise_on_unsupported_feature(func_ir):
                             "is being used in an unsupported manner.") % \
                             (use, expr)
                     raise UnsupportedError(msg, stmt.value.loc)
+
+            # this checks for gdb initilization calls, only one is permitted
+            if isinstance(stmt.value, (ir.Global, ir.FreeVar)):
+                val = stmt.value
+                val = getattr(val, 'value', None)
+                if val is None:
+                    continue
+
+                # check global function
+                found = False
+                if isinstance(val, pytypes.FunctionType):
+                    found = val in {numba.gdb, numba.gdb_init}
+                if not found: # freevar bind to intrinsic
+                    found = getattr(val, '_name', "") == "gdb_internal"
+                if found:
+                    gdb_calls.append(stmt.loc) # report last seen location
+
+    # There is more than one call to function gdb/gdb_init
+    if len(gdb_calls) > 1:
+        msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "
+               "in a function is unsupported (strange things happen!), use "
+               "numba.gdb_breakpoint() to create additional breakpoints "
+               "instead.\n\nRelevant documentation is available here:\n"
+               "http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
+               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
+               "nopython-mode\n\nConflicting calls found at:\n %s")
+        buf = '\n'.join([x.strformat() for x in gdb_calls])
+        raise UnsupportedError(msg % buf)
