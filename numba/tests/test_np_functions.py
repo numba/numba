@@ -1601,6 +1601,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.full(5, np.nan)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
+        x = np.nan
+        xp = [3]
+        fp = [4]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
         # xp not sorted
         for x in np.arange(-4, 10):
             xp = np.array([5, 4, 3, 2, 1])
@@ -1609,6 +1614,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.rnd.shuffle(xp)
             _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+    def test_interp_non_unique_xp(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([0, 1, 2, 3, 4, 5])
+        xp = np.array([1, 2, 3, 3, 3, 5])
+        fp = np.array([0, 1, 2, 3, 4, 5])
+        params = {'x': x, 'xp': xp, 'fp': fp}
+
+        out = pyfunc(**params)
+        print(out)
+
+        out = cfunc(**params)
+        print(out)
 
     @unittest.skipUnless(np_version >= (1, 12), "complex dtype handling changed Numpy 1.12+")
     def test_interp_complex_edge_case(self):

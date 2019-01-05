@@ -1385,9 +1385,9 @@ def np_vander(x, N=None, increasing=False):
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, out_dtype):
-    x_arr = _asarray(x)
-    xp_arr = _asarray(xp)
-    fp_arr = _asarray(fp)
+    x_arr = np.asarray(x)
+    xp_arr = np.asarray(xp)
+    fp_arr = np.asarray(fp)
 
     if len(xp_arr) == 0:
         raise ValueError('array of sample points is empty')
@@ -1398,17 +1398,20 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
     out = np.empty(x_arr.shape, dtype=out_dtype)
 
     for i in range(x_arr.size):
-        if x_arr.flat[i] > xp_arr[-1]:
-            out.flat[i] = fp_arr[-1]
-        elif x_arr.flat[i] < xp_arr[0]:
-            out.flat[i] = fp_arr[0]
+        if xp_arr.size > 1:
+            if x_arr.flat[i] > xp_arr[-1]:
+                out.flat[i] = fp_arr[-1]
+            elif x_arr.flat[i] < xp_arr[0]:
+                out.flat[i] = fp_arr[0]
+            else:
+                # using searchsorted looks unwise as there's nothing
+                # which requires xp to actually be sorted at this point
+                # but we replicate NumPy behaviour in this regard
+                idx = np.searchsorted(xp_arr, x_arr.flat[i])
+                f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
+                out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])
         else:
-            # using searchsorted looks unwise as there's nothing
-            # which requires xp to actually be sorted at this point
-            # but we replicate NumPy behaviour in this regard
-            idx = np.searchsorted(xp_arr, x_arr.flat[i])
-            f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
-            out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])
+            out.flat[i] = fp_arr[0]
 
     return out
 
