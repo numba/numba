@@ -185,6 +185,7 @@ class CPUContext(BaseContext):
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
 
+
 class ParallelOptions(object):
     """
     Options for controlling auto parallelization.

@@ -81,6 +81,7 @@ class CodeLibrary(object):
 
     @property
     def has_dynamic_globals(self):
+        self._ensure_finalized()
         return len(self._dynamic_globals) > 0
 
     @property
@@ -186,16 +187,7 @@ class CodeLibrary(object):
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
-    def _scan_dynamic_globals(self, ll_module):
-        """
-        Scan for dynanmic globals and track their names
-        """
-        for gv in ll_module.global_variables:
-            if gv.name.startswith("numba.dynamic.globals"):
-                self._dynamic_globals.append(gv.name)
-
     def add_llvm_module(self, ll_module):
-        self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
@@ -232,10 +224,19 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
+    def _finalize_dyanmic_globals(self):
+        # Scan for dynamic globals
+        for gv in self._final_module.global_variables:
+            if gv.name.startswith('numba.dynamic.globals'):
+                self._dynamic_globals.append(gv.name)
+
+
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
         """
+        self._finalize_dyanmic_globals()
+
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
 

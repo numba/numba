@@ -77,9 +77,10 @@ select_overload(PyObject* self, PyObject* args)
 {
     PyObject *tmcap, *sigtup, *ovsigstup;
     int allow_unsafe;
+    int exact_match_required;
 
-    if (!PyArg_ParseTuple(args, "OOOi", &tmcap, &sigtup, &ovsigstup,
-                          &allow_unsafe)) {
+    if (!PyArg_ParseTuple(args, "OOOii", &tmcap, &sigtup, &ovsigstup,
+                          &allow_unsafe, &exact_match_required)) {
         return NULL;
     }
 
@@ -110,7 +111,8 @@ select_overload(PyObject* self, PyObject* args)
 
     int selected = -42;
     int matches = tm->selectOverload(sig, ovsigs, selected, sigsz, ovsz,
-                                     (bool) allow_unsafe);
+                                     (bool) allow_unsafe,
+                                     (bool) exact_match_required);
 
     delete [] sig;
     delete [] ovsigs;

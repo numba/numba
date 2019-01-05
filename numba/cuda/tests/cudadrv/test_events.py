@@ -12,7 +12,7 @@ class TestCudaEvent(SerialMixin, unittest.TestCase):
         evtend = cuda.event()
 
         evtstart.record()
-        cuda.to_device(np.arange(N), to=dary)
+        cuda.to_device(np.arange(N, dtype=np.double), to=dary)
         evtend.record()
         evtend.wait()
         evtend.synchronize()
@@ -27,7 +27,7 @@ class TestCudaEvent(SerialMixin, unittest.TestCase):
         evtend = cuda.event()
 
         evtstart.record(stream=stream)
-        cuda.to_device(np.arange(N), to=dary, stream=stream)
+        cuda.to_device(np.arange(N, dtype=np.double), to=dary, stream=stream)
         evtend.record(stream=stream)
         evtend.wait(stream=stream)
         evtend.synchronize()

@@ -223,10 +223,9 @@ class _Intrinsic(object):
 
     __uuid = None
 
-    def __init__(self, name, defn, support_literals=False):
+    def __init__(self, name, defn):
         self._name = name
         self._defn = defn
-        self._support_literals = support_literals
 
     @property
     def _uuid(self):
@@ -252,7 +251,6 @@ class _Intrinsic(object):
         from .typing.templates import make_intrinsic_template, infer_global
 
         template = make_intrinsic_template(self, self._defn, self._name)
-        template.support_literals = self._support_literals
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -327,18 +325,6 @@ def intrinsic(*args, **kwargs):
                     llrtype = context.get_value_type(rtype)
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
-
-    Optionally, keyword arguments can be provided to configure the intrinsic; e.g.
-
-        @intrinsic(support_literals=True)
-        def example(typingctx, ...):
-            ...
-
-    Supported keyword arguments are:
-
-    - support_literals : bool
-        Indicates to the type inferencer that the typing logic accepts and can specialize to
-        `Const` type.
     """
     # Make inner function for the actual work
     def _intrinsic(func):

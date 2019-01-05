@@ -500,6 +500,14 @@ class LoweringError(NumbaError):
         super(LoweringError, self).__init__(msg, loc=loc)
 
 
+class UnsupportedParforsError(NumbaError):
+    """
+    An error ocurred because parfors is not supported on the platform.
+    """
+    pass
+
+
+
 class ForbiddenConstruct(LoweringError):
     """
     A forbidden Python construct was encountered (e.g. use of locals()).
