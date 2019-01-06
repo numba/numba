@@ -1404,10 +1404,12 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
         # NumPy does not check for this or enforce it; whereas NumPy will return output,
         # this implementation will raise.
 
-    out = np.empty(x_arr.shape, dtype=out_dtype)
+    if xp_arr.size == 1:
+        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=out_dtype)
+    else:
+        out = np.empty(x_arr.shape, dtype=out_dtype)
 
-    for i in range(x_arr.size):
-        if xp_arr.size > 1:
+        for i in range(x_arr.size):
             if x_arr.flat[i] > xp_arr[-1]:
                 out.flat[i] = fp_arr[-1]
             elif x_arr.flat[i] < xp_arr[0]:
@@ -1416,10 +1418,8 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
                 idx = np.searchsorted(xp_arr, x_arr.flat[i])
                 f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
                 out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])
-        else:
-            out.flat[i] = fp_arr[0]
 
-    return out
+        return out
 
 if numpy_version >= (1, 10):
     # replicate behaviour of NumPy 1.10 where handling of
