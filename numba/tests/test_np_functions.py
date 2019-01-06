@@ -1606,7 +1606,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [4]
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-    def test_interp_xp_not_monotonic_increasing(self):
+        x = np.arange(-4, 8)
+        xp = x
+        fp = x
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [True, False]
+        xp = np.arange(-4, 8)
+        fp = xp
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [-np.inf, -1.0, 0.0, 1.0, np.inf]
+        xp = np.arange(-4, 8)
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(-10, 10, 10)
+        xp = np.array([-np.inf, -1.0, 0.0, 1.0, np.inf])
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+    def test_interp_raise_if_xp_not_monotonic_increasing(self):
+        # this is *different* no NumPy...
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
