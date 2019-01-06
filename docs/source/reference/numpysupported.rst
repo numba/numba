@@ -287,7 +287,7 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10;
-  complex dtype handling per NumPy 1.12+)
+  complex dtype handling per NumPy 1.12+; ``xp`` must be monotonic increasing)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`

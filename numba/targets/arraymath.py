@@ -1395,6 +1395,15 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
     if len(xp_arr) != len(fp_arr):
         raise ValueError('fp and xp are not of the same length.')
 
+    if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
+        raise ValueError('The x-coordinates of the data points must be increasing')
+        # this is a strict and literal interpretation of NumPy docs:
+        # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L1192
+        #   "The x-coordinates of the data points, must be increasing if argument
+        #   `period` is not specified."
+        # NumPy does not check for this or enforce it; whereas NumPy will return output,
+        # this implementation will raise.
+
     out = np.empty(x_arr.shape, dtype=out_dtype)
 
     for i in range(x_arr.size):
@@ -1404,9 +1413,6 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
             elif x_arr.flat[i] < xp_arr[0]:
                 out.flat[i] = fp_arr[0]
             else:
-                # using searchsorted looks unwise as there's nothing
-                # which requires xp to actually be sorted at this point
-                # but we replicate NumPy behaviour in this regard
                 idx = np.searchsorted(xp_arr, x_arr.flat[i])
                 f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
                 out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])

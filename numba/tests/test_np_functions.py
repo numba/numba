@@ -1554,7 +1554,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-10)
 
         x = np.linspace(-5, 5, 25)
         xp = np.arange(-4, 8)
@@ -1597,7 +1597,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
         x = np.nan
-        xp = np.full(5, np.nan)
+        xp = np.arange(5)
         fp = np.full(5, np.nan)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
@@ -1606,29 +1606,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [4]
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        # xp not sorted
-        for x in np.arange(-4, 10):
-            xp = np.array([5, 4, 3, 2, 1])
-            fp = np.array([1, 2, 3, 4, 5])
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
-
-            self.rnd.shuffle(xp)
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
-
-    def test_interp_non_unique_xp(self):
+    def test_interp_xp_not_monotonic_increasing(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
-        x = np.array([0, 1, 2, 3, 4, 5])
-        xp = np.array([1, 2, 3, 3, 3, 5])
-        fp = np.array([0, 1, 2, 3, 4, 5])
-        params = {'x': x, 'xp': xp, 'fp': fp}
+        # Exceptions leak references
+        self.disable_leak_check()
 
-        out = pyfunc(**params)
-        print(out)
+        def _check(x, xp, fp):
+            msg = "The x-coordinates of the data points must be increasing"
+            with self.assertRaises(ValueError) as e:
+                cfunc(x, xp, fp)
 
-        out = cfunc(**params)
-        print(out)
+            assert msg in str(e.exception)
+
+        x = np.arange(6)
+        xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = 10 - np.arange(6)  # distinct but not increasing values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = np.ones(6)  # constant value
+        fp = np.arange(6)
+        _check(x, xp, fp)
 
     @unittest.skipUnless(np_version >= (1, 12), "complex dtype handling changed Numpy 1.12+")
     def test_interp_complex_edge_case(self):
