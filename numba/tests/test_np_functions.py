@@ -1711,7 +1711,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         assert complex_dtype_msg in str(e.exception)
 
-
     def test_asarray(self):
 
         def input_variations():
