@@ -771,6 +771,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             real = np.linspace(-10, 10, 40)
             real[:4] = real[-1]
             imag = real * 2
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a)
+
+    def test_nanmin_nanmax_complex_basic(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            real[5:9] = np.nan
+            imag = real * 2
+            imag[7:12] = np.nan
+            a = real - imag * 1j
+            check(a)
 
             for _ in range(10):
                 self.random.shuffle(real)
@@ -793,14 +821,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_any, array_any_global,
                            array_min, array_min_global,
                            array_max, array_max_global,
+                           array_nanmax, array_nanmin,
                            array_nansum,
                            ]
 
         # these functions only work in real space as no complex comparison
         # operator is implemented
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
-                                  array_argmax, array_argmax_global,
-                                  array_nanmax, array_nanmin]
+                                  array_argmax, array_argmax_global]
 
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]

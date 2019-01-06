@@ -586,19 +586,41 @@ def get_isnan(dtype):
 def np_nanmin(a):
     if not isinstance(a, types.Array):
         return
-    isnan = get_isnan(a.dtype)
 
-    def nanmin_impl(a):
-        if a.size == 0:
-            raise ValueError("nanmin(): empty array")
-        for view in np.nditer(a):
-            minval = view.item()
-            break
-        for view in np.nditer(a):
-            v = view.item()
-            if not minval < v and not isnan(v):
-                minval = v
-        return minval
+    ty = a.dtype
+    isnan = get_isnan(ty)
+    MSG = "nanmin(): empty array"
+
+    if isinstance(ty, types.Complex):
+        def nanmin_impl(a):
+            if a.size == 0:
+                raise ValueError(MSG)
+            for view in np.nditer(a):
+                minval = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if np.isnan(minval.real) and not np.isnan(v.real):
+                    minval = v
+                else:
+                    if v.real < minval.real:
+                        minval = v
+                    elif v.real == minval.real:
+                        if v.imag < minval.imag:
+                            minval = v
+            return minval
+    else:
+        def nanmin_impl(a):
+            if a.size == 0:
+                raise ValueError(MSG)
+            for view in np.nditer(a):
+                minval = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if not minval < v and not isnan(v):
+                    minval = v
+            return minval
 
     return nanmin_impl
 
@@ -606,19 +628,41 @@ def np_nanmin(a):
 def np_nanmax(a):
     if not isinstance(a, types.Array):
         return
-    isnan = get_isnan(a.dtype)
 
-    def nanmax_impl(a):
-        if a.size == 0:
-            raise ValueError("nanmin(): empty array")
-        for view in np.nditer(a):
-            maxval = view.item()
-            break
-        for view in np.nditer(a):
-            v = view.item()
-            if not maxval > v and not isnan(v):
-                maxval = v
-        return maxval
+    ty = a.dtype
+    isnan = get_isnan(ty)
+    MSG = "nanmax(): empty array"
+
+    if isinstance(ty, types.Complex):
+        def nanmax_impl(a):
+            if a.size == 0:
+                raise ValueError(MSG)
+            for view in np.nditer(a):
+                maxval = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if np.isnan(maxval.real) and not np.isnan(v.real):
+                    maxval = v
+                else:
+                    if v.real > maxval.real:
+                        maxval = v
+                    elif v.real == maxval.real:
+                        if v.imag > maxval.imag:
+                            maxval = v
+            return maxval
+    else:
+        def nanmax_impl(a):
+            if a.size == 0:
+                raise ValueError(MSG)
+            for view in np.nditer(a):
+                maxval = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if not maxval > v and not isnan(v):
+                    maxval = v
+            return maxval
 
     return nanmax_impl
 
