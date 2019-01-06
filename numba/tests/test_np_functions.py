@@ -1626,6 +1626,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = xp * 2.2
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* no NumPy...
         pyfunc = interp
