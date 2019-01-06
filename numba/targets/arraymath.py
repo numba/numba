@@ -351,10 +351,18 @@ def array_std(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def zero_dim_msg(fn_name):
+    msg = ("zero-size array to reduction operation "
+           "{0} which has no identity".format(fn_name))
+    return msg
+
+
 @lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
     ty = sig.args[0].dtype
+    MSG = zero_dim_msg('minimum')
+
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
         # NaT is smaller than every other value, but it is
         # ignored as far as min() is concerned.
@@ -362,8 +370,8 @@ def array_min(context, builder, sig, args):
 
         def array_min_impl(arry):
             if arry.size == 0:
-                raise ValueError(("zero-size array to reduction operation "
-                                  "minimum which has no identity"))
+                raise ValueError(MSG)
+
             min_value = nat
             it = np.nditer(arry)
             for view in it:
@@ -378,11 +386,30 @@ def array_min(context, builder, sig, args):
                     min_value = v
             return min_value
 
+    elif isinstance(ty, types.Complex):
+        def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            for view in it:
+                min_value = view.item()
+                break
+
+            for view in it:
+                v = view.item()
+                if v.real < min_value.real:
+                    min_value = v
+                elif v.real == min_value.real:
+                    if v.imag < min_value.imag:
+                        min_value = v
+            return min_value
+
     else:
         def array_min_impl(arry):
             if arry.size == 0:
-                raise ValueError(("zero-size array to reduction operation "
-                                  "minimum which has no identity"))
+                raise ValueError(MSG)
+
             it = np.nditer(arry)
             for view in it:
                 min_value = view.item()
@@ -393,6 +420,7 @@ def array_min(context, builder, sig, args):
                 if v < min_value:
                     min_value = v
             return min_value
+
     res = context.compile_internal(builder, array_min_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -400,20 +428,43 @@ def array_min(context, builder, sig, args):
 @lower_builtin(np.max, types.Array)
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
-    def array_max_impl(arry):
-        if arry.size == 0:
-            raise ValueError(("zero-size array to reduction operation "
-                                "maximum which has no identity"))
-        it = np.nditer(arry)
-        for view in it:
-            max_value = view.item()
-            break
+    ty = sig.args[0].dtype
+    MSG = zero_dim_msg('maximum')
 
-        for view in it:
-            v = view.item()
-            if v > max_value:
-                max_value = v
-        return max_value
+    if isinstance(ty, types.Complex):
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            for view in it:
+                max_value = view.item()
+                break
+
+            for view in it:
+                v = view.item()
+                if v.real > max_value.real:
+                    max_value = v
+                elif v.real == max_value.real:
+                    if v.imag > max_value.imag:
+                        max_value = v
+            return max_value
+    else:
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            for view in it:
+                max_value = view.item()
+                break
+
+            for view in it:
+                v = view.item()
+                if v > max_value:
+                    max_value = v
+            return max_value
+
     res = context.compile_internal(builder, array_max_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 

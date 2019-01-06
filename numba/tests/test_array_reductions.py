@@ -769,14 +769,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_std, array_std_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
+                           array_min, array_min_global,
+                           array_max, array_max_global,
                            array_nansum,
                            ]
 
         # these functions only work in real space as no complex comparison
         # operator is implemented
-        reduction_funcs_rspace = [array_min, array_min_global,
-                                  array_max, array_max_global,
-                                  array_argmin, array_argmin_global,
+        reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global,
                                   array_nanmax, array_nanmin]
 
