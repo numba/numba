@@ -68,7 +68,7 @@ class Record(Type):
         descbuf = []
         fmt = "{}[type={};offset={}]"
         for k, infos in fields:
-            descbuf.append(fmt.format(k, infos.offset, infos.type))
+            descbuf.append(fmt.format(k, infos.type, infos.offset))
 
         desc = ','.join(descbuf)
         name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
@@ -81,7 +81,7 @@ class Record(Type):
             [name: str, { type: Type, offset: int }]
         """
         res = []
-        for name, infos in fields:
+        for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
             fd = _RecordField(type=infos['type'], offset=infos['offset'])
             res.append((name, fd))
         return res

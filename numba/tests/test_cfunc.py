@@ -13,7 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import cfunc, carray, farray, types, typing, utils, njit
-from numba import cffi_support
+from numba import cffi_support, numpy_support
 from .support import TestCase, tag, captured_stderr
 from .test_dispatcher import BaseCacheTest
 
@@ -440,7 +440,7 @@ typedef double (*myfunc)(big_struct*, size_t);
         # Make numpy array from the cffi buffer
         array = np.ndarray(
             buffer=ffi.buffer(mydata),
-            dtype=nb_big_struct.dtype,
+            dtype=numpy_support.as_dtype(nb_big_struct),
             shape=3,
             )
         expect = calc(array)
