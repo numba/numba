@@ -48,7 +48,7 @@ _RecordField = collections.namedtuple('_RecordField', 'type,offset')
 class Record(Type):
     """
     A Record datatype can be mapped to a Numpy structured dtype.
-    A record is very flexible since it is layout just as a list of bytes.
+    A record is very flexible since it is layout as a list of bytes.
     Fields can be mapped to arbitrary points inside it, even if they overlap.
 
     *fields* is a list of `(name:str, data:dict)`.
@@ -114,7 +114,7 @@ class Record(Type):
 
     @property
     def key(self):
-        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # Numpy dtype equality doesn't always succeed, use the name instead
         # (https://github.com/numpy/numpy/issues/5715)
         return self.name
 

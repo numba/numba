@@ -135,6 +135,8 @@ def map_type(cffi_type, use_record_dtype=False):
 
 
 def map_struct_to_record_dtype(cffi_type):
+    """Convert a cffi type into a numpy record dtype
+    """
     fields = {
             'names': [],
             'formats': [],
