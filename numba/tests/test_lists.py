@@ -692,8 +692,9 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = list_mul
         cfunc = jit(nopython=True)(pyfunc)
         # Fail in malloc()
-        with self.assertRaises(MemoryError):
+        with self.assertRaises(MemoryError) as cm:
             cfunc(1, 2**58)
+        print("###Please ignore above error message i.e. can't allocate region. It is in fact purpose of the this test to overflow memory###")
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
