@@ -58,6 +58,32 @@ class Record(Type):
     """
     mutable = True
 
+    @classmethod
+    def make_c_struct(cls, name_types):
+        """Construct a Record type from a list of (name:str, type:Types).
+        The layout of the structure will follow C.
+
+        Note: only scalar types are supported currently.
+        """
+        from numba.targets.registry import cpu_target
+
+        ctx = cpu_target.target_context
+        offset = 0
+        fields = []
+        for k, ty in name_types:
+            if not isinstance(ty, Number):
+                raise TypeError("invalid type specified: {}".format(ty))
+            datatype = ctx.get_data_type(ty)
+            size = ctx.get_abi_sizeof(datatype)
+            align = ctx.get_abi_alignment(datatype)
+            # align
+            misaligned = offset % align
+            if misaligned:
+                offset += size - misaligned
+            fields.append((k, {'type': ty, 'offset': offset}))
+            offset += size
+        return Record(fields, size=offset, aligned=True)
+
     def __init__(self, fields, size, aligned):
         fields = self._normalize_fields(fields)
         self.fields = dict(fields)

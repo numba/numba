@@ -157,7 +157,7 @@ def as_struct_dtype(rec):
         'offsets': [rec.offset(k) for k in names],
         'itemsize': rec.size,
     }
-    return np.dtype(fields)
+    return np.dtype(fields, align=rec.aligned)
 
 def is_arrayscalar(val):
     return np.dtype(type(val)) in FROM_DTYPE

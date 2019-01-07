@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 import numpy as np
+import ctypes
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
@@ -242,6 +243,56 @@ recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
 
 recordwithcharseq = np.dtype([('m', np.int32),
                               ('n', 'S5')])
+
+
+class TestRecordDtypeMakeCStruct(unittest.TestCase):
+    def test_two_scalars(self):
+
+        class Ref(ctypes.Structure):
+            _fields_ = [
+                ('apple', ctypes.c_int32),
+                ('orange', ctypes.c_float),
+            ]
+
+        ty = types.Record.make_c_struct([
+            ('apple', types.int32),
+            ('orange', types.float32),
+        ])
+        # Correct offsets
+        self.assertEqual(len(ty), 2)
+        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
+        self.assertEqual(ty.offset('orange'), Ref.orange.offset)
+        # Correct size
+        self.assertEqual(ty.size, ctypes.sizeof(Ref))
+        # Is aligned
+        dtype = numpy_support.as_dtype(ty)
+        self.assertTrue(dtype.isalignedstruct)
+
+    def test_three_scalars(self):
+
+        class Ref(ctypes.Structure):
+            _fields_ = [
+                ('apple', ctypes.c_int32),
+                ('mango', ctypes.c_int8),
+                ('orange', ctypes.c_float),
+            ]
+
+        ty = types.Record.make_c_struct([
+            ('apple', types.int32),
+            ('mango', types.int8),
+            ('orange', types.float32),
+        ])
+        # Correct offsets
+        self.assertEqual(len(ty), 3)
+        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
+        self.assertEqual(ty.offset('mango'), Ref.mango.offset)
+        self.assertEqual(ty.offset('orange'), Ref.orange.offset)
+        # Correct size
+        self.assertEqual(ty.size, ctypes.sizeof(Ref))
+        # Is aligned
+        dtype = numpy_support.as_dtype(ty)
+        self.assertTrue(dtype.isalignedstruct)
+
 
 class TestRecordDtype(unittest.TestCase):
 
