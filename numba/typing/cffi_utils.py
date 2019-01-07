@@ -123,7 +123,16 @@ def map_type(cffi_type):
             'itemsize': ffi.sizeof(cffi_type),
         }
         for k, v in cffi_type.fields:
-            # TODO guard .bitsize, .bitshift, .flags
+            # guard unsupport values
+            if v.bitshift != -1:
+                msg = "fields with bitshift are not supported: {}"
+                raise ValueError(msg.format(k))
+            if v.flags != 0:
+                msg = "fields has unsupport flags: {}"
+                raise ValueError(msg.format(k))
+            if v.bitsize != -1:
+                msg = "fields with bitsize are not supported: {}"
+                raise ValueError(msg.format(k))
             dtype = numpy_support.as_dtype(map_type(v.type))
             fields['names'].append(k)
             fields['formats'].append(dtype)
