@@ -392,7 +392,7 @@ typedef double (*myfunc)(big_struct*, size_t);
         ffi = self.get_ffi()
         # Check struct typedef
         big_struct = ffi.typeof('big_struct')
-        nbtype = cffi_support.map_type(big_struct)
+        nbtype = cffi_support.map_type(big_struct, use_record_dtype=True)
         self.assertIsInstance(nbtype, types.Record)
         self.assertEqual(len(nbtype), 3)
         self.assertEqual(nbtype.typeof('i1'), types.int32)
@@ -400,7 +400,7 @@ typedef double (*myfunc)(big_struct*, size_t);
         self.assertEqual(nbtype.typeof('d3'), types.float64)
         # Check function typedef
         myfunc = ffi.typeof('myfunc')
-        sig = cffi_support.map_type(myfunc)
+        sig = cffi_support.map_type(myfunc, use_record_dtype=True)
         self.assertIsInstance(sig, typing.Signature)
         self.assertEqual(sig.args[0], types.CPointer(nbtype))
         self.assertEqual(sig.args[1], types.uintp)
@@ -409,8 +409,8 @@ typedef double (*myfunc)(big_struct*, size_t);
     def test_cfunc_callback(self):
         ffi = self.get_ffi()
         big_struct = ffi.typeof('big_struct')
-        nb_big_struct = cffi_support.map_type(big_struct)
-        sig = cffi_support.map_type(ffi.typeof('myfunc'))
+        nb_big_struct = cffi_support.map_type(big_struct, use_record_dtype=True)
+        sig = cffi_support.map_type(ffi.typeof('myfunc'), use_record_dtype=True)
 
         @njit
         def calc(base):

@@ -144,6 +144,12 @@ class Record(Type):
         ordered = sorted(self.fields.items(), key=lambda x: x[1].offset)
         return [(k, v.type) for k, v in ordered]
 
+    @property
+    def dtype(self):
+        from numba.numpy_support import as_struct_dtype
+
+        return as_struct_dtype(self)
+
 
 class DType(DTypeSpec, Opaque):
     """

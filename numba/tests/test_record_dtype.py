@@ -265,7 +265,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned
-        dtype = numpy_support.as_dtype(ty)
+        dtype = ty.dtype
         self.assertTrue(dtype.isalignedstruct)
 
     def test_three_scalars(self):
@@ -290,7 +290,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned
-        dtype = numpy_support.as_dtype(ty)
+        dtype = ty.dtype
         self.assertTrue(dtype.isalignedstruct)
 
 

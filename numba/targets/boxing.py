@@ -187,9 +187,7 @@ def box_record(typ, val, c):
     # This is the only safe way.
     size = ir.Constant(ir.IntType(32), val.type.pointee.count)
     ptr = c.builder.bitcast(val, ir.PointerType(ir.IntType(8)))
-    return c.pyapi.recreate_record(
-        ptr, size, numpy_support.as_dtype(typ), c.env_manager,
-    )
+    return c.pyapi.recreate_record(ptr, size, typ.dtype, c.env_manager)
 
 @unbox(types.Record)
 def unbox_record(typ, obj, c):
@@ -407,7 +405,7 @@ def unbox_array(typ, obj, c):
     # TODO: here we have minimal typechecking by the itemsize.
     #       need to do better
     try:
-        expected_itemsize = numpy_support.as_dtype(typ).itemsize
+        expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
     except NotImplementedError:
         # Don't check types that can't be `as_dtype()`-ed
         itemsize_mismatch = cgutils.false_bit
