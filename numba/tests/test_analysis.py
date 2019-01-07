@@ -5,8 +5,8 @@ from numba.compiler import compile_isolated, run_frontend
 from numba import types, rewrites, ir
 from .support import TestCase, MemoryLeakMixin
 
-from numba.analysis import dead_branch_prune
 
+from numba.analysis import dead_branch_prune
 
 def compile_to_ir(func):
     func_ir = run_frontend(func)
@@ -126,7 +126,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 return 3.14159
 
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
-        self.assert_prune(impl, (types.IntegerLiteral(10),), [False], 10)
+        self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
         def impl(x):
             if x == 10:
@@ -135,12 +135,12 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
-        # TODO: cannot handle this without const prop
-        # def impl(x):
-        #     z = None
-        #     y = z
-        #     if x == y:
-        #         print("x is 10")
+        #TODO: cannot handle this without const prop
+        #def impl(x):
+            #z = None
+            #y = z
+            #if x == y:
+                #print("x is 10")
 
         #self.assert_prune(impl, (types.NoneType('none'),), [None], None)
         #self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
@@ -163,7 +163,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 return 3.14159
 
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
-        self.assert_prune(impl, (types.IntegerLiteral(100),), [False], 100)
+        self.assert_prune(impl, (types.IntegerLiteral(100),), [None], 100)
 
         def impl(x):
             # switch the condition order
@@ -171,7 +171,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 return 3.14159
 
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
-        self.assert_prune(impl, (types.IntegerLiteral(100),), [False], 100)
+        self.assert_prune(impl, (types.IntegerLiteral(100),), [None], 100)
 
     def test_single_if_else_two_const_val(self):
 
@@ -181,14 +181,14 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             else:
                 return 1.61803
 
-        self.assert_prune(impl, (types.IntegerLiteral(100),) * 2, [False], 100,
+        self.assert_prune(impl, (types.IntegerLiteral(100),) * 2, [None], 100,
                           100)
         self.assert_prune(impl, (types.NoneType('none'),) * 2, [False], None,
                           None)
         self.assert_prune(impl, (types.IntegerLiteral(100),
                                  types.NoneType('none'),), [True], 100, None)
         self.assert_prune(impl, (types.IntegerLiteral(100),
-                                 types.IntegerLiteral(1000)), [True], 100, 1000)
+                                 types.IntegerLiteral(1000)), [None], 100, 1000)
 
     def test_single_if_else_w_following_undetermined(self):
 
@@ -254,7 +254,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 y = 1.61803
             return y
 
-        # no constant propagation so cannot prune
+        # no prune as compilation specialization on literal value not permitted
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
         self.assert_prune(impl, (types.IntegerLiteral(100),), [None], 100)
 
@@ -311,7 +311,8 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
 
             return z, y
 
-        self.assert_prune(impl, (types.Omitted(1000),), [False, True], 1000)
-        self.assert_prune(impl, (types.IntegerLiteral(1000),), [False, True],
+        self.assert_prune(impl, (types.Omitted(1000),), [None, None], 1000)
+        self.assert_prune(impl, (types.IntegerLiteral(1000),), [None, None],
                           1000)
-        self.assert_prune(impl, (types.IntegerLiteral(0),), [True, False], 0)
+        self.assert_prune(impl, (types.IntegerLiteral(0),), [None, None], 0)
+        self.assert_prune(impl, (types.NoneType('none'),), [True, False], None)

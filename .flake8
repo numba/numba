@@ -33,7 +33,6 @@ exclude =
     numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
-    numba/analysis.py
     numba/_version.py
     numba/unicode.py
     numba/inline_closurecall.py
