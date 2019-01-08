@@ -296,6 +296,8 @@ The following top-level functions are supported:
 * :func:`numpy.ptp` (only the first argument)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
+  must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)

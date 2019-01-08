@@ -1380,6 +1380,29 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
+@overload(np.roll)
+def np_roll(a, shift):
+
+    if not isinstance(shift, (types.Integer, types.Boolean)):
+        raise TypingError('shift must be an integer')
+
+    def np_roll_impl(a, shift):
+        arr = np.asarray(a)
+        out = np.empty(arr.shape, dtype=arr.dtype)
+        # empty_like might result in different contiguity vs NumPy
+
+        arr_flat = arr.flat
+        for i in range(arr.size):
+            idx = (i + shift) % arr.size
+            out.flat[idx] = arr_flat[i]
+
+        return out
+
+    if isinstance(a, (types.Number, types.Boolean)):
+        return lambda a, shift: np.asarray(a)
+    else:
+        return np_roll_impl
+
 #----------------------------------------------------------------------------
 # Statistics
 
