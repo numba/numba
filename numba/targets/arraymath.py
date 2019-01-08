@@ -581,90 +581,72 @@ def get_isnan(dtype):
             return False
         return _trivial_isnan
 
+@register_jitable
+def less_than(a, b):
+    return a < b
+
+@register_jitable
+def greater_than(a, b):
+    return a > b
+
+@register_jitable
+def check_array(a):
+    if a.size == 0:
+        raise ValueError('zero-size array to reduction operation not possible')
+
+@register_jitable
+def complex_comparison(a, op):
+    check_array(a)
+    for view in np.nditer(a):
+        return_val = view.item()
+        break
+    for view in np.nditer(a):
+        v = view.item()
+        if np.isnan(return_val.real) and not np.isnan(v.real):
+            return_val = v
+        else:
+            if op(v.real, return_val.real):
+                return_val = v
+            elif v.real == return_val.real:
+                if op(v.imag, return_val.imag):
+                    return_val = v
+    return return_val
+
+@register_jitable
+def real_comparison(a, op):
+    check_array(a)
+    for view in np.nditer(a):
+        return_val = view.item()
+        break
+    for view in np.nditer(a):
+        v = view.item()
+        if not np.isnan(v):
+            if not op(return_val, v):
+                return_val = v
+    return return_val
+
+def _nan_min_max_inner(a, op):
+
+    # TODO: what if a has no dtype attr?  generates JIT better here?
+
+    if isinstance(a.dtype, types.Complex):
+        def _comparison(a):
+            arr = np.asarray(a)
+            return complex_comparison(arr, op)
+    else:
+        def _comparison(a):
+            arr = np.asarray(a)
+            return real_comparison(arr, op)
+
+    return _comparison
 
 @overload(np.nanmin)
 def np_nanmin(a):
-    if not isinstance(a, types.Array):
-        return
-
-    ty = a.dtype
-    isnan = get_isnan(ty)
-    MSG = "nanmin(): empty array"
-
-    if isinstance(ty, types.Complex):
-        def nanmin_impl(a):
-            if a.size == 0:
-                raise ValueError(MSG)
-            for view in np.nditer(a):
-                minval = view.item()
-                break
-            for view in np.nditer(a):
-                v = view.item()
-                if np.isnan(minval.real) and not np.isnan(v.real):
-                    minval = v
-                else:
-                    if v.real < minval.real:
-                        minval = v
-                    elif v.real == minval.real:
-                        if v.imag < minval.imag:
-                            minval = v
-            return minval
-    else:
-        def nanmin_impl(a):
-            if a.size == 0:
-                raise ValueError(MSG)
-            for view in np.nditer(a):
-                minval = view.item()
-                break
-            for view in np.nditer(a):
-                v = view.item()
-                if not minval < v and not isnan(v):
-                    minval = v
-            return minval
-
-    return nanmin_impl
+    return _nan_min_max_inner(a, less_than)
 
 @overload(np.nanmax)
 def np_nanmax(a):
-    if not isinstance(a, types.Array):
-        return
-
-    ty = a.dtype
-    isnan = get_isnan(ty)
-    MSG = "nanmax(): empty array"
-
-    if isinstance(ty, types.Complex):
-        def nanmax_impl(a):
-            if a.size == 0:
-                raise ValueError(MSG)
-            for view in np.nditer(a):
-                maxval = view.item()
-                break
-            for view in np.nditer(a):
-                v = view.item()
-                if np.isnan(maxval.real) and not np.isnan(v.real):
-                    maxval = v
-                else:
-                    if v.real > maxval.real:
-                        maxval = v
-                    elif v.real == maxval.real:
-                        if v.imag > maxval.imag:
-                            maxval = v
-            return maxval
-    else:
-        def nanmax_impl(a):
-            if a.size == 0:
-                raise ValueError(MSG)
-            for view in np.nditer(a):
-                maxval = view.item()
-                break
-            for view in np.nditer(a):
-                v = view.item()
-                if not maxval > v and not isnan(v):
-                    maxval = v
-            return maxval
-
-    return nanmax_impl
+    return _nan_min_max_inner(a, greater_than)
 
 if numpy_version >= (1, 8):
     @overload(np.nanmean)
@@ -819,14 +801,6 @@ def prepare_ptp_input(a):
         raise ValueError('zero-size array reduction not possible')
     else:
         return arr
-
-@register_jitable
-def less_than(a, b):
-    return a < b
-
-@register_jitable
-def greater_than(a, b):
-    return a > b
 
 def _compute_current_val_impl_gen(op):
     def _compute_current_val_impl(current_val, val):
@@ -1593,6 +1567,8 @@ def determine_dtype(array_like):
     array_like_dt = np.float64
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, (types.Number, types.Boolean)):
+        array_like_dt = array_like.dtype
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
         for val in array_like:
