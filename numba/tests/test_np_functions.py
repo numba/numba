@@ -1592,6 +1592,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cond = [1, 0, 1, 0, 1, 0]  # but [1, 0, 1, 0, 1, 0, 1] raises
         _check({'condition': cond, 'arr': a})
 
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = np.array([1, 0, 1, 0, 1, 0, 0, 0]).reshape(2, 2, 2)
+        _check({'condition': cond, 'arr': a})
+
         a = np.asfortranarray(np.arange(60).reshape(3, 4, 5))
         cond = np.repeat((0, 1), 30)
         _check({'condition': cond, 'arr': a})
@@ -1603,6 +1607,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         a = 1
         cond = 1
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array(1)
+        cond = np.array([True, False])
         _check({'condition': cond, 'arr': a})
 
     def test_extract_exceptions(self):
@@ -1634,6 +1642,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         a = np.array(60)  # note, this is 0D
         cond = 0, 1
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn(msg, str(e.exception))
+
+        a = np.arange(4)
+        cond = np.array([True, False, False, False, True])
         with self.assertRaises(ValueError) as e:
             cfunc(cond, a)
         self.assertIn(msg, str(e.exception))
