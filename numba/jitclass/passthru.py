@@ -377,7 +377,11 @@ def create_pass_thru_type(typ, unbox_payload=unbox_passthru_payload):
 class PassThruContainer(_box.Box):
     def __init__(self, obj):
         super(PassThruContainer, self).__init__()
-        self.obj = obj
+        self._obj = obj
+
+    @property
+    def obj(self):
+        return self._obj
 
     def __eq__(self, other):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
