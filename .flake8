@@ -41,7 +41,6 @@ exclude =
     numba/pylowering.py
     numba/io_support.py
     numba/parfor.py
-    numba/lowering.py
     numba/numba_entry.py
     numba/stencilparfor.py
     numba/numpy_support.py
