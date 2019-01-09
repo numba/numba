@@ -1655,6 +1655,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cond = np.array([True, False])
         _check({'condition': cond, 'arr': a})
 
+        a = np.arange(4)
+        cond = np.array([1, 0, 1, 0, 0, 0]).reshape(2, 3) * 1j
+        _check({'condition': cond, 'arr': a})
+
     def test_extract_exceptions(self):
         pyfunc = extract
         cfunc = jit(nopython=True)(pyfunc)
@@ -1669,30 +1673,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(cond, a)
         self.assertIn('Cannot extract from an empty array', str(e.exception))
 
-        msg = 'condition shape inconsistent with arr shape'
+        def _check(cond, a):
+            msg = 'condition shape inconsistent with arr shape'
+            with self.assertRaises(ValueError) as e:
+                cfunc(cond, a)
+            self.assertIn(msg, str(e.exception))
+
         a = np.array([[1, 2, 3], [1, 2, 3]])
         cond = [1, 0, 1, 0, 1, 0, 1]
-        with self.assertRaises(ValueError) as e:
-            cfunc(cond, a)
-        self.assertIn(msg, str(e.exception))
+        _check(cond, a)
 
         a = np.array([1, 2, 3])
         cond = np.array([1, 0, 1, 0, 1])
-        with self.assertRaises(ValueError) as e:
-            cfunc(cond, a)
-        self.assertIn(msg, str(e.exception))
+        _check(cond, a)
 
         a = np.array(60)  # note, this is 0D
         cond = 0, 1
-        with self.assertRaises(ValueError) as e:
-            cfunc(cond, a)
-        self.assertIn(msg, str(e.exception))
+        _check(cond, a)
 
         a = np.arange(4)
         cond = np.array([True, False, False, False, True])
-        with self.assertRaises(ValueError) as e:
-            cfunc(cond, a)
-        self.assertIn(msg, str(e.exception))
+        _check(cond, a)
+
+        a = np.arange(4)
+        cond = np.array([True, False, True, False, False, True, False])
+        _check(cond, a)
 
     def test_asarray(self):
 

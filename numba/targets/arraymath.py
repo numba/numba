@@ -2675,7 +2675,7 @@ def np_extract(condition, arr):
             raise ValueError('Cannot extract from an empty array')
 
         # the following looks odd but replicates NumPy...
-        if bool(cond[-1]) and cond.size > a.size:
+        if np.any(cond[a.size:]) and cond.size > a.size:
             msg = 'condition shape inconsistent with arr shape'
             raise ValueError(msg)
             # NumPy raises IndexError: index 'm' is out of
