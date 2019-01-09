@@ -196,11 +196,9 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
-def np_average(a, weights=None):
+def array_average(a, weights=None):
     return np.average(a, weights=weights)
 
-def array_average(a,weights=None):
-    return np.average(a, weights=weights)
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -960,10 +958,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.random.ranf(N)
         w = np.random.ranf(N)
 
-        for pyfunc in [np_average, array_average]:
-            cfunc = jit(nopython=True)(pyfunc)
+        pyfunc = array_average
+        cfunc = jit(nopython=True)(pyfunc)
 
-            self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=15)
+        self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=15)
 
 class TestArrayComparisons(TestCase):
 

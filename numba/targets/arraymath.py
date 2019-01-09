@@ -517,30 +517,24 @@ def np_any(a):
 
     return flat_any
 
-#average function without weight argument
 @overload(np.average)
-@overload_method(types.Array, 'average')
-def np_average(arr):
-    def np_average_impl(arr):
-            #use np.mean if array of weights is not given
-            return np.mean(arr)
-    return np_average_impl
-
-#average function with weight argument
-@overload(np.average)
-@overload_method(types.Array, 'average')
 def np_average(arr, weights=None):
-    def np_average_impl(arr, weights=None):
-        if weights is not None:
-            c = 0
-            #cumulative sum of weights
-            cw = 0
-            for ind in range(len(arr)):
-                c += arr[ind]*weights[ind]
-                cw += weights[ind]
-            return c / cw
-    return np_average_impl
+    if weights is None or isinstance(weights, types.NoneType):
+        def np_average_impl(arr, weights=None):
+            return np.mean(arr)
 
+    else:
+        def np_average_impl(arr, weights=None):
+            weighted_arr = np.multiply(arr, weights)
+            c = 0
+            cw = 0
+            for v in np.nditer(weighted_arr):
+                c += v.item()
+            for w in np.nditer(weights):
+                cw += w.item()
+            return c/cw
+
+        return np_average_impl
 
 def get_isnan(dtype):
     """
