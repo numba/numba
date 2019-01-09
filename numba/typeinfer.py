@@ -433,14 +433,9 @@ class CallConstraint(object):
 
         # Check argument to be precise
         for a in itertools.chain(pos_args, kw_args.values()):
-            if not a.is_precise():
-                # Getitem on non-precise array is allowed to
-                # support array-comprehension
-                if fnty == operator.getitem and isinstance(pos_args[0], types.Array):
-                    pass
-                # Otherwise, don't compute type yet
-                else:
-                    return
+            # Forbids imprecise type except array of undefined dtype
+            if not a.is_precise() and not isinstance(a, types.Array):
+                return
 
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)

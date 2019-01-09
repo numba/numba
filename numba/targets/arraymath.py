@@ -14,7 +14,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-from numba import types, cgutils, typing
+from numba import types, cgutils, typing, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
@@ -77,7 +77,7 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
 
     return function_sig, codegen
 
-@intrinsic(support_literals=True)
+@intrinsic
 def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     """
     Generates a tuple that can be used to index a specific slice from an
@@ -735,12 +735,98 @@ if numpy_version >= (1, 12):
 
             return nancumsum_impl
 
-#----------------------------------------------------------------------------
-# Median and partitioning
+@register_jitable
+def prepare_ptp_input(a):
+    arr = _asarray(a)
+    if len(arr) == 0:
+        raise ValueError('zero-size array reduction not possible')
+    else:
+        return arr
 
 @register_jitable
 def less_than(a, b):
     return a < b
+
+@register_jitable
+def greater_than(a, b):
+    return a > b
+
+def _compute_current_val_impl_gen(op):
+    def _compute_current_val_impl(current_val, val):
+        if isinstance(current_val, types.Complex):
+            # The sort order for complex numbers is lexicographic. If both the
+            # real and imaginary parts are non-nan then the order is determined
+            # by the real parts except when they are equal, in which case the
+            # order is determined by the imaginary parts.
+            # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877
+            def impl(current_val, val):
+                if op(val.real, current_val.real):
+                    return val
+                elif (val.real == current_val.real
+                    and op(val.imag, current_val.imag)):
+                    return val
+                return current_val
+        else:
+            def impl(current_val, val):
+                return val if op(val, current_val) else current_val
+        return impl
+    return _compute_current_val_impl
+
+_compute_a_max = generated_jit(_compute_current_val_impl_gen(greater_than))
+_compute_a_min = generated_jit(_compute_current_val_impl_gen(less_than))
+
+@generated_jit
+def _early_return(val):
+    UNUSED = 0
+    if isinstance(val, types.Complex):
+        def impl(val):
+            if np.isnan(val.real):
+                if np.isnan(val.imag):
+                    return True, np.nan + np.nan * 1j
+                else:
+                    return True, np.nan + 0j
+            else:
+                return False, UNUSED
+    elif isinstance(val, types.Float):
+        def impl(val):
+            if np.isnan(val):
+                return True, np.nan
+            else:
+                return False, UNUSED
+    else:
+        def impl(val):
+            return False, UNUSED
+    return impl
+
+@overload(np.ptp)
+def np_ptp(a):
+
+    if hasattr(a, 'dtype'):
+        if isinstance(a.dtype, types.Boolean):
+            raise TypingError("Boolean dtype is unsupported (as per NumPy)")
+            # Numpy raises a TypeError
+
+    def np_ptp_impl(a):
+        arr = prepare_ptp_input(a)
+
+        a_flat = arr.flat
+        a_min = a_flat[0]
+        a_max = a_flat[0]
+
+        for i in range(arr.size):
+            val = a_flat[i]
+            take_branch, retval = _early_return(val)
+            if take_branch:
+                return retval
+            a_max = _compute_a_max(a_max, val)
+            a_min = _compute_a_min(a_min, val)
+
+        return a_max - a_min
+
+    return np_ptp_impl
+
+#----------------------------------------------------------------------------
+# Median and partitioning
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -1312,6 +1398,29 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
+@overload(np.roll)
+def np_roll(a, shift):
+
+    if not isinstance(shift, (types.Integer, types.Boolean)):
+        raise TypingError('shift must be an integer')
+
+    def np_roll_impl(a, shift):
+        arr = np.asarray(a)
+        out = np.empty(arr.shape, dtype=arr.dtype)
+        # empty_like might result in different contiguity vs NumPy
+
+        arr_flat = arr.flat
+        for i in range(arr.size):
+            idx = (i + shift) % arr.size
+            out.flat[idx] = arr_flat[i]
+
+        return out
+
+    if isinstance(a, (types.Number, types.Boolean)):
+        return lambda a, shift: np.asarray(a)
+    else:
+        return np_roll_impl
+
 #----------------------------------------------------------------------------
 # Statistics
 
@@ -1639,7 +1748,7 @@ def _asarray_impl(x):
         return lambda x: x
     elif isinstance(x, (types.Sequence, types.Tuple)):
         return lambda x: np.array(x)
-    elif isinstance(x, (types.Float, types.Integer, types.Boolean)):
+    elif isinstance(x, (types.Number, types.Boolean)):
         ty = as_dtype(x)
         return lambda x: np.array([x], dtype=ty)
 
@@ -2539,5 +2648,36 @@ def np_convolve(a, v):
             return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
         else:
             return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+
+    return impl
+
+def _is_nonelike(ty):
+    return (ty is None) or isinstance(ty, types.NoneType)
+
+@overload(np.asarray)
+def np_asarray(a, dtype=None):
+    impl = None
+    if isinstance(a, types.Array):
+        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+            def impl(a, dtype=None):
+                return a
+        else:
+            def impl(a, dtype=None):
+                return a.astype(dtype)
+    elif isinstance(a, (types.Sequence, types.Tuple)):
+        # Nested lists cannot be unpacked, therefore only single lists are
+        # permitted and these conform to Sequence and can be unpacked along on
+        # the same path as Tuple.
+        if _is_nonelike(dtype):
+            def impl(a, dtype=None):
+                return np.array(a)
+        else:
+            def impl(a, dtype=None):
+                return np.array(a, dtype)
+    elif isinstance(a, (types.Number, types.Boolean)):
+        dt_conv = a if _is_nonelike(dtype) else dtype
+        ty = as_dtype(dt_conv)
+        def impl(a, dtype=None):
+                return np.array(a, ty)
 
     return impl

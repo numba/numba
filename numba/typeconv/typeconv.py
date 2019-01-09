@@ -17,11 +17,12 @@ class TypeManager(object):
         self._ptr = _typeconv.new_type_manager()
         self._types = set()
 
-    def select_overload(self, sig, overloads, allow_unsafe):
+    def select_overload(self, sig, overloads, allow_unsafe,
+                        exact_match_required):
         sig = [t._code for t in sig]
         overloads = [[t._code for t in s] for s in overloads]
         return _typeconv.select_overload(self._ptr, sig, overloads,
-                                         allow_unsafe)
+                                         allow_unsafe, exact_match_required)
 
     def check_compatible(self, fromty, toty):
         if not isinstance(toty, types.Type):
