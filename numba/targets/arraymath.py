@@ -1396,32 +1396,47 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
         raise ValueError('fp and xp are not of the same length.')
 
     if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
-        msg = 'xp must be monotonically increasing (unlike numpy)'
+        msg = 'xp must be monotonically increasing'
         raise ValueError(msg)
+        # note: NumPy docs suggest this is required but it is not
+        # checked for or enforced
 
     if xp_arr.size == 1:
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=out_dtype)
     else:
         out = np.empty(x_arr.shape, dtype=out_dtype)
 
+        # pre-cache slopes
         slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
 
         last_idx = 0
 
         for i in range(x_arr.size):
-            if x_arr.flat[i] > xp_arr[-1]:
+            if x_arr.flat[i] >= xp_arr[-1]:
                 out.flat[i] = fp_arr[-1]
-            elif x_arr.flat[i] < xp_arr[0]:
+                last_idx = -1
+            elif x_arr.flat[i] <= xp_arr[0]:
                 out.flat[i] = fp_arr[0]
+                last_idx = 0
             else:
-                idx = np.searchsorted(xp_arr, x_arr.flat[i])
+                if i == 0:
+                    idx = np.searchsorted(xp_arr[1:-1], x_arr.flat[i])
+                else:
+                    if x_arr.flat[i] > x_arr.flat[i - 1]:
+                        idx = np.searchsorted(xp_arr[last_idx - 1:-1],
+                                              x_arr.flat[i])
+                    elif x_arr.flat[i] == x_arr.flat[i - 1]:
+                        idx = last_idx
+                    else:
+                        idx = np.searchsorted(xp_arr[1:last_idx], x_arr.flat[i])
 
                 if x_arr.flat[i] == xp_arr[idx]:
                     out.flat[i] = fp_arr[idx]
                 else:
-                    x_val = (x_arr.flat[i] - xp_arr[idx - 1])
-                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * x_val
+                    delta_x = x_arr.flat[i] - xp_arr[idx - 1]
+                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
 
+                # reduce subsequent search space
                 last_idx = idx
 
         return out
@@ -1440,9 +1455,9 @@ if numpy_version >= (1, 10):
             "Cannot cast array data from complex dtype to float64 dtype"
         )
 
-        if hasattr(xp, 'dtype'):
-            if np.issubdtype(as_dtype(xp.dtype), np.dtype(complex).type):
-                raise TypingError(complex_dtype_msg)
+        xp_dt = determine_dtype(xp)
+        if np.issubdtype(xp_dt, np.complexfloating):
+            raise TypingError(complex_dtype_msg)
 
         fp_dt = determine_dtype(fp)
         dtype = np.result_type(fp_dt, np.float64)

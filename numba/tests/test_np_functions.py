@@ -1576,7 +1576,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.arange(-5, 5)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1]).reshape(3, 2, order='F')
+        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1])
+        x = x.reshape(3, 2, order='F')
         xp = np.linspace(-4, 4, 10)
         fp = np.arange(-5, 5)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
@@ -1626,6 +1627,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = xp * 2.2
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
+        x = self.rnd.randn(100)
+        xp = np.linspace(-3, 3, 100)
+        fp = np.full(100, fill_value=3.142)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        for factor in 1, -1:
+            x = np.array([5, 6, 7]) * factor
+            xp = [1, 2]
+            fp = [3, 4]
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = 1
+        xp = [1]
+        fp = [True]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* no NumPy...
@@ -1636,7 +1653,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         def _check(x, xp, fp):
-            msg = "The x-coordinates of the data points must be increasing"
+            msg = 'xp must be monotonically increasing'
             with self.assertRaises(ValueError) as e:
                 cfunc(x, xp, fp)
 
@@ -1661,7 +1678,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_interp_complex_edge_case(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
 
         for x in range(-2, 4):
             xp = np.arange(3) + 0.01
@@ -1725,7 +1742,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         assert complex_dtype_msg in str(e.exception)
 
         x = 1
-        xp = np.arange(6) + 1j
+        xp = (np.arange(6) + 1j).astype(np.complex64)
         fp = np.arange(6)
 
         with self.assertTypingError() as e:
