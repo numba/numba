@@ -1550,7 +1550,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -1643,7 +1642,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [True]
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* no NumPy...
         pyfunc = interp
@@ -1674,7 +1672,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.arange(6)
         _check(x, xp, fp)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex dtype handling changed Numpy 1.12+")
+    @unittest.skipUnless(np_version >= (1, 12), "complex handling per Numpy 1.12+")
     def test_interp_complex_edge_case(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -1690,7 +1688,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # dtype('complex128')  to dtype('float64') according to the
         # rule 'safe'
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
