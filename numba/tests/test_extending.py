@@ -671,8 +671,16 @@ class TestHighLevelExtending(TestCase):
             else:
                 return -1
 
+        def impl4(*args, kw=None): # starargs
+            if kw > 10:
+                return 1
+            else:
+                return -1
+
+
         # register all the overloads (all are bad!)
-        for inner in [impl1 ,impl2, impl3]:
+        #impl1 ,impl2, impl3,
+        for inner in [impl4]:
             def problem_factory(impl):
                 def _myoverload_impl(a, kw=None):
                     return impl
@@ -694,6 +702,32 @@ class TestHighLevelExtending(TestCase):
                      if "Differing" in x])
         for ex in expected:
             self.assertIn(ex, diff_lines)
+
+    def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
+        """
+        Tests that an overload which has a differing typing and implementing
+        signature raises an exception.
+        """
+        def myoverload(a, kw=None):
+            pass
+
+        @overload(myoverload)
+        def _myoverload_impl(a, b, c, kw=None, kw1=12):
+            def impl(a, b, f, kw=None, kw1=12):
+                x = a
+                y = args[0]
+                if x > 10:
+                    return 1 + y, kw
+                else:
+                    return -1 + y, kw
+            return impl
+
+        @jit(nopython=True)
+        def foo(a, b):
+            return myoverload(a, b, 9, kw=11)
+
+        print(foo(1, 5))
+
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
