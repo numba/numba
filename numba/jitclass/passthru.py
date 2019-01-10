@@ -451,6 +451,8 @@ def type_hash_passthrucontainer(context):
     def hash_passthrucontainer_typer(container):
         if container is PassThruContainerType():
             return types.intp if not PY3 else types.uintp
+        else:
+            return types.intp
 
     return hash_passthrucontainer_typer
 
