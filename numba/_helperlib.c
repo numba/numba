@@ -1113,3 +1113,9 @@ numba_gdb_breakpoint(void) {
  */
 
 #include "_random.c"
+
+
+/*
+ * Dictionary support
+ */
+ #include "_dictobject.c"

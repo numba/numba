@@ -3,25 +3,54 @@
 #ifndef Py_DICT_COMMON_H
 #define Py_DICT_COMMON_H
 
+
+typedef struct _NumbaObject NumbaObject;
+
 typedef struct {
     /* Cached hash code of me_key. */
     Py_hash_t me_hash;
-    PyObject *me_key;
-    PyObject *me_value; /* This field is only meaningful for combined tables */
-} PyDictKeyEntry;
+    NumbaObject *me_key;
+    NumbaObject *me_value; /* This field is only meaningful for combined tables */
+} NumbaDictKeyEntry;
+
+
+struct _dictkeysobject;
+
+
+/* The following structure is adapted from PyDictObject from
+   cpython/dictobject.h */
+typedef struct {
+
+    /* Number of items in the dictionary */
+    Py_ssize_t ma_used;
+
+    /* Dictionary version: globally unique, value change each time
+       the dictionary is modified */
+    uint64_t ma_version_tag;
+
+    struct _dictkeysobject *ma_keys;
+
+    /* If ma_values is NULL, the table is "combined": keys and values
+       are stored in ma_keys.
+       If ma_values is not NULL, the table is splitted:
+       keys are stored in ma_keys and values are stored in ma_values */
+    NumbaObject **ma_values;
+
+} NumbaDictObject;
+
 
 /* dict_lookup_func() returns index of entry which can be used like DK_ENTRIES(dk)[index].
  * -1 when no entry found, -3 when compare raises error.
  */
 typedef Py_ssize_t (*dict_lookup_func)
-    (PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
+    (NumbaDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
 #define DKIX_ERROR (-3)
 
 /* See dictobject.c for actual layout of DictKeysObject */
-struct _dictkeysobject {
+typedef struct _dictkeysobject {
     Py_ssize_t dk_refcnt;
 
     /* Size of the hash table (dk_indices). It must be a power of 2. */
@@ -63,8 +92,13 @@ struct _dictkeysobject {
        Dynamically sized, SIZEOF_VOID_P is minimum. */
     char dk_indices[];  /* char is required to avoid strict aliasing. */
 
-    /* "PyDictKeyEntry dk_entries[dk_usable];" array follows:
+    /* "NumbaDictKeyEntry dk_entries[dk_usable];" array follows:
        see the DK_ENTRIES() macro */
-};
+} NumbaDictKeysObject;
+
+
+/* XXX: unknown macros */
+#define _Numba_HOT_FUNCTION
+#define Numba_UNREACHABLE() exit(1)
 
 #endif

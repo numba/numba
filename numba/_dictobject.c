@@ -1,4 +1,4 @@
-/* The following is adapted from CPython3.7.
+/* The following is adapted from CPython3.7. */
 
 /* Dictionary object implementation using a hash table */
 
@@ -113,9 +113,10 @@ converting the dict to the combined table.
 #define PyDict_MINSIZE 8
 
 #include "Python.h"
-#include "internal/pystate.h"
-#include "dict-common.h"
-#include "stringlib/eq.h"    /* to get unicode_eq() */
+#include "_dictobject.h"
+// #include "internal/pystate.h"
+// #include "dict-common.h"
+// #include "stringlib/eq.h"    /* to get unicode_eq() */
 
 /*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
@@ -224,6 +225,8 @@ equally good collision statistics, needed less code & used less memory.
 
 */
 
+#ifdef NUMBA_SKIP
+
 /* forward declarations */
 static Py_ssize_t lookdict(PyDictObject *mp, PyObject *key,
                            Py_hash_t hash, PyObject **value_addr);
@@ -239,13 +242,6 @@ static int dictresize(PyDictObject *mp, Py_ssize_t minused);
 
 static PyObject* dict_iter(PyDictObject *dict);
 
-/*Global counter used to set ma_version_tag field of dictionary.
- * It is incremented each time that a dictionary is created and each
- * time that a dictionary is modified. */
-static uint64_t pydict_global_version = 0;
-
-#define DICT_NEXT_VERSION() (++pydict_global_version)
-
 /* Dictionary reuse scheme to save calls to malloc and free */
 #ifndef PyDict_MAXFREELIST
 #define PyDict_MAXFREELIST 80
@@ -255,7 +251,7 @@ static int numfree = 0;
 static PyDictKeysObject *keys_free_list[PyDict_MAXFREELIST];
 static int numfreekeys = 0;
 
-#include "clinic/dictobject.c.h"
+// #include "clinic/dictobject.c.h"
 
 int
 PyDict_ClearFreeList(void)
@@ -373,48 +369,6 @@ dk_set_index(PyDictKeysObject *keys, Py_ssize_t i, Py_ssize_t ix)
 }
 
 
-/* USABLE_FRACTION is the maximum dictionary load.
- * Increasing this ratio makes dictionaries more dense resulting in more
- * collisions.  Decreasing it improves sparseness at the expense of spreading
- * indices over more cache lines and at the cost of total memory consumed.
- *
- * USABLE_FRACTION must obey the following:
- *     (0 < USABLE_FRACTION(n) < n) for all n >= 2
- *
- * USABLE_FRACTION should be quick to calculate.
- * Fractions around 1/2 to 2/3 seem to work well in practice.
- */
-#define USABLE_FRACTION(n) (((n) << 1)/3)
-
-/* ESTIMATE_SIZE is reverse function of USABLE_FRACTION.
- * This can be used to reserve enough size to insert n entries without
- * resizing.
- */
-#define ESTIMATE_SIZE(n)  (((n)*3+1) >> 1)
-
-/* Alternative fraction that is otherwise close enough to 2n/3 to make
- * little difference. 8 * 2/3 == 8 * 5/8 == 5. 16 * 2/3 == 16 * 5/8 == 10.
- * 32 * 2/3 = 21, 32 * 5/8 = 20.
- * Its advantage is that it is faster to compute on machines with slow division.
- * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))
- */
-
-/* GROWTH_RATE. Growth rate upon hitting maximum load.
- * Currently set to used*3.
- * This means that dicts double in size when growing without deletions,
- * but have more head room when the number of deletions is on a par with the
- * number of insertions.  See also bpo-17563 and bpo-33205.
- *
- * GROWTH_RATE was set to used*4 up to version 3.2.
- * GROWTH_RATE was set to used*2 in version 3.3.0
- * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
- */
-#define GROWTH_RATE(d) ((d)->ma_used*3)
-
-#define ENSURE_ALLOWS_DELETIONS(d) \
-    if ((d)->ma_keys->dk_lookup == lookdict_unicode_nodummy) { \
-        (d)->ma_keys->dk_lookup = lookdict_unicode; \
-    }
 
 /* This immutable, empty PyDictKeysObject is used for PyDict_Clear()
  * (which cannot fail and thus can do no allocation).
@@ -4382,4 +4336,279 @@ void
 _PyDictKeys_DecRef(PyDictKeysObject *keys)
 {
     DK_DECREF(keys);
+}
+
+
+#endif // NUMBA_SKIP
+//////////////////////////////////////////////////////////////////////////////
+
+
+/* USABLE_FRACTION is the maximum dictionary load.
+ * Increasing this ratio makes dictionaries more dense resulting in more
+ * collisions.  Decreasing it improves sparseness at the expense of spreading
+ * indices over more cache lines and at the cost of total memory consumed.
+ *
+ * USABLE_FRACTION must obey the following:
+ *     (0 < USABLE_FRACTION(n) < n) for all n >= 2
+ *
+ * USABLE_FRACTION should be quick to calculate.
+ * Fractions around 1/2 to 2/3 seem to work well in practice.
+ */
+#define USABLE_FRACTION(n) (((n) << 1)/3)
+
+/* ESTIMATE_SIZE is reverse function of USABLE_FRACTION.
+ * This can be used to reserve enough size to insert n entries without
+ * resizing.
+ */
+#define ESTIMATE_SIZE(n)  (((n)*3+1) >> 1)
+
+/* Alternative fraction that is otherwise close enough to 2n/3 to make
+ * little difference. 8 * 2/3 == 8 * 5/8 == 5. 16 * 2/3 == 16 * 5/8 == 10.
+ * 32 * 2/3 = 21, 32 * 5/8 = 20.
+ * Its advantage is that it is faster to compute on machines with slow division.
+ * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))
+ */
+
+/* GROWTH_RATE. Growth rate upon hitting maximum load.
+ * Currently set to used*3.
+ * This means that dicts double in size when growing without deletions,
+ * but have more head room when the number of deletions is on a par with the
+ * number of insertions.  See also bpo-17563 and bpo-33205.
+ *
+ * GROWTH_RATE was set to used*4 up to version 3.2.
+ * GROWTH_RATE was set to used*2 in version 3.3.0
+ * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
+ */
+#define GROWTH_RATE(d) ((d)->ma_used*3)
+
+#define ENSURE_ALLOWS_DELETIONS(d) \
+    if ((d)->ma_keys->dk_lookup == lookdict_unicode_nodummy) { \
+        (d)->ma_keys->dk_lookup = lookdict_unicode; \
+    }
+
+
+#define DK_SIZE(dk) ((dk)->dk_size)
+#if SIZEOF_VOID_P > 4
+#define DK_IXSIZE(dk)                          \
+    (DK_SIZE(dk) <= 0xff ?                     \
+        1 : DK_SIZE(dk) <= 0xffff ?            \
+            2 : DK_SIZE(dk) <= 0xffffffff ?    \
+                4 : sizeof(int64_t))
+#else
+#define DK_IXSIZE(dk)                          \
+    (DK_SIZE(dk) <= 0xff ?                     \
+        1 : DK_SIZE(dk) <= 0xffff ?            \
+            2 : sizeof(int32_t))
+#endif
+#define DK_ENTRIES(dk) \
+    ((NumbaDictKeyEntry*)(&((int8_t*)((dk)->dk_indices))[DK_SIZE(dk) * DK_IXSIZE(dk)]))
+
+#define DK_MASK(dk) (((dk)->dk_size)-1)
+
+/*Global counter used to set ma_version_tag field of dictionary.
+ * It is incremented each time that a dictionary is created and each
+ * time that a dictionary is modified. */
+static uint64_t pydict_global_version = 0;
+
+#define DICT_NEXT_VERSION() (++pydict_global_version)
+
+
+typedef enum {
+    OK,
+    ERR_NO_MEMORY,
+} Status;
+
+
+
+/* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
+static inline Py_ssize_t
+dk_get_index(NumbaDictKeysObject *keys, Py_ssize_t i)
+{
+    Py_ssize_t s = DK_SIZE(keys);
+    Py_ssize_t ix;
+
+    if (s <= 0xff) {
+        int8_t *indices = (int8_t*)(keys->dk_indices);
+        ix = indices[i];
+    }
+    else if (s <= 0xffff) {
+        int16_t *indices = (int16_t*)(keys->dk_indices);
+        ix = indices[i];
+    }
+#if SIZEOF_VOID_P > 4
+    else if (s > 0xffffffff) {
+        int64_t *indices = (int64_t*)(keys->dk_indices);
+        ix = indices[i];
+    }
+#endif
+    else {
+        int32_t *indices = (int32_t*)(keys->dk_indices);
+        ix = indices[i];
+    }
+    assert(ix >= DKIX_DUMMY);
+    return ix;
+}
+
+int NumbaObject_Equal(NumbaObject *startkey, NumbaObject *key){
+    return 0;
+}
+
+/*
+The basic lookup function used by all operations.
+This is based on Algorithm D from Knuth Vol. 3, Sec. 6.4.
+Open addressing is preferred over chaining since the link overhead for
+chaining would be substantial (100% with typical malloc overhead).
+
+The initial probe index is computed as hash mod the table size. Subsequent
+probe indices are computed as explained earlier.
+
+All arithmetic on hash should ignore overflow.
+
+The details in this version are due to Tim Peters, building on many past
+contributions by Reimer Behrends, Jyrki Alakuijala, Vladimir Marangozov and
+Christian Tismer.
+
+lookdict() is general-purpose, and may return DKIX_ERROR if (and only if) a
+comparison raises an exception.
+lookdict_unicode() below is specialized to string keys, comparison of which can
+never raise an exception; that function can never return DKIX_ERROR when key
+is string.  Otherwise, it falls back to lookdict().
+lookdict_unicode_nodummy is further specialized for string keys that cannot be
+the <dummy> value.
+For both, when the key isn't found a DKIX_EMPTY is returned.
+*/
+static Py_ssize_t
+lookdict(NumbaDictObject *mp, NumbaObject *key,
+         Py_hash_t hash, NumbaObject **value_addr)
+{
+    size_t i, mask, perturb;
+    NumbaDictKeysObject *dk;
+    NumbaDictKeyEntry *ep0;
+
+top:
+    dk = mp->ma_keys;
+    ep0 = DK_ENTRIES(dk);
+    mask = DK_MASK(dk);
+    perturb = hash;
+    i = (size_t)hash & mask;
+
+    for (;;) {
+        Py_ssize_t ix = dk_get_index(dk, i);
+        if (ix == DKIX_EMPTY) {
+            *value_addr = NULL;
+            return ix;
+        }
+        if (ix >= 0) {
+            NumbaDictKeyEntry *ep = &ep0[ix];
+            assert(ep->me_key != NULL);
+            if (ep->me_key == key) {
+                *value_addr = ep->me_value;
+                return ix;
+            }
+            if (ep->me_hash == hash) {
+                NumbaObject *startkey = ep->me_key;
+                Py_INCREF(startkey);
+                int cmp = NumbaObject_Equal(startkey, key);
+                Py_DECREF(startkey);
+                if (cmp < 0) {
+                    *value_addr = NULL;
+                    return DKIX_ERROR;
+                }
+                if (dk == mp->ma_keys && ep->me_key == startkey) {
+                    if (cmp > 0) {
+                        *value_addr = ep->me_value;
+                        return ix;
+                    }
+                }
+                else {
+                    /* The dict was mutated, restart */
+                    goto top;
+                }
+            }
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = (i*5 + perturb + 1) & mask;
+    }
+    exit(1); // unreachable
+}
+
+
+static
+int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
+{
+    NumbaDictKeysObject *dk;
+    Py_ssize_t es, usable;
+
+    assert(size >= PyDict_MINSIZE);
+    assert(IS_POWER_OF_2(size));
+
+    usable = USABLE_FRACTION(size);
+    if (size <= 0xff) {
+        es = 1;
+    }
+    else if (size <= 0xffff) {
+        es = 2;
+    }
+#if SIZEOF_VOID_P > 4
+    else if (size <= 0xffffffff) {
+        es = 4;
+    }
+#endif
+    else {
+        es = sizeof(Py_ssize_t);
+    }
+
+
+    dk = PyMem_RawMalloc(sizeof(NumbaDictKeysObject)
+                            + es * size
+                            + sizeof(NumbaDictKeyEntry) * usable);
+    if (dk == NULL) {;
+        return ERR_NO_MEMORY;
+    }
+    dk->dk_refcnt = 1;
+    dk->dk_size = size;
+    dk->dk_usable = usable;
+    dk->dk_lookup = lookdict;
+    dk->dk_nentries = 0;
+    memset(&dk->dk_indices[0], 0xff, es * size);
+    memset(DK_ENTRIES(dk), 0, sizeof(NumbaDictKeyEntry) * usable);
+
+    // Set output
+    *out = dk;
+    return OK;
+}
+
+int
+Numba_dict_new() {
+    NumbaDictObject* d = PyMem_RawMalloc(sizeof(NumbaDictObject));
+    d->ma_used = 0;
+    d->ma_version_tag = DICT_NEXT_VERSION();
+
+    Numba_new_keys_object(&d->ma_keys, PyDict_MINSIZE);
+    if (d->ma_keys == NULL) {
+        return ERR_NO_MEMORY;
+    }
+    return OK;
+}
+
+static void show_status(Status status) {
+    const char* msg = "<?>";
+    switch (status) {
+    case OK:
+        msg = "OK";
+        break;
+    case ERR_NO_MEMORY:
+        msg = "ERR_NO_MEMORY";
+        break;
+    }
+    puts(msg);
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+test_dict() {
+    puts("test_dict");
+    Status status = Numba_dict_new();
+
+    show_status(status);
 }

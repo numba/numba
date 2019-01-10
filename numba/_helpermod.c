@@ -229,6 +229,11 @@ bool _numba_test_boolean()
     return true;
 }
 
+bool _numba_test_dict()
+{
+    test_dict();
+}
+
 MOD_INIT(_helperlib) {
     PyObject *m;
     MOD_DEF(m, "_helperlib", "No docs", ext_methods)
