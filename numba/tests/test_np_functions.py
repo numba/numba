@@ -1717,12 +1717,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = 1
         xp = np.arange(6).reshape(3, 2)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "xp must be 1D"
+        assert msg in str(e.exception)
+
+        x = 1
+        xp = np.arange(6)
         fp = np.arange(6).reshape(3, 2)
 
         with self.assertTypingError() as e:
             cfunc(x, xp, fp)
 
-        msg = "xp and fp must both be 1D"
+        msg = "fp must be 1D"
         assert msg in str(e.exception)
 
         x = 1 + 1j

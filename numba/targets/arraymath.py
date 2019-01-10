@@ -1444,9 +1444,10 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
 @overload(np.interp)
 def np_interp(x, xp, fp):
 
-    for param in xp, fp:
-        if hasattr(param, 'ndim') and param.ndim > 1:
-            raise TypingError('xp and fp must both be 1D')
+    if hasattr(xp, 'ndim') and xp.ndim > 1:
+        raise TypingError('xp must be 1D')
+    if hasattr(fp, 'ndim') and fp.ndim > 1:
+        raise TypingError('fp must be 1D')
 
     complex_dtype_msg = (
         "Cannot cast array data from complex dtype to float64 dtype"
