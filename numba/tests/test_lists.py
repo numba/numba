@@ -695,8 +695,11 @@ class TestLists(MemoryLeakMixin, TestCase):
         # Fail in malloc()
         with self.assertRaises(MemoryError) as cm:
             cfunc(1, 2**58)
-        libc = ct.CDLL('libc.dylib')
-        libc.printf("###Please ignore above error message i.e. can't allocate region. It is in fact purpose of the this test to overflow memory###\n".encode("UTF-8"))
+        if sys.platform.startswith('darwin'):
+            libc = ct.CDLL('libc.dylib')
+            libc.printf("###Please ignore above error message i.e. \
+can't allocate region. It is in fact purpose of the this test to \
+request more memory than can be provided###\n".encode("UTF-8"))
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
