@@ -1384,7 +1384,7 @@ def np_vander(x, N=None, increasing=False):
 # Mathematical functions
 
 @register_jitable
-def np_interp_impl_inner(x, xp, fp, out_dtype):
+def np_interp_impl_inner(x, xp, fp, dtype):
     x_arr = np.asarray(x)
     xp_arr = np.asarray(xp)
     fp_arr = np.asarray(fp)
@@ -1402,9 +1402,9 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
         # checked for or enforced
 
     if xp_arr.size == 1:
-        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=out_dtype)
+        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
     else:
-        out = np.empty(x_arr.shape, dtype=out_dtype)
+        out = np.empty(x_arr.shape, dtype=dtype)
 
         # pre-cache slopes
         slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
