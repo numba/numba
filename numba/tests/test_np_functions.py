@@ -1712,7 +1712,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(x, xp, fp)
 
-        msg = "fp and xp are not of the same length."
+        msg = "fp and xp are not of the same size."
         assert msg in str(e.exception)
 
         x = 1

@@ -1393,7 +1393,7 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
         raise ValueError('array of sample points is empty')
 
     if len(xp_arr) != len(fp_arr):
-        raise ValueError('fp and xp are not of the same length.')
+        raise ValueError('fp and xp are not of the same size.')
 
     if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
         msg = 'xp must be monotonically increasing'
