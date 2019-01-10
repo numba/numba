@@ -1396,18 +1396,17 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
         raise ValueError('fp and xp are not of the same length.')
 
     if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
-        raise ValueError('The x-coordinates of the data points must be increasing')
-        # this is a strict and literal interpretation of NumPy docs:
-        # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L1192
-        #   "The x-coordinates of the data points, must be increasing if argument
-        #   `period` is not specified."
-        # NumPy does not check for this or enforce it; whereas NumPy will return output,
-        # this implementation will raise.
+        msg = 'xp must be monotonically increasing (unlike numpy)'
+        raise ValueError(msg)
 
     if xp_arr.size == 1:
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=out_dtype)
     else:
         out = np.empty(x_arr.shape, dtype=out_dtype)
+
+        slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
+
+        last_idx = 0
 
         for i in range(x_arr.size):
             if x_arr.flat[i] > xp_arr[-1]:
@@ -1416,8 +1415,14 @@ def np_interp_impl_inner(x, xp, fp, out_dtype):
                 out.flat[i] = fp_arr[0]
             else:
                 idx = np.searchsorted(xp_arr, x_arr.flat[i])
-                f = (x_arr.flat[i] - xp_arr[idx - 1]) / (xp_arr[idx] - xp_arr[idx - 1])
-                out.flat[i] = fp_arr[idx - 1] + f * (fp_arr[idx] - fp_arr[idx - 1])
+
+                if x_arr.flat[i] == xp_arr[idx]:
+                    out.flat[i] = fp_arr[idx]
+                else:
+                    x_val = (x_arr.flat[i] - xp_arr[idx - 1])
+                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * x_val
+
+                last_idx = idx
 
         return out
 
