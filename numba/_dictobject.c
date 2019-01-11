@@ -4355,7 +4355,10 @@ dk_get_index(NumbaDictKeysObject *keys, Py_ssize_t i)
 }
 
 int NumbaObject_Equal(NumbaObject *startkey, NumbaObject *key){
-    return 0;
+    if (startkey == key)
+        return 1;
+    else
+        return 0;
 }
 
 /*
@@ -4435,6 +4438,30 @@ top:
         i = (i*5 + perturb + 1) & mask;
     }
     exit(1); // unreachable
+}
+
+
+
+/* Search index of hash table from offset of entry table */
+static Py_ssize_t
+lookdict_index(NumbaDictKeysObject *k, Py_hash_t hash, Py_ssize_t index)
+{
+    size_t mask = DK_MASK(k);
+    size_t perturb = (size_t)hash;
+    size_t i = (size_t)hash & mask;
+
+    for (;;) {
+        Py_ssize_t ix = dk_get_index(k, i);
+        if (ix == index) {
+            return i;
+        }
+        if (ix == DKIX_EMPTY) {
+            return DKIX_EMPTY;
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = mask & (i*5 + perturb + 1);
+    }
+    assert(0 && "unreachable");
 }
 
 /* write to indices. */
@@ -4757,6 +4784,32 @@ Fail:
 }
 
 
+static Status
+delitem_common(NumbaDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
+               PyObject *old_value)
+{
+    NumbaObject *old_key;
+    NumbaDictKeyEntry *ep;
+
+    Py_ssize_t hashpos = lookdict_index(mp->ma_keys, hash, ix);
+    assert(hashpos >= 0);
+
+    mp->ma_used--;
+    mp->ma_version_tag = DICT_NEXT_VERSION();
+    ep = &DK_ENTRIES(mp->ma_keys)[ix];
+    dk_set_index(mp->ma_keys, hashpos, DKIX_DUMMY);
+    // ENSURE_ALLOWS_DELETIONS(mp); // seems to only affect unicode
+    old_key = ep->me_key;
+    ep->me_key = NULL;
+    ep->me_value = NULL;
+    NUMBA_DECREF(old_key);
+    NUMBA_DECREF(old_value);
+
+    // assert(_PyDict_CheckConsistency(mp));
+    return OK;
+}
+
+
 int
 Numba_dict_new(NumbaDictObject **res) {
     NumbaDictObject* d = PyMem_RawMalloc(sizeof(NumbaDictObject));
@@ -4810,7 +4863,19 @@ test_dict() {
 
     NumbaObject *got_value = NULL;
     key = 0xdead;
-    Py_ssize_t ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
+    Py_ssize_t ix;
+    ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
+    printf("ix = %zd got_value=%p\n", ix, got_value);
+
+    status = delitem_common(d, hash, ix, got_value);
+    printf("ix = %zd got_value=%p\n", ix, got_value);
+
+    ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
+    printf("ix = %zd got_value=%p\n", ix, got_value);
+
+
+    key = 0xdeae;
+    ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
 
 
