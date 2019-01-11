@@ -3,10 +3,12 @@ import gc
 from numba import jit, objmode, PassThruContainer, types
 from numba import cgutils
 from numba.config import MACHINE_BITS
-from numba.extending import box, lower_builtin, NativeValue, type_callable, typeof_impl
+from numba.datamodel import models
+from numba.extending import box, lower_builtin, NativeValue, register_model, type_callable, typeof_impl, unbox, \
+    make_attribute_wrapper
 from numba.jitclass import _box
 from numba.runtime.nrt import rtsys
-from numba.jitclass.passthru import create_pass_thru_native, PassThruTypeBase, create_pass_thru_type
+from numba.jitclass.passthru import PassThru, PassThruType, pass_thru_type, pass_thru_constructor
 from sys import getrefcount
 from unittest import TestCase
 
@@ -21,7 +23,10 @@ def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, r
     for k, v in track_refcounts.items():
         if isinstance(v, _box.Box):
             self.assertEqual(_box.box_get_meminfoptr(v), 0, "'{}' already has meminfo.".format(k))
-    del v
+
+    if track_refcounts:
+        # if loop ran at least once clean-up v
+        del v
 
     before = rtsys.get_allocation_stats()
 
@@ -36,7 +41,10 @@ def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, r
                 self.assertEqual(
                     get_nrt_refcount(v), 1, "'{}'s meminfo refcount is {} != 1.".format(k, get_nrt_refcount(v))
                 )
-        del v
+
+        if track_refcounts:
+            # if loop ran at least once clean-up v
+            del v
         del track_refcounts
 
         after = rtsys.get_allocation_stats()
@@ -151,23 +159,14 @@ class PassThruContainerTest(TestCase):
 ############################ PassThru ############################
 # simple pass through type, no attributes accessible from nopython
 ##################################################################
-class MyPassThru(_box.Box):
+class MyPassThru:
     def __init__(self):
-        super(MyPassThru, self).__init__()
         self.something_not_boxable = object()
-
-
-class MyPassThruType(PassThruTypeBase):
-    def __init__(self):
-        super(MyPassThruType, self).__init__()
 
 
 @typeof_impl.register(MyPassThru)
 def type_my_passthru(val, context):
-    return MyPassThruType()
-
-
-create_pass_thru_type(MyPassThruType)
+    return pass_thru_type
 
 
 class MyPassThruTest(TestCase):
@@ -219,15 +218,26 @@ class MyPassThruTest(TestCase):
 
             del x, y, z, l, l2, l3
 
+    def test_native_create(self):
+        @jit(nopython=True)
+        def create_pass_thru():
+            # this will raise NotImplementedError from boxer
+            return PassThru()
+
+        with check_numba_allocations(self, (lambda: {})):
+            with self.assertRaises(NotImplementedError) as raises:
+                o = create_pass_thru()
+
+        self.assertIn("Native creation of 'PassThruType' not implemented.", str(raises.exception))
+
 
 ############################# PassThruComplex #############################
 # pass through type with several attrs accessible from nopython,
 # including another pass through type and a list
 ###########################################################################
 
-class PassThruComplex(_box.Box):
+class PassThruComplex:
     def __init__(self, int_attr, passthru_attr, list_attr=[]):
-        super(PassThruComplex, self).__init__()
         self.int_attr = int_attr
         self.passthru_attr = passthru_attr
         self.list_attr = list_attr
@@ -235,31 +245,48 @@ class PassThruComplex(_box.Box):
         self.something_not_boxable = object()
 
 
-class PassThruComplexType(PassThruTypeBase):
-    nopython_attrs = [
-        ('int_attr', lambda fe_type: types.intp),
-        ('passthru_attr', lambda fe_type: MyPassThruType()),
-        ('list_attr', lambda fe_type: types.List(MyPassThruType()))
-    ]
-
+class PassThruComplexType(PassThruType):
     def __init__(self):
         super(PassThruComplexType, self).__init__()
 
 
+@register_model(PassThruComplexType)
+class PassThruComplexModel(models.StructModel):
+    def __init__(self, dmm, fe_typ):
+        members = [
+            ('parent', pass_thru_type),
+            ('int_attr', types.intp),
+            ('passthru_attr', pass_thru_type),
+            ('list_attr', types.List(pass_thru_type))
+        ]
+        super(PassThruComplexModel, self).__init__(dmm, fe_typ, members)
+
+
+make_attribute_wrapper(PassThruComplexType, 'int_attr', 'int_attr')
+make_attribute_wrapper(PassThruComplexType, 'passthru_attr', 'passthru_attr')
+make_attribute_wrapper(PassThruComplexType, 'list_attr', 'list_attr')
+
+
+@typeof_impl.register(PassThruComplex)
+def type_my_pass_thru_complex(val, context):
+    return PassThruComplexType()
+
+
+@unbox(PassThruComplexType)
 def unbox_passthru_complex_payload(typ, obj, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder)
 
-    pass_thru.parent = obj
+    pass_thru.parent = context.unbox(pass_thru_type, obj).value
 
     int_attr = context.pyapi.object_getattr_string(obj, 'int_attr')
     pass_thru.int_attr = context.unbox(types.intp, int_attr).value
     context.pyapi.decref(int_attr)
 
     passthru_attr = context.pyapi.object_getattr_string(obj, 'passthru_attr')
-    pass_thru.passthru_attr = context.unbox(MyPassThruType(), passthru_attr).value
+    pass_thru.passthru_attr = context.unbox(pass_thru_type, passthru_attr).value
     context.pyapi.decref(passthru_attr)
 
-    list_attr_type = types.List(MyPassThruType())
+    list_attr_type = types.List(pass_thru_type)
 
     list_attr = context.pyapi.object_getattr_string(obj, 'list_attr')
     list_attr_unboxed = context.unbox(list_attr_type, list_attr)
@@ -275,28 +302,43 @@ def unbox_passthru_complex_payload(typ, obj, context):
     return NativeValue(pass_thru._getvalue(), is_error=is_error, cleanup=cleanup)
 
 
-PassThruComplexPayloadType = create_pass_thru_type(PassThruComplexType, unbox_payload=unbox_passthru_complex_payload)
-
-
-@typeof_impl.register(PassThruComplex)
-def type_passthru_complex(val, context):
-    return PassThruComplexType()
-
-
-@box(PassThruComplexPayloadType)
-def box_passthru_complex_payload(typ, val, context):
+@box(PassThruComplexType)
+def box_passthru_complex(typ, val, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
 
-    int_attr = context.box(types.intp, pass_thru.int_attr)
-    passthru_attr = context.box(MyPassThruType(), pass_thru.passthru_attr)
-    list_attr = context.box(types.List(MyPassThruType()), pass_thru.list_attr)
+    obj = context.box(pass_thru_type, pass_thru.parent)
 
-    class_obj = context.pyapi.unserialize(context.pyapi.serialize_object(PassThruComplex))
-    res = context.pyapi.call_function_objargs(class_obj, (int_attr, passthru_attr, list_attr))
+    with context.builder.if_else(cgutils.is_null(context.builder, obj)) as (no_python_created, python_created):
+        with python_created:
+            bb_python_created = context.builder.basic_block
 
-    context.pyapi.decref(int_attr)
-    context.pyapi.decref(passthru_attr)
-    context.pyapi.decref(list_attr)
+        with no_python_created:
+            # clear the NotImplementedError set by context.box(pass_thru_type, val)
+            context.pyapi.err_clear()
+
+            int_attr = context.box(types.intp, pass_thru.int_attr)
+            passthru_attr = context.box(pass_thru_type, pass_thru.passthru_attr)
+            list_attr = context.box(types.List(pass_thru_type), pass_thru.list_attr)
+
+            class_obj = context.pyapi.unserialize(context.pyapi.serialize_object(PassThruComplex))
+            new_obj = context.pyapi.call_function_objargs(class_obj, (int_attr, passthru_attr, list_attr))
+
+            # store the newly created object onto the meminfo such that only one instance is created
+            # even if the same nopython instance gets returned twice (or more)
+            parent = cgutils.create_struct_proxy(pass_thru_type)(context.context, context.builder, value=pass_thru.parent)
+            context.context.nrt.meminfo_set_data(context.builder, parent.meminfo, new_obj)
+
+            context.pyapi.decref(int_attr)
+            context.pyapi.decref(passthru_attr)
+            context.pyapi.decref(list_attr)
+
+            bb_no_python_created = context.builder.basic_block
+
+    res = context.builder.phi(cgutils.voidptr_t)
+    res.add_incoming(obj, bb_python_created)
+    res.add_incoming(new_obj, bb_no_python_created)
+
+    context.context.nrt.decref(context.builder, typ, val)
 
     return res
 
@@ -309,22 +351,23 @@ def type_passthru_complex_constructor(context):
     return passthru_complex_constructor_typer
 
 
-@lower_builtin(PassThruComplex, types.Integer, MyPassThruType, types.List)
+@lower_builtin(PassThruComplex, types.Integer, pass_thru_type, types.List)
 def passthru_complex_constructor(context, builder, sig, args):
     typ = sig.return_type
     int_attr_ty, passthru_attr_ty, list_attr_ty = sig.args
     int_attr, passthru_attr, list_attr = args
 
-    pass_thru, _ = create_pass_thru_native(context, builder, typ)
-    payload = typ.get_payload(context, builder, pass_thru)
+    pass_thru = cgutils.create_struct_proxy(typ)(context, builder)
+
+    pass_thru.parent = pass_thru_constructor(context, builder, pass_thru_type(), [])
 
     context.nrt.incref(builder, int_attr_ty, int_attr)
     context.nrt.incref(builder, passthru_attr_ty, passthru_attr)
     context.nrt.incref(builder, list_attr_ty, list_attr)
 
-    payload.int_attr = int_attr
-    payload.passthru_attr = passthru_attr
-    payload.list_attr = list_attr
+    pass_thru.int_attr = int_attr
+    pass_thru.passthru_attr = passthru_attr
+    pass_thru.list_attr = list_attr
 
     return pass_thru._getvalue()
 

@@ -25,6 +25,7 @@ _meminfo_struct_type = ir.LiteralStructType([
 
 incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type])
 meminfo_data_ty = ir.FunctionType(_pointer_type, [_pointer_type])
+meminfo_set_data_ty = ir.FunctionType(ir.VoidType(), [_pointer_type, _pointer_type])
 
 
 def _define_nrt_meminfo_data(module):
@@ -39,6 +40,21 @@ def _define_nrt_meminfo_data(module):
     struct_ptr = builder.bitcast(ptr, _meminfo_struct_type.as_pointer())
     data_ptr = builder.load(cgutils.gep(builder, struct_ptr, 0, 3))
     builder.ret(data_ptr)
+
+
+def _define_nrt_meminfo_set_data(module):
+    """
+    Allows to set NRT_MemInfo.data. This has a special use-case for nopython-created
+    pass through types.
+    """
+    fn = module.get_or_insert_function(meminfo_set_data_ty,
+                                       name="NRT_MemInfo_set_data")
+    builder = ir.IRBuilder(fn.append_basic_block())
+    [meminfo_ptr, data_ptr] = fn.args
+    struct_ptr = builder.bitcast(meminfo_ptr, _meminfo_struct_type.as_pointer())
+    builder.store(data_ptr, cgutils.gep(builder, struct_ptr, 0, 3))
+
+    builder.ret_void()
 
 
 def _define_nrt_incref(module, atomic_incr):
@@ -192,6 +208,7 @@ def create_nrt_module(ctx):
     _define_atomic_cas(ir_mod, ordering='monotonic')
 
     _define_nrt_meminfo_data(ir_mod)
+    _define_nrt_meminfo_set_data(ir_mod)
     _define_nrt_incref(ir_mod, atomic_inc)
     _define_nrt_decref(ir_mod, atomic_dec)
 
