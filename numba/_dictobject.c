@@ -110,6 +110,11 @@ converting the dict to the combined table.
  * Making this 8, rather than 4 reduces the number of resizes for most
  * dictionaries, without any significant extra memory use.
  */
+#define DEBUG
+
+#define NUMBA_INCREF(x)
+#define NUMBA_DECREF(x)
+
 #define PyDict_MINSIZE 8
 
 #include "Python.h"
@@ -4407,9 +4412,9 @@ top:
             }
             if (ep->me_hash == hash) {
                 NumbaObject *startkey = ep->me_key;
-                Py_INCREF(startkey);
+                NUMBA_INCREF(startkey);
                 int cmp = NumbaObject_Equal(startkey, key);
-                Py_DECREF(startkey);
+                NUMBA_DECREF(startkey);
                 if (cmp < 0) {
                     *value_addr = NULL;
                     return DKIX_ERROR;
@@ -4510,8 +4515,6 @@ int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
 }
 
 
-#define NUMBA_INCREF(x)
-#define NUMBA_DECREF(x)
 
 /*
 Internal routine used by dictresize() to build a hashtable of entries.
@@ -4664,6 +4667,7 @@ Returns -1 if an error occurred, or 0 on success.
 static int
 insertdict(NumbaDictObject *mp, NumbaObject *key, Py_hash_t hash, NumbaObject *value)
 {
+    printf("insertdict key=%p hash=%zx\n", key, hash);
     NumbaObject *old_value;
     NumbaDictKeyEntry *ep;
 
@@ -4680,6 +4684,7 @@ insertdict(NumbaDictObject *mp, NumbaObject *key, Py_hash_t hash, NumbaObject *v
     */
 
     Py_ssize_t ix = mp->ma_keys->dk_lookup(mp, key, hash, &old_value);
+    printf("insert index = %zd\n", ix);
 
     if (ix == DKIX_ERROR)
         goto Fail;
@@ -4793,11 +4798,22 @@ test_dict() {
     NumbaObject *key = 0xdead, *value = 0xbeef;
     Py_hash_t hash = 0xcafe;
     status = insertdict(d, key, hash, value);
+    key = 0xdeae; value = 0xbeed;
+    status = insertdict(d, key, hash, value);
+    key = 0xdeaf; value = 0xbeee;
+    status = insertdict(d, key, hash, value);
 
     printf("d->ma_used = %d\n", (int)d->ma_used);
 
     printf("d->ma_keys = %p\n", d->ma_keys);
     printf("d->ma_values = %p\n", d->ma_values);
+
+    NumbaObject *got_value = NULL;
+    key = 0xdead;
+    Py_ssize_t ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
+    printf("ix = %zd got_value=%p\n", ix, got_value);
+
+
 
     show_status(status);
 }
