@@ -4828,6 +4828,45 @@ Numba_dict_new(NumbaDictObject **res) {
     return OK;
 }
 
+
+
+static
+dict_keys_dump(NumbaDictObject *mp)
+{
+    PyObject *v;
+    Py_ssize_t i, j;
+    NumbaDictKeyEntry *ep;
+    Py_ssize_t size, n, offset;
+    PyObject **value_ptr;
+
+    n = mp->ma_used;
+
+    ep = DK_ENTRIES(mp->ma_keys);
+    size = mp->ma_keys->dk_nentries;
+
+    //// Never splitted
+    // if (mp->ma_values) {
+    //     value_ptr = mp->ma_values;
+    //     offset = sizeof(PyObject *);
+    // }
+    // else {
+        value_ptr = &ep[0].me_value;
+        offset = sizeof(NumbaDictKeyEntry);
+    // }
+    printf("Key dump\n");
+    for (i = 0, j = 0; i < size; i++) {
+        if (*value_ptr != NULL) {
+            NumbaObject *key = ep[i].me_key;
+            Py_hash_t hash = ep[i].me_hash;
+            printf("  key=%p hash=%zu value=%p\n", key, hash, *value_ptr);
+            j++;
+        }
+        value_ptr = (PyObject **)(((char *)value_ptr) + offset);
+    }
+    assert(j == n);
+}
+
+
 static void show_status(Status status) {
     const char* msg = "<?>";
     switch (status) {
@@ -4851,10 +4890,17 @@ test_dict() {
     NumbaObject *key = 0xdead, *value = 0xbeef;
     Py_hash_t hash = 0xcafe;
     status = insertdict(d, key, hash, value);
+
+    dict_keys_dump(d);
+
     key = 0xdeae; value = 0xbeed;
     status = insertdict(d, key, hash, value);
+
+    dict_keys_dump(d);
+
     key = 0xdeaf; value = 0xbeee;
     status = insertdict(d, key, hash, value);
+    dict_keys_dump(d);
 
     printf("d->ma_used = %d\n", (int)d->ma_used);
 
@@ -4867,8 +4913,11 @@ test_dict() {
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
 
+
     status = delitem_common(d, hash, ix, got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
+
+    dict_keys_dump(d);
 
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
@@ -4879,6 +4928,6 @@ test_dict() {
     printf("ix = %zd got_value=%p\n", ix, got_value);
 
 
-
+    dict_keys_dump(d);
     show_status(status);
 }
