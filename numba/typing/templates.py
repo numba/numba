@@ -6,12 +6,12 @@ from __future__ import print_function, division, absolute_import
 import functools
 import operator
 import sys
-import inspect
 from types import MethodType
 
 from .. import types, utils
 from ..errors import TypingError, UntypedAttributeError
 
+_IS_PY3 = sys.version_info >= (3,)
 
 class Signature(object):
     """
@@ -291,8 +291,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     def _validate_sigs(self, typing_func, impl_func):
         # check that the impl func and the typing func have the same signature!
-        typing_sig = inspect.signature(typing_func)
-        impl_sig = inspect.signature(impl_func)
+        typing_sig = utils.pysignature(typing_func)
+        impl_sig = utils.pysignature(impl_func)
         # the typing signature is considered golden and must be adhered to by
         # the implementation...
         # Things that are valid:
@@ -312,11 +312,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             args = []
             pos_arg = None
             for x in sig.parameters.values():
-                if x.default == inspect.Parameter.empty:
+                if x.default == utils.pyParameter.empty:
                     args.append(x)
-                    if x.kind == inspect.Parameter.VAR_POSITIONAL:
+                    if x.kind == utils.pyParameter.VAR_POSITIONAL:
                         pos_arg = x
-                    elif x.kind == inspect.Parameter.VAR_KEYWORD:
+                    elif x.kind == utils.pyParameter.VAR_KEYWORD:
                         msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
                             "unsupported. (offending argument name is '%s')")
                         raise TypingError(msg % x)
@@ -358,9 +358,14 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     msg = err_prefix + specialized % (sig_str, b[-1])
                     raise TypingError(msg)
 
-        def gen_diff(typing, implementing):
-            diff = set(typing) ^ set(implementing)
-            return "Difference: %s" % diff
+        if _IS_PY3:
+            def gen_diff(typing, implementing):
+                diff = set(typing) ^ set(implementing)
+                return "Difference: %s" % diff
+        else:
+            # funcsigs.Parameter cannot be hashed
+            def gen_diff(typing, implementing):
+                pass
 
         if a != b:
             specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))
@@ -396,13 +401,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 return
             # check that the typing and impl sigs match up
             if self._strict:
-                try:
-                    self._validate_sigs(self._overload_func, pyfunc)
-                except Exception as e:
-                    import traceback
-                    traceback.print_stack()
-                    print(self)
-                    print(e)
+                self._validate_sigs(self._overload_func, pyfunc)
             from numba import jit
             jitdecor = jit(nopython=True, **self._jit_options)
             disp = self._impl_cache[cache_key] = jitdecor(pyfunc)

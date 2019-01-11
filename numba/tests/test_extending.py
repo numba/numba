@@ -32,6 +32,8 @@ from numba.extending import (typeof_impl, type_callable,
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
+_IS_PY3 = sys.version_info >= (3,)
+
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
 
@@ -678,8 +680,9 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument default values", msg)
-        self.assertIn('<Parameter "kw=12">', msg)
-        self.assertIn('<Parameter "kw=None">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kw=12">', msg)
+            self.assertIn('<Parameter "kw=None">', msg)
 
         # kwarg name is different
         def impl2(a, b, c, kwarg=None):
@@ -693,8 +696,9 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        self.assertIn('<Parameter "kwarg=None">', msg)
-        self.assertIn('<Parameter "kw=None">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kwarg=None">', msg)
+            self.assertIn('<Parameter "kw=None">', msg)
 
         # arg name is different
         def impl3(z, b, c, kw=None):
@@ -709,39 +713,29 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        self.assertIn('<Parameter "a">', msg)
-        self.assertIn('<Parameter "z">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "a">', msg)
+            self.assertIn('<Parameter "z">', msg)
 
-        # arg name is different, and there's no arg name to match before *args
-        def impl4(z, *args, kw=None):
-            if a > 10:
-                return 1
-            else:
-                return -1
+        # impl4/5 has invalid syntax for python < 3
+        if _IS_PY3:
+            from .overload_usecases import impl4, impl5
+            with self.assertRaises(errors.TypingError) as e:
+                gen_ol(impl4)(1, 2, 3, 4)
+            msg = str(e.exception)
+            self.assertIn(sentinel, msg)
+            self.assertIn("argument names", msg)
+            self.assertFalse("keyword" in msg)
+            self.assertIn("First difference: 'z'", msg)
 
-        with self.assertRaises(errors.TypingError) as e:
-            gen_ol(impl4)(1, 2, 3, 4)
-        msg = str(e.exception)
-        self.assertIn(sentinel, msg)
-        self.assertIn("argument names", msg)
-        self.assertFalse("keyword" in msg)
-        self.assertIn("First difference: 'z'", msg)
-
-        # arg name is different but at a detectable location, with *args
-        def impl5(z, b, *args, kw=None):
-            if a > 10:
-                return 1
-            else:
-                return -1
-
-        with self.assertRaises(errors.TypingError) as e:
-            gen_ol(impl5)(1, 2, 3, 4)
-        msg = str(e.exception)
-        self.assertIn(sentinel, msg)
-        self.assertIn("argument names", msg)
-        self.assertFalse("keyword" in msg)
-        self.assertIn('<Parameter "a">', msg)
-        self.assertIn('<Parameter "z">', msg)
+            with self.assertRaises(errors.TypingError) as e:
+                gen_ol(impl5)(1, 2, 3, 4)
+            msg = str(e.exception)
+            self.assertIn(sentinel, msg)
+            self.assertIn("argument names", msg)
+            self.assertFalse("keyword" in msg)
+            self.assertIn('<Parameter "a">', msg)
+            self.assertIn('<Parameter "z">', msg)
 
         # too many args
         def impl6(a, b, c, d, e, kw=None):
@@ -756,8 +750,9 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        self.assertIn('<Parameter "d">', msg)
-        self.assertIn('<Parameter "e">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "d">', msg)
+            self.assertIn('<Parameter "e">', msg)
 
         # too few args
         def impl7(a, b, kw=None):
@@ -772,7 +767,8 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        self.assertIn('<Parameter "c">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "c">', msg)
 
         # too many kwargs
         def impl8(a, b, c, kw=None, extra_kwarg=None):
@@ -786,7 +782,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        self.assertIn('<Parameter "extra_kwarg=None">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "extra_kwarg=None">', msg)
 
         # too few kwargs
         def impl9(a, b, c):
@@ -800,8 +797,10 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        self.assertIn('<Parameter "kw=None">', msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kw=None">', msg)
 
+    @unittest.skipUnless(_IS_PY3, "Python 3+ only syntax")
     def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
         """
         Tests that an overload which has a differing typing and implementing
@@ -810,14 +809,9 @@ class TestHighLevelExtending(TestCase):
         def myoverload(a, kw=None):
             pass
 
-        @overload(myoverload)
-        def _myoverload_impl(a, *star_args_token, kw=None, kw1=12):
-            def impl(a, b, f, kw=None, kw1=12):
-                if x > 10:
-                    return 1
-                else:
-                    return -1
-            return impl
+        from .overload_usecases import var_positional_impl
+        overload(myoverload)(var_positional_impl)
+
 
         @jit(nopython=True)
         def foo(a, b):
