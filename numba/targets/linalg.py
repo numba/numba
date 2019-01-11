@@ -1502,7 +1502,7 @@ def _system_check_non_empty_impl(a, b):
         return twoD_impl
 
 
-def _lstsq_residual(b, n, rhs):
+def _lstsq_residual(b, n, nrhs):
     """
     Compute the residual from the 'b' scratch space.
     """
@@ -1510,7 +1510,7 @@ def _lstsq_residual(b, n, rhs):
 
 
 @overload(_lstsq_residual)
-def _lstsq_residual_impl(b, n, rhs):
+def _lstsq_residual_impl(b, n, nrhs):
     ndim = b.ndim
     dtype = b.dtype
     real_dtype = np_support.as_dtype(getattr(dtype, "underlying_float", dtype))
@@ -2192,10 +2192,10 @@ def _get_norm_impl(a, ord_flag):
 
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
-            def oneD_impl(a, order=None):
+            def oneD_impl(a, ord=None):
                 return _oneD_norm_2(a)
         else:
-            def oneD_impl(a, order=None):
+            def oneD_impl(a, ord=None):
                 n = len(a)
 
                 # Shortcut to handle zero length arrays
@@ -2211,9 +2211,9 @@ def _get_norm_impl(a, ord_flag):
                 # This is the same as for ord=="None" but because
                 # we have to handle "None" specially this condition
                 # is separated
-                if order == 2:
+                if ord == 2:
                     return _oneD_norm_2(a)
-                elif order == np.inf:
+                elif ord == np.inf:
                     # max(abs(a))
                     ret = abs(a[0])
                     for k in range(1, n):
@@ -2222,7 +2222,7 @@ def _get_norm_impl(a, ord_flag):
                             ret = val
                     return ret
 
-                elif order == -np.inf:
+                elif ord == -np.inf:
                     # min(abs(a))
                     ret = abs(a[0])
                     for k in range(1, n):
@@ -2231,7 +2231,7 @@ def _get_norm_impl(a, ord_flag):
                             ret = val
                     return ret
 
-                elif order == 0:
+                elif ord == 0:
                     # sum(a != 0)
                     ret = 0.0
                     for k in range(n):
@@ -2239,7 +2239,7 @@ def _get_norm_impl(a, ord_flag):
                             ret += 1.
                     return ret
 
-                elif order == 1:
+                elif ord == 1:
                     # sum(abs(a))
                     ret = 0.0
                     for k in range(n):
@@ -2250,8 +2250,8 @@ def _get_norm_impl(a, ord_flag):
                     # sum(abs(a)**ord)**(1./ord)
                     ret = 0.0
                     for k in range(n):
-                        ret += abs(a[k])**order
-                    return ret**(1. / order)
+                        ret += abs(a[k])**ord
+                    return ret**(1. / ord)
         return oneD_impl
 
     elif a.ndim == 2:
@@ -2277,7 +2277,7 @@ def _get_norm_impl(a, ord_flag):
 
             # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
             # which is the L2-norm of A.ravel() and so can be computed via BLAS
-            def twoD_impl(a, order=None):
+            def twoD_impl(a, ord=None):
                 n = a.size
                 if n == 0:
                     # reshape() currently doesn't support zero-sized arrays
@@ -2288,7 +2288,7 @@ def _get_norm_impl(a, ord_flag):
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
 
-            def twoD_impl(a, order=None):
+            def twoD_impl(a, ord=None):
                 n = a.shape[-1]
                 m = a.shape[-2]
 
@@ -2299,7 +2299,7 @@ def _get_norm_impl(a, ord_flag):
                 if a.size == 0:
                     return 0.0
 
-                if order == np.inf:
+                if ord == np.inf:
                     # max of sum of abs across rows
                     # max(sum(abs(a)), axis=1)
                     global_max = 0.
@@ -2311,7 +2311,7 @@ def _get_norm_impl(a, ord_flag):
                             global_max = tmp
                     return global_max
 
-                elif order == -np.inf:
+                elif ord == -np.inf:
                     # min of sum of abs across rows
                     # min(sum(abs(a)), axis=1)
                     global_min = max_val
@@ -2322,7 +2322,7 @@ def _get_norm_impl(a, ord_flag):
                         if tmp < global_min:
                             global_min = tmp
                     return global_min
-                elif order == 1:
+                elif ord == 1:
                     # max of sum of abs across cols
                     # max(sum(abs(a)), axis=0)
                     global_max = 0.
@@ -2334,7 +2334,7 @@ def _get_norm_impl(a, ord_flag):
                             global_max = tmp
                     return global_max
 
-                elif order == -1:
+                elif ord == -1:
                     # min of sum of abs across cols
                     # min(sum(abs(a)), axis=0)
                     global_min = max_val
@@ -2348,10 +2348,10 @@ def _get_norm_impl(a, ord_flag):
 
                 # Results via SVD, singular values are sorted on return
                 # by definition.
-                elif order == 2:
+                elif ord == 2:
                     # max SV
                     return _compute_singular_values(a)[0]
-                elif order == -2:
+                elif ord == -2:
                     # min SV
                     return _compute_singular_values(a)[-1]
                 else:
@@ -2385,7 +2385,7 @@ def cond_impl(a, p=None):
                 return s[0] / s[-1]
             return cond_none_impl
         else:
-            def cond_not_none_impl(a, p):
+            def cond_not_none_impl(a, p=None):
                 # This is extracted for performance, numpy does approximately:
                 # `condition = norm(a) * norm(inv(a))`
                 # in the cases of `p == 2` or `p ==-2` singular values are used
@@ -2465,7 +2465,7 @@ def matrix_rank_impl(a, tol=None):
                 return _get_rank_from_singular_values(s, t)
             return _2d_tol_none_impl
         else:
-            def _2d_tol_not_none_impl(a, tol):
+            def _2d_tol_not_none_impl(a, tol=None):
                 s = _compute_singular_values(a)
                 return _get_rank_from_singular_values(s, tol)
             return _2d_tol_not_none_impl
@@ -2485,7 +2485,7 @@ def matrix_rank_impl(a, tol=None):
             # lead to a reported rank of 0 whereas a tol of 1e-15 should lead
             # to a reported rank of 1, numpy reports 1 regardless.
             # The code below replicates the numpy behaviour.
-            def _1d_matrix_rank_impl(a, tol):
+            def _1d_matrix_rank_impl(a, tol=None):
                 for k in range(len(a)):
                     if a[k] != 0.:
                         return 1
@@ -2578,14 +2578,14 @@ def matrix_power_impl(a, n):
 
 
 @overload(np.trace)
-def matrix_trace_impl(a, offset=types.int_):
+def matrix_trace_impl(a, offset=0):
     """
     Computes the trace of an array.
     """
 
     _check_linalg_matrix(a, "trace", la_prefix=False)
 
-    if not isinstance(offset, types.Integer):
+    if not isinstance(offset, (int, types.Integer)):
         raise TypeError("integer argument expected, got %s" % offset)
 
     def matrix_trace_impl(a, offset=0):

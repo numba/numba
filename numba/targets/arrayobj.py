@@ -1488,11 +1488,11 @@ def array_transpose_vararg(context, builder, sig, args):
 def numpy_transpose(a, axes=None):
 
     if axes is None:
-        def np_transpose_impl(arr):
-            return arr.transpose()
+        def np_transpose_impl(a, axes=None):
+            return a.transpose()
     else:
-        def np_transpose_impl(arr, axes=None):
-            return arr.transpose(axes)
+        def np_transpose_impl(a, axes=None):
+            return a.transpose(axes)
 
     return np_transpose_impl
 

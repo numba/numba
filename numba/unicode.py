@@ -510,8 +510,8 @@ def unicode_getitem(s, idx):
                 return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
-            def getitem_slice(s, slice_idx):
-                slice_idx = _normalize_slice(slice_idx, len(s))
+            def getitem_slice(s, idx):
+                slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
                 ret = _empty_string(s._kind, span)
                 cur = slice_idx.start

@@ -962,7 +962,7 @@ class TestIntrinsic(TestCase):
         def unsafe_get_ctypes_pointer(src):
             raise NotImplementedError("not callable from python")
 
-        @overload(unsafe_get_ctypes_pointer)
+        @overload(unsafe_get_ctypes_pointer, strict=False)
         def array_impl_unsafe_get_ctypes_pointer(arrtype):
             if isinstance(arrtype, types.Array):
                 unsafe_cast = unsafe_caster(types.CPointer(arrtype.dtype))

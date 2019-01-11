@@ -396,7 +396,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 return
             # check that the typing and impl sigs match up
             if self._strict:
-                self._validate_sigs(self._overload_func, pyfunc)
+                try:
+                    self._validate_sigs(self._overload_func, pyfunc)
+                except Exception as e:
+                    import traceback
+                    traceback.print_stack()
+                    print(self)
+                    print(e)
             from numba import jit
             jitdecor = jit(nopython=True, **self._jit_options)
             disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
