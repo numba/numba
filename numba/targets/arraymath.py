@@ -1464,37 +1464,39 @@ def np_interp_impl_inner(x, xp, fp, dtype):
 
         return out
 
-@overload(np.interp)
-def np_interp(x, xp, fp):
+if numpy_version >= (1, 10):
+    # replicate behaviour change of 1.10+
+    @overload(np.interp)
+    def np_interp(x, xp, fp):
 
-    if hasattr(xp, 'ndim') and xp.ndim > 1:
-        raise TypingError('xp must be 1D')
-    if hasattr(fp, 'ndim') and fp.ndim > 1:
-        raise TypingError('fp must be 1D')
+        if hasattr(xp, 'ndim') and xp.ndim > 1:
+            raise TypingError('xp must be 1D')
+        if hasattr(fp, 'ndim') and fp.ndim > 1:
+            raise TypingError('fp must be 1D')
 
-    complex_dtype_msg = (
-        "Cannot cast array data from complex dtype to float64 dtype"
-    )
+        complex_dtype_msg = (
+            "Cannot cast array data from complex dtype to float64 dtype"
+        )
 
-    xp_dt = determine_dtype(xp)
-    if np.issubdtype(xp_dt, np.complexfloating):
-        raise TypingError(complex_dtype_msg)
-
-    fp_dt = determine_dtype(fp)
-    dtype = np.result_type(fp_dt, np.float64)
-
-    def np_interp_impl(x, xp, fp):
-        return np_interp_impl_inner(x, xp, fp, dtype)
-
-    def np_interp_scalar_impl(x, xp, fp):
-        return np_interp_impl_inner(x, xp, fp, dtype).flat[0]
-
-    if isinstance(x, types.Number):
-        if isinstance(x, types.Complex):
+        xp_dt = determine_dtype(xp)
+        if np.issubdtype(xp_dt, np.complexfloating):
             raise TypingError(complex_dtype_msg)
-        return np_interp_scalar_impl
 
-    return np_interp_impl
+        fp_dt = determine_dtype(fp)
+        dtype = np.result_type(fp_dt, np.float64)
+
+        def np_interp_impl(x, xp, fp):
+            return np_interp_impl_inner(x, xp, fp, dtype)
+
+        def np_interp_scalar_impl(x, xp, fp):
+            return np_interp_impl_inner(x, xp, fp, dtype).flat[0]
+
+        if isinstance(x, types.Number):
+            if isinstance(x, types.Complex):
+                raise TypingError(complex_dtype_msg)
+            return np_interp_scalar_impl
+
+        return np_interp_impl
 
 #----------------------------------------------------------------------------
 # Statistics

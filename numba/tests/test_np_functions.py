@@ -1592,6 +1592,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             msg = "shift must be an integer"
             assert msg in str(e.exception)
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -1684,6 +1685,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [True]
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* no NumPy...
         pyfunc = interp
@@ -1730,6 +1732,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # dtype('complex128')  to dtype('float64') according to the
         # rule 'safe'
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
