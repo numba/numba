@@ -316,16 +316,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     args.append(x)
                     if x.kind == inspect.Parameter.VAR_POSITIONAL:
                         pos_arg = x
+                    elif x.kind == inspect.Parameter.VAR_KEYWORD:
+                        msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
+                            "unsupported. (offending argument name is '%s')")
+                        raise TypingError(msg % x)
                 else:
                     kws.append(x)
-                    if x.kind == inspect.Parameter.VAR_KEYWORD:
-                        msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
-                              "unsupported.")
-                        raise TypingError(msg)
-                if x.kind == inspect.Parameter.VAR_KEYWORD:
-                    msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
-                            "unsupported.")
-                    raise TypingError(msg)
             return args, kws, pos_arg
 
         ty_args, ty_kws, ty_pos = get_args_kwargs(typing_sig)
@@ -335,12 +331,18 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                    "Implementation signature: %s")
         sig_str = sig_fmt % (typing_sig, impl_sig)
 
+        err_prefix = "Typing and implementation arguments differ in "
+
         a = ty_args
         b = im_args
         if ty_pos:
             if not im_pos:
                 # case 5. described above
-                raise TypingError("VAR_POSITIONAL (*args) argument kind found in typing but not in implementation.\n%s" % sig_str)
+                msg = ("VAR_POSITIONAL (e.g. *args) argument kind (offending "
+                      "argument name is '%s') found in the typing function "
+                      "signature, but is not in the implementing function "
+                      "signature.\n%s") % (ty_pos, sig_str)
+                raise TypingError(msg)
         else:
             if im_pos:
                 # no *args in typing but there's a *args in the implementation
@@ -350,22 +352,32 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     a = ty_args[:ty_args.index(b[-1]) + 1]
                 except ValueError:
                     # there's no b[-1] arg name in the ty_args, something is
-                    # very wrong
-                    raise TypingError("Typing and implementation arguments differ in argument names.\n%s\nFirst difference: '%s'" % (sig_str, b[-1]))
+                    # very wrong, we can't work out a diff (*args consumes
+                    # unknown quantity of args) so just report first error
+                    specialized = "argument names.\n%s\nFirst difference: '%s'"
+                    msg = err_prefix + specialized % (sig_str, b[-1])
+                    raise TypingError(msg)
+
+        def gen_diff(typing, implementing):
+            diff = set(typing) ^ set(implementing)
+            return "Difference: %s" % diff
 
         if a != b:
-            d = set(a) ^ set(b)
-            raise TypingError("Typing and implementation arguments differ in argument names.\n%s\nDifference: %s" % (sig_str, d))
+            specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))
+            raise TypingError(err_prefix + specialized)
 
         # ensure kwargs are the same
         ty = [x.name for x in ty_kws]
         im = [x.name for x in im_kws]
         if ty != im:
-            d = [x for x in ty if x not in im]
-            raise TypingError("Typing and implementation arguments differ in kwarg names.\n%s" % sig_str)
+            specialized = "keyword argument names.\n%s\n%s"
+            msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
+            raise TypingError(msg)
         same = [x.default for x in ty_kws] == [x.default for x in im_kws]
         if not same:
-            raise TypingError("Typing and implementation arguments differ in kwarg defaults.\n%s" % sig_str)
+            specialized = "keyword argument default values.\n%s\n%s"
+            msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
+            raise TypingError(msg)
 
     def generic(self, args, kws):
         """

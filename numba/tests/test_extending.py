@@ -649,86 +649,228 @@ class TestHighLevelExtending(TestCase):
         Tests that an overload which has a differing typing and implementing
         signature raises an exception.
         """
-        def myoverload(a, kw=None):
-            pass
+        def gen_ol(impl=None):
 
+            def myoverload(a, b, c, kw=None):
+                pass
 
-        def impl1(a, kw=12): # kwarg value is different
-            if kw > 10:
+            @overload(myoverload)
+            def _myoverload_impl(a, b, c, kw=None):
+                return impl
+
+            @jit(nopython=True)
+            def foo(a, b, c, d):
+                myoverload(a, b, c, kw=d)
+
+            return foo
+
+        sentinel = "Typing and implementation arguments differ in"
+
+        # kwarg value is different
+        def impl1(a, b, c, kw=12):
+            if a > 10:
                 return 1
             else:
                 return -1
-
-        def impl2(a, kwarg=None): # kwarg name is different
-            if kw > 10:
-                return 1
-            else:
-                return -1
-
-        def impl3(z, kw=None): # arg name is different
-            if kw > 10:
-                return 1
-            else:
-                return -1
-
-        def impl4(*args, kw=None): # starargs
-            if kw > 10:
-                return 1
-            else:
-                return -1
-
-
-        # register all the overloads (all are bad!)
-        #impl1 ,impl2, impl3,
-        for inner in [impl4]:
-            def problem_factory(impl):
-                def _myoverload_impl(a, kw=None):
-                    return impl
-                return overload(myoverload)(_myoverload_impl)
-
-            problem_factory(inner)
-
-        @jit(nopython=True)
-        def foo(a, b):
-            myoverload(a, kw=b)
 
         with self.assertRaises(errors.TypingError) as e:
-            foo(1, 2)
+            gen_ol(impl1)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument default values", msg)
+        self.assertIn('<Parameter "kw=12">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
-        err_msg = e.exception.msg
-        expected = ['<Parameter "kw=None">', '<Parameter "kw=12">',
-                    '<Parameter "kwarg=None">', '<Parameter "z">']
-        diff_lines = ''.join([x for x in err_msg.splitlines() \
-                     if "Differing" in x])
-        for ex in expected:
-            self.assertIn(ex, diff_lines)
+        # kwarg name is different
+        def impl2(a, b, c, kwarg=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl2)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        self.assertIn('<Parameter "kwarg=None">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
+
+        # arg name is different
+        def impl3(z, b, c, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl3)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
+
+        # arg name is different, and there's no arg name to match before *args
+        def impl4(z, *args, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl4)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn("First difference: 'z'", msg)
+
+        # arg name is different but at a detectable location, with *args
+        def impl5(z, b, *args, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl5)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
+
+        # too many args
+        def impl6(a, b, c, d, e, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl6)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "d">', msg)
+        self.assertIn('<Parameter "e">', msg)
+
+        # too few args
+        def impl7(a, b, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl7)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "c">', msg)
+
+        # too many kwargs
+        def impl8(a, b, c, kw=None, extra_kwarg=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl8)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        self.assertIn('<Parameter "extra_kwarg=None">', msg)
+
+        # too few kwargs
+        def impl9(a, b, c):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl9)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
     def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
         """
         Tests that an overload which has a differing typing and implementing
-        signature raises an exception.
+        signature raises an exception and uses VAR_POSITIONAL (*args) in typing
         """
         def myoverload(a, kw=None):
             pass
 
         @overload(myoverload)
-        def _myoverload_impl(a, b, c, kw=None, kw1=12):
+        def _myoverload_impl(a, *star_args_token, kw=None, kw1=12):
             def impl(a, b, f, kw=None, kw1=12):
-                x = a
-                y = args[0]
                 if x > 10:
-                    return 1 + y, kw
+                    return 1
                 else:
-                    return -1 + y, kw
+                    return -1
             return impl
 
         @jit(nopython=True)
         def foo(a, b):
             return myoverload(a, b, 9, kw=11)
 
-        print(foo(1, 5))
+        with self.assertRaises(errors.TypingError) as e:
+            foo(1, 5)
+        msg = str(e.exception)
+        self.assertIn("VAR_POSITIONAL (e.g. *args) argument kind", msg)
+        self.assertIn("offending argument name is '*star_args_token'", msg)
 
+    def test_typing_vs_impl_signature_mismatch_handling_var_keyword(self):
+        """
+        Tests that an overload which uses **kwargs (VAR_KEYWORD)
+        """
 
+        def gen_ol(impl, strict=True):
+
+            def myoverload(a, kw=None):
+                pass
+
+            overload(myoverload, strict=strict)(impl)
+
+            @jit(nopython=True)
+            def foo(a, b):
+                return myoverload(a, kw=11)
+
+            return foo
+
+        # **kwargs in typing
+        def ol1(a, **kws):
+            def impl(a, kw=10):
+                return a
+            return impl
+
+        gen_ol(ol1, False)(1, 2) # no error if strictness not enforced
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(ol1)(1, 2)
+        msg = str(e.exception)
+        self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
+        self.assertIn("offending argument name is '**kws'", msg)
+
+        # **kwargs in implementation
+        def ol2(a, kw=0):
+            def impl(a, **kws):
+                return a
+            return impl
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(ol2)(1, 2)
+        msg = str(e.exception)
+        self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
+        self.assertIn("offending argument name is '**kws'", msg)
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
