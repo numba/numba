@@ -159,7 +159,7 @@ class PassThruContainerTest(TestCase):
 ############################ PassThru ############################
 # simple pass through type, no attributes accessible from nopython
 ##################################################################
-class MyPassThru:
+class MyPassThru(object):
     def __init__(self):
         self.something_not_boxable = object()
 
@@ -226,7 +226,7 @@ class MyPassThruTest(TestCase):
 
         with check_numba_allocations(self, (lambda: {})):
             with self.assertRaises(NotImplementedError) as raises:
-                o = create_pass_thru()
+                create_pass_thru()
 
         self.assertIn("Native creation of 'PassThruType' not implemented.", str(raises.exception))
 
@@ -236,7 +236,7 @@ class MyPassThruTest(TestCase):
 # including another pass through type and a list
 ###########################################################################
 
-class PassThruComplex:
+class PassThruComplex(object):
     def __init__(self, int_attr, passthru_attr, list_attr=[]):
         self.int_attr = int_attr
         self.passthru_attr = passthru_attr
@@ -306,10 +306,15 @@ def unbox_passthru_complex_payload(typ, obj, context):
 def box_passthru_complex(typ, val, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
 
+    # try to box parent, if this succeeds we are done else create a new Python object
+    # we need to incref here as the boxer will decref and we might still need the parent
+    # to create a new Python object
+    context.context.nrt.incref(context.builder, pass_thru_type, pass_thru.parent)
     obj = context.box(pass_thru_type, pass_thru.parent)
 
     with context.builder.if_else(cgutils.is_null(context.builder, obj)) as (no_python_created, python_created):
         with python_created:
+            context.context.nrt.decref(context.builder, typ, val)
             bb_python_created = context.builder.basic_block
 
         with no_python_created:
@@ -325,20 +330,23 @@ def box_passthru_complex(typ, val, context):
 
             # store the newly created object onto the meminfo such that only one instance is created
             # even if the same nopython instance gets returned twice (or more)
-            parent = cgutils.create_struct_proxy(pass_thru_type)(context.context, context.builder, value=pass_thru.parent)
+            parent = cgutils.create_struct_proxy(pass_thru_type)(
+                context.context, context.builder, value=pass_thru.parent
+            )
             context.context.nrt.meminfo_set_data(context.builder, parent.meminfo, new_obj)
 
             context.pyapi.decref(int_attr)
             context.pyapi.decref(passthru_attr)
             context.pyapi.decref(list_attr)
 
+            # only need to decref parent, other members already decref'ed by the boxers
+            context.context.nrt.decref(context.builder, pass_thru_type, pass_thru.parent)
+
             bb_no_python_created = context.builder.basic_block
 
     res = context.builder.phi(cgutils.voidptr_t)
     res.add_incoming(obj, bb_python_created)
     res.add_incoming(new_obj, bb_no_python_created)
-
-    context.context.nrt.decref(context.builder, typ, val)
 
     return res
 

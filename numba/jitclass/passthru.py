@@ -1,14 +1,12 @@
 from .. import cgutils, types
-from ..datamodel import default_manager as data_model_manager, models
+from ..datamodel import models
 from ..extending import make_attribute_wrapper, overload, register_model, type_callable
 from ..pythonapi import NativeValue, unbox, box
 from ..six import PY3
-from ..targets.imputils import lower_getattr, lower_builtin
-from ..typing.templates import infer_getattr, AttributeTemplate
+from ..targets.imputils import lower_builtin
 from ..typing.typeof import typeof_impl
 
 from operator import is_, eq
-from llvmlite import ir
 from llvmlite.llvmpy.core import Constant
 
 
@@ -66,7 +64,8 @@ def box_pass_thru_type(typ, val, context):
     return obj
 
 
-class PassThru: pass
+class PassThru(object):
+    pass
 
 
 @type_callable(PassThru)
@@ -91,7 +90,7 @@ def pass_thru_constructor(context, builder, sig, args):
     return pass_thru._getvalue()
 
 
-class PassThruContainer:
+class PassThruContainer(object):
     def __init__(self, obj):
         self._obj = obj
 
@@ -147,11 +146,10 @@ def unbox_pass_thru_container_type(typ, obj, context):
 
 
 @box(PassThruContainerType)
-def box_pass_thru_type(typ, val, context):
+def box_pass_thru_container_type(typ, val, context):
     val = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
 
     return context.box(pass_thru_type, val.container)
-
 
 
 @lower_builtin(is_, types.Opaque, types.Opaque)
