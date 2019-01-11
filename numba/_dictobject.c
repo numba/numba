@@ -1058,106 +1058,6 @@ build_indices(PyDictKeysObject *keys, PyDictKeyEntry *ep, Py_ssize_t n)
     }
 }
 
-/*
-Restructure the table by allocating a new table and reinserting all
-items again.  When entries have been deleted, the new table may
-actually be smaller than the old one.
-If a table is split (its keys and hashes are shared, its values are not),
-then the values are temporarily copied into the table, it is resized as
-a combined table, then the me_value slots in the old table are NULLed out.
-After resizing a table is always combined,
-but can be resplit by make_keys_shared().
-*/
-static int
-dictresize(PyDictObject *mp, Py_ssize_t minsize)
-{
-    Py_ssize_t newsize, numentries;
-    PyDictKeysObject *oldkeys;
-    PyObject **oldvalues;
-    PyDictKeyEntry *oldentries, *newentries;
-
-    /* Find the smallest table size > minused. */
-    for (newsize = PyDict_MINSIZE;
-         newsize < minsize && newsize > 0;
-         newsize <<= 1)
-        ;
-    if (newsize <= 0) {
-        PyErr_NoMemory();
-        return -1;
-    }
-
-    oldkeys = mp->ma_keys;
-
-    /* NOTE: Current odict checks mp->ma_keys to detect resize happen.
-     * So we can't reuse oldkeys even if oldkeys->dk_size == newsize.
-     * TODO: Try reusing oldkeys when reimplement odict.
-     */
-
-    /* Allocate a new table. */
-    mp->ma_keys = new_keys_object(newsize);
-    if (mp->ma_keys == NULL) {
-        mp->ma_keys = oldkeys;
-        return -1;
-    }
-    // New table must be large enough.
-    assert(mp->ma_keys->dk_usable >= mp->ma_used);
-    if (oldkeys->dk_lookup == lookdict)
-        mp->ma_keys->dk_lookup = lookdict;
-
-    numentries = mp->ma_used;
-    oldentries = DK_ENTRIES(oldkeys);
-    newentries = DK_ENTRIES(mp->ma_keys);
-    oldvalues = mp->ma_values;
-    if (oldvalues != NULL) {
-        /* Convert split table into new combined table.
-         * We must incref keys; we can transfer values.
-         * Note that values of split table is always dense.
-         */
-        for (Py_ssize_t i = 0; i < numentries; i++) {
-            assert(oldvalues[i] != NULL);
-            PyDictKeyEntry *ep = &oldentries[i];
-            PyObject *key = ep->me_key;
-            Py_INCREF(key);
-            newentries[i].me_key = key;
-            newentries[i].me_hash = ep->me_hash;
-            newentries[i].me_value = oldvalues[i];
-        }
-
-        DK_DECREF(oldkeys);
-        mp->ma_values = NULL;
-        if (oldvalues != empty_values) {
-            free_values(oldvalues);
-        }
-    }
-    else {  // combined table.
-        if (oldkeys->dk_nentries == numentries) {
-            memcpy(newentries, oldentries, numentries * sizeof(PyDictKeyEntry));
-        }
-        else {
-            PyDictKeyEntry *ep = oldentries;
-            for (Py_ssize_t i = 0; i < numentries; i++) {
-                while (ep->me_value == NULL)
-                    ep++;
-                newentries[i] = *ep++;
-            }
-        }
-
-        assert(oldkeys->dk_lookup != lookdict_split);
-        assert(oldkeys->dk_refcnt == 1);
-        if (oldkeys->dk_size == PyDict_MINSIZE &&
-            numfreekeys < PyDict_MAXFREELIST) {
-            DK_DEBUG_DECREF keys_free_list[numfreekeys++] = oldkeys;
-        }
-        else {
-            DK_DEBUG_DECREF PyObject_FREE(oldkeys);
-        }
-    }
-
-    build_indices(mp->ma_keys, newentries, numentries);
-    mp->ma_keys->dk_usable -= numentries;
-    mp->ma_keys->dk_nentries = numentries;
-    return 0;
-}
 
 /* Returns NULL if unable to split table.
  * A NULL return does not necessarily indicate an error */
@@ -4532,6 +4432,37 @@ top:
     exit(1); // unreachable
 }
 
+/* write to indices. */
+static inline void
+dk_set_index(NumbaDictKeysObject *keys, Py_ssize_t i, Py_ssize_t ix)
+{
+    Py_ssize_t s = DK_SIZE(keys);
+
+    assert(ix >= DKIX_DUMMY);
+
+    if (s <= 0xff) {
+        int8_t *indices = (int8_t*)(keys->dk_indices);
+        assert(ix <= 0x7f);
+        indices[i] = (char)ix;
+    }
+    else if (s <= 0xffff) {
+        int16_t *indices = (int16_t*)(keys->dk_indices);
+        assert(ix <= 0x7fff);
+        indices[i] = (int16_t)ix;
+    }
+#if SIZEOF_VOID_P > 4
+    else if (s > 0xffffffff) {
+        int64_t *indices = (int64_t*)(keys->dk_indices);
+        indices[i] = ix;
+    }
+#endif
+    else {
+        int32_t *indices = (int32_t*)(keys->dk_indices);
+        assert(ix <= 0x7fffffff);
+        indices[i] = (int32_t)ix;
+    }
+}
+
 
 static
 int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
@@ -4578,9 +4509,254 @@ int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
     return OK;
 }
 
+
+#define NUMBA_INCREF(x)
+#define NUMBA_DECREF(x)
+
+/*
+Internal routine used by dictresize() to build a hashtable of entries.
+*/
+static void
+build_indices(NumbaDictKeysObject *keys, NumbaDictKeyEntry *ep, Py_ssize_t n)
+{
+    size_t mask = (size_t)DK_SIZE(keys) - 1;
+    for (Py_ssize_t ix = 0; ix != n; ix++, ep++) {
+        Py_hash_t hash = ep->me_hash;
+        size_t i = hash & mask;
+        for (size_t perturb = hash; dk_get_index(keys, i) != DKIX_EMPTY;) {
+            perturb >>= PERTURB_SHIFT;
+            i = mask & (i*5 + perturb + 1);
+        }
+        dk_set_index(keys, i, ix);
+    }
+}
+
+/*
+Restructure the table by allocating a new table and reinserting all
+items again.  When entries have been deleted, the new table may
+actually be smaller than the old one.
+If a table is split (its keys and hashes are shared, its values are not),
+then the values are temporarily copied into the table, it is resized as
+a combined table, then the me_value slots in the old table are NULLed out.
+After resizing a table is always combined,
+but can be resplit by make_keys_shared().
+*/
+static Status
+dictresize(NumbaDictObject *mp, Py_ssize_t minsize)
+{
+    Py_ssize_t newsize, numentries;
+    NumbaDictKeysObject *oldkeys;
+    NumbaObject **oldvalues;
+    NumbaDictKeyEntry *oldentries, *newentries;
+
+    /* Find the smallest table size > minused. */
+    for (newsize = PyDict_MINSIZE;
+         newsize < minsize && newsize > 0;
+         newsize <<= 1)
+        ;
+    if (newsize <= 0) {
+        return ERR_NO_MEMORY;
+    }
+
+    oldkeys = mp->ma_keys;
+
+    /* NOTE: Current odict checks mp->ma_keys to detect resize happen.
+     * So we can't reuse oldkeys even if oldkeys->dk_size == newsize.
+     * TODO: Try reusing oldkeys when reimplement odict.
+     */
+
+    /* Allocate a new table. */
+    Status status = Numba_new_keys_object(&mp->ma_keys, newsize);
+    if (status != OK) {
+        mp->ma_keys = oldkeys;
+        return status;
+    }
+    // New table must be large enough.
+    assert(mp->ma_keys->dk_usable >= mp->ma_used);
+    if (oldkeys->dk_lookup == lookdict)
+        mp->ma_keys->dk_lookup = lookdict;
+
+    numentries = mp->ma_used;
+    oldentries = DK_ENTRIES(oldkeys);
+    newentries = DK_ENTRIES(mp->ma_keys);
+    oldvalues = mp->ma_values;
+    if (oldvalues != NULL) {
+        /* Convert split table into new combined table.
+         * We must incref keys; we can transfer values.
+         * Note that values of split table is always dense.
+         */
+        assert(0 && "do not do split table");
+        for (Py_ssize_t i = 0; i < numentries; i++) {
+            assert(oldvalues[i] != NULL);
+            NumbaDictKeyEntry *ep = &oldentries[i];
+            NumbaObject *key = ep->me_key;
+            NUMBA_INCREF(key);
+            newentries[i].me_key = key;
+            newentries[i].me_hash = ep->me_hash;
+            newentries[i].me_value = oldvalues[i];
+        }
+
+        NUMBA_DECREF(oldkeys);
+        mp->ma_values = NULL;
+        // if (oldvalues != empty_values) {
+        PyMem_RawFree(oldvalues);
+        // }
+    }
+    else {  // combined table.
+        if (oldkeys->dk_nentries == numentries) {
+            memcpy(newentries, oldentries, numentries * sizeof(NumbaDictKeyEntry));
+        }
+        else {
+            NumbaDictKeyEntry *ep = oldentries;
+            for (Py_ssize_t i = 0; i < numentries; i++) {
+                while (ep->me_value == NULL)
+                    ep++;
+                newentries[i] = *ep++;
+            }
+        }
+
+        assert(oldkeys->dk_lookup != lookdict_split);
+        assert(oldkeys->dk_refcnt == 1);
+
+        PyMem_RawFree(oldkeys);
+    }
+
+    build_indices(mp->ma_keys, newentries, numentries);
+    mp->ma_keys->dk_usable -= numentries;
+    mp->ma_keys->dk_nentries = numentries;
+    return 0;
+}
+
+
+
+static int
+insertion_resize(NumbaDictObject *mp)
+{
+    return dictresize(mp, GROWTH_RATE(mp));
+}
+
+/* Internal function to find slot for an item from its hash
+   when it is known that the key is not present in the dict.
+
+   The dict must be combined. */
+static Py_ssize_t
+find_empty_slot(PyDictKeysObject *keys, Py_hash_t hash)
+{
+    assert(keys != NULL);
+
+    const size_t mask = DK_MASK(keys);
+    size_t i = hash & mask;
+    Py_ssize_t ix = dk_get_index(keys, i);
+    for (size_t perturb = hash; ix >= 0;) {
+        perturb >>= PERTURB_SHIFT;
+        i = (i*5 + perturb + 1) & mask;
+        ix = dk_get_index(keys, i);
+    }
+    return i;
+}
+
+
+/*
+Internal routine to insert a new item into the table.
+Used both by the internal resize routine and by the public insert routine.
+Returns -1 if an error occurred, or 0 on success.
+*/
+static int
+insertdict(NumbaDictObject *mp, NumbaObject *key, Py_hash_t hash, NumbaObject *value)
+{
+    NumbaObject *old_value;
+    NumbaDictKeyEntry *ep;
+
+    NUMBA_INCREF(key);
+    NUMBA_INCREF(value);
+
+    assert(mp->ma_values);
+    /* we don't do split tables
+    //
+    // if (mp->ma_values != NULL && !PyUnicode_CheckExact(key)) {
+    //     if (insertion_resize(mp) < 0)
+    //         goto Fail;
+    // }
+    */
+
+    Py_ssize_t ix = mp->ma_keys->dk_lookup(mp, key, hash, &old_value);
+
+    if (ix == DKIX_ERROR)
+        goto Fail;
+
+    // assert(PyUnicode_CheckExact(key) || mp->ma_keys->dk_lookup == lookdict);
+    // MAINTAIN_TRACKING(mp, key, value);
+
+    /* When insertion order is different from shared key, we can't share
+     * the key anymore.  Convert this instance to combine table.
+     */
+    if (((ix >= 0 && old_value == NULL && mp->ma_used != ix) ||
+         (ix == DKIX_EMPTY && mp->ma_used != mp->ma_keys->dk_nentries))) {
+        if (insertion_resize(mp) < 0)
+            goto Fail;
+        ix = DKIX_EMPTY;
+    }
+
+    if (ix == DKIX_EMPTY) {
+        /* Insert into new slot. */
+        assert(old_value == NULL);
+        if (mp->ma_keys->dk_usable <= 0) {
+            /* Need to resize. */
+            if (insertion_resize(mp) < 0)
+                goto Fail;
+        }
+        Py_ssize_t hashpos = find_empty_slot(mp->ma_keys, hash);
+        ep = &DK_ENTRIES(mp->ma_keys)[mp->ma_keys->dk_nentries];
+        dk_set_index(mp->ma_keys, hashpos, mp->ma_keys->dk_nentries);
+        ep->me_key = key;
+        ep->me_hash = hash;
+        if (mp->ma_values) {
+            assert (mp->ma_values[mp->ma_keys->dk_nentries] == NULL);
+            mp->ma_values[mp->ma_keys->dk_nentries] = value;
+        }
+        else {
+            ep->me_value = value;
+        }
+        mp->ma_used++;
+        mp->ma_version_tag = DICT_NEXT_VERSION();
+        mp->ma_keys->dk_usable--;
+        mp->ma_keys->dk_nentries++;
+        assert(mp->ma_keys->dk_usable >= 0);
+        // assert(_PyDict_CheckConsistency(mp));
+        return 0;
+    }
+
+    // if (_PyDict_HasSplitTable(mp)) {
+    //     mp->ma_values[ix] = value;
+    //     if (old_value == NULL) {
+    //         /* pending state */
+    //         assert(ix == mp->ma_used);
+    //         mp->ma_used++;
+    //     }
+    // }
+    // else {
+        assert(old_value != NULL);
+        DK_ENTRIES(mp->ma_keys)[ix].me_value = value;
+    // }
+
+    mp->ma_version_tag = DICT_NEXT_VERSION();
+    NUMBA_DECREF(old_value); /* which **CAN** re-enter (see issue #22653) */
+    // assert(_PyDict_CheckConsistency(mp));
+    NUMBA_DECREF(key);
+    return OK;
+
+Fail:
+    NUMBA_DECREF(value);
+    NUMBA_DECREF(key);
+    return -1;
+}
+
+
 int
-Numba_dict_new() {
+Numba_dict_new(NumbaDictObject **res) {
     NumbaDictObject* d = PyMem_RawMalloc(sizeof(NumbaDictObject));
+    memset(d, 0, sizeof(NumbaDictObject));
+
     d->ma_used = 0;
     d->ma_version_tag = DICT_NEXT_VERSION();
 
@@ -4588,6 +4764,9 @@ Numba_dict_new() {
     if (d->ma_keys == NULL) {
         return ERR_NO_MEMORY;
     }
+
+    /* Set returned object */
+    *res = d;
     return OK;
 }
 
@@ -4608,7 +4787,17 @@ static void show_status(Status status) {
 NUMBA_EXPORT_FUNC(void)
 test_dict() {
     puts("test_dict");
-    Status status = Numba_dict_new();
+    NumbaDictObject* d;
+    Status status = Numba_dict_new(&d);
+
+    NumbaObject *key = 0xdead, *value = 0xbeef;
+    Py_hash_t hash = 0xcafe;
+    status = insertdict(d, key, hash, value);
+
+    printf("d->ma_used = %d\n", (int)d->ma_used);
+
+    printf("d->ma_keys = %p\n", d->ma_keys);
+    printf("d->ma_values = %p\n", d->ma_values);
 
     show_status(status);
 }

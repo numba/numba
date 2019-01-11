@@ -43,7 +43,7 @@ typedef struct {
  * -1 when no entry found, -3 when compare raises error.
  */
 typedef Py_ssize_t (*dict_lookup_func)
-    (NumbaDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
+    (NumbaDictObject *mp, NumbaObject *key, Py_hash_t hash, NumbaObject **value_addr);
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
