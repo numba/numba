@@ -777,9 +777,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for _ in range(10):
                 self.random.shuffle(real)
                 self.random.shuffle(imag)
+                dtype = self.random.choice([np.complex64, np.complex128])
                 a = real - imag * 1j
                 a[:4] = a[-1]
-                check(a)
+                check(a.astype(dtype))
 
     def test_nanmin_nanmax_complex_basic(self):
         pyfuncs = array_nanmin, array_nanmax

@@ -2236,7 +2236,7 @@ def _searchsorted(func):
         return lo
     return searchsorted_inner
 
-_lt = register_jitable(lambda x, y: x < y)
+_lt = less_than
 _le = register_jitable(lambda x, y: x <= y)
 _searchsorted_left = register_jitable(_searchsorted(_lt))
 _searchsorted_right = register_jitable(_searchsorted(_le))
