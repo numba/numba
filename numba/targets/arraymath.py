@@ -1965,14 +1965,16 @@ def any_where(context, builder, sig, args):
     if isinstance(cond, types.Array):
         if isinstance(x, types.Array):
             if isinstance(y, types.Array):
-                return array_where(context, builder, sig, args)
+                impl = array_where
             elif isinstance(y, (types.Number, types.Boolean)):
-                return array_array_scalar_where(context, builder, sig, args)
+                impl = array_array_scalar_where
         elif isinstance(x, (types.Number, types.Boolean)):
             if isinstance(y, types.Array):
-                return array_scalar_array_where(context, builder, sig, args)
+                impl = array_scalar_array_where
             elif isinstance(y, (types.Number, types.Boolean)):
-                return array_scalar_scalar_where(context, builder, sig, args)
+                impl = array_scalar_scalar_where
+
+        return impl(context, builder, sig, args)
 
     def scalar_where_impl(cond, x, y):
         """
