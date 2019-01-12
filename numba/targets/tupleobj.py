@@ -188,6 +188,8 @@ def iternext_unituple(context, builder, sig, args, result):
                                        types.intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
+        if context.enable_nrt:
+            context.nrt.decref(builder, tupiterty.container.dtype, getitem_out)
         result.yield_(getitem_out)
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
