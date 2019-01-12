@@ -682,13 +682,27 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = cfunc(condition, y, x)
             self.assertPreciseEqual(got, expected)
 
-        x = np.array([[1, 2, 3],
-                      [4, 5, 6],
-                      [7, 8, 9]])
-        y = 0
-        condition = np.logical_or(x > 8, x < 2)
-        params = (condition, x, y)
-        check_ok(params)
+        def array_permutations():
+            x = np.arange(9).reshape(3, 3)
+            yield x
+            yield x * 1.1
+            yield np.asfortranarray(x)
+            yield x[::-1]
+            yield np.linspace(-10, 10, 60).reshape(3, 4, 5) * 1j
+
+        def scalar_permutations():
+            yield 0
+            yield 4.3
+            yield np.nan
+            yield True
+            yield 8 + 4j
+
+        for x in array_permutations():
+            for y in scalar_permutations():
+                x_mean = np.mean(x)
+                condition = x > x_mean
+                params = (condition, x, y)
+                check_ok(params)
 
     def test_item(self):
         pyfunc = array_item
