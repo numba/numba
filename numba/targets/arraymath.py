@@ -1307,155 +1307,56 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
 
         return np_ediff1d_impl
 
-@register_jitable
-def pairwise_average(arr):
-    return 0.5 * (arr[1:] + arr[:-1])
+def _select_element(arr):
+    pass
 
-@register_jitable
-def area_dx_scalar(y_average, dx):
-    return np.sum(y_average) * dx
+@overload(_select_element)
+def _select_element_impl(arr):
+    zerod = getattr(arr, 'ndim', None) == 0
+    if zerod:
+        def impl(arr):
+            x = np.array((1,), dtype=arr.dtype)
+            x[:] = arr
+            return x[0]
+        return impl
+    else:
+        def impl(arr):
+            return arr
+        return impl
 
-@register_jitable
-def area_dx_array(y_average, dx):
-    return np.dot(y_average, dx)
+def _get_d(dx, x):
+    pass
 
-@register_jitable
-def np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype):
-    out = np.empty(y_arr.shape[:-1], dtype=dtype)
-    for idx in np.ndindex(y_arr.shape[:-1]):
-        y_idx = y_arr[idx]
-        y_average = pairwise_average(y_idx)
-        out[idx] = area_dx_scalar(y_average, dx)
-
-    return out
+@overload(_get_d)
+def get_d_impl(x, dx):
+    if _is_nonelike(x):
+        def impl(x, dx):
+            return np.asarray(dx)
+    else:
+        def impl(x, dx):
+            return np.diff(np.asarray(x))
+    return impl
 
 @overload(np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
-    y_dt = determine_dtype(y)
-    x_dt = determine_dtype(x)
-    dx_dt = determine_dtype(dx)
-    dtype = np.result_type(x_dt, y_dt, dx_dt, np.float64)
-
-    Y_DX_MSG = (
-        "Shape of third argument 'dx' incompatible "
-        "with first argument 'y'"
-    )
-
-    Y_X_MSG = (
-        "First argument 'y' has shape which is "
-        "incompatible with second argument 'x'"
-    )
-
-    def np_trapz_impl_x_none_dx_scalar(y, x=None, dx=1.0):
-        y_arr = np.atleast_2d(_asarray(y)).astype(dtype)
-        if not np.isfinite(dx):
-            return np.nan
-        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)[0]
-
-    def np_trapz_impl_x_none_dx_scalar_multi_dim(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        return np_trapz_impl_x_none_dx_scalar_inner(y_arr, dx, dtype)
-
-    def np_trapz_impl_x_none_dx_array_like(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        x_arr = np.asarray(dx, dtype)
-        y_average = pairwise_average(y_arr)
-
-        if len(x_arr) == 1:
-            return area_dx_scalar(y_average, x_arr[0])
-        elif len(x_arr) == len(y_arr) - 1:
-            return area_dx_array(y_average, x_arr)
-        else:
-            raise ValueError(Y_DX_MSG)
-
-    def np_trapz_impl_x_none_dx_array_like_multi_dim(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        x_arr = np.asarray(dx, dtype)
-
-        if x_arr.shape[-1] != y_arr.shape[-1] - 1:
-            raise ValueError(Y_DX_MSG)
-
-        out = np.empty(y_arr.shape[:-1], dtype=dtype)
-        for idx in np.ndindex(y_arr.shape[:-1]):
-            y_idx = y_arr[idx]
-            x_idx = x_arr[idx]
-            y_average = pairwise_average(y_idx)
-            out[idx] = area_dx_array(y_average, x_idx)
-
-        return out
-
-    def np_trapz_impl_x_y_non_arr(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        x_arr = np.asarray(x, dtype)
-        y_average = pairwise_average(y_arr)
-
-        if len(y_arr) == 0:
-            return 0.0
-        if len(x_arr) == 1:
-            return area_dx_scalar(y_average, x_arr[0])
-        elif len(x_arr) == 2:
-            return area_dx_scalar(y_average, (x_arr[1] - x_arr[0]))
-        elif len(x_arr) == len(y_arr):
-            return area_dx_array(y_average, np.diff(x_arr))
-        else:
-            raise ValueError(Y_X_MSG)
-
-    def np_trapz_impl_x(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        x_arr = np.asarray(x, dtype)
-
-        out = np.empty(y_arr.shape[:-1], dtype=dtype)
-        for idx in np.ndindex(y_arr.shape[:-1]):
-            y_idx = y_arr[idx]
-            y_average = pairwise_average(y_idx)
-
-            if len(x_arr) == 2:
-                out[idx] = area_dx_scalar(y_average, (x_arr[1] - x_arr[0]))
-            elif len(x_arr) == y_arr.shape[-1]:
-                out[idx] = area_dx_array(y_average, np.diff(x_arr))
-            else:
-                raise ValueError(Y_X_MSG)
-
-        return out
-
-    def np_trapz_impl_x_multi_dim(y, x=None, dx=1.0):
-        y_arr = np.asarray(y, dtype)
-        x_arr = np.asarray(x, dtype)
-
-        if y_arr.shape != x_arr.shape:
-            raise ValueError(Y_X_MSG)
-
-        out = np.empty(y_arr.shape[:-1], dtype=dtype)
-        for idx in np.ndindex(y_arr.shape[:-1]):
-            y_idx = y_arr[idx]
-            x_idx = x_arr[idx]
-            y_average = pairwise_average(y_idx)
-            out[idx] = area_dx_array(y_average, np.diff(x_idx))
-
-        return out
-
     if isinstance(y, (types.Number, types.Boolean)):
         raise TypingError('y cannot be a scalar')
+    elif isinstance(y, types.Array) and y.ndim == 0:
+        raise TypingError('y cannot be 0D')
+        # NumPy raises IndexError: list assignment index out of range
 
-    if _is_nonelike(x):
-        if isinstance(dx, (float, int, types.Number)):
-            if isinstance(y, types.Array) and y.ndim > 1:
-                return np_trapz_impl_x_none_dx_scalar_multi_dim
-            else:
-                return np_trapz_impl_x_none_dx_scalar
-        elif isinstance(dx, types.Array) and dx.ndim > 1:
-            return np_trapz_impl_x_none_dx_array_like_multi_dim
-        else:
-            return np_trapz_impl_x_none_dx_array_like
-    else:
-        if isinstance(y, types.Array) and y.ndim > 1:
-            if isinstance(x, types.Array) and x.ndim > 1:
-                return np_trapz_impl_x_multi_dim
-            else:
-                return np_trapz_impl_x
-        else:
-            return np_trapz_impl_x_y_non_arr
+    # inspired by:
+    # https://github.com/numpy/numpy/blob/7ee52003/numpy/lib/function_base.py#L4040-L4065
+    def impl(y, x=None, dx=1.0):
+        yarr = np.asarray(y)
+        d = _get_d(x, dx)
+        y_ave = (yarr[..., slice(1, None)] + yarr[..., slice(None, -1)]) / 2.0
+        ret = np.sum(d * y_ave, -1)
+        processed = _select_element(ret)
+        return processed
+
+    return impl
 
 @register_jitable
 def _np_vander(x, N, increasing, out):

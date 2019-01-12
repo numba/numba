@@ -1593,6 +1593,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([], dtype=np.complex128)
         _check({'y': y})
 
+        y = (True, False, True)
+        _check({'y': y})
+
     @needs_blas
     def test_np_trapz_x_basic(self):
         pyfunc = np_trapz_x
@@ -1697,7 +1700,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = np.linspace(-2, 5, 9)
         _check({'y': y, 'dx': dx}, abs_tol=1e-13)
 
-        y = np.arange(60).reshape(4, 5, 3)
+        y = np.arange(60).reshape(4, 5, 3) * 1j
         dx = np.arange(40).reshape(4, 5, 2)
         _check({'y': y, 'dx': dx})
 
@@ -1744,61 +1747,47 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapz_x_dx_exceptions(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
 
         # Exceptions leak references
         self.disable_leak_check()
 
-        y = [1, 2, 3, 4, 5]
-        msg = ("First argument 'y' has shape which is "
-               "incompatible with second argument 'x'")
-
-        for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
+        def check_not_ok(params):
             with self.assertRaises(ValueError) as e:
-                cfunc(**{'y': y, 'x': x, 'dx': 1.0})
+                cfunc(*params)
 
-            self.assertIn(msg, str(e.exception))
+            self.assertIn('unable to broadcast', str(e.exception))
+
+        y = [1, 2, 3, 4, 5]
+        for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
+            check_not_ok((y, x, 1.0))
 
         y = np.arange(60).reshape(3, 4, 5)
         x = np.arange(36).reshape(3, 4, 3)
-
-        with self.assertRaises(ValueError) as e:
-            cfunc(**{'y': y, 'x': x, 'dx': 1.0})
-
-        self.assertIn(msg, str(e.exception))
+        check_not_ok((y, x, 1.0))
 
         y = np.arange(60).reshape(3, 4, 5)
         x = np.array([4, 5, 6, 7])
-
-        with self.assertRaises(ValueError) as e:
-            cfunc(**{'y': y, 'x': x, 'dx': 1.0})
-
-        self.assertIn(msg, str(e.exception))
+        check_not_ok((y, x, 1.0))
 
         y = [1, 2, 3, 4, 5]
         dx = np.array([1.0, 2.0])
-
-        with self.assertRaises(ValueError) as e:
-            cfunc(**{'y': y, 'x': None, 'dx': dx})
-
-        msg = ("Shape of third argument 'dx' incompatible "
-               "with first argument 'y'")
-
-        self.assertIn(msg, str(e.exception))
+        check_not_ok((y, None, dx))
 
         y = np.arange(60).reshape(3, 4, 5)
         dx = np.arange(60).reshape(3, 4, 5)
+        check_not_ok((y, None, dx))
 
-        with self.assertRaises(ValueError) as e:
-            cfunc(**{'y': y, 'x': None, 'dx': dx})
-
-        self.assertIn(msg, str(e.exception))
-
-        y = 5
         with self.assertTypingError() as e:
-            cfunc(**{'y': y, 'x': None, 'dx': 1.0})
+            y = np.array(4)
+            check_not_ok((y, None, 1.0))
 
-        self.assertIn('y cannot be a scalar', str(e.exception))
+        self.assertIn('y cannot be 0D', str(e.exception))
+
+        for y in 5, False, np.nan:
+            with self.assertTypingError() as e:
+                cfunc(y, None, 1.0)
+
+            self.assertIn('y cannot be a scalar', str(e.exception))
 
     def test_asarray(self):
 
