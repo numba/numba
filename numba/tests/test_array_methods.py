@@ -639,7 +639,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for x in (0, 1, True, False, 2.5, 0j):
             check_scal(x)
 
-    def test_np_where_3_broadcast(self):
+    def test_np_where_3_broadcast_x_y_scalar(self):
         pyfunc = np_where_3
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -665,6 +665,30 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
             params = (a > 1, True, False)
             check_ok(params)
+
+    def test_np_where_3_broadcast_x_or_y_scalar(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            condition, x, y = args
+
+            expected = pyfunc(condition, x, y)
+            got = cfunc(condition, x, y)
+            self.assertPreciseEqual(got, expected)
+
+            # swap x and y
+            expected = pyfunc(condition, y, x)
+            got = cfunc(condition, y, x)
+            self.assertPreciseEqual(got, expected)
+
+        x = np.array([[1, 2, 3],
+                      [4, 5, 6],
+                      [7, 8, 9]])
+        y = 0
+        condition = np.logical_or(x > 8, x < 2)
+        params = (condition, x, y)
+        check_ok(params)
 
     def test_item(self):
         pyfunc = array_item

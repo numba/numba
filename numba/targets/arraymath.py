@@ -1389,6 +1389,8 @@ def determine_dtype(array_like):
     array_like_dt = np.float64
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, (types.Number, types.Boolean)):
+        array_like_dt = as_dtype(array_like)
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
         for val in array_like:
@@ -1923,6 +1925,69 @@ def array_scalar_scalar_where(context, builder, sig, args):
     res = context.compile_internal(builder, where_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
+@register_jitable
+def _where_inner_y_scalar(cond, x, y, res):
+    for idx, c in np.ndenumerate(cond):
+        res[idx] = x[idx] if c else y
+    return res
+
+def array_array_scalar_where(context, builder, sig, args):
+    """
+    np.where(array, array, scalar)
+    """
+    cond, x, y = sig.args
+
+    x_dt = determine_dtype(x)
+    y_dt = determine_dtype(y)
+    npty = np.promote_types(x_dt, y_dt)
+
+    if cond.layout == 'F':
+        def where_impl(cond, x, y):
+            res = np.asfortranarray(np.empty(cond.shape, dtype=npty))
+            return _where_inner_y_scalar(cond, x, y, res)
+    else:
+        def where_impl(cond, x, y):
+            res = np.empty(cond.shape, dtype=npty)
+            return _where_inner_y_scalar(cond, x, y, res)
+
+    res = context.compile_internal(builder, where_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+
+@register_jitable
+def _where_inner_x_scalar(cond, x, y, res):
+    for idx, c in np.ndenumerate(cond):
+        res[idx] = x if c else y[idx]
+    return res
+
+def array_scalar_array_where(context, builder, sig, args):
+    """
+    np.where(array, scalar, array)
+    """
+    cond, x, y = sig.args
+
+    x_dt = determine_dtype(x)
+    y_dt = determine_dtype(y)
+    npty = np.promote_types(x_dt, y_dt)
+
+    if cond.layout == 'F':
+        def where_impl(cond, x, y):
+            res = np.asfortranarray(np.empty(cond.shape, dtype=npty))
+            return _where_inner_x_scalar(cond, x, y, res)
+    else:
+        def where_impl(cond, x, y):
+            res = np.empty(cond.shape, dtype=npty)
+            return _where_inner_x_scalar(cond, x, y, res)
+
+    res = context.compile_internal(builder, where_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+
+
+
 def instances_of(objects, class_info):
     return all(isinstance(o, class_info) for o in objects)
 
@@ -1931,10 +1996,16 @@ def any_where(context, builder, sig, args):
     cond, x, y = sig.args
 
     if isinstance(cond, types.Array):
-        if instances_of((x, y), types.Array):
-            return array_where(context, builder, sig, args)
-        if instances_of((x, y), (types.Number, types.Boolean)):
-            return array_scalar_scalar_where(context, builder, sig, args)
+        if isinstance(x, types.Array):
+            if isinstance(y, types.Array):
+                return array_where(context, builder, sig, args)
+            else:
+                return array_array_scalar_where(context, builder, sig, args)
+        elif isinstance(x, (types.Number, types.Boolean)):
+            if isinstance(y, types.Array):
+                return array_scalar_array_where(context, builder, sig, args)
+            elif isinstance(y, (types.Number, types.Boolean)):
+                return array_scalar_scalar_where(context, builder, sig, args)
 
     def scalar_where_impl(cond, x, y):
         """
