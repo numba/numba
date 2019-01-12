@@ -807,6 +807,26 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 a[:4] = a[-1]
                 check(a)
 
+    def test_nanmin_nanmax_non_array_inputs(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield [1, 6, 4, 2]
+            yield ((-10, 4, -12), (5, 200, -30))
+            yield np.array(3)
+            yield (2,)
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for a in a_variations():
+                check(a)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested

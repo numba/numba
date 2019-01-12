@@ -626,10 +626,8 @@ def real_comparison(a, op):
     return return_val
 
 def _nan_min_max_inner(a, op):
-
-    # TODO: what if a has no dtype attr?  generates JIT better here?
-
-    if isinstance(a.dtype, types.Complex):
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
         def _comparison(a):
             arr = np.asarray(a)
             return complex_comparison(arr, op)
@@ -1568,7 +1566,7 @@ def determine_dtype(array_like):
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
     elif isinstance(array_like, (types.Number, types.Boolean)):
-        array_like_dt = array_like.dtype
+        array_like_dt = as_dtype(array_like)
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
         for val in array_like:
