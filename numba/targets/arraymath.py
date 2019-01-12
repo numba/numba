@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import math
 from collections import namedtuple
 from enum import IntEnum
+from functools import partial
 
 import numpy as np
 
@@ -1900,11 +1901,13 @@ def array_where(context, builder, sig, args):
     res = context.compile_internal(builder, where_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @register_jitable
 def _where_inner_x_y_scalar(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
         res[idx] = x if c else y
     return res
+
 
 @register_jitable
 def _where_inner_x_scalar(cond, x, y, res):
@@ -1912,13 +1915,15 @@ def _where_inner_x_scalar(cond, x, y, res):
         res[idx] = x if c else y[idx]
     return res
 
+
 @register_jitable
 def _where_inner_y_scalar(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
         res[idx] = x[idx] if c else y
     return res
 
-def _where_inner(context, builder, sig, args, where_inner):
+
+def _where_inner(context, builder, sig, args, impl):
     cond, x, y = sig.args
 
     x_dt = determine_dtype(x)
@@ -1928,35 +1933,20 @@ def _where_inner(context, builder, sig, args, where_inner):
     if cond.layout == 'F':
         def where_impl(cond, x, y):
             res = np.asfortranarray(np.empty(cond.shape, dtype=npty))
-            return where_inner(cond, x, y, res)
+            return impl(cond, x, y, res)
     else:
         def where_impl(cond, x, y):
             res = np.empty(cond.shape, dtype=npty)
-            return where_inner(cond, x, y, res)
+            return impl(cond, x, y, res)
 
     res = context.compile_internal(builder, where_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-def array_scalar_scalar_where(context, builder, sig, args):
-    """
-    np.where(array, scalar, scalar)
-    """
-    impl = _where_inner_x_y_scalar
-    return _where_inner(context, builder, sig, args, impl)
 
-def array_array_scalar_where(context, builder, sig, args):
-    """
-    np.where(array, array, scalar)
-    """
-    impl = _where_inner_y_scalar
-    return _where_inner(context, builder, sig, args, impl)
+array_scalar_scalar_where = partial(_where_inner, impl=_where_inner_x_y_scalar)
+array_array_scalar_where = partial(_where_inner, impl=_where_inner_y_scalar)
+array_scalar_array_where = partial(_where_inner, impl=_where_inner_x_scalar)
 
-def array_scalar_array_where(context, builder, sig, args):
-    """
-    np.where(array, scalar, array)
-    """
-    impl = _where_inner_x_scalar
-    return _where_inner(context, builder, sig, args, impl)
 
 @lower_builtin(np.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
@@ -1989,6 +1979,7 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @overload(np.real)
 def np_real(a):
