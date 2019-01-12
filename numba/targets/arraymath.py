@@ -1918,7 +1918,7 @@ def _where_inner_y_scalar(cond, x, y, res):
         res[idx] = x[idx] if c else y
     return res
 
-def foo(context, builder, sig, args, where_inner):
+def _where_inner(context, builder, sig, args, where_inner):
     cond, x, y = sig.args
 
     x_dt = determine_dtype(x)
@@ -1941,22 +1941,22 @@ def array_scalar_scalar_where(context, builder, sig, args):
     """
     np.where(array, scalar, scalar)
     """
-    where_inner = _where_inner_x_y_scalar
-    return foo(context, builder, sig, args, where_inner)
+    impl = _where_inner_x_y_scalar
+    return _where_inner(context, builder, sig, args, impl)
 
 def array_array_scalar_where(context, builder, sig, args):
     """
     np.where(array, array, scalar)
     """
-    where_inner = _where_inner_y_scalar
-    return foo(context, builder, sig, args, where_inner)
+    impl = _where_inner_y_scalar
+    return _where_inner(context, builder, sig, args, impl)
 
 def array_scalar_array_where(context, builder, sig, args):
     """
     np.where(array, scalar, array)
     """
-    where_inner = _where_inner_x_scalar
-    return foo(context, builder, sig, args, where_inner)
+    impl = _where_inner_x_scalar
+    return _where_inner(context, builder, sig, args, impl)
 
 @lower_builtin(np.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
