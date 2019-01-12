@@ -821,6 +821,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield ((-10, 4, -12), (5, 200, -30))
             yield np.array(3)
             yield (2,)
+            yield 3.142
+            yield False
 
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)

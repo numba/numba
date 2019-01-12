@@ -594,57 +594,70 @@ def check_array(a):
     if a.size == 0:
         raise ValueError('zero-size array to reduction operation not possible')
 
-@register_jitable
-def complex_comparison(a, op):
-    check_array(a)
-    for view in np.nditer(a):
-        return_val = view.item()
-        break
-    for view in np.nditer(a):
-        v = view.item()
-        if np.isnan(return_val.real) and not np.isnan(v.real):
-            return_val = v
-        else:
-            if op(v.real, return_val.real):
-                return_val = v
-            elif v.real == return_val.real:
-                if op(v.imag, return_val.imag):
+def nan_min_max_factory(comparison_op, is_complex_dtype):
+
+    if is_complex_dtype:
+        def impl(arr):
+            a = np.asarray(arr)
+            check_array(a)
+            for view in np.nditer(a):
+                return_val = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if np.isnan(return_val.real) and not np.isnan(v.real):
                     return_val = v
-    return return_val
-
-@register_jitable
-def real_comparison(a, op):
-    check_array(a)
-    for view in np.nditer(a):
-        return_val = view.item()
-        break
-    for view in np.nditer(a):
-        v = view.item()
-        if not np.isnan(v):
-            if not op(return_val, v):
-                return_val = v
-    return return_val
-
-def _nan_min_max_inner(a, op):
-    dt = determine_dtype(a)
-    if np.issubdtype(dt, np.complexfloating):
-        def _comparison(a):
-            arr = np.asarray(a)
-            return complex_comparison(arr, op)
+                else:
+                    if comparison_op(v.real, return_val.real):
+                        return_val = v
+                    elif v.real == return_val.real:
+                        if comparison_op(v.imag, return_val.imag):
+                            return_val = v
+            return return_val
     else:
-        def _comparison(a):
-            arr = np.asarray(a)
-            return real_comparison(arr, op)
+        def impl(arr):
+            a = np.asarray(arr)
+            check_array(a)
+            for view in np.nditer(a):
+                return_val = view.item()
+                break
+            for view in np.nditer(a):
+                v = view.item()
+                if not np.isnan(v):
+                    if not comparison_op(return_val, v):
+                        return_val = v
+            return return_val
 
-    return _comparison
+    return impl
+
+real_nanmin = register_jitable(
+    nan_min_max_factory(less_than, is_complex_dtype=False)
+)
+real_nanmax = register_jitable(
+    nan_min_max_factory(greater_than, is_complex_dtype=False)
+)
+complex_nanmin = register_jitable(
+    nan_min_max_factory(less_than, is_complex_dtype=True)
+)
+complex_nanmax = register_jitable(
+    nan_min_max_factory(greater_than, is_complex_dtype=True)
+)
 
 @overload(np.nanmin)
 def np_nanmin(a):
-    return _nan_min_max_inner(a, less_than)
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        return complex_nanmin
+    else:
+        return real_nanmin
 
 @overload(np.nanmax)
 def np_nanmax(a):
-    return _nan_min_max_inner(a, greater_than)
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        return complex_nanmax
+    else:
+        return real_nanmax
 
 if numpy_version >= (1, 8):
     @overload(np.nanmean)
