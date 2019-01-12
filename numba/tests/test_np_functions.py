@@ -113,6 +113,9 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def roll(a, shift):
+    return np.roll(a, shift)
+
 def asarray(a):
     return np.asarray(a)
 
@@ -1560,7 +1563,45 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
-    @needs_blas
+    def test_roll_basic(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(7)
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+            yield [1.1, 2.2, 3.3]
+            yield (True, False, True)
+            yield False
+            yield 4
+            yield (9,)
+            yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
+            yield np.array([])
+            yield ()
+
+        def shift_variations():
+            return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+
+        for a in a_variations():
+            for shift in shift_variations():
+                expected = pyfunc(a, shift)
+                got = cfunc(a, shift)
+                self.assertPreciseEqual(expected, got)
+
+    def test_roll_exceptions(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        for shift in 1.1, (1, 2):
+            with self.assertTypingError() as e:
+                cfunc(np.arange(10), shift)
+
+            msg = "shift must be an integer"
+            assert msg in str(e.exception)
+
     def test_np_trapz_basic(self):
         pyfunc = np_trapz
         cfunc = jit(nopython=True)(pyfunc)
@@ -1596,7 +1637,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = (True, False, True)
         _check({'y': y})
 
-    @needs_blas
     def test_np_trapz_x_basic(self):
         pyfunc = np_trapz_x
         cfunc = jit(nopython=True)(pyfunc)
@@ -1670,7 +1710,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([True, False, True, True])
         _check({'y': y})
 
-    @needs_blas
+
     def test_np_trapz_dx_basic(self):
         pyfunc = np_trapz_dx
         cfunc = jit(nopython=True)(pyfunc)
@@ -1717,7 +1757,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = np.array([5])
         _check({'y': y, 'dx': dx})
 
-    @needs_blas
     def test_np_trapz_x_dx_basic(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)
@@ -1743,7 +1782,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             x[2, 2, 2] = np.nan
             _check({'y': y, 'x': x, 'dx': dx})
 
-    @needs_blas
     def test_np_trapz_x_dx_exceptions(self):
         pyfunc = np_trapz_x_dx
         cfunc = jit(nopython=True)(pyfunc)

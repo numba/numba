@@ -14,7 +14,7 @@ matrix:
         - env: PYTHON=2.7 NUMPY=1.15 CONDA_ENV=travisci
         - env: PYTHON=2.7 NUMPY=1.9  CONDA_ENV=travisci
         - env: PYTHON=3.5 NUMPY=1.10 CONDA_ENV=travisci
-        - env: PYTHON=3.5 NUMPY=1.11 CONDA_ENV=travisci RUN_COVERAGE=yes
+        - env: PYTHON=3.5 NUMPY=1.11 CONDA_ENV=travisci
         - env: PYTHON=3.6 NUMPY=1.12 CONDA_ENV=travisci BUILD_DOC=yes
         - env: PYTHON=3.6 NUMPY=1.13 CONDA_ENV=travisci
         - env: PYTHON=3.7 NUMPY=1.14 CONDA_ENV=travisci
