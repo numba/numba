@@ -1903,21 +1903,21 @@ def array_where(context, builder, sig, args):
 
 
 @register_jitable
-def _where_inner_x_y_scalar(cond, x, y, res):
+def _where_x_y_scalar(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
         res[idx] = x if c else y
     return res
 
 
 @register_jitable
-def _where_inner_x_scalar(cond, x, y, res):
+def _where_x_scalar(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
         res[idx] = x if c else y[idx]
     return res
 
 
 @register_jitable
-def _where_inner_y_scalar(cond, x, y, res):
+def _where_y_scalar(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
         res[idx] = x[idx] if c else y
     return res
@@ -1943,9 +1943,9 @@ def _where_inner(context, builder, sig, args, impl):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-array_scalar_scalar_where = partial(_where_inner, impl=_where_inner_x_y_scalar)
-array_array_scalar_where = partial(_where_inner, impl=_where_inner_y_scalar)
-array_scalar_array_where = partial(_where_inner, impl=_where_inner_x_scalar)
+array_scalar_scalar_where = partial(_where_inner, impl=_where_x_y_scalar)
+array_array_scalar_where = partial(_where_inner, impl=_where_y_scalar)
+array_scalar_array_where = partial(_where_inner, impl=_where_x_scalar)
 
 
 @lower_builtin(np.where, types.Any, types.Any, types.Any)
