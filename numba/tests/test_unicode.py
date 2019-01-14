@@ -75,6 +75,17 @@ def split_usecase(x, y):
     return x.split(y)
 
 
+def join_usecase(x, y):
+    return x.join(y)
+
+
+def join_empty_usecase(x):
+    # hack to make empty typed list
+    l = ['']
+    l.pop()
+    return x.join(l)
+
+
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
@@ -329,6 +340,38 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
                              "'%s'.split('%s')?" % (test_str, splitter))
+
+    def test_join_empty(self):
+        # Can't pass empty list to nopython mode, so we have to make a
+        # separate test case
+        pyfunc = join_empty_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            '',
+            '🐍🐍🐍',
+        ]
+
+        for sep in CASES:
+            self.assertEqual(pyfunc(sep),
+                             cfunc(sep),
+                             "'%s'.join([])?" % (sep,))
+
+    def test_join(self):
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', ['', '', '']),
+            ('a', ['', '', '']),
+            ('', ['a', 'bbbb', 'c']),
+            ('🐍🐍🐍', ['⚡⚡'] * 5),
+        ]
+
+        for sep, parts in CASES:
+            self.assertEqual(pyfunc(sep, parts),
+                             cfunc(sep, parts),
+                             "'%s'.join('%s')?" % (sep, parts))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):

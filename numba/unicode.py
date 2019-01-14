@@ -470,6 +470,24 @@ def unicode_split(a, sep):
         return split_impl
 
 
+@overload_method(types.UnicodeType, 'join')
+def unicode_join(sep, parts):
+    if isinstance(parts, types.IterableType):
+        def join_iter_impl(sep, parts):
+            # This version is slower than it could be because it assumes a
+            # generic iterable type
+            result = ''
+            first = True
+            for part in parts:
+                if first:
+                    result = part
+                    first = False
+                else:
+                    result = result + sep + part
+            return result
+        return join_iter_impl
+
+
 ### String creation
 
 @njit
