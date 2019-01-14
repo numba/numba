@@ -124,8 +124,9 @@ With CFFI
 ---------
 
 For applications that have a lot of state, it is useful to pass data in C
-structures.  To simplify the interop with C code, numba can convert a ``cffi``
-type into a numba ``Record`` type using ``numba.cffi_support.map_type``::
+structures.  To simplify the interoperability with C code, numba can convert
+a ``cffi`` type into a numba ``Record`` type using
+``numba.cffi_support.map_type``::
 
    from numba import cffi_support
 
@@ -183,8 +184,8 @@ C-structure's layout.  To do that, use ``Record.make_c_struct``, for example::
       ('d3', types.float64),
    ])
 
-Due to ABI limitations, structures should be passed as pointers.
-Use ``types.CPointer(my_struct)`` as the argument type.  Inside the ``cfunc``
+Due to ABI limitations, structures should be passed as pointers
+using ``types.CPointer(my_struct)`` as the argument type.  Inside the ``cfunc``
 body, the ``my_struct*`` can be accessed with ``carray``.
 
 Full example
