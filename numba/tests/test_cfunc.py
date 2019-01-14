@@ -8,6 +8,7 @@ import ctypes
 import os
 import subprocess
 import sys
+from collections import namedtuple
 
 import numpy as np
 
@@ -378,6 +379,10 @@ typedef struct _big_struct {
     double d3;
 } big_struct;
 
+typedef struct _error {
+    int bits:4;
+} error;
+
 typedef double (*myfunc)(big_struct*, size_t);
 """
 
@@ -445,6 +450,20 @@ typedef double (*myfunc)(big_struct*, size_t);
             )
         expect = calc(array)
         self.assertEqual(got, expect)
+
+    def test_unsupport_bitsize(self):
+        ffi = self.get_ffi()
+        with self.assertRaises(ValueError) as raises:
+            cffi_support.map_type(
+                ffi.typeof('error'),
+                use_record_dtype=True,
+            )
+        self.assertEqual(
+            "field bits has bitshift, this is not supported",
+            str(raises.exception)
+        )
+
+
 
 
 if __name__ == "__main__":
