@@ -189,6 +189,22 @@ class MyPassThruTest(TestCase):
             self.assertIs(o, o3)
             del o, o2, o3
 
+    def test_list_forget(self):
+        @jit(nopython=True)
+        def forget_list(x):
+            return 1
+
+        def create_tracked():
+            o = MyPassThru()
+            l = [o, o, o]
+
+            return dict(l=l, o=o)
+
+        with check_numba_allocations(self, create_tracked) as (l, o):
+            one = forget_list(l)
+            self.assertIs(one, 1)
+            del o, l
+
     def test_list_identity(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             l = [x, y, z]
@@ -204,6 +220,26 @@ class MyPassThruTest(TestCase):
             self.assertIs(l[1], y)
 
             del l, x, y
+
+    def test_list_copy(self):
+        @jit(nopython=True)
+        def copy_list(x):
+            the_copy = []
+            for ii in range(len(x)):
+                v = x[ii]
+                the_copy.append(v)
+
+            return the_copy  # y
+
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru()))) as (x, y):
+            l1 = [x, y]
+
+            l2 = copy_list(l1)
+
+            self.assertIs(l2[0], x)
+            self.assertIs(l2[1], y)
+
+            del l1, l2, x, y
 
     def test_list_doubling(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
@@ -273,7 +309,7 @@ def type_my_pass_thru_complex(val, context):
 
 
 @unbox(PassThruComplexType)
-def unbox_passthru_complex_payload(typ, obj, context):
+def unbox_passthru_complex(typ, obj, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder)
 
     pass_thru.parent = context.unbox(pass_thru_type, obj).value
@@ -286,20 +322,26 @@ def unbox_passthru_complex_payload(typ, obj, context):
     pass_thru.passthru_attr = context.unbox(pass_thru_type, passthru_attr).value
     context.pyapi.decref(passthru_attr)
 
-    list_attr_type = types.List(pass_thru_type)
+    # We want to have lists of PassThruComplexType. We must copy the list as nopython lists have
+    # a cleanup functions that will not get called for list members (ie forwarding like
+    # NativeValue(..., cleanup=list_attr_unboxed.cleanup) will not work).
+    list_attr_type = types.List(pass_thru_type) # force list reflected=False
 
     list_attr = context.pyapi.object_getattr_string(obj, 'list_attr')
-    list_attr_unboxed = context.unbox(list_attr_type, list_attr)
-    pass_thru.list_attr = list_attr_unboxed.value
+    py_list_obj = context.pyapi.unserialize(context.pyapi.serialize_object(list))
+    list_attr_copy = context.pyapi.call_function_objargs(py_list_obj, [list_attr])
     context.pyapi.decref(list_attr)
+    context.pyapi.decref(py_list_obj)
+
+    list_attr_unboxed = context.unbox(list_attr_type, list_attr_copy)
+    pass_thru.list_attr = list_attr_unboxed.value
+    context.pyapi.decref(list_attr_copy)
+    list_attr_unboxed.cleanup()
 
     # should have done this more often, errors most likely erased by subsequent pyapi call anyway ...
     is_error = cgutils.is_not_null(context.builder, context.pyapi.err_occurred())
 
-    def cleanup():
-        list_attr_unboxed.cleanup()
-
-    return NativeValue(pass_thru._getvalue(), is_error=is_error, cleanup=cleanup)
+    return NativeValue(pass_thru._getvalue(), is_error=is_error)
 
 
 @box(PassThruComplexType)
@@ -435,6 +477,57 @@ class PassThruComplexTest(TestCase):
             self.assertEqual(o1.list_attr[1], z)
 
             del l, o1, o2, x, y, z
+
+    def test_list_copy(self):
+        @jit(nopython=True)
+        def copy_list(x):
+            the_copy = []
+            for ii in range(len(x.list_attr)):
+                v = x.list_attr[ii]
+                the_copy.append(v)
+
+            return the_copy  # y
+
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
+            o = PassThruComplex(42, x, [y, z])
+
+            l2 = copy_list(o)
+
+            self.assertIs(l2[0], y)
+            self.assertIs(l2[1], z)
+
+            del o, l2, x, y, z
+
+    def test_list_identity(self):
+        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
+            o = PassThruComplex(42, x, [y, z])
+
+            l = [o, o, o]
+            l2 = identity(l)
+            self.assertIs(l, l2)
+            del o, x, y, z, l, l2
+
+    def test_list_forget(self):
+        @jit(nopython=True)
+        def forget_list(x):
+            return 1
+
+        def create_tracked():
+            from numpy import ones
+            x = MyPassThru()
+            y = MyPassThru()
+            z = MyPassThru()
+            o = PassThruComplex(42, x, [y, z])
+            l = [o, o, o]
+
+            return dict(l=l, o=o, x=x, y=y, z=z)
+
+        with check_numba_allocations(self, create_tracked) as (l, o, x, y, z):
+            one = forget_list(l)
+            one = forget_list(l)
+            # one = forget_list(l)
+            self.assertIs(one, 1)
+            del x, y, z, l, o
 
     def test_native_create(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
