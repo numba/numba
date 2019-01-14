@@ -104,7 +104,7 @@ def map_type(cffi_type, use_record_dtype=False):
     cffi_type:
         The CFFI type to be converted.
     use_record_dtype: bool (default: False)
-        When True, struct types are mapped to numpy record dtype.
+        When True, struct types are mapped to a NumPy Record dtype.
 
     """
     primed_map_type = partial(map_type, use_record_dtype=use_record_dtype)
@@ -135,7 +135,7 @@ def map_type(cffi_type, use_record_dtype=False):
 
 
 def map_struct_to_record_dtype(cffi_type):
-    """Convert a cffi type into a numpy record dtype
+    """Convert a cffi type into a NumPy Record dtype
     """
     fields = {
             'names': [],
@@ -147,13 +147,13 @@ def map_struct_to_record_dtype(cffi_type):
     for k, v in cffi_type.fields:
         # guard unsupport values
         if v.bitshift != -1:
-            msg = "fields with bitshift are not supported: {}"
+            msg = "field {} has bitshift, this is not supported"
             raise ValueError(msg.format(k))
         if v.flags != 0:
-            msg = "fields has unsupport flags: {}"
+            msg = "field {} has flags, this is not supported"
             raise ValueError(msg.format(k))
         if v.bitsize != -1:
-            msg = "fields with bitsize are not supported: {}"
+            msg = "field {} has bitsize, this is not supported"
             raise ValueError(msg.format(k))
         dtype = numpy_support.as_dtype(
             map_type(v.type, use_record_dtype=True),

@@ -116,14 +116,14 @@ assumed to be laid out in C order.  If the data is laid out in Fortran order,
 :func:`numba.farray` should be used instead.
 
 
-Dealing with C structures
-=========================
+Handling C structures
+=====================
 
 
 With CFFI
 ---------
 
-For applications that has a lot of states, it is useful to pass data in C
+For applications that have a lot of state, it is useful to pass data in C
 structures.  To simplify the interop with C code, numba can convert a ``cffi``
 type into a numba ``Record`` type using ``numba.cffi_support.map_type``::
 
@@ -131,7 +131,7 @@ type into a numba ``Record`` type using ``numba.cffi_support.map_type``::
 
    nbtype = cffi_support.map_type(cffi_type, use_record_dtype=True)
 
-.. note:: **use_record_dtype=True** is needed.  Otherwise, pointers to C
+.. note:: **use_record_dtype=True** is needed otherwise pointers to C
     structures are returned as void pointers.
 
 
@@ -155,10 +155,10 @@ For example::
    ffi = FFI()
    ffi.cdef(src)
 
-   # Get function signature from *my_func*
+   # Get the function signature from *my_func*
    sig = cffi_support.map_type(ffi.typeof('my_func'), use_record_dtype=True)
 
-   # Make cfunc
+   # Make the cfunc
    from numba import cfunc, carray
 
    @cfunc(sig)
@@ -173,8 +173,8 @@ For example::
 With ``numba.types.Record.make_c_struct``
 -----------------------------------------
 
-The ``numba.types.Record`` type can be created manually to follow the
-C-structure layout.  To do that, use ``Record.make_c_struct``::
+The ``numba.types.Record`` type can be created manually to follow a
+C-structure's layout.  To do that, use ``Record.make_c_struct``, for example::
 
    my_struct = types.Record.make_c_struct([
       # Provides a sequence of 2-tuples i.e. (name:str, type:Type)

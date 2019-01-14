@@ -47,12 +47,12 @@ _RecordField = collections.namedtuple('_RecordField', 'type,offset')
 
 class Record(Type):
     """
-    A Record datatype can be mapped to a Numpy structured dtype.
-    A record is very flexible since it is layout as a list of bytes.
+    A Record datatype can be mapped to a NumPy structured dtype.
+    A record is very flexible since it is laid out as a list of bytes.
     Fields can be mapped to arbitrary points inside it, even if they overlap.
 
     *fields* is a list of `(name:str, data:dict)`.
-        data is `{ type: Type, offset: int }`
+        Where `data` is `{ type: Type, offset: int }`
     *size* is an int; the record size
     *aligned* is a boolean; whether the record is ABI aligned.
     """
@@ -133,7 +133,7 @@ class Record(Type):
         return self.fields[key].offset
 
     def typeof(self, key):
-        """Get type of a field.
+        """Get the type of a field.
         """
         return self.fields[key].type
 

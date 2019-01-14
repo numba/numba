@@ -147,13 +147,13 @@ def as_dtype(nbtype):
                               % (nbtype,))
 
 def as_struct_dtype(rec):
-    """Convert numba Record type to numpy structure dtype
+    """Convert Numba Record type to NumPy structured dtype
     """
     assert isinstance(rec, types.Record)
     names = [k for k, _ in rec.members]
     fields = {
         'names': names,
-        'formats': [as_dtype(t) for k, t in rec.members],
+        'formats': [as_dtype(t) for _, t in rec.members],
         'offsets': [rec.offset(k) for k in names],
         'itemsize': rec.size,
     }
@@ -408,7 +408,7 @@ def _is_aligned_struct(struct):
 
 
 def from_struct_dtype(dtype):
-    """Convert numpy structured dtype to numba Record type
+    """Convert a NumPy structured dtype to Numba Record type
     """
     if dtype.hasobject:
         raise TypeError("Do not support dtype containing object")
