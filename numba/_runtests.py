@@ -68,8 +68,9 @@ class _FailedFirstRunner(object):
         print("Running {} tests".format(len(tests)))
         print('Flags', flags)
         result = run_tests([prog] + flags + tests, **kwds)
-        # Update failed tests records
-        if not self.last_failed or len(tests) == len(failed_tests):
+        # Update failed tests records only if we have run the all the tests
+        # last failed.
+        if len(tests) == result.testsRun:
             self.save_failed_tests(result, all_tests)
         return result.wasSuccessful()
 
