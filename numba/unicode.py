@@ -77,6 +77,10 @@ def compile_time_get_string_data(obj):
 
 
 def make_string_from_constant(context, builder, typ, literal_string):
+    """
+    Get string data by `compile_time_get_string_data()` and return a
+    unicode_type LLVM value
+    """
     databytes, length, kind = compile_time_get_string_data(literal_string)
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
