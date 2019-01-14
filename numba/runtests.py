@@ -1,7 +1,4 @@
 from numba._runtests import _main, main
-import logging
-
-# logging.basicConfig(level=logging.DEBUG)
 
 
 if __name__ == '__main__':

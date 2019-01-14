@@ -14,7 +14,6 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
-
 import logging
 import operator
 import contextlib
