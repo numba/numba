@@ -71,6 +71,10 @@ def endswith_usecase(x, y):
     return x.endswith(y)
 
 
+def split_usecase(x, y):
+    return x.split(y)
+
+
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
@@ -290,6 +294,41 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
+
+    def test_split_exception(self):
+        self.disable_leak_check()
+
+        pyfunc = split_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        with self.assertRaises(ValueError) as raises:
+                pyfunc('a', '')
+        self.assertIn('empty separator', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+                cfunc('a', '')
+        self.assertIn('empty separator', str(raises.exception))
+
+    def test_split(self):
+        pyfunc = split_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', '⚡'),
+            ('abcabc', '⚡'),
+            ('🐍⚡', '⚡'),
+            ('🐍⚡🐍', '⚡'),
+            ('abababa', 'a'),
+            ('abababa', 'b'),
+            ('abababa', 'c'),
+            ('abababa', 'ab'),
+            ('abababa', 'aba'),
+        ]
+
+        for test_str, splitter in CASES:
+            self.assertEqual(pyfunc(test_str, splitter),
+                             cfunc(test_str, splitter),
+                             "'%s'.split('%s')?" % (test_str, splitter))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):

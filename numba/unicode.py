@@ -435,6 +435,41 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
+@overload_method(types.UnicodeType, 'split')
+def unicode_split(a, sep):
+    if isinstance(sep, types.UnicodeType):
+        def split_impl(a, sep):
+            # placeholder until we can expose maxsplit as argument with
+            # default value
+            maxsplit = -1
+
+            a_len = len(a)
+            sep_len = len(sep)
+
+            if sep_len == 0:
+                raise ValueError('empty separator')
+
+            parts = []
+            last = 0
+            idx = 0
+            split_count = 0
+
+            while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
+                if a[idx:].startswith(sep):
+                    parts.append(a[last:idx])
+                    idx += sep_len
+                    last = idx
+                    split_count += 1
+                else:
+                    idx += 1
+
+            if last <= a_len:
+                parts.append(a[last:])
+
+            return parts
+        return split_impl
+
+
 ### String creation
 
 @njit
