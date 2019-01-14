@@ -13,7 +13,7 @@ from numba.extending import (
     overload,
     overload_method,
     intrinsic,
-    )
+)
 from numba.targets.imputils import lower_constant, lower_cast
 from numba import cgutils
 from numba import types
@@ -23,7 +23,7 @@ from numba.pythonapi import (
     PY_UNICODE_2BYTE_KIND,
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
-    )
+)
 from numba.targets import slicing
 from numba._helperlib import c_helpers
 
@@ -40,7 +40,7 @@ class UnicodeModel(models.StructModel):
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
-            ]
+        ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 
@@ -58,7 +58,7 @@ def compile_time_get_string_data(obj):
     """
     from ctypes import (
         CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
-        cast, c_ubyte,
+        c_ubyte,
     )
 
     extract_unicode_fn = c_helpers['extract_unicode']
@@ -216,6 +216,7 @@ def _get_code_point(a, i):
         return 0
 
 ####
+
 
 def make_set_codegen(bitsize):
     def codegen(context, builder, signature, args):
@@ -482,6 +483,7 @@ def _normalize_slice(typingctx, sliceobj, length):
         return slice._getvalue()
 
     return sig, codegen
+
 
 @intrinsic
 def _slice_span(typingctx, sliceobj):

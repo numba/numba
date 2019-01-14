@@ -135,7 +135,7 @@ class TestUnicode(BaseTest):
                 pyfunc(a, a),
                 cfunc(a, a),
                 '%s: "%s", "%s"' % (usecase.__name__, a, a),
-                )
+            )
 
         # Check comparison to adjacent
         for a, b in permutations(UNICODE_ORDERING_EXAMPLES, r=2):
@@ -143,13 +143,13 @@ class TestUnicode(BaseTest):
                 pyfunc(a, b),
                 cfunc(a, b),
                 '%s: "%s", "%s"' % (usecase.__name__, a, b),
-                )
+            )
             # and reversed
             self.assertEqual(
                 pyfunc(b, a),
                 cfunc(b, a),
                 '%s: "%s", "%s"' % (usecase.__name__, b, a),
-                )
+            )
 
     def test_lt(self, flags=no_pyobj_flags):
         self._check_ordering_op(lt_usecase)
@@ -349,7 +349,7 @@ class TestUnicode(BaseTest):
             for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
                 args = [cmpop, x, y]
                 self.assertEqual(pyfunc(*args), cfunc(*args),
-                                msg='failed on {}'.format(args))
+                                 msg='failed on {}'.format(args))
 
     def test_literal_concat(self):
         def pyfunc(x):
