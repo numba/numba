@@ -18,8 +18,8 @@ opaque_pyobject = types.Opaque('Opaque(PyObject)')
 
 
 class PassThruType(types.Type):
-    def __init__(self):
-        super(PassThruType, self).__init__(self.__class__.__name__)
+    def __init__(self, name=None):
+        super(PassThruType, self).__init__(name or self.__class__.__name__)
 
 
 pass_thru_type = PassThruType()
@@ -184,17 +184,15 @@ def generic_passthru_eq(xty, yty):
 
 
 @type_callable(hash)
-def type_hash_passthrucontainer(context):
-    def hash_passthrucontainer_typer(container):
-        if container is PassThruContainerType():
+def type_hash_pass_thru(context):
+    def hash_pass_thru_typer(typ):
+        if isinstance(typ, PassThruType):
             return types.intp if not PY3 else types.uintp
-        else:
-            return types.intp
 
-    return hash_passthrucontainer_typer
+    return hash_pass_thru_typer
 
 
-@lower_builtin(hash, PassThruContainerType())
+@lower_builtin(hash, pass_thru_container_type)
 def passthru_container_hash(context, builder, sig, args):
     typ, = sig.args
 

@@ -513,7 +513,6 @@ class PassThruComplexTest(TestCase):
             return 1
 
         def create_tracked():
-            from numpy import ones
             x = MyPassThru()
             y = MyPassThru()
             z = MyPassThru()
