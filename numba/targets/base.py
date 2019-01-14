@@ -560,7 +560,9 @@ class BaseContext(object):
     def get_generator_impl(self, genty):
         """
         """
-        return self._generators[genty][1]
+        res = self._generators[genty][1]
+        self.add_linking_libs(getattr(res, 'libs', ()))
+        return res
 
     def get_bound_function(self, builder, obj, ty):
         assert self.get_value_type(ty) == obj.type
@@ -1125,7 +1127,10 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        return self._imp(self._context, builder, self._sig, args, loc=loc)
+        res = self._imp(self._context, builder, self._sig, args, loc=loc)
+        # Link
+        self._context.add_linking_libs(getattr(self, 'libs', ()))
+        return res
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

@@ -28,7 +28,9 @@ class StencilFuncLowerer(object):
     def __call__(self, context, builder, sig, args):
         cres = self.stencilFunc.compile_for_argtys(sig.args, {},
                     sig.return_type, None)
-        return context.call_internal(builder, cres.fndesc, sig, args)
+        res = context.call_internal(builder, cres.fndesc, sig, args)
+        context.add_linking_libs([cres.library])
+        return res
 
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):

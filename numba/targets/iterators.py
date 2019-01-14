@@ -125,11 +125,11 @@ def iternext_zip(context, builder, sig, args, result):
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args
     gen, = args
-    # XXX We should link with the generator's library.
-    # Currently, this doesn't make a difference as the library has already
-    # been linked for the generator init function.
     impl = context.get_generator_impl(genty)
     status, retval = impl(context, builder, sig, args)
+    # Link
+    context.add_linking_libs(getattr(impl, 'libs', ()))
+
     with cgutils.if_likely(builder, status.is_ok):
         result.set_valid(True)
         result.yield_(retval)

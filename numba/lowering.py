@@ -864,11 +864,6 @@ class Lower(BaseLower):
             argvals = [the_self] + list(argvals)
 
         res = impl(self.builder, argvals, self.loc)
-
-        libs = getattr(impl, "libs", ())
-        for lib in libs:
-            self.library.add_linking_library(lib)
-
         return res
 
     def lower_expr(self, resty, expr):
