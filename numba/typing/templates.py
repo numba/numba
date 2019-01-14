@@ -4,12 +4,11 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-import operator
 import sys
 from types import MethodType
 
 from .. import types, utils
-from ..errors import TypingError, UntypedAttributeError
+from ..errors import TypingError
 
 
 class Signature(object):
@@ -134,7 +133,6 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
     ba = pysig.bind(*args, **kws)
-    defargs = []
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -548,6 +546,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
                 sig = self._resolve_impl_sig(typ, attr, args, kws)
@@ -603,6 +602,7 @@ def bound_function(template_key, support_literals=False):
         def attribute_resolver(self, ty):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
+
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:
