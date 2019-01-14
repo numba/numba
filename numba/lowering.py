@@ -825,17 +825,6 @@ class Lower(BaseLower):
             )
         return res
 
-    def _lower_call_NumbaFunction(self, fnty, expr, signature):
-        # Handle a compiled Numba function
-        self.debug_print("# calling numba function")
-        argvals = self.fold_call_args(
-            fnty, signature, expr.args, expr.vararg, expr.kws,
-        )
-        raise RuntimeError(str(fnty))
-        return self.context.call_internal(
-            self.builder, fnty.fndesc, fnty.sig, argvals,
-        )
-
     def _lower_call_RecursiveCall(self, fnty, expr, signature):
         # Recursive call
         argvals = self.fold_call_args(
