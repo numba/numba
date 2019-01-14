@@ -458,12 +458,11 @@ typedef double (*myfunc)(big_struct*, size_t);
                 ffi.typeof('error'),
                 use_record_dtype=True,
             )
+        # When bitsize is provided, bitshift is defaulted to 0.
         self.assertEqual(
             "field bits has bitshift, this is not supported",
             str(raises.exception)
         )
-
-
 
 
 if __name__ == "__main__":
