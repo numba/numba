@@ -1136,21 +1136,25 @@ class PythonAPI(object):
         The ``buffer`` is a i8* of the output buffer.
         The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
         The ``kind`` is a i32 (int32) of the Unicode kind constant
+        The ``hash`` is a long/uint64_t (py_hash_t) of the Unicode constant hash
         """
         if PYVERSION >= (3, 3):
             p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
             p_kind = cgutils.alloca_once(self.builder, Type.int())
+            p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
             fnty = Type.function(self.cstring, [self.pyobj,
                                                 self.py_ssize_t.as_pointer(),
-                                                Type.int().as_pointer()])
+                                                Type.int().as_pointer(),
+                                                self.py_hash_t.as_pointer()])
             fname = "numba_extract_unicode"
             fn = self._get_function(fnty, name=fname)
 
-            buffer = self.builder.call(fn, [strobj, p_length, p_kind])
+            buffer = self.builder.call(fn, [strobj, p_length, p_kind, p_hash])
             ok = self.builder.icmp_unsigned('!=',
                                             ir.Constant(buffer.type, None),
                                             buffer)
-            return (ok, buffer, self.builder.load(p_length), self.builder.load(p_kind))
+            return (ok, buffer, self.builder.load(p_length),
+                    self.builder.load(p_kind), self.builder.load(p_hash))
         else:
             assert False, 'not supported on Python < 3.3'
 

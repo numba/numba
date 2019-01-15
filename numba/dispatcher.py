@@ -643,7 +643,6 @@ class Dispatcher(_DispatcherBase):
             existing = self.overloads.get(tuple(args))
             if existing is not None:
                 return existing.entry_point
-
             # Try to load from disk cache
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:

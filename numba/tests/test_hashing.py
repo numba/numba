@@ -10,6 +10,7 @@ from collections import defaultdict
 import numpy as np
 
 from numba import jit, types, utils
+from numba.unicode import compile_time_get_string_data
 import numba.unittest_support as unittest
 from .support import TestCase, tag, CompilationCache
 
@@ -18,35 +19,21 @@ def hash_usecase(x):
     return hash(x)
 
 
+@unittest.skipUnless(utils.IS_PY3, "hash tests are Python 3 only")
 class BaseTest(TestCase):
 
     def setUp(self):
         self.cfunc = jit(nopython=True)(hash_usecase)
 
-    def check_collection(self, values):
+    def check_hash_values(self, values):
         cfunc = self.cfunc
-        values = list(values)
-        hashes = [cfunc(x) for x in values]
-        for x in hashes:
-            self.assertIsInstance(x, utils.INT_TYPES)
-
-        def check_distribution(hashes):
-            distinct = set(hashes)
-            if len(distinct) < 0.95 * len(values):
-                # Display hash collisions, for ease of debugging
-                counter = defaultdict(list)
-                for v, h in zip(values, hashes):
-                    counter[h].append(v)
-                collisions = [(h, v) for h, v in counter.items()
-                              if len(v) > 1]
-                collisions = "\n".join("%s: %s" % (h, v)
-                                       for h, v in sorted(collisions))
-                self.fail("too many hash collisions: \n%s" % collisions)
-
-        check_distribution(hashes)
+        for val in list(values):
+            nb_hash = cfunc(val)
+            self.assertIsInstance(nb_hash, utils.INT_TYPES)
+            self.assertEqual(nb_hash, hash(val))
 
     def int_samples(self, typ=np.int64):
-        for start in (0, -50, 60000, 1<<32):
+        for start in (0, -50, 60000, 1 << 32):
             info = np.iinfo(typ)
             if not info.min <= start <= info.max:
                 continue
@@ -54,6 +41,7 @@ class BaseTest(TestCase):
             yield range(start, start + n)
             yield range(start, start + 100 * n, 100)
             yield range(start, start + 128 * n, 128)
+            yield [-1]
 
     def float_samples(self, typ):
         info = np.finfo(typ)
@@ -70,8 +58,9 @@ class BaseTest(TestCase):
                 yield -a
                 yield a + a.mean()
 
-        # Infs, nans, zeros
-        a = typ([0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'), float('nan')])
+        # Infs, nans, zeros, magic -1
+        a = typ([0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),
+                 float('nan')])
         yield a
 
     def complex_samples(self, typ, float_ty):
@@ -90,22 +79,18 @@ class TestNumberHashing(BaseTest):
     """
 
     def check_ints(self, typ):
-        def check_values(values):
-            values = sorted(set(typ(x) for x in values))
-            self.check_collection(values)
-
         for a in self.int_samples(typ):
-            check_values(a)
+            self.check_hash_values(a)
 
     def check_floats(self, typ):
         for a in self.float_samples(typ):
             self.assertEqual(a.dtype, np.dtype(typ))
-            self.check_collection(a)
+            self.check_hash_values(a)
 
     def check_complex(self, typ, float_ty):
         for a in self.complex_samples(typ, float_ty):
             self.assertEqual(a.dtype, np.dtype(typ))
-            self.check_collection(a)
+            self.check_hash_values(a)
 
     @tag('important')
     def test_ints(self):
@@ -125,7 +110,48 @@ class TestNumberHashing(BaseTest):
         self.check_complex(np.complex128, np.float64)
 
     def test_bool(self):
-        self.check_collection([False, True])
+        self.check_hash_values([False, True])
+
+    def test_ints(self):
+        minmax = []
+        for ty in [np.int8, np.uint8, np.int16, np.uint16,
+                   np.int32, np.uint32, np.int64, np.uint64]:
+            info = np.iinfo(ty)
+            # check hash(-1) = -2
+            # check hash(0) = 0
+            self.check_hash_values([ty(-1)])
+            self.check_hash_values([ty(0)])
+            signed = 'uint' not in str(ty)
+            # check bit shifting patterns from min through to max
+            sz = ty().itemsize
+            for x in [info.min, info.max]:
+                shifts = 8 * sz
+                # x is a python int, do shifts etc as a python int and init
+                # numpy type from that to avoid numpy type rules
+                y = x
+                for i in range(shifts):
+                    twiddle1 = 0xaaaaaaaaaaaaaaa
+                    twiddle2 = 0x555555555555555
+                    self.check_hash_values([ty(y)])
+                    self.check_hash_values([ty(y & twiddle1)])
+                    self.check_hash_values([ty(y & twiddle2)])
+                    if signed:  # try the same with flipped signs
+                        # negated signed INT_MIN will overflow
+                        if y != info.min:
+                            self.check_hash_values([ty(-y)])
+                        self.check_hash_values([ty(-(y & twiddle1))])
+                        self.check_hash_values([ty(-(y & twiddle2))])
+                    if x == 0:  # unsigned min is 0, shift up
+                        y = (y | 1) << 1
+                    else:  # everything else shift down
+                        y = y >> 1
+
+        # these straddle the branch between returning the int as the hash and
+        # doing the PyLong hash alg
+        self.check_hash_values([np.int64(0x1ffffffffffffffe)])
+        self.check_hash_values([np.int64(0x1fffffffffffffff)])
+        self.check_hash_values([np.uint64(0x1ffffffffffffffe)])
+        self.check_hash_values([np.uint64(0x1fffffffffffffff)])
 
 
 class TestTupleHashing(BaseTest):
@@ -136,10 +162,11 @@ class TestTupleHashing(BaseTest):
     def check_tuples(self, value_generator, split):
         for values in value_generator:
             tuples = [split(a) for a in values]
-            self.check_collection(tuples)
+            self.check_hash_values(tuples)
 
     def test_homogeneous_tuples(self):
         typ = np.uint64
+
         def split2(i):
             """
             Split i's bits into 2 integers.
@@ -172,6 +199,90 @@ class TestTupleHashing(BaseTest):
             return np.int64(a), np.float64(b * 0.0001)
 
         self.check_tuples(self.int_samples(), split)
+
+
+class TestUnicodeHashing(BaseTest):
+    def check_hash(self, value):
+        expected = hash(value)
+        cfunc = self.cfunc
+        got = cfunc(val)
+        print(expected)
+        print(got)
+
+    def test_basic_unicode(self):
+        kind1_string = "abcdefghijklmnopqrstuvwxyz"
+        for i in range(len(kind1_string)):
+            self.check_hash_values([kind1_string[:i]])
+
+        sep = "眼"
+        kind2_string = sep.join(list(kind1_string))
+        for i in range(len(kind2_string)):
+            self.check_hash_values([kind2_string[:i]])
+
+        sep = "🐍⚡"
+        kind4_string = sep.join(list(kind1_string))
+        for i in range(len(kind4_string)):
+            self.check_hash_values([kind4_string[:i]])
+
+    def test_hash_passthrough(self):
+        # no `hash` call made, this just checks that `._hash` is correctly
+        # passed through from an already existing string
+        kind1_string = "abcdefghijklmnopqrstuvwxyz"
+
+        @jit(nopython=True)
+        def fn(x):
+            return x._hash
+
+        hash_value = compile_time_get_string_data(kind1_string)[-1]
+        self.assertTrue(hash_value != -1)
+        self.assertEqual(fn(kind1_string), hash_value)
+
+    def test_hash_passthrough_call(self):
+        # check `x._hash` and hash(x) are the same
+        kind1_string = "abcdefghijklmnopqrstuvwxyz"
+
+        @jit(nopython=True)
+        def fn(x):
+            return x._hash, hash(x)
+
+        hash_value = compile_time_get_string_data(kind1_string)[-1]
+        self.assertTrue(hash_value != -1)
+        self.assertEqual(fn(kind1_string), (hash_value, hash_value))
+
+    @unittest.skip("Needs #3683 resolved")
+    def test_retrieve_hash_from_str_const(self):
+        @jit(nopython=True)
+        def fn():
+            strconst = "abcdefghijklmnopqrstuvwxyz"
+            print(strconst._hash)
+
+    def test_hash_literal(self):
+        # a strconst always seem to have an associated hash value so the hash
+        # member of the returned value should contain the correct hash
+        @jit(nopython=True)
+        def fn():
+            x = "abcdefghijklmnopqrstuvwxyz"
+            return x
+        val = fn()
+        tmp = hash("abcdefghijklmnopqrstuvwxyz")
+        self.assertEqual(tmp, (compile_time_get_string_data(val)[-1]))
+
+    def test_hash_on_str_creation(self):
+        # new strings do not have a cached hash until hash() is called
+        def impl():
+            const1 = "aaaa"
+            const2 = "眼眼眼眼"
+            new = const1 + const2
+            print(new._hash)
+            hash(new)
+            print(new._hash)
+            return new
+
+        #expected = impl()
+        got = jit(nopython=True)(impl)()
+        #a = (compile_time_get_string_data(expected))
+        b = (compile_time_get_string_data(got))
+        #self.assertEqual(a, b)
 
 
 if __name__ == "__main__":
