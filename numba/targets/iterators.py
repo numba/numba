@@ -61,6 +61,8 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
+        if context.enable_nrt:
+            context.nrt.decref(builder, enumty.yield_type[1], srcval)
         result.yield_(context.make_tuple(builder, enumty.yield_type,
                                          [count, srcval]))
 
