@@ -196,9 +196,11 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
-def array_average(a, weights=None):
-    return np.average(a, weights=weights)
+def array_average(a):
+    return np.mean(a)
 
+def array_average_weights(a, weights=None):
+    return np.average(a, weights=weights)
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -954,14 +956,31 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
 
     def test_average(self):
+        #array of random numbers
         N = 100
-        a = np.random.ranf(N)
-        w = np.random.ranf(N)
+        a = np.random.ranf(N)*100
+        w = np.random.ranf(N)*100
 
+        #3D array of random numbers
+        d1 = 100
+        d2 = 50
+        d3 = 25
+        a_3d = np.random.rand(d1,d2,d3)*100
+        w_3d = np.random.rand(d1,d2,d3)*100
+
+        #test case for average with weights
+        pyfunc = array_average_weights
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=10)
+        self.assertAlmostEqual(pyfunc(a_3d,weights=w_3d), cfunc(a_3d,weights=w_3d), places=10)
+
+        #test case for average without weights
         pyfunc = array_average
         cfunc = jit(nopython=True)(pyfunc)
 
-        self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=15)
+        self.assertAlmostEqual(pyfunc(a), cfunc(a), places=10)
+        self.assertAlmostEqual(pyfunc(a_3d), cfunc(a_3d), places=10)
 
 class TestArrayComparisons(TestCase):
 
