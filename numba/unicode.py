@@ -470,21 +470,46 @@ def unicode_split(a, sep):
         return split_impl
 
 
+@njit
+def join_list(sep, parts):
+    parts_len = len(parts)
+    if parts_len == 0:
+        return ''
+
+    # Precompute size and char_width of result
+    sep_len = len(sep)
+    length = (parts_len - 1) * sep_len
+    kind = sep._kind
+    for p in parts:
+        length += len(p)
+        kind = _pick_kind(kind, p._kind)
+
+    result = _empty_string(kind, length)
+
+    # populate string
+    part = parts[0]
+    _strncpy(part, 0, result, 0, len(part))
+    dst_offset = len(part)
+    for idx in range(1, parts_len):
+        _strncpy(sep, 0, result, dst_offset, sep_len)
+        dst_offset += sep_len
+        part = parts[idx]
+        _strncpy(part, 0, result, dst_offset, len(part))
+        dst_offset += len(part)
+
+    return result
+
+
 @overload_method(types.UnicodeType, 'join')
 def unicode_join(sep, parts):
-    if isinstance(parts, types.IterableType):
+    if isinstance(parts, types.List):
+        def join_list_impl(sep, parts):
+            return join_list(sep, parts)
+        return join_list_impl
+    elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
-            # This version is slower than it could be because it assumes a
-            # generic iterable type
-            result = ''
-            first = True
-            for part in parts:
-                if first:
-                    result = part
-                    first = False
-                else:
-                    result = result + sep + part
-            return result
+            parts_list = [p for p in parts]
+            return join_list(sep, parts_list)
         return join_iter_impl
 
 
@@ -552,6 +577,12 @@ def _slice_span(typingctx, sliceobj):
         return result_size
 
     return sig, codegen
+
+
+@njit
+def _strncpy(src, src_offset, dst, dst_offset, n):
+    for i in range(n):
+        _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))
 
 
 @overload(operator.getitem)
