@@ -1758,7 +1758,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "fp and xp are not of the same size."
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1
         xp = np.arange(6).reshape(3, 2)
