@@ -1699,7 +1699,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as e:
                 cfunc(x, xp, fp)
 
-        self.assertIn(msg, str(e.exception))
+            self.assertIn(msg, str(e.exception))
 
         x = np.arange(6)
         xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
