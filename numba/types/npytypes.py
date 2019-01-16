@@ -72,7 +72,8 @@ class Record(Type):
         fields = []
         for k, ty in name_types:
             if not isinstance(ty, Number):
-                raise TypeError("invalid type specified: {}".format(ty))
+                msg = "invalid type specified: {}.  Only support Number".
+                raise TypeError(msg.format(ty))
             datatype = ctx.get_data_type(ty)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
@@ -128,7 +129,7 @@ class Record(Type):
         return len(self.fields)
 
     def offset(self, key):
-        """Get byte offset of a field from the start of the structure.
+        """Get the byte offset of a field from the start of the structure.
         """
         return self.fields[key].offset
 
