@@ -102,7 +102,6 @@ def cast_from_literal(context, builder, fromty, toty, val):
 
 @lower_constant(types.unicode_type)
 def constant_unicode(context, builder, typ, pyval):
-    literal_string = pyval
     return make_string_from_constant(context, builder, typ, pyval)
 
 
