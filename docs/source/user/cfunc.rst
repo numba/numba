@@ -147,6 +147,7 @@ For example::
       int    i1;
       float  f2;
       double d3;
+      float  af4[7]; // arrays are supported
    } my_struct;
 
    /* Define a callback function */
@@ -168,6 +169,7 @@ For example::
       tmp = 0
       for i in range(n):
          tmp += base[i].i1 * base[i].f2 / base[i].d3
+         tmp += base[i].af4.sum()  # nested arrays are like normal numpy array
       return tmp
 
 
@@ -182,6 +184,7 @@ C-structure's layout.  To do that, use ``Record.make_c_struct``, for example::
       ('i1', types.int32),
       ('f2', types.float32),
       ('d3', types.float64),
+      ('af4', types.NestedArray(dtype=types.float32, shape=(7,))),
    ])
 
 Due to ABI limitations, structures should be passed as pointers
