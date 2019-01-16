@@ -628,7 +628,7 @@ def pack_array(builder, values, ty=None):
 
 def pack_struct(builder, values):
     """
-    Pack a sequence of values in a LLVM struct.
+    Pack a sequence of values into a LLVM struct.
     """
     structty = ir.LiteralStructType([v.type for v in values])
     st = structty(ir.Undefined)
