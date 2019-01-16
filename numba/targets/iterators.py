@@ -127,7 +127,6 @@ def iternext_zip(context, builder, sig, args, result):
     gen, = args
     impl = context.get_generator_impl(genty)
     status, retval = impl(context, builder, sig, args)
-    # Link
     context.add_linking_libs(getattr(impl, 'libs', ()))
 
     with cgutils.if_likely(builder, status.is_ok):
