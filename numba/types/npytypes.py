@@ -72,7 +72,7 @@ class Record(Type):
         fields = []
         for k, ty in name_types:
             if not isinstance(ty, Number):
-                msg = "invalid type specified: {}.  Only support Number".
+                msg = "invalid type specified: {}.  Only support Number."
                 raise TypeError(msg.format(ty))
             datatype = ctx.get_data_type(ty)
             size = ctx.get_abi_sizeof(datatype)
