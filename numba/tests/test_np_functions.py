@@ -1778,7 +1778,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "fp must be 1D"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1 + 1j
         xp = np.arange(6)
