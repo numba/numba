@@ -50,7 +50,7 @@ class Buffer(IterableType, ArrayCompatible):
         from .misc import unliteral
 
         if isinstance(dtype, Buffer):
-            raise TypeError("Buffer dtype cannot be buffer")
+            raise TypeError("Buffer dtype cannot be buffer: {}".format(dtype))
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
         self.dtype = unliteral(dtype)
