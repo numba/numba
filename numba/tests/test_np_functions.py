@@ -1748,7 +1748,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "array of sample points is empty"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1
         xp = np.array([1, 2, 3])
