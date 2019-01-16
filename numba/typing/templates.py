@@ -9,7 +9,7 @@ import sys
 from types import MethodType
 
 from .. import types, utils
-from ..errors import TypingError, UntypedAttributeError
+from ..errors import TypingError, UntypedAttributeError, InternalError
 
 _IS_PY3 = sys.version_info >= (3,)
 
@@ -319,7 +319,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     elif x.kind == utils.pyParameter.VAR_KEYWORD:
                         msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
                             "unsupported. (offending argument name is '%s')")
-                        raise TypingError(msg % x)
+                        raise InternalError(msg % x)
                 else:
                     kws.append(x)
             return args, kws, pos_arg
@@ -342,7 +342,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                       "argument name is '%s') found in the typing function "
                       "signature, but is not in the implementing function "
                       "signature.\n%s") % (ty_pos, sig_str)
-                raise TypingError(msg)
+                raise InternalError(msg)
         else:
             if im_pos:
                 # no *args in typing but there's a *args in the implementation
@@ -356,7 +356,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     # unknown quantity of args) so just report first error
                     specialized = "argument names.\n%s\nFirst difference: '%s'"
                     msg = err_prefix + specialized % (sig_str, b[-1])
-                    raise TypingError(msg)
+                    raise InternalError(msg)
 
         if _IS_PY3:
             def gen_diff(typing, implementing):
@@ -369,7 +369,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         if a != b:
             specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))
-            raise TypingError(err_prefix + specialized)
+            raise InternalError(err_prefix + specialized)
 
         # ensure kwargs are the same
         ty = [x.name for x in ty_kws]
@@ -377,12 +377,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if ty != im:
             specialized = "keyword argument names.\n%s\n%s"
             msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
-            raise TypingError(msg)
+            raise InternalError(msg)
         same = [x.default for x in ty_kws] == [x.default for x in im_kws]
         if not same:
             specialized = "keyword argument default values.\n%s\n%s"
             msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
-            raise TypingError(msg)
+            raise InternalError(msg)
 
     def generic(self, args, kws):
         """
