@@ -1800,7 +1800,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc(x, xp, fp)
 
-        assert complex_dtype_msg in str(e.exception)
+        self.assertIn(complex_dtype_msg, str(e.exception))
 
     def test_asarray(self):
 
