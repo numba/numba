@@ -147,13 +147,13 @@ def map_struct_to_record_dtype(cffi_type):
     for k, v in cffi_type.fields:
         # guard unsupport values
         if v.bitshift != -1:
-            msg = "field {} has bitshift, this is not supported"
+            msg = "field {!r} has bitshift, this is not supported"
             raise ValueError(msg.format(k))
         if v.flags != 0:
-            msg = "field {} has flags, this is not supported"
+            msg = "field {!r} has flags, this is not supported"
             raise ValueError(msg.format(k))
         if v.bitsize != -1:
-            msg = "field {} has bitsize, this is not supported"
+            msg = "field {!r} has bitsize, this is not supported"
             raise ValueError(msg.format(k))
         dtype = numpy_support.as_dtype(
             map_type(v.type, use_record_dtype=True),
