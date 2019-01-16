@@ -1791,7 +1791,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "Cannot cast array data from complex dtype "
             "to float64 dtype"
         )
-        assert complex_dtype_msg in str(e.exception)
+        self.assertIn(complex_dtype_msg, str(e.exception))
 
         x = 1
         xp = (np.arange(6) + 1j).astype(np.complex64)
