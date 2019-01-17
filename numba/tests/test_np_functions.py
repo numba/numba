@@ -116,6 +116,9 @@ def ediff1d(ary, to_end=None, to_begin=None):
 def roll(a, shift):
     return np.roll(a, shift)
 
+def tile(a, reps):
+    return np.tile(a, reps)
+
 def asarray(a):
     return np.asarray(a)
 
@@ -1575,6 +1578,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(a, shift)
                 got = cfunc(a, shift)
                 self.assertPreciseEqual(expected, got)
+
+    def test_tile_basic(self):
+        pyfunc = tile
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+#             yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+#             yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
+
+            yield 4
+            yield False
+            yield np.arange(7)
+            yield [1.1, 2.2, 3.3]
+            yield (True, False, True)
+            yield (9,)
+            yield np.array([])
+            yield ()
+
+        def shift_variations():
+            pass
+            #return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+            return itertools.chain.from_iterable((range(2, 10),))
+
+        for a in a_variations():
+            for shift in shift_variations():
+                expected = pyfunc(a, shift)
+                got = cfunc(a, shift)
+                self.assertPreciseEqual(expected, got)
+
 
     def test_roll_exceptions(self):
         pyfunc = roll

@@ -1403,6 +1403,30 @@ def np_roll(a, shift):
     else:
         return np_roll_impl
 
+@overload(np.tile)
+def np_tile(a, reps):
+
+    def np_tile_impl_arr(a, reps):
+        arr = np.asarray(a)
+        temp_arr = arr
+        #TODO: Check for -ve reps value. reps should not be negative
+        for i in range(reps - 1):
+            arr = np.concatenate((arr, temp_arr), axis=0)
+        return arr
+
+    def np_tile_impl_nonarr(a, reps):
+        arr = np.asarray([a])
+        temp_arr = arr
+        #TODO: Check for -ve reps value. reps should not be negative
+        for i in range(reps - 1):
+            arr = np.concatenate((arr, temp_arr), axis=0)
+        return arr
+
+    if isinstance(a, (types.Number, types.Boolean)):
+        return np_tile_impl_nonarr
+    else:
+        return np_tile_impl_arr
+
 #----------------------------------------------------------------------------
 # Statistics
 
