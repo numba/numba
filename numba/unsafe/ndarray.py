@@ -39,7 +39,7 @@ def empty_inferred(typingctx, shape):
     return sig, codegen
 
 
-@intrinsic(support_literals=True)
+@intrinsic
 def to_fixed_tuple(typingctx, array, length):
     """Convert *array* into a tuple of *length*
 

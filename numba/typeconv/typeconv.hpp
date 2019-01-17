@@ -77,11 +77,14 @@ public:
         Number of matches
     */
     int selectOverload(const Type sig[], const Type ovsigs[], int &selected,
-                       int sigsz, int ovct, bool allow_unsafe) const;
+                       int sigsz, int ovct, bool allow_unsafe,
+                       bool exact_match_required
+                      ) const;
 
 private:
     int _selectOverload(const Type sig[], const Type ovsigs[], int &selected,
                         int sigsz, int ovct, bool allow_unsafe,
+                        bool exact_match_required,
                         Rating ratings[], int candidates[]) const;
 
     TCCMap tccmap;

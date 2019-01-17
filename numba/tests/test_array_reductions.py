@@ -128,6 +128,9 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def array_ptp_global(a):
+    return np.ptp(a)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -664,6 +667,95 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nancumsum_basic(self):
         self.check_cumulative(array_nancumsum)
         self.check_nan_cumulative(array_nancumsum)
+
+    def test_ptp_basic(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.array([-1.1, np.nan, 2.2])
+            yield np.array([-np.inf, 5])
+            yield (4, 2, 5)
+            yield (1,)
+            yield np.full(5, 5)
+            yield [2.2, -2.3, 0.1]
+            a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
+            yield a
+            yield np.asfortranarray(a)
+            yield a[::-1]
+            np.random.RandomState(0).shuffle(a)
+            yield a
+            yield 6
+            yield 6.5
+            yield -np.inf
+            yield 1 + 4j
+            yield [2.2, np.nan]
+            yield [2.2, np.inf]
+            yield ((4.1, 2.0, -7.6), (4.3, 2.7, 5.2))
+            yield np.full(5, np.nan)
+            yield 1 + np.nan * 1j
+            yield np.nan + np.nan * 1j
+            yield np.nan
+
+        for a in a_variations():
+            check(a)
+
+    def test_ptp_complex(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def make_array(real_nan=False, imag_nan=False):
+            real = np.linspace(-4, 4, 25)
+            if real_nan:
+                real[4:9] = np.nan
+            imag = np.linspace(-5, 5, 25)
+            if imag_nan:
+                imag[7:12] = np.nan
+            return (real + 1j * imag).reshape(5, 5)
+
+        for real_nan, imag_nan in product([True, False], repeat=2):
+            comp = make_array(real_nan, imag_nan)
+            check(comp)
+
+        real = np.ones(8)
+        imag = np.arange(-4, 4)
+        comp = real + 1j * imag
+        check(comp)
+        comp = real - 1j * imag
+        check(comp)
+
+        comp = np.full((4, 4), fill_value=(1 - 1j))
+        check(comp)
+
+    def test_ptp_exceptions(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Boolean dtype is unsupported (as per NumPy)"
+        self.assertIn(msg, str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([]))
+
+        msg = "zero-size array reduction not possible"
+        self.assertIn(msg, str(e.exception))
 
     @classmethod
     def install_generated_tests(cls):

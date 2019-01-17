@@ -81,6 +81,7 @@ class CodeLibrary(object):
 
     @property
     def has_dynamic_globals(self):
+        self._ensure_finalized()
         return len(self._dynamic_globals) > 0
 
     @property
@@ -186,16 +187,7 @@ class CodeLibrary(object):
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
-    def _scan_dynamic_globals(self, ll_module):
-        """
-        Scan for dynanmic globals and track their names
-        """
-        for gv in ll_module.global_variables:
-            if gv.name.startswith("numba.dynamic.globals"):
-                self._dynamic_globals.append(gv.name)
-
     def add_llvm_module(self, ll_module):
-        self._scan_dynamic_globals(ll_module)
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
@@ -221,9 +213,6 @@ class CodeLibrary(object):
         for library in self._linking_libraries:
             self._final_module.link_in(
                 library._get_module_for_linking(), preserve=True)
-        for library in self._codegen._libraries:
-            self._final_module.link_in(
-                library._get_module_for_linking(), preserve=True)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
@@ -232,10 +221,19 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
+    def _finalize_dyanmic_globals(self):
+        # Scan for dynamic globals
+        for gv in self._final_module.global_variables:
+            if gv.name.startswith('numba.dynamic.globals'):
+                self._dynamic_globals.append(gv.name)
+
+
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
         """
+        self._finalize_dyanmic_globals()
+
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
 
@@ -594,7 +592,6 @@ class BaseCPUCodegen(object):
     def __init__(self, module_name):
         initialize_llvm()
 
-        self._libraries = set()
         self._data_layout = None
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
@@ -637,14 +634,6 @@ class BaseCPUCodegen(object):
         The LLVM "target data" object for this codegen instance.
         """
         return self._target_data
-
-    def add_linking_library(self, library):
-        """
-        Add a library for linking into all libraries created by this
-        codegen object, without losing the original library.
-        """
-        library._ensure_finalized()
-        self._libraries.add(library)
 
     def create_library(self, name):
         """

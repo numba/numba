@@ -77,6 +77,14 @@ def looplifted(n):
 def use_c_sin(x):
     return c_sin(x)
 
+@jit(cache=True, nopython=True)
+def use_c_sin_nest1(x):
+    return use_c_sin(x)
+
+@jit(cache=True, nopython=True)
+def use_c_sin_nest2(x):
+    return use_c_sin_nest1(x)
+
 
 @jit(cache=True, nopython=True)
 def ambiguous_function(x):

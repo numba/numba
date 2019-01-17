@@ -610,9 +610,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            return tup.types[idx]
+            ret = tup.types[idx]
         elif isinstance(idx, slice):
-            return types.BaseTuple.from_types(tup.types[idx])
+            ret = types.BaseTuple.from_types(tup.types[idx])
+        return signature(ret, *args)
 
 
 # Generic implementation for "not in"

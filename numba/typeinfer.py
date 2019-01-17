@@ -336,9 +336,12 @@ class StaticGetItemConstraint(object):
         with new_error_context("typing of static-get-item at {0}", self.loc):
             typevars = typeinfer.typevars
             for ty in typevars[self.value.name].get():
-                itemty = typeinfer.context.resolve_static_getitem(
-                            value=ty, index=self.index)
-                if itemty is not None:
+                sig = typeinfer.context.resolve_static_getitem(
+                    value=ty, index=self.index,
+                )
+
+                if sig is not None:
+                    itemty = sig.return_type
                     assert itemty.is_precise()
                     typeinfer.add_type(self.target, itemty, loc=self.loc)
                 elif self.fallback is not None:
@@ -433,14 +436,9 @@ class CallConstraint(object):
 
         # Check argument to be precise
         for a in itertools.chain(pos_args, kw_args.values()):
-            if not a.is_precise():
-                # Getitem on non-precise array is allowed to
-                # support array-comprehension
-                if fnty == operator.getitem and isinstance(pos_args[0], types.Array):
-                    pass
-                # Otherwise, don't compute type yet
-                else:
-                    return
+            # Forbids imprecise type except array of undefined dtype
+            if not a.is_precise() and not isinstance(a, types.Array):
+                return
 
         # Resolve call type
         sig = typeinfer.resolve_call(fnty, pos_args, kw_args)

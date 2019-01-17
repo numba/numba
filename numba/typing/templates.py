@@ -4,12 +4,11 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-import operator
 import sys
 from types import MethodType
 
 from .. import types, utils
-from ..errors import TypingError, UntypedAttributeError
+from ..errors import TypingError
 
 
 class Signature(object):
@@ -134,7 +133,6 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
     ba = pysig.bind(*args, **kws)
-    defargs = []
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -165,9 +163,7 @@ class FunctionTemplate(object):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
-
-    # Whether the typing support literals
-    support_literals = False
+    exact_match_required = False
 
     def __init__(self, context):
         self.context = context
@@ -175,6 +171,7 @@ class FunctionTemplate(object):
     def _select(self, cases, args, kws):
         options = {
             'unsafe_casting': self.unsafe_casting,
+            'exact_match_required': self.exact_match_required,
         }
         selected = self.context.resolve_overload(self.key, cases, args, kws,
                                                  **options)
@@ -204,6 +201,13 @@ class AbstractTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         sig = generic(args, kws)
+        # Enforce that *generic()* must return None or Signature
+        if sig is not None:
+            if not isinstance(sig, Signature):
+                raise AssertionError(
+                    "generic() must return a Signature or None. "
+                    "{} returned {}".format(generic, type(sig)),
+                )
 
         # Unpack optional type if no matching signature
         if not sig and any(isinstance(x, types.Optional) for x in args):
@@ -526,9 +530,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
             # Link dependent library
-            cg = context.codegen()
-            for lib in getattr(call, 'libs', ()):
-                cg.add_linking_library(lib)
+            context.add_linking_libs(getattr(call, 'libs', ()))
             return call(builder, args)
 
     def _resolve(self, typ, attr):
@@ -539,6 +541,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
                 sig = self._resolve_impl_sig(typ, attr, args, kws)
@@ -572,7 +575,7 @@ def make_overload_method_template(typ, attr, overload_func):
                                             base=_OverloadMethodTemplate)
 
 
-def bound_function(template_key, support_literals=False):
+def bound_function(template_key):
     """
     Wrap an AttributeTemplate resolve_* method to allow it to
     resolve an instance method's signature rather than a instance attribute.
@@ -594,13 +597,13 @@ def bound_function(template_key, support_literals=False):
         def attribute_resolver(self, ty):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
+
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:
                         sig.recvr = ty
                     return sig
 
-            MethodTemplate.support_literals = support_literals
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper
