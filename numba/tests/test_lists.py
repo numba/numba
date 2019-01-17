@@ -693,7 +693,7 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = list_mul
         cfunc = jit(nopython=True)(pyfunc)
         # Fail in malloc()
-        with self.assertRaises(MemoryError) as cm:
+        with self.assertRaises(MemoryError):
             cfunc(1, 2**58)
         if sys.platform.startswith('darwin'):
             libc = ct.CDLL('libc.dylib')
