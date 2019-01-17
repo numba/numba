@@ -40,7 +40,7 @@ class EnumClassStaticGetItem(AbstractTemplate):
         enum, idx = args
         if (isinstance(enum, types.EnumClass)
                 and idx in enum.instance_class.__members__):
-            return enum.member_type
+            return signature(enum.member_type, *args)
 
 
 class EnumCompare(AbstractTemplate):

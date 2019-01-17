@@ -2716,3 +2716,27 @@ def np_asarray(a, dtype=None):
                 return np.array(a, ty)
 
     return impl
+
+@overload(np.extract)
+def np_extract(condition, arr):
+
+    def np_extract_impl(condition, arr):
+        cond = np.asarray(condition).flatten()
+        a = np.asarray(arr)
+
+        if a.size == 0:
+            raise ValueError('Cannot extract from an empty array')
+
+        # the following looks odd but replicates NumPy...
+        if np.any(cond[a.size:]) and cond.size > a.size:
+            msg = 'condition shape inconsistent with arr shape'
+            raise ValueError(msg)
+            # NumPy raises IndexError: index 'm' is out of
+            # bounds for size 'n'
+
+        max_len = min(a.size, cond.size)
+        out = [a.flat[idx] for idx in range(max_len) if cond[idx]]
+
+        return np.array(out)
+
+    return np_extract_impl
