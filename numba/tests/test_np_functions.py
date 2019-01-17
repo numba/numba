@@ -113,11 +113,17 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def roll(a, shift):
+    return np.roll(a, shift)
+
 def asarray(a):
     return np.asarray(a)
 
 def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
+
+def extract(condition, arr):
+    return np.extract(condition, arr)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -1548,6 +1554,150 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
+    def test_roll_basic(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(7)
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+            yield [1.1, 2.2, 3.3]
+            yield (True, False, True)
+            yield False
+            yield 4
+            yield (9,)
+            yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
+            yield np.array([])
+            yield ()
+
+        def shift_variations():
+            return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+
+        for a in a_variations():
+            for shift in shift_variations():
+                expected = pyfunc(a, shift)
+                got = cfunc(a, shift)
+                self.assertPreciseEqual(expected, got)
+
+    def test_roll_exceptions(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        for shift in 1.1, (1, 2):
+            with self.assertTypingError() as e:
+                cfunc(np.arange(10), shift)
+
+            msg = "shift must be an integer"
+            assert msg in str(e.exception)
+
+    def test_extract_basic(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        a = np.arange(10)
+        self.rnd.shuffle(a)
+        for threshold in range(-3, 13):
+            cond = a > threshold
+            _check({'condition': cond, 'arr': a})
+
+        a = np.arange(60).reshape(4, 5, 3)
+        cond = a > 11.2
+        _check({'condition': cond, 'arr': a})
+
+        a = ((1, 2, 3), (3, 4, 5), (4, 5, 6))
+        cond = np.eye(3).flatten()
+        _check({'condition': cond, 'arr': a})
+
+        a = [1.1, 2.2, 3.3, 4.4]
+        cond = [1, 1, 0, 1]
+        _check({'condition': cond, 'arr': a})
+
+        a = np.linspace(-2, 10, 6)
+        element_pool = (True, False, np.nan, -1, -1.0, -1.2, 1, 1.0, 1.5j)
+        for cond in itertools.combinations_with_replacement(element_pool, 4):
+            _check({'condition': cond, 'arr': a})
+            _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
+
+        a = np.array([1, 2, 3])
+        cond = np.array([])
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0])  # but [1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = [1, 0, 1, 0, 1, 0]  # but [1, 0, 1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = np.array([1, 0, 1, 0, 1, 0, 0, 0]).reshape(2, 2, 2)
+        _check({'condition': cond, 'arr': a})
+
+        a = np.asfortranarray(np.arange(60).reshape(3, 4, 5))
+        cond = np.repeat((0, 1), 30)
+        _check({'condition': cond, 'arr': a})
+        _check({'condition': cond, 'arr': a[::-1]})
+
+        a = np.array(4)
+        for cond in 0, 1:
+            _check({'condition': cond, 'arr': a})
+
+        a = 1
+        cond = 1
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array(1)
+        cond = np.array([True, False])
+        _check({'condition': cond, 'arr': a})
+
+        a = np.arange(4)
+        cond = np.array([1, 0, 1, 0, 0, 0]).reshape(2, 3) * 1j
+        _check({'condition': cond, 'arr': a})
+
+    def test_extract_exceptions(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.array([])
+        cond = np.array([1, 2, 3])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn('Cannot extract from an empty array', str(e.exception))
+
+        def _check(cond, a):
+            msg = 'condition shape inconsistent with arr shape'
+            with self.assertRaises(ValueError) as e:
+                cfunc(cond, a)
+            self.assertIn(msg, str(e.exception))
+
+        a = np.array([[1, 2, 3], [1, 2, 3]])
+        cond = [1, 0, 1, 0, 1, 0, 1]
+        _check(cond, a)
+
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0, 1])
+        _check(cond, a)
+
+        a = np.array(60)  # note, this is 0D
+        cond = 0, 1
+        _check(cond, a)
+
+        a = np.arange(4)
+        cond = np.array([True, False, False, False, True])
+        _check(cond, a)
+
+        a = np.arange(4)
+        cond = np.array([True, False, True, False, False, True, False])
+        _check(cond, a)
 
     def test_asarray(self):
 

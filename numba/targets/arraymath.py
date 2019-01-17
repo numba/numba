@@ -1380,6 +1380,29 @@ def np_vander(x, N=None, increasing=False):
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
 
+@overload(np.roll)
+def np_roll(a, shift):
+
+    if not isinstance(shift, (types.Integer, types.Boolean)):
+        raise TypingError('shift must be an integer')
+
+    def np_roll_impl(a, shift):
+        arr = np.asarray(a)
+        out = np.empty(arr.shape, dtype=arr.dtype)
+        # empty_like might result in different contiguity vs NumPy
+
+        arr_flat = arr.flat
+        for i in range(arr.size):
+            idx = (i + shift) % arr.size
+            out.flat[idx] = arr_flat[i]
+
+        return out
+
+    if isinstance(a, (types.Number, types.Boolean)):
+        return lambda a, shift: np.asarray(a)
+    else:
+        return np_roll_impl
+
 #----------------------------------------------------------------------------
 # Statistics
 
@@ -2640,3 +2663,27 @@ def np_asarray(a, dtype=None):
                 return np.array(a, ty)
 
     return impl
+
+@overload(np.extract)
+def np_extract(condition, arr):
+
+    def np_extract_impl(condition, arr):
+        cond = np.asarray(condition).flatten()
+        a = np.asarray(arr)
+
+        if a.size == 0:
+            raise ValueError('Cannot extract from an empty array')
+
+        # the following looks odd but replicates NumPy...
+        if np.any(cond[a.size:]) and cond.size > a.size:
+            msg = 'condition shape inconsistent with arr shape'
+            raise ValueError(msg)
+            # NumPy raises IndexError: index 'm' is out of
+            # bounds for size 'n'
+
+        max_len = min(a.size, cond.size)
+        out = [a.flat[idx] for idx in range(max_len) if cond[idx]]
+
+        return np.array(out)
+
+    return np_extract_impl

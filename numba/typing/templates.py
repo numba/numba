@@ -4,12 +4,11 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-import operator
 import sys
 from types import MethodType
 
 from .. import types, utils
-from ..errors import TypingError, UntypedAttributeError, InternalError
+from ..errors import TypingError, InternalError
 
 _IS_PY3 = sys.version_info >= (3,)
 
@@ -198,6 +197,13 @@ class AbstractTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         sig = generic(args, kws)
+        # Enforce that *generic()* must return None or Signature
+        if sig is not None:
+            if not isinstance(sig, Signature):
+                raise AssertionError(
+                    "generic() must return a Signature or None. "
+                    "{} returned {}".format(generic, type(sig)),
+                )
 
         # Unpack optional type if no matching signature
         if not sig and any(isinstance(x, types.Optional) for x in args):
@@ -619,9 +625,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
             # Link dependent library
-            cg = context.codegen()
-            for lib in getattr(call, 'libs', ()):
-                cg.add_linking_library(lib)
+            context.add_linking_libs(getattr(call, 'libs', ()))
             return call(builder, args)
 
     def _resolve(self, typ, attr):
@@ -632,6 +636,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
                 sig = self._resolve_impl_sig(typ, attr, args, kws)
@@ -687,6 +692,7 @@ def bound_function(template_key):
         def attribute_resolver(self, ty):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
+
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:
