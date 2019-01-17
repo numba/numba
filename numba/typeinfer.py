@@ -127,10 +127,16 @@ class ConstraintNetwork(object):
 
     def propagate(self, typeinfer, raise_errors):
         """
-        Execute all constraints.  Errors are caught and returned as a list.
-        This allows progressing even though some constraints may fail
-        due to lack of information
-        (e.g. imprecise types such as List(undefined)).
+        Execute all constraints.
+
+        Parameters
+        ----------
+        typeinfer : TypeInferer
+        raise_errors : bool
+
+
+        If *raise_errors* is set, errors are caught and returned as a list.
+        This allows progressing even though some constraints.
         """
         errors = []
         for constraint in self.constraints:
@@ -143,9 +149,10 @@ class ConstraintNetwork(object):
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    errors.append(e)
                     if raise_errors:
                         raise e
+                    else:
+                        errors.append(e)
                 except Exception:
                     msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
                     e = TypingError(msg.format(con=constraint,
@@ -153,9 +160,10 @@ class ConstraintNetwork(object):
                                                sep='--%<' + '-' * 76),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    errors.append(e)
                     if raise_errors:
                         raise e
+                    else:
+                        errors.append(e)
         return errors
 
 
