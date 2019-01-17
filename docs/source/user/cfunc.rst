@@ -116,13 +116,92 @@ assumed to be laid out in C order.  If the data is laid out in Fortran order,
 :func:`numba.farray` should be used instead.
 
 
+Handling C structures
+=====================
+
+
+With CFFI
+---------
+
+For applications that have a lot of state, it is useful to pass data in C
+structures.  To simplify the interoperability with C code, numba can convert
+a ``cffi`` type into a numba ``Record`` type using
+``numba.cffi_support.map_type``::
+
+   from numba import cffi_support
+
+   nbtype = cffi_support.map_type(cffi_type, use_record_dtype=True)
+
+.. note:: **use_record_dtype=True** is needed otherwise pointers to C
+    structures are returned as void pointers.
+
+
+For example::
+
+   from cffi import FFI
+
+   src = """
+
+   /* Define the C struct */
+   typedef struct my_struct {
+      int    i1;
+      float  f2;
+      double d3;
+   } my_struct;
+
+   /* Define a callback function */
+   typedef double (*my_func)(my_struct*, size_t);
+   """
+
+   ffi = FFI()
+   ffi.cdef(src)
+
+   # Get the function signature from *my_func*
+   sig = cffi_support.map_type(ffi.typeof('my_func'), use_record_dtype=True)
+
+   # Make the cfunc
+   from numba import cfunc, carray
+
+   @cfunc(sig)
+   def foo(ptr, n):
+      base = carray(ptr, n)  # view pointer as an array of my_struct
+      tmp = 0
+      for i in range(n):
+         tmp += base[i].i1 * base[i].f2 / base[i].d3
+      return tmp
+
+
+With ``numba.types.Record.make_c_struct``
+-----------------------------------------
+
+The ``numba.types.Record`` type can be created manually to follow a
+C-structure's layout.  To do that, use ``Record.make_c_struct``, for example::
+
+   my_struct = types.Record.make_c_struct([
+      # Provides a sequence of 2-tuples i.e. (name:str, type:Type)
+      ('i1', types.int32),
+      ('f2', types.float32),
+      ('d3', types.float64),
+   ])
+
+Due to ABI limitations, structures should be passed as pointers
+using ``types.CPointer(my_struct)`` as the argument type.  Inside the ``cfunc``
+body, the ``my_struct*`` can be accessed with ``carray``.
+
+Full example
+------------
+
+See full example in ``examples/notebooks/Accessing C Struct Data.ipynb``.
+
+
 Signature specification
 =======================
 
 The explicit ``@cfunc`` signature can use any :ref:`Numba types <numba-types>`,
 but only a subset of them make sense for a C callback.  You should
 generally limit yourself to scalar types (such as ``int8`` or ``float64``)
-or pointers to them (for example ``types.CPointer(types.int8)``).
+,pointers to them (for example ``types.CPointer(types.int8)``), or pointers
+to ``Record`` type.
 
 
 Compilation options
