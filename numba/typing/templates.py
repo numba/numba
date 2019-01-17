@@ -12,6 +12,7 @@ from ..errors import TypingError, InternalError
 
 _IS_PY3 = sys.version_info >= (3,)
 
+
 class Signature(object):
     """
     The signature of a function call or operation, i.e. its argument types
@@ -324,7 +325,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                         pos_arg = x
                     elif x.kind == utils.pyParameter.VAR_KEYWORD:
                         msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
-                            "unsupported. (offending argument name is '%s')")
+                               "unsupported. (offending argument name is '%s')")
                         raise InternalError(msg % x)
                 else:
                     kws.append(x)
@@ -345,9 +346,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             if not im_pos:
                 # case 5. described above
                 msg = ("VAR_POSITIONAL (e.g. *args) argument kind (offending "
-                      "argument name is '%s') found in the typing function "
-                      "signature, but is not in the implementing function "
-                      "signature.\n%s") % (ty_pos, sig_str)
+                       "argument name is '%s') found in the typing function "
+                       "signature, but is not in the implementing function "
+                       "signature.\n%s") % (ty_pos, sig_str)
                 raise InternalError(msg)
         else:
             if im_pos:
