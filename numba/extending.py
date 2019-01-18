@@ -50,7 +50,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}):
+def overload(func, jit_options={}, strict=True):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -71,6 +71,10 @@ def overload(func, jit_options={}):
 
     Compiler options can be passed as an dictionary using the **jit_options**
     argument.
+
+    Overloading strictness (that the typing and implementing signatures match)
+    is enforced by the **strict** keyword argument, it is recommended that this
+    is set to True (default).
     """
     from .typing.templates import make_overload_template, infer_global
 
@@ -79,7 +83,7 @@ def overload(func, jit_options={}):
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts)
+        template = make_overload_template(func, overload_func, opts, strict)
         infer(template)
         if hasattr(func, '__module__'):
             infer_global(func, types.Function(template))
@@ -107,7 +111,7 @@ def register_jitable(*args, **kwargs):
     """
     def wrap(fn):
         # It is just a wrapper for @overload
-        @overload(fn, jit_options=kwargs)
+        @overload(fn, jit_options=kwargs, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
         return fn
