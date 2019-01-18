@@ -123,6 +123,9 @@ build_c_helpers_dict(void)
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);
 
+    /* util for stdout, stderr */
+    declmethod(flush_stdout);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"
