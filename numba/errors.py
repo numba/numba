@@ -300,10 +300,7 @@ and traceback, along with a minimal reproducer at:
 https://github.com/numba/numba/issues/new
 """
 
-reportable_issue_info = """
--------------------------------------------------------------------------------
-This should not have happened, a problem has occurred in Numba's internals.
-
+feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new
 
@@ -312,6 +309,12 @@ directly at: https://gitter.im/numba/numba
 
 Thanks in advance for your help in improving Numba!
 """
+
+reportable_issue_info = """
+-------------------------------------------------------------------------------
+This should not have happened, a problem has occurred in Numba's internals.
+%s
+""" % feedback_details
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
