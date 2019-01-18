@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import io
 
 import numpy as np
 
@@ -674,3 +675,26 @@ def forbid_codegen():
         for (obj, attrname), value in old.items():
             setattr(obj, attrname, value)
 
+
+@contextlib.contextmanager
+def redirect_fd(fd):
+    """
+    Temporarily redirect *fd* to a pipe's write end and return a file object
+    wrapping the pipe's read end.
+    """
+    save = os.dup(fd)
+    r, w = os.pipe()
+    try:
+        os.dup2(w, fd)
+        yield io.open(r, "r")
+    finally:
+        os.close(w)
+        os.dup2(save, fd)
+        os.close(save)
+
+
+def redirect_c_stdout():
+    """Redirect C stdout
+    """
+    fd = sys.__stdout__.fileno()
+    return redirect_fd(fd)
