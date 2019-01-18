@@ -477,37 +477,67 @@ def unwrap_loop_body(loop_body):
     last_label = max(loop_body.keys())
     loop_body[last_label].body = loop_body[last_label].body[:-1]
 
+def add_to_def_once_sets(a_def, def_once, def_more):
+    '''If the variable is already defined more than once, do nothing.
+       Else if defined exactly once previously then transition this
+       variable to the defined more than once set (remove it from
+       def_once set and add to def_more set).
+       Else this must be the first time we've seen this variable defined
+       so add to def_once set.
+    '''
+    if a_def in def_more:
+        pass
+    elif a_def in def_once:
+        def_more.add(a_def)
+        def_once.remove(a_def)
+    else:
+        def_once.add(a_def)
+
 def compute_def_once_block(block, def_once, def_more, getattr_taken):
+    '''Effect changes to the set of variables defined once or more than once
+       for a single block.
+    '''
+    # The only "defs" occur in assignments, so find such instructions.
     assignments = block.find_insts(ir.Assign)
+    # For each assignment...
     for one_assign in assignments:
+        print("assign:", one_assign, "def_once:", def_once, "def_more:", def_more, "getattr_taken:", getattr_taken)
+        # Get the LHS/target of the assignment.
         a_def = one_assign.target.name
-        if a_def in def_more:
-            pass
-        elif a_def in def_once:
-            def_more.add(a_def)
-            def_once.remove(a_def)
-        else:
-            def_once.add(a_def)
+        # Add variable to def sets.
+        add_to_def_once_sets(a_def, def_once, def_more)
 
         rhs = one_assign.value
         if isinstance(rhs, ir.Expr) and rhs.op == 'getattr' and rhs.value.name in def_once:
             getattr_taken[a_def] = rhs.value.name
         if isinstance(rhs, ir.Expr) and rhs.op == 'call' and rhs.func.name in getattr_taken:
+            # Calling a method on an object is like a def of that object.
             base_obj = getattr_taken[rhs.func.name]
-            def_more.add(base_obj)
-            def_once.remove(base_obj)
+            add_to_def_once_sets(base_obj, def_once, def_more)
 
 def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken):
+    '''Compute the set of variables defined exactly once in the given set of blocks
+       and using the given sets for storing which variables are defined once, more than
+       once and which have had a getattr call on them.
+    '''
+    # For each block...
     for label, block in loop_body.items():
+        # Scan this block and effect changes to def_once, def_more, and getattr_taken
+        # based on the instructions in that block.
         compute_def_once_block(block, def_once, def_more, getattr_taken)
+        # Have to recursively process parfors manually here.
         for inst in block.body:
             if isinstance(inst, parfor.Parfor):
+                # Recursively compute for the parfor's init block.
                 compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken)
+                # Recursively compute for the parfor's loop body.
                 compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken)
 
 def compute_def_once(loop_body):
-    def_once = set()
-    def_more = set()
+    '''Compute the set of variables defined exactly once in the given set of blocks.
+    '''
+    def_once = set()   # set to hold variables defined exactly once
+    def_more = set()   # set to hold variables defined more than once
     getattr_taken = {}
     compute_def_once_internal(loop_body, def_once, def_more, getattr_taken)
     return def_once
@@ -557,6 +587,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     hoisted = []
     not_hoisted = []
 
+    # Compute the set of variable defined exactly once in the loop body.
     def_once = compute_def_once(loop_body)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
@@ -591,6 +622,15 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
             new_block.append(inst)
         block.body = new_block
     return hoisted, not_hoisted
+
+#def fix_numpy_module(blocks):
+#    npmod = sys.modules['numpy']
+#    for label, block in blocks.items():
+#        for inst in block.body:
+#            if isinstance(inst, ir.Assign):
+#                rhs = inst.value
+#                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
+#                    rhs.value = npmod
 
 def redtyp_is_scalar(redtype):
     return not isinstance(redtype, types.npytypes.Array)
