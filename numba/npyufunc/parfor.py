@@ -623,15 +623,6 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
         block.body = new_block
     return hoisted, not_hoisted
 
-#def fix_numpy_module(blocks):
-#    npmod = sys.modules['numpy']
-#    for label, block in blocks.items():
-#        for inst in block.body:
-#            if isinstance(inst, ir.Assign):
-#                rhs = inst.value
-#                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
-#                    rhs.value = npmod
-
 def redtyp_is_scalar(redtype):
     return not isinstance(redtype, types.npytypes.Array)
 
