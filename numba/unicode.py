@@ -193,6 +193,19 @@ def _malloc_string(typingctx, kind, char_bytes, length):
     return sig, details
 
 
+@intrinsic
+def _memcpy(typingctx, dst, dst_offset, src, src_offset, nbytes):
+    def codegen(context, builder, signature, args):
+        [dst_val, dst_offset_val, src_val, src_offset_val, nbytes_val] = args
+        src_ptr = builder.gep(src_val, [src_offset_val])
+        dst_ptr = builder.gep(dst_val, [dst_offset_val])
+        cgutils.raw_memcpy(builder, dst_ptr, src_ptr, nbytes_val, 1)
+        return context.get_dummy_value()
+
+    sig = types.void(types.voidptr, types.intp, types.voidptr, types.intp, types.intp)
+    return sig, codegen
+
+
 @njit
 def _empty_string(kind, length):
     char_width = _kind_to_byte_width(kind)
@@ -488,13 +501,13 @@ def join_list(sep, parts):
 
     # populate string
     part = parts[0]
-    _strncpy(part, 0, result, 0, len(part))
+    _strncpy(result, 0, part, 0, len(part))
     dst_offset = len(part)
     for idx in range(1, parts_len):
-        _strncpy(sep, 0, result, dst_offset, sep_len)
+        _strncpy(result, dst_offset, sep, 0, sep_len)
         dst_offset += sep_len
         part = parts[idx]
-        _strncpy(part, 0, result, dst_offset, len(part))
+        _strncpy(result, dst_offset, part, 0, len(part))
         dst_offset += len(part)
 
     return result
@@ -580,9 +593,16 @@ def _slice_span(typingctx, sliceobj):
 
 
 @njit
-def _strncpy(src, src_offset, dst, dst_offset, n):
-    for i in range(n):
-        _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))
+def _strncpy(dst, dst_offset, src, src_offset, n):
+    if src._kind == dst._kind:
+        byte_width = _kind_to_byte_width(src._kind)
+        src_byte_offset = byte_width * src_offset
+        dst_byte_offset = byte_width * dst_offset
+        nbytes = n * byte_width
+        _memcpy(dst._data, dst_byte_offset, src._data, src_byte_offset, nbytes)
+    else:
+        for i in range(n):
+            _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))
 
 
 @overload(operator.getitem)
