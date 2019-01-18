@@ -369,7 +369,10 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
-        builder.store(ty(None), ptr)
+        # Zero-fill at the init-site
+        if zfill:
+            builder.store(ty(None), ptr)
+    # Also zero-fill at the use-site
     if zfill:
         builder.store(ty(None), ptr)
     return ptr

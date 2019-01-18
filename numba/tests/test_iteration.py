@@ -130,6 +130,7 @@ class IterationTest(MemoryLeakMixin, TestCase):
         self.test_nested_enumerate(flags=no_pyobj_flags)
 
     def test_enumerate_refct(self):
+        # Test issue 3473
         pyfunc = enumerate_array_usecase
         cr = compile_isolated(pyfunc, ())
         cfunc = cr.entry_point
