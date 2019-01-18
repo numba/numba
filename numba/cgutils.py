@@ -1008,14 +1008,6 @@ def printf(builder, format, *args):
     ptr_fmt = builder.bitcast(global_fmt, cstring)
     return builder.call(fn, [ptr_fmt] + list(args))
 
-def flush_stdout(builder):
-    """Calls numba_flush_stdout
-    """
-    mod = builder.module
-    fnty = ir.FunctionType(ir.VoidType(), [])
-    fn = mod.get_or_insert_function(fnty, name='numba_flush_stdout')
-    return builder.call(fn, ())
-
 
 if utils.PY3:
     def normalize_ir_text(text):

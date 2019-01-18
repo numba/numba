@@ -1090,16 +1090,6 @@ numba_gdb_breakpoint(void) {
 
 
 /*
- * Helper to deal with stdout, stderr
- */
-NUMBA_EXPORT_FUNC(void)
-numba_flush_stdout(void) {
-  fflush(stdout);
-}
-
-
-
-/*
  * Define bridge for all math functions
  */
 

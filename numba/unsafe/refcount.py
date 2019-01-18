@@ -32,8 +32,6 @@ def dump_refcount(typingctx, obj):
                 refct = builder.load(refctptr)
                 cgutils.printf(builder, "| {} -> %zd".format(ty), refct)
             cgutils.printf(builder, ";\n")
-            # Flush immediately
-            cgutils.flush_stdout(builder)
             return cgutils.true_bit
         else:
             return cgutils.false_bit

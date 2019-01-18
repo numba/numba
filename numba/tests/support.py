@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import io
+import ctypes
 
 import numpy as np
 
@@ -676,18 +677,27 @@ def forbid_codegen():
             setattr(obj, attrname, value)
 
 
+# For details about redirection of file-descriptor, read
+# https://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
+
 @contextlib.contextmanager
 def redirect_fd(fd):
     """
     Temporarily redirect *fd* to a pipe's write end and return a file object
     wrapping the pipe's read end.
     """
+
+    from numba import _helperlib
+    libnumba = ctypes.CDLL(_helperlib.__file__)
+
+    libnumba._numba_flush_stdout()
     save = os.dup(fd)
     r, w = os.pipe()
     try:
         os.dup2(w, fd)
         yield io.open(r, "r")
     finally:
+        libnumba._numba_flush_stdout()
         os.close(w)
         os.dup2(save, fd)
         os.close(save)
