@@ -1088,7 +1088,6 @@ numba_gdb_breakpoint(void) {
   /* does nothing */
 }
 
-
 /*
  * Define bridge for all math functions
  */
