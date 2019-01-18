@@ -704,8 +704,10 @@ class BaseContext(object):
         assert ty is not None
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
-        cmpfunc = self.get_function(key, cmpsig)
+        fnty = self.typing_context.resolve_value_type(key)
+        cmpsig = fnty.get_call_type(self.typing_context, argtypes, {})
+        cmpfunc = self.get_function(fnty, cmpsig)
+        self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
         return cmpfunc(builder, (cav, cbv))
 
     def make_optional_none(self, builder, valtype):

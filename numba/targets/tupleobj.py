@@ -131,7 +131,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.dtype, v)
               for v in pyval]
-    return ir.ArrayType(consts[0].type, len(consts))(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_array(builder, consts),
+    )
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
@@ -141,7 +143,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.types[i], v)
               for i, v in enumerate(pyval)]
-    return ir.Constant.literal_struct(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_struct(builder, consts),
+    )
 
 
 #------------------------------------------------------------------------------

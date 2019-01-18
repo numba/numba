@@ -3725,7 +3725,9 @@ def _as_layout_array(context, builder, sig, args, output_layout):
         ary = make_array(aryty)(context, builder, value=args[0])
         ret = make_array(retty)(context, builder)
 
-        shape = context.get_constant(types.UniTuple(types.intp, 1), (1,))
+        shape = context.get_constant_generic(
+            builder, types.UniTuple(types.intp, 1), (1,),
+        )
         strides = context.make_tuple(builder,
                                      types.UniTuple(types.intp, 1),
                                      (ary.itemsize,))
