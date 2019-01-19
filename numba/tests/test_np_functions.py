@@ -2045,7 +2045,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as e:
                 cfunc(x, xp, fp)
 
-            assert msg in str(e.exception)
+            self.assertIn(msg, str(e.exception))
 
         x = np.arange(6)
         xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
@@ -2094,7 +2094,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "array of sample points is empty"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1
         xp = np.array([1, 2, 3])
@@ -2104,7 +2104,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "fp and xp are not of the same size."
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1
         xp = np.arange(6).reshape(3, 2)
@@ -2114,7 +2114,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "xp must be 1D"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1
         xp = np.arange(6)
@@ -2124,7 +2124,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(x, xp, fp)
 
         msg = "fp must be 1D"
-        assert msg in str(e.exception)
+        self.assertIn(msg, str(e.exception))
 
         x = 1 + 1j
         xp = np.arange(6)
@@ -2137,7 +2137,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "Cannot cast array data from complex dtype "
             "to float64 dtype"
         )
-        assert complex_dtype_msg in str(e.exception)
+        self.assertIn(complex_dtype_msg, str(e.exception))
 
         x = 1
         xp = (np.arange(6) + 1j).astype(np.complex64)
@@ -2146,7 +2146,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc(x, xp, fp)
 
-        assert complex_dtype_msg in str(e.exception)
+        self.assertIn(complex_dtype_msg, str(e.exception))
 
     def test_asarray(self):
 
