@@ -99,11 +99,19 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DEBUGINFO
 
-   if sets to non-zero, enable debug for the full application by setting
+   If set to non-zero, enable debug for the full application by setting
    the default value of the ``debug`` option in ``jit``. Beware that
    enabling debug info significantly increases the memory consumption
    for each compiled function.
    Default value equals to the value of `NUMBA_ENABLE_PROFILING`.
+
+.. envvar:: NUMBA_GDB_BINARY
+
+   Set the ``gdb`` binary for use in Numba's ``gdb`` support, this takes the
+   form  of a path and full name of the binary, for example:
+   ``/path/from/root/to/binary/name_of_gdb_binary`` This is to permit
+   the use of a ``gdb`` from a non-default location with a non-default name. If
+   not set ``gdb`` is assumed to reside at ``/usr/bin/gdb``.
 
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 

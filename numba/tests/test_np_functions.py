@@ -113,6 +113,30 @@ def corrcoef(x, y=None, rowvar=True):
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+def roll(a, shift):
+    return np.roll(a, shift)
+
+def asarray(a):
+    return np.asarray(a)
+
+def asarray_kws(a, dtype):
+    return np.asarray(a, dtype=dtype)
+
+def extract(condition, arr):
+    return np.extract(condition, arr)
+
+def np_trapz(y):
+    return np.trapz(y)
+
+def np_trapz_x(y, x):
+    return np.trapz(y, x)
+
+def np_trapz_dx(y, dx):
+    return np.trapz(y, dx=dx)
+
+def np_trapz_x_dx(y, x, dx):
+    return np.trapz(y, x, dx)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1541,6 +1565,442 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
+
+    def test_roll_basic(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(7)
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+            yield [1.1, 2.2, 3.3]
+            yield (True, False, True)
+            yield False
+            yield 4
+            yield (9,)
+            yield np.asfortranarray(np.array([[1.1, np.nan], [np.inf, 7.8]]))
+            yield np.array([])
+            yield ()
+
+        def shift_variations():
+            return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+
+        for a in a_variations():
+            for shift in shift_variations():
+                expected = pyfunc(a, shift)
+                got = cfunc(a, shift)
+                self.assertPreciseEqual(expected, got)
+
+    def test_roll_exceptions(self):
+        pyfunc = roll
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        for shift in 1.1, (1, 2):
+            with self.assertTypingError() as e:
+                cfunc(np.arange(10), shift)
+
+            msg = "shift must be an integer"
+            assert msg in str(e.exception)
+
+    def test_extract_basic(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        a = np.arange(10)
+        self.rnd.shuffle(a)
+        for threshold in range(-3, 13):
+            cond = a > threshold
+            _check({'condition': cond, 'arr': a})
+
+        a = np.arange(60).reshape(4, 5, 3)
+        cond = a > 11.2
+        _check({'condition': cond, 'arr': a})
+
+        a = ((1, 2, 3), (3, 4, 5), (4, 5, 6))
+        cond = np.eye(3).flatten()
+        _check({'condition': cond, 'arr': a})
+
+        a = [1.1, 2.2, 3.3, 4.4]
+        cond = [1, 1, 0, 1]
+        _check({'condition': cond, 'arr': a})
+
+        a = np.linspace(-2, 10, 6)
+        element_pool = (True, False, np.nan, -1, -1.0, -1.2, 1, 1.0, 1.5j)
+        for cond in itertools.combinations_with_replacement(element_pool, 4):
+            _check({'condition': cond, 'arr': a})
+            _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
+
+        a = np.array([1, 2, 3])
+        cond = np.array([])
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0])  # but [1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = [1, 0, 1, 0, 1, 0]  # but [1, 0, 1, 0, 1, 0, 1] raises
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array([[1, 2, 3], [4, 5, 6]])
+        cond = np.array([1, 0, 1, 0, 1, 0, 0, 0]).reshape(2, 2, 2)
+        _check({'condition': cond, 'arr': a})
+
+        a = np.asfortranarray(np.arange(60).reshape(3, 4, 5))
+        cond = np.repeat((0, 1), 30)
+        _check({'condition': cond, 'arr': a})
+        _check({'condition': cond, 'arr': a[::-1]})
+
+        a = np.array(4)
+        for cond in 0, 1:
+            _check({'condition': cond, 'arr': a})
+
+        a = 1
+        cond = 1
+        _check({'condition': cond, 'arr': a})
+
+        a = np.array(1)
+        cond = np.array([True, False])
+        _check({'condition': cond, 'arr': a})
+
+        a = np.arange(4)
+        cond = np.array([1, 0, 1, 0, 0, 0]).reshape(2, 3) * 1j
+        _check({'condition': cond, 'arr': a})
+
+    def test_extract_exceptions(self):
+        pyfunc = extract
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.array([])
+        cond = np.array([1, 2, 3])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(cond, a)
+        self.assertIn('Cannot extract from an empty array', str(e.exception))
+
+        def _check(cond, a):
+            msg = 'condition shape inconsistent with arr shape'
+            with self.assertRaises(ValueError) as e:
+                cfunc(cond, a)
+            self.assertIn(msg, str(e.exception))
+
+        a = np.array([[1, 2, 3], [1, 2, 3]])
+        cond = [1, 0, 1, 0, 1, 0, 1]
+        _check(cond, a)
+
+        a = np.array([1, 2, 3])
+        cond = np.array([1, 0, 1, 0, 1])
+        _check(cond, a)
+
+        a = np.array(60)  # note, this is 0D
+        cond = 0, 1
+        _check(cond, a)
+
+        a = np.arange(4)
+        cond = np.array([True, False, False, False, True])
+        _check(cond, a)
+
+        a = np.arange(4)
+        cond = np.array([True, False, True, False, False, True, False])
+        _check(cond, a)
+
+    def test_np_trapz_basic(self):
+        pyfunc = np_trapz
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        _check({'y': y})
+
+        y = (3, 1, 2, 2, 2)
+        _check({'y': y})
+
+        y = np.arange(15).reshape(3, 5)
+        _check({'y': y})
+
+        y = np.linspace(-10, 10, 60).reshape(4, 3, 5)
+        _check({'y': y}, abs_tol=1e-13)
+
+        self.rnd.shuffle(y)
+        _check({'y': y}, abs_tol=1e-13)
+
+        y = np.array([])
+        _check({'y': y})
+
+        y = np.array([3.142, np.nan, np.inf, -np.inf, 5])
+        _check({'y': y})
+
+        y = np.arange(20) + np.linspace(0, 10, 20) * 1j
+        _check({'y': y})
+
+        y = np.array([], dtype=np.complex128)
+        _check({'y': y})
+
+        y = (True, False, True)
+        _check({'y': y})
+
+    def test_np_trapz_x_basic(self):
+        pyfunc = np_trapz_x
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        x = [4, 6, 8]
+        _check({'y': y, 'x': x})
+
+        y = [1, 2, 3, 4, 5]
+        x = (4, 6)
+        _check({'y': y, 'x': x})
+
+        y = (1, 2, 3, 4, 5)
+        x = [4, 5, 6, 7, 8]
+        _check({'y': y, 'x': x})
+
+        y = np.array([1, 2, 3, 4, 5])
+        x = [4, 4]
+        _check({'y': y, 'x': x})
+
+        y = np.array([])
+        x = np.array([2, 3])
+        _check({'y': y, 'x': x})
+
+        y = (1, 2, 3, 4, 5)
+        x = None
+        _check({'y': y, 'x': x})
+
+        y = np.arange(20).reshape(5, 4)
+        x = np.array([4, 5])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(20).reshape(5, 4)
+        x = np.array([4, 5, 6, 7])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        x = np.array([4, 5])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        x = np.array([4, 5, 7])
+        _check({'y': y, 'x': x})
+
+        y = np.arange(60).reshape(5, 4, 3)
+        self.rnd.shuffle(y)
+        x = y + 1.1
+        self.rnd.shuffle(x)
+        _check({'y': y, 'x': x})
+
+        y = np.arange(20)
+        x = y + np.linspace(0, 10, 20) * 1j
+        _check({'y': y, 'x': x})
+
+        y = np.array([1, 2, 3])
+        x = np.array([1 + 1j, 1 + 2j])
+        _check({'y': y, 'x': x})
+
+    @unittest.skip('NumPy behaviour questionable')
+    def test_trapz_numpy_questionable(self):
+        pyfunc = np_trapz
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # passes (NumPy and Numba return 2.0)
+        y = np.array([True, False, True, True]).astype(np.int)
+        _check({'y': y})
+
+        # fails (NumPy returns 1.5; Numba returns 2.0)
+        y = np.array([True, False, True, True])
+        _check({'y': y})
+
+    def test_np_trapz_dx_basic(self):
+        pyfunc = np_trapz_dx
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        y = [1, 2, 3]
+        dx = 2
+        _check({'y': y, 'dx': dx})
+
+        y = [1, 2, 3, 4, 5]
+        dx = [1, 4, 5, 6]
+        _check({'y': y, 'dx': dx})
+
+        y = [1, 2, 3, 4, 5]
+        dx = [1, 4, 5, 6]
+        _check({'y': y, 'dx': dx})
+
+        y = np.linspace(-2, 5, 10)
+        dx = np.nan
+        _check({'y': y, 'dx': dx})
+
+        y = np.linspace(-2, 5, 10)
+        dx = np.inf
+        _check({'y': y, 'dx': dx})
+
+        y = np.linspace(-2, 5, 10)
+        dx = np.linspace(-2, 5, 9)
+        _check({'y': y, 'dx': dx}, abs_tol=1e-13)
+
+        y = np.arange(60).reshape(4, 5, 3) * 1j
+        dx = np.arange(40).reshape(4, 5, 2)
+        _check({'y': y, 'dx': dx})
+
+        x = np.arange(-10, 10, .1)
+        r = cfunc(np.exp(-.5 * x ** 2) / np.sqrt(2 * np.pi), dx=0.1)
+        # check integral of normal equals 1
+        np.testing.assert_almost_equal(r, 1, 7)
+
+        y = np.arange(20)
+        dx = 1j
+        _check({'y': y, 'dx': dx})
+
+        y = np.arange(20)
+        dx = np.array([5])
+        _check({'y': y, 'dx': dx})
+
+    def test_np_trapz_x_dx_basic(self):
+        pyfunc = np_trapz_x_dx
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        # dx should be ignored
+        for dx in (None, 2, np.array([1, 2, 3, 4, 5])):
+            y = [1, 2, 3]
+            x = [4, 6, 8]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = [1, 2, 3, 4, 5]
+            x = [4, 6]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = [1, 2, 3, 4, 5]
+            x = [4, 5, 6, 7, 8]
+            _check({'y': y, 'x': x, 'dx': dx})
+
+            y = np.arange(60).reshape(4, 5, 3)
+            self.rnd.shuffle(y)
+            x = y * 1.1
+            x[2, 2, 2] = np.nan
+            _check({'y': y, 'x': x, 'dx': dx})
+
+    def test_np_trapz_x_dx_exceptions(self):
+        pyfunc = np_trapz_x_dx
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def check_not_ok(params):
+            with self.assertRaises(ValueError) as e:
+                cfunc(*params)
+
+            self.assertIn('unable to broadcast', str(e.exception))
+
+        y = [1, 2, 3, 4, 5]
+        for x in [4, 5, 6, 7, 8, 9], [4, 5, 6]:
+            check_not_ok((y, x, 1.0))
+
+        y = np.arange(60).reshape(3, 4, 5)
+        x = np.arange(36).reshape(3, 4, 3)
+        check_not_ok((y, x, 1.0))
+
+        y = np.arange(60).reshape(3, 4, 5)
+        x = np.array([4, 5, 6, 7])
+        check_not_ok((y, x, 1.0))
+
+        y = [1, 2, 3, 4, 5]
+        dx = np.array([1.0, 2.0])
+        check_not_ok((y, None, dx))
+
+        y = np.arange(60).reshape(3, 4, 5)
+        dx = np.arange(60).reshape(3, 4, 5)
+        check_not_ok((y, None, dx))
+
+        with self.assertTypingError() as e:
+            y = np.array(4)
+            check_not_ok((y, None, 1.0))
+
+        self.assertIn('y cannot be 0D', str(e.exception))
+
+        for y in 5, False, np.nan:
+            with self.assertTypingError() as e:
+                cfunc(y, None, 1.0)
+
+            self.assertIn('y cannot be a scalar', str(e.exception))
+
+    def test_asarray(self):
+
+        def input_variations():
+            """
+            To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html
+            Input data, in any form that can be converted to an array.
+            This includes:
+            * lists
+            * lists of tuples
+            * tuples
+            * tuples of tuples
+            * tuples of lists
+            * ndarrays
+            """
+            yield 1j
+            yield 1.2
+            yield False
+            yield 1
+            yield [1, 2, 3]
+            yield [(1, 2, 3), (1, 2, 3)]
+            yield (1, 2, 3)
+            yield ((1, 2, 3), (1, 2, 3))
+            yield ([1, 2, 3], [1, 2, 3])
+            yield np.array([])
+            yield np.arange(4)
+            yield np.arange(12).reshape(3, 4)
+            yield np.arange(12).reshape(3, 4).T
+
+        # used to check that if the input is already an array and the dtype is
+        # the same as that of the input/omitted then the array itself is
+        # returned.
+        def check_pass_through(jitted, expect_same, params):
+            returned = jitted(**params)
+            if expect_same:
+                self.assertTrue(returned is params['a'])
+            else:
+                self.assertTrue(returned is not params['a'])
+                # should be numerically the same, just different dtype
+                np.testing.assert_allclose(returned, params['a'])
+                self.assertTrue(returned.dtype == params['dtype'])
+
+        for pyfunc in [asarray, asarray_kws]:
+            cfunc = jit(nopython=True)(pyfunc)
+            _check = partial(self._check_output, pyfunc, cfunc)
+
+            for x in input_variations():
+                params = {'a': x}
+                if 'kws' in pyfunc.__name__:
+                    for dt in [None, np.complex128]:
+                        params['dtype'] = dt
+                        _check(params)
+                else:
+                    _check(params)
+
+                # check the behaviour over a dtype change (or not!)
+                x = np.arange(10, dtype=np.float32)
+                params = {'a': x}
+                if 'kws' in pyfunc.__name__:
+                    params['dtype'] = None
+                    check_pass_through(cfunc, True, params)
+                    params['dtype'] = np.complex128
+                    check_pass_through(cfunc, False, params)
+                    params['dtype'] = np.float32
+                    check_pass_through(cfunc, True, params)
+                else:
+                    check_pass_through(cfunc, True, params)
 
 
 class TestNPMachineParameters(TestCase):

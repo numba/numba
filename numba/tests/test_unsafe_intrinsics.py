@@ -7,7 +7,7 @@ import numpy as np
 from .support import TestCase
 from numba import njit
 from numba.unsafe.tuple import tuple_setitem
-from numba.unsafe.ndarray import to_fixed_tuple
+from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.errors import TypingError
 
 
@@ -83,3 +83,29 @@ class TestNdarrayIntrinsic(TestCase):
             tuple_with_length(np.random.random(3), 1)
         expectmsg = "*length* argument must be a constant"
         self.assertIn(expectmsg, str(raises.exception))
+
+    def test_issue_3586_variant1(self):
+        @njit
+        def func():
+            S = empty_inferred((10,))
+            a = 1.1
+            for i in range(len(S)):
+                S[i] = a + 2
+            return S
+
+        got = func()
+        expect = np.asarray([3.1] * 10)
+        np.testing.assert_array_equal(got, expect)
+
+    def test_issue_3586_variant2(self):
+        @njit
+        def func():
+            S = empty_inferred((10,))
+            a = 1.1
+            for i in range(S.size):
+                S[i] = a + 2
+            return S
+
+        got = func()
+        expect = np.asarray([3.1] * 10)
+        np.testing.assert_array_equal(got, expect)

@@ -269,6 +269,56 @@ class StencilPass(object):
                                        self.calltypes)
             equiv_set.insert_equiv(out_arr, in_arr_dim_sizes)
             init_block.body.extend(stmts)
+        else: # out is present
+            if "cval" in stencil_func.options: # do out[:] = cval
+                cval = stencil_func.options["cval"]
+                # TODO: Loosen this restriction to adhere to casting rules.
+                cval_ty = typing.typeof.typeof(cval)
+                if not self.typingctx.can_convert(cval_ty, return_type.dtype):
+                    msg = "cval type does not match stencil return type."
+                    raise ValueError(msg)
+
+                # get slice ref
+                slice_var = ir.Var(scope, mk_unique_var("$py_g_var"), loc)
+                slice_fn_ty = self.typingctx.resolve_value_type(slice)
+                self.typemap[slice_var.name] = slice_fn_ty
+                slice_g = ir.Global('slice', slice, loc)
+                slice_assigned = ir.Assign(slice_g, slice_var, loc)
+                init_block.body.append(slice_assigned)
+
+                sig = self.typingctx.resolve_function_type(slice_fn_ty,
+                                                           (types.none,) * 2,
+                                                           {})
+
+                callexpr = ir.Expr.call(func=slice_var, args=(), kws=(),
+                                        loc=loc)
+
+                self.calltypes[callexpr] = sig
+                slice_inst_var = ir.Var(scope, mk_unique_var("$slice_inst"),
+                                        loc)
+                self.typemap[slice_inst_var.name] = types.slice2_type
+                slice_assign = ir.Assign(callexpr, slice_inst_var, loc)
+                init_block.body.append(slice_assign)
+
+                # get const val for cval
+                cval_const_val = ir.Const(return_type.dtype(cval), loc)
+                cval_const_var = ir.Var(scope, mk_unique_var("$cval_const"),
+                                            loc)
+                self.typemap[cval_const_var.name] = return_type.dtype
+                cval_const_assign = ir.Assign(cval_const_val,
+                                              cval_const_var, loc)
+                init_block.body.append(cval_const_assign)
+
+                # do setitem on `out` array
+                setitemexpr = ir.StaticSetItem(out_arr, slice(None, None),
+                                               slice_inst_var, cval_const_var,
+                                               loc)
+                init_block.body.append(setitemexpr)
+                sig = signature(types.none, self.typemap[out_arr.name],
+                                self.typemap[slice_inst_var.name],
+                                self.typemap[out_arr.name].dtype)
+                self.calltypes[setitemexpr] = sig
+
 
         self.replace_return_with_setitem(stencil_blocks, exit_value_var,
                                          parfor_body_exit_label)

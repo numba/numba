@@ -26,7 +26,7 @@ import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
-from numba import array_analysis, postproc, typeinfer
+from numba import array_analysis, postproc, typeinfer, utils, errors
 from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
@@ -992,7 +992,7 @@ class ParforDiagnostics(object):
 #---------- compute various properties and orderings in the data for subsequent use
 
             # ensure adjacency lists are the same size for both sets of info
-            # (nests and fusion may not traverse the same space, for 
+            # (nests and fusion may not traverse the same space, for
             # convenience [] is used as a condition to halt recursion)
             fadj, froots = self.compute_graph_info(self.fusion_info)
             nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
@@ -1191,7 +1191,7 @@ class ParforDiagnostics(object):
             if print_allocation_hoist or print_instruction_hoist:
                 print_wrapped('Loop invariant code motion'.center(80, '-'))
 
-            if print_allocation_hoist: 
+            if print_allocation_hoist:
                 found = False
                 print('Allocation hoisting:')
                 for pf_id, data in self.hoist_info.items():
@@ -3940,3 +3940,18 @@ class ReduceInfer(AbstractTemplate):
         assert len(args) == 3
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
+
+
+def ensure_parallel_support():
+    """Check if the platform supports parallel=True and raise if it does not.
+    """
+    is_win32 = config.IS_WIN32
+    is_py2 = not utils.IS_PY3
+    is_32bit = config.IS_32BITS
+    uns1 = is_win32 and is_py2
+    uns2 = is_32bit
+    if uns1 or uns2:
+        msg = ("The 'parallel' target is not currently supported on "
+            "Windows operating systems when using Python 2.7, or "
+            "on 32 bit hardware.")
+        raise errors.UnsupportedParforsError(msg)

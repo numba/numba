@@ -2,7 +2,6 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 import operator
-import six
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
@@ -10,6 +9,7 @@ import llvmlite.binding as ll
 
 from numba.targets.imputils import Registry
 from numba import cgutils
+from numba import six
 from numba import types
 from .cudadrv import nvvm
 from . import nvvmutils, stubs

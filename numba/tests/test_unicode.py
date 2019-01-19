@@ -435,5 +435,37 @@ class TestUnicode(BaseTest):
                              msg='failed on {}'.format(args))
 
 
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeInTuple(BaseTest):
+
+    def test_const_unicode_in_tuple(self):
+        # Issue 3673
+        @njit
+        def f():
+            return ('aa',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('cc',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+    def test_const_unicode_in_hetero_tuple(self):
+        @njit
+        def f():
+            return ('aa', 1) < ('bb', 1)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('aa', 1) < ('aa', 2)
+
+        self.assertEqual(f.py_func(), f())
+
+
 if __name__ == '__main__':
     unittest.main()
