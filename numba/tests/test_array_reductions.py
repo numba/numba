@@ -98,11 +98,11 @@ def array_argmax_global(arr):
 def array_median_global(arr):
     return np.median(arr)
 
-def array_nanmin(a):
-    return np.nanmin(a)
+def array_nanmin(arr):
+    return np.nanmin(arr)
 
-def array_nanmax(a):
-    return np.nanmax(a)
+def array_nanmax(arr):
+    return np.nanmax(arr)
 
 def array_nanmean(arr):
     return np.nanmean(arr)
