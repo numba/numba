@@ -823,6 +823,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield (2,)
             yield 3.142
             yield False
+            yield (np.nan, 3.142, -5.2, 3.0)
+            yield [np.inf, np.nan, -np.inf]
+            yield [(np.nan, 1.1), (-4.4, 8.7)]
 
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
