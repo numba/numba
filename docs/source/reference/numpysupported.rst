@@ -277,6 +277,7 @@ The following top-level functions are supported:
 * :func:`numpy.empty` (only the 2 first arguments)
 * :func:`numpy.empty_like` (only the 2 first arguments)
 * :func:`numpy.expand_dims`
+* :func:`numpy.extract`
 * :func:`numpy.eye`
 * :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
@@ -306,6 +307,7 @@ The following top-level functions are supported:
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
+* :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)

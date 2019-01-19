@@ -1138,8 +1138,10 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                           'not have a regular shape')):
             cfunc((np.int64(1), [np.int64(2)]))
 
-        with check_raises(("cannot convert (int64, Record([('a', '<i4'), "
-                           "('b', '<f4')])) to a homogeneous type")):
+        with check_raises(
+                "cannot convert (int64, Record(a[type=int32;offset=0],"
+                "b[type=float32;offset=4];8;False)) to a homogeneous type",
+            ):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
             val = np.zeros(1, dtype=st)[0]
             cfunc(((1, 2), (np.int64(1), val)))

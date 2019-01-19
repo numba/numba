@@ -626,6 +626,17 @@ def pack_array(builder, values, ty=None):
     return ary
 
 
+def pack_struct(builder, values):
+    """
+    Pack a sequence of values into a LLVM struct.
+    """
+    structty = ir.LiteralStructType([v.type for v in values])
+    st = structty(ir.Undefined)
+    for i, v in enumerate(values):
+        st = builder.insert_value(st, v, i)
+    return st
+
+
 def unpack_tuple(builder, tup, count=None):
     """
     Unpack an array or structure of values, return a Python tuple.

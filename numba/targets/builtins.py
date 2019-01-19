@@ -447,9 +447,9 @@ def impl_index_value(context, builder, sig, args):
     return index_value._getvalue()
 
 @overload(min)
-def indval_min(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
+def indval_min(indval1, indval2):
+    if isinstance(indval1, IndexValueType) and \
+       isinstance(indval2, IndexValueType):
         def min_impl(indval1, indval2):
             if indval1.value > indval2.value:
                 return indval2
@@ -457,9 +457,9 @@ def indval_min(*args):
         return min_impl
 
 @overload(max)
-def indval_max(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
+def indval_max(indval1, indval2):
+    if isinstance(indval1, IndexValueType) and \
+       isinstance(indval2, IndexValueType):
         def max_impl(indval1, indval2):
             if indval2.value > indval1.value:
                 return indval2
