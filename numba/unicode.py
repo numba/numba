@@ -76,28 +76,34 @@ def compile_time_get_string_data(obj):
     return bytes(out), length, kind
 
 
-@lower_cast(types.StringLiteral, types.unicode_type)
-def cast_from_literal(context, builder, fromty, toty, val):
-    literal_string = fromty.literal_value
-
+def make_string_from_constant(context, builder, typ, literal_string):
+    """
+    Get string data by `compile_time_get_string_data()` and return a
+    unicode_type LLVM value
+    """
     databytes, length, kind = compile_time_get_string_data(literal_string)
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
-    uni_str = cgutils.create_struct_proxy(toty)(context, builder)
+    uni_str = cgutils.create_struct_proxy(typ)(context, builder)
     uni_str.data = gv
     uni_str.length = uni_str.length.type(length)
     uni_str.kind = uni_str.kind.type(kind)
     return uni_str._getvalue()
 
 
+@lower_cast(types.StringLiteral, types.unicode_type)
+def cast_from_literal(context, builder, fromty, toty, val):
+    return make_string_from_constant(
+        context, builder, toty, fromty.literal_value,
+    )
+
+
 ### CONSTANT
 
 @lower_constant(types.unicode_type)
 def constant_unicode(context, builder, typ, pyval):
-    # Constants are handled specially.
-    #
-    uni_str = cgutils.create_struct_proxy(typ)(context, builder)
-    return uni_str._getvalue()
+    return make_string_from_constant(context, builder, typ, pyval)
+
 
 
 ### BOXING
@@ -510,8 +516,8 @@ def unicode_getitem(s, idx):
                 return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
-            def getitem_slice(s, slice_idx):
-                slice_idx = _normalize_slice(slice_idx, len(s))
+            def getitem_slice(s, idx):
+                slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
                 ret = _empty_string(s._kind, span)
                 cur = slice_idx.start

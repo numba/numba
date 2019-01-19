@@ -32,6 +32,8 @@ from numba.extending import (typeof_impl, type_callable,
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
+_IS_PY3 = sys.version_info >= (3,)
+
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
 
@@ -644,6 +646,225 @@ class TestHighLevelExtending(TestCase):
         expectmsg = "cannot convert native Module"
         self.assertIn(expectmsg, errmsg)
 
+    def test_typing_vs_impl_signature_mismatch_handling(self):
+        """
+        Tests that an overload which has a differing typing and implementing
+        signature raises an exception.
+        """
+        def gen_ol(impl=None):
+
+            def myoverload(a, b, c, kw=None):
+                pass
+
+            @overload(myoverload)
+            def _myoverload_impl(a, b, c, kw=None):
+                return impl
+
+            @jit(nopython=True)
+            def foo(a, b, c, d):
+                myoverload(a, b, c, kw=d)
+
+            return foo
+
+        sentinel = "Typing and implementation arguments differ in"
+
+        # kwarg value is different
+        def impl1(a, b, c, kw=12):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl1)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument default values", msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kw=12">', msg)
+            self.assertIn('<Parameter "kw=None">', msg)
+
+        # kwarg name is different
+        def impl2(a, b, c, kwarg=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl2)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kwarg=None">', msg)
+            self.assertIn('<Parameter "kw=None">', msg)
+
+        # arg name is different
+        def impl3(z, b, c, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl3)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "a">', msg)
+            self.assertIn('<Parameter "z">', msg)
+
+        # impl4/5 has invalid syntax for python < 3
+        if _IS_PY3:
+            from .overload_usecases import impl4, impl5
+            with self.assertRaises(errors.TypingError) as e:
+                gen_ol(impl4)(1, 2, 3, 4)
+            msg = str(e.exception)
+            self.assertIn(sentinel, msg)
+            self.assertIn("argument names", msg)
+            self.assertFalse("keyword" in msg)
+            self.assertIn("First difference: 'z'", msg)
+
+            with self.assertRaises(errors.TypingError) as e:
+                gen_ol(impl5)(1, 2, 3, 4)
+            msg = str(e.exception)
+            self.assertIn(sentinel, msg)
+            self.assertIn("argument names", msg)
+            self.assertFalse("keyword" in msg)
+            self.assertIn('<Parameter "a">', msg)
+            self.assertIn('<Parameter "z">', msg)
+
+        # too many args
+        def impl6(a, b, c, d, e, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl6)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "d">', msg)
+            self.assertIn('<Parameter "e">', msg)
+
+        # too few args
+        def impl7(a, b, kw=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl7)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "c">', msg)
+
+        # too many kwargs
+        def impl8(a, b, c, kw=None, extra_kwarg=None):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl8)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "extra_kwarg=None">', msg)
+
+        # too few kwargs
+        def impl9(a, b, c):
+            if a > 10:
+                return 1
+            else:
+                return -1
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl9)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("keyword argument names", msg)
+        if _IS_PY3:
+            self.assertIn('<Parameter "kw=None">', msg)
+
+    @unittest.skipUnless(_IS_PY3, "Python 3+ only syntax")
+    def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
+        """
+        Tests that an overload which has a differing typing and implementing
+        signature raises an exception and uses VAR_POSITIONAL (*args) in typing
+        """
+        def myoverload(a, kw=None):
+            pass
+
+        from .overload_usecases import var_positional_impl
+        overload(myoverload)(var_positional_impl)
+
+
+        @jit(nopython=True)
+        def foo(a, b):
+            return myoverload(a, b, 9, kw=11)
+
+        with self.assertRaises(errors.TypingError) as e:
+            foo(1, 5)
+        msg = str(e.exception)
+        self.assertIn("VAR_POSITIONAL (e.g. *args) argument kind", msg)
+        self.assertIn("offending argument name is '*star_args_token'", msg)
+
+    def test_typing_vs_impl_signature_mismatch_handling_var_keyword(self):
+        """
+        Tests that an overload which uses **kwargs (VAR_KEYWORD)
+        """
+
+        def gen_ol(impl, strict=True):
+
+            def myoverload(a, kw=None):
+                pass
+
+            overload(myoverload, strict=strict)(impl)
+
+            @jit(nopython=True)
+            def foo(a, b):
+                return myoverload(a, kw=11)
+
+            return foo
+
+        # **kwargs in typing
+        def ol1(a, **kws):
+            def impl(a, kw=10):
+                return a
+            return impl
+
+        gen_ol(ol1, False)(1, 2) # no error if strictness not enforced
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(ol1)(1, 2)
+        msg = str(e.exception)
+        self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
+        self.assertIn("offending argument name is '**kws'", msg)
+
+        # **kwargs in implementation
+        def ol2(a, kw=0):
+            def impl(a, **kws):
+                return a
+            return impl
+
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(ol2)(1, 2)
+        msg = str(e.exception)
+        self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
+        self.assertIn("offending argument name is '**kws'", msg)
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
@@ -735,7 +956,7 @@ class TestIntrinsic(TestCase):
         def unsafe_get_ctypes_pointer(src):
             raise NotImplementedError("not callable from python")
 
-        @overload(unsafe_get_ctypes_pointer)
+        @overload(unsafe_get_ctypes_pointer, strict=False)
         def array_impl_unsafe_get_ctypes_pointer(arrtype):
             if isinstance(arrtype, types.Array):
                 unsafe_cast = unsafe_caster(types.CPointer(arrtype.dtype))

@@ -78,9 +78,11 @@ else:
 
 try:
     from inspect import signature as pysignature
+    from inspect import Parameter as pyParameter
 except ImportError:
     try:
         from funcsigs import signature as pysignature
+        from funcsigs import Parameter as pyParameter
     except ImportError:
         raise ImportError("please install the 'funcsigs' package "
                           "('pip install funcsigs')")
