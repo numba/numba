@@ -5,7 +5,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import numpy_support, types
-from .support import TestCase, tag
+from .support import TestCase, MemoryLeakMixin, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -75,7 +75,7 @@ record_dtype = np.dtype([('a', np.float64),
                          ])
 
 
-class IterationTest(TestCase):
+class IterationTest(MemoryLeakMixin, TestCase):
 
     def run_nullary_func(self, pyfunc, flags):
         cr = compile_isolated(pyfunc, (), flags=flags)
@@ -191,6 +191,23 @@ class IterationTest(TestCase):
 
         expect = bar(x, y)
         got = cres.entry_point(x, y)
+        self.assertEqual(expect, got)
+
+    def test_tuple_of_arrays_iter(self):
+        # We used to leak a reference to each element of the tuple
+        def bar(arrs):
+            total = 0
+            for arr in arrs:
+                total += arr[0]
+
+            return total
+
+        x = y = np.arange(3, dtype=np.int32)
+        aryty = types.Array(types.int32, 1, 'C')
+        cres = compile_isolated(bar, (types.containers.UniTuple(aryty, 2),))
+
+        expect = bar((x, y))
+        got = cres.entry_point((x, y))
         self.assertEqual(expect, got)
 
 

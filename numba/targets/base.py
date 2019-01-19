@@ -560,7 +560,9 @@ class BaseContext(object):
     def get_generator_impl(self, genty):
         """
         """
-        return self._generators[genty][1]
+        res = self._generators[genty][1]
+        self.add_linking_libs(getattr(res, 'libs', ()))
+        return res
 
     def get_bound_function(self, builder, obj, ty):
         assert self.get_value_type(ty) == obj.type
@@ -704,8 +706,10 @@ class BaseContext(object):
         assert ty is not None
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
-        cmpfunc = self.get_function(key, cmpsig)
+        fnty = self.typing_context.resolve_value_type(key)
+        cmpsig = fnty.get_call_type(self.typing_context, argtypes, {})
+        cmpfunc = self.get_function(fnty, cmpsig)
+        self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
         return cmpfunc(builder, (cav, cbv))
 
     def make_optional_none(self, builder, valtype):
@@ -1125,7 +1129,9 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        return self._imp(self._context, builder, self._sig, args, loc=loc)
+        res = self._imp(self._context, builder, self._sig, args, loc=loc)
+        self._context.add_linking_libs(getattr(self, 'libs', ()))
+        return res
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

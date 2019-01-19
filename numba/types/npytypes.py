@@ -42,47 +42,114 @@ class UnicodeCharSeq(Type):
         return self.count
 
 
+_RecordField = collections.namedtuple('_RecordField', 'type,offset')
+
+
 class Record(Type):
     """
-    A Numpy structured scalar.  *descr* is the string representation
-    of the Numpy dtype; *fields* of mapping of field names to
-    (type, offset) tuples; *size* the bytesize of a record;
-    *aligned* whether the fields are aligned; *dtype* the Numpy dtype
-    instance.
+    A Record datatype can be mapped to a NumPy structured dtype.
+    A record is very flexible since it is laid out as a list of bytes.
+    Fields can be mapped to arbitrary points inside it, even if they overlap.
+
+    *fields* is a list of `(name:str, data:dict)`.
+        Where `data` is `{ type: Type, offset: int }`
+    *size* is an int; the record size
+    *aligned* is a boolean; whether the record is ABI aligned.
     """
     mutable = True
 
-    def __init__(self, descr, fields, size, aligned, dtype):
-        self.descr = descr
-        self.fields = fields.copy()
+    @classmethod
+    def make_c_struct(cls, name_types):
+        """Construct a Record type from a list of (name:str, type:Types).
+        The layout of the structure will follow C.
+
+        Note: only scalar types are supported currently.
+        """
+        from numba.targets.registry import cpu_target
+
+        ctx = cpu_target.target_context
+        offset = 0
+        fields = []
+        for k, ty in name_types:
+            if not isinstance(ty, Number):
+                msg = "invalid type specified: {}.  Only support Number."
+                raise TypeError(msg.format(ty))
+            datatype = ctx.get_data_type(ty)
+            size = ctx.get_abi_sizeof(datatype)
+            align = ctx.get_abi_alignment(datatype)
+            # align
+            misaligned = offset % align
+            if misaligned:
+                offset += size - misaligned
+            fields.append((k, {'type': ty, 'offset': offset}))
+            offset += size
+        return Record(fields, size=offset, aligned=True)
+
+    def __init__(self, fields, size, aligned):
+        fields = self._normalize_fields(fields)
+        self.fields = dict(fields)
         self.size = size
         self.aligned = aligned
-        self.dtype = dtype
-        name = 'Record(%s)' % descr
+
+        # Create description
+        descbuf = []
+        fmt = "{}[type={};offset={}]"
+        for k, infos in fields:
+            descbuf.append(fmt.format(k, infos.type, infos.offset))
+
+        desc = ','.join(descbuf)
+        name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
         super(Record, self).__init__(name)
+
+    @classmethod
+    def _normalize_fields(cls, fields):
+        """
+        fields:
+            [name: str, { type: Type, offset: int }]
+        """
+        res = []
+        for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
+            fd = _RecordField(type=infos['type'], offset=infos['offset'])
+            res.append((name, fd))
+        return res
 
     @property
     def key(self):
-        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # Numpy dtype equality doesn't always succeed, use the name instead
         # (https://github.com/numpy/numpy/issues/5715)
-        return (self.descr, self.size, self.aligned)
+        return self.name
 
     @property
     def mangling_args(self):
         return self.__class__.__name__, (self._code,)
 
     def __len__(self):
+        """Returns the number of fields
+        """
         return len(self.fields)
 
     def offset(self, key):
-        return self.fields[key][1]
+        """Get the byte offset of a field from the start of the structure.
+        """
+        return self.fields[key].offset
 
     def typeof(self, key):
-        return self.fields[key][0]
+        """Get the type of a field.
+        """
+        return self.fields[key].type
 
     @property
     def members(self):
-        return [(f, t) for f, (t, _) in self.fields.items()]
+        """An ordered list of (name, type) for the fields.
+        """
+        ordered = sorted(self.fields.items(), key=lambda x: x[1].offset)
+        return [(k, v.type) for k, v in ordered]
+
+    @property
+    def dtype(self):
+        from numba.numpy_support import as_struct_dtype
+
+        return as_struct_dtype(self)
 
 
 class DType(DTypeSpec, Opaque):
