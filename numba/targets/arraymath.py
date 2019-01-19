@@ -590,12 +590,12 @@ def nan_min_max_factory(comparison_op, is_complex_dtype):
 
     if is_complex_dtype:
         def impl(a):
-            a = np.asarray(a)
-            check_array(a)
-            for view in np.nditer(a):
+            arr = np.asarray(a)
+            check_array(arr)
+            for view in np.nditer(arr):
                 return_val = view.item()
                 break
-            for view in np.nditer(a):
+            for view in np.nditer(arr):
                 v = view.item()
                 if np.isnan(return_val.real) and not np.isnan(v.real):
                     return_val = v
@@ -608,12 +608,12 @@ def nan_min_max_factory(comparison_op, is_complex_dtype):
             return return_val
     else:
         def impl(a):
-            a = np.asarray(a)
-            check_array(a)
-            for view in np.nditer(a):
+            arr = np.asarray(a)
+            check_array(arr)
+            for view in np.nditer(arr):
                 return_val = view.item()
                 break
-            for view in np.nditer(a):
+            for view in np.nditer(arr):
                 v = view.item()
                 if not np.isnan(v):
                     if not comparison_op(return_val, v):
