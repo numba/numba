@@ -597,8 +597,8 @@ def check_array(a):
 def nan_min_max_factory(comparison_op, is_complex_dtype):
 
     if is_complex_dtype:
-        def impl(arr):
-            a = np.asarray(arr)
+        def impl(a):
+            a = np.asarray(a)
             check_array(a)
             for view in np.nditer(a):
                 return_val = view.item()
@@ -615,8 +615,8 @@ def nan_min_max_factory(comparison_op, is_complex_dtype):
                             return_val = v
             return return_val
     else:
-        def impl(arr):
-            a = np.asarray(arr)
+        def impl(a):
+            a = np.asarray(a)
             check_array(a)
             for view in np.nditer(a):
                 return_val = view.item()
