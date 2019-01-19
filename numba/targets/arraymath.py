@@ -392,9 +392,7 @@ def array_min(context, builder, sig, args):
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
-            for view in it:
-                min_value = view.item()
-                break
+            min_value = next(it).take(0)
 
             for view in it:
                 v = view.item()
@@ -411,9 +409,7 @@ def array_min(context, builder, sig, args):
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
-            for view in it:
-                min_value = view.item()
-                break
+            min_value = next(it).take(0)
 
             for view in it:
                 v = view.item()
@@ -437,9 +433,7 @@ def array_max(context, builder, sig, args):
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
-            for view in it:
-                max_value = view.item()
-                break
+            max_value = next(it).take(0)
 
             for view in it:
                 v = view.item()
@@ -455,9 +449,7 @@ def array_max(context, builder, sig, args):
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
-            for view in it:
-                max_value = view.item()
-                break
+            max_value = next(it).take(0)
 
             for view in it:
                 v = view.item()
