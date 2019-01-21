@@ -261,7 +261,7 @@ def set_uint32(typingctx, data, idx, ch):
     return sig, make_set_codegen(32)
 
 
-@njit
+@njit(_nrt=False)
 def _set_code_point(a, i, ch):
     ### WARNING: This method is very dangerous:
     #   * Assumes that data contents can be changed (only allowed for new
@@ -311,7 +311,7 @@ def _kind_to_byte_width(kind):
         raise AssertionError("Unexpected unicode encoding encountered")
 
 
-@njit
+@njit(_nrt=False)
 def _cmp_region(a, a_offset, b, b_offset, n):
     if n == 0:
         return 0
@@ -331,7 +331,7 @@ def _cmp_region(a, a_offset, b, b_offset, n):
     return 0
 
 
-@njit
+@njit(_nrt=False)
 def _find(substr, s):
     # Naive, slow string matching for now
     for i in range(len(s) - len(substr) + 1):
@@ -592,7 +592,7 @@ def _slice_span(typingctx, sliceobj):
     return sig, codegen
 
 
-@njit
+@njit(_nrt=False)
 def _strncpy(dst, dst_offset, src, src_offset, n):
     if src._kind == dst._kind:
         byte_width = _kind_to_byte_width(src._kind)
