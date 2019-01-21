@@ -518,23 +518,51 @@ def np_any(a):
     return flat_any
 
 @overload(np.average)
-def np_average(arr, weights=None):
+def np_average(arr, axis=None, weights=None):
+
+    arr = np.asarray(arr)
     if weights is None or isinstance(weights, types.NoneType):
-        def np_average_impl(arr, weights=None):
+        def np_average_impl(arr, axis=None, weights=None):
             return np.mean(arr)
-
     else:
-        def np_average_impl(arr, weights=None):
-            weighted_arr = np.multiply(arr, weights)
-            c = 0
-            cw = 0
-            for v in np.nditer(weighted_arr):
-                c += v.item()
-            for w in np.nditer(weights):
-                cw += w.item()
-            return c/cw
+        weights = np.asarray(weights)
+        if axis is None or isinstance(axis, types.NoneType):
+            def np_average_impl(arr, axis=None, weights=None):
+                if arr.shape != weights.shape:
+                    if axis is None:
+                        raise TypeError(
+                            "Axis must be specified when shapes of a and weights "
+                            "differ.")
+                    if weights.ndim != 1:
+                        raise TypeError(
+                            "1D weights expected when shapes of a and weights differ.")
 
-        return np_average_impl
+                scl = np.sum(weights)
+                if scl == 0.0:
+                    raise ZeroDivisionError(
+                        "Weights sum to zero, can't be normalized")
+
+                avg = np.sum(np.multiply(arr, weights))/scl
+                return avg
+        else:
+            def np_average_impl(arr, axis=None, weights=None):
+                if arr.shape != weights.shape:
+                    if weights.ndim != 1:
+                        raise TypeError(
+                            "1D weights expected when shapes of a and weights differ.")
+                    if weights.shape[0] != arr.shape[axis]:
+                        raise ValueError(
+                            "Length of weights not compatible with specified axis.")
+
+                scl = np.sum(weights)
+                if scl == 0.0:
+                    raise ZeroDivisionError(
+                        "Weights sum to zero, can't be normalized")
+
+                avg=np.sum(np.multiply(arr, weights), axis)/scl
+                return avg
+
+    return np_average_impl
 
 def get_isnan(dtype):
     """
