@@ -137,6 +137,9 @@ def np_trapz_dx(y, dx):
 def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
 
+def interp(x, xp, fp):
+    return np.interp(x, xp, fp)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1934,6 +1937,216 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 cfunc(y, None, 1.0)
 
             self.assertIn('y cannot be a scalar', str(e.exception))
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_basic(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-10)
+
+        x = np.linspace(-5, 5, 25)
+        xp = np.arange(-4, 8)
+        fp = xp + 1.5
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.arange(-4, 8)
+        xp = x + 1
+        fp = x + 2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = (2.2, 3.3, -5.0)
+        xp = (2, 3, 4)
+        fp = (5, 6, 7)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = ((2.2, 3.3, -5.0), (1.2, 1.3, 4.0))
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1])
+        x = x.reshape(3, 2, order='F')
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        for x in range(-2, 4):
+            xp = [0, 1, 2]
+            fp = (3, 4, 5)
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([])
+        xp = [0, 1, 2]
+        fp = (3, 4, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(0, 25, 60).reshape(3, 4, 5)
+        xp = np.arange(20)
+        fp = xp - 10
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.nan
+        xp = np.arange(5)
+        fp = np.full(5, np.nan)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.nan
+        xp = [3]
+        fp = [4]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.arange(-4, 8)
+        xp = x
+        fp = x
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [True, False]
+        xp = np.arange(-4, 8)
+        fp = xp
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [-np.inf, -1.0, 0.0, 1.0, np.inf]
+        xp = np.arange(-4, 8)
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(-10, 10, 10)
+        xp = np.array([-np.inf, -1.0, 0.0, 1.0, np.inf])
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = self.rnd.randn(100)
+        xp = np.linspace(-3, 3, 100)
+        fp = np.full(100, fill_value=3.142)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        for factor in 1, -1:
+            x = np.array([5, 6, 7]) * factor
+            xp = [1, 2]
+            fp = [3, 4]
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = 1
+        xp = [1]
+        fp = [True]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_raise_if_xp_not_monotonic_increasing(self):
+        # this is *different* no NumPy...
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(x, xp, fp):
+            msg = 'xp must be monotonically increasing'
+            with self.assertRaises(ValueError) as e:
+                cfunc(x, xp, fp)
+
+            self.assertIn(msg, str(e.exception))
+
+        x = np.arange(6)
+        xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = 10 - np.arange(6)  # distinct but not increasing values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = np.ones(6)  # constant value
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+    @unittest.skipUnless(np_version >= (1, 12), "complex handling per Numpy 1.12+")
+    def test_interp_complex_edge_case(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
+
+        for x in range(-2, 4):
+            xp = np.arange(3) + 0.01
+            fp = np.arange(3) + 1j
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # note: in versions of NumPy prior to 1.12, this test causes
+        # Numpy to raise: TypeError: Cannot cast array data from
+        # dtype('complex128')  to dtype('float64') according to the
+        # rule 'safe'
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_exceptions(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        x = np.array([1, 2, 3])
+        xp = np.array([])
+        fp = np.array([])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "array of sample points is empty"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.array([1, 2, 3])
+        fp = np.array([1, 2])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "fp and xp are not of the same size."
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.arange(6).reshape(3, 2)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "xp must be 1D"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.arange(6)
+        fp = np.arange(6).reshape(3, 2)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "fp must be 1D"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1 + 1j
+        xp = np.arange(6)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        complex_dtype_msg = (
+            "Cannot cast array data from complex dtype "
+            "to float64 dtype"
+        )
+        self.assertIn(complex_dtype_msg, str(e.exception))
+
+        x = 1
+        xp = (np.arange(6) + 1j).astype(np.complex64)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        self.assertIn(complex_dtype_msg, str(e.exception))
 
     def test_asarray(self):
 
