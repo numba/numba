@@ -75,7 +75,7 @@ class Record(Type):
         lltypes = []
         for k, ty in name_types:
             if not isinstance(ty, (Number, NestedArray)):
-                msg = "Only support Number and NestedArray but got {}. "
+                msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
             datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
