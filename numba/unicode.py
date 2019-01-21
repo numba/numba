@@ -468,7 +468,7 @@ def unicode_split(a, sep):
             split_count = 0
 
             while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
-                if a[idx:].startswith(sep):
+                if _cmp_region(a, idx, sep, 0, sep_len) == 0:
                     parts.append(a[last:idx])
                     idx += sep_len
                     last = idx
