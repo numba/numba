@@ -697,8 +697,8 @@ class TestLists(MemoryLeakMixin, TestCase):
             cfunc(1, 2**58)
         if sys.platform.startswith('darwin'):
             libc = ct.CDLL('libc.dylib')
-            libc.printf("###Please ignore above error message i.e. \
-can't allocate region. It is in fact purpose of the this test to \
+            libc.printf("###Please ignore the above error message i.e. \
+can't allocate region. It is in fact the purpose of this test to \
 request more memory than can be provided###\n".encode("UTF-8"))
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
