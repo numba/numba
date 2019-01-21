@@ -309,6 +309,15 @@ typedef enum {
 
 
 
+int mem_cmp_zeros(void *obj, size_t n){
+    int diff = 0;
+    char *mem = obj;
+    for (char *it = mem; it < mem + n; ++it) {
+        if (*it != 0) diff += 1;
+    }
+    return diff;
+}
+
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
 static inline Py_ssize_t
 dk_get_index(NumbaDictKeysObject *keys, Py_ssize_t i)
@@ -339,11 +348,11 @@ dk_get_index(NumbaDictKeysObject *keys, Py_ssize_t i)
 }
 
 int NumbaKeyObject_Equal(NumbaKeyObject startkey, NumbaKeyObject key){
-    return memcpy(&startkey, &key, sizeof(NumbaKeyObject)) == 0;
+    return memcmp(&startkey, &key, sizeof(NumbaKeyObject)) == 0;
 }
 
 int NumbaKeyObject_Is(NumbaKeyObject a, NumbaKeyObject b) {
-    return a.ptr == b.ptr;
+    return NumbaKeyObject_Equal(a, b);
 }
 
 /*
@@ -372,7 +381,7 @@ For both, when the key isn't found a DKIX_EMPTY is returned.
 */
 static Py_ssize_t
 lookdict(NumbaDictObject *mp, NumbaKeyObject key,
-         Py_hash_t hash, NumbaObject **value_addr)
+         Py_hash_t hash, NumbaValObject *value_addr)
 {
     size_t i, mask, perturb;
     NumbaDictKeysObject *dk;
@@ -388,28 +397,30 @@ top:
     for (;;) {
         Py_ssize_t ix = dk_get_index(dk, i);
         if (ix == DKIX_EMPTY) {
-            *value_addr = NULL;
+            memset(value_addr, 0, mp->ma_keys->dk_value_size);
             return ix;
         }
         if (ix >= 0) {
             NumbaDictKeyEntry *ep = &ep0[ix];
-            assert(ep->me_key != NULL);
+            // assert( memcmp(&ep->me_key != NULL);
             if ( NumbaKeyObject_Is(ep->me_key, key) ){
-                *value_addr = ep->me_value;
+                memcpy(value_addr, &ep->me_value, mp->ma_keys->dk_value_size);
                 return ix;
             }
             if (ep->me_hash == hash) {
-                NumbaKeyObject startkey = ep->me_key;
+                NumbaKeyObject startkey;
+                memcpy(&startkey, &ep->me_key, sizeof(NumbaKeyObject));
+
                 NUMBA_INCREF(startkey);
                 int cmp = NumbaKeyObject_Equal(startkey, key);
                 NUMBA_DECREF(startkey);
                 if (cmp < 0) {
-                    *value_addr = NULL;
+                    memset(value_addr, 0, mp->ma_keys->dk_value_size);
                     return DKIX_ERROR;
                 }
                 if (dk == mp->ma_keys && NumbaKeyObject_Is(ep->me_key, startkey) ) {
                     if (cmp > 0) {
-                        *value_addr = ep->me_value;
+                        memcpy(value_addr, &ep->me_value, mp->ma_keys->dk_value_size);
                         return ix;
                     }
                 }
@@ -482,13 +493,13 @@ dk_set_index(NumbaDictKeysObject *keys, Py_ssize_t i, Py_ssize_t ix)
 
 
 static
-int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
+int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size, Py_ssize_t value_size)
 {
     NumbaDictKeysObject *dk;
     Py_ssize_t es, usable;
 
     assert(size >= PyDict_MINSIZE);
-    assert(IS_POWER_OF_2(size));
+    // assert(IS_POWER_OF_2(size));
 
     usable = USABLE_FRACTION(size);
     if (size <= 0xff) {
@@ -506,10 +517,10 @@ int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
         es = sizeof(Py_ssize_t);
     }
 
-
+    size_t entry_size = sizeof(NumbaDictKeyEntry);
     dk = PyMem_RawMalloc(sizeof(NumbaDictKeysObject)
                             + es * size
-                            + sizeof(NumbaDictKeyEntry) * usable);
+                            + entry_size * usable);
     if (dk == NULL) {;
         return ERR_NO_MEMORY;
     }
@@ -518,8 +529,9 @@ int Numba_new_keys_object(NumbaDictKeysObject **out, Py_ssize_t size)
     dk->dk_usable = usable;
     dk->dk_lookup = lookdict;
     dk->dk_nentries = 0;
+    dk->dk_value_size = value_size;
     memset(&dk->dk_indices[0], 0xff, es * size);
-    memset(DK_ENTRIES(dk), 0, sizeof(NumbaDictKeyEntry) * usable);
+    memset(DK_ENTRIES(dk), 0, entry_size * usable);
 
     // Set output
     *out = dk;
@@ -561,8 +573,8 @@ dictresize(NumbaDictObject *mp, Py_ssize_t minsize)
 {
     Py_ssize_t newsize, numentries;
     NumbaDictKeysObject *oldkeys;
-    NumbaObject **oldvalues;
     NumbaDictKeyEntry *oldentries, *newentries;
+    puts("RESIZE");
 
     /* Find the smallest table size > minused. */
     for (newsize = PyDict_MINSIZE;
@@ -581,7 +593,7 @@ dictresize(NumbaDictObject *mp, Py_ssize_t minsize)
      */
 
     /* Allocate a new table. */
-    Status status = Numba_new_keys_object(&mp->ma_keys, newsize);
+    Status status = Numba_new_keys_object(&mp->ma_keys, newsize, oldkeys->dk_value_size);
     if (status != OK) {
         mp->ma_keys = oldkeys;
         return status;
@@ -594,43 +606,25 @@ dictresize(NumbaDictObject *mp, Py_ssize_t minsize)
     numentries = mp->ma_used;
     oldentries = DK_ENTRIES(oldkeys);
     newentries = DK_ENTRIES(mp->ma_keys);
-    oldvalues = mp->ma_values;
-    if (oldvalues != NULL) {
-        /* Convert split table into new combined table.
-         * We must incref keys; we can transfer values.
-         * Note that values of split table is always dense.
-         */
-        assert(0 && "do not do split table");
-        for (Py_ssize_t i = 0; i < numentries; i++) {
-            assert(oldvalues[i] != NULL);
-            NumbaDictKeyEntry *ep = &oldentries[i];
-            NumbaKeyObject key = ep->me_key;
-            NUMBA_INCREF(key);
-            newentries[i].me_key = key;
-            newentries[i].me_hash = ep->me_hash;
-            newentries[i].me_value = oldvalues[i];
-        }
 
-        NUMBA_DECREF(oldkeys);
-        mp->ma_values = NULL;
-        // if (oldvalues != empty_values) {
-        PyMem_RawFree(oldvalues);
-        // }
-    }
-    else {  // combined table.
+     {  // combined table.
         if (oldkeys->dk_nentries == numentries) {
-            memcpy(newentries, oldentries, numentries * sizeof(NumbaDictKeyEntry));
+            size_t entry_size = sizeof(NumbaDictKeyEntry);
+            memcpy(newentries, oldentries, numentries * entry_size);
         }
         else {
             NumbaDictKeyEntry *ep = oldentries;
             for (Py_ssize_t i = 0; i < numentries; i++) {
-                while (ep->me_value == NULL)
+                while ( ep->me_is_used == 0 ){
+                    assert( mem_cmp_zeros(&ep->me_value, oldkeys->dk_value_size) == 0 );
                     ep++;
+
+                }
                 newentries[i] = *ep++;
             }
         }
 
-        assert(oldkeys->dk_lookup != lookdict_split);
+        // assert(oldkeys->dk_lookup != lookdict_split);
         assert(oldkeys->dk_refcnt == 1);
 
         PyMem_RawFree(oldkeys);
@@ -677,23 +671,14 @@ Used both by the internal resize routine and by the public insert routine.
 Returns -1 if an error occurred, or 0 on success.
 */
 static int
-insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject *value)
+insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaValObject value)
 {
     printf("insertdict key=%p hash=%zx\n", key.ptr, hash);
-    NumbaObject *old_value;
+    NumbaValObject old_value;
     NumbaDictKeyEntry *ep;
 
     NUMBA_INCREF(key);
     NUMBA_INCREF(value);
-
-    assert(mp->ma_values);
-    /* we don't do split tables
-    //
-    // if (mp->ma_values != NULL && !PyUnicode_CheckExact(key)) {
-    //     if (insertion_resize(mp) < 0)
-    //         goto Fail;
-    // }
-    */
 
     Py_ssize_t ix = mp->ma_keys->dk_lookup(mp, key, hash, &old_value);
     printf("insert index = %zd\n", ix);
@@ -707,7 +692,7 @@ insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject 
     /* When insertion order is different from shared key, we can't share
      * the key anymore.  Convert this instance to combine table.
      */
-    if (((ix >= 0 && old_value == NULL && mp->ma_used != ix) ||
+    if (((ix >= 0 && mem_cmp_zeros(&old_value, mp->ma_keys->dk_value_size) == 0 && mp->ma_used != ix) ||
          (ix == DKIX_EMPTY && mp->ma_used != mp->ma_keys->dk_nentries))) {
         if (insertion_resize(mp) < 0)
             goto Fail;
@@ -716,7 +701,7 @@ insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject 
 
     if (ix == DKIX_EMPTY) {
         /* Insert into new slot. */
-        assert(old_value == NULL);
+        assert(  mem_cmp_zeros(&old_value, mp->ma_keys->dk_value_size) == 0 );
         if (mp->ma_keys->dk_usable <= 0) {
             /* Need to resize. */
             if (insertion_resize(mp) < 0)
@@ -725,19 +710,18 @@ insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject 
         Py_ssize_t hashpos = find_empty_slot(mp->ma_keys, hash);
         ep = &DK_ENTRIES(mp->ma_keys)[mp->ma_keys->dk_nentries];
         dk_set_index(mp->ma_keys, hashpos, mp->ma_keys->dk_nentries);
-        ep->me_key = key;
+        memcpy(&ep->me_key, &key, sizeof(NumbaKeyObject));
         ep->me_hash = hash;
-        if (mp->ma_values) {
-            assert (mp->ma_values[mp->ma_keys->dk_nentries] == NULL);
-            mp->ma_values[mp->ma_keys->dk_nentries] = value;
-        }
-        else {
-            ep->me_value = value;
-        }
+
+
+        memcpy(&ep->me_value, &value, mp->ma_keys->dk_value_size);
+        ep->me_is_used = 1;
+
         mp->ma_used++;
         mp->ma_version_tag = DICT_NEXT_VERSION();
         mp->ma_keys->dk_usable--;
         mp->ma_keys->dk_nentries++;
+        printf("usable: %zd\n", mp->ma_keys->dk_usable);
         assert(mp->ma_keys->dk_usable >= 0);
         // assert(_PyDict_CheckConsistency(mp));
         return 0;
@@ -752,8 +736,11 @@ insertdict(NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject 
     //     }
     // }
     // else {
-        assert(old_value != NULL);
-        DK_ENTRIES(mp->ma_keys)[ix].me_value = value;
+
+        // assert(old_value != NULL);
+        assert (  mem_cmp_zeros( &old_value, mp->ma_keys->dk_value_size) != 0 );
+
+        memcpy(&DK_ENTRIES(mp->ma_keys)[ix].me_value, &value, mp->ma_keys->dk_value_size);
     // }
 
     mp->ma_version_tag = DICT_NEXT_VERSION();
@@ -771,7 +758,7 @@ Fail:
 
 static Status
 delitem_common(NumbaDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
-               NumbaObject *old_value)
+               NumbaValObject old_value)
 {
     NumbaKeyObject old_key;
     NumbaDictKeyEntry *ep;
@@ -784,9 +771,10 @@ delitem_common(NumbaDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
     ep = &DK_ENTRIES(mp->ma_keys)[ix];
     dk_set_index(mp->ma_keys, hashpos, DKIX_DUMMY);
     // ENSURE_ALLOWS_DELETIONS(mp); // seems to only affect unicode
-    old_key = ep->me_key;
-    ep->me_key.ptr = NULL; // ep->me_key = NULL;
-    ep->me_value = NULL;
+    memcpy(&old_key, &ep->me_key, sizeof(NumbaKeyObject));
+    memset(&ep->me_key, 0, sizeof(NumbaKeyObject));
+    memset(&ep->me_value, 0, mp->ma_keys->dk_value_size);
+    ep->me_is_used = 0;
     NUMBA_DECREF(old_key);
     NUMBA_DECREF(old_value);
 
@@ -796,14 +784,14 @@ delitem_common(NumbaDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
 
 
 int
-Numba_dict_new(NumbaDictObject **res) {
+Numba_dict_new(NumbaDictObject **res, Py_ssize_t value_size) {
     NumbaDictObject* d = PyMem_RawMalloc(sizeof(NumbaDictObject));
     memset(d, 0, sizeof(NumbaDictObject));
 
     d->ma_used = 0;
     d->ma_version_tag = DICT_NEXT_VERSION();
 
-    Numba_new_keys_object(&d->ma_keys, PyDict_MINSIZE);
+    Numba_new_keys_object(&d->ma_keys, PyDict_MINSIZE, value_size);
     if (d->ma_keys == NULL) {
         return ERR_NO_MEMORY;
     }
@@ -820,33 +808,28 @@ dict_keys_dump(NumbaDictObject *mp)
 {
     Py_ssize_t i, j;
     NumbaDictKeyEntry *ep;
-    Py_ssize_t size, n, offset;
-    NumbaObject **value_ptr;
+    Py_ssize_t size, n;
 
     n = mp->ma_used;
 
     ep = DK_ENTRIES(mp->ma_keys);
     size = mp->ma_keys->dk_nentries;
 
-    //// Never splitted
-    // if (mp->ma_values) {
-    //     value_ptr = mp->ma_values;
-    //     offset = sizeof(PyObject *);
-    // }
-    // else {
-        value_ptr = &ep[0].me_value;
-        offset = sizeof(NumbaDictKeyEntry);
-    // }
     printf("Key dump\n");
+
     for (i = 0, j = 0; i < size; i++) {
-        if (*value_ptr != NULL) {
-            NumbaKeyObject key = ep[i].me_key;
+        if (ep->me_is_used) {
+            char* *value_ptr = (char**)&ep->me_value;
+            assert (mem_cmp_zeros(value_ptr, mp->ma_keys->dk_value_size) != 0);
+            NumbaKeyObject key;
+            memcpy(&key, &ep[i].me_key, sizeof(NumbaKeyObject));
             Py_hash_t hash = ep[i].me_hash;
-            printf("  key=%p hash=%zu value=%p\n", key.ptr, hash, *value_ptr);
+            printf("  key=%p hash=%zu value=%p\n", key.ptr, hash, value_ptr[0]);
             j++;
         }
-        value_ptr = (NumbaObject **)(((char *)value_ptr) + offset);
+        ep += 1;
     }
+    printf("j = %zd; n = %zd\n", j, n);
     assert(j == n);
 }
 
@@ -869,50 +852,80 @@ NUMBA_EXPORT_FUNC(void)
 test_dict() {
     puts("test_dict");
     NumbaDictObject* d;
-    Status status = Numba_dict_new(&d);
+    Status status = Numba_dict_new(&d, sizeof(NumbaValObject));
+    assert (status == OK);
+    assert (d->ma_used == 0);
+    assert (d->ma_keys->dk_value_size == sizeof(NumbaValObject));
 
-    NumbaKeyObject key = { (void*)0xdead };
-    NumbaObject *value = (NumbaObject *)0xbeef;
+    #define ASSIGN_KEY(key, val) { void* p = (void*)val; memset(&key, 0, sizeof(NumbaKeyObject)); memcpy(&key, &p, sizeof(void*)); }
+    #define ASSIGN_VAL(obj, val) { void* p = (void*)val; memset(&obj, 0, d->ma_keys->dk_value_size); memcpy(&obj, &p, sizeof(void*)); }
+
+    NumbaKeyObject key;
+    ASSIGN_KEY(key, 0xdead);
+    NumbaValObject value;
+    ASSIGN_VAL(value, 0xbeef);
+
     Py_hash_t hash = 0xcafe;
     status = insertdict(d, key, hash, value);
+    assert (status == OK);
+    assert (d->ma_used == 1);
 
     dict_keys_dump(d);
 
-    key.ptr = (void*)0xdeae; value = (NumbaObject *)0xbeed;
+    ASSIGN_KEY(key, 0xdeae);
+    ASSIGN_VAL(value, 0xbeed);
     status = insertdict(d, key, hash, value);
+    assert (status == OK);
+    assert (d->ma_used == 2);
 
     dict_keys_dump(d);
 
-    key.ptr = (void*)0xdeaf; value = (NumbaObject *)0xbeee;
+    ASSIGN_KEY(key, 0xdeaf);
+    ASSIGN_VAL(value, 0xbeee);
     status = insertdict(d, key, hash, value);
+    assert (status == OK);
+    assert (d->ma_used == 3);
     dict_keys_dump(d);
 
     printf("d->ma_used = %d\n", (int)d->ma_used);
 
     printf("d->ma_keys = %p\n", d->ma_keys);
-    printf("d->ma_values = %p\n", d->ma_values);
 
-    NumbaObject *got_value = NULL;
-    key.ptr = (void*)0xdead;
+    NumbaValObject got_value;
+    ASSIGN_VAL(got_value, NULL);
+    ASSIGN_KEY(key, 0xdead);
     Py_ssize_t ix;
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
-    printf("ix = %zd got_value=%p\n", ix, got_value);
-
+    assert(ix == 0);
+    assert (got_value.ptr == (void*)0xbeef);
+    printf("ix = %zd got_value=%p\n", ix, got_value.ptr);
 
     status = delitem_common(d, hash, ix, got_value);
-    printf("ix = %zd got_value=%p\n", ix, got_value);
+    assert (status == OK);
+    assert (d->ma_used == 2);
+    assert (got_value.ptr == (void*)0xbeef);
+    printf("deleted ix = %zd got_value=%p\n", ix, got_value.ptr);
 
     dict_keys_dump(d);
 
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
-    printf("ix = %zd got_value=%p\n", ix, got_value);
+    assert(ix == -1);
+    printf("ix = %zd got_value=%p\n", ix, got_value.ptr);
 
-
-    key.ptr = (void*)0xdeae;
+    ASSIGN_KEY(key, 0xdeae);
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
-    printf("ix = %zd got_value=%p\n", ix, got_value);
+    printf("ix = %zd got_value=%p\n", ix, got_value.ptr);
 
 
     dict_keys_dump(d);
     show_status(status);
+
+
+    for (int i=0; i< 200; ++i){
+        ASSIGN_KEY(key, 0xffff + i);
+        ASSIGN_VAL(value, 0xbeee);
+        hash = i % 2;
+        status = insertdict(d, key, hash, value);
+        assert (status == OK);
+    }
 }

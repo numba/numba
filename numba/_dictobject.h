@@ -4,14 +4,15 @@
 #define Py_DICT_COMMON_H
 
 
-typedef struct _NumbaObject NumbaObject;
 typedef struct _NumbaKeyObject{ void * ptr; } NumbaKeyObject;
+typedef struct _NumbaValObject{ void * ptr; } NumbaValObject;
 
 typedef struct {
     /* Cached hash code of me_key. */
     Py_hash_t me_hash;
+    size_t    me_is_used;
     NumbaKeyObject me_key;
-    NumbaObject *me_value; /* This field is only meaningful for combined tables */
+    NumbaValObject me_value; /* This field is only meaningful for combined tables */
 } NumbaDictKeyEntry;
 
 
@@ -31,11 +32,6 @@ typedef struct {
 
     struct _dictkeysobject *ma_keys;
 
-    /* If ma_values is NULL, the table is "combined": keys and values
-       are stored in ma_keys.
-       If ma_values is not NULL, the table is splitted:
-       keys are stored in ma_keys and values are stored in ma_values */
-    NumbaObject **ma_values;
 
 } NumbaDictObject;
 
@@ -44,7 +40,7 @@ typedef struct {
  * -1 when no entry found, -3 when compare raises error.
  */
 typedef Py_ssize_t (*dict_lookup_func)
-    (NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaObject **value_addr);
+    (NumbaDictObject *mp, NumbaKeyObject key, Py_hash_t hash, NumbaValObject *value_addr);
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
@@ -77,6 +73,9 @@ typedef struct _dictkeysobject {
 
     /* Number of used entries in dk_entries. */
     Py_ssize_t dk_nentries;
+
+
+    Py_ssize_t dk_value_size;
 
     /* Actual hash table of dk_size entries. It holds indices in dk_entries,
        or DKIX_EMPTY(-1) or DKIX_DUMMY(-2).
