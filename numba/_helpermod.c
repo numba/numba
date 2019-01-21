@@ -232,6 +232,7 @@ bool _numba_test_boolean()
 bool _numba_test_dict()
 {
     test_dict();
+    return 1;
 }
 
 MOD_INIT(_helperlib) {

@@ -770,7 +770,7 @@ Fail:
 
 static Status
 delitem_common(NumbaDictObject *mp, Py_hash_t hash, Py_ssize_t ix,
-               PyObject *old_value)
+               NumbaObject *old_value)
 {
     NumbaObject *old_key;
     NumbaDictKeyEntry *ep;
@@ -814,14 +814,13 @@ Numba_dict_new(NumbaDictObject **res) {
 
 
 
-static
+static void
 dict_keys_dump(NumbaDictObject *mp)
 {
-    PyObject *v;
     Py_ssize_t i, j;
     NumbaDictKeyEntry *ep;
     Py_ssize_t size, n, offset;
-    PyObject **value_ptr;
+    NumbaObject **value_ptr;
 
     n = mp->ma_used;
 
@@ -845,7 +844,7 @@ dict_keys_dump(NumbaDictObject *mp)
             printf("  key=%p hash=%zu value=%p\n", key, hash, *value_ptr);
             j++;
         }
-        value_ptr = (PyObject **)(((char *)value_ptr) + offset);
+        value_ptr = (NumbaObject **)(((char *)value_ptr) + offset);
     }
     assert(j == n);
 }
@@ -871,18 +870,18 @@ test_dict() {
     NumbaDictObject* d;
     Status status = Numba_dict_new(&d);
 
-    NumbaObject *key = 0xdead, *value = 0xbeef;
+    NumbaObject *key = (NumbaObject *)0xdead, *value = (NumbaObject *)0xbeef;
     Py_hash_t hash = 0xcafe;
     status = insertdict(d, key, hash, value);
 
     dict_keys_dump(d);
 
-    key = 0xdeae; value = 0xbeed;
+    key = (NumbaObject *)0xdeae; value = (NumbaObject *)0xbeed;
     status = insertdict(d, key, hash, value);
 
     dict_keys_dump(d);
 
-    key = 0xdeaf; value = 0xbeee;
+    key = (NumbaObject *)0xdeaf; value = (NumbaObject *)0xbeee;
     status = insertdict(d, key, hash, value);
     dict_keys_dump(d);
 
@@ -892,7 +891,7 @@ test_dict() {
     printf("d->ma_values = %p\n", d->ma_values);
 
     NumbaObject *got_value = NULL;
-    key = 0xdead;
+    key = (NumbaObject *)0xdead;
     Py_ssize_t ix;
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
@@ -907,7 +906,7 @@ test_dict() {
     printf("ix = %zd got_value=%p\n", ix, got_value);
 
 
-    key = 0xdeae;
+    key = (NumbaObject *)0xdeae;
     ix = d->ma_keys->dk_lookup(d, key, hash, &got_value);
     printf("ix = %zd got_value=%p\n", ix, got_value);
 
