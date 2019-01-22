@@ -143,6 +143,9 @@ def as_dtype(nbtype):
         return as_dtype(nbtype.dtype)
     if isinstance(nbtype, types.NumberClass):
         return as_dtype(nbtype.dtype)
+    if isinstance(nbtype, types.NestedArray):
+        spec = (as_dtype(nbtype.dtype), tuple(nbtype.shape))
+        return np.dtype(spec)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
