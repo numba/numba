@@ -86,6 +86,13 @@ class Signature(object):
             return self
         sig = signature(self.return_type, *self.args[1:],
                         recvr=self.args[0])
+
+        # Adjust the python signature
+        params = list(self.pysig.parameters.values())[1:]
+        sig.pysig = utils.pySignature(
+            parameters=params,
+            return_annotation=self.pysig.return_annotation,
+        )
         return sig
 
     def as_function(self):
