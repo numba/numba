@@ -867,6 +867,7 @@ class TestHighLevelExtending(TestCase):
         self.assertIn("offending argument name is '**kws'", msg)
 
     def test_overload_method_kwargs(self):
+        # Issue #3489
         @overload_method(types.Array, 'foo')
         def fooimpl(arr, a_kwarg=10):
             def impl(arr, a_kwarg=10):
@@ -881,6 +882,22 @@ class TestHighLevelExtending(TestCase):
 
         self.assertEqual(bar(Z), (10, 20, 30))
 
+    def test_overload_method_literal_unpack(self):
+        # Issue #3683
+        @overload_method(types.Array, 'litfoo')
+        def litfoo(arr, val):
+            if val == types.unicode_type:
+                def impl(arr, val):
+                    return val
+                return impl
+
+        @njit
+        def bar(A):
+            return A.litfoo("LiTeRaL")
+
+        A = np.zeros(1)
+        bar(A)
+        self.assertEqual(bar(A), 'LiTeRaL')
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
