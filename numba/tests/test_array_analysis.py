@@ -26,7 +26,7 @@ skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
 
 # test class for #3700
 @jitclass([('L', types.int32), ('T', types.int32)])
-class ExampleClass3700():
+class ExampleClass3700(object):
     def __init__(self, n):
         self.L = n
         self.T = n + 1
