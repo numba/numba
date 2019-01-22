@@ -604,6 +604,17 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         return sig.return_type
 
 
+def _adjust_omitted_args(argtypes, argvals):
+    """Add dummy arguments for each missing types.Omitted in *argtypes*.
+    """
+    if len(argtypes) > len(argvals):
+        argvals = list(argvals)
+        for t in reversed(argtypes):
+            if isinstance(t, types.Omitted):
+                argvals.append(None)
+    return argvals
+
+
 class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     A base class of templates for @overload_method functions.
@@ -627,7 +638,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             call = context.get_function(disp_type, sig)
             # Link dependent library
             context.add_linking_libs(getattr(call, 'libs', ()))
-            return call(builder, args)
+            return call(builder, _adjust_omitted_args(sig.args, args))
 
     def _resolve(self, typ, attr):
         if self._attr != attr:

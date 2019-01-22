@@ -875,11 +875,11 @@ class TestHighLevelExtending(TestCase):
 
         @njit
         def bar(A):
-            print(A.foo())
+            return A.foo()
 
         Z = np.arange(5)
 
-        bar(Z)
+        self.assertEqual(bar(Z), 10)
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
