@@ -620,10 +620,14 @@ def unicode_getitem(s, idx):
                 slice_idx = _normalize_slice(slice_idx, len(s))
                 span = _slice_span(slice_idx)
                 ret = _empty_string(s._kind, span)
-                cur = slice_idx.start
-                for i in range(span):
-                    _set_code_point(ret, i, _get_code_point(s, cur))
-                    cur += slice_idx.step
+
+                if slice_idx.step == 1:
+                    _strncpy(ret, 0, s, slice_idx.start, span)
+                else:
+                    cur = slice_idx.start
+                    for i in range(span):
+                        _set_code_point(ret, i, _get_code_point(s, cur))
+                        cur += slice_idx.step
                 return ret
             return getitem_slice
 
