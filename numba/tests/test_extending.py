@@ -12,7 +12,7 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typing, compiler
+from numba import njit, jit, types, errors, typing, compiler
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
@@ -865,6 +865,22 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
         self.assertIn("offending argument name is '**kws'", msg)
+
+    def test_overload_method_kwargs(self):
+        @overload_method(types.Array, 'foo')
+        def fooimpl(arr, a_kwarg=10):
+            def impl(arr, a_kwarg=10):
+                return a_kwarg
+            return impl
+
+        @njit
+        def bar(A):
+            print(A.foo())
+
+        Z = np.arange(5)
+
+        bar(Z)
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
