@@ -1,9 +1,6 @@
 from __future__ import print_function
 
-import sys
 import random
-import multiprocessing
-
 import numpy as np
 
 from .support import TestCase, redirect_c_stdout
@@ -12,7 +9,6 @@ from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.unsafe.refcount import dump_refcount
 from numba.errors import TypingError
-
 
 
 class TestTupleIntrinsic(TestCase):
@@ -134,4 +130,3 @@ class TestRefCount(TestCase):
         tupty = types.Tuple.from_types([aryty] * 2)
         self.assertIn(pat.format(aryty), output)
         self.assertIn(pat.format(tupty), output)
-
