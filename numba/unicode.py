@@ -105,7 +105,6 @@ def constant_unicode(context, builder, typ, pyval):
     return make_string_from_constant(context, builder, typ, pyval)
 
 
-
 ### BOXING
 
 
