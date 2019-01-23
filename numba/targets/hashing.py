@@ -4,6 +4,7 @@ Hash implementations for Numba types
 from __future__ import print_function, absolute_import, division
 
 import math
+import numpy as np
 import sys
 
 import numpy as np
@@ -14,22 +15,38 @@ from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba import types
 
-# Constants from cPython source, obtained by various means:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h
-_PyHASH_INF = sys.hash_info.inf
-_PyHASH_NAN = sys.hash_info.nan
-_PyHASH_MODULUS = types.uint64(sys.hash_info.modulus)
-_PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
-_PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
-_PyHASH_IMAG = _PyHASH_MULTIPLIER
-_PyLong_SHIFT = sys.int_info.bits_per_digit
-_Py_HASH_CUTOFF = sys.hash_info.cutoff
-_Py_hashfunc_name = sys.hash_info.algorithm
+_py34_or_later = sys.version_info[:2] >= (3, 4)
 
-# This is Py_hash_t:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
-_hash_width = sys.hash_info.hash_bits
-_hash_return_type = getattr(types, 'int%s' % _hash_width)
+if _py34_or_later:
+    # Constants from cPython source, obtained by various means:
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h
+    _PyHASH_INF = sys.hash_info.inf
+    _PyHASH_NAN = sys.hash_info.nan
+    _PyHASH_MODULUS = types.uint64(sys.hash_info.modulus)
+    _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+    _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
+    _PyHASH_IMAG = _PyHASH_MULTIPLIER
+    _PyLong_SHIFT = sys.int_info.bits_per_digit
+    _Py_HASH_CUTOFF = sys.hash_info.cutoff
+    _Py_hashfunc_name = sys.hash_info.algorithm
+
+    # This is Py_hash_t:
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
+    _hash_width = sys.hash_info.hash_bits
+    _hash_return_type = getattr(types, 'int%s' % _hash_width)
+else:
+    # these are largely just copied in from python 3 as reasonable defaults
+    _PyHASH_INF = 314159
+    _PyHASH_NAN = 0
+    _PyHASH_MODULUS = types.uint64(2305843009213693951)
+    _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+    _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
+    _PyHASH_IMAG = _PyHASH_MULTIPLIER
+    _PyLong_SHIFT = 30
+    _Py_HASH_CUTOFF = 0
+    # set this as siphash24 for py27... TODO: implement py27 string first!
+    _Py_hashfunc_name = "siphash24"
+    _hash_return_type = types.long_
 
 # hash(obj) is implemented by calling obj.__hash__()
 
@@ -58,8 +75,8 @@ def process_return(val):
                           '_PyHASH_MODULUS': types.uint64,
                           '_PyHASH_BITS': types.int32})
 def _Py_HashDouble(v):
-    if not math.isfinite(v):
-        if (math.isinf(v)):
+    if not np.isfinite(v):
+        if (np.isinf(v)):
             if (v > 0):
                 return _PyHASH_INF
             else:
@@ -572,10 +589,10 @@ if _Py_hashfunc_name == 'siphash24':
         return t
 
 elif _Py_hashfunc_name == 'fnv':
-    raise Exception("need to write this")
+    raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
-    raise errors.UnsupportedError(msg)
+    raise ValueError(msg)
 
 # This is a translation of cPythons's _Py_HashBytes:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
@@ -583,7 +600,7 @@ else:
 def _Py_HashBytes(val, _len):
     debug_print(_len)
     if (_len == 0):
-        return 0
+        return process_return(0)
 
     if (_len < _Py_HASH_CUTOFF):
         # /* Optimize hashing of very small strings with inline DJBX33A. */
@@ -611,34 +628,13 @@ def unicode_hash(val):
     def impl(val):
         kindwidth = _kind_to_byte_width(val._kind)
         _len = len(val)
-
+        # use the cache if possible
         current_hash = val._hash
-        debug_print("Cached value for '", val, "' is", current_hash)
         if current_hash != -1:
-            debug_print(val, "returning with", current_hash)
             return current_hash
         else:
-            debug_print("taking compute hash branch")
-            # TODO cache handling
-            if _len == 0:
-                debug_print("len 0", val)
-                hashval = process_return(0)
-            else:
-                debug_print("taking siphash24 branch")
-                if _len < _Py_HASH_CUTOFF:
-                    tmp = types.uint64(
-                        _Py_HashBytes(
-                            val._data,
-                            kindwidth * _len))
-                    hashval = process_return(tmp)
-                else:
-                    tmp = _siphash24(types.uint64(_Py_HashSecret_siphash_k0),
-                                     types.uint64(_Py_HashSecret_siphash_k1),
-                                     val._data,
-                                     kindwidth * _len)
-                    hashval = process_return(tmp)
-                # cannot write hash value to cache in the unicode struct due to
-                # pass by value on the struct making the struct member immutable
-            return hashval
+            # cannot write hash value to cache in the unicode struct due to
+            # pass by value on the struct making the struct member immutable
+            return _Py_HashBytes(val._data, kindwidth * _len)
 
     return impl

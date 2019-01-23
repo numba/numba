@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Test hashing of various supported types.
 """
@@ -10,16 +11,16 @@ from collections import defaultdict
 import numpy as np
 
 from numba import jit, types, utils
-from numba.unicode import compile_time_get_string_data
 import numba.unittest_support as unittest
 from .support import TestCase, tag, CompilationCache
 
+if utils.IS_PY3:
+    from numba.unicode import compile_time_get_string_data
 
 def hash_usecase(x):
     return hash(x)
 
 
-@unittest.skipUnless(utils.IS_PY3, "hash tests are Python 3 only")
 class BaseTest(TestCase):
 
     def setUp(self):
@@ -30,7 +31,9 @@ class BaseTest(TestCase):
         for val in list(values):
             nb_hash = cfunc(val)
             self.assertIsInstance(nb_hash, utils.INT_TYPES)
-            self.assertEqual(nb_hash, hash(val))
+            # check the value only on python 3
+            if utils.IS_PY3:
+                self.assertEqual(nb_hash, hash(val))
 
     def int_samples(self, typ=np.int64):
         for start in (0, -50, 60000, 1 << 32):
@@ -200,7 +203,7 @@ class TestTupleHashing(BaseTest):
 
         self.check_tuples(self.int_samples(), split)
 
-
+@unittest.skipUnless(utils.IS_PY3, "unicode hash tests are Python 3 only")
 class TestUnicodeHashing(BaseTest):
     def check_hash(self, value):
         expected = hash(value)
