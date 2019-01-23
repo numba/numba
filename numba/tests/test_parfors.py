@@ -2027,6 +2027,18 @@ class TestPrange(TestPrangeBase):
                         "in non-deterministic or unintended results.")
         self.assertIn(expected_msg, str(warning_obj.message))
 
+    @skip_unsupported
+    def test_multiple_call_getattr_object(self):
+        def test_impl(n):
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.0)
+                B += f(n)
+
+            return B
+        self.prange_tester(test_impl, 1.0)
+
 
 @skip_parfors_unsupported
 @x86_only

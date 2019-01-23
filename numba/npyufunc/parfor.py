@@ -501,7 +501,6 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken):
     assignments = block.find_insts(ir.Assign)
     # For each assignment...
     for one_assign in assignments:
-        print("assign:", one_assign, "def_once:", def_once, "def_more:", def_more, "getattr_taken:", getattr_taken)
         # Get the LHS/target of the assignment.
         a_def = one_assign.target.name
         # Add variable to def sets.
@@ -517,7 +516,7 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken):
 
 def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken):
     '''Compute the set of variables defined exactly once in the given set of blocks
-       and using the given sets for storing which variables are defined once, more than
+       and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
     '''
     # For each block...
