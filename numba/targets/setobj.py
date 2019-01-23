@@ -496,13 +496,14 @@ class SetInstance(object):
             # calling convention.
 
             fnty = context.call_conv.get_function_type(resty, argtypes)
-            fn = builder.module.get_or_insert_function(
-                fnty, name='.set_hash_item',
+            mod = builder.module
+            fn = ir.Function(
+                mod, fnty, name=mod.get_unique_name('.set_hash_item'),
             )
             fn.linkage = 'internal'
             inner_builder = ir.IRBuilder(fn.append_basic_block())
             [inner_item] = context.call_conv.decode_arguments(
-                builder, argtypes, fn,
+                inner_builder, argtypes, fn,
             )
             # Call get_hash_value()
             h = get_hash_value(
