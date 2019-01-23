@@ -3729,7 +3729,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
 ir_utils.apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 
-def push_call_vars(blocks, saved_globals, saved_getattrs):
+def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
     """push call variables to right before their call site.
     assuming one global/getattr is created for each call site and control flow
     doesn't change it.
@@ -3753,11 +3753,11 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                             saved_getattrs[lhs.name] = stmt
                             block_defs.add(lhs.name)
 
-            if isinstance(stmt, Parfor):
+            if not nested and isinstance(stmt, Parfor):
                 for s in stmt.init_block.body:
                     process_assign(s)
                 pblocks = stmt.loop_body.copy()
-                push_call_vars(pblocks, saved_globals, saved_getattrs)
+                push_call_vars(pblocks, saved_globals, saved_getattrs, nested=True)
                 new_body.append(stmt)
                 continue
             else:
