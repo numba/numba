@@ -476,6 +476,55 @@ class SetInstance(object):
         h = get_hash_value(context, builder, self._ty.dtype, item)
         self._add_key(payload, item, h, do_resize)
 
+    def add_pyapi(self, pyapi, item, do_resize=True):
+        """A version of .add for use inside functions following Python calling
+        convention.
+        """
+        context = self._context
+        builder = self._builder
+
+        payload = self.payload
+        h = self._pyapi_get_hash_value(pyapi, context, builder, item)
+        self._add_key(payload, item, h, do_resize)
+
+    def _pyapi_get_hash_value(self, pyapi, context, builder, item):
+        """Python API compatible version of `get_hash_value()`.
+        """
+        def emit_wrapper(resty, argtypes):
+            # Because `get_hash_value()` could raise a nopython exception,
+            # we need to wrap it in a function that has nopython
+            # calling convention.
+
+            fnty = context.call_conv.get_function_type(resty, argtypes)
+            fn = builder.module.get_or_insert_function(
+                fnty, name='.set_hash_item',
+            )
+            fn.linkage = 'internal'
+            inner_builder = ir.IRBuilder(fn.append_basic_block())
+            [inner_item] = context.call_conv.decode_arguments(
+                builder, argtypes, fn,
+            )
+            # Call get_hash_value()
+            h = get_hash_value(
+                context, inner_builder, self._ty.dtype, inner_item,
+            )
+            context.call_conv.return_value(inner_builder, h)
+            return fn
+
+        argtypes = [self._ty.dtype]
+        resty = types.intp
+        fn = emit_wrapper(resty, argtypes)
+        # Call wrapper function
+        status, retval = context.call_conv.call_function(
+            builder, fn, resty, argtypes, [item],
+        )
+        # Handle return status
+        with builder.if_then(builder.not_(status.is_ok), likely=False):
+            # Raise nopython exception as a Python exception
+            context.call_conv.raise_error(builder, pyapi, status)
+            builder.ret(pyapi.get_null_object())
+        return retval
+
     def contains(self, item):
         context = self._context
         builder = self._builder
