@@ -58,8 +58,10 @@ def get_hash_value(context, builder, typ, value):
     """
     Compute the hash of the given value.
     """
-    sig = typing.signature(types.intp, typ)
-    fn = context.get_function(hash, sig)
+    typingctx = context.typing_context
+    fnty = typingctx.resolve_value_type(hash)
+    sig = fnty.get_call_type(typingctx, (typ,), {})
+    fn = context.get_function(fnty, sig)
     h = fn(builder, (value,))
     # Fixup reserved values
     is_ok = is_hash_used(context, builder, h)
