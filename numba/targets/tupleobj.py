@@ -131,7 +131,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.dtype, v)
               for v in pyval]
-    return ir.ArrayType(consts[0].type, len(consts))(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_array(builder, consts),
+    )
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
@@ -141,7 +143,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.types[i], v)
               for i, v in enumerate(pyval)]
-    return ir.Constant.literal_struct(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_struct(builder, consts),
+    )
 
 
 #------------------------------------------------------------------------------
@@ -188,6 +192,8 @@ def iternext_unituple(context, builder, sig, args, result):
                                        types.intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
+        if context.enable_nrt:
+            context.nrt.decref(builder, tupiterty.container.dtype, getitem_out)
         result.yield_(getitem_out)
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)

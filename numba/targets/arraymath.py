@@ -578,10 +578,10 @@ if numpy_version >= (1, 8):
             return
         isnan = get_isnan(a.dtype)
 
-        def nanmean_impl(arr):
+        def nanmean_impl(a):
             c = 0.0
             count = 0
-            for view in np.nditer(arr):
+            for view in np.nditer(a):
                 v = view.item()
                 if not isnan(v):
                     c += v.item()
@@ -597,14 +597,14 @@ if numpy_version >= (1, 8):
             return
         isnan = get_isnan(a.dtype)
 
-        def nanvar_impl(arr):
+        def nanvar_impl(a):
             # Compute the mean
-            m = np.nanmean(arr)
+            m = np.nanmean(a)
 
             # Compute the sum of square diffs
             ssd = 0.0
             count = 0
-            for view in np.nditer(arr):
+            for view in np.nditer(a):
                 v = view.item()
                 if not isnan(v):
                     val = (v.item() - m)
@@ -620,8 +620,8 @@ if numpy_version >= (1, 8):
         if not isinstance(a, types.Array):
             return
 
-        def nanstd_impl(arr):
-            return np.nanvar(arr) ** 0.5
+        def nanstd_impl(a):
+            return np.nanvar(a) ** 0.5
 
         return nanstd_impl
 
@@ -636,9 +636,9 @@ def np_nansum(a):
     zero = retty(0)
     isnan = get_isnan(a.dtype)
 
-    def nansum_impl(arr):
+    def nansum_impl(a):
         c = zero
-        for view in np.nditer(arr):
+        for view in np.nditer(a):
             v = view.item()
             if not isnan(v):
                 c += v
@@ -658,9 +658,9 @@ if numpy_version >= (1, 10):
         one = retty(1)
         isnan = get_isnan(a.dtype)
 
-        def nanprod_impl(arr):
+        def nanprod_impl(a):
             c = one
-            for view in np.nditer(arr):
+            for view in np.nditer(a):
                 v = view.item()
                 if not isnan(v):
                     c *= v
@@ -676,16 +676,16 @@ if numpy_version >= (1, 12):
 
         if isinstance(a.dtype, (types.Boolean, types.Integer)):
             # dtype cannot possibly contain NaN
-            return lambda arr: np.cumprod(arr)
+            return lambda a: np.cumprod(a)
         else:
             retty = a.dtype
             is_nan = get_isnan(retty)
             one = retty(1)
 
-            def nancumprod_impl(arr):
-                out = np.empty(arr.size, retty)
+            def nancumprod_impl(a):
+                out = np.empty(a.size, retty)
                 c = one
-                for idx, v in enumerate(arr.flat):
+                for idx, v in enumerate(a.flat):
                     if ~is_nan(v):
                         c *= v
                     out[idx] = c
@@ -700,16 +700,16 @@ if numpy_version >= (1, 12):
 
         if isinstance(a.dtype, (types.Boolean, types.Integer)):
             # dtype cannot possibly contain NaN
-            return lambda arr: np.cumsum(arr)
+            return lambda a: np.cumsum(a)
         else:
             retty = a.dtype
             is_nan = get_isnan(retty)
             zero = retty(0)
 
-            def nancumsum_impl(arr):
-                out = np.empty(arr.size, retty)
+            def nancumsum_impl(a):
+                out = np.empty(a.size, retty)
                 c = zero
-                for idx, v in enumerate(arr.flat):
+                for idx, v in enumerate(a.flat):
                     if ~is_nan(v):
                         c += v
                     out[idx] = c
@@ -922,10 +922,10 @@ def np_median(a):
     if not isinstance(a, types.Array):
         return
 
-    def median_impl(arry):
+    def median_impl(a):
         # np.median() works on the flattened array, and we need a temporary
         # workspace anyway
-        temp_arry = arry.flatten()
+        temp_arry = a.flatten()
         n = temp_arry.shape[0]
         return _median_inner(temp_arry, n)
 
@@ -1057,11 +1057,11 @@ if numpy_version >= (1, 9):
             return
         isnan = get_isnan(a.dtype)
 
-        def nanmedian_impl(arry):
+        def nanmedian_impl(a):
             # Create a temporary workspace with only non-NaN values
-            temp_arry = np.empty(arry.size, arry.dtype)
+            temp_arry = np.empty(a.size, a.dtype)
             n = 0
-            for view in np.nditer(arry):
+            for view in np.nditer(a):
                 v = view.item()
                 if not isnan(v):
                     temp_arry[n] = v
@@ -1266,9 +1266,9 @@ def _prepare_array(arr):
 @overload(_prepare_array)
 def _prepare_array_impl(arr):
     if arr in (None, types.none):
-        return lambda x: np.array(())
+        return lambda arr: np.array(())
     else:
-        return lambda x: _asarray(x).ravel()
+        return lambda arr: _asarray(arr).ravel()
 
 if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
     @overload(np.ediff1d)
@@ -1306,6 +1306,57 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
             return out
 
         return np_ediff1d_impl
+
+def _select_element(arr):
+    pass
+
+@overload(_select_element)
+def _select_element_impl(arr):
+    zerod = getattr(arr, 'ndim', None) == 0
+    if zerod:
+        def impl(arr):
+            x = np.array((1,), dtype=arr.dtype)
+            x[:] = arr
+            return x[0]
+        return impl
+    else:
+        def impl(arr):
+            return arr
+        return impl
+
+def _get_d(dx, x):
+    pass
+
+@overload(_get_d)
+def get_d_impl(x, dx):
+    if _is_nonelike(x):
+        def impl(x, dx):
+            return np.asarray(dx)
+    else:
+        def impl(x, dx):
+            return np.diff(np.asarray(x))
+    return impl
+
+@overload(np.trapz)
+def np_trapz(y, x=None, dx=1.0):
+
+    if isinstance(y, (types.Number, types.Boolean)):
+        raise TypingError('y cannot be a scalar')
+    elif isinstance(y, types.Array) and y.ndim == 0:
+        raise TypingError('y cannot be 0D')
+        # NumPy raises IndexError: list assignment index out of range
+
+    # inspired by:
+    # https://github.com/numpy/numpy/blob/7ee52003/numpy/lib/function_base.py#L4040-L4065
+    def impl(y, x=None, dx=1.0):
+        yarr = np.asarray(y)
+        d = _get_d(x, dx)
+        y_ave = (yarr[..., slice(1, None)] + yarr[..., slice(None, -1)]) / 2.0
+        ret = np.sum(d * y_ave, -1)
+        processed = _select_element(ret)
+        return processed
+
+    return impl
 
 @register_jitable
 def _np_vander(x, N, increasing, out):
@@ -1404,6 +1455,101 @@ def np_roll(a, shift):
         return np_roll_impl
 
 #----------------------------------------------------------------------------
+# Mathematical functions
+
+@register_jitable
+def np_interp_impl_inner(x, xp, fp, dtype):
+    x_arr = np.asarray(x)
+    xp_arr = np.asarray(xp)
+    fp_arr = np.asarray(fp)
+
+    if len(xp_arr) == 0:
+        raise ValueError('array of sample points is empty')
+
+    if len(xp_arr) != len(fp_arr):
+        raise ValueError('fp and xp are not of the same size.')
+
+    if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
+        msg = 'xp must be monotonically increasing'
+        raise ValueError(msg)
+        # note: NumPy docs suggest this is required but it is not
+        # checked for or enforced
+
+    if xp_arr.size == 1:
+        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
+    else:
+        out = np.empty(x_arr.shape, dtype=dtype)
+
+        # pre-cache slopes
+        slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
+
+        last_idx = 0
+
+        for i in range(x_arr.size):
+            if x_arr.flat[i] >= xp_arr[-1]:
+                out.flat[i] = fp_arr[-1]
+                last_idx = -1
+            elif x_arr.flat[i] <= xp_arr[0]:
+                out.flat[i] = fp_arr[0]
+                last_idx = 0
+            else:
+                if i == 0:
+                    idx = np.searchsorted(xp_arr[1:-1], x_arr.flat[i])
+                else:
+                    if x_arr.flat[i] > x_arr.flat[i - 1]:
+                        idx = np.searchsorted(xp_arr[last_idx - 1:-1],
+                                              x_arr.flat[i])
+                    elif x_arr.flat[i] == x_arr.flat[i - 1]:
+                        idx = last_idx
+                    else:
+                        idx = np.searchsorted(xp_arr[1:last_idx], x_arr.flat[i])
+
+                if x_arr.flat[i] == xp_arr[idx]:
+                    out.flat[i] = fp_arr[idx]
+                else:
+                    delta_x = x_arr.flat[i] - xp_arr[idx - 1]
+                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
+
+                # reduce subsequent search space
+                last_idx = idx
+
+        return out
+
+if numpy_version >= (1, 10):
+    # replicate behaviour change of 1.10+
+    @overload(np.interp)
+    def np_interp(x, xp, fp):
+
+        if hasattr(xp, 'ndim') and xp.ndim > 1:
+            raise TypingError('xp must be 1D')
+        if hasattr(fp, 'ndim') and fp.ndim > 1:
+            raise TypingError('fp must be 1D')
+
+        complex_dtype_msg = (
+            "Cannot cast array data from complex dtype to float64 dtype"
+        )
+
+        xp_dt = determine_dtype(xp)
+        if np.issubdtype(xp_dt, np.complexfloating):
+            raise TypingError(complex_dtype_msg)
+
+        fp_dt = determine_dtype(fp)
+        dtype = np.result_type(fp_dt, np.float64)
+
+        def np_interp_impl(x, xp, fp):
+            return np_interp_impl_inner(x, xp, fp, dtype)
+
+        def np_interp_scalar_impl(x, xp, fp):
+            return np_interp_impl_inner(x, xp, fp, dtype).flat[0]
+
+        if isinstance(x, types.Number):
+            if isinstance(x, types.Complex):
+                raise TypingError(complex_dtype_msg)
+            return np_interp_scalar_impl
+
+        return np_interp_impl
+
+#----------------------------------------------------------------------------
 # Statistics
 
 @register_jitable
@@ -1498,6 +1644,8 @@ def determine_dtype(array_like):
     array_like_dt = np.float64
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
+    elif isinstance(array_like, types.Number):
+        array_like_dt = as_dtype(array_like)
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
         for val in array_like:
@@ -2380,7 +2528,7 @@ def np_histogram(a, bins=10, range=None):
     else:
         # With a custom bins array, use a bisection search
 
-        def histogram_impl(a, bins, range=None):
+        def histogram_impl(a, bins=10, range=None):
             nbins = len(bins) - 1
             for i in _range(nbins):
                 # Note this also catches NaNs
@@ -2663,3 +2811,27 @@ def np_asarray(a, dtype=None):
                 return np.array(a, ty)
 
     return impl
+
+@overload(np.extract)
+def np_extract(condition, arr):
+
+    def np_extract_impl(condition, arr):
+        cond = np.asarray(condition).flatten()
+        a = np.asarray(arr)
+
+        if a.size == 0:
+            raise ValueError('Cannot extract from an empty array')
+
+        # the following looks odd but replicates NumPy...
+        if np.any(cond[a.size:]) and cond.size > a.size:
+            msg = 'condition shape inconsistent with arr shape'
+            raise ValueError(msg)
+            # NumPy raises IndexError: index 'm' is out of
+            # bounds for size 'n'
+
+        max_len = min(a.size, cond.size)
+        out = [a.flat[idx] for idx in range(max_len) if cond[idx]]
+
+        return np.array(out)
+
+    return np_extract_impl

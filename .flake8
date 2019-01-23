@@ -373,7 +373,6 @@ exclude =
     numba/typing/randomdecl.py
     numba/typing/setdecl.py
     numba/typing/npydecl.py
-    numba/typing/templates.py
     numba/typing/arraydecl.py
     numba/typing/context.py
     numba/typing/collections.py
