@@ -606,25 +606,25 @@ def _Py_HashBytes(val, _len):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/unicodeobject.c#L11635-L11663
 @overload_method(types.UnicodeType, '__hash__')
 def unicode_hash(val):
-    from numba.unicode import _kind_to_byte_width, _set_hash
+    from numba.unicode import _kind_to_byte_width
 
     def impl(val):
         kindwidth = _kind_to_byte_width(val._kind)
         _len = len(val)
 
         current_hash = val._hash
-        print("Cached value for '", val, "' is", current_hash)
+        debug_print("Cached value for '", val, "' is", current_hash)
         if current_hash != -1:
-            print(val, "returning with", current_hash)
+            debug_print(val, "returning with", current_hash)
             return current_hash
         else:
-            print("taking compute hash branch")
+            debug_print("taking compute hash branch")
             # TODO cache handling
             if _len == 0:
-                print("len 0", val)
+                debug_print("len 0", val)
                 hashval = process_return(0)
             else:
-                print("taking siphash24 branch")
+                debug_print("taking siphash24 branch")
                 if _len < _Py_HASH_CUTOFF:
                     tmp = types.uint64(
                         _Py_HashBytes(
@@ -637,10 +637,8 @@ def unicode_hash(val):
                                      val._data,
                                      kindwidth * _len)
                     hashval = process_return(tmp)
-            # write hash to string cache slot
-            print("Have computed hash as", hashval)
-            _set_hash(val, hashval)
-            print("New cached value for '", val, "' is", val._hash)
+                # cannot write hash value to cache in the unicode struct due to
+                # pass by value on the struct making the struct member immutable
             return hashval
 
     return impl

@@ -142,6 +142,10 @@ def box_unicode_str(typ, val, c):
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
     res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
+    # hash isn't needed now, just compute it so it ends up in the unicodeobject
+    # hash cache, cpython doesn't always do this, depends how a string was
+    # created it's safe, just burns the cycles required to hash on @box
+    c.pyapi.object_hash(res)
     c.context.nrt.decref(c.builder, typ, val)
     return res
 
@@ -308,15 +312,6 @@ def _kind_to_byte_width(kind):
     else:
         raise AssertionError("Unexpected unicode encoding encountered")
 
-@intrinsic
-def _set_hash(typingctx, a, val):
-    def details(context, builder, signature, args):
-        [a_val, hash_val] = args
-        proxy = cgutils.create_struct_proxy(types.unicode_type, kind='value')
-        proxy_inst = proxy(context, builder, value=a_val)
-        return context.get_dummy_value()
-    sig = types.void(types.unicode_type, types.intp)
-    return sig, details
 
 @njit
 def _cmp_region(a, a_offset, b, b_offset, n):

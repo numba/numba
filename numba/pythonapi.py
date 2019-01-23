@@ -1192,6 +1192,12 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
+    def object_hash(self, obj):
+        fnty = Type.function(self.py_hash_t, [self.pyobj,])
+        fname = "PyObject_Hash"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj,])
+
     def object_str(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_Str")

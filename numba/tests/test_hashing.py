@@ -224,6 +224,9 @@ class TestUnicodeHashing(BaseTest):
         for i in range(len(kind4_string)):
             self.check_hash_values([kind4_string[:i]])
 
+        empty_string = ""
+        self.check_hash_values(empty_string)
+
     def test_hash_passthrough(self):
         # no `hash` call made, this just checks that `._hash` is correctly
         # passed through from an already existing string
@@ -249,13 +252,7 @@ class TestUnicodeHashing(BaseTest):
         self.assertTrue(hash_value != -1)
         self.assertEqual(fn(kind1_string), (hash_value, hash_value))
 
-    @unittest.skip("Needs #3683 resolved")
-    def test_retrieve_hash_from_str_const(self):
-        @jit(nopython=True)
-        def fn():
-            strconst = "abcdefghijklmnopqrstuvwxyz"
-            print(strconst._hash)
-
+    @unittest.skip("Needs hash computation at const unpickling time")
     def test_hash_literal(self):
         # a strconst always seem to have an associated hash value so the hash
         # member of the returned value should contain the correct hash
@@ -268,21 +265,36 @@ class TestUnicodeHashing(BaseTest):
         self.assertEqual(tmp, (compile_time_get_string_data(val)[-1]))
 
     def test_hash_on_str_creation(self):
-        # new strings do not have a cached hash until hash() is called
-        def impl():
+        # In cPython some? new strings do not have a cached hash until hash() is
+        # called
+        def impl(do_hash):
             const1 = "aaaa"
             const2 = "眼眼眼眼"
             new = const1 + const2
-            print(new._hash)
-            hash(new)
-            print(new._hash)
+            if do_hash:
+                hash(new)
             return new
 
-        #expected = impl()
-        got = jit(nopython=True)(impl)()
-        #a = (compile_time_get_string_data(expected))
+        jitted = jit(nopython=True)(impl)
+
+        # do not compute the hash, cPython will have no cached hash, but Numba
+        # will
+        compute_hash = False
+        expected = impl(compute_hash)
+        got = jitted(compute_hash)
+        a = (compile_time_get_string_data(expected))
         b = (compile_time_get_string_data(got))
-        #self.assertEqual(a, b)
+        self.assertEqual(a[:-1], b[:-1])
+        self.assertTrue(a[-1] != b[-1])
+
+        # now with compute hash enabled, cPython will have a cached hash as will
+        # Numba
+        compute_hash = True
+        expected = impl(compute_hash)
+        got = jitted(compute_hash)
+        a = (compile_time_get_string_data(expected))
+        b = (compile_time_get_string_data(got))
+        self.assertEqual(a, b)
 
 
 if __name__ == "__main__":
