@@ -17,6 +17,7 @@ from .support import TestCase, tag, CompilationCache
 if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
 
+
 def hash_usecase(x):
     return hash(x)
 
@@ -202,6 +203,7 @@ class TestTupleHashing(BaseTest):
             return np.int64(a), np.float64(b * 0.0001)
 
         self.check_tuples(self.int_samples(), split)
+
 
 @unittest.skipUnless(utils.IS_PY3, "unicode hash tests are Python 3 only")
 class TestUnicodeHashing(BaseTest):

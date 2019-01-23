@@ -7,7 +7,6 @@ import math
 import numpy as np
 import sys
 
-import numpy as np
 import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
@@ -67,6 +66,8 @@ def process_return(val):
 
 # This is a translation of cPython's _Py_HashDouble:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129
+
+
 @register_jitable(locals={'x': types.uint64,
                           'y': types.uint64,
                           'm': types.float64,
@@ -126,6 +127,8 @@ def _fpext(tyctx, val):
 # This is a translation of cPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/longobject.c#L2934-L2989
+
+
 @register_jitable(locals={'x': types.uint64,
                           'p1': types.uint64,
                           'p2': types.uint64,
@@ -189,7 +192,6 @@ def _long_impl(val):
 @overload_method(types.Integer, '__hash__')
 @overload_method(types.Boolean, '__hash__')
 def int_hash(val):
-    signed = getattr(val, 'signed', False)
 
     # this is a bit involved due to the cPython repr of ints
     def impl(val):
@@ -224,6 +226,8 @@ def int_hash(val):
 
 # This is a translation of cPython's float_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/floatobject.c#L528-L532
+
+
 @overload_method(types.Float, '__hash__')
 def float_hash(val):
     if val.bitwidth == 64:
@@ -240,6 +244,8 @@ def float_hash(val):
 
 # This is a translation of cPython's complex_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/complexobject.c#L408-L428
+
+
 @overload_method(types.Complex, '__hash__')
 def complex_hash(val):
     def impl(val):
@@ -282,6 +288,8 @@ def _tuple_hash(tup):
 # achieved by essentially unrolling the loop over the members and inserting a
 # per-type hash function call for each member, and then simply computing the
 # hash value in an inlined/rolling fashion.
+
+
 @intrinsic
 def _tuple_hash_resolve(tyctx, val):
     def impl(cgctx, builder, signature, args):
@@ -292,7 +300,6 @@ def _tuple_hash_resolve(tyctx, val):
         lty = cgctx.get_value_type(signature.return_type)
         x = ir.Constant(lty, 0x345678)
         mult = ir.Constant(lty, _PyHASH_MULTIPLIER)
-        n = ir.Constant(lty, len(tupty))
         shift = ir.Constant(lty, 82520)
         tl = len(tupty)
         for i, packed in enumerate(zip(tupty.types, range(tl - 1, -1, -1))):
@@ -330,14 +337,14 @@ def tuple_hash(val):
 # String/bytes hashing needs hashseed info, this is from:
 # https://stackoverflow.com/a/41088757
 # with thanks to Martijn Pieters
-from ctypes import (
+from ctypes import (  # noqa
     c_size_t,
     c_ubyte,
     c_uint64,
     pythonapi,
     Structure,
     Union,
-)
+)  # noqa
 
 
 class FNV(Structure):
@@ -381,6 +388,7 @@ class _Py_HashSecret_t(Union):
         ('expat', EXPAT),
     ]
 
+
 # Only a few members are needed at present
 _Py_hashSecret = _Py_HashSecret_t.in_dll(pythonapi, '_Py_HashSecret')
 _Py_HashSecret_djbx33a = _Py_hashSecret.djbx33a
@@ -388,6 +396,7 @@ _Py_HashSecret_djbx33a_suffix = _Py_hashSecret.djbx33a.suffix
 _Py_HashSecret_siphash_k0 = _Py_hashSecret.siphash.k0
 _Py_HashSecret_siphash_k1 = _Py_hashSecret.siphash.k1
 # ------------------------------------------------------------------------------
+
 
 @intrinsic
 def grabbyte(typingctx, data, offset):
@@ -403,41 +412,41 @@ def grabbyte(typingctx, data, offset):
 
 
 if _Py_hashfunc_name == 'siphash24':
-# This is a translation of cPython's siphash24 function:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413
+    # This is a translation of cPython's siphash24 function:
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413
 
- # /* *********************************************************************
- # <MIT License>
- # Copyright (c) 2013  Marek Majkowski <marek@popcount.org>
+    # /* *********************************************************************
+    # <MIT License>
+    # Copyright (c) 2013  Marek Majkowski <marek@popcount.org>
 
- # Permission is hereby granted, free of charge, to any person obtaining a copy
- # of this software and associated documentation files (the "Software"), to deal
- # in the Software without restriction, including without limitation the rights
- # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- # copies of the Software, and to permit persons to whom the Software is
- # furnished to do so, subject to the following conditions:
+    # Permission is hereby granted, free of charge, to any person obtaining a copy
+    # of this software and associated documentation files (the "Software"), to deal
+    # in the Software without restriction, including without limitation the rights
+    # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    # copies of the Software, and to permit persons to whom the Software is
+    # furnished to do so, subject to the following conditions:
 
- # The above copyright notice and this permission notice shall be included in
- # all copies or substantial portions of the Software.
+    # The above copyright notice and this permission notice shall be included in
+    # all copies or substantial portions of the Software.
 
- # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- # AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- # THE SOFTWARE.
- # </MIT License>
+    # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    # AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    # THE SOFTWARE.
+    # </MIT License>
 
- # Original location:
+    # Original location:
     # https://github.com/majek/csiphash/
 
- # Solution inspired by code from:
+    # Solution inspired by code from:
     # Samuel Neves (supercop/crypto_auth/siphash24/little)
     #djb (supercop/crypto_auth/siphash24/little2)
     # Jean-Philippe Aumasson (https://131002.net/siphash/siphash24.c)
 
- # Modified for Python by Christian Heimes:
+    # Modified for Python by Christian Heimes:
     # - C89 / MSVC compatibility
     # - _rotl64() on Windows
     # - letoh64() fallback
@@ -517,8 +526,6 @@ if _Py_hashfunc_name == 'siphash24':
         v3 = k1 ^ types.uint64(0x7465646279746573)
         debug_print(v0, v1, v2, v3)
 
-        init_sz = src_sz
-
         idx = 0
         while (src_sz >= 8):
             mi = grab_uint64_t(src, idx)
@@ -596,6 +603,8 @@ else:
 
 # This is a translation of cPythons's _Py_HashBytes:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
+
+
 @register_jitable
 def _Py_HashBytes(val, _len):
     debug_print(_len)
@@ -621,6 +630,8 @@ def _Py_HashBytes(val, _len):
 
 # This is an approximate translation of cPython's unicode_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/unicodeobject.c#L11635-L11663
+
+
 @overload_method(types.UnicodeType, '__hash__')
 def unicode_hash(val):
     from numba.unicode import _kind_to_byte_width
