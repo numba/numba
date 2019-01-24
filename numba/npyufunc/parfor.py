@@ -493,7 +493,7 @@ def add_to_def_once_sets(a_def, def_once, def_more):
     else:
         def_once.add(a_def)
 
-def compute_def_once_block(block, def_once, def_more, getattr_taken):
+def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap):
     '''Effect changes to the set of variables defined once or more than once
        for a single block.
     '''
@@ -513,8 +513,23 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken):
             # Calling a method on an object is like a def of that object.
             base_obj = getattr_taken[rhs.func.name]
             add_to_def_once_sets(base_obj, def_once, def_more)
+        if isinstance(rhs, ir.Expr) and rhs.op == 'call':
+            # If a mutable object is passed to a function, then it may be changed and
+            # therefore can't be hoisted.
+            # For each argument to the function...
+            for argvar in rhs.args:
+                # Get the argument's type.
+                if isinstance(argvar, ir.Var):
+                    argvar = argvar.name
+                avtype = typemap[argvar]
+                # If that type doesn't have a mutable attribute or it does and it's set to
+                # not mutable then this usage is safe for hoisting.
+                if hasattr(avtype, 'mutable') and avtype.mutable:
+                    # Here we have a mutable variable passed to a function so add this variable
+                    # to the def lists.
+                    add_to_def_once_sets(argvar, def_once, def_more)
 
-def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken):
+def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap):
     '''Compute the set of variables defined exactly once in the given set of blocks
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
@@ -523,22 +538,22 @@ def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken):
     for label, block in loop_body.items():
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
         # based on the instructions in that block.
-        compute_def_once_block(block, def_once, def_more, getattr_taken)
+        compute_def_once_block(block, def_once, def_more, getattr_taken, typemap)
         # Have to recursively process parfors manually here.
         for inst in block.body:
             if isinstance(inst, parfor.Parfor):
                 # Recursively compute for the parfor's init block.
-                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken)
+                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken, typemap)
                 # Recursively compute for the parfor's loop body.
-                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken)
+                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken, typemap)
 
-def compute_def_once(loop_body):
+def compute_def_once(loop_body, typemap):
     '''Compute the set of variables defined exactly once in the given set of blocks.
     '''
     def_once = set()   # set to hold variables defined exactly once
     def_more = set()   # set to hold variables defined more than once
     getattr_taken = {}
-    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken)
+    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap)
     return def_once
 
 def find_vars(var, varset):
@@ -587,7 +602,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     not_hoisted = []
 
     # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body)
+    def_once = compute_def_once(loop_body, typemap)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
