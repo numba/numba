@@ -3,7 +3,7 @@ from __future__ import print_function
 import random
 import numpy as np
 
-from .support import TestCase, redirect_c_stdout
+from .support import TestCase, captured_stdout
 from numba import njit, types
 from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
@@ -120,10 +120,11 @@ class TestRefCount(TestCase):
             dump_refcount(a)
             dump_refcount(b)
 
-        with redirect_c_stdout() as stream:
+        # Capture output to sys.stdout
+        with captured_stdout() as stream:
             use_dump_refcount()
 
-        output = stream.read()
+        output = stream.getvalue()
         # Check that it printed
         pat = "dump refct of {}"
         aryty = types.float64[::1]

@@ -1,6 +1,7 @@
 """
 Helpers to see the refcount information of an object
 """
+from llvmlite import ir
 
 from numba import types
 from numba import cgutils
@@ -25,15 +26,25 @@ def dump_refcount(typingctx, obj):
             meminfos.extend(tmp_mis)
 
         if meminfos:
-            cgutils.printf(builder, "dump refct of {}".format(ty))
+            pyapi = context.get_python_api(builder)
+            gil_state = pyapi.gil_ensure()
+            pyapi.print_string("dump refct of {}".format(ty))
             for ty, mi in meminfos:
                 miptr = builder.bitcast(mi, _meminfo_struct_type.as_pointer())
                 refctptr = cgutils.gep_inbounds(builder, miptr, 0, 0)
                 refct = builder.load(refctptr)
-                cgutils.sprintf_stackbuffer(
-                    builder, 20, "| {} -> %zd".format(ty), refct,
+
+                pyapi.print_string(" | {} refct=".format(ty))
+                # "%zu" is not portable.  just truncate refcount to 32-bit.
+                # that's good enough for a debugging util.
+                refct_32bit = builder.trunc(refct, ir.IntType(32))
+                printed = cgutils.snprintf_stackbuffer(
+                    builder, 30, "%d".format(ty), refct_32bit,
                 )
-            cgutils.printf(builder, ";\n")
+                pyapi.sys_write_stdout(printed)
+
+            pyapi.print_string(";\n")
+            pyapi.gil_release(gil_state)
             return cgutils.true_bit
         else:
             return cgutils.false_bit
