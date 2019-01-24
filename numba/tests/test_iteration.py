@@ -53,6 +53,15 @@ def nested_enumerate_usecase():
         res = res * 2
     return res
 
+
+def enumerate_array_usecase():
+    res = 0
+    arrays = (np.ones(4), np.ones(5))
+    for i, v in enumerate(arrays):
+        res += v.sum()
+    return res
+
+
 def scalar_iter_usecase(iterable):
     res = 0.0
     for x in iterable:
@@ -119,6 +128,14 @@ class IterationTest(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_nested_enumerate_npm(self):
         self.test_nested_enumerate(flags=no_pyobj_flags)
+
+    def test_enumerate_refct(self):
+        # Test issue 3473
+        pyfunc = enumerate_array_usecase
+        cr = compile_isolated(pyfunc, ())
+        cfunc = cr.entry_point
+        expected = pyfunc()
+        self.assertPreciseEqual(cfunc(), expected)
 
     def run_array_1d(self, item_type, arg, flags):
         # Iteration over a 1d numpy array
