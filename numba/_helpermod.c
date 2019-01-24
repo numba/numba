@@ -171,7 +171,9 @@ build_npymath_exports_dict(void)
 /*
  * Helper to deal with flushing stdout
  */
-PyAPI_FUNC(void)
+PyAPI_FUNC(void) _numba_flush_stdout(void) ;
+
+void
 _numba_flush_stdout(void) {
   fflush(stdout);
 }
