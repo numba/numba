@@ -882,6 +882,7 @@ class TestHighLevelExtending(TestCase):
 
         self.assertEqual(bar(Z), (10, 20, 30))
 
+    @unittest.skipUnless(_IS_PY3, "unicode not supported in py2")
     def test_overload_method_literal_unpack(self):
         # Issue #3683
         @overload_method(types.Array, 'litfoo')
