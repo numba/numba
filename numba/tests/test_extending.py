@@ -17,6 +17,7 @@ from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
+from numba.errors import LoweringError
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -924,6 +925,45 @@ def run_caching_overload_method(q, cache_dir):
         _assert_cache_stats(cfunc, 1, 0)
 
 class TestIntrinsic(TestCase):
+    def test_void_return(self):
+        """
+        Verify that returning a None from codegen function is handled
+        automatically for void functions, otherwise raise exception.
+        """
+
+        @intrinsic
+        def void_func(typingctx, a):
+            sig = types.void(types.int32)
+            def codegen(context, builder, signature, args):
+                pass  # do nothing, return None, should be turned into 
+                      # dummy value
+
+            return sig, codegen
+
+        @intrinsic
+        def non_void_func(typingctx, a):
+            sig = types.int32(types.int32)
+            def codegen(context, builder, signature, args):
+                pass # oops, should be returning a value here, raise exception
+            return sig, codegen
+
+        @jit(nopython=True)
+        def call_void_func():
+            void_func(1)
+            return 0
+
+        @jit(nopython=True)
+        def call_non_void_func():
+            non_void_func(1)
+            return 0
+
+        # void func should work
+        self.assertEqual(call_void_func(), 0)
+        # not void function should raise exception
+        with self.assertRaises(LoweringError) as e:
+            call_non_void_func()
+        self.assertIn('non-void function returns None', e.exception.msg)
+
     def test_ll_pointer_cast(self):
         """
         Usecase test: custom reinterpret cast to turn int values to pointers
