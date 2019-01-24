@@ -1009,6 +1009,35 @@ def printf(builder, format, *args):
     return builder.call(fn, [ptr_fmt] + list(args))
 
 
+def sprintf(builder, buffer, format, *args):
+    """Calls sprintf(buffer, format, ...args)
+    """
+    assert isinstance(format, str)
+    mod = builder.module
+    # Make global constant for format string
+    cstring = voidptr_t
+    fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
+    global_fmt = global_constant(mod, "sprintf_format", fmt_bytes)
+    fnty = ir.FunctionType(int32_t, [cstring, cstring], var_arg=True)
+    # Insert printf()
+    try:
+        fn = mod.get_global('sprintf')
+    except KeyError:
+        fn = ir.Function(mod, fnty, name="sprintf")
+    # Call
+    ptr_fmt = builder.bitcast(global_fmt, cstring)
+    return builder.call(fn, [buffer, ptr_fmt] + list(args))
+
+def sprintf_stackbuffer(builder, bufsz, format, *args):
+    """Similar to `sprint()` but the buffer is stack allocated to size *bufsz*.
+    """
+    assert isinstance(bufsz, int)
+    spacety = ir.ArrayType(ir.IntType(8), bufsz)
+    space = alloca_once(builder, spacety, zfill=True)
+    buffer = builder.bitcast(space, voidptr_t)
+    return sprintf(builder, buffer, format, *args)
+
+
 if utils.PY3:
     def normalize_ir_text(text):
         """

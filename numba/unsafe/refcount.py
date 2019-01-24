@@ -30,7 +30,9 @@ def dump_refcount(typingctx, obj):
                 miptr = builder.bitcast(mi, _meminfo_struct_type.as_pointer())
                 refctptr = cgutils.gep_inbounds(builder, miptr, 0, 0)
                 refct = builder.load(refctptr)
-                cgutils.printf(builder, "| {} -> %zd".format(ty), refct)
+                cgutils.sprintf_stackbuffer(
+                    builder, 20, "| {} -> %zd".format(ty), refct,
+                )
             cgutils.printf(builder, ";\n")
             return cgutils.true_bit
         else:
