@@ -29,9 +29,9 @@ if _py34_or_later:
     _Py_HASH_CUTOFF = sys.hash_info.cutoff
     _Py_hashfunc_name = sys.hash_info.algorithm
 
-    # This is Py_hash_t:
+    # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
-    _hash_width = sys.hash_info.hash_bits
+    _hash_width = sys.hash_info.width
     _hash_return_type = getattr(types, 'int%s' % _hash_width)
 else:
     # these are largely just copied in from python 3 as reasonable defaults
@@ -45,7 +45,7 @@ else:
     _Py_HASH_CUTOFF = 0
     # set this as siphash24 for py27... TODO: implement py27 string first!
     _Py_hashfunc_name = "siphash24"
-    _hash_return_type = types.long_
+    _hash_return_type = types.intp
 
 # hash(obj) is implemented by calling obj.__hash__()
 
