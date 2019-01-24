@@ -17,35 +17,39 @@ from numba import types
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 if _py34_or_later:
+    # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
+    _hash_width = sys.hash_info.width
+    _Py_hash_t = getattr(types, 'int%s' % _hash_width)
+    _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
+
     # Constants from cPython source, obtained by various means:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h
     _PyHASH_INF = sys.hash_info.inf
     _PyHASH_NAN = sys.hash_info.nan
-    _PyHASH_MODULUS = types.uint64(sys.hash_info.modulus)
+    _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
     _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
     _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
     _PyHASH_IMAG = _PyHASH_MULTIPLIER
     _PyLong_SHIFT = sys.int_info.bits_per_digit
     _Py_HASH_CUTOFF = sys.hash_info.cutoff
     _Py_hashfunc_name = sys.hash_info.algorithm
-
-    # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
-    _hash_width = sys.hash_info.width
-    _hash_return_type = getattr(types, 'int%s' % _hash_width)
 else:
+    _hash_width = intp.bitwidth
+    _Py_hash_t = getattr(types, 'int%s' % _hash_width)
+    _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
+
     # these are largely just copied in from python 3 as reasonable defaults
     _PyHASH_INF = 314159
     _PyHASH_NAN = 0
-    _PyHASH_MODULUS = types.uint64(2305843009213693951)
     _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+    _PyHASH_MODULUS = _Py_uhash_t((1 << _PyHASH_BITS) - 1)
     _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
     _PyHASH_IMAG = _PyHASH_MULTIPLIER
     _PyLong_SHIFT = 30
     _Py_HASH_CUTOFF = 0
     # set this as siphash24 for py27... TODO: implement py27 string first!
     _Py_hashfunc_name = "siphash24"
-    _hash_return_type = types.intp
 
 # hash(obj) is implemented by calling obj.__hash__()
 
@@ -59,7 +63,7 @@ def hash_overload(obj):
 
 @register_jitable
 def process_return(val):
-    asint = _hash_return_type(val)
+    asint = _Py_hash_t(val)
     if (asint == int(-1)):
         asint = int(-2)
     return asint
@@ -68,13 +72,13 @@ def process_return(val):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129
 
 
-@register_jitable(locals={'x': types.uint64,
-                          'y': types.uint64,
-                          'm': types.float64,
+@register_jitable(locals={'x': _Py_uhash_t,
+                          'y': _Py_uhash_t,
+                          'm': types.double,
                           'e': types.intc,
                           'sign': types.intc,
-                          '_PyHASH_MODULUS': types.uint64,
-                          '_PyHASH_BITS': types.int32})
+                          '_PyHASH_MODULUS': _Py_uhash_t,
+                          '_PyHASH_BITS': types.intc})
 def _Py_HashDouble(v):
     if not np.isfinite(v):
         if (np.isinf(v)):
@@ -127,19 +131,19 @@ def _fpext(tyctx, val):
 # This is a translation of cPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/longobject.c#L2934-L2989
+# obdigit is a uint32_t which is typedef'd to digit
+# int32_t is typedef'd to sdigit
 
 
-@register_jitable(locals={'x': types.uint64,
-                          'p1': types.uint64,
-                          'p2': types.uint64,
-                          'p3': types.uint64,
-                          'p4': types.uint64,
-                          '_PyHASH_MODULUS': types.uint64,
+@register_jitable(locals={'x': _Py_uhash_t,
+                          'p1': _Py_uhash_t,
+                          'p2': _Py_uhash_t,
+                          'p3': _Py_uhash_t,
+                          'p4': _Py_uhash_t,
+                          '_PyHASH_MODULUS': _Py_uhash_t,
                           '_PyHASH_BITS': types.int32,
                           '_PyLong_SHIFT': types.int32,
-                          'ret': _hash_return_type,
-                          'tmp': types.uint64,
-                          'x.1': types.uint64})
+                          'x.1': _Py_uhash_t})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
@@ -185,7 +189,7 @@ def _long_impl(val):
             x -= _PyHASH_MODULUS
         if _DEBUG:
             print("end x", x)
-    return _hash_return_type(x)
+    return _Py_hash_t(x)
 
 
 # This has no cPython equivalent, cPython uses long_hash.
@@ -210,9 +214,9 @@ def int_hash(val):
                 if val == 0:
                     ret = 0
                 else:  # int64 min, -0x8000000000000000
-                    ret = _hash_return_type(-4)
+                    ret = _Py_hash_t(-4)
             else:
-                ret = _hash_return_type(val)
+                ret = _Py_hash_t(val)
         else:
             needs_negate = False
             if val < 0:
@@ -263,21 +267,21 @@ def complex_hash(val):
 
 # This is a translation of cPython's tuplehash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369
-@register_jitable(locals={'x': types.uint64,
-                          'y': types.int64,
-                          'mult': types.uint64,
-                          'l': types.int64, })
+@register_jitable(locals={'x': _Py_uhash_t,
+                          'y': _Py_hash_t,
+                          'mult': _Py_uhash_t,
+                          'l': _Py_hash_t, })
 def _tuple_hash(tup):
     tl = len(tup)
     mult = _PyHASH_MULTIPLIER
-    x = types.uint64(0x345678)
+    x = _Py_uhash_t(0x345678)
     # in C this is while(--l >= 0), i is indexing tup instead of *tup++
     for i, l in enumerate(range(tl - 1, -1, -1)):
         y = hash(tup[i])
         xxory = (x ^ y)
         x = xxory * mult
-        mult += _hash_return_type((types.uint64(82520) + l + l))
-    x += types.uint64(97531)
+        mult += _Py_hash_t((_Py_uhash_t(82520) + l + l))
+    x += _Py_uhash_t(97531)
     return process_return(x)
 
 # This is an obfuscated translation of cPython's tuplehash:
@@ -316,7 +320,7 @@ def _tuple_hash_resolve(tyctx, val):
             mult = builder.add(mult, lconst)
         x = builder.add(x, ir.Constant(lty, 97531))
         return x
-    sig = _hash_return_type(val)
+    sig = _Py_hash_t(val)
     return sig, impl
 
 
@@ -328,7 +332,7 @@ def tuple_hash(val):
         return impl
     else:
         def impl(val):
-            hashed = _hash_return_type(_tuple_hash_resolve(val))
+            hashed = _Py_hash_t(_tuple_hash_resolve(val))
             return process_return(hashed)
         return impl
 
@@ -605,7 +609,7 @@ else:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
 
 
-@register_jitable
+@register_jitable(locals={'_hash': _Py_uhash_t})
 def _Py_HashBytes(val, _len):
     debug_print(_len)
     if (_len == 0):
@@ -613,10 +617,10 @@ def _Py_HashBytes(val, _len):
 
     if (_len < _Py_HASH_CUTOFF):
         # /* Optimize hashing of very small strings with inline DJBX33A. */
-        _hash = types.int64(5381)  # /* DJBX33A starts with 5381 */
+        _hash = _Py_uhash_t(5381)  # /* DJBX33A starts with 5381 */
         for idx in range(_len):
             debug_print(grabbyte(val, idx))
-            _hash = ((_hash << 5) + _hash) + np.uint32(grabbyte(val, idx))
+            _hash = ((_hash << 5) + _hash) + np.uint8(grabbyte(val, idx))
 
         _hash ^= _len
         _hash ^= _Py_HashSecret_djbx33a_suffix

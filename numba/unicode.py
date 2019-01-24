@@ -26,7 +26,7 @@ from numba.pythonapi import (
     )
 from numba.targets import slicing
 from numba._helperlib import c_helpers
-from numba.targets.hashing import _hash_return_type
+from numba.targets.hashing import _Py_hash_t
 
 ### DATA MODEL
 
@@ -37,7 +37,7 @@ class UnicodeModel(models.StructModel):
             ('data', types.voidptr),
             ('length', types.intp),
             ('kind', types.int32),
-            ('hash', _hash_return_type),
+            ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
@@ -201,7 +201,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.kind = kind_val
         uni_str.length = length_val
         # empty string has hash value -1 to indicate "need to compute hash"
-        uni_str.hash = context.get_constant(_hash_return_type, -1)
+        uni_str.hash = context.get_constant(_Py_hash_t, -1)
         uni_str.data = context.nrt.meminfo_data(builder, uni_str.meminfo)
         # Set parent to NULL
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
