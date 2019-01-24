@@ -882,23 +882,25 @@ class TestHighLevelExtending(TestCase):
 
         self.assertEqual(bar(Z), (10, 20, 30))
 
-    @unittest.skipUnless(_IS_PY3, "unicode not supported in py2")
     def test_overload_method_literal_unpack(self):
         # Issue #3683
         @overload_method(types.Array, 'litfoo')
         def litfoo(arr, val):
-            if val == types.unicode_type:
-                def impl(arr, val):
-                    return val
-                return impl
+            # Must be an integer
+            if isinstance(val, types.Integer):
+                # Must not be literal
+                if not isinstance(val, types.Literal):
+                    def impl(arr, val):
+                        return val
+                    return impl
 
         @njit
         def bar(A):
-            return A.litfoo("LiTeRaL")
+            return A.litfoo(0xcafe)
 
         A = np.zeros(1)
         bar(A)
-        self.assertEqual(bar(A), 'LiTeRaL')
+        self.assertEqual(bar(A), 0xcafe)
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
