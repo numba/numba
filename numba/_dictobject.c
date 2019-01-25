@@ -863,7 +863,7 @@ void show_status(Status status) {
  *
  */
 #define D_MINSIZE 8
-#define D_MASK(d) ((d)->keys->size-1)
+#define D_MASK(dk) ((dk)->size-1)
 #define D_GROWTH_RATE(d) ((d)->used*3)
 
 
@@ -890,7 +890,7 @@ typedef struct {
 
 typedef struct {
     /* num of elements in the hashtable */
-    Py_ssize_t         used;
+    Py_ssize_t        used;
     NB_DictKeys      *keys;
 } NB_Dict;
 
@@ -1100,34 +1100,35 @@ For both, when the key isn't found a DKIX_EMPTY is returned.
 Py_ssize_t
 NB_Dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_bytes)
 {
-    size_t mask = D_MASK(d);
+    NB_DictKeys *dk = d->keys;
+    size_t mask = D_MASK(dk);
     size_t perturb = hash;
     size_t i = (size_t)hash & mask;
 
     while (1) {
-        Py_ssize_t ix = _get_index(d, i);
+        Py_ssize_t ix = _get_index(dk, i);
         printf("_get_index ix=%zd\n", ix);
         if (ix == DKIX_EMPTY) {
-            _zero_val(d, oldval_bytes);
+            _zero_val(dk, oldval_bytes);
             return ix;
         }
         if (ix >= 0) {
-            NB_DictEntry *ep = _get_entry(d, ix);
-            char startkey[d->val_size];
+            NB_DictEntry *ep = _get_entry(dk, ix);
+            char startkey[dk->val_size];
             if (ep->hash == hash) {
-                _copy_key(d, startkey, _entry_get_key(d, ep));
+                _copy_key(dk, startkey, _entry_get_key(dk, ep));
 
                 printf("startkey %s == key_bytes %s ", startkey, key_bytes);
-                int cmp = _key_equal(d, startkey, key_bytes);
+                int cmp = _key_equal(dk, startkey, key_bytes);
                 printf("cmp = %d\n", cmp);
                 if (cmp < 0) {
                     // error'ed in comparison
-                    memset(oldval_bytes, 0, d->val_size);
+                    memset(oldval_bytes, 0, dk->val_size);
                     return DKIX_ERROR;
                 }
                 if (cmp > 0) {
                     // key is equal; retrieve the value.
-                    _copy_val(d, oldval_bytes, _entry_get_val(d, ep));
+                    _copy_val(dk, oldval_bytes, _entry_get_val(dk, ep));
                     return ix;
                 }
 
@@ -1141,17 +1142,16 @@ NB_Dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_b
 
 
 Py_ssize_t
-_find_empty_slot(NB_Dict *d, Py_hash_t hash){
+_find_empty_slot(NB_DictKeys *dk, Py_hash_t hash){
+    assert(dk != NULL);
 
-    assert(d != NULL);
-
-    const size_t mask = D_MASK(d);
+    const size_t mask = D_MASK(dk);
     size_t i = hash & mask;
-    Py_ssize_t ix = _get_index(d, i);
+    Py_ssize_t ix = _get_index(dk, i);
     for (size_t perturb = hash; ix >= 0;) {
         perturb >>= PERTURB_SHIFT;
         i = (i*5 + perturb + 1) & mask;
-        ix = _get_index(d, i);
+        ix = _get_index(dk, i);
     }
     return i;
 }
@@ -1186,14 +1186,15 @@ _insertion_resize(NB_Dict *d) {
 
 int
 NB_Dict_insert(
-    NB_Dict *d,
-    const char* key_bytes,
-    Py_hash_t hash,
+    NB_Dict    *d,
+    const char *key_bytes,
+    Py_hash_t   hash,
     const char *val_bytes,
     char       *oldval_bytes
     )
 {
     puts("insert to dict");
+    NB_DictKeys *dk = d->keys;
 
     Py_ssize_t ix = NB_Dict_lookup(d, key_bytes, hash, oldval_bytes);
     if (ix == DKIX_ERROR) {
@@ -1205,29 +1206,29 @@ NB_Dict_insert(
 
     if (ix == DKIX_EMPTY) {
         /* Insert into new slot */
-        assert ( mem_cmp_zeros(oldval_bytes, d->val_size) == 0 );
-        if (d->usable <= 0) {
+        assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
+        if (dk->usable <= 0) {
             /* Need to resize */
             assert (0 && "insertion resize not implemented");
             goto Fail;
         }
-        Py_ssize_t hashpos = _find_empty_slot(d, hash);
-        NB_DictEntry *ep = _get_entry(d, d->nentries);
-        _set_index(d, hashpos, d->nentries);
-        _copy_val(d, _entry_get_key(d, ep), key_bytes);
+        Py_ssize_t hashpos = _find_empty_slot(dk, hash);
+        NB_DictEntry *ep = _get_entry(dk, dk->nentries);
+        _set_index(dk, hashpos, dk->nentries);
+        _copy_val(dk, _entry_get_key(dk, ep), key_bytes);
         ep->hash = hash;
-        _copy_val(d, _entry_get_val(d, ep), val_bytes);
+        _copy_val(dk, _entry_get_val(dk, ep), val_bytes);
 
         d->used += 1;
-        d->usable -= 1;
-        d->nentries += 1;
-        assert (d->usable >= 0);
+        dk->usable -= 1;
+        dk->nentries += 1;
+        assert (dk->usable >= 0);
         return OK;
     }
 
-    assert ( mem_cmp_zeros(oldval_bytes, d->val_size) != 0 && "lookup found previous entry");
+    assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) != 0 && "lookup found previous entry");
     // Replace the previous value
-    _copy_val(d, _entry_get_val(d, _get_entry(d, ix)), val_bytes);
+    _copy_val(dk, _entry_get_val(dk, _get_entry(dk, ix)), val_bytes);
 
     return OK;
 Fail:
@@ -1244,20 +1245,20 @@ test_dict() {
 
     status = NB_Dict_new(&d, D_MINSIZE, 4, 8);
     assert(status == OK);
-    assert(d->size == PyDict_MINSIZE);
-    assert(d->key_size == 4);
-    assert(d->val_size == 8);
-    assert(_index_size(d->size) == 1);
-    printf("_align(index_size * size) = %zd\n", _align(_index_size(d->size) * d->size));
+    assert(d->keys->size == PyDict_MINSIZE);
+    assert(d->keys->key_size == 4);
+    assert(d->keys->val_size == 8);
+    assert(_index_size(d->keys->size) == 1);
+    printf("_align(index_size * size) = %zd\n", _align(_index_size(d->keys->size) * d->keys->size));
 
     printf("d %p\n", d);
-    printf("d->usable = %zu\n", d->usable);
-    printf("d[0] 0x%zx\n", (char*)_get_entry(d, 0) - (char*)d);
-    assert ((char*)_get_entry(d, 0) - (char*)d->indices == d->entry_offset);
-    printf("d[1] 0x%zx\n", (char*)_get_entry(d, 1) - (char*)d);
-    assert ((char*)_get_entry(d, 1) - (char*)d->indices == d->entry_offset + d->entry_size);
+    printf("d->usable = %zu\n", d->keys->usable);
+    printf("d[0] 0x%zx\n", (char*)_get_entry(d->keys, 0) - (char*)d->keys);
+    assert ((char*)_get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
+    printf("d[1] 0x%zx\n", (char*)_get_entry(d->keys, 1) - (char*)d->keys);
+    assert ((char*)_get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
 
-    char got_value[d->val_size];
+    char got_value[d->keys->val_size];
     Py_ssize_t ix = NB_Dict_lookup(d, "bef", 0xbeef, got_value);
     printf("ix = %zd\n", ix);
     assert (ix == DKIX_EMPTY);
