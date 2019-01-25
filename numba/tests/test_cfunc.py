@@ -377,6 +377,7 @@ typedef struct _big_struct {
     int    i1;
     float  f2;
     double d3;
+    float  af4[9];
 } big_struct;
 
 typedef struct _error {
@@ -399,10 +400,15 @@ typedef double (*myfunc)(big_struct*, size_t);
         big_struct = ffi.typeof('big_struct')
         nbtype = cffi_support.map_type(big_struct, use_record_dtype=True)
         self.assertIsInstance(nbtype, types.Record)
-        self.assertEqual(len(nbtype), 3)
+        self.assertEqual(len(nbtype), 4)
         self.assertEqual(nbtype.typeof('i1'), types.int32)
         self.assertEqual(nbtype.typeof('f2'), types.float32)
         self.assertEqual(nbtype.typeof('d3'), types.float64)
+        self.assertEqual(
+            nbtype.typeof('af4'),
+            types.NestedArray(dtype=types.float32, shape=(9,)),
+        )
+
         # Check function typedef
         myfunc = ffi.typeof('myfunc')
         sig = cffi_support.map_type(myfunc, use_record_dtype=True)
@@ -423,6 +429,7 @@ typedef double (*myfunc)(big_struct*, size_t);
             for i in range(base.size):
                 elem = base[i]
                 tmp += elem.i1 * elem.f2 / elem.d3
+                tmp += base[i].af4.sum()
             return tmp
 
         @cfunc(sig)
@@ -437,6 +444,8 @@ typedef double (*myfunc)(big_struct*, size_t);
             ptr[i].i1 = i * 123
             ptr[i].f2 = i * 213
             ptr[i].d3 = (1 + i) * 213
+            for j in range(9):
+                ptr[i].af4[j] = i * 10 + j
 
         # Address of my data
         addr = int(ffi.cast('size_t', ptr))

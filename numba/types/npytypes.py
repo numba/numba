@@ -4,6 +4,8 @@ import collections
 
 import numpy as np
 
+from llvmlite import ir
+
 from .abstract import *
 from .common import *
 from ..typeconv import Conversion
@@ -70,11 +72,13 @@ class Record(Type):
         ctx = cpu_target.target_context
         offset = 0
         fields = []
+        lltypes = []
         for k, ty in name_types:
-            if not isinstance(ty, Number):
-                msg = "invalid type specified: {}.  Only support Number."
+            if not isinstance(ty, (Number, NestedArray)):
+                msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
             datatype = ctx.get_data_type(ty)
+            lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
             # align
@@ -83,7 +87,9 @@ class Record(Type):
                 offset += size - misaligned
             fields.append((k, {'type': ty, 'offset': offset}))
             offset += size
-        return Record(fields, size=offset, aligned=True)
+        # Adjust sizeof structure
+        abi_size = ctx.get_abi_sizeof(ir.LiteralStructType(lltypes))
+        return Record(fields, size=abi_size, aligned=True)
 
     def __init__(self, fields, size, aligned):
         fields = self._normalize_fields(fields)

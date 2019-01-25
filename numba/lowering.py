@@ -698,6 +698,18 @@ class Lower(BaseLower):
         else:
             res = self._lower_call_normal(fnty, expr, signature)
 
+        # If lowering the call returned None, interpret that as returning dummy
+        # value if the return type of the function is void, otherwise there is
+        # a problem
+        if res is None:
+            if signature.return_type == types.void:
+                res = self.context.get_dummy_value()
+            else:
+                raise LoweringError(
+                    msg="non-void function returns None from implementation",
+                    loc=self.loc
+                )
+
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 

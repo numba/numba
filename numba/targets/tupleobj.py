@@ -192,6 +192,8 @@ def iternext_unituple(context, builder, sig, args, result):
                                        types.intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
+        # As a iternext_impl function, this will incref the yieled value.
+        # We need to release the new reference from getitem_unituple.
         if context.enable_nrt:
             context.nrt.decref(builder, tupiterty.container.dtype, getitem_out)
         result.yield_(getitem_out)
