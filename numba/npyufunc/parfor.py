@@ -660,6 +660,21 @@ def redarraytype_to_sig(redarraytyp):
     assert isinstance(redarraytyp, types.npytypes.Array)
     return types.npytypes.Array(redarraytyp.dtype, max(1, redarraytyp.ndim - 1), redarraytyp.layout)
 
+def legalize_names_with_typemap(names, typemap):
+    """ We use ir_utils.legalize_names to replace internal IR variables that have things like
+        periods in them that aren't legal parameter names and we replace those with things like
+        underscores which are legal.  The original variable names are in the typemap so we
+        need to add the legalized name to the typemap as well.
+    """
+    outdict = legalize_names(names)
+    # For each pair in the dict of legalized names...
+    for x,y in outdict.items():
+        # If the name had some legalization change to it...
+        if x != y:
+            # Set the type of the new name the same as the type of the old name.
+            typemap[y] = typemap[x]
+    return outdict
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -752,7 +767,7 @@ def _create_gufunc_for_parfor_body(
 
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
-    param_dict = legalize_names(parfor_params + parfor_redvars)
+    param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
     if config.DEBUG_ARRAY_OPT == 1:
         print(
             "param_dict = ",
@@ -763,7 +778,7 @@ def _create_gufunc_for_parfor_body(
 
     # Some loop_indices are not legal parameter names so create a dict of potentially illegal
     # loop index to guaranteed legal name.
-    ind_dict = legalize_names(loop_indices)
+    ind_dict = legalize_names_with_typemap(loop_indices, typemap)
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
     if config.DEBUG_ARRAY_OPT == 1:
