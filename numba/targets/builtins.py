@@ -465,10 +465,3 @@ def indval_max(indval1, indval2):
                 return indval2
             return indval1
         return max_impl
-
-@overload(operator.ne)
-def number_operator_ne(a, b):
-    if isinstance(a, types.Number) and isinstance(b, types.Number):
-        def ne_impl(a, b):
-            return not (a == b)
-        return ne_impl

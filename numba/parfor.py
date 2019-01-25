@@ -41,7 +41,6 @@ from numba.ir_utils import (
     get_np_ufunc_typ,
     mk_range_block,
     mk_loop_header,
-    find_op_typ,
     get_name_var_table,
     replace_vars,
     replace_vars_inner,
@@ -2537,13 +2536,13 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = find_op_typ(op, [el_typ1, el_typ2])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
-                func_typ = find_op_typ(op, [el_typ1])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
             calltypes[ir_expr] = func_typ
             el_typ = func_typ.return_type
