@@ -1349,6 +1349,57 @@ NB_Dict_dump_keys(NB_Dict *d) {
 }
 
 
+/*
+Adapted from CPython lookdict_index().
+
+Search index of hash table from offset of entry table
+*/
+static Py_ssize_t
+_lookdict_index(NB_DictKeys *dk, Py_hash_t hash, Py_ssize_t index)
+{
+    size_t mask = D_MASK(dk);
+    size_t perturb = (size_t)hash;
+    size_t i = (size_t)hash & mask;
+
+    for (;;) {
+        Py_ssize_t ix = _get_index(dk, i);
+        if (ix == index) {
+            return i;
+        }
+        if (ix == DKIX_EMPTY) {
+            return DKIX_EMPTY;
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = mask & (i*5 + perturb + 1);
+    }
+    assert(0 && "unreachable");
+}
+
+/*
+    Adapted from CPython delitem_common
+ */
+int
+NB_Dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
+{
+    NB_DictEntry *ep;
+    NB_DictKeys *dk = d->keys;
+    char oldkey_bytes[dk->key_size];
+
+    Py_ssize_t hashpos = _lookdict_index(dk, hash, ix);
+    assert(hashpos >= 0);
+
+    d->used -= 1;
+    ep = _get_entry(dk, ix);
+    _set_index(dk, hashpos, DKIX_DUMMY);
+
+    _copy_key(dk, oldkey_bytes, _entry_get_key(dk, ep));
+    _zero_key(dk, _entry_get_key(dk, ep));
+    _zero_val(dk, _entry_get_val(dk, ep));
+    ep->hash = -1; // to mark it as empty;
+
+    return OK;
+}
+
 NUMBA_EXPORT_FUNC(void)
 test_dict() {
     puts("test_dict");
@@ -1423,29 +1474,41 @@ test_dict() {
 
     // Make sure everything are still in there
     ix = NB_Dict_lookup(d, "bef", 0xbeef, got_value);
-    assert (status == OK);
+    assert (ix >= 0);
     assert (memcpy(got_value, "7654321", d->keys->val_size));
 
     ix = NB_Dict_lookup(d, "beg", 0xbeef, got_value);
-    assert (status == OK);
+    assert (ix >= 0);
     assert (memcpy(got_value, "1234567", d->keys->val_size));
 
-    ix = NB_Dict_lookup(d, "beh", 0xbeef, got_value);
-    assert (status == OK);
+    ix = NB_Dict_lookup(d, "beh", 0xcafe, got_value);
+    printf("ix = %zd\n", ix);
+    assert (ix >= 0);
     assert (memcpy(got_value, "1234569", d->keys->val_size));
 
     ix = NB_Dict_lookup(d, "bei", 0xcafe, got_value);
-    assert (status == OK);
+    assert (ix >= 0);
     assert (memcpy(got_value, "0_0_0_1", d->keys->val_size));
 
     ix = NB_Dict_lookup(d, "bej", 0xcafe, got_value);
-    assert (status == OK);
+    assert (ix >= 0);
     assert (memcpy(got_value, "0_0_0_2", d->keys->val_size));
 
     ix = NB_Dict_lookup(d, "bek", 0xcafe, got_value);
-    assert (status == OK);
+    assert (ix >= 0);
     assert (memcpy(got_value, "0_0_0_3", d->keys->val_size));
 
+    // Test delete
+    ix = NB_Dict_lookup(d, "beg", 0xbeef, got_value);
+    status = NB_Dict_delitem(d, 0xbeef, ix, got_value);
+    assert (status == OK);
 
+    ix = NB_Dict_lookup(d, "beg", 0xbeef, got_value);
+    assert (ix == DKIX_EMPTY); // not found
+
+    ix = NB_Dict_lookup(d, "bef", 0xbeef, got_value);
+    assert (ix >= 0);
+    ix = NB_Dict_lookup(d, "beh", 0xcafe, got_value);
+    assert (ix >= 0);
 
 }
