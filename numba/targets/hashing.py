@@ -35,7 +35,7 @@ if _py34_or_later:
     _Py_HASH_CUTOFF = sys.hash_info.cutoff
     _Py_hashfunc_name = sys.hash_info.algorithm
 else:
-    _hash_width = intp.bitwidth
+    _hash_width = types.intp.bitwidth
     _Py_hash_t = getattr(types, 'int%s' % _hash_width)
     _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
 
