@@ -919,6 +919,7 @@ _get_index(NB_DictKeys *dk, Py_ssize_t i)
 
     if (s <= 0xff) {
         int8_t *indices = (int8_t*)(dk->indices);
+        assert (i < dk->size);
         ix = indices[i];
     }
     else if (s <= 0xffff) {
@@ -993,7 +994,8 @@ NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssiz
     dk->entry_size = entry_size;
 
     memset(dk->indices, 0xff, entry_offset);
-    memset(dk->indices + entry_offset, 0, entry_size * size);
+    /* Ensure hash is (-1) for empty */
+    memset(dk->indices + entry_offset, 0xff, entry_size * size);
 
     *out = dk;
     return OK;
@@ -1026,6 +1028,7 @@ NB_Dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_
 
 NB_DictEntry*
 _get_entry(NB_DictKeys *dk, Py_ssize_t idx) {
+    assert (idx < dk->size);
     Py_ssize_t offset = idx * dk->entry_size;
     char *ptr = dk->indices + dk->entry_offset + offset;
     return (NB_DictEntry*)ptr;
@@ -1107,7 +1110,6 @@ NB_Dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_b
 
     while (1) {
         Py_ssize_t ix = _get_index(dk, i);
-        printf("_get_index ix=%zd\n", ix);
         if (ix == DKIX_EMPTY) {
             _zero_val(dk, oldval_bytes);
             return ix;
@@ -1157,30 +1159,113 @@ _find_empty_slot(NB_DictKeys *dk, Py_hash_t hash){
 }
 
 
-// int
-// NB_Dict_resize(NB_Dict *d, Py_ssize_t newsize) {
-//     Py_ssize_t newsize, numentries;
-//     NB_DictEntry *oldentries, *newentries;
+/*
+Adapted from build_indices()
+*/
+void
+_build_indices(NB_DictKeys *keys, Py_ssize_t n) {
+    size_t mask = (size_t)D_MASK(keys);
+    for (Py_ssize_t ix = 0; ix != n; ix++) {
+        Py_hash_t hash = _get_entry(keys, ix)->hash;
+        size_t i = hash & mask;
+        for (size_t perturb = hash; _get_index(keys, i) != DKIX_EMPTY;) {
+            perturb >>= PERTURB_SHIFT;
+            i = mask & (i*5 + perturb + 1);
+        }
+        _set_index(keys, i, ix);
+    }
 
-//     puts("Resize");
+}
 
-//     /* Find the smallest table size > minused. */
-//     for (newsize = D_MINSIZE;
-//          newsize < minsize && newsize > 0;
-//          newsize <<= 1)
-//         ;
+/*
 
-//     if (newsize <= 0) {
-//         return ERR_NO_MEMORY;
-//     }
+Adapted from CPython dictresize().
 
-//     assert(0);
-// }
+Restructure the table by allocating a new table and reinserting all
+items again.  When entries have been deleted, the new table may
+actually be smaller than the old one.
+If a table is split (its keys and hashes are shared, its values are not),
+then the values are temporarily copied into the table, it is resized as
+a combined table, then the me_value slots in the old table are NULLed out.
+After resizing a table is always combined,
+but can be resplit by make_keys_shared().
+*/
+int
+NB_Dict_resize(NB_Dict *d, Py_ssize_t minsize) {
+    Py_ssize_t newsize, numentries;
+    NB_DictKeys *oldkeys;
+
+    puts("Resize");
+
+    /* Find the smallest table size > minused. */
+    for (newsize = D_MINSIZE;
+         newsize < minsize && newsize > 0;
+         newsize <<= 1)
+        ;
+
+    if (newsize <= 0) {
+        return ERR_NO_MEMORY;
+    }
+    oldkeys = d->keys;
+
+    /* NOTE: Current odict checks mp->ma_keys to detect resize happen.
+     * So we can't reuse oldkeys even if oldkeys->dk_size == newsize.
+     * TODO: Try reusing oldkeys when reimplement odict.
+     */
+
+    /* Allocate a new table. */
+    int status = NB_DictKeys_new(
+        &d->keys, newsize, oldkeys->key_size, oldkeys->val_size
+    );
+    if (status != OK) {
+        d->keys = oldkeys;
+        return status;
+    }
+    // New table must be large enough.
+    assert(d->keys->usable >= d->used);
+
+    numentries = d->used;
+
+    if (oldkeys->nentries == numentries) {
+        puts("JUST COPY");
+        NB_DictEntry *oldentries, *newentries;
+
+        oldentries = _get_entry(oldkeys, 0);
+        newentries = _get_entry(d->keys, 0);
+        memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
+    }
+    else {
+        puts("WALK IT");
+        NB_DictEntry *ep;
+        for (Py_ssize_t i=0; i<numentries; ++i) {
+
+            /*
+                ep->hash == (-1) hash means it is empty
+
+                Here, we skip until a non empty entry is encountered.
+            */
+            ep = _get_entry(oldkeys, i);
+            while( ep->hash == -1 ) {
+                assert( mem_cmp_zeros(_entry_get_val(oldkeys, ep), oldkeys->val_size) == 0 );
+                i += 1;
+                ep = _get_entry(oldkeys, i);
+            }
+
+            memcpy(_get_entry(d->keys, i), ep, oldkeys->entry_size);
+        }
+
+    }
+    NB_DictKeys_free(oldkeys);
+
+    _build_indices(d->keys, numentries);
+    d->keys->usable = numentries;
+    d->keys->nentries = numentries;
+    return OK;
+}
 
 int
 _insertion_resize(NB_Dict *d) {
-    assert (0);
-    // return NB_Dict_resize(d, D_GROWTH_RATE(d));
+    return NB_Dict_resize(d, D_GROWTH_RATE(d));
 }
 
 
@@ -1198,7 +1283,7 @@ NB_Dict_insert(
 
     Py_ssize_t ix = NB_Dict_lookup(d, key_bytes, hash, oldval_bytes);
     if (ix == DKIX_ERROR) {
-        assert (0); // exception in key comparision in lookup.
+        // exception in key comparision in lookup.
         goto Fail;
     }
 
@@ -1209,13 +1294,16 @@ NB_Dict_insert(
         assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
         if (dk->usable <= 0) {
             /* Need to resize */
-            assert (0 && "insertion resize not implemented");
-            goto Fail;
+            if (_insertion_resize(d) != OK)
+                goto Fail;
+            else
+                dk = d->keys;     // reload
         }
         Py_ssize_t hashpos = _find_empty_slot(dk, hash);
         NB_DictEntry *ep = _get_entry(dk, dk->nentries);
         _set_index(dk, hashpos, dk->nentries);
         _copy_val(dk, _entry_get_key(dk, ep), key_bytes);
+        assert ( hash != -1 );
         ep->hash = hash;
         _copy_val(dk, _entry_get_val(dk, ep), val_bytes);
 
@@ -1233,6 +1321,31 @@ NB_Dict_insert(
     return OK;
 Fail:
     return ERR_NO_MEMORY;
+}
+
+
+
+void
+NB_Dict_dump_keys(NB_Dict *d) {
+    Py_ssize_t i, j;
+    Py_ssize_t size, n;
+    NB_DictEntry *ep;
+    NB_DictKeys *dk = d->keys;
+
+    n = d->used;
+    size = dk->nentries;
+
+    printf("Key dump\n");
+
+    for (i = 0, j = 0; i < size; i++) {
+        ep = _get_entry(dk, i);
+        if (ep->hash != -1) {
+            printf("  key=%s hash=%zu value=%s\n", _entry_get_key(dk, ep), ep->hash, _entry_get_val(dk, ep));
+            j++;
+        }
+    }
+    printf("j = %zd; n = %zd\n", j, n);
+    assert(j == n);
 }
 
 
@@ -1304,6 +1417,35 @@ test_dict() {
     status = NB_Dict_insert(d, "bek", 0xcafe, "0_0_0_3", got_value);
     assert (status == OK);
     assert (d->used == 6);
+
+    // Dump
+    NB_Dict_dump_keys(d);
+
+    // Make sure everything are still in there
+    ix = NB_Dict_lookup(d, "bef", 0xbeef, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "7654321", d->keys->val_size));
+
+    ix = NB_Dict_lookup(d, "beg", 0xbeef, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "1234567", d->keys->val_size));
+
+    ix = NB_Dict_lookup(d, "beh", 0xbeef, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "1234569", d->keys->val_size));
+
+    ix = NB_Dict_lookup(d, "bei", 0xcafe, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "0_0_0_1", d->keys->val_size));
+
+    ix = NB_Dict_lookup(d, "bej", 0xcafe, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "0_0_0_2", d->keys->val_size));
+
+    ix = NB_Dict_lookup(d, "bek", 0xcafe, got_value);
+    assert (status == OK);
+    assert (memcpy(got_value, "0_0_0_3", d->keys->val_size));
+
 
 
 }
