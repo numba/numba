@@ -46,7 +46,7 @@ else:
     _PyHASH_MODULUS = _Py_uhash_t((1 << _PyHASH_BITS) - 1)
     _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
     _PyHASH_IMAG = _PyHASH_MULTIPLIER
-    _PyLong_SHIFT = 30
+    _PyLong_SHIFT = 30 if types.intp.bitwidth == 64 else 15
     _Py_HASH_CUTOFF = 0
     # set this as siphash24 for py27... TODO: implement py27 string first!
     _Py_hashfunc_name = "siphash24"
@@ -150,23 +150,24 @@ def _long_impl(val):
     # chunks in an unsigned hash wide type, max numba can handle is a 64bit int
     # TODO: work out 32bit variant
 
-    # mask to select low 30 bits
-    mask30 = (~types.uint32(0x0)) >> 0x2
+    # mask to select low _PyLong_SHIFT bits
+    _tmp_shift = 32 - _PyLong_SHIFT
+    mask_shift = (~types.uint32(0x0)) >> _tmp_shift
 
     _DEBUG = False
     if _DEBUG:
+        # shows the first 3 blocks of the py long repr
         obdigits = np.zeros((3,), dtype=np.uint32)
         print(val)
-        print(val >> 0)
-        print(val & mask30)
-        obdigits[0] = types.uint32((val >> 0) & mask30)
-        obdigits[1] = types.uint32((val >> 30) & mask30)
-        obdigits[2] = types.uint32((val >> 60) & mask30)
+        obdigits[0] = types.uint32((val >> 0) & mask_shift)
+        obdigits[1] = types.uint32((val >> _PyLong_SHIFT) & mask_shift)
+        obdigits[2] = types.uint32((val >> (2 * _PyLong_SHIFT)) & mask_shift)
         for i, x in enumerate(obdigits):
             print(i, x)
 
-    # a 64bit wide max means Numba only needs 3 x 30 bit values max
-    i = 3
+    # a 64bit wide max means Numba only needs 3 x 30 bit values max,
+    # or 5 x 15 bit values max on 32bit platforms
+    i = (64 // _PyLong_SHIFT) + 1
 
     # alg as per hash_long
     x = 0
@@ -180,7 +181,7 @@ def _long_impl(val):
             print(p1, p2, p3, p4)
             print("bitshift", x)
         # the shift and mask splits out the `ob_digit` parts of a Long repr
-        x += types.uint32((val >> idx * 30) & mask30)
+        x += types.uint32((val >> idx * _PyLong_SHIFT) & mask_shift)
         if _DEBUG:
             print("add x", x)
         if x >= _PyHASH_MODULUS:
@@ -518,7 +519,9 @@ if _Py_hashfunc_name == 'siphash24':
                               'mi': types.uint64,
                               'tmp': types.Array(types.uint64, 1, 'C'),
                               't': types.uint64,
-                              'mask': types.uint64},)
+                              'mask': types.uint64,
+                              'jmp': types.uint64,
+                              'ohexefef': types.uint64})
     def _siphash24(k0, k1, src, src_sz):
         debug_print("k0=", k0)
         debug_print("k1=", k1)
@@ -549,41 +552,42 @@ if _Py_hashfunc_name == 'siphash24':
         debug_print("*in=", grab_uint64_t(src, idx), "idx=", idx)
         debug_print("src_sz", src_sz)
         boffset = idx * 8
+        ohexefef = types.uint64(0xff)
         if src_sz >= 7:
             jmp = (6 * 8)
-            mask = ~types.uint64(0xff << jmp)
-            t = (t & mask) | (grabbyte(src, boffset + 6) << jmp)
+            mask = ~types.uint64(ohexefef << jmp)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 6)) << jmp)
             debug_print("case 7", t)
         if src_sz >= 6:
             jmp = (5 * 8)
-            mask = ~types.uint64(0xff << jmp)
-            t = (t & mask) | (grabbyte(src, boffset + 5) << jmp)
+            mask = ~types.uint64(ohexefef << jmp)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 5)) << jmp)
             debug_print("case 6", t)
         if src_sz >= 5:
             jmp = (4 * 8)
-            mask = ~types.uint64(0xff << jmp)
-            t = (t & mask) | (grabbyte(src, boffset + 4) << jmp)
+            mask = ~types.uint64(ohexefef << jmp)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 4)) << jmp)
             debug_print("case 5", t)
         if src_sz >= 4:
-            t &= 0xffffffff00000000
+            t &= types.uint64(0xffffffff00000000)
             for i in range(4):
                 jmp = i * 8
-                mask = ~types.uint64(0xff << jmp)
-                t = (t & mask) | (grabbyte(src, boffset + i) << jmp)
+                mask = ~types.uint64(ohexefef << jmp)
+                t = (t & mask) | (types.uint64(grabbyte(src, boffset + i)) << jmp)
             debug_print("case 4", t)
         if src_sz >= 3:
             jmp = (2 * 8)
-            mask = ~types.uint64(0xff << jmp)
-            t = (t & mask) | (grabbyte(src, boffset + 2) << jmp)
-            debug_print("case 3", t, grabbyte(src, boffset + 3))
+            mask = ~types.uint64(ohexefef << jmp)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 2)) << jmp)
+            debug_print("case 3", t, grabbyte(src, boffset + 2))
         if src_sz >= 2:
             jmp = (1 * 8)
-            mask = ~types.uint64(0xff << jmp)
-            t = (t & mask) | (grabbyte(src, boffset + 1) << jmp)
+            mask = ~types.uint64(ohexefef << jmp)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 1)) << jmp)
             debug_print("case 2", t, grabbyte(src, boffset + 1))
         if src_sz >= 1:
-            mask = ~(0xff)
-            t = (t & mask) | grabbyte(src, boffset + 0)
+            mask = ~(ohexefef)
+            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 0)))
             debug_print("case 1", t, grabbyte(src, boffset + 0))
 
         debug_print("t=", t)
@@ -593,7 +597,7 @@ if _Py_hashfunc_name == 'siphash24':
         v3 ^= b
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         v0 ^= b
-        v2 ^= 0xff
+        v2 ^= ohexefef
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         t = (v0 ^ v1) ^ (v2 ^ v3)

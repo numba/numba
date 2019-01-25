@@ -207,12 +207,6 @@ class TestTupleHashing(BaseTest):
 
 @unittest.skipUnless(utils.IS_PY3, "unicode hash tests are Python 3 only")
 class TestUnicodeHashing(BaseTest):
-    def check_hash(self, value):
-        expected = hash(value)
-        cfunc = self.cfunc
-        got = cfunc(val)
-        print(expected)
-        print(got)
 
     def test_basic_unicode(self):
         kind1_string = "abcdefghijklmnopqrstuvwxyz"
