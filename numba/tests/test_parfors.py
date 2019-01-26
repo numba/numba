@@ -1378,6 +1378,18 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, np.random.ranf(128))
 
+    @skip_unsupported
+    def test_array_compare_scalar(self):
+        """ issue3671: X != 0 becomes an arrayexpr with operator.ne.
+            That is turned into a parfor by devectorizing.  Make sure
+            the return type of the devectorized operator.ne
+            on integer types works properly.
+        """
+        def test_impl():
+            X = np.zeros(10, dtype=np.int_)
+            return X != 0
+
+        self.check(test_impl)
 
 class TestPrangeBase(TestParforsBase):
 
