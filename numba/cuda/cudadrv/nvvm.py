@@ -299,7 +299,7 @@ def _find_arch(mycc):
             if i == 0:
                 # CC lower than supported
                 raise NvvmSupportError("GPU compute capability %d.%d is "
-                                       "not supported (requires >=%d.%d)" % (*mycc, *cc))
+                                       "not supported (requires >=%d.%d)" % (mycc + cc))
             else:
                 # return the previous CC
                 return SUPPORTED_CC[i - 1]
