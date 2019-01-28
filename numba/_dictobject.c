@@ -523,9 +523,7 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
             if (ep->hash == hash) {
                 _copy_key(dk, startkey, _entry_get_key(dk, ep));
 
-                printf("startkey %s == key_bytes %s ", startkey, key_bytes);
                 int cmp = _key_equal(dk, startkey, key_bytes);
-                printf("cmp = %d\n", cmp);
                 if (cmp < 0) {
                     // error'ed in comparison
                     memset(oldval_bytes, 0, dk->val_size);
@@ -681,7 +679,6 @@ numba_dict_insert(
     char       *oldval_bytes
     )
 {
-    puts("insert to dict");
     NB_DictKeys *dk = d->keys;
 
     Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
@@ -689,8 +686,6 @@ numba_dict_insert(
         // exception in key comparision in lookup.
         goto Fail;
     }
-
-    printf("ix = %zd\n", ix);
 
     if (ix == DKIX_EMPTY) {
         /* Insert into new slot */
@@ -814,6 +809,13 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes
     ep->hash = -1; // to mark it as empty;
 
     return OK;
+}
+
+int
+numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
+{
+    char oldval_bytes[d->keys->key_size];
+    return numba_dict_delitem(d, hash, ix, oldval_bytes);
 }
 
 

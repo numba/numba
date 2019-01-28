@@ -126,7 +126,10 @@ build_c_helpers_dict(void)
     /* for dictionary support */
     declmethod(dict_new_minsize);
     declmethod(dict_length);
+    declmethod(dict_insert);
     declmethod(dict_insert_ez);
+    declmethod(dict_delitem);
+    declmethod(dict_delitem_ez);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
