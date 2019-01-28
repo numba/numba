@@ -306,12 +306,10 @@ class TestDictImpl(TestCase):
             v = make_val(nmax + i)
             remain[k] = v
             d[k] = v
-            print(i)
             for k in remain:
                 self.assertEqual(d[k], remain[k])
 
         self.assertEqual(len(remain), len(d))
-
 
         # Make sure everything else is still here
         for k in remain:

@@ -637,7 +637,8 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     }
     else {
         puts("WALK IT");
-        NB_DictEntry *ep;
+        size_t epi = 0;
+        // NB_DictEntry *ep;
         for (Py_ssize_t i=0; i<numentries; ++i) {
 
             /*
@@ -645,14 +646,17 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
 
                 Here, we skip until a non empty entry is encountered.
             */
-            ep = _get_entry(oldkeys, i);
-            while( ep->hash == -1 ) {
-                assert( mem_cmp_zeros(_entry_get_val(oldkeys, ep), oldkeys->val_size) == 0 );
-                i += 1;
-                ep = _get_entry(oldkeys, i);
+            while( _get_entry(oldkeys, epi)->hash == DKIX_EMPTY ) {
+                assert( mem_cmp_zeros(_entry_get_val(oldkeys, _get_entry(oldkeys, epi)), oldkeys->val_size) == 0 );
+                epi += 1;
             }
+            memcpy(
+                _get_entry(d->keys, i),
+                _get_entry(oldkeys, epi),
+                oldkeys->entry_size
+            );
+            epi += 1;
 
-            memcpy(_get_entry(d->keys, i), ep, oldkeys->entry_size);
         }
 
     }
@@ -806,7 +810,7 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes
     _copy_key(dk, oldkey_bytes, _entry_get_key(dk, ep));
     _zero_key(dk, _entry_get_key(dk, ep));
     _zero_val(dk, _entry_get_val(dk, ep));
-    ep->hash = -1; // to mark it as empty;
+    ep->hash = DKIX_EMPTY; // to mark it as empty;
 
     return OK;
 }
