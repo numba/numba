@@ -31,4 +31,60 @@ typedef struct {
 } NB_Dict;
 
 
+typedef struct {
+    /* parent dictionary */
+    NB_Dict         *parent;
+    /* parent keys object */
+    NB_DictKeys     *parent_keys;
+    /* dict size */
+    Py_ssize_t       size;
+    /* iterator position; indicates the next position to read */
+    Py_ssize_t       pos;
+} NB_DictIter;
+
+
+
+NUMBA_EXPORT_FUNC(int)
+numba_test_dict(void);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size);
+
+NUMBA_EXPORT_FUNC(void)
+numba_dict_free(NB_Dict *d);
+
+NUMBA_EXPORT_FUNC(Py_ssize_t)
+numba_dict_length(NB_Dict *d);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size);
+
+NUMBA_EXPORT_FUNC(Py_ssize_t)
+numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_bytes);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_resize(NB_Dict *d, Py_ssize_t minsize);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_insert(NB_Dict *d, const char *key_bytes, Py_hash_t hash, const char *val_bytes, char *oldval_bytes);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_insert_ez(NB_Dict *d, const char *key_bytes, Py_hash_t hash, const char *val_bytes);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix);
+
+NUMBA_EXPORT_FUNC(size_t)
+numba_dict_iter_sizeof(void);
+
+NUMBA_EXPORT_FUNC(void)
+numba_dict_iter(NB_DictIter *it, NB_Dict *d);
+
+NUMBA_EXPORT_FUNC(int)
+numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr);
+
+
 #endif

@@ -171,102 +171,126 @@ class TestDictImpl(TestCase):
     def setUp(self):
         """Bind to the c_helper library and provide the ctypes wrapper.
         """
-        lib = ctypes.CDLL(_helperlib.__file__)
         dict_t = ctypes.c_void_p
         iter_t = ctypes.c_void_p
         hash_t = ctypes.c_ssize_t
-        self.lib = lib
-        # _numba_test_dict()
-        self._numba_test_dict = lib._numba_test_dict
-        self._numba_test_dict.restype = ctypes.c_int
+
+        def wrap(name, restype, argtypes=()):
+            proto = ctypes.CFUNCTYPE(restype, *argtypes)
+            return proto(_helperlib.c_helpers[name])
+
+        # numba_test_dict()
+        self.numba_test_dict = wrap(
+            'test_dict',
+            ctypes.c_int,
+        )
         # numba_dict_new_minsize(
         #    NB_Dict **out,
         #    Py_ssize_t key_size,
         #    Py_ssize_t val_size
         # )
-        self.numba_dict_new_minsize = lib.numba_dict_new_minsize
-        self.numba_dict_new_minsize.argtypes = [
-            ctypes.POINTER(dict_t),  # out
-            ctypes.c_ssize_t,        # key_size
-            ctypes.c_ssize_t,        # val_size
-        ]
-        self.numba_dict_new_minsize.restype = ctypes.c_int
+        self.numba_dict_new_minsize = wrap(
+            'dict_new_minsize',
+            ctypes.c_int,
+            [
+                ctypes.POINTER(dict_t),  # out
+                ctypes.c_ssize_t,        # key_size
+                ctypes.c_ssize_t,        # val_size
+            ],
+        )
         # numba_dict_free(NB_Dict *d)
-        self.numba_dict_free = lib.numba_dict_free
-        self.numba_dict_free.argtypes = [dict_t]
+        self.numba_dict_free = wrap(
+            'dict_free',
+            None,
+            [dict_t],
+        )
         # numba_dict_length(NB_Dict *d)
-        self.numba_dict_length = lib.numba_dict_length
-        self.numba_dict_length.argtypes = [dict_t]
-        self.numba_dict_length.restype = ctypes.c_int
+        self.numba_dict_length = wrap(
+            'dict_length',
+            ctypes.c_int,
+            [dict_t],
+        )
         # numba_dict_insert_ez(
         #     NB_Dict    *d,
         #     const char *key_bytes,
         #     Py_hash_t   hash,
         #     const char *val_bytes,
         #     )
-        self.numba_dict_insert_ez = lib.numba_dict_insert_ez
-        self.numba_dict_insert_ez.argtypes = [
-            dict_t,             # d
-            ctypes.c_char_p,    # key_bytes
-            hash_t,             # hash
-            ctypes.c_char_p,    # val_bytes
-        ]
-        self.numba_dict_insert_ez.restype = ctypes.c_int
+        self.numba_dict_insert_ez = wrap(
+            'dict_insert_ez',
+            ctypes.c_int,
+            [
+                dict_t,             # d
+                ctypes.c_char_p,    # key_bytes
+                hash_t,             # hash
+                ctypes.c_char_p,    # val_bytes
+            ],
+        )
         # numba_dict_lookup(
         #       NB_Dict *d,
         #       const char *key_bytes,
         #       Py_hash_t hash,
         #       char *oldval_bytes
         # )
-        self.numba_dict_lookup = lib.numba_dict_lookup
-        self.numba_dict_lookup.argtypes = [
-            dict_t,             # d
-            ctypes.c_char_p,    # key_bytes
-            hash_t,             # hash
-            ctypes.c_char_p,    # oldval_bytes
-        ]
+        self.numba_dict_lookup = wrap(
+            'dict_lookup',
+            ctypes.c_ssize_t,
+            [
+                dict_t,             # d
+                ctypes.c_char_p,    # key_bytes
+                hash_t,             # hash
+                ctypes.c_char_p,    # oldval_bytes
+            ],
+        )
         # numba_dict_delitem_ez(
         #     NB_Dict *d,
         #     Py_hash_t hash,
         #     Py_ssize_t ix
         # )
-        self.numba_dict_delitem_ez = lib.numba_dict_delitem_ez
-        self.numba_dict_delitem_ez.argtypes = [
-            dict_t,             # d
-            hash_t,             # hash
-            ctypes.c_ssize_t,   # ix
-        ]
-        self.numba_dict_delitem_ez.restype = ctypes.c_int
-
+        self.numba_dict_delitem_ez = wrap(
+            'dict_delitem_ez',
+            ctypes.c_int,
+            [
+                dict_t,             # d
+                hash_t,             # hash
+                ctypes.c_ssize_t,   # ix
+            ],
+        )
         # numba_dict_iter_sizeof()
-        self.numba_dict_iter_sizeof = lib.numba_dict_iter_sizeof
-        self.numba_dict_iter_sizeof.argtypes = ()
-        self.numba_dict_iter_sizeof.restype = ctypes.c_size_t
-
+        self.numba_dict_iter_sizeof = wrap(
+            'dict_iter_sizeof',
+            ctypes.c_size_t,
+        )
         # numba_dict_iter(
         #     NB_DictIter *it,
         #     NB_Dict     *d
         # )
-        self.numba_dict_iter = lib.numba_dict_iter
-        self.numba_dict_iter.argtypes = [
-            iter_t,
-            dict_t,
-        ]
+        self.numba_dict_iter = wrap(
+            'dict_iter',
+            None,
+            [
+                iter_t,
+                dict_t,
+            ],
+        )
         # numba_dict_iter_next(
         #     NB_DictIter *it,
         #     const char **key_ptr,
         #     const char **val_ptr
         # )
-        self.numba_dict_iter_next = lib.numba_dict_iter_next
-        self.numba_dict_iter_next.argtypes = [
-            iter_t,                             # it
-            ctypes.POINTER(ctypes.c_void_p),    # key_ptr
-            ctypes.POINTER(ctypes.c_void_p),    # val_ptr
-        ]
+        self.numba_dict_iter_next = wrap(
+            'dict_iter_next',
+            ctypes.c_int,
+            [
+                iter_t,                             # it
+                ctypes.POINTER(ctypes.c_void_p),    # key_ptr
+                ctypes.POINTER(ctypes.c_void_p),    # val_ptr
+            ],
+        )
 
     def test_simple_c_test(self):
         # Runs the basic test in C.
-        ret = self._numba_test_dict()
+        ret = self.numba_test_dict()
         self.assertEqual(ret, 0)
 
     def test_insertion_small(self):

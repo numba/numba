@@ -124,9 +124,11 @@ build_c_helpers_dict(void)
     declmethod(gdb_breakpoint);
 
     /* for dictionary support */
+    declmethod(test_dict);
     declmethod(dict_new_minsize);
     declmethod(dict_free);
     declmethod(dict_length);
+    declmethod(dict_lookup);
     declmethod(dict_insert);
     declmethod(dict_insert_ez);
     declmethod(dict_delitem);
@@ -239,11 +241,6 @@ double _numba_test_funcptr(double (*func)(double))
 bool _numba_test_boolean()
 {
     return true;
-}
-
-int _numba_test_dict()
-{
-    return test_dict();
 }
 
 MOD_INIT(_helperlib) {

@@ -105,11 +105,7 @@ converting the dict to the combined table.
 
 #define DEBUG
 
-
 #include "_dictobject.h"
-// #include "internal/pystate.h"
-// #include "dict-common.h"
-// #include "stringlib/eq.h"    /* to get unicode_eq() */
 
 /*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
@@ -777,17 +773,6 @@ numba_dict_dump_keys(NB_Dict *d) {
     assert(j == n);
 }
 
-typedef struct {
-    /* parent dictionary */
-    NB_Dict         *parent;
-    /* parent keys object */
-    NB_DictKeys     *parent_keys;
-    /* dict size */
-    Py_ssize_t       size;
-    /* iterator position; indicates the next position to read */
-    Py_ssize_t       pos;
-} NB_DictIter;
-
 
 size_t
 numba_dict_iter_sizeof() {
@@ -882,13 +867,14 @@ numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
 
 
 int
-numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size) {
+numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
+{
     return numba_dict_new(out, D_MINSIZE, key_size, val_size);
 }
 
 
 int
-test_dict() {
+numba_test_dict(void) {
     puts("test_dict");
 
     NB_Dict *d;
