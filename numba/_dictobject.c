@@ -105,8 +105,6 @@ converting the dict to the combined table.
 
 #define DEBUG
 
-#define NUMBA_INCREF(x)
-#define NUMBA_DECREF(x)
 
 #include "_dictobject.h"
 // #include "internal/pystate.h"
@@ -256,6 +254,13 @@ equally good collision statistics, needed less code & used less memory.
  */
 #define GROWTH_RATE(d) ((d)->ma_used*3)
 
+
+
+#define DKIX_EMPTY (-1)
+#define DKIX_DUMMY (-2)  /* Used internally */
+#define DKIX_ERROR (-3)
+
+
 typedef enum {
     OK = 0,
     ERR_NO_MEMORY = -1,
@@ -286,33 +291,6 @@ int mem_cmp_zeros(void *obj, size_t n){
 #define D_MASK(dk) ((dk)->size-1)
 #define D_GROWTH_RATE(d) ((d)->used*3)
 
-
-typedef struct {
-    Py_hash_t   hash;
-    char        keyvalue[];
-} NB_DictEntry;
-
-typedef struct {
-   /* hash table size */
-    Py_ssize_t      size;
-    Py_ssize_t      usable;
-    /* hash table used entries */
-    Py_ssize_t      nentries;
-    /* Entry info */
-    Py_ssize_t      key_size, val_size, entry_size;
-    /* Byte offset from indices to the first entry. */
-    Py_ssize_t      entry_offset;
-
-    /* hash table */
-    char            indices[];
-} NB_DictKeys;
-
-
-typedef struct {
-    /* num of elements in the hashtable */
-    Py_ssize_t        used;
-    NB_DictKeys      *keys;
-} NB_Dict;
 
 
 int
