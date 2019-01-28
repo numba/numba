@@ -596,8 +596,6 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     Py_ssize_t newsize, numentries;
     NB_DictKeys *oldkeys;
 
-    puts("Resize");
-
     /* Find the smallest table size > minused. */
     for (newsize = D_MINSIZE;
          newsize < minsize && newsize > 0;
@@ -628,7 +626,6 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     numentries = d->used;
 
     if (oldkeys->nentries == numentries) {
-        puts("JUST COPY");
         NB_DictEntry *oldentries, *newentries;
 
         oldentries = _get_entry(oldkeys, 0);
@@ -636,7 +633,6 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
         memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
     }
     else {
-        puts("WALK IT");
         size_t epi = 0;
         // NB_DictEntry *ep;
         for (Py_ssize_t i=0; i<numentries; ++i) {

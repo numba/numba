@@ -306,16 +306,19 @@ class TestDictImpl(TestCase):
             v = make_val(nmax + i)
             remain[k] = v
             d[k] = v
-            for k in remain:
-                self.assertEqual(d[k], remain[k])
 
         self.assertEqual(len(remain), len(d))
 
-        # Make sure everything else is still here
+        # Make sure everything is here
         for k in remain:
             self.assertEqual(d[k], remain[k])
 
     def test_delete_randomly(self):
+        self.check_delete_randomly(nmax=8, ndrop=2, nrefill=2)
         self.check_delete_randomly(nmax=13, ndrop=10, nrefill=31)
-
+        self.check_delete_randomly(nmax=100, ndrop=50, nrefill=200)
+        self.check_delete_randomly(nmax=100, ndrop=99, nrefill=100)
+        self.check_delete_randomly(nmax=100, ndrop=100, nrefill=100)
+        self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=1)
+        self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=2048)
 
