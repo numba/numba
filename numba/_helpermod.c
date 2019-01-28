@@ -241,10 +241,9 @@ bool _numba_test_boolean()
     return true;
 }
 
-bool _numba_test_dict()
+int _numba_test_dict()
 {
-    test_dict();
-    return 1;
+    return test_dict();
 }
 
 MOD_INIT(_helperlib) {

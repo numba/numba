@@ -8,6 +8,7 @@ import random
 
 from .support import TestCase
 from numba import _helperlib
+from numba.config import IS_32BITS
 
 
 DKIX_EMPTY = -1
@@ -15,8 +16,23 @@ DKIX_DUMMY = -2
 DKIX_ERROR = -3
 
 
+ALIGN = 4 if IS_32BITS else 8
+
+
 class Dict(object):
+    """A wrapper around the C-API to provide a minimal dictionary object for
+    testing.
+    """
     def __init__(self, tc, keysize, valsize):
+        """
+        Parameters
+        ----------
+        tc : TestCase instance
+        keysize : int
+            byte size for the key
+        valsize : int
+            byte size for the value
+        """
         self.tc = tc
         self.keysize = keysize
         self.valsize = valsize
@@ -58,6 +74,10 @@ class Dict(object):
 
     def items(self):
         return DictIter(self)
+
+    #
+    # The methods below are higher-level wrappers for the C-API
+    #
 
     def dict_new_minsize(self, key_size, val_size):
         dp = ctypes.c_void_p()
@@ -110,12 +130,24 @@ class Dict(object):
             return
         else:
             self.tc.assertGreaterEqual(status, 0)
+
+            # Check the alignment of the key-value in the entries.
+            # We know we are getting the pointers to data in the entries.
+
+            self.tc.assertEqual(bk.value % ALIGN, 0, msg='key not aligned')
+            self.tc.assertEqual(bv.value % ALIGN, 0, msg='val not aligned')
+
             key = (ctypes.c_char * self.keysize).from_address(bk.value)
             val = (ctypes.c_char * self.valsize).from_address(bv.value)
             return key.value, val.value
 
 
 class DictIter(object):
+    """A iterator for the `Dict.items()`.
+
+    Only the `.items()` is needed.  `.keys` and `.values` can be trivially
+    implemented on the `.items` iterator.
+    """
     def __init__(self, parent):
         self.parent = parent
         itsize = self.parent.tc.numba_dict_iter_sizeof()
@@ -136,54 +168,58 @@ class DictIter(object):
 
 
 class TestDictImpl(TestCase):
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
+        """Bind to the c_helper library and provide the ctypes wrapper.
+        """
         lib = ctypes.CDLL(_helperlib.__file__)
         dict_t = ctypes.c_void_p
         iter_t = ctypes.c_void_p
         hash_t = ctypes.c_ssize_t
-        cls.lib = lib
+        self.lib = lib
+        # _numba_test_dict()
+        self._numba_test_dict = lib._numba_test_dict
+        self._numba_test_dict.restype = ctypes.c_int
         # numba_dict_new_minsize(
         #    NB_Dict **out,
         #    Py_ssize_t key_size,
         #    Py_ssize_t val_size
         # )
-        cls.numba_dict_new_minsize = lib.numba_dict_new_minsize
-        cls.numba_dict_new_minsize.argtypes = [
+        self.numba_dict_new_minsize = lib.numba_dict_new_minsize
+        self.numba_dict_new_minsize.argtypes = [
             ctypes.POINTER(dict_t),  # out
             ctypes.c_ssize_t,        # key_size
             ctypes.c_ssize_t,        # val_size
         ]
-        cls.numba_dict_new_minsize.restype = ctypes.c_int
+        self.numba_dict_new_minsize.restype = ctypes.c_int
         # numba_dict_free(NB_Dict *d)
-        cls.numba_dict_free = lib.numba_dict_free
-        cls.numba_dict_free.argtypes = [dict_t]
+        self.numba_dict_free = lib.numba_dict_free
+        self.numba_dict_free.argtypes = [dict_t]
         # numba_dict_length(NB_Dict *d)
-        cls.numba_dict_length = lib.numba_dict_length
-        cls.numba_dict_length.argtypes = [dict_t]
-        cls.numba_dict_length.restype = ctypes.c_int
+        self.numba_dict_length = lib.numba_dict_length
+        self.numba_dict_length.argtypes = [dict_t]
+        self.numba_dict_length.restype = ctypes.c_int
         # numba_dict_insert_ez(
         #     NB_Dict    *d,
         #     const char *key_bytes,
         #     Py_hash_t   hash,
         #     const char *val_bytes,
         #     )
-        cls.numba_dict_insert_ez = lib.numba_dict_insert_ez
-        cls.numba_dict_insert_ez.argtypes = [
+        self.numba_dict_insert_ez = lib.numba_dict_insert_ez
+        self.numba_dict_insert_ez.argtypes = [
             dict_t,             # d
             ctypes.c_char_p,    # key_bytes
             hash_t,             # hash
             ctypes.c_char_p,    # val_bytes
         ]
-        cls.numba_dict_insert_ez.restype = ctypes.c_int
+        self.numba_dict_insert_ez.restype = ctypes.c_int
         # numba_dict_lookup(
         #       NB_Dict *d,
         #       const char *key_bytes,
         #       Py_hash_t hash,
         #       char *oldval_bytes
         # )
-        cls.numba_dict_lookup = lib.numba_dict_lookup
-        cls.numba_dict_lookup.argtypes = [
+        self.numba_dict_lookup = lib.numba_dict_lookup
+        self.numba_dict_lookup.argtypes = [
             dict_t,             # d
             ctypes.c_char_p,    # key_bytes
             hash_t,             # hash
@@ -194,25 +230,25 @@ class TestDictImpl(TestCase):
         #     Py_hash_t hash,
         #     Py_ssize_t ix
         # )
-        cls.numba_dict_delitem_ez = lib.numba_dict_delitem_ez
-        cls.numba_dict_delitem_ez.argtypes = [
+        self.numba_dict_delitem_ez = lib.numba_dict_delitem_ez
+        self.numba_dict_delitem_ez.argtypes = [
             dict_t,             # d
             hash_t,             # hash
             ctypes.c_ssize_t,   # ix
         ]
-        cls.numba_dict_delitem_ez.restype = ctypes.c_int
+        self.numba_dict_delitem_ez.restype = ctypes.c_int
 
         # numba_dict_iter_sizeof()
-        cls.numba_dict_iter_sizeof = lib.numba_dict_iter_sizeof
-        cls.numba_dict_iter_sizeof.argtypes = ()
-        cls.numba_dict_iter_sizeof.restype = ctypes.c_size_t
+        self.numba_dict_iter_sizeof = lib.numba_dict_iter_sizeof
+        self.numba_dict_iter_sizeof.argtypes = ()
+        self.numba_dict_iter_sizeof.restype = ctypes.c_size_t
 
         # numba_dict_iter(
         #     NB_DictIter *it,
         #     NB_Dict     *d
         # )
-        cls.numba_dict_iter = lib.numba_dict_iter
-        cls.numba_dict_iter.argtypes = [
+        self.numba_dict_iter = lib.numba_dict_iter
+        self.numba_dict_iter.argtypes = [
             iter_t,
             dict_t,
         ]
@@ -221,17 +257,20 @@ class TestDictImpl(TestCase):
         #     const char **key_ptr,
         #     const char **val_ptr
         # )
-        cls.numba_dict_iter_next = lib.numba_dict_iter_next
-        cls.numba_dict_iter_next.argtypes = [
+        self.numba_dict_iter_next = lib.numba_dict_iter_next
+        self.numba_dict_iter_next.argtypes = [
             iter_t,                             # it
             ctypes.POINTER(ctypes.c_void_p),    # key_ptr
             ctypes.POINTER(ctypes.c_void_p),    # val_ptr
         ]
 
     def test_simple_c_test(self):
-        self.lib._numba_test_dict()
+        # Runs the basic test in C.
+        ret = self._numba_test_dict()
+        self.assertEqual(ret, 0)
 
     def test_insertion_small(self):
+        # Tests insertation and lookup for a small dict.
         d = Dict(self, 4, 8)
         self.assertEqual(len(d), 0)
         self.assertIsNone(d.get('abcd'))
@@ -261,6 +300,7 @@ class TestDictImpl(TestCase):
         self.assertEqual(d['abcf'], 'cafe0002')
 
     def check_insertion_many(self, nmax):
+        # Helper to test insertion/lookup/resize
         d = Dict(self, 8, 8)
 
         def make_key(v):
@@ -269,14 +309,17 @@ class TestDictImpl(TestCase):
         def make_val(v):
             return "val_{:04}".format(v)
 
+        # Check insert
         for i in range(nmax):
             d[make_key(i)] = make_val(i)
             self.assertEqual(len(d), i + 1)
 
+        # Check lookup
         for i in range(nmax):
             self.assertEqual(d[make_key(i)], make_val(i))
 
     def test_insertion_many(self):
+        # Test insertion for differently sized dict
         # Around minsize
         self.check_insertion_many(nmax=7)
         self.check_insertion_many(nmax=8)
@@ -295,6 +338,7 @@ class TestDictImpl(TestCase):
         self.check_insertion_many(nmax=4097)
 
     def test_deletion_small(self):
+        # Test deletion
         d = Dict(self, 4, 8)
         self.assertEqual(len(d), 0)
         self.assertIsNone(d.get('abcd'))
@@ -335,16 +379,17 @@ class TestDictImpl(TestCase):
         self.assertEqual(len(d), 0)
 
     def check_delete_randomly(self, nmax, ndrop, nrefill, seed=0):
+        # Helper to test deletion
         random.seed(seed)
 
         d = Dict(self, 8, 8)
         keys = {}
 
         def make_key(v):
-            return "key_{:04}".format(v)
+            return "k_{:06x}".format(v)
 
         def make_val(v):
-            return "val_{:04}".format(v)
+            return "v_{:06x}".format(v)
 
         for i in range(nmax):
             d[make_key(i)] = make_val(i)
@@ -389,6 +434,7 @@ class TestDictImpl(TestCase):
             self.assertEqual(d[k], remain[k])
 
     def test_delete_randomly(self):
+        # Test deletion for differently sized dict
         self.check_delete_randomly(nmax=8, ndrop=2, nrefill=2)
         self.check_delete_randomly(nmax=13, ndrop=10, nrefill=31)
         self.check_delete_randomly(nmax=100, ndrop=50, nrefill=200)
@@ -397,7 +443,15 @@ class TestDictImpl(TestCase):
         self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=1)
         self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=2048)
 
+    def test_delete_randomly_large(self):
+        # Go beyound 2^16 to exercise large indices.
+        # Internally, size of index changes as the hashtable size changes.
+        # Size of index can be 8, 16, 32 or 64 bytes (on 64-bit).
+        # We are not inserting >2^32 elements because of limitation of time.
+        self.check_delete_randomly(nmax=2**17, ndrop=2**16, nrefill=2**10)
+
     def test_iter_items(self):
+        # Test .items iteration
         d = Dict(self, 4, 4)
         nmax = 1000
 
@@ -414,3 +468,27 @@ class TestDictImpl(TestCase):
         for i, (k, v) in enumerate(d.items()):
             self.assertEqual(make_key(i), k)
             self.assertEqual(make_val(i), v)
+
+    def check_sizing(self, key_size, val_size, nmax):
+        # Helper to verify different key/value sizes.
+        d = Dict(self, key_size, val_size)
+
+        def make_key(v):
+            return "{:0{}}".format(v, key_size)[:key_size]
+
+        def make_val(v):
+            return "{:0{}}".format(nmax - v - 1, val_size)[:val_size]
+
+        for i in range(nmax):
+            d[make_key(i)] = make_val(i)
+
+        # Check that the everything is ordered
+        for i, (k, v) in enumerate(d.items()):
+            self.assertEqual(make_key(i), k)
+            self.assertEqual(make_val(i), v)
+
+    def test_sizing(self):
+        # Check different sizes of the key & value.
+        for i in range(1, 8):
+            self.check_sizing(key_size=i, val_size=i, nmax=2**i)
+

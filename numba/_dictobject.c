@@ -306,7 +306,12 @@ _index_size(Py_ssize_t size) {
 Py_ssize_t
 _align(Py_ssize_t sz) {
     Py_ssize_t alignment = sizeof(void*);
-    return sz + (alignment - sz % alignment);
+    return sz + (alignment - sz % alignment) % alignment;
+}
+
+void*
+_palign(void *ptr) {
+    return (void*)_align((size_t)ptr);
 }
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
@@ -379,7 +384,8 @@ NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssiz
     Py_ssize_t entry_size = _align(sizeof(NB_DictEntry) + _align(key_size) + _align(val_size));
     Py_ssize_t entry_offset = _align(index_size * size);
     Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * size;
-    NB_DictKeys *dk = malloc(alloc_size);
+
+    NB_DictKeys *dk = _palign(malloc(_align(alloc_size)));
     if (!dk) return ERR_NO_MEMORY;
 
     assert ( size >= D_MINSIZE );
@@ -392,6 +398,7 @@ NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssiz
     dk->entry_offset = entry_offset;
     dk->entry_size = entry_size;
 
+    assert (_palign(dk->indices) == dk->indices );
     memset(dk->indices, 0xff, entry_offset);
     /* Ensure hash is (-1) for empty */
     memset(dk->indices + entry_offset, 0xff, entry_size * size);
@@ -474,12 +481,16 @@ _key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
 
 char *
 _entry_get_key(NB_DictKeys *dk, NB_DictEntry* entry) {
-    return entry->keyvalue;
+    char * out = entry->keyvalue;
+    assert (out == _palign(out));
+    return out;
 }
 
 char *
 _entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
-    return entry->keyvalue + dk->key_size;
+    char * out = _entry_get_key(dk, entry) + _align(dk->key_size);
+    assert (out == _palign(out));
+    return out;
 }
 
 
@@ -876,7 +887,7 @@ numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size) 
 }
 
 
-void
+int
 test_dict() {
     puts("test_dict");
 
@@ -986,5 +997,7 @@ test_dict() {
     assert (ix >= 0);
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
     assert (ix >= 0);
+
+    return 0;
 
 }
