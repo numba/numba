@@ -64,11 +64,12 @@ def compile_time_get_string_data(obj):
     )
 
     extract_unicode_fn = c_helpers['extract_unicode']
-    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int))
+    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int),
+                      POINTER(c_ssize_t))
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
-    hashv = c_long()
+    hashv = c_ssize_t()
     data = fn(obj, byref(length), byref(kind), byref(hashv))
     if data is None:
         raise ValueError("cannot extract unicode data from the given string")
