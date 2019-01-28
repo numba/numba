@@ -22,6 +22,9 @@ class Dict(object):
         self.valsize = valsize
         self.dp = self.dict_new_minsize(keysize, valsize)
 
+    def __del__(self):
+        self.tc.numba_dict_free(self.dp)
+
     def __len__(self):
         return self.dict_length()
 
@@ -52,6 +55,9 @@ class Dict(object):
             return self[k]
         except KeyError:
             return
+
+    def items(self):
+        return DictIter(self)
 
     def dict_new_minsize(self, key_size, val_size):
         dp = ctypes.c_void_p()
@@ -89,12 +95,52 @@ class Dict(object):
         self.tc.assertEqual(status, 0)
         return True
 
+    def dict_iter(self, itptr):
+        self.tc.numba_dict_iter(itptr, self.dp)
+
+    def dict_iter_next(self, itptr):
+        bk = ctypes.c_void_p(0)
+        bv = ctypes.c_void_p(0)
+        status = self.tc.numba_dict_iter_next(
+            itptr, ctypes.byref(bk), ctypes.byref(bv),
+        )
+        if status == -2:
+            raise ValueError('dictionary mutated')
+        elif status == -3:
+            return
+        else:
+            self.tc.assertGreaterEqual(status, 0)
+            key = (ctypes.c_char * self.keysize).from_address(bk.value)
+            val = (ctypes.c_char * self.valsize).from_address(bv.value)
+            return key.value, val.value
+
+
+class DictIter(object):
+    def __init__(self, parent):
+        self.parent = parent
+        itsize = self.parent.tc.numba_dict_iter_sizeof()
+        self.it_state_buf = (ctypes.c_char_p * itsize)(0)
+        self.it = ctypes.cast(self.it_state_buf, ctypes.c_void_p)
+        self.parent.dict_iter(self.it)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        out = self.parent.dict_iter_next(self.it)
+        if out is None:
+            raise StopIteration
+        else:
+            k, v = out
+            return k.decode(), v.decode()
+
 
 class TestDictImpl(TestCase):
     @classmethod
     def setUpClass(cls):
         lib = ctypes.CDLL(_helperlib.__file__)
         dict_t = ctypes.c_void_p
+        iter_t = ctypes.c_void_p
         hash_t = ctypes.c_ssize_t
         cls.lib = lib
         # numba_dict_new_minsize(
@@ -109,6 +155,9 @@ class TestDictImpl(TestCase):
             ctypes.c_ssize_t,        # val_size
         ]
         cls.numba_dict_new_minsize.restype = ctypes.c_int
+        # numba_dict_free(NB_Dict *d)
+        cls.numba_dict_free = lib.numba_dict_free
+        cls.numba_dict_free.argtypes = [dict_t]
         # numba_dict_length(NB_Dict *d)
         cls.numba_dict_length = lib.numba_dict_length
         cls.numba_dict_length.argtypes = [dict_t]
@@ -152,6 +201,32 @@ class TestDictImpl(TestCase):
             ctypes.c_ssize_t,   # ix
         ]
         cls.numba_dict_delitem_ez.restype = ctypes.c_int
+
+        # numba_dict_iter_sizeof()
+        cls.numba_dict_iter_sizeof = lib.numba_dict_iter_sizeof
+        cls.numba_dict_iter_sizeof.argtypes = ()
+        cls.numba_dict_iter_sizeof.restype = ctypes.c_size_t
+
+        # numba_dict_iter(
+        #     NB_DictIter *it,
+        #     NB_Dict     *d
+        # )
+        cls.numba_dict_iter = lib.numba_dict_iter
+        cls.numba_dict_iter.argtypes = [
+            iter_t,
+            dict_t,
+        ]
+        # numba_dict_iter_next(
+        #     NB_DictIter *it,
+        #     const char **key_ptr,
+        #     const char **val_ptr
+        # )
+        cls.numba_dict_iter_next = lib.numba_dict_iter_next
+        cls.numba_dict_iter_next.argtypes = [
+            iter_t,                             # it
+            ctypes.POINTER(ctypes.c_void_p),    # key_ptr
+            ctypes.POINTER(ctypes.c_void_p),    # val_ptr
+        ]
 
     def test_simple_c_test(self):
         self.lib._numba_test_dict()
@@ -322,3 +397,20 @@ class TestDictImpl(TestCase):
         self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=1)
         self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=2048)
 
+    def test_iter_items(self):
+        d = Dict(self, 4, 4)
+        nmax = 1000
+
+        def make_key(v):
+            return "{:04}".format(v)
+
+        def make_val(v):
+            return "{:04}".format(v + nmax)
+
+        for i in range(nmax):
+            d[make_key(i)] = make_val(i)
+
+        # Check that the everything is ordered
+        for i, (k, v) in enumerate(d.items()):
+            self.assertEqual(make_key(i), k)
+            self.assertEqual(make_val(i), v)

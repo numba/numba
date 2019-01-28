@@ -264,7 +264,8 @@ equally good collision statistics, needed less code & used less memory.
 typedef enum {
     OK = 0,
     ERR_NO_MEMORY = -1,
-    ERR_UNKNOWN = -2
+    ERR_DICT_MUTATED = -2,
+    ERR_ITER_EXHAUSTED = -3,
 } Status;
 
 
@@ -421,6 +422,12 @@ numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t v
     d->keys = dk;
     *out = d;
     return OK;
+}
+
+void
+numba_dict_free(NB_Dict *d) {
+    NB_DictKeys_free(d->keys);
+    free(d);
 }
 
 Py_ssize_t
@@ -757,6 +764,50 @@ numba_dict_dump_keys(NB_Dict *d) {
     }
     printf("j = %zd; n = %zd\n", j, n);
     assert(j == n);
+}
+
+typedef struct {
+    /* parent dictionary */
+    NB_Dict         *parent;
+    /* parent keys object */
+    NB_DictKeys     *parent_keys;
+    /* dict size */
+    Py_ssize_t       size;
+    /* iterator position; indicates the next position to read */
+    Py_ssize_t       pos;
+} NB_DictIter;
+
+
+size_t
+numba_dict_iter_sizeof() {
+    return sizeof(NB_DictIter);
+}
+
+void
+numba_dict_iter(NB_DictIter *it, NB_Dict *d) {
+    it->parent = d;
+    it->parent_keys = d->keys;
+    it->size = d->used;
+    it->pos = 0;
+}
+
+int
+numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr) {
+    /* Detect dictionary mutation during iteration */
+    if (it->parent->keys != it->parent_keys ||
+        it->parent->used != it->size) {
+        return ERR_DICT_MUTATED;
+    }
+    NB_DictKeys *dk = it->parent_keys;
+    while ( it->pos < dk->nentries ) {
+        NB_DictEntry *ep = _get_entry(dk, it->pos++);
+        if ( ep->hash != DKIX_EMPTY ) {
+            *key_ptr = _entry_get_key(dk, ep);
+            *val_ptr = _entry_get_val(dk, ep);
+            return OK;
+        }
+    }
+    return ERR_ITER_EXHAUSTED;
 }
 
 
