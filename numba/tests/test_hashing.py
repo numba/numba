@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import numba.unittest_support as unittest
 
+import sys
 from collections import defaultdict
 
 import numpy as np
@@ -81,11 +82,6 @@ class TestNumberHashing(BaseTest):
     """
     Test hashing of number types.
     """
-
-    def check_ints(self, typ):
-        for a in self.int_samples(typ):
-            self.check_hash_values(a)
-
     def check_floats(self, typ):
         for a in self.float_samples(typ):
             self.assertEqual(a.dtype, np.dtype(typ))
@@ -95,13 +91,6 @@ class TestNumberHashing(BaseTest):
         for a in self.complex_samples(typ, float_ty):
             self.assertEqual(a.dtype, np.dtype(typ))
             self.check_hash_values(a)
-
-    @tag('important')
-    def test_ints(self):
-        self.check_ints(np.int8)
-        self.check_ints(np.uint16)
-        self.check_ints(np.int32)
-        self.check_ints(np.uint64)
 
     @tag('important')
     def test_floats(self):
@@ -120,6 +109,8 @@ class TestNumberHashing(BaseTest):
         minmax = []
         for ty in [np.int8, np.uint8, np.int16, np.uint16,
                    np.int32, np.uint32, np.int64, np.uint64]:
+            for a in self.int_samples(ty):
+                self.check_hash_values(a)
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
@@ -134,17 +125,20 @@ class TestNumberHashing(BaseTest):
                 # numpy type from that to avoid numpy type rules
                 y = x
                 for i in range(shifts):
-                    twiddle1 = 0xaaaaaaaaaaaaaaa
-                    twiddle2 = 0x555555555555555
-                    self.check_hash_values([ty(y)])
-                    self.check_hash_values([ty(y & twiddle1)])
-                    self.check_hash_values([ty(y & twiddle2)])
+                    twiddle1 = 0xaaaaaaaaaaaaaaaa
+                    twiddle2 = 0x5555555555555555
+                    vals = [y]
+                    for tw in [twiddle1, twiddle2]:
+                        val = y & twiddle1
+                        if val < sys.maxsize:
+                            vals.append(val)
+                    for v in vals:
+                        self.check_hash_values([ty(v)])
                     if signed:  # try the same with flipped signs
                         # negated signed INT_MIN will overflow
-                        if y != info.min:
-                            self.check_hash_values([ty(-y)])
-                        self.check_hash_values([ty(-(y & twiddle1))])
-                        self.check_hash_values([ty(-(y & twiddle2))])
+                        for v in vals:
+                            if v != info.min:
+                                self.check_hash_values([ty(-v)])
                     if x == 0:  # unsigned min is 0, shift up
                         y = (y | 1) << 1
                     else:  # everything else shift down
