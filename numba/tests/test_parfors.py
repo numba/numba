@@ -2039,6 +2039,20 @@ class TestPrange(TestPrangeBase):
             return B
         self.prange_tester(test_impl, 1.0)
 
+    @skip_unsupported
+    def test_mutable_list_param(self):
+        def test_impl(n):
+            def list_check(X):
+                a = X[-1] + 1
+                if a not in X:
+                    X.append(a)
+                return a
+            for i in range(n):
+                X = [100]
+                a = list_check(X)
+            return a
+        self.prange_tester(test_impl, 10)
+
 
 @skip_parfors_unsupported
 @x86_only
