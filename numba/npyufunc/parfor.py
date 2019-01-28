@@ -524,7 +524,7 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap):
                 avtype = typemap[argvar]
                 # If that type doesn't have a mutable attribute or it does and it's set to
                 # not mutable then this usage is safe for hoisting.
-                if hasattr(avtype, 'mutable') and avtype.mutable:
+                if getattr(avtype, 'mutable', False):
                     # Here we have a mutable variable passed to a function so add this variable
                     # to the def lists.
                     add_to_def_once_sets(argvar, def_once, def_more)
@@ -661,14 +661,15 @@ def redarraytype_to_sig(redarraytyp):
     return types.npytypes.Array(redarraytyp.dtype, max(1, redarraytyp.ndim - 1), redarraytyp.layout)
 
 def legalize_names_with_typemap(names, typemap):
-    """ We use ir_utils.legalize_names to replace internal IR variables that have things like
-        periods in them that aren't legal parameter names and we replace those with things like
-        underscores which are legal.  The original variable names are in the typemap so we
+    """ We use ir_utils.legalize_names to replace internal IR variable names
+        containing illegal characters (e.g. period) with a legal character
+        (underscore) so as to create legal variable names.
+        The original variable names are in the typemap so we also
         need to add the legalized name to the typemap as well.
     """
     outdict = legalize_names(names)
     # For each pair in the dict of legalized names...
-    for x,y in outdict.items():
+    for x, y in outdict.items():
         # If the name had some legalization change to it...
         if x != y:
             # Set the type of the new name the same as the type of the old name.
