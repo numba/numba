@@ -58,7 +58,6 @@ exclude =
     numba/pretty_annotate.py
     numba/six.py
     numba/typeinfer.py
-    numba/errors.py
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
