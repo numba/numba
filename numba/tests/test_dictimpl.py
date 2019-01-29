@@ -12,8 +12,6 @@ from numba.config import IS_32BITS
 
 
 DKIX_EMPTY = -1
-DKIX_DUMMY = -2
-DKIX_ERROR = -3
 
 
 ALIGN = 4 if IS_32BITS else 8

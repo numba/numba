@@ -103,8 +103,6 @@ where ix == mp->ma_used. Inserting into other index and deleting item cause
 converting the dict to the combined table.
 */
 
-#define DEBUG
-
 #include "_dictobject.h"
 
 /*[clinic input]
@@ -873,6 +871,13 @@ numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
 }
 
 
+#define CHECK(CASE) {                                                   \
+    if ( !(CASE) ) {                                                    \
+        printf("'%s' failed file %s:%d\n", #CASE, __FILE__, __LINE__);   \
+        return 1;                                                       \
+    }                                                                   \
+}
+
 int
 numba_test_dict(void) {
     puts("test_dict");
@@ -881,109 +886,111 @@ numba_test_dict(void) {
     int status;
 
     status = numba_dict_new(&d, D_MINSIZE, 4, 8);
-    assert(status == OK);
-    assert(d->keys->size == D_MINSIZE);
-    assert(d->keys->key_size == 4);
-    assert(d->keys->val_size == 8);
-    assert(_index_size(d->keys->size) == 1);
+    CHECK(status == OK);
+    CHECK(d->keys->size == D_MINSIZE);
+    CHECK(d->keys->key_size == 4);
+    CHECK(d->keys->val_size == 8);
+    CHECK(_index_size(d->keys->size) == 1);
     printf("_align(index_size * size) = %zd\n", _align(_index_size(d->keys->size) * d->keys->size));
 
     printf("d %p\n", d);
     printf("d->usable = %zu\n", d->keys->usable);
     printf("d[0] 0x%zx\n", (char*)_get_entry(d->keys, 0) - (char*)d->keys);
-    assert ((char*)_get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
+    CHECK ((char*)_get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
     printf("d[1] 0x%zx\n", (char*)_get_entry(d->keys, 1) - (char*)d->keys);
-    assert ((char*)_get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
+    CHECK ((char*)_get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
 
     char got_value[d->keys->val_size];
     Py_ssize_t ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
     printf("ix = %zd\n", ix);
-    assert (ix == DKIX_EMPTY);
+    CHECK (ix == DKIX_EMPTY);
 
     // insert 1st key
     status = numba_dict_insert(d, "bef", 0xbeef, "1234567", got_value);
-    assert (status == OK);
-    assert (d->used == 1);
+    CHECK (status == OK);
+    CHECK (d->used == 1);
 
     // insert same key
     status = numba_dict_insert(d, "bef", 0xbeef, "1234567", got_value);
-    assert (status == OK);
+    CHECK (status == OK);
     printf("got_value %s\n", got_value);
-    assert (d->used == 1);
+    CHECK (d->used == 1);
 
     // insert 2nd key
     status = numba_dict_insert(d, "beg", 0xbeef, "1234568", got_value);
-    assert (status == OK);
-    assert (d->used == 2);
+    CHECK (status == OK);
+    CHECK (d->used == 2);
 
     // insert 3rd key
     status = numba_dict_insert(d, "beh", 0xcafe, "1234569", got_value);
-    assert (status == OK);
-    assert (d->used == 3);
+    CHECK (status == OK);
+    CHECK (d->used == 3);
 
     // replace key "bef"'s value
     status = numba_dict_insert(d, "bef", 0xbeef, "7654321", got_value);
-    assert (status == OK);
-    assert (d->used == 3);
+    CHECK (status == OK);
+    CHECK (d->used == 3);
 
 
     // insert 4th key
     status = numba_dict_insert(d, "bei", 0xcafe, "0_0_0_1", got_value);
-    assert (status == OK);
-    assert (d->used == 4);
+    CHECK (status == OK);
+    CHECK (d->used == 4);
 
     // insert 5th key
     status = numba_dict_insert(d, "bej", 0xcafe, "0_0_0_2", got_value);
-    assert (status == OK);
-    assert (d->used == 5);
+    CHECK (status == OK);
+    CHECK (d->used == 5);
 
     // insert 5th key & triggers resize
     status = numba_dict_insert(d, "bek", 0xcafe, "0_0_0_3", got_value);
-    assert (status == OK);
-    assert (d->used == 6);
+    CHECK (status == OK);
+    CHECK (d->used == 6);
 
     // Dump
     numba_dict_dump_keys(d);
 
     // Make sure everything are still in there
     ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "7654321", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "7654321", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "beg", 0xbeef, got_value);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "1234567", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "1234567", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
     printf("ix = %zd\n", ix);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "1234569", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "1234569", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "bei", 0xcafe, got_value);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "0_0_0_1", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "0_0_0_1", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "bej", 0xcafe, got_value);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "0_0_0_2", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "0_0_0_2", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "bek", 0xcafe, got_value);
-    assert (ix >= 0);
-    assert (memcpy(got_value, "0_0_0_3", d->keys->val_size));
+    CHECK (ix >= 0);
+    CHECK (memcpy(got_value, "0_0_0_3", d->keys->val_size));
 
     // Test delete
     ix = numba_dict_lookup(d, "beg", 0xbeef, got_value);
     status = numba_dict_delitem(d, 0xbeef, ix, got_value);
-    assert (status == OK);
+    CHECK (status == OK);
 
     ix = numba_dict_lookup(d, "beg", 0xbeef, got_value);
-    assert (ix == DKIX_EMPTY); // not found
+    CHECK (ix == DKIX_EMPTY); // not found
 
     ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
-    assert (ix >= 0);
+    CHECK (ix >= 0);
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
-    assert (ix >= 0);
+    CHECK (ix >= 0);
 
     return 0;
 
 }
+
+#undef CHECK
