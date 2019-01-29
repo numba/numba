@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils
+from . import utils, config
 
 
 bool_t = ir.IntType(1)
@@ -1025,11 +1025,15 @@ def snprintf(builder, buffer, bufsz, format, *args):
     fnty = ir.FunctionType(
         int32_t, [cstring, intp_t, cstring], var_arg=True,
     )
+    # Actual symbol name of snprintf is different on win32.
+    symbol = 'snprintf'
+    if config.IS_WIN32:
+        symbol = '_' + symbol
     # Insert snprintf()
     try:
-        fn = mod.get_global('snprintf')
+        fn = mod.get_global(symbol)
     except KeyError:
-        fn = ir.Function(mod, fnty, name="snprintf")
+        fn = ir.Function(mod, fnty, name=symbol)
     # Call
     ptr_fmt = builder.bitcast(global_fmt, cstring)
     return builder.call(fn, [buffer, bufsz, ptr_fmt] + list(args))
