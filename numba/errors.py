@@ -558,9 +558,7 @@ class ConstantInferenceError(NumbaError):
     Failure during constant inference.
     """
     def __init__(self, value, loc=None):
-        self.value = value
-        msg = "Cannot make a constant from: %s" % value
-        super(ConstantInferenceError, self).__init__(msg, loc=loc)
+        super(ConstantInferenceError, self).__init__(value, loc=loc)
 
 
 class InternalError(NumbaError):
