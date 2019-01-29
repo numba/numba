@@ -198,13 +198,15 @@ def _long_impl(val):
 @overload_method(types.Boolean, '__hash__')
 def int_hash(val):
 
+    _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
+
     # this is a bit involved due to the cPython repr of ints
     def impl(val):
         # If the magnitude is under PyHASH_MODULUS, if so just return the
         # value itval as the has, couple of special cases if val == val:
         # 1. it's 0, in which case return 0
-        # 2. it's int64 minimum value, return -4 (the value cPython computes but
-        # Numba cannot as there's no type wide enough to hold the shifts)
+        # 2. it's int64 minimum value, return the value cPython computes but
+        # Numba cannot as there's no type wide enough to hold the shifts.
         #
         # If the magnitude is greater than PyHASH_MODULUS then... if the value
         # is negative then negate it switch the sign on the hash once computed
@@ -215,7 +217,7 @@ def int_hash(val):
                 if val == 0:
                     ret = 0
                 else:  # int64 min, -0x8000000000000000
-                    ret = _Py_hash_t(-4)
+                    ret = _Py_hash_t(_HASH_I64_MIN)
             else:
                 ret = _Py_hash_t(val)
         else:
