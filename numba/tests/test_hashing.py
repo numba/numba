@@ -45,7 +45,7 @@ class BaseTest(TestCase):
                                  float(val).is_integer()))
                     nonzero = val != 0
                     intmin = val < 0 and abs(val) == val
-                    notlong = abs(val) < (hashing._PyHASH_MODULUS)
+                    notlong = abs(val) < (hashing._PyHASH_MODULUS - 1)
                     proceed = intinput and nonzero and not intmin and notlong
             if proceed:
                 self.assertEqual(nb_hash, hash(val))
