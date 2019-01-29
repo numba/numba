@@ -58,6 +58,9 @@ Either:
     ma_values == NULL, dk_refcnt == 1.
     Values are stored in the me_value field of the PyDictKeysObject.
 Or:
+
+  (Numba dev notes: split table logic is removed)
+
   A split table:
     ma_values != NULL, dk_refcnt >= 1
     Values are stored in the ma_values array.
@@ -102,6 +105,17 @@ In split table, inserting into pending entry is allowed only for dk_entries[ix]
 where ix == mp->ma_used. Inserting into other index and deleting item cause
 converting the dict to the combined table.
 */
+
+
+/* D_MINSIZE (adapted from PyDict_MINSIZE)
+ * is the starting size for any new dict.
+ * 8 allows dicts with no more than 5 active entries; experiments suggested
+ * this suffices for the majority of dicts (consisting mostly of usually-small
+ * dicts created to pass keyword arguments).
+ * Making this 8, rather than 4 reduces the number of resizes for most
+ * dictionaries, without any significant extra memory use.
+ */
+#define D_MINSIZE 8
 
 #include "_dictobject.h"
 
@@ -211,49 +225,10 @@ polynomial.  In Tim's experiments the current scheme ran faster, produced
 equally good collision statistics, needed less code & used less memory.
 
 */
-//////////////////////////////////////////////////////////////////////////////
-
-
-/* USABLE_FRACTION is the maximum dictionary load.
- * Increasing this ratio makes dictionaries more dense resulting in more
- * collisions.  Decreasing it improves sparseness at the expense of spreading
- * indices over more cache lines and at the cost of total memory consumed.
- *
- * USABLE_FRACTION must obey the following:
- *     (0 < USABLE_FRACTION(n) < n) for all n >= 2
- *
- * USABLE_FRACTION should be quick to calculate.
- * Fractions around 1/2 to 2/3 seem to work well in practice.
- */
-#define USABLE_FRACTION(n) (((n) << 1)/3)
-
-
-
-/* Alternative fraction that is otherwise close enough to 2n/3 to make
- * little difference. 8 * 2/3 == 8 * 5/8 == 5. 16 * 2/3 == 16 * 5/8 == 10.
- * 32 * 2/3 = 21, 32 * 5/8 = 20.
- * Its advantage is that it is faster to compute on machines with slow division.
- * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))
- */
-
-/* GROWTH_RATE. Growth rate upon hitting maximum load.
- * Currently set to used*3.
- * This means that dicts double in size when growing without deletions,
- * but have more head room when the number of deletions is on a par with the
- * number of insertions.  See also bpo-17563 and bpo-33205.
- *
- * GROWTH_RATE was set to used*4 up to version 3.2.
- * GROWTH_RATE was set to used*2 in version 3.3.0
- * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
- */
-#define GROWTH_RATE(d) ((d)->ma_used*3)
-
-
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
 #define DKIX_ERROR (-3)
-
 
 typedef enum {
     OK = 0,
@@ -273,44 +248,33 @@ int mem_cmp_zeros(void *obj, size_t n){
     return diff;
 }
 
-
-/* D_MINSIZE (adapted from PyDict_MINSIZE)
- * is the starting size for any new dict.
- * 8 allows dicts with no more than 5 active entries; experiments suggested
- * this suffices for the majority of dicts (consisting mostly of usually-small
- * dicts created to pass keyword arguments).
- * Making this 8, rather than 4 reduces the number of resizes for most
- * dictionaries, without any significant extra memory use.
- */
-#define D_MINSIZE 8
 #define D_MASK(dk) ((dk)->size-1)
 #define D_GROWTH_RATE(d) ((d)->used*3)
 
-
-
-int
-_index_size(Py_ssize_t size) {
+static int
+ix_size(Py_ssize_t size) {
     if ( size < 0xff ) return 1;
     if ( size < 0xffff ) return 2;
     if ( size < 0xffffffff ) return 4;
     return sizeof(int64_t);
 }
 
-
-Py_ssize_t
-_align(Py_ssize_t sz) {
+/* Align size *sz* to pointer width */
+static Py_ssize_t
+align(Py_ssize_t sz) {
     Py_ssize_t alignment = sizeof(void*);
     return sz + (alignment - sz % alignment) % alignment;
 }
 
-void*
-_palign(void *ptr) {
-    return (void*)_align((size_t)ptr);
+/* Align pointer *ptr* to pointer size */
+static void*
+palign(void *ptr) {
+    return (void*)align((size_t)ptr);
 }
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
 static inline Py_ssize_t
-_get_index(NB_DictKeys *dk, Py_ssize_t i)
+get_index(NB_DictKeys *dk, Py_ssize_t i)
 {
     Py_ssize_t s = dk->size;
     Py_ssize_t ix;
@@ -338,10 +302,9 @@ _get_index(NB_DictKeys *dk, Py_ssize_t i)
     return ix;
 }
 
-
 /* write to indices. */
 static inline void
-_set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
+set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
 {
     Py_ssize_t s = dk->size;
 
@@ -371,15 +334,113 @@ _set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
 }
 
 
+/* USABLE_FRACTION is the maximum dictionary load.
+ * Increasing this ratio makes dictionaries more dense resulting in more
+ * collisions.  Decreasing it improves sparseness at the expense of spreading
+ * indices over more cache lines and at the cost of total memory consumed.
+ *
+ * USABLE_FRACTION must obey the following:
+ *     (0 < USABLE_FRACTION(n) < n) for all n >= 2
+ *
+ * USABLE_FRACTION should be quick to calculate.
+ * Fractions around 1/2 to 2/3 seem to work well in practice.
+ */
+#define USABLE_FRACTION(n) (((n) << 1)/3)
+
+/* Alternative fraction that is otherwise close enough to 2n/3 to make
+ * little difference. 8 * 2/3 == 8 * 5/8 == 5. 16 * 2/3 == 16 * 5/8 == 10.
+ * 32 * 2/3 = 21, 32 * 5/8 = 20.
+ * Its advantage is that it is faster to compute on machines with slow division.
+ * #define USABLE_FRACTION(n) (((n) >> 1) + ((n) >> 2) - ((n) >> 3))
+ */
+
+/* GROWTH_RATE. Growth rate upon hitting maximum load.
+ * Currently set to used*3.
+ * This means that dicts double in size when growing without deletions,
+ * but have more head room when the number of deletions is on a par with the
+ * number of insertions.  See also bpo-17563 and bpo-33205.
+ *
+ * GROWTH_RATE was set to used*4 up to version 3.2.
+ * GROWTH_RATE was set to used*2 in version 3.3.0
+ * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
+ */
+#define GROWTH_RATE(d) ((d)->ma_used*3)
+
+void
+numba_dictkeys_free(NB_DictKeys *dk) {
+    free(dk);
+}
+
+void
+numba_dict_free(NB_Dict *d) {
+    numba_dictkeys_free(d->keys);
+    free(d);
+}
+
+Py_ssize_t
+numba_dict_length(NB_Dict *d) {
+    return d->used;
+}
+
+
+static NB_DictEntry*
+get_entry(NB_DictKeys *dk, Py_ssize_t idx) {
+    assert (idx < dk->size);
+    Py_ssize_t offset = idx * dk->entry_size;
+    char *ptr = dk->indices + dk->entry_offset + offset;
+    return (NB_DictEntry*)ptr;
+}
+
+static void
+zero_key(NB_DictKeys *dk, char *data){
+    memset(data, 0, dk->key_size);
+}
+
+static void
+zero_val(NB_DictKeys *dk, char *data){
+    memset(data, 0, dk->val_size);
+}
+
+static void
+copy_key(NB_DictKeys *dk, char *dst, const char *src){
+    memcpy(dst, src, dk->key_size);
+}
+
+static void
+copy_val(NB_DictKeys *dk, char *dst, const char *src){
+    memcpy(dst, src, dk->val_size);
+}
+
+/* Returns -1 for error; 0 for not equal; 1 for equal */
+static int
+key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
+    /* XXX: should use user provided Equality */
+    return memcmp(lhs, rhs, dk->key_size) == 0;
+}
+
+static char *
+entry_get_key(NB_DictKeys *dk, NB_DictEntry* entry) {
+    char * out = entry->keyvalue;
+    assert (out == palign(out));
+    return out;
+}
+
+static char *
+entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
+    char * out = entry_get_key(dk, entry) + align(dk->key_size);
+    assert (out == palign(out));
+    return out;
+}
+
 /* Allocate new dictionary keys */
 int
-NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
-    Py_ssize_t index_size = _index_size(size);
-    Py_ssize_t entry_size = _align(sizeof(NB_DictEntry) + _align(key_size) + _align(val_size));
-    Py_ssize_t entry_offset = _align(index_size * size);
+numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
+    Py_ssize_t index_size = ix_size(size);
+    Py_ssize_t entry_size = align(sizeof(NB_DictEntry) + align(key_size) + align(val_size));
+    Py_ssize_t entry_offset = align(index_size * size);
     Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * size;
 
-    NB_DictKeys *dk = _palign(malloc(_align(alloc_size)));
+    NB_DictKeys *dk = palign(malloc(align(alloc_size)));
     if (!dk) return ERR_NO_MEMORY;
 
     assert ( size >= D_MINSIZE );
@@ -392,7 +453,7 @@ NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssiz
     dk->entry_offset = entry_offset;
     dk->entry_size = entry_size;
 
-    assert (_palign(dk->indices) == dk->indices );
+    assert (palign(dk->indices) == dk->indices );
     memset(dk->indices, 0xff, entry_offset);
     /* Ensure hash is (-1) for empty */
     memset(dk->indices + entry_offset, 0xff, entry_size * size);
@@ -401,21 +462,17 @@ NB_DictKeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssiz
     return OK;
 }
 
-void
-NB_DictKeys_free(NB_DictKeys *dk) {
-    free(dk);
-}
 
 /* Allocate new dictionary */
 int
 numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     NB_DictKeys* dk;
-    int status = NB_DictKeys_new(&dk, size, key_size, val_size);
+    int status = numba_dictkeys_new(&dk, size, key_size, val_size);
     if (status != OK) return status;
 
     NB_Dict *d = malloc(sizeof(NB_Dict));
     if (!d) {
-        NB_DictKeys_free(dk);
+        numba_dictkeys_free(dk);
         return ERR_NO_MEMORY;
     }
 
@@ -425,68 +482,31 @@ numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t v
     return OK;
 }
 
-void
-numba_dict_free(NB_Dict *d) {
-    NB_DictKeys_free(d->keys);
-    free(d);
+/*
+Adapted from CPython lookdict_index().
+
+Search index of hash table from offset of entry table
+*/
+static Py_ssize_t
+lookdict_index(NB_DictKeys *dk, Py_hash_t hash, Py_ssize_t index)
+{
+    size_t mask = D_MASK(dk);
+    size_t perturb = (size_t)hash;
+    size_t i = (size_t)hash & mask;
+
+    for (;;) {
+        Py_ssize_t ix = get_index(dk, i);
+        if (ix == index) {
+            return i;
+        }
+        if (ix == DKIX_EMPTY) {
+            return DKIX_EMPTY;
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = mask & (i*5 + perturb + 1);
+    }
+    assert(0 && "unreachable");
 }
-
-Py_ssize_t
-numba_dict_length(NB_Dict *d) {
-    return d->used;
-}
-
-
-NB_DictEntry*
-_get_entry(NB_DictKeys *dk, Py_ssize_t idx) {
-    assert (idx < dk->size);
-    Py_ssize_t offset = idx * dk->entry_size;
-    char *ptr = dk->indices + dk->entry_offset + offset;
-    return (NB_DictEntry*)ptr;
-}
-
-void
-_zero_key(NB_DictKeys *dk, char *data){
-    memset(data, 0, dk->key_size);
-}
-
-void
-_zero_val(NB_DictKeys *dk, char *data){
-    memset(data, 0, dk->val_size);
-}
-
-void
-_copy_key(NB_DictKeys *dk, char *dst, const char *src){
-    memcpy(dst, src, dk->key_size);
-}
-
-void
-_copy_val(NB_DictKeys *dk, char *dst, const char *src){
-    memcpy(dst, src, dk->val_size);
-}
-
-/* Returns -1 for error; 0 for not equal; 1 for equal */
-int
-_key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
-    /* XXX: should use user provided Equality */
-    return memcmp(lhs, rhs, dk->key_size) == 0;
-}
-
-
-char *
-_entry_get_key(NB_DictKeys *dk, NB_DictEntry* entry) {
-    char * out = entry->keyvalue;
-    assert (out == _palign(out));
-    return out;
-}
-
-char *
-_entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
-    char * out = _entry_get_key(dk, entry) + _align(dk->key_size);
-    assert (out == _palign(out));
-    return out;
-}
-
 
 /*
 
@@ -523,19 +543,19 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
     size_t perturb = hash;
     size_t i = (size_t)hash & mask;
 
-    while (1) {
-        Py_ssize_t ix = _get_index(dk, i);
+    for (;;) {
+        Py_ssize_t ix = get_index(dk, i);
         if (ix == DKIX_EMPTY) {
-            _zero_val(dk, oldval_bytes);
+            zero_val(dk, oldval_bytes);
             return ix;
         }
         if (ix >= 0) {
-            NB_DictEntry *ep = _get_entry(dk, ix);
+            NB_DictEntry *ep = get_entry(dk, ix);
             char startkey[dk->val_size];
             if (ep->hash == hash) {
-                _copy_key(dk, startkey, _entry_get_key(dk, ep));
+                copy_key(dk, startkey, entry_get_key(dk, ep));
 
-                int cmp = _key_equal(dk, startkey, key_bytes);
+                int cmp = key_equal(dk, startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
                     memset(oldval_bytes, 0, dk->val_size);
@@ -543,10 +563,9 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
                 }
                 if (cmp > 0) {
                     // key is equal; retrieve the value.
-                    _copy_val(dk, oldval_bytes, _entry_get_val(dk, ep));
+                    copy_val(dk, oldval_bytes, entry_get_val(dk, ep));
                     return ix;
                 }
-
             }
         }
         perturb >>= PERTURB_SHIFT;
@@ -556,36 +575,97 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
 }
 
 
-Py_ssize_t
-_find_empty_slot(NB_DictKeys *dk, Py_hash_t hash){
+/* Internal function to find slot for an item from its hash
+   when it is known that the key is not present in the dict.
+
+   The dict must be combined. */
+static Py_ssize_t
+find_empty_slot(NB_DictKeys *dk, Py_hash_t hash){
     assert(dk != NULL);
 
     const size_t mask = D_MASK(dk);
     size_t i = hash & mask;
-    Py_ssize_t ix = _get_index(dk, i);
+    Py_ssize_t ix = get_index(dk, i);
     for (size_t perturb = hash; ix >= 0;) {
         perturb >>= PERTURB_SHIFT;
         i = (i*5 + perturb + 1) & mask;
-        ix = _get_index(dk, i);
+        ix = get_index(dk, i);
     }
     return i;
 }
 
+static int
+insertion_resize(NB_Dict *d)
+{
+    return numba_dict_resize(d, D_GROWTH_RATE(d));
+}
+
+int
+numba_dict_insert(
+    NB_Dict    *d,
+    const char *key_bytes,
+    Py_hash_t   hash,
+    const char *val_bytes,
+    char       *oldval_bytes
+    )
+{
+    NB_DictKeys *dk = d->keys;
+
+    Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
+    if (ix == DKIX_ERROR) {
+        // exception in key comparision in lookup.
+        goto Fail;
+    }
+
+    if (ix == DKIX_EMPTY) {
+        /* Insert into new slot */
+        assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
+        if (dk->usable <= 0) {
+            /* Need to resize */
+            if (insertion_resize(d) != OK)
+                goto Fail;
+            else
+                dk = d->keys;     // reload
+        }
+        Py_ssize_t hashpos = find_empty_slot(dk, hash);
+        NB_DictEntry *ep = get_entry(dk, dk->nentries);
+        set_index(dk, hashpos, dk->nentries);
+        copy_val(dk, entry_get_key(dk, ep), key_bytes);
+        assert ( hash != -1 );
+        ep->hash = hash;
+        copy_val(dk, entry_get_val(dk, ep), val_bytes);
+
+        d->used += 1;
+        dk->usable -= 1;
+        dk->nentries += 1;
+        assert (dk->usable >= 0);
+        return OK;
+    }
+
+    assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) != 0 && "lookup found previous entry");
+    // Replace the previous value
+    copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
+
+    return OK;
+Fail:
+    return ERR_NO_MEMORY;
+}
 
 /*
-Adapted from build_indices()
+Adapted from build_indices().
+Internal routine used by dictresize() to build a hashtable of entries.
 */
 void
-_build_indices(NB_DictKeys *keys, Py_ssize_t n) {
+build_indices(NB_DictKeys *keys, Py_ssize_t n) {
     size_t mask = (size_t)D_MASK(keys);
     for (Py_ssize_t ix = 0; ix != n; ix++) {
-        Py_hash_t hash = _get_entry(keys, ix)->hash;
+        Py_hash_t hash = get_entry(keys, ix)->hash;
         size_t i = hash & mask;
-        for (size_t perturb = hash; _get_index(keys, i) != DKIX_EMPTY;) {
+        for (size_t perturb = hash; get_index(keys, i) != DKIX_EMPTY;) {
             perturb >>= PERTURB_SHIFT;
             i = mask & (i*5 + perturb + 1);
         }
-        _set_index(keys, i, ix);
+        set_index(keys, i, ix);
     }
 
 }
@@ -613,7 +693,6 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
          newsize < minsize && newsize > 0;
          newsize <<= 1)
         ;
-
     if (newsize <= 0) {
         return ERR_NO_MEMORY;
     }
@@ -625,7 +704,7 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
      */
 
     /* Allocate a new table. */
-    int status = NB_DictKeys_new(
+    int status = numba_dictkeys_new(
         &d->keys, newsize, oldkeys->key_size, oldkeys->val_size
     );
     if (status != OK) {
@@ -640,8 +719,8 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     if (oldkeys->nentries == numentries) {
         NB_DictEntry *oldentries, *newentries;
 
-        oldentries = _get_entry(oldkeys, 0);
-        newentries = _get_entry(d->keys, 0);
+        oldentries = get_entry(oldkeys, 0);
+        newentries = get_entry(d->keys, 0);
         memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
     }
     else {
@@ -654,13 +733,13 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
 
                 Here, we skip until a non empty entry is encountered.
             */
-            while( _get_entry(oldkeys, epi)->hash == DKIX_EMPTY ) {
-                assert( mem_cmp_zeros(_entry_get_val(oldkeys, _get_entry(oldkeys, epi)), oldkeys->val_size) == 0 );
+            while( get_entry(oldkeys, epi)->hash == DKIX_EMPTY ) {
+                assert( mem_cmp_zeros(entry_get_val(oldkeys, get_entry(oldkeys, epi)), oldkeys->val_size) == 0 );
                 epi += 1;
             }
             memcpy(
-                _get_entry(d->keys, i),
-                _get_entry(oldkeys, epi),
+                get_entry(d->keys, i),
+                get_entry(oldkeys, epi),
                 oldkeys->entry_size
             );
             epi += 1;
@@ -668,85 +747,38 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
         }
 
     }
-    NB_DictKeys_free(oldkeys);
+    numba_dictkeys_free(oldkeys);
 
-    _build_indices(d->keys, numentries);
+    build_indices(d->keys, numentries);
     d->keys->usable = numentries;
     d->keys->nentries = numentries;
     return OK;
 }
 
-int
-_insertion_resize(NB_Dict *d) {
-    return numba_dict_resize(d, D_GROWTH_RATE(d));
-}
-
-
-int
-numba_dict_insert(
-    NB_Dict    *d,
-    const char *key_bytes,
-    Py_hash_t   hash,
-    const char *val_bytes,
-    char       *oldval_bytes
-    )
+/*
+    Adapted from CPython delitem_common
+ */
+static int
+numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
 {
+    NB_DictEntry *ep;
     NB_DictKeys *dk = d->keys;
+    char oldkey_bytes[dk->key_size];
 
-    Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
-    if (ix == DKIX_ERROR) {
-        // exception in key comparision in lookup.
-        goto Fail;
-    }
+    Py_ssize_t hashpos = lookdict_index(dk, hash, ix);
+    assert(hashpos >= 0);
 
-    if (ix == DKIX_EMPTY) {
-        /* Insert into new slot */
-        assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
-        if (dk->usable <= 0) {
-            /* Need to resize */
-            if (_insertion_resize(d) != OK)
-                goto Fail;
-            else
-                dk = d->keys;     // reload
-        }
-        Py_ssize_t hashpos = _find_empty_slot(dk, hash);
-        NB_DictEntry *ep = _get_entry(dk, dk->nentries);
-        _set_index(dk, hashpos, dk->nentries);
-        _copy_val(dk, _entry_get_key(dk, ep), key_bytes);
-        assert ( hash != -1 );
-        ep->hash = hash;
-        _copy_val(dk, _entry_get_val(dk, ep), val_bytes);
+    d->used -= 1;
+    ep = get_entry(dk, ix);
+    set_index(dk, hashpos, DKIX_DUMMY);
 
-        d->used += 1;
-        dk->usable -= 1;
-        dk->nentries += 1;
-        assert (dk->usable >= 0);
-        return OK;
-    }
-
-    assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) != 0 && "lookup found previous entry");
-    // Replace the previous value
-    _copy_val(dk, _entry_get_val(dk, _get_entry(dk, ix)), val_bytes);
+    copy_key(dk, oldkey_bytes, entry_get_key(dk, ep));
+    zero_key(dk, entry_get_key(dk, ep));
+    zero_val(dk, entry_get_val(dk, ep));
+    ep->hash = DKIX_EMPTY; // to mark it as empty;
 
     return OK;
-Fail:
-    return ERR_NO_MEMORY;
 }
-
-
-
-int
-numba_dict_insert_ez(
-    NB_Dict    *d,
-    const char *key_bytes,
-    Py_hash_t   hash,
-    const char *val_bytes
-    )
-{
-    char old[d->keys->val_size];
-    return numba_dict_insert(d, key_bytes, hash, val_bytes, old);
-}
-
 
 void
 numba_dict_dump_keys(NB_Dict *d) {
@@ -761,9 +793,9 @@ numba_dict_dump_keys(NB_Dict *d) {
     printf("Key dump\n");
 
     for (i = 0, j = 0; i < size; i++) {
-        ep = _get_entry(dk, i);
+        ep = get_entry(dk, i);
         if (ep->hash != -1) {
-            printf("  key=%s hash=%zu value=%s\n", _entry_get_key(dk, ep), ep->hash, _entry_get_val(dk, ep));
+            printf("  key=%s hash=%zu value=%s\n", entry_get_key(dk, ep), ep->hash, entry_get_val(dk, ep));
             j++;
         }
     }
@@ -794,66 +826,26 @@ numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr
     }
     NB_DictKeys *dk = it->parent_keys;
     while ( it->pos < dk->nentries ) {
-        NB_DictEntry *ep = _get_entry(dk, it->pos++);
+        NB_DictEntry *ep = get_entry(dk, it->pos++);
         if ( ep->hash != DKIX_EMPTY ) {
-            *key_ptr = _entry_get_key(dk, ep);
-            *val_ptr = _entry_get_val(dk, ep);
+            *key_ptr = entry_get_key(dk, ep);
+            *val_ptr = entry_get_val(dk, ep);
             return OK;
         }
     }
     return ERR_ITER_EXHAUSTED;
 }
 
-
-/*
-Adapted from CPython lookdict_index().
-
-Search index of hash table from offset of entry table
-*/
-static Py_ssize_t
-_lookdict_index(NB_DictKeys *dk, Py_hash_t hash, Py_ssize_t index)
+static int
+numba_dict_insert_ez(
+    NB_Dict    *d,
+    const char *key_bytes,
+    Py_hash_t   hash,
+    const char *val_bytes
+    )
 {
-    size_t mask = D_MASK(dk);
-    size_t perturb = (size_t)hash;
-    size_t i = (size_t)hash & mask;
-
-    for (;;) {
-        Py_ssize_t ix = _get_index(dk, i);
-        if (ix == index) {
-            return i;
-        }
-        if (ix == DKIX_EMPTY) {
-            return DKIX_EMPTY;
-        }
-        perturb >>= PERTURB_SHIFT;
-        i = mask & (i*5 + perturb + 1);
-    }
-    assert(0 && "unreachable");
-}
-
-/*
-    Adapted from CPython delitem_common
- */
-int
-numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
-{
-    NB_DictEntry *ep;
-    NB_DictKeys *dk = d->keys;
-    char oldkey_bytes[dk->key_size];
-
-    Py_ssize_t hashpos = _lookdict_index(dk, hash, ix);
-    assert(hashpos >= 0);
-
-    d->used -= 1;
-    ep = _get_entry(dk, ix);
-    _set_index(dk, hashpos, DKIX_DUMMY);
-
-    _copy_key(dk, oldkey_bytes, _entry_get_key(dk, ep));
-    _zero_key(dk, _entry_get_key(dk, ep));
-    _zero_val(dk, _entry_get_val(dk, ep));
-    ep->hash = DKIX_EMPTY; // to mark it as empty;
-
-    return OK;
+    char old[d->keys->val_size];
+    return numba_dict_insert(d, key_bytes, hash, val_bytes, old);
 }
 
 int
@@ -890,15 +882,15 @@ numba_test_dict(void) {
     CHECK(d->keys->size == D_MINSIZE);
     CHECK(d->keys->key_size == 4);
     CHECK(d->keys->val_size == 8);
-    CHECK(_index_size(d->keys->size) == 1);
-    printf("_align(index_size * size) = %zd\n", _align(_index_size(d->keys->size) * d->keys->size));
+    CHECK(ix_size(d->keys->size) == 1);
+    printf("align(index_size * size) = %zd\n", align(ix_size(d->keys->size) * d->keys->size));
 
     printf("d %p\n", d);
     printf("d->usable = %zu\n", d->keys->usable);
-    printf("d[0] 0x%zx\n", (char*)_get_entry(d->keys, 0) - (char*)d->keys);
-    CHECK ((char*)_get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
-    printf("d[1] 0x%zx\n", (char*)_get_entry(d->keys, 1) - (char*)d->keys);
-    CHECK ((char*)_get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
+    printf("d[0] 0x%zx\n", (char*)get_entry(d->keys, 0) - (char*)d->keys);
+    CHECK ((char*)get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
+    printf("d[1] 0x%zx\n", (char*)get_entry(d->keys, 1) - (char*)d->keys);
+    CHECK ((char*)get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
 
     char got_value[d->keys->val_size];
     Py_ssize_t ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
