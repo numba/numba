@@ -2568,5 +2568,12 @@ class TestManyStencils(TestStencilBase):
         A = np.array(np.arange(20) % 2).reshape(4, 5).astype(np.bool_)
         self.check(kernel, A, options={'cval': True})
 
+    def test_basic94(self):
+        """ Issue #3528. Support for slices. """
+        def kernel(a):
+            return np.median(a[-1:2, -1:2])
+        a = np.arange(20, dtype=np.uint32).reshape(4, 5)
+        self.check(kernel, a, options={'neighborhood': ((-1, 1), (-1, 1),)})
+
 if __name__ == "__main__":
     unittest.main()
