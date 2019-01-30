@@ -38,8 +38,8 @@ def normalize_signature(sig):
 
     def check_type(ty):
         if not isinstance(ty, types.Type):
-            raise TypeError("invalid signature: expected a type instance, "
-                            "got %r" % (ty,))
+            raise TypeError("invalid type in signature: expected a type "
+                            "instance, got %r" % (ty,))
 
     if return_type is not None:
         check_type(return_type)
