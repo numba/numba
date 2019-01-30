@@ -352,10 +352,18 @@ def array_std(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def zero_dim_msg(fn_name):
+    msg = ("zero-size array to reduction operation "
+           "{0} which has no identity".format(fn_name))
+    return msg
+
+
 @lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
     ty = sig.args[0].dtype
+    MSG = zero_dim_msg('minimum')
+
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
         # NaT is smaller than every other value, but it is
         # ignored as far as min() is concerned.
@@ -363,8 +371,8 @@ def array_min(context, builder, sig, args):
 
         def array_min_impl(arry):
             if arry.size == 0:
-                raise ValueError(("zero-size array to reduction operation "
-                                  "minimum which has no identity"))
+                raise ValueError(MSG)
+
             min_value = nat
             it = np.nditer(arry)
             for view in it:
@@ -379,21 +387,37 @@ def array_min(context, builder, sig, args):
                     min_value = v
             return min_value
 
+    elif isinstance(ty, types.Complex):
+        def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            min_value = next(it).take(0)
+
+            for view in it:
+                v = view.item()
+                if v.real < min_value.real:
+                    min_value = v
+                elif v.real == min_value.real:
+                    if v.imag < min_value.imag:
+                        min_value = v
+            return min_value
+
     else:
         def array_min_impl(arry):
             if arry.size == 0:
-                raise ValueError(("zero-size array to reduction operation "
-                                  "minimum which has no identity"))
+                raise ValueError(MSG)
+
             it = np.nditer(arry)
-            for view in it:
-                min_value = view.item()
-                break
+            min_value = next(it).take(0)
 
             for view in it:
                 v = view.item()
                 if v < min_value:
                     min_value = v
             return min_value
+
     res = context.compile_internal(builder, array_min_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -401,20 +425,39 @@ def array_min(context, builder, sig, args):
 @lower_builtin(np.max, types.Array)
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
-    def array_max_impl(arry):
-        if arry.size == 0:
-            raise ValueError(("zero-size array to reduction operation "
-                                "maximum which has no identity"))
-        it = np.nditer(arry)
-        for view in it:
-            max_value = view.item()
-            break
+    ty = sig.args[0].dtype
+    MSG = zero_dim_msg('maximum')
 
-        for view in it:
-            v = view.item()
-            if v > max_value:
-                max_value = v
-        return max_value
+    if isinstance(ty, types.Complex):
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+
+            for view in it:
+                v = view.item()
+                if v.real > max_value.real:
+                    max_value = v
+                elif v.real == max_value.real:
+                    if v.imag > max_value.imag:
+                        max_value = v
+            return max_value
+    else:
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+
+            for view in it:
+                v = view.item()
+                if v > max_value:
+                    max_value = v
+            return max_value
+
     res = context.compile_internal(builder, array_max_impl, sig, args)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -531,46 +574,81 @@ def get_isnan(dtype):
             return False
         return _trivial_isnan
 
+@register_jitable
+def less_than(a, b):
+    return a < b
+
+@register_jitable
+def greater_than(a, b):
+    return a > b
+
+@register_jitable
+def check_array(a):
+    if a.size == 0:
+        raise ValueError('zero-size array to reduction operation not possible')
+
+def nan_min_max_factory(comparison_op, is_complex_dtype):
+
+    if is_complex_dtype:
+        def impl(a):
+            arr = np.asarray(a)
+            check_array(arr)
+            it = np.nditer(arr)
+            return_val = next(it).take(0)
+            for view in it:
+                v = view.item()
+                if np.isnan(return_val.real) and not np.isnan(v.real):
+                    return_val = v
+                else:
+                    if comparison_op(v.real, return_val.real):
+                        return_val = v
+                    elif v.real == return_val.real:
+                        if comparison_op(v.imag, return_val.imag):
+                            return_val = v
+            return return_val
+    else:
+        def impl(a):
+            arr = np.asarray(a)
+            check_array(arr)
+            it = np.nditer(arr)
+            return_val = next(it).take(0)
+            for view in it:
+                v = view.item()
+                if not np.isnan(v):
+                    if not comparison_op(return_val, v):
+                        return_val = v
+            return return_val
+
+    return impl
+
+real_nanmin = register_jitable(
+    nan_min_max_factory(less_than, is_complex_dtype=False)
+)
+real_nanmax = register_jitable(
+    nan_min_max_factory(greater_than, is_complex_dtype=False)
+)
+complex_nanmin = register_jitable(
+    nan_min_max_factory(less_than, is_complex_dtype=True)
+)
+complex_nanmax = register_jitable(
+    nan_min_max_factory(greater_than, is_complex_dtype=True)
+)
 
 @overload(np.nanmin)
 def np_nanmin(a):
-    if not isinstance(a, types.Array):
-        return
-    isnan = get_isnan(a.dtype)
-
-    def nanmin_impl(a):
-        if a.size == 0:
-            raise ValueError("nanmin(): empty array")
-        for view in np.nditer(a):
-            minval = view.item()
-            break
-        for view in np.nditer(a):
-            v = view.item()
-            if not minval < v and not isnan(v):
-                minval = v
-        return minval
-
-    return nanmin_impl
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        return complex_nanmin
+    else:
+        return real_nanmin
 
 @overload(np.nanmax)
 def np_nanmax(a):
-    if not isinstance(a, types.Array):
-        return
-    isnan = get_isnan(a.dtype)
-
-    def nanmax_impl(a):
-        if a.size == 0:
-            raise ValueError("nanmin(): empty array")
-        for view in np.nditer(a):
-            maxval = view.item()
-            break
-        for view in np.nditer(a):
-            v = view.item()
-            if not maxval > v and not isnan(v):
-                maxval = v
-        return maxval
-
-    return nanmax_impl
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        return complex_nanmax
+    else:
+        return real_nanmax
 
 if numpy_version >= (1, 8):
     @overload(np.nanmean)
@@ -725,14 +803,6 @@ def prepare_ptp_input(a):
         raise ValueError('zero-size array reduction not possible')
     else:
         return arr
-
-@register_jitable
-def less_than(a, b):
-    return a < b
-
-@register_jitable
-def greater_than(a, b):
-    return a > b
 
 def _compute_current_val_impl_gen(op):
     def _compute_current_val_impl(current_val, val):
@@ -2374,7 +2444,7 @@ def _searchsorted(func):
         return lo
     return searchsorted_inner
 
-_lt = register_jitable(lambda x, y: x < y)
+_lt = less_than
 _le = register_jitable(lambda x, y: x <= y)
 _searchsorted_left = register_jitable(_searchsorted(_lt))
 _searchsorted_right = register_jitable(_searchsorted(_le))
