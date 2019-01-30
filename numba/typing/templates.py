@@ -86,6 +86,13 @@ class Signature(object):
             return self
         sig = signature(self.return_type, *self.args[1:],
                         recvr=self.args[0])
+
+        # Adjust the python signature
+        params = list(self.pysig.parameters.values())[1:]
+        sig.pysig = utils.pySignature(
+            parameters=params,
+            return_annotation=self.pysig.return_annotation,
+        )
         return sig
 
     def as_function(self):
@@ -568,7 +575,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
         """
-        cache_key = context, typ, attr
+        cache_key = context, typ, attr, tuple(sig_args), tuple(sig_kws.items())
         try:
             disp = cls._impl_cache[cache_key]
         except KeyError:
