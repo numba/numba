@@ -758,7 +758,7 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
 /*
     Adapted from CPython delitem_common
  */
-static int
+int
 numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
 {
     NB_DictEntry *ep;
@@ -836,7 +836,7 @@ numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr
     return ERR_ITER_EXHAUSTED;
 }
 
-static int
+int
 numba_dict_insert_ez(
     NB_Dict    *d,
     const char *key_bytes,
