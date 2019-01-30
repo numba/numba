@@ -59,9 +59,7 @@ class Dim(object):
             if stride == 0:
                 size = 1
             else:
-                size = (stop - start + (stride - 1)) // stride
-            if size < 0:
-                size = 0
+                size = _compute_size(start, stop, stride)
             ret = Dim(
                 start=start,
                 stop=stop,
@@ -405,3 +403,17 @@ def is_element_indexing(item, ndim):
 
     return False
 
+
+def _compute_size(start, stop, step):
+    """Algorithm adapted from cpython rangeobject.c
+    """
+    if step > 0:
+        lo = start
+        hi = stop
+    else:
+        lo = stop
+        hi = start
+        step = -step
+    if lo >= hi:
+        return 0
+    return (hi - lo - 1) // step + 1
