@@ -48,7 +48,14 @@ class BaseTest(TestCase):
                     notlong = abs(val) < (hashing._PyHASH_MODULUS - 1)
                     proceed = intinput and nonzero and not intmin and notlong
             if proceed:
-                self.assertEqual(nb_hash, hash(val))
+                try:
+                    self.assertEqual(nb_hash, hash(val))
+                except AssertionError as e:
+                    print("val, nb_hash, hash(val)")
+                    print(val, nb_hash, hash(val))
+                    print("abs(val), hashing._PyHASH_MODULUS - 1")
+                    print(abs(val), hashing._PyHASH_MODULUS - 1)
+                    raise e
 
     def int_samples(self, typ=np.int64):
         for start in (0, -50, 60000, 1 << 32):
