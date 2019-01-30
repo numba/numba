@@ -43,8 +43,6 @@ class Dim(object):
     __slots__ = 'start', 'stop', 'size', 'stride', 'single'
 
     def __init__(self, start, stop, size, stride, single):
-        if stop < start:
-            raise ValueError("end offset is before start offset")
         self.start = start
         self.stop = stop
         self.size = size
@@ -54,54 +52,33 @@ class Dim(object):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            start, stop, step = item.start, item.stop, item.step
-            single = False
+            start, stop, step = item.indices(self.size)
+            stride = step * self.stride
+            start = self.start + start * abs(self.stride)
+            stop = self.start + stop * abs(self.stride)
+            if stride == 0:
+                size = 1
+            else:
+                size = (stop - start + (stride - 1)) // stride
+            if size < 0:
+                size = 0
+            ret = Dim(
+                start=start,
+                stop=stop,
+                size=size,
+                stride=stride,
+                single=False
+            )
+            return ret
         else:
-            single = True
-            start = item
-            stop = start + 1
-            step = None
-
-        # Default values
-        #   Start value is default to zero
-        if start is None:
-            start = 0
-        #   Stop value is default to self.size
-        if stop is None:
-            stop = self.size
-        #   Step is default to 1
-        if step is None:
-            step = 1
-
-        stride = step * self.stride
-
-        # Compute start in bytes
-        if start >= 0:
-            start = self.start + start * self.stride
-        else:
-            start = self.stop + start * self.stride
-        start = max(start, self.start)
-
-        # Compute stop in bytes
-        if stop >= 0:
-            stop = self.start + stop * self.stride
-        else:
-            stop = self.stop + stop * self.stride
-        stop = min(stop, self.stop)
-
-        # Clip stop
-        if (stop - start) > self.size * self.stride:
-            stop = start + self.size * stride
-
-        if stop < start:
-            start = stop
-            size = 0
-        elif stride == 0:
-            size = 1 if single else ((stop - start) // step)
-        else:
-            size = (stop - start + (stride - 1)) // stride
-
-        return Dim(start, stop, size, stride, single)
+            sliced = self[item:item + 1]
+            return Dim(
+                start=sliced.start,
+                stop=sliced.stop,
+                size=sliced.size,
+                stride=sliced.stride,
+                single=True,
+            )
 
     def get_offset(self, idx):
         return self.start + idx * self.stride
