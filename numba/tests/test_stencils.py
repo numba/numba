@@ -2760,7 +2760,6 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(20, dtype=np.uint32).reshape(4, 5)
         self.check(kernel, a)
 
-    @unittest.skip("not yet supported")
     def test_basic96(self):
         """ 1D slice. """
         def kernel(a):
