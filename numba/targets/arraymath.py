@@ -520,18 +520,20 @@ def np_any(a):
 @overload(np.average)
 def np_average(arr, axis=None, weights=None):
 
-    arr = np.asarray(arr)
     if weights is None or isinstance(weights, types.NoneType):
         def np_average_impl(arr, axis=None, weights=None):
+            arr = np.asarray(arr)
             return np.mean(arr)
     else:
-        weights = np.asarray(weights)
         if axis is None or isinstance(axis, types.NoneType):
             def np_average_impl(arr, axis=None, weights=None):
+                arr = np.asarray(arr)
+                weights = np.asarray(weights)
+
                 if arr.shape != weights.shape:
                     if axis is None:
                         raise TypeError(
-                            "Axis must be specified when shapes of a and weights "
+                            "Numba does not support average when shapes of a and weights "
                             "differ.")
                     if weights.ndim != 1:
                         raise TypeError(
@@ -540,27 +542,13 @@ def np_average(arr, axis=None, weights=None):
                 scl = np.sum(weights)
                 if scl == 0.0:
                     raise ZeroDivisionError(
-                        "Weights sum to zero, can't be normalized")
+                        "Weights sum to zero, can't be normalized.")
 
                 avg = np.sum(np.multiply(arr, weights))/scl
                 return avg
         else:
             def np_average_impl(arr, axis=None, weights=None):
-                if arr.shape != weights.shape:
-                    if weights.ndim != 1:
-                        raise TypeError(
-                            "1D weights expected when shapes of a and weights differ.")
-                    if weights.shape[0] != arr.shape[axis]:
-                        raise ValueError(
-                            "Length of weights not compatible with specified axis.")
-
-                scl = np.sum(weights)
-                if scl == 0.0:
-                    raise ZeroDivisionError(
-                        "Weights sum to zero, can't be normalized")
-
-                avg=np.sum(np.multiply(arr, weights), axis)/scl
-                return avg
+                raise TypeError("Numba does not support average with axis.")
 
     return np_average_impl
 
