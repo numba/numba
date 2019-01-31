@@ -248,9 +248,9 @@ class TestArrayComprehension(unittest.TestCase):
     def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
         and compare results."""
-        run_parallel = kwargs['run_parallel'] if 'run_parallel' in kwargs else False
-        assert_allocate_list = kwargs['assert_allocate_list'] if 'assert_allocate_list' in kwargs else False
-        assert_dtype = kwargs['assert_dtype'] if 'assert_dtype' in kwargs else None
+        run_parallel = kwargs.get('run_parallel', False)
+        assert_allocate_list = kwargs.get('assert_allocate_list', False)
+        assert_dtype = kwargs.get('assert_dtype', False)
         cfunc = jit(nopython=True,parallel=run_parallel)(pyfunc)
         pyres = pyfunc(*args)
         cres = cfunc(*args)
@@ -483,6 +483,15 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertNotEqual(got, expect)
         self.assertRegexpMatches(got, r'\[(\s*\d+)+\]')
 
+    def test_empty_list_not_removed(self):
+        # see issue #3724
+        def f(x):
+            t = []
+            myList = np.array([1])
+            a = np.random.choice(myList, 1)
+            t.append(x + a)
+            return a
+        self.check(f, 5, assert_allocate_list=True)
 
 if __name__ == '__main__':
     unittest.main()

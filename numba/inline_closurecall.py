@@ -1048,8 +1048,11 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
             elif isinstance(inst.value, ir.Expr):
                 expr = inst.value
                 if expr.op == 'build_list':
-                    list_vars = [inst.target.name]
                     list_items = [x.name for x in expr.items]
+                    # checking there are some items prevents removal of
+                    # `build_list` in the case of an empty list that is appended
+                    # to!
+                    list_vars = [inst.target.name] if list_items else []
                     stmts.append(inst)
                     continue
                 elif expr.op == 'call' and expr in calltypes:
