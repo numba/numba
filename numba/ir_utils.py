@@ -256,25 +256,6 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     return header_block
 
 
-def find_op_typ(op, arg_typs):
-    for ft in typing.templates.builtin_registry.functions:
-        if ft.key == op:
-            try:
-                func_typ = types.Function(ft).get_call_type(typing.Context(),
-                                                            arg_typs, {})
-            except TypingError:
-                func_typ = None
-            if func_typ is not None:
-                return func_typ
-    else:
-        for f, ft in typing.templates.builtin_registry.globals:
-            if f == op:
-                return ft.get_call_type(typing.Context(),
-                                                    arg_typs, {})
-
-    raise RuntimeError("unknown array operation")
-
-
 def legalize_names(varnames):
     """returns a dictionary for conversion of variable names to legal
     parameter names.
