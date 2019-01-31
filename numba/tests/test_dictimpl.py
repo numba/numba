@@ -164,6 +164,8 @@ class DictIter(object):
             k, v = out
             return k.decode(), v.decode()
 
+    next = __next__    # needed for py2 only
+
 
 class TestDictImpl(TestCase):
     def setUp(self):
