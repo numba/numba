@@ -23,7 +23,7 @@ if _py34_or_later:
     _Py_hash_t = getattr(types, 'int%s' % _hash_width)
     _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
 
-    # Constants from cPython source, obtained by various means:
+    # Constants from CPython source, obtained by various means:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h
     _PyHASH_INF = sys.hash_info.inf
     _PyHASH_NAN = sys.hash_info.nan
@@ -68,7 +68,7 @@ def process_return(val):
         asint = int(-2)
     return asint
 
-# This is a translation of cPython's _Py_HashDouble:
+# This is a translation of CPython's _Py_HashDouble:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129
 
 
@@ -128,7 +128,7 @@ def _fpext(tyctx, val):
     sig = types.float64(types.float32)
     return sig, impl
 
-# This is a translation of cPython's long_hash, but restricted to the numerical
+# This is a translation of CPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/longobject.c#L2934-L2989
 # obdigit is a uint32_t which is typedef'd to digit
@@ -148,22 +148,10 @@ def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
     # chunks in an unsigned hash wide type, max numba can handle is a 64bit int
-    # TODO: work out 32bit variant
 
     # mask to select low _PyLong_SHIFT bits
     _tmp_shift = 32 - _PyLong_SHIFT
     mask_shift = (~types.uint32(0x0)) >> _tmp_shift
-
-    _DEBUG = False
-    if _DEBUG:
-        # shows the first 3 blocks of the py long repr
-        obdigits = np.zeros((3,), dtype=np.uint32)
-        print(val)
-        obdigits[0] = types.uint32((val >> 0) & mask_shift)
-        obdigits[1] = types.uint32((val >> _PyLong_SHIFT) & mask_shift)
-        obdigits[2] = types.uint32((val >> (2 * _PyLong_SHIFT)) & mask_shift)
-        for i, x in enumerate(obdigits):
-            print(i, x)
 
     # a 64bit wide max means Numba only needs 3 x 30 bit values max,
     # or 5 x 15 bit values max on 32bit platforms
@@ -177,36 +165,27 @@ def _long_impl(val):
         p2 = p1 & _PyHASH_MODULUS
         p4 = x >> p3
         x = p2 | p4
-        if _DEBUG:
-            print(p1, p2, p3, p4)
-            print("bitshift", x)
         # the shift and mask splits out the `ob_digit` parts of a Long repr
         x += types.uint32((val >> idx * _PyLong_SHIFT) & mask_shift)
-        if _DEBUG:
-            print("add x", x)
         if x >= _PyHASH_MODULUS:
-            if _DEBUG:
-                print("subtracting mod", _PyHASH_MODULUS)
             x -= _PyHASH_MODULUS
-        if _DEBUG:
-            print("end x", x)
     return _Py_hash_t(x)
 
 
-# This has no cPython equivalent, cPython uses long_hash.
+# This has no CPython equivalent, CPython uses long_hash.
 @overload_method(types.Integer, '__hash__')
 @overload_method(types.Boolean, '__hash__')
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
 
-    # this is a bit involved due to the cPython repr of ints
+    # this is a bit involved due to the CPython repr of ints
     def impl(val):
         # If the magnitude is under PyHASH_MODULUS, if so just return the
         # value itval as the has, couple of special cases if val == val:
         # 1. it's 0, in which case return 0
-        # 2. it's int64 minimum value, return the value cPython computes but
-        # Numba cannot as there's no type wide enough to hold the shifts.
+        # 2. it's signed int minimum value, return the value CPython computes
+        # but Numba cannot as there's no type wide enough to hold the shifts.
         #
         # If the magnitude is greater than PyHASH_MODULUS then... if the value
         # is negative then negate it switch the sign on the hash once computed
@@ -231,7 +210,7 @@ def int_hash(val):
         return process_return(ret)
     return impl
 
-# This is a translation of cPython's float_hash:
+# This is a translation of CPython's float_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/floatobject.c#L528-L532
 
 
@@ -249,7 +228,7 @@ def float_hash(val):
             return hashed
     return impl
 
-# This is a translation of cPython's complex_hash:
+# This is a translation of CPython's complex_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/complexobject.c#L408-L428
 
 
@@ -268,7 +247,7 @@ def complex_hash(val):
     return impl
 
 
-# This is a translation of cPython's tuplehash:
+# This is a translation of CPython's tuplehash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369
 @register_jitable(locals={'x': _Py_uhash_t,
                           'y': _Py_hash_t,
@@ -287,7 +266,7 @@ def _tuple_hash(tup):
     x += _Py_uhash_t(97531)
     return process_return(x)
 
-# This is an obfuscated translation of cPython's tuplehash:
+# This is an obfuscated translation of CPython's tuplehash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369
 # The obfuscation occurs for a heterogeneous tuple as each tuple member needs
 # a potentially different hash() function calling for it. This cannot be done at
@@ -419,7 +398,7 @@ def grabbyte(typingctx, data, offset):
 
 
 if _Py_hashfunc_name == 'siphash24':
-    # This is a translation of cPython's siphash24 function:
+    # This is a translation of CPython's siphash24 function:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413
 
     # /* *********************************************************************
@@ -458,16 +437,6 @@ if _Py_hashfunc_name == 'siphash24':
     # - _rotl64() on Windows
     # - letoh64() fallback
     # */
-    _DEBUG = False
-
-    if _DEBUG:
-        @register_jitable
-        def debug_print(*args):
-            print(*args)
-    else:
-        @register_jitable
-        def debug_print(*args):
-            pass
 
     @intrinsic
     def grab_uint64_t(typingctx, data, offset):
@@ -504,13 +473,9 @@ if _Py_hashfunc_name == 'siphash24':
                               'v3': types.uint64, })
     def _DOUBLE_ROUND(v0, v1, v2, v3):
         v0, v1, v2, v3 = _HALF_ROUND(v0, v1, v2, v3, 13, 16)
-        debug_print("DR1", v0, v1, v2, v3)
         v2, v1, v0, v3 = _HALF_ROUND(v2, v1, v0, v3, 17, 21)
-        debug_print("DR2", v0, v1, v2, v3)
         v0, v1, v2, v3 = _HALF_ROUND(v0, v1, v2, v3, 13, 16)
-        debug_print("DR3", v0, v1, v2, v3)
         v2, v1, v0, v3 = _HALF_ROUND(v2, v1, v0, v3, 17, 21)
-        debug_print("DR4", v0, v1, v2, v3)
         return v0, v1, v2, v3
 
     @register_jitable(locals={'v0': types.uint64,
@@ -525,77 +490,57 @@ if _Py_hashfunc_name == 'siphash24':
                               'jmp': types.uint64,
                               'ohexefef': types.uint64})
     def _siphash24(k0, k1, src, src_sz):
-        debug_print("k0=", k0)
-        debug_print("k1=", k1)
         b = types.uint64(src_sz) << 56
-        debug_print("b=", b)
         v0 = k0 ^ types.uint64(0x736f6d6570736575)
         v1 = k1 ^ types.uint64(0x646f72616e646f6d)
         v2 = k0 ^ types.uint64(0x6c7967656e657261)
         v3 = k1 ^ types.uint64(0x7465646279746573)
-        debug_print(v0, v1, v2, v3)
 
         idx = 0
         while (src_sz >= 8):
             mi = grab_uint64_t(src, idx)
-            debug_print("mi=", mi)
             idx += 1
             src_sz -= 8
             v3 ^= mi
-            debug_print("v3=", v3)
             v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
-            debug_print(v0, v1, v2, v3)
             v0 ^= mi
-        debug_print(v0, v1, v2, v3)
 
         # this is the switch fallthrough:
         # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400
         t = types.uint64(0x0)
-        debug_print("*in=", grab_uint64_t(src, idx), "idx=", idx)
-        debug_print("src_sz", src_sz)
         boffset = idx * 8
         ohexefef = types.uint64(0xff)
         if src_sz >= 7:
             jmp = (6 * 8)
             mask = ~types.uint64(ohexefef << jmp)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 6)) << jmp)
-            debug_print("case 7", t)
         if src_sz >= 6:
             jmp = (5 * 8)
             mask = ~types.uint64(ohexefef << jmp)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 5)) << jmp)
-            debug_print("case 6", t)
         if src_sz >= 5:
             jmp = (4 * 8)
             mask = ~types.uint64(ohexefef << jmp)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 4)) << jmp)
-            debug_print("case 5", t)
         if src_sz >= 4:
             t &= types.uint64(0xffffffff00000000)
             for i in range(4):
                 jmp = i * 8
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grabbyte(src, boffset + i)) << jmp)
-            debug_print("case 4", t)
         if src_sz >= 3:
             jmp = (2 * 8)
             mask = ~types.uint64(ohexefef << jmp)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 2)) << jmp)
-            debug_print("case 3", t, grabbyte(src, boffset + 2))
         if src_sz >= 2:
             jmp = (1 * 8)
             mask = ~types.uint64(ohexefef << jmp)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 1)) << jmp)
-            debug_print("case 2", t, grabbyte(src, boffset + 1))
         if src_sz >= 1:
             mask = ~(ohexefef)
             t = (t & mask) | (types.uint64(grabbyte(src, boffset + 0)))
-            debug_print("case 1", t, grabbyte(src, boffset + 0))
 
-        debug_print("t=", t)
         b |= t
-        debug_print("b ord=", b)
-        debug_print(v0, v1, v2, v3)
         v3 ^= b
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         v0 ^= b
@@ -606,39 +551,38 @@ if _Py_hashfunc_name == 'siphash24':
         return t
 
 elif _Py_hashfunc_name == 'fnv':
+    #TODO: Should this instead warn and switch to siphash24?
     raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)
 
-# This is a translation of cPythons's _Py_HashBytes:
+# This is a translation of CPythons's _Py_HashBytes:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
 
 
 @register_jitable(locals={'_hash': _Py_uhash_t})
 def _Py_HashBytes(val, _len):
-    debug_print(_len)
     if (_len == 0):
         return process_return(0)
 
     if (_len < _Py_HASH_CUTOFF):
+        # TODO: this branch needs testing, needs a CPython setup for it!
         # /* Optimize hashing of very small strings with inline DJBX33A. */
         _hash = _Py_uhash_t(5381)  # /* DJBX33A starts with 5381 */
         for idx in range(_len):
-            debug_print(grabbyte(val, idx))
             _hash = ((_hash << 5) + _hash) + np.uint8(grabbyte(val, idx))
 
         _hash ^= _len
         _hash ^= _Py_HashSecret_djbx33a_suffix
     else:
-        # TODO: this branch needs testing
         tmp = _siphash24(types.uint64(_Py_HashSecret_siphash_k0),
                          types.uint64(_Py_HashSecret_siphash_k1),
                          val, _len)
         _hash = process_return(tmp)
     return process_return(_hash)
 
-# This is an approximate translation of cPython's unicode_hash:
+# This is an approximate translation of CPython's unicode_hash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/unicodeobject.c#L11635-L11663
 
 
