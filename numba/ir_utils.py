@@ -544,6 +544,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         lives_n_aliases = lives | alias_lives | arg_aliases
+
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
@@ -551,6 +552,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             if stmt is None:
                 removed = True
                 continue
+
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -563,6 +565,12 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
+
+        if isinstance(stmt, ir.Del):
+            if stmt.value not in lives:
+                removed = True
+                continue
+
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
             if name not in lives_n_aliases:
