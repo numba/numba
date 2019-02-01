@@ -294,7 +294,7 @@ class TestDictImpl(TestCase):
         self.assertEqual(ret, 0)
 
     def test_insertion_small(self):
-        # Tests insertation and lookup for a small dict.
+        # Tests insertion and lookup for a small dict.
         d = Dict(self, 4, 8)
         self.assertEqual(len(d), 0)
         self.assertIsNone(d.get('abcd'))
@@ -468,7 +468,7 @@ class TestDictImpl(TestCase):
         self.check_delete_randomly(nmax=1024, ndrop=999, nrefill=2048)
 
     def test_delete_randomly_large(self):
-        # Go beyound 2^16 to exercise large indices.
+        # Go beyond 2^16 to exercise large indices.
         # Internally, size of index changes as the hashtable size changes.
         # Size of index can be 8, 16, 32 or 64 bytes (on 64-bit).
         # We are not inserting >2^32 elements because of limitation of time.
@@ -515,4 +515,3 @@ class TestDictImpl(TestCase):
         # Check different sizes of the key & value.
         for i in range(1, 8):
             self.check_sizing(key_size=i, val_size=i, nmax=2**i)
-
