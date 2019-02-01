@@ -238,6 +238,7 @@ typedef enum {
 } Status;
 
 
+#ifndef NDEBUG
 static
 int mem_cmp_zeros(void *obj, size_t n){
     int diff = 0;
@@ -247,6 +248,7 @@ int mem_cmp_zeros(void *obj, size_t n){
     }
     return diff;
 }
+#endif
 
 #define D_MASK(dk) ((dk)->size-1)
 #define D_GROWTH_RATE(d) ((d)->used*3)
