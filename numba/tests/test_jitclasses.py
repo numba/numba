@@ -696,7 +696,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         assert t_1 == 10
         assert t[2] == 20
 
-    def test_getitem_bytes(self):
+    def test_getitem_bytes_key(self):
         spec = [('data', int32[:])]
 
         # save value of len(data) to the position indicated as len(key)
@@ -706,23 +706,90 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.data = np.zeros(10, dtype=np.int32)
 
             def __setitem__(self, key, data):
-                self.data[len(key)] = len(data)
+                self.data[len(key)] = data
 
             def __getitem__(self, key):
                 return self.data[len(key)]
 
         t = TestClass()
         # save value 4 at position 3
-        t[b'123'] = b'1234'
+        t[b'123'] = 3
 
         @njit
-        def get3set4(t):
-            t[b'1234'] = b'12345'
-            return t[b'123']
+        def set_key(t, key, data):
+            t[key] = data
+            return t[key]
 
-        t_3 = get3set4(t)
-        assert t_3 == len(b'1234')
-        assert t[b'1234'] == len(b'12345')
+        t_3 = set_key(t, b'1234', 4)
+        assert t_3 == 4
+        assert t[b'1234'] == 4
+
+    def test_getitem_tuple_key(self):
+        spec = [('data', int32[:, :])]
+
+        @jitclass(spec)
+        class TestClass:
+            def __init__(self):
+                self.data = np.zeros((10, 10), dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key[0], key[1]] = data
+
+            def __getitem__(self, key):
+                return self.data[key[0], key[1]]
+
+        t = TestClass()
+        t[1, 1] = 11
+
+        @njit
+        def get11(t):
+            return t[1, 1]
+
+        @njit
+        def set22(t, data):
+            t[2, 2] = data
+
+        assert get11(t) == 11
+        set22(t, 22)
+        assert t[2, 2] == 22
+
+    def test_getitem_slice_key(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass:
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, slc, data):
+                self.data[slc.start] = data
+                self.data[slc.stop] = data + slc.step
+
+            def __getitem__(self, slc):
+                return self.data[slc.start]
+
+        t = TestClass()
+        # set t.data[1] = 1 and t.data[5] = 2
+        t[1:5:1] = 1
+
+        assert t[1:1:1] == 1
+        assert t[5:5:5] == 2
+
+        @njit
+        def get5(t):
+            return t[5:6:1]
+
+        assert get5(t) == 2
+
+        # sets t.data[2] = data, and t.data[6] = data + 1
+        @njit
+        def set26(t, data):
+            t[2:6:1] = data
+
+        set26(t, 2)
+        assert t[2:2:1] == 2
+        assert t[6:6:1] == 3
+
 
 if __name__ == '__main__':
     unittest.main()
