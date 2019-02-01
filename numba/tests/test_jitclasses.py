@@ -639,6 +639,36 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
                 self.assertPreciseEqual(expect, got)
 
+    def test_getitem(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class Test:
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        @njit
+        def create_and_set_indices():
+            t = Test()
+            t[1] = 1
+            t[2] = 2
+            t[3] = 3
+            return t
+
+        @njit
+        def get_index(t, n):
+            return t[n]
+
+        t = create_and_set_indices()
+        assert get_index(t, 1) == 1
+        assert get_index(t, 2) == 2
+        assert get_index(t, 3) == 3
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function
 from collections import OrderedDict
 import types as pytypes
 import inspect
+import operator
 
 from llvmlite import ir as llvmir
 
@@ -297,6 +298,7 @@ class ClassBuilder(object):
         Register method implementations for the given instance type.
         """
         for meth in instance_type.jitmethods:
+
             # There's no way to retrive the particular method name
             # inside the implementation function, so we have to register a
             # specific closure for each different name
@@ -305,18 +307,56 @@ class ClassBuilder(object):
                 self.implemented_methods.add(meth)
 
     def _implement_method(self, registry, attr):
-        @registry.lower((types.ClassInstanceType, attr),
-                        types.ClassInstanceType, types.VarArg(types.Any))
-        def imp(context, builder, sig, args):
-            instance_type = sig.args[0]
-            method = instance_type.jitmethods[attr]
-            disp_type = types.Dispatcher(method)
-            call = context.get_function(disp_type, sig)
-            out = call(builder, args)
-            _add_linking_libs(context, call)
-            return imputils.impl_ret_new_ref(context, builder,
-                                             sig.return_type, out)
+        def get_imp():
+            def imp(context, builder, sig, args):
+                instance_type = sig.args[0]
+                method = instance_type.jitmethods[attr]
+                disp_type = types.Dispatcher(method)
+                call = context.get_function(disp_type, sig)
+                out = call(builder, args)
+                _add_linking_libs(context, call)
+                return imputils.impl_ret_new_ref(context, builder,
+                                                sig.return_type, out)
+            return imp
 
+        if attr == "__getitem__":
+            parent = self
+
+            @templates.infer_global(operator.getitem)
+            class GetItem(templates.AbstractTemplate):
+                def generic(self, args, kws):
+                    instance, value = args
+                    if isinstance(instance, types.ClassInstanceType) and \
+                            instance.class_type == parent.class_type:
+                        meth = instance.jitmethods['__getitem__']
+                        disp_type = types.Dispatcher(meth)
+                        sig = disp_type.get_call_type(self.context, args, kws)
+
+                        return sig
+
+            imputils.lower_builtin(operator.getitem,
+                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+        elif attr == "__setitem__":
+            parent = self
+
+            @templates.infer
+            class SetItem(templates.AbstractTemplate):
+                key = "setitem"
+                def generic(self, args, kws):
+                    instance, *rest = args
+                    if isinstance(instance, types.ClassInstanceType) and \
+                            instance.class_type == parent.class_type:
+                        meth = instance.jitmethods['__setitem__']
+                        disp_type = types.Dispatcher(meth)
+                        sig = disp_type.get_call_type(self.context, args, kws)
+
+                        return sig
+
+            imputils.lower_builtin(
+                'setitem', types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+        else:
+            registry.lower((types.ClassInstanceType, attr),
+                            types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
 
 
 @templates.infer_getattr
