@@ -639,6 +639,158 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
                 self.assertPreciseEqual(expect, got)
 
+    def test_getitem(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        @njit
+        def create_and_set_indices():
+            t = TestClass()
+            t[1] = 1
+            t[2] = 2
+            t[3] = 3
+            return t
+
+        @njit
+        def get_index(t, n):
+            return t[n]
+
+        t = create_and_set_indices()
+        assert get_index(t, 1) == 1
+        assert get_index(t, 2) == 2
+        assert get_index(t, 3) == 3
+
+    def test_getitem_unbox(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        t = TestClass()
+        t[1] = 10
+
+        @njit
+        def set2return1(t):
+            t[2] = 20
+            return t[1]
+
+        t_1 = set2return1(t)
+        assert t_1 == 10
+        assert t[2] == 20
+
+    def test_getitem_complex_key(self):
+        spec = [('data', int32[:, :])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros((10, 10), dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[int(key.real), int(key.imag)] = data
+
+            def __getitem__(self, key):
+                return self.data[int(key.real), int(key.imag)]
+
+        t = TestClass()
+        # save value 4 at position 3
+        t[complex(1, 1)] = 3
+
+        @njit
+        def get_key(t, real, imag):
+            return t[complex(real, imag)]
+        @njit
+        def set_key(t, real, imag, data):
+            t[complex(real, imag)] = data
+
+        assert get_key(t, 1, 1) == 3
+        set_key(t, 2, 2, 4)
+        assert t[complex(2, 2)] == 4
+
+    def test_getitem_tuple_key(self):
+        spec = [('data', int32[:, :])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros((10, 10), dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key[0], key[1]] = data
+
+            def __getitem__(self, key):
+                return self.data[key[0], key[1]]
+
+        t = TestClass()
+        t[1, 1] = 11
+
+        @njit
+        def get11(t):
+            return t[1, 1]
+
+        @njit
+        def set22(t, data):
+            t[2, 2] = data
+
+        assert get11(t) == 11
+        set22(t, 22)
+        assert t[2, 2] == 22
+
+    def test_getitem_slice_key(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, slc, data):
+                self.data[slc.start] = data
+                self.data[slc.stop] = data + slc.step
+
+            def __getitem__(self, slc):
+                return self.data[slc.start]
+
+        t = TestClass()
+        # set t.data[1] = 1 and t.data[5] = 2
+        t[1:5:1] = 1
+
+        assert t[1:1:1] == 1
+        assert t[5:5:5] == 2
+
+        @njit
+        def get5(t):
+            return t[5:6:1]
+
+        assert get5(t) == 2
+
+        # sets t.data[2] = data, and t.data[6] = data + 1
+        @njit
+        def set26(t, data):
+            t[2:6:1] = data
+
+        set26(t, 2)
+        assert t[2:2:1] == 2
+        assert t[6:6:1] == 3
+
 
 if __name__ == '__main__':
     unittest.main()
