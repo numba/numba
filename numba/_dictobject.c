@@ -982,6 +982,7 @@ numba_test_dict(void) {
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
     CHECK (ix >= 0);
 
+    numba_dict_free(d);
     return 0;
 
 }
