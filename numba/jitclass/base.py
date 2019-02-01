@@ -345,7 +345,7 @@ class ClassBuilder(object):
             class SetItem(templates.AbstractTemplate):
                 key = "setitem"
                 def generic(self, args, kws):
-                    instance, *rest = args
+                    instance  = args[0]
                     if isinstance(instance, types.ClassInstanceType) and \
                             '__setitem__' in instance.jitmethods:
                         meth = instance.jitmethods['__setitem__']
