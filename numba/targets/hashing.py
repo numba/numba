@@ -13,6 +13,7 @@ from llvmlite import ir
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba import types
+from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
@@ -323,6 +324,16 @@ def tuple_hash(val):
 # String/bytes hashing needs hashseed info, this is from:
 # https://stackoverflow.com/a/41088757
 # with thanks to Martijn Pieters
+#
+# Developer note:
+# CPython makes use of an internal "hashsecret" which is essentially a struct
+# containing some state that is set on CPython initialization and contains magic
+# numbers used particularly in unicode/string hashing. This code binds to the
+# Python runtime libraries in use by the current process and reads the
+# "hashsecret" state so that it can be used by Numba. As this is done at runtime
+# the behaviour and influence of the PYTHONHASHSEED environment variable is
+# accommodated.
+
 from ctypes import (  # noqa
     c_size_t,
     c_ubyte,
@@ -384,19 +395,6 @@ _Py_HashSecret_siphash_k1 = _Py_hashSecret.siphash.k1
 # ------------------------------------------------------------------------------
 
 
-@intrinsic
-def grabbyte(typingctx, data, offset):
-    # returns a byte at a given offset in data
-    def impl(context, builder, signature, args):
-        data, idx = args
-        ptr = builder.bitcast(data, ir.IntType(8).as_pointer())
-        ch = builder.load(builder.gep(ptr, [idx]))
-        return ch
-
-    sig = types.uint8(types.voidptr, types.intp)
-    return sig, impl
-
-
 if _Py_hashfunc_name == 'siphash24':
     # This is a translation of CPython's siphash24 function:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413
@@ -437,16 +435,6 @@ if _Py_hashfunc_name == 'siphash24':
     # - _rotl64() on Windows
     # - letoh64() fallback
     # */
-
-    @intrinsic
-    def grab_uint64_t(typingctx, data, offset):
-        def impl(context, builder, signature, args):
-            data, idx = args
-            ptr = builder.bitcast(data, ir.IntType(64).as_pointer())
-            ch = builder.load(builder.gep(ptr, [idx]))
-            return ch
-        sig = types.uint64(types.voidptr, types.intp)
-        return sig, impl
 
     @register_jitable(locals={'x': types.uint64,
                               'b': types.uint64, })
@@ -513,32 +501,32 @@ if _Py_hashfunc_name == 'siphash24':
         if src_sz >= 7:
             jmp = (6 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 6)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6)) << jmp)
         if src_sz >= 6:
             jmp = (5 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 5)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5)) << jmp)
         if src_sz >= 5:
             jmp = (4 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 4)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4)) << jmp)
         if src_sz >= 4:
             t &= types.uint64(0xffffffff00000000)
             for i in range(4):
                 jmp = i * 8
                 mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grabbyte(src, boffset + i)) << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + i)) << jmp)
         if src_sz >= 3:
             jmp = (2 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 2)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2)) << jmp)
         if src_sz >= 2:
             jmp = (1 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 1)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1)) << jmp)
         if src_sz >= 1:
             mask = ~(ohexefef)
-            t = (t & mask) | (types.uint64(grabbyte(src, boffset + 0)))
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
 
         b |= t
         v3 ^= b
@@ -571,7 +559,7 @@ def _Py_HashBytes(val, _len):
         # /* Optimize hashing of very small strings with inline DJBX33A. */
         _hash = _Py_uhash_t(5381)  # /* DJBX33A starts with 5381 */
         for idx in range(_len):
-            _hash = ((_hash << 5) + _hash) + np.uint8(grabbyte(val, idx))
+            _hash = ((_hash << 5) + _hash) + np.uint8(grab_byte(val, idx))
 
         _hash ^= _len
         _hash ^= _Py_HashSecret_djbx33a_suffix
