@@ -435,10 +435,11 @@ entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
 /* Allocate new dictionary keys */
 int
 numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
+    Py_ssize_t usable = USABLE_FRACTION(size);
     Py_ssize_t index_size = ix_size(size);
     Py_ssize_t entry_size = align(sizeof(NB_DictEntry) + align(key_size) + align(val_size));
     Py_ssize_t entry_offset = align(index_size * size);
-    Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * size;
+    Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * usable;
 
     NB_DictKeys *dk = palign(malloc(align(alloc_size)));
     if (!dk) return ERR_NO_MEMORY;
@@ -446,7 +447,7 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
     assert ( size >= D_MINSIZE );
 
     dk->size = size;
-    dk->usable = USABLE_FRACTION(size);
+    dk->usable = usable;
     dk->nentries = 0;
     dk->key_size = key_size;
     dk->val_size = val_size;
@@ -456,7 +457,7 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
     assert (palign(dk->indices) == dk->indices );
     memset(dk->indices, 0xff, entry_offset);
     /* Ensure hash is (-1) for empty */
-    memset(dk->indices + entry_offset, 0xff, entry_size * size);
+    memset(dk->indices + entry_offset, 0xff, entry_size * usable);
 
     *out = dk;
     return OK;
