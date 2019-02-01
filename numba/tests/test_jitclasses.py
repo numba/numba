@@ -643,7 +643,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('data', int32[:])]
 
         @jitclass(spec)
-        class TestClass:
+        class TestClass(object):
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -674,7 +674,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('data', int32[:])]
 
         @jitclass(spec)
-        class TestClass:
+        class TestClass(object):
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -701,7 +701,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         # save value of len(data) to the position indicated as len(key)
         @jitclass(spec)
-        class TestClass:
+        class TestClass(object):
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -728,7 +728,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('data', int32[:, :])]
 
         @jitclass(spec)
-        class TestClass:
+        class TestClass(object):
             def __init__(self):
                 self.data = np.zeros((10, 10), dtype=np.int32)
 
@@ -757,7 +757,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('data', int32[:])]
 
         @jitclass(spec)
-        class TestClass:
+        class TestClass(object):
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
