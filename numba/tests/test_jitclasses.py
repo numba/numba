@@ -696,6 +696,33 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         assert t_1 == 10
         assert t[2] == 20
 
+    def test_getitem_bytes(self):
+        spec = [('data', int32[:])]
+
+        # save value of len(data) to the position indicated as len(key)
+        @jitclass(spec)
+        class TestClass:
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[len(key)] = len(data)
+
+            def __getitem__(self, key):
+                return self.data[len(key)]
+
+        t = TestClass()
+        # save value 4 at position 3
+        t[b'123'] = b'1234'
+
+        @njit
+        def get3set4(t):
+            t[b'1234'] = b'12345'
+            return t[b'123']
+
+        t_3 = get3set4(t)
+        assert t_3 == len(b'1234')
+        assert t[b'1234'] == len(b'12345')
 
 if __name__ == '__main__':
     unittest.main()

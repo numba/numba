@@ -307,6 +307,8 @@ class ClassBuilder(object):
                 self.implemented_methods.add(meth)
 
     def _implement_method(self, registry, attr):
+        print("implementing ", attr)
+        # create a separate instance of imp method to avoid closure clashing
         def get_imp():
             def imp(context, builder, sig, args):
                 instance_type = sig.args[0]
@@ -320,19 +322,21 @@ class ClassBuilder(object):
             return imp
 
         if attr == "__getitem__":
-            parent = self
+            # create new class to bind closure
+            def make_getitem(parent):
+                class GetItem(templates.AbstractTemplate):
+                    def generic(self, args, kws):
+                        instance, value = args
+                        if isinstance(instance, types.ClassInstanceType) and \
+                                instance.class_type == parent.class_type:
+                            meth = instance.jitmethods['__getitem__']
+                            disp_type = types.Dispatcher(meth)
+                            sig = disp_type.get_call_type(self.context, args, kws)
 
-            @templates.infer_global(operator.getitem)
-            class GetItem(templates.AbstractTemplate):
-                def generic(self, args, kws):
-                    instance, value = args
-                    if isinstance(instance, types.ClassInstanceType) and \
-                            instance.class_type == parent.class_type:
-                        meth = instance.jitmethods['__getitem__']
-                        disp_type = types.Dispatcher(meth)
-                        sig = disp_type.get_call_type(self.context, args, kws)
+                            return sig
+                return GetItem
 
-                        return sig
+            templates.infer_global(operator.getitem)(make_getitem(self))
 
             # lower both getitem and __getitem__ to catch the calls
             # from python and numba
@@ -341,20 +345,25 @@ class ClassBuilder(object):
             imputils.lower_builtin(operator.getitem,
                 types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
         elif attr == "__setitem__":
-            parent = self
+            # create new class to bind closure
+            def make_setitem(parent):
+                # infer_global doesn't work here
+                class SetItem(templates.AbstractTemplate):
+                    key = "setitem"
+                    def generic(self, args, kws):
+                        print(parent.class_type)
+                        instance, *rest = args
+                        if isinstance(instance, types.ClassInstanceType) and \
+                                instance.class_type == parent.class_type:
+                            print("Found setitem")
+                            meth = instance.jitmethods['__setitem__']
+                            disp_type = types.Dispatcher(meth)
+                            sig = disp_type.get_call_type(self.context, args, kws)
 
-            @templates.infer
-            class SetItem(templates.AbstractTemplate):
-                key = "setitem"
-                def generic(self, args, kws):
-                    instance, *rest = args
-                    if isinstance(instance, types.ClassInstanceType) and \
-                            instance.class_type == parent.class_type:
-                        meth = instance.jitmethods['__setitem__']
-                        disp_type = types.Dispatcher(meth)
-                        sig = disp_type.get_call_type(self.context, args, kws)
-
-                        return sig
+                            return sig
+                return SetItem
+            print("binding setitem with ", self.class_type)
+            templates.infer(make_setitem(self))
 
             # lower both setitem and __setitem__ to catch the calls
             # from python and numba
