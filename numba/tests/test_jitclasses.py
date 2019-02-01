@@ -643,7 +643,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('data', int32[:])]
 
         @jitclass(spec)
-        class Test:
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -655,7 +655,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         @njit
         def create_and_set_indices():
-            t = Test()
+            t = TestClass()
             t[1] = 1
             t[2] = 2
             t[3] = 3
@@ -669,6 +669,33 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         assert get_index(t, 1) == 1
         assert get_index(t, 2) == 2
         assert get_index(t, 3) == 3
+
+    def test_getitem_unbox(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass:
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        t = TestClass()
+        t[1] = 10
+
+        @njit
+        def set2return1(t):
+            t[2] = 20
+            return t[1]
+
+        t_1 = set2return1(t)
+        assert t_1 == 10
+        assert t[2] == 20
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -334,6 +334,10 @@ class ClassBuilder(object):
 
                         return sig
 
+            # lower both getitem and __getitem__ to catch the calls
+            # from python and numba
+            imputils.lower_builtin((types.ClassInstanceType, "__getitem__"),
+                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
             imputils.lower_builtin(operator.getitem,
                 types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
         elif attr == "__setitem__":
@@ -352,6 +356,10 @@ class ClassBuilder(object):
 
                         return sig
 
+            # lower both setitem and __setitem__ to catch the calls
+            # from python and numba
+            imputils.lower_builtin((types.ClassInstanceType, "__setitem__"),
+                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
             imputils.lower_builtin(
                 'setitem', types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
         else:
