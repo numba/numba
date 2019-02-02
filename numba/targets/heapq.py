@@ -10,7 +10,6 @@ import numpy as np
 from numba import types
 from numba.errors import TypingError
 from numba.extending import overload, register_jitable
-from numba.numpy_support import as_dtype
 
 
 @register_jitable
@@ -58,10 +57,10 @@ def hq_heapify(x):
 
     # what to do if list is empty?
 
-    x_dt = as_dtype(x.dtype)
-    if np.issubdtype(x_dt, np.complexfloating):
+    dt = x.dtype
+    if isinstance(dt, types.Complex):
         msg = ("'<' not supported between instances "
-               "of 'complex' and 'complex'")
+                   "of 'complex' and 'complex'")
         raise TypingError(msg)
 
     def hq_heapify_impl(x):

@@ -57,6 +57,13 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             cfunc(b)
             self.assertPreciseEqual(a, b)
 
+        # elements are tuples
+        a = [(3, 'c'), (1, 'a'), (2, 'b')]
+        b = a[:]
+        pyfunc(a)
+        cfunc(b)
+        self.assertPreciseEqual(a, b)
+
     def check_invariant(self, heap):
         for pos, item in enumerate(heap):
             if pos:
