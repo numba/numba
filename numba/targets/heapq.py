@@ -58,7 +58,7 @@ def hq_heapify(x):
     dt = x.dtype
     if isinstance(dt, types.Complex):
         msg = ("'<' not supported between instances "
-                   "of 'complex' and 'complex'")
+               "of 'complex' and 'complex'")
         raise TypingError(msg)
 
     def hq_heapify_impl(x):
