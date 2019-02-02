@@ -30,7 +30,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         a = [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
-        b = a.copy()
+        b = a[:]
 
         pyfunc(a)
         cfunc(b)
@@ -44,7 +44,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
         for x in itertools.combinations_with_replacement(element_pool, 6):
             a = list(x)
-            b = a.copy()
+            b = a[:]
 
             pyfunc(a)
             cfunc(b)
