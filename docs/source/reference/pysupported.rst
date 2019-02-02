@@ -562,6 +562,12 @@ startup with entropy drawn from the operating system.
    Numba also supports most additional distributions from the :ref:`Numpy
    random module <numpy-random>`.
 
+``heapq``
+------------
+
+The following functions from the :mod:`heapq` module are supported:
+
+* :func:`heapq.heapify`
 
 Third-party modules
 ===================
