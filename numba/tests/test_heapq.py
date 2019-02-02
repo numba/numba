@@ -18,6 +18,10 @@ def heapify(x):
     return hq.heapify(x)
 
 
+def heappop(heap):
+    return hq.heappop(heap)
+
+
 class TestHeapq(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -100,3 +104,23 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         msg = ("'<' not supported between instances "
                "of 'complex' and 'complex'")
         self.assertIn(msg, str(e.exception))
+
+    def test_heappop_basic_sanity(self):
+        pyfunc = heappop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
+            yield [(3, 'c'), (1, 'a'), (2, 'b')]
+            yield np.full(5, fill_value=np.nan).tolist()
+            yield np.linspace(-10, -5, 100).tolist()
+
+        for a in a_variations():
+            heapify(a)
+            b = a[:]
+
+            for i in range(len(a)):
+                val_py = pyfunc(a)
+                val_c = cfunc(b)
+                self.assertPreciseEqual(a, b)
+                self.assertPreciseEqual(val_py, val_c)

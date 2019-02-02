@@ -5,8 +5,6 @@ from __future__ import print_function, absolute_import, division
 
 import heapq as hq
 
-import numpy as np
-
 from numba import types
 from numba.errors import TypingError
 from numba.extending import overload, register_jitable
@@ -69,3 +67,18 @@ def hq_heapify(x):
             _siftup(x, i)
 
     return hq_heapify_impl
+
+
+@overload(hq.heappop)
+def hq_heappop(heap):
+
+    def hq_heappop_impl(heap):
+        lastelt = heap.pop()
+        if heap:
+            returnitem = heap[0]
+            heap[0] = lastelt
+            _siftup(heap, 0)
+            return returnitem
+        return lastelt
+
+    return hq_heappop_impl

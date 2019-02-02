@@ -568,6 +568,8 @@ startup with entropy drawn from the operating system.
 The following functions from the :mod:`heapq` module are supported:
 
 * :func:`heapq.heapify`
+* :func:`heapq.heappop`
+
 
 Third-party modules
 ===================
