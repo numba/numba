@@ -100,7 +100,7 @@ def _specialize_box(typ):
     # Inject methods as class members
     for name, func in typ.methods.items():
         if (name == "__getitem__" or name == "__setitem__") or \
-            (not (name.startswith('__') and name.endswith('__'))):
+                (not (name.startswith('__') and name.endswith('__'))):
 
             dct[name] = _generate_method(name, func)
     # Create subclass
