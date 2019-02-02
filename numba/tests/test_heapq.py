@@ -62,7 +62,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(a, b)
 
         # elements are tuples
-        a = [(3, 'c'), (1, 'a'), (2, 'b')]
+        a = [(3, 33), (1, 11), (2, 22)]
         b = a[:]
         pyfunc(a)
         cfunc(b)
@@ -111,7 +111,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
         def a_variations():
             yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
-            yield [(3, 'c'), (1, 'a'), (2, 'b')]
+            yield [(3, 33), (1, 111), (2, 2222)]
             yield np.full(5, fill_value=np.nan).tolist()
             yield np.linspace(-10, -5, 100).tolist()
 
