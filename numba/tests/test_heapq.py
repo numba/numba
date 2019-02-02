@@ -60,7 +60,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
     def check_invariant(self, heap):
         for pos, item in enumerate(heap):
             if pos:
-                parentpos = (pos-1) >> 1
+                parentpos = (pos - 1) >> 1
                 self.assertTrue(heap[parentpos] <= item)
 
     def test_heapify(self):
