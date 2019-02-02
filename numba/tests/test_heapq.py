@@ -36,13 +36,10 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         cfunc(b)
         self.assertPreciseEqual(a, b)
 
-    def test_heapify(self):
-        pyfunc = heapify
-        cfunc = jit(nopython=True)(pyfunc)
-
+        # includes non-finite elements
         element_pool = [3.142, -10.0, 5.5, np.nan, -np.inf, np.inf]
 
-        # list which may contain duplicates
+        # list which may contain duplicate elements
         for x in itertools.combinations_with_replacement(element_pool, 6):
             a = list(x)
             b = a[:]
@@ -59,6 +56,23 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             pyfunc(a)
             cfunc(b)
             self.assertPreciseEqual(a, b)
+
+    def check_invariant(self, heap):
+        for pos, item in enumerate(heap):
+            if pos:
+                parentpos = (pos-1) >> 1
+                self.assertTrue(heap[parentpos] <= item)
+
+    def test_heapify(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc = heapify
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in list(range(1, 30)) + [20000]:
+            heap = self.rnd.random_sample(size).tolist()
+            cfunc(heap)
+            self.check_invariant(heap)
 
     def test_heapify_exceptions(self):
         pyfunc = heapify
