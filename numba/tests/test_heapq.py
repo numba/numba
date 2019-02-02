@@ -42,8 +42,18 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
         element_pool = [3.142, -10.0, 5.5, np.nan, -np.inf, np.inf]
 
+        # list which may contain duplicates
         for x in itertools.combinations_with_replacement(element_pool, 6):
             a = list(x)
+            b = a[:]
+
+            pyfunc(a)
+            cfunc(b)
+            self.assertPreciseEqual(a, b)
+
+        # single element list
+        for i in range(len(element_pool)):
+            a = [element_pool[i]]
             b = a[:]
 
             pyfunc(a)
