@@ -78,6 +78,10 @@ def split_usecase(x, y):
     return x.split(y)
 
 
+def split_with_maxsplit_usecase(x, y, maxsplit):
+    return x.split(y, maxsplit)
+
+
 def join_usecase(x, y):
     return x.join(y)
 
@@ -343,6 +347,27 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
                              "'%s'.split('%s')?" % (test_str, splitter))
+
+    def test_split_with_maxsplit(self):
+        pyfunc = split_with_maxsplit_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', '⚡', 1),
+            ('abcabc', '⚡', 1),
+            ('🐍⚡', '⚡', 1),
+            ('🐍⚡🐍', '⚡', 1),
+            ('abababa', 'a', 2),
+            ('abababa', 'b', 1),
+            ('abababa', 'c', 2),
+            ('abababa', 'ab', 1),
+            ('abababa', 'aba', 5),
+        ]
+
+        for test_str, splitter, maxsplit in CASES:
+            self.assertEqual(pyfunc(test_str, splitter, maxsplit),
+                             cfunc(test_str, splitter, maxsplit),
+                             "'%s'.split('%s', %d)?" % (test_str, splitter, maxsplit))
 
     def test_join_empty(self):
         # Can't pass empty list to nopython mode, so we have to make a

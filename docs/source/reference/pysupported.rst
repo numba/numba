@@ -171,7 +171,7 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
-* ``.split()`` (1st arg only)
+* ``.split()``
 * ``.join()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes

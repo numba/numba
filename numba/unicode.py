@@ -454,13 +454,9 @@ def unicode_endswith(a, b):
 
 
 @overload_method(types.UnicodeType, 'split')
-def unicode_split(a, sep):
+def unicode_split(a, sep, maxsplit=-1):
     if isinstance(sep, types.UnicodeType):
-        def split_impl(a, sep):
-            # placeholder until we can expose maxsplit as argument with
-            # default value
-            maxsplit = -1
-
+        def split_impl(a, sep, maxsplit=-1):
             a_len = len(a)
             sep_len = len(sep)
 
