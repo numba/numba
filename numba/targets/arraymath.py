@@ -26,6 +26,7 @@ from .linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireLiteralValue, TypingError
+from numba.cuda.args import Out
 
 def _check_blas():
     # Checks if a BLAS is available so e.g. dot will work
@@ -1403,29 +1404,51 @@ def np_roll(a, shift):
     else:
         return np_roll_impl
 
+
 @overload(np.tile)
 def np_tile(a, reps):
 
     def np_tile_impl_arr(a, reps):
-        arr = np.asarray(a)
+        arr = _prepare_array(a)
         temp_arr = arr
+
+        reps_arr = _prepare_array(reps)
+        len_reps = len(reps_arr)
+
         #TODO: Check for -ve reps value. reps should not be negative
-        for i in range(reps - 1):
+
+        yparam = reps_arr[1] if len_reps > 1 else reps_arr[0]
+        xparam = reps_arr[0] if len_reps > 1 else 0
+
+        for i in range(yparam - 1):
             arr = np.concatenate((arr, temp_arr), axis=0)
-        return arr
+
+        # TODO:  Gives error If below code is uncommented
+        #Can't unify return type from the following types: array(float64, 1d, C), array(float64, 2d, C) 
+#         if xparam == 0:
+#             return arr
+#
+        len_arr = len(arr)
+        out = np.empty((xparam, len_arr), dtype=arr.dtype)
+
+        for i in range(xparam):
+            out[i] = arr
+
+        return out
 
     def np_tile_impl_nonarr(a, reps):
-        arr = np.asarray([a])
+        arr = _prepare_array(a)
         temp_arr = arr
-        #TODO: Check for -ve reps value. reps should not be negative
         for i in range(reps - 1):
             arr = np.concatenate((arr, temp_arr), axis=0)
         return arr
 
-    if isinstance(a, (types.Number, types.Boolean)):
+
+    if isinstance(reps, (types.Integer, types.Number, types.Boolean)):
         return np_tile_impl_nonarr
     else:
         return np_tile_impl_arr
+
 
 #----------------------------------------------------------------------------
 # Statistics

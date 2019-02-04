@@ -1609,7 +1609,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(a, shift)
                 got = cfunc(a, shift)
                 self.assertPreciseEqual(expected, got)
-
+#         a = [1.1, 2.2, 3.3]
+#         shift = 2
+#         expected = pyfunc(a, shift)
+#         got = cfunc(a, shift)
+#         print("expected", expected)
+#         print("got", got)
+#         #print(got)
+#         self.assertPreciseEqual(expected, got)
 
     def test_roll_exceptions(self):
         pyfunc = roll
