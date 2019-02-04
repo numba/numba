@@ -26,7 +26,6 @@ from .linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireLiteralValue, TypingError
-from numba.cuda.args import Out
 
 def _check_blas():
     # Checks if a BLAS is available so e.g. dot will work
