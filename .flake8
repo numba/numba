@@ -48,7 +48,6 @@ exclude =
     numba/itanium_mangler.py
     numba/unittest_support.py
     numba/array_analysis.py
-    numba/consts.py
     numba/generators.py
     numba/appdirs.py
     numba/cffi_support.py
@@ -59,7 +58,6 @@ exclude =
     numba/pretty_annotate.py
     numba/six.py
     numba/typeinfer.py
-    numba/errors.py
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
