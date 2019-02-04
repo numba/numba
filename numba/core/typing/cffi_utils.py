@@ -9,10 +9,18 @@ import ctypes
 from functools import partial
 import numpy as np
 
-from numba.core import types
-from numba.core.errors import TypingError
+from numba import types
+from numba import numpy_support
+from numba import cgutils
+from numba.errors import TypingError
+from numba.targets import imputils
+from numba.datamodel import models
+from numba.datamodel import default_manager, models
+from numba.typeconv import Conversion
+from numba.pythonapi import box, unbox, NativeValue
 from numba.core.typing import templates
 from numba.np import numpy_support
+
 
 try:
     import cffi
@@ -46,7 +54,20 @@ def is_cffi_func(obj):
         except:
             return False
 
-def get_pointer(cffi_func):
+def is_cffi_struct(obj):
+    """
+    Check whether the obj is a CFFI struct or a pointer to one
+    """
+    try:
+        t = ffi.typeof(obj)
+        if t.kind == 'pointer':
+            return t.item in _type_map()
+        elif t.kind == 'struct':
+            return t in _type_map()
+    except TypeError:
+        return False
+
+def get_func_pointer(cffi_func):
     """
     Get a pointer to the underlying function for a CFFI function as an
     integer.
@@ -54,6 +75,12 @@ def get_pointer(cffi_func):
     if cffi_func in _ool_func_ptr:
         return _ool_func_ptr[cffi_func]
     return int(ffi.cast("uintptr_t", cffi_func))
+
+def get_struct_pointer(cffi_struct_ptr):
+    """
+    Convert struct pointer to integer
+    """
+    return int(ffi.cast("uintptr_t", cffi_struct_ptr))
 
 
 _cached_type_map = None
@@ -93,7 +120,6 @@ def _type_map():
         }
     return _cached_type_map
 
-
 def map_type(cffi_type, use_record_dtype=False):
     """
     Map CFFI type to numba type.
@@ -121,19 +147,154 @@ def map_type(cffi_type, use_record_dtype=False):
         if pointee.kind == 'void':
             return types.voidptr
         else:
-            return types.CPointer(primed_map_type(pointee))
+            if use_record_dtype:
+                return types.CFFIPointer(primed_map_type(pointee))
+            else:
+                return types.voidptr
     elif kind == 'array':
         dtype = primed_map_type(cffi_type.item)
         nelem = cffi_type.length
         return types.NestedArray(dtype=dtype, shape=(nelem,))
-    elif kind == 'struct' and use_record_dtype:
-        return map_struct_to_record_dtype(cffi_type)
+    elif kind == 'struct':
+        if use_record_dtype:
+            return map_struct_to_record_dtype(cffi_type)
+        else:
+            return map_struct_to_numba_type(cffi_type)
     else:
         result = _type_map().get(cffi_type)
         if result is None:
             raise TypeError(cffi_type)
         return result
 
+struct_registry = imputils.Registry()
+
+class StructInstanceModel(models.StructModel):
+    def __init__(self, dmm, fe_typ):
+        cls_data_ty = types.ClassDataType(fe_typ)
+        # MemInfoPointer uses the `dtype` attribute to traverse for nested
+        # NRT MemInfo.  Since we handle nested NRT MemInfo ourselves,
+        # we will replace provide MemInfoPointer with an opaque type
+        # so that it does not raise exception for nested meminfo.
+        dtype = types.Opaque('Opaque.' + str(cls_data_ty))
+        members = [
+            ('meminfo', types.MemInfoPointer(dtype)),
+            ('data', types.CPointer(cls_data_ty)),
+        ]
+        super(StructInstanceModel, self).__init__(dmm, fe_typ, members)
+
+class CFFIPointer(types.CPointer):
+    def __init__(self, dtype):
+        super(CFFIPointer, self).__init__(dtype)
+        self.name = '<ffi>' + self.name
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, types.CPointer):
+            return typingctx.can_convert_to(self.dtype, other.dtype)
+        elif isinstance(other, types.RawPointer):
+            return Conversion.unsafe
+
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, types.CPointer):
+            return typingctx.can_convert_from(self.dtype, other.dtype)
+        elif isinstance(other, types.RawPointer):
+            return Conversion.unsafe
+
+    def get_pointer(self, struct_ptr):
+        return get_struct_pointer(struct_ptr)
+
+
+class StructInstanceDataModel(models.StructModel):
+    def __init__(self, dmm, fe_typ):
+        members = [(_mangle_attr(k), v) for k, v in fe_typ.struct.items()]
+        super(StructInstanceDataModel, self).__init__(dmm, fe_typ, members)
+
+class CFFIPointerModel(models.PointerModel):
+    pass
+
+class StructInstanceType(types.Type):
+    def __init__(self, cname):
+        name = cname.replace(" ", "_")
+        self.struct = {}
+        super(StructInstanceType, self).__init__(name)
+
+    def can_convert_to(self, typingctx, other):
+        if other == types.voidptr:
+            return Conversion.safe
+
+    def can_convert_from(self, typeingctx, other):
+        if other == types.voidptr:
+            return Conversion.safe
+
+class StructDataType(types.Type):
+    """
+    Internal only.
+    Represents the data of the instance.  The representation of
+    ClassInstanceType contains a pointer to a ClassDataType which represents
+    a C structure that contains all the data fields of the class instance.
+    """
+    def __init__(self, classtyp):
+        self.class_type = classtyp
+        name = "data.{0}".format(self.class_type.name)
+        super(StructDataType, self).__init__(name)
+
+
+@imputils.lower_cast(CFFIPointer, CFFIPointer)
+@imputils.lower_cast(CFFIPointer, types.voidptr)
+def voidptr_to_cpointer(context, builder, fromty, toty, val):
+    res = builder.bitcast(val, context.get_data_type(toty))
+    return imputils.impl_ret_untracked(context, builder, toty, res)
+
+def _mangle_attr(name):
+    """
+    Mangle attributes.
+    The resulting name does not startswith an underscore '_'.
+    """
+    return 'm_' + name
+
+default_manager.register(StructInstanceType, StructInstanceModel)
+default_manager.register(StructInstanceType, StructInstanceDataModel)
+default_manager.register(CFFIPointer, CFFIPointerModel)
+
+
+@struct_registry.lower_getattr_generic(StructInstanceType)
+def field_impl(context, builder, typ, value, attr):
+    """
+    Generic getattr for cffi.StructInstanceType
+    """
+    if attr in typ.struct:
+        inst = context.make_helper(builder, typ, value=value)
+        data_pointer = inst
+        data = context.make_data_helper(builder, typ.get_data_type(),
+            ref=data_pointer)
+        return imputils.impl_ret_borrowed(context, builder, typ.struct[attr],
+            getattr(data, _mangle_attr(attr)))
+
+@templates.infer_getattr
+class StructAttribute(templates.AttributeTemplate):
+    key = StructInstanceType
+
+    def generic_resolve(self, instance, attr):
+        if attr in instance.struct:
+            return instance.struct[attr]
+
+
+def map_struct_to_numba_type(cffi_type):
+    """
+    Convert a cffi type to a numba StructType
+    """
+    struct_type = StructInstanceType(cffi_type.cname)
+    for k, v in cffi_type.fields:
+        if v.bitshift != -1:
+            msg = "field {!r} has bitshift, this is not supported"
+            raise ValueError(msg.format(k))
+        if v.flags != 0:
+            msg = "field {!r} has flags, this is not supported"
+            raise ValueError(msg.format(k))
+        if v.bitsize != -1:
+            msg = "field {!r} has bitsize, this is not supported"
+            raise ValueError(msg.format(k))
+        struct_type.struct[k] = map_type(v.type, use_record_dtype=False)
+    return struct_type
 
 def map_struct_to_record_dtype(cffi_type):
     """Convert a cffi type into a NumPy Record dtype
@@ -176,7 +337,35 @@ def make_function_type(cffi_func, use_record_dtype=False):
     if getattr(cffi_type, 'kind', '') == 'struct':
         raise TypeError('No support for CFFI struct values')
     sig = map_type(cffi_type, use_record_dtype=use_record_dtype)
-    return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
+    return types.ExternalFunctionPointer(sig, get_pointer=get_func_pointer)
+
+def get_struct_type(cffi_struct):
+    """
+    Return a Numba type for the given CFFI struct
+    """
+    t = ffi.typeof(cffi_struct)
+    if t.kind == "pointer":
+        return CFFIPointer(_type_map()[t.item])
+
+    return _type_map()[t]
+
+@box(CFFIPointer)
+def struct_instance_box(typ, val, c):
+    import ipdb; ipdb.set_trace()
+
+@unbox(CFFIPointer)
+def struct_instance_ptr_unbox(typ, val, c):
+    ptrty = c.context.data_model_manager[typ].get_value_type()
+    ret = c.builder.alloca(ptrty)
+    ser = c.pyapi.serialize_object(typ.get_pointer)
+    get_pointer = c.pyapi.unserialize(ser)
+    intobj = c.pyapi.call_function_objargs(get_pointer, (val, ))
+    c.pyapi.decref(get_pointer)
+    with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, intobj)):
+        ptr = c.pyapi.long_as_voidptr(intobj)
+        c.pyapi.decref(intobj)
+        c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
+    return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
 
 
 registry = templates.Registry()

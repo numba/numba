@@ -51,7 +51,8 @@ def typeof_impl(val, c):
             return cffi_utils.make_function_type(val)
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
-
+        if cffi_utils.is_cffi_struct(val):
+            return cffi_utils.get_struct_type(val)
     return getattr(val, "_numba_type_", None)
 
 

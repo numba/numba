@@ -156,7 +156,6 @@ def setitem_cpointer(context, builder, sig, args):
     elem_ptr = builder.gep(base_ptr, [idx])
     builder.store(val, elem_ptr)
 
-
 #-------------------------------------------------------------------------------
 
 def do_minmax(context, builder, argtys, args, cmpop):
