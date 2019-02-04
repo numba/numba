@@ -202,7 +202,9 @@ def iternext_unituple(context, builder, sig, args, result):
 
 
 @lower_builtin(operator.getitem, types.UniTuple, types.intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.uintp)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.uintp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
