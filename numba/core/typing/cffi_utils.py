@@ -240,7 +240,7 @@ class StructDataType(types.Type):
 
 @imputils.lower_cast(CFFIPointer, CFFIPointer)
 @imputils.lower_cast(CFFIPointer, types.voidptr)
-def voidptr_to_cpointer(context, builder, fromty, toty, val):
+def voidptr_to_cffipointer(context, builder, fromty, toty, val):
     res = builder.bitcast(val, context.get_data_type(toty))
     return imputils.impl_ret_untracked(context, builder, toty, res)
 
@@ -250,6 +250,7 @@ def _mangle_attr(name):
     The resulting name does not startswith an underscore '_'.
     """
     return 'm_' + name
+
 
 default_manager.register(StructInstanceType, StructInstanceModel)
 default_manager.register(StructInstanceType, StructInstanceDataModel)
@@ -367,7 +368,6 @@ def struct_instance_ptr_unbox(typ, val, c):
         c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
 
-
 registry = templates.Registry()
 
 @registry.register
@@ -397,11 +397,20 @@ class FFIAttribute(templates.AttributeTemplate):
     def resolve_from_buffer(self, ffi):
         return types.BoundFunction(FFI_from_buffer, types.ffi)
 
+def register_type(cffi_type, numba_type):
+    """
+    Add typing for a given CFFI type to the typemap
+    """
+    tm = _type_map()
+    tm[cffi_type] = numba_type
 
 def register_module(mod):
     """
     Add typing for all functions in an out-of-line CFFI module to the typemap
     """
+    for t in mod.ffi.list_types()[0]:
+        cffi_type = mod.ffi.typeof(t)
+        register_type(cffi_type, map_struct_to_numba_type(cffi_type))
     for f in dir(mod.lib):
         f = getattr(mod.lib, f)
         if isinstance(f, BuiltinFunctionType):
@@ -410,9 +419,3 @@ def register_module(mod):
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
         _ffi_instances.add(mod.ffi)
 
-def register_type(cffi_type, numba_type):
-    """
-    Add typing for a given CFFI type to the typemap
-    """
-    tm = _type_map()
-    tm[cffi_type] = numba_type
