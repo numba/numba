@@ -2073,6 +2073,34 @@ class TestPrange(TestPrangeBase):
             return B
         self.prange_tester(test_impl, 1.0)
 
+    @skip_unsupported
+    def test_mutable_list_param(self):
+        """ issue3699: test that mutable variable to call in loop
+            is not hoisted.  The call in test_impl forces a manual
+            check here rather than using prange_tester.
+        """
+        @njit
+        def list_check(X):
+            """ If the variable X is hoisted in the test_impl prange
+                then subsequent list_check calls would return increasing
+                values.
+            """
+            ret = X[-1]
+            a = X[-1] + 1
+            X.append(a)
+            return ret
+        def test_impl(n):
+            for i in prange(n):
+                X = [100]
+                a = list_check(X)
+            return a
+        python_res = test_impl(10)
+        njit_res = njit(test_impl)(10)
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = pa_func(10)
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
 
 @skip_parfors_unsupported
 @x86_only
