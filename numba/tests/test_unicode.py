@@ -38,6 +38,9 @@ def getitem_usecase(x, i):
 def concat_usecase(x, y):
     return x + y
 
+def inplace_concat_usecase(x, y):
+    x += y
+    return x
 
 def in_usecase(x, y):
     return x in y
@@ -372,6 +375,15 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
+
+    def test_inplace_concat(self, flags=no_pyobj_flags):
+        pyfunc = inplace_concat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            for b in UNICODE_EXAMPLES[::-1]:
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b),
+                                 "'%s' + '%s'?" % (a, b))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):

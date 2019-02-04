@@ -639,6 +639,71 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for x in (0, 1, True, False, 2.5, 0j):
             check_scal(x)
 
+    def test_np_where_3_broadcast_x_y_scalar(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(got, expected)
+
+        def a_variations():
+            a = np.linspace(-2, 4, 20)
+            self.random.shuffle(a)
+            yield a
+            yield a.reshape(2, 5, 2)
+            yield a.reshape(4, 5, order='F')
+            yield a.reshape(2, 5, 2)[::-1]
+
+        for a in a_variations():
+            params = (a > 0, 0, 1)
+            check_ok(params)
+
+            params = (a < 0, np.nan, 1 + 4j)
+            check_ok(params)
+
+            params = (a > 1, True, False)
+            check_ok(params)
+
+    def test_np_where_3_broadcast_x_or_y_scalar(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            condition, x, y = args
+
+            expected = pyfunc(condition, x, y)
+            got = cfunc(condition, x, y)
+            self.assertPreciseEqual(got, expected)
+
+            # swap x and y
+            expected = pyfunc(condition, y, x)
+            got = cfunc(condition, y, x)
+            self.assertPreciseEqual(got, expected)
+
+        def array_permutations():
+            x = np.arange(9).reshape(3, 3)
+            yield x
+            yield x * 1.1
+            yield np.asfortranarray(x)
+            yield x[::-1]
+            yield np.linspace(-10, 10, 60).reshape(3, 4, 5) * 1j
+
+        def scalar_permutations():
+            yield 0
+            yield 4.3
+            yield np.nan
+            yield True
+            yield 8 + 4j
+
+        for x in array_permutations():
+            for y in scalar_permutations():
+                x_mean = np.mean(x)
+                condition = x > x_mean
+                params = (condition, x, y)
+                check_ok(params)
+
     def test_item(self):
         pyfunc = array_item
         cfunc = jit(nopython=True)(pyfunc)

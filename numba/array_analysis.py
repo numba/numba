@@ -1090,7 +1090,7 @@ class ArrayAnalysis(object):
 
     def _analyze_op_getattr(self, scope, equiv_set, expr):
         # TODO: getattr of npytypes.Record
-        if expr.attr == 'T':
+        if expr.attr == 'T' and self._isarray(expr.value.name):
             return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
         elif expr.attr == 'shape':
             shape = equiv_set.get_shape(expr.value)

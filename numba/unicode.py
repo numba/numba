@@ -638,6 +638,7 @@ def unicode_getitem(s, idx):
 
 
 @overload(operator.add)
+@overload(operator.iadd)
 def unicode_concat(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def concat_impl(a, b):

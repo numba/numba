@@ -148,13 +148,6 @@ class BaseCallConv(object):
         arginfo = self._get_arg_packer(argtypes)
         return arginfo.from_arguments(builder, raw_args)
 
-    def _fix_argtypes(self, argtypes):
-        """
-        Fix argument types, removing any omitted arguments.
-        """
-        return tuple(ty for ty in argtypes
-                     if not isinstance(ty, types.Omitted))
-
     def _get_arg_packer(self, argtypes):
         """
         Get an argument packer for the given argument types.
