@@ -119,6 +119,20 @@ converting the dict to the combined table.
 
 #include "_dictobject.h"
 
+
+#if defined(_MSC_VER)
+#   if _MSC_VER < 1800  /* Visual Studio 2013 */
+        typedef __int8 int8_t;
+        typedef __int16 int16_t;
+        typedef __int32 int32_t;
+#   endif
+    /* Use _alloca() to dynamically allocate on the stack on MSVC */
+    #define STACK_ALLOC(Type, Name, Size) Type * const Name = _alloca(Size);
+#else
+    #define STACK_ALLOC(Type, Name, Size) Type Name[Size];
+#endif
+
+
 /*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
 [clinic start generated code]*/
@@ -275,7 +289,7 @@ palign(void *ptr) {
 }
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
-static inline Py_ssize_t
+static Py_ssize_t
 get_index(NB_DictKeys *dk, Py_ssize_t i)
 {
     Py_ssize_t s = dk->size;
@@ -305,7 +319,7 @@ get_index(NB_DictKeys *dk, Py_ssize_t i)
 }
 
 /* write to indices. */
-static inline void
+static void
 set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
 {
     Py_ssize_t s = dk->size;
@@ -387,9 +401,12 @@ numba_dict_length(NB_Dict *d) {
 
 static NB_DictEntry*
 get_entry(NB_DictKeys *dk, Py_ssize_t idx) {
+    Py_ssize_t offset;
+    char *ptr;
+
     assert (idx < dk->size);
-    Py_ssize_t offset = idx * dk->entry_size;
-    char *ptr = dk->indices + dk->entry_offset + offset;
+    offset = idx * dk->entry_size;
+    ptr = dk->indices + dk->entry_offset + offset;
     return (NB_DictEntry*)ptr;
 }
 
@@ -470,10 +487,11 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
 int
 numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     NB_DictKeys* dk;
+    NB_Dict *d;
     int status = numba_dictkeys_new(&dk, size, key_size, val_size);
     if (status != OK) return status;
 
-    NB_Dict *d = malloc(sizeof(NB_Dict));
+    d = malloc(sizeof(NB_Dict));
     if (!d) {
         numba_dictkeys_free(dk);
         return ERR_NO_MEMORY;
@@ -554,11 +572,12 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
         }
         if (ix >= 0) {
             NB_DictEntry *ep = get_entry(dk, ix);
-            char startkey[dk->val_size];
+            STACK_ALLOC(char, startkey, dk->val_size);
             if (ep->hash == hash) {
-                copy_key(dk, startkey, entry_get_key(dk, ep));
+                int cmp;
 
-                int cmp = key_equal(dk, startkey, key_bytes);
+                copy_key(dk, startkey, entry_get_key(dk, ep));
+                cmp = key_equal(dk, startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
                     memset(oldval_bytes, 0, dk->val_size);
@@ -584,12 +603,17 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
    The dict must be combined. */
 static Py_ssize_t
 find_empty_slot(NB_DictKeys *dk, Py_hash_t hash){
+    size_t mask;
+    size_t i;
+    Py_ssize_t ix;
+    size_t perturb;
+
     assert(dk != NULL);
 
-    const size_t mask = D_MASK(dk);
-    size_t i = hash & mask;
-    Py_ssize_t ix = get_index(dk, i);
-    for (size_t perturb = hash; ix >= 0;) {
+    mask = D_MASK(dk);
+    i = hash & mask;
+    ix = get_index(dk, i);
+    for (perturb = hash; ix >= 0;) {
         perturb >>= PERTURB_SHIFT;
         i = (i*5 + perturb + 1) & mask;
         ix = get_index(dk, i);
@@ -612,6 +636,7 @@ numba_dict_insert(
     char       *oldval_bytes
     )
 {
+
     NB_DictKeys *dk = d->keys;
 
     Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
@@ -622,6 +647,9 @@ numba_dict_insert(
 
     if (ix == DKIX_EMPTY) {
         /* Insert into new slot */
+        Py_ssize_t hashpos;
+        NB_DictEntry *ep;
+
         assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
         if (dk->usable <= 0) {
             /* Need to resize */
@@ -630,8 +658,8 @@ numba_dict_insert(
             else
                 dk = d->keys;     // reload
         }
-        Py_ssize_t hashpos = find_empty_slot(dk, hash);
-        NB_DictEntry *ep = get_entry(dk, dk->nentries);
+        hashpos = find_empty_slot(dk, hash);
+        ep = get_entry(dk, dk->nentries);
         set_index(dk, hashpos, dk->nentries);
         copy_val(dk, entry_get_key(dk, ep), key_bytes);
         assert ( hash != -1 );
@@ -661,10 +689,12 @@ Internal routine used by dictresize() to build a hashtable of entries.
 void
 build_indices(NB_DictKeys *keys, Py_ssize_t n) {
     size_t mask = (size_t)D_MASK(keys);
-    for (Py_ssize_t ix = 0; ix != n; ix++) {
+    Py_ssize_t ix;
+    for (ix = 0; ix != n; ix++) {
+        size_t perturb;
         Py_hash_t hash = get_entry(keys, ix)->hash;
         size_t i = hash & mask;
-        for (size_t perturb = hash; get_index(keys, i) != DKIX_EMPTY;) {
+        for (perturb = hash; get_index(keys, i) != DKIX_EMPTY;) {
             perturb >>= PERTURB_SHIFT;
             i = mask & (i*5 + perturb + 1);
         }
@@ -690,6 +720,7 @@ int
 numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     Py_ssize_t newsize, numentries;
     NB_DictKeys *oldkeys;
+    int status;
 
     /* Find the smallest table size > minused. */
     for (newsize = D_MINSIZE;
@@ -707,7 +738,7 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
      */
 
     /* Allocate a new table. */
-    int status = numba_dictkeys_new(
+    status = numba_dictkeys_new(
         &d->keys, newsize, oldkeys->key_size, oldkeys->val_size
     );
     if (status != OK) {
@@ -727,9 +758,10 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
         memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
     }
     else {
+        Py_ssize_t i;
         size_t epi = 0;
         // NB_DictEntry *ep;
-        for (Py_ssize_t i=0; i<numentries; ++i) {
+        for (i=0; i<numentries; ++i) {
 
             /*
                 ep->hash == (-1) hash means it is empty
@@ -764,11 +796,12 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
 int
 numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
 {
+    Py_ssize_t hashpos;
     NB_DictEntry *ep;
     NB_DictKeys *dk = d->keys;
-    char oldkey_bytes[dk->key_size];
+    STACK_ALLOC(char, oldkey_bytes, dk->key_size);
 
-    Py_ssize_t hashpos = lookdict_index(dk, hash, ix);
+    hashpos = lookdict_index(dk, hash, ix);
     assert(hashpos >= 0);
 
     d->used -= 1;
@@ -806,7 +839,6 @@ numba_dict_dump_keys(NB_Dict *d) {
     assert(j == n);
 }
 
-
 size_t
 numba_dict_iter_sizeof() {
     return sizeof(NB_DictIter);
@@ -823,11 +855,12 @@ numba_dict_iter(NB_DictIter *it, NB_Dict *d) {
 int
 numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr) {
     /* Detect dictionary mutation during iteration */
+    NB_DictKeys *dk;
     if (it->parent->keys != it->parent_keys ||
         it->parent->used != it->size) {
         return ERR_DICT_MUTATED;
     }
-    NB_DictKeys *dk = it->parent_keys;
+    dk = it->parent_keys;
     while ( it->pos < dk->nentries ) {
         NB_DictEntry *ep = get_entry(dk, it->pos++);
         if ( ep->hash != DKIX_EMPTY ) {
@@ -847,14 +880,14 @@ numba_dict_insert_ez(
     const char *val_bytes
     )
 {
-    char old[d->keys->val_size];
+    STACK_ALLOC(char, old, d->keys->val_size);
     return numba_dict_insert(d, key_bytes, hash, val_bytes, old);
 }
 
 int
 numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
 {
-    char oldval_bytes[d->keys->key_size];
+    STACK_ALLOC(char, oldval_bytes, d->keys->key_size);
     return numba_dict_delitem(d, hash, ix, oldval_bytes);
 }
 
@@ -875,10 +908,13 @@ numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
 
 int
 numba_test_dict(void) {
-    puts("test_dict");
+
 
     NB_Dict *d;
     int status;
+    Py_ssize_t ix;
+    STACK_ALLOC(char, got_value, 8);
+    puts("test_dict");
 
     status = numba_dict_new(&d, D_MINSIZE, 4, 8);
     CHECK(status == OK);
@@ -895,8 +931,7 @@ numba_test_dict(void) {
     printf("d[1] 0x%zx\n", (char*)get_entry(d->keys, 1) - (char*)d->keys);
     CHECK ((char*)get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
 
-    char got_value[d->keys->val_size];
-    Py_ssize_t ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
+    ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
     printf("ix = %zd\n", ix);
     CHECK (ix == DKIX_EMPTY);
 
