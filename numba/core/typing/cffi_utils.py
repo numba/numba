@@ -31,10 +31,14 @@ except ImportError:
     ffi = None
 
 SUPPORTED = ffi is not None
-_ool_func_types = {}
-_ool_func_ptr = {}
 _ool_libraries = {}
+_ool_func_types = {}
+_ool_struct_types = {}
+_ool_func_ptr = {}
 _ffi_instances = set()
+
+def debug():
+    return _ool_struct_types, _ool_func_types
 
 
 def is_ffi_instance(obj):
@@ -173,54 +177,42 @@ def map_type(cffi_type, use_record_dtype=False):
             raise TypeError(cffi_type)
         return result
 
-struct_registry = imputils.Registry()
-
 class StructInstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
-        cls_data_ty = types.ClassDataType(fe_typ)
-        # MemInfoPointer uses the `dtype` attribute to traverse for nested
-        # NRT MemInfo.  Since we handle nested NRT MemInfo ourselves,
-        # we will replace provide MemInfoPointer with an opaque type
-        # so that it does not raise exception for nested meminfo.
-        dtype = types.Opaque('Opaque.' + str(cls_data_ty))
-        members = [
-            ('meminfo', types.MemInfoPointer(dtype)),
-            ('data', types.CPointer(cls_data_ty)),
-        ]
+        members = []
+        self._offsets = {}
+        self._field_pos = {}
+        cffi_type = fe_typ.cffi_type
+        for idx, (field, member_fe_typ) in enumerate(fe_typ.struct.items()):
+            members.append((field, member_fe_typ))
+            self._offsets[field] = ffi.offsetof(cffi_type, field)
+            self._field_pos[field] = idx
         super(StructInstanceModel, self).__init__(dmm, fe_typ, members)
+
+    def get_field_offset(self, field):
+        return self._offsets[field]
+
+    def get_field_pos(self, field):
+        return self._field_pos[field]
 
 class CFFIPointer(types.CPointer):
     def __init__(self, dtype):
         super(CFFIPointer, self).__init__(dtype)
-        self.name = '<ffi>' + self.name
+        self.name = '<ffi>(' + self.name + ')'
 
-    def can_convert_to(self, typingctx, other):
-        if isinstance(other, types.CPointer):
-            return typingctx.can_convert_to(self.dtype, other.dtype)
-        elif isinstance(other, types.RawPointer):
-            return Conversion.unsafe
-
-    def can_convert_from(self, typingctx, other):
-        if isinstance(other, types.CPointer):
-            return typingctx.can_convert_from(self.dtype, other.dtype)
-        elif isinstance(other, types.RawPointer):
-            return Conversion.unsafe
-
-    def get_pointer(self, struct_ptr):
+    @staticmethod
+    def get_pointer(struct_ptr):
         return get_struct_pointer(struct_ptr)
 
-
-class StructInstanceDataModel(models.StructModel):
-    def __init__(self, dmm, fe_typ):
-        members = [(_mangle_attr(k), v) for k, v in fe_typ.struct.items()]
-        super(StructInstanceDataModel, self).__init__(dmm, fe_typ, members)
 
 class CFFIPointerModel(models.PointerModel):
     pass
 
+
 class StructInstanceType(types.Type):
-    def __init__(self, cname):
-        name = cname.replace(" ", "_")
+    def __init__(self, cffi_type):
+        self.cffi_type = cffi_type
+        name = "<instance> (" + self.cffi_type.cname + ")"
         self.struct = {}
         super(StructInstanceType, self).__init__(name)
 
@@ -232,24 +224,6 @@ class StructInstanceType(types.Type):
         if other == types.voidptr:
             return Conversion.safe
 
-class StructDataType(types.Type):
-    """
-    Internal only.
-    Represents the data of the instance.  The representation of
-    ClassInstanceType contains a pointer to a ClassDataType which represents
-    a C structure that contains all the data fields of the class instance.
-    """
-    def __init__(self, classtyp):
-        self.class_type = classtyp
-        name = "data.{0}".format(self.class_type.name)
-        super(StructDataType, self).__init__(name)
-
-
-@imputils.lower_cast(CFFIPointer, CFFIPointer)
-@imputils.lower_cast(CFFIPointer, types.voidptr)
-def voidptr_to_cffipointer(context, builder, fromty, toty, val):
-    res = builder.bitcast(val, context.get_data_type(toty))
-    return imputils.impl_ret_untracked(context, builder, toty, res)
 
 def _mangle_attr(name):
     """
@@ -260,22 +234,21 @@ def _mangle_attr(name):
 
 
 default_manager.register(StructInstanceType, StructInstanceModel)
-default_manager.register(StructInstanceType, StructInstanceDataModel)
 default_manager.register(CFFIPointer, CFFIPointerModel)
 
 
-@struct_registry.lower_getattr_generic(StructInstanceType)
+@imputils.lower_getattr_generic(StructInstanceType)
 def field_impl(context, builder, typ, value, attr):
     """
     Generic getattr for cffi.StructInstanceType
     """
     if attr in typ.struct:
-        inst = context.make_helper(builder, typ, value=value)
-        data_pointer = inst
-        data = context.make_data_helper(builder, typ.get_data_type(),
-            ref=data_pointer)
+        ddm = context.data_model_manager[typ]
+        pos = ddm.get_field_pos(attr)
+        data = builder.extract_value(value, pos)
+        retty = context.get_return_type(typ.struct[attr])
         return imputils.impl_ret_borrowed(context, builder, typ.struct[attr],
-            getattr(data, _mangle_attr(attr)))
+            data)
 
 @templates.infer_getattr
 class StructAttribute(templates.AttributeTemplate):
@@ -290,7 +263,13 @@ def map_struct_to_numba_type(cffi_type):
     """
     Convert a cffi type to a numba StructType
     """
-    struct_type = StructInstanceType(cffi_type.cname)
+    if cffi_type in _ool_struct_types:
+        return _ool_struct_types[cffi_type]
+
+    # forward declare the struct type
+    forward = types.DeferredType()
+    _ool_struct_types[cffi_type] = forward
+    struct_type = StructInstanceType(cffi_type)
     for k, v in cffi_type.fields:
         if v.bitshift != -1:
             msg = "field {!r} has bitshift, this is not supported"
@@ -301,7 +280,11 @@ def map_struct_to_numba_type(cffi_type):
         if v.bitsize != -1:
             msg = "field {!r} has bitsize, this is not supported"
             raise ValueError(msg.format(k))
+        print("mapping {} of {}".format(k, cffi_type))
         struct_type.struct[k] = map_type(v.type, use_record_dtype=False)
+    print("Stuct of {} is {}".format(cffi_type, struct_type.struct))
+    forward.define(struct_type)
+    _ool_struct_types[cffi_type] = struct_type
     return struct_type
 
 def map_struct_to_record_dtype(cffi_type):
@@ -475,6 +458,9 @@ def register_module(mod):
     """
     Add typing for all functions in an out-of-line CFFI module to the typemap
     """
+    if mod.lib in _ool_libraries:
+        # module already registered, don't do anything
+        return
     _ool_libraries[mod.lib] = CFFILibrary(mod.lib)
     for t in mod.ffi.list_types()[0]:
         cffi_type = mod.ffi.typeof(t)
