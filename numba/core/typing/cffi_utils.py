@@ -37,6 +37,35 @@ _ool_struct_types = {}
 _ool_func_ptr = {}
 _ffi_instances = set()
 
+class CFFITypeInfo(object):
+    """
+    Cache cffi type info
+    """
+    def __init__(self, ffi, cffi_type):
+        self.cname = cffi_type.cname
+        self.cffi_type = cffi_type
+        self.cffi_ptr_t = ffi.typeof(self.cffi_type.cname + '*')
+
+class CFFIStructTypeCache(object):
+    def __init__(self):
+        self.ctypes_cache = {}
+        self.type_to_lib = {}
+
+    def add_type(self, mod, cffi_type):
+        self.ctypes_cache[hash((mod.lib, cffi_type))] = CFFITypeInfo(mod.ffi, cffi_type)
+        self.type_to_lib[cffi_type] = mod.lib
+
+    def get_type_by_hash(self, h):
+        return self.ctypes_cache[h]
+
+    def get_types_lib(self, cffi_type):
+        return self.type_to_lib[cffi_type]
+
+    def get_hash(self, lib, cffi_type):
+        return hash((lib, cffi_type))
+
+_cffi_types_cache = CFFIStructTypeCache()
+
 def debug():
     return _ool_struct_types, _ool_func_types
 
@@ -177,23 +206,22 @@ def map_type(cffi_type, use_record_dtype=False):
             raise TypeError(cffi_type)
         return result
 
-class StructInstanceModel(models.StructModel):
+class CFFIStructInstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         members = []
-        self._offsets = {}
         self._field_pos = {}
-        cffi_type = fe_typ.cffi_type
         for idx, (field, member_fe_typ) in enumerate(fe_typ.struct.items()):
             members.append((field, member_fe_typ))
-            self._offsets[field] = ffi.offsetof(cffi_type, field)
             self._field_pos[field] = idx
-        super(StructInstanceModel, self).__init__(dmm, fe_typ, members)
-
-    def get_field_offset(self, field):
-        return self._offsets[field]
+        super(CFFIStructInstanceModel, self).__init__(dmm, fe_typ, members)
 
     def get_field_pos(self, field):
         return self._field_pos[field]
+
+    def get_field(self, builder, value, field):
+        pos = self.get_field_pos(self, field)
+        return builder.extract_value(value, pos)
+
 
 class CFFIPointer(types.CPointer):
     def __init__(self, dtype):
@@ -206,15 +234,17 @@ class CFFIPointer(types.CPointer):
 
 
 class CFFIPointerModel(models.PointerModel):
-    pass
+    def get_field(self, builder, value, field):
+        pos = self._pointee_model.get_field_pos(field)
+        return builder.gep(value, [cgutils.int32_t(0), cgutils.int32_t(pos)])
 
 
-class StructInstanceType(types.Type):
+class CFFIStructInstanceType(types.Type):
     def __init__(self, cffi_type):
         self.cffi_type = cffi_type
         name = "<instance> (" + self.cffi_type.cname + ")"
         self.struct = {}
-        super(StructInstanceType, self).__init__(name)
+        super(CFFIStructInstanceType, self).__init__(name)
 
     def can_convert_to(self, typingctx, other):
         if other == types.voidptr:
@@ -233,30 +263,50 @@ def _mangle_attr(name):
     return 'm_' + name
 
 
-default_manager.register(StructInstanceType, StructInstanceModel)
+default_manager.register(CFFIStructInstanceType, CFFIStructInstanceModel)
 default_manager.register(CFFIPointer, CFFIPointerModel)
 
 
-@imputils.lower_getattr_generic(StructInstanceType)
+@imputils.lower_getattr_generic(CFFIStructInstanceType)
 def field_impl(context, builder, typ, value, attr):
     """
-    Generic getattr for cffi.StructInstanceType
+    Generic getattr for cffi.CFFIStructInstanceType
     """
     if attr in typ.struct:
         ddm = context.data_model_manager[typ]
-        pos = ddm.get_field_pos(attr)
-        data = builder.extract_value(value, pos)
-        retty = context.get_return_type(typ.struct[attr])
+        data = ddm.get_field(builder, value, attr)
         return imputils.impl_ret_borrowed(context, builder, typ.struct[attr],
             data)
 
+@imputils.lower_getattr_generic(CFFIPointer)
+def pointer_field_impl(context, builder, typ, value, attr):
+    """
+    Generic getattr for cffi.CFFIStructInstanceType
+    """
+    pointee = typ.dtype
+    if attr in pointee.struct:
+        ddm = context.data_model_manager[typ]
+        ret = ddm.get_field(builder, value, attr)
+        return imputils.impl_ret_borrowed(context, builder, typ.dtype.struct[attr],
+            builder.load(ret))
+
+
 @templates.infer_getattr
 class StructAttribute(templates.AttributeTemplate):
-    key = StructInstanceType
+    key = CFFIStructInstanceType
 
     def generic_resolve(self, instance, attr):
         if attr in instance.struct:
             return instance.struct[attr]
+
+@templates.infer_getattr
+class get_attr_cffi_pointer(templates.AttributeTemplate):
+    key = CFFIPointer
+
+    def generic_resolve(self, instance, attr):
+        pointee = instance.dtype
+        if attr in pointee.struct:
+            return pointee.struct[attr]
 
 
 def map_struct_to_numba_type(cffi_type):
@@ -269,7 +319,7 @@ def map_struct_to_numba_type(cffi_type):
     # forward declare the struct type
     forward = types.DeferredType()
     _ool_struct_types[cffi_type] = forward
-    struct_type = StructInstanceType(cffi_type)
+    struct_type = CFFIStructInstanceType(cffi_type)
     for k, v in cffi_type.fields:
         if v.bitshift != -1:
             msg = "field {!r} has bitshift, this is not supported"
@@ -280,9 +330,7 @@ def map_struct_to_numba_type(cffi_type):
         if v.bitsize != -1:
             msg = "field {!r} has bitsize, this is not supported"
             raise ValueError(msg.format(k))
-        print("mapping {} of {}".format(k, cffi_type))
         struct_type.struct[k] = map_type(v.type, use_record_dtype=False)
-    print("Stuct of {} is {}".format(cffi_type, struct_type.struct))
     forward.define(struct_type)
     _ool_struct_types[cffi_type] = struct_type
     return struct_type
@@ -341,9 +389,21 @@ def get_struct_type(cffi_struct):
 
     return _type_map()[t]
 
+def struct_from_ptr(h, intptr):
+    return ffi.cast(_cffi_types_cache.get_type_by_hash(h).cffi_ptr_t, intptr)
+
 @box(CFFIPointer)
 def struct_instance_box(typ, val, c):
-    import ipdb; ipdb.set_trace()
+    ser = c.pyapi.serialize_object(struct_from_ptr)
+    struct_from_ptr_runtime = c.pyapi.unserialize(ser)
+    pointee = typ.dtype
+
+    h = hash((_cffi_types_cache.get_types_lib(pointee.cffi_type), pointee.cffi_type))
+    h = cgutils.intp_t(h)
+    h = c.pyapi.long_from_longlong(h)
+    cast_val = c.builder.ptrtoint(val, cgutils.intp_t)
+    struct_addr = c.pyapi.long_from_ssize_t(cast_val)
+    return c.pyapi.call_function_objargs(struct_from_ptr_runtime, [h, struct_addr])
 
 @unbox(CFFIPointer)
 def struct_instance_ptr_unbox(typ, val, c):
@@ -465,6 +525,7 @@ def register_module(mod):
     for t in mod.ffi.list_types()[0]:
         cffi_type = mod.ffi.typeof(t)
         register_type(cffi_type, map_struct_to_numba_type(cffi_type))
+        _cffi_types_cache.add_type(mod, cffi_type)
     for f in dir(mod.lib):
         f = getattr(mod.lib, f)
         if isinstance(f, BuiltinFunctionType):
