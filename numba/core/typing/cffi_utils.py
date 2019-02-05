@@ -10,13 +10,14 @@ import re
 from functools import partial
 import numpy as np
 import llvmlite.ir as ir
+import operator
 
 from numba import types
 from numba import numpy_support
 from numba import cgutils
 from numba.errors import TypingError
 from numba.targets import imputils
-from numba.datamodel import models
+from numba.datamodel import models, register_default
 from numba.datamodel import default_manager, models
 from numba.typeconv import Conversion
 from numba.pythonapi import box, unbox, NativeValue
@@ -189,7 +190,7 @@ def map_type(cffi_type, use_record_dtype=False):
         else:
             try:
                 return CFFIPointer(primed_map_type(pointee))
-            except TypeError:
+            except TypeError as e:
                 return types.voidptr
     elif kind == 'array':
         dtype = primed_map_type(cffi_type.item)
@@ -300,7 +301,7 @@ class StructAttribute(templates.AttributeTemplate):
             return instance.struct[attr]
 
 @templates.infer_getattr
-class get_attr_cffi_pointer(templates.AttributeTemplate):
+class CFFIPointerAttr(templates.AttributeTemplate):
     key = CFFIPointer
 
     def generic_resolve(self, instance, attr):
@@ -317,7 +318,7 @@ def map_struct_to_numba_type(cffi_type):
         return _ool_struct_types[cffi_type]
 
     # forward declare the struct type
-    forward = types.DeferredType()
+    forward = types.deferred_type()
     _ool_struct_types[cffi_type] = forward
     struct_type = CFFIStructInstanceType(cffi_type)
     for k, v in cffi_type.fields:
@@ -392,6 +393,8 @@ def get_struct_type(cffi_struct):
 def struct_from_ptr(h, intptr):
     return ffi.cast(_cffi_types_cache.get_type_by_hash(h).cffi_ptr_t, intptr)
 
+
+
 @box(CFFIPointer)
 def struct_instance_box(typ, val, c):
     ser = c.pyapi.serialize_object(struct_from_ptr)
@@ -437,11 +440,9 @@ class CFFILibrary(types.Type):
         return _ool_func_ptr[func_name]
 
 
+@register_default(CFFILibrary)
 class CFFILibraryDataModel(models.OpaqueModel):
     pass
-
-
-default_manager.register(CFFILibrary, CFFILibraryDataModel)
 
 
 registry = templates.Registry()
@@ -480,6 +481,30 @@ def lower_get_func(context, builder, typ, value, attr):
     builder.store(builder.inttoptr(func_addr, ptrty), ret)
     return builder.load(ret)
 
+
+class CFFINullPtrType(types.CPointer):
+    def __init__(self):
+        super(CFFINullPtrType, self).__init__(types.void)
+
+    def can_convert_from(self, typeingctx, other):
+        if isinstance(other, CFFIPointer):
+            return Conversion.safe
+
+    def can_convert_to(self, typeingctx, other):
+        if isinstance(other, CFFIPointer):
+            return Conversion.safe
+
+
+
+class CFFINullPtrModel(models.PointerModel):
+    pass
+
+default_manager.register(CFFINullPtrType, CFFINullPtrModel)
+
+@imputils.lower_getattr(types.ffi, 'NULL')
+def lower_ffi_null(context, builder, sig, args):
+    return context.get_constant_null(CFFINullPtrType())
+
 @registry.register
 class FFI_from_buffer(templates.AbstractTemplate):
     key = 'ffi.from_buffer'
@@ -506,6 +531,47 @@ class FFIAttribute(templates.AttributeTemplate):
 
     def resolve_from_buffer(self, ffi):
         return types.BoundFunction(FFI_from_buffer, types.ffi)
+
+    def resolve_NULL(self, ffi):
+        return CFFINullPtrType()
+
+@templates.infer_global(operator.ne)
+@templates.infer_global(operator.eq)
+class PtrCMPTemplate(templates.AbstractTemplate):
+    def generic(self, args, kws):
+        (ptr1, ptr2) = args
+        if isinstance(ptr1, types.CPointer) and isinstance(ptr2, types.CPointer):
+            return templates.signature(types.bool_, ptr1, ptr2)
+
+@imputils.lower_builtin(operator.ne, CFFINullPtrType, types.CPointer)
+def lower_null_ptr_cmp_pos1(context, builder, sig, args):
+    to_compare = args[1]
+    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
+    res = builder.icmp_unsigned('!=',int_ptr, cgutils.intp_t(0))
+    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+
+@imputils.lower_builtin(operator.ne, types.CPointer, CFFINullPtrType)
+def lower_null_ptr_cmp_pos2(context, builder, sig, args):
+    to_compare = args[0]
+    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
+    res = builder.icmp_unsigned('!=',int_ptr, cgutils.intp_t(0))
+    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+
+@imputils.lower_builtin(operator.eq, CFFINullPtrType, types.CPointer)
+def lower_null_ptr_cmp_pos1(context, builder, sig, args):
+    to_compare = args[1]
+    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
+    res = builder.icmp_unsigned('==',int_ptr, cgutils.intp_t(0))
+    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+
+@imputils.lower_builtin(operator.eq, types.CPointer, CFFINullPtrType)
+def lower_null_ptr_cmp_pos2(context, builder, sig, args):
+    to_compare = args[0]
+    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
+    res = builder.icmp_unsigned('==',int_ptr, cgutils.intp_t(0))
+    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 
 def register_type(cffi_type, numba_type):
     """

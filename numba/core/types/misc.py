@@ -164,6 +164,12 @@ class CPointer(Type):
     def key(self):
         return self.dtype
 
+    def unify(self, typingctx, other):
+        return type(self)(typingctx.unify_pairs(self.dtype, other.dtype))
+
+    def __repr__(self):
+        return "{}*".format(repr(self.dtype))
+
 
 class EphemeralPointer(CPointer):
     """
@@ -466,6 +472,12 @@ class DeferredType(Type):
 
     def unify(self, typingctx, other):
         return typingctx.unify_pairs(self.get(), other)
+
+    def __repr__(self):
+        # fixes repr for defined types
+        if self._define:
+            return 'Resolved#' + repr(self._define)
+        return super(DeferredType, self).__repr__()
 
 
 class ClassDataType(Type):

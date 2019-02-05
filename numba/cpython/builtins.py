@@ -135,6 +135,7 @@ def any_to_deferred(context, builder, fromty, toty, val):
 @lower_cast(types.DeferredType, types.Boolean)
 @lower_cast(types.DeferredType, types.Optional)
 def deferred_to_any(context, builder, fromty, toty, val):
+    import ipdb; ipdb.set_trace()
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
     return context.cast(builder, val, fromty.get(), toty)
@@ -155,6 +156,15 @@ def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
     elem_ptr = builder.gep(base_ptr, [idx])
     builder.store(val, elem_ptr)
+
+# assert correct casting of deferred pointers
+@lower_cast(types.CPointer, types.CPointer)
+def cast_deferred(context, builder, fromty, toty, val):
+    if isinstance(fromty.dtype, types.DeferredType) or isinstance(toty.dtype, types.DeferredType):
+        target_type = context.get_value_type(toty)
+        return builder.bitcast(val, target_type)
+
+
 
 #-------------------------------------------------------------------------------
 
