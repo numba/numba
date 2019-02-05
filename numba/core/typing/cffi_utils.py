@@ -431,16 +431,10 @@ def lower_get_func(context, builder, typ, value, attr):
     ret = cgutils.alloca_once_value(builder,
                                     ir.Constant(ptrty, None),
                                     name='fnptr')
-    ser = pyapi.serialize_object(typ)
-    runtime_typ = pyapi.unserialize(ser)
-    attr_cstr = context.insert_const_string(builder.module, attr)
-    intobj = pyapi.call_method(runtime_typ, "get_func_pointer",
-        [pyapi.string_from_string(attr_cstr)])
-    with cgutils.if_likely(builder,
-                            cgutils.is_not_null(builder, intobj)):
-        ptr = pyapi.long_as_voidptr(intobj)
-        pyapi.decref(intobj)
-        builder.store(builder.bitcast(ptr, ptrty), ret)
+    # function address is constant and can't be overwritten from python
+    # so we cache it
+    func_addr = cgutils.intp_t(typ.get_func_pointer(attr))
+    builder.store(builder.inttoptr(func_addr, ptrty), ret)
     return builder.load(ret)
 
 @registry.register
