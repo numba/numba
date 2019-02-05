@@ -147,9 +147,9 @@ def map_type(cffi_type, use_record_dtype=False):
         if pointee.kind == 'void':
             return types.voidptr
         else:
-            if use_record_dtype:
-                return types.CFFIPointer(primed_map_type(pointee))
-            else:
+            try:
+                return CFFIPointer(primed_map_type(pointee))
+            except TypeError:
                 return types.voidptr
     elif kind == 'array':
         dtype = primed_map_type(cffi_type.item)
@@ -335,8 +335,6 @@ def make_function_type(cffi_func, use_record_dtype=False):
     Return a Numba type for the given CFFI function pointer.
     """
     cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
-    if getattr(cffi_type, 'kind', '') == 'struct':
-        raise TypeError('No support for CFFI struct values')
     sig = map_type(cffi_type, use_record_dtype=use_record_dtype)
     return types.ExternalFunctionPointer(sig, get_pointer=get_func_pointer)
 
