@@ -94,6 +94,10 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes
 NUMBA_EXPORT_FUNC(int)
 numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix);
 
+/* Remove an item from the dict */
+NUMBA_EXPORT_FUNC(int)
+numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes);
+
 /* Returns the sizeof a dictionary iterator */
 NUMBA_EXPORT_FUNC(size_t)
 numba_dict_iter_sizeof(void);

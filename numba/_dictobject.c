@@ -1,4 +1,10 @@
-/* The following is adapted from CPython3.7. */
+/* The following is adapted from CPython3.7.
+The exact commit is:
+
+- https://github.com/python/cpython/blob/44467e8ea4cea390b0718702291b4cfe8ddd67ed/Objects/dictobject.c
+
+
+*/
 
 /* Dictionary object implementation using a hash table */
 
@@ -249,6 +255,7 @@ typedef enum {
     ERR_NO_MEMORY = -1,
     ERR_DICT_MUTATED = -2,
     ERR_ITER_EXHAUSTED = -3,
+    ERR_DICT_EMPTY = -4,
 } Status;
 
 
@@ -815,6 +822,52 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes
 
     return OK;
 }
+
+
+/**
+ * Adapted from dict_popitem
+ *
+ */
+int
+numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
+{
+    Py_ssize_t i, j;
+    char *key_ptr, *val_ptr;
+    NB_DictEntry *ep;
+
+    if (d->used == 0) {
+        return ERR_DICT_EMPTY;
+    }
+
+    /* Pop last item */
+    i = d->keys->nentries - 1;
+    while (i >= 0 && (ep = get_entry(d->keys, i))->hash == DKIX_EMPTY ) {
+        i--;
+    }
+    assert(i >= 0);
+
+    j = lookdict_index(d->keys, ep->hash, i);
+    assert(j >= 0);
+    assert(get_index(d->keys, j) == i);
+    set_index(d->keys, j, DKIX_DUMMY);
+
+
+    key_ptr = entry_get_key(d->keys, ep);
+    val_ptr = entry_get_val(d->keys, ep);
+
+    copy_key(d->keys, key_bytes, key_ptr);
+    copy_val(d->keys, val_bytes, val_ptr);
+
+    zero_key(d->keys, key_ptr);
+    zero_val(d->keys, val_ptr);
+
+    /* We can't dk_usable++ since there is DKIX_DUMMY in indices */
+    d->keys->nentries = i;
+    d->used--;
+
+    return OK;
+}
+
 
 void
 numba_dict_dump_keys(NB_Dict *d) {

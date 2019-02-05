@@ -73,6 +73,10 @@ class Dict(object):
     def items(self):
         return DictIter(self)
 
+    def popitem(self):
+        k, v = self.dict_popitem()
+        return k.decode(), v.decode()
+
     #
     # The methods below are higher-level wrappers for the C-API
     #
@@ -112,6 +116,17 @@ class Dict(object):
         status = self.tc.numba_dict_delitem_ez(self.dp, hashval, ix)
         self.tc.assertEqual(status, 0)
         return True
+
+    def dict_popitem(self):
+        key_bytes = ctypes.create_string_buffer(self.keysize)
+        val_bytes = ctypes.create_string_buffer(self.valsize)
+        status = self.tc.numba_dict_popitem(self.dp, key_bytes, val_bytes)
+        if status != 0:
+            if status == -4:
+                raise KeyError('popitem(): dictionary is empty')
+            else:
+                self.tc._fail('Unknown')
+        return key_bytes.value, val_bytes.value
 
     def dict_iter(self, itptr):
         self.tc.numba_dict_iter(itptr, self.dp)
@@ -254,6 +269,20 @@ class TestDictImpl(TestCase):
                 dict_t,             # d
                 hash_t,             # hash
                 ctypes.c_ssize_t,   # ix
+            ],
+        )
+        # numba_dict_popitem(
+        #   NB_Dict *d,
+        #   char *key_bytes,
+        #   char *val_bytes
+        # )
+        self.numba_dict_popitem = wrap(
+            'dict_popitem',
+            ctypes.c_int,
+            [
+                dict_t,             # d
+                ctypes.c_char_p,    # key_bytes
+                ctypes.c_char_p,    # val_bytes
             ],
         )
         # numba_dict_iter_sizeof()
@@ -473,6 +502,40 @@ class TestDictImpl(TestCase):
         # Size of index can be 8, 16, 32 or 64 bytes (on 64-bit).
         # We are not inserting >2^32 elements because of limitation of time.
         self.check_delete_randomly(nmax=2**17, ndrop=2**16, nrefill=2**10)
+
+    def test_popitem(self):
+        nmax = 10
+        d = Dict(self, 8, 8)
+
+        def make_key(v):
+            return "k_{:06x}".format(v)
+
+        def make_val(v):
+            return "v_{:06x}".format(v)
+
+        for i in range(nmax):
+            d[make_key(i)] = make_val(i)
+
+        self.assertEqual(len(d), nmax)
+        k, v = d.popitem()
+        self.assertEqual(len(d), nmax - 1)
+        self.assertEqual(k, make_key(len(d)))
+        self.assertEqual(v, make_val(len(d)))
+
+        while len(d):
+            n = len(d)
+            k, v = d.popitem()
+            self.assertEqual(len(d), n - 1)
+            self.assertEqual(k, make_key(len(d)))
+            self.assertEqual(v, make_val(len(d)))
+
+        self.assertEqual(len(d), 0)
+        with self.assertRaises(KeyError) as raises:
+            d.popitem()
+        self.assertIn(
+            'popitem(): dictionary is empty',
+            str(raises.exception),
+        )
 
     def test_iter_items(self):
         # Test .items iteration
