@@ -6,8 +6,10 @@ obtaining the pointer and numba signature.
 
 from types import BuiltinFunctionType
 import ctypes
+import re
 from functools import partial
 import numpy as np
+import llvmlite.ir as ir
 
 from numba import types
 from numba import numpy_support
@@ -31,6 +33,7 @@ except ImportError:
 SUPPORTED = ffi is not None
 _ool_func_types = {}
 _ool_func_ptr = {}
+_ool_libraries = {}
 _ffi_instances = set()
 
 
@@ -44,13 +47,17 @@ def is_ffi_instance(obj):
     except TypeError: # Unhashable type possible
         return False
 
+def is_ffi_lib(lib):
+    # we register libs on register_module call
+    return lib in _ool_libraries
+
 def is_cffi_func(obj):
     """Check whether the obj is a CFFI function"""
     try:
         return ffi.typeof(obj).kind == 'function'
     except TypeError:
         try:
-            return obj in _ool_func_types
+            return obj.__name__ in _ool_func_types
         except:
             return False
 
@@ -72,8 +79,8 @@ def get_func_pointer(cffi_func):
     Get a pointer to the underlying function for a CFFI function as an
     integer.
     """
-    if cffi_func in _ool_func_ptr:
-        return _ool_func_ptr[cffi_func]
+    if cffi_func.__name__ in _ool_func_ptr:
+        return _ool_func_ptr[cffi_func.__name__]
     return int(ffi.cast("uintptr_t", cffi_func))
 
 def get_struct_pointer(cffi_struct_ptr):
@@ -334,7 +341,10 @@ def make_function_type(cffi_func, use_record_dtype=False):
     """
     Return a Numba type for the given CFFI function pointer.
     """
-    cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
+    if isinstance(cffi_func, str):
+        cffi_type = _ool_func_types.get(cffi_func)
+    else:
+        cffi_type = _ool_func_types.get(cffi_func.__name__) or ffi.typeof(cffi_func)
     sig = map_type(cffi_type, use_record_dtype=use_record_dtype)
     return types.ExternalFunctionPointer(sig, get_pointer=get_func_pointer)
 
@@ -366,7 +376,72 @@ def struct_instance_ptr_unbox(typ, val, c):
         c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
 
+class CFFILibrary(types.Type):
+    def __init__(self, lib):
+        self._func_names = set(f for f in dir(lib) \
+            if isinstance(getattr(lib, f), BuiltinFunctionType))
+        self._lib_name = re.match(r"<Lib object for '([^']+)'>", str(lib)).group(1)
+        name = 'cffi_lib<{}>'.format(self._lib_name)
+        super(CFFILibrary, self).__init__(name)
+
+    def has_func(self, func_name):
+        return func_name in self._func_names
+
+    def get_func_pointer(self, func_name):
+        if not func_name in self._func_names:
+            raise AttributeError("Function {} is not present in the library {}".format(
+                func_name, self._lib_name))
+        return _ool_func_ptr[func_name]
+
+
+class CFFILibraryDataModel(models.OpaqueModel):
+    pass
+
+
+default_manager.register(CFFILibrary, CFFILibraryDataModel)
+
+
 registry = templates.Registry()
+
+
+@registry.register_attr
+class CFFILibAttr(templates.AttributeTemplate):
+    key = CFFILibrary
+
+    def generic_resolve(self, instance, attr):
+        if instance.has_func(attr):
+            return make_function_type(attr)
+
+
+@imputils.lower_constant(CFFILibrary)
+def lower_cffi_library(context, builder, ty, pyval):
+    return context.get_dummy_value()
+    # return ir.Constant(ir.IntType(8).as_pointer(), None)
+
+
+@imputils.lower_getattr_generic(CFFILibrary)
+def lower_get_func(context, builder, typ, value, attr):
+    pyapi = context.get_python_api(builder)
+    if not typ.has_func(attr):
+        raise AttributeError("Function {} is not present in the library {}".format(
+                func_name, self._lib_name))
+    func_typ = make_function_type(attr)
+    # Call get_func_pointer() on the object to get the raw pointer value
+    ptrty = context.get_function_pointer_type(func_typ)
+    ret = cgutils.alloca_once_value(builder,
+                                    ir.Constant(ptrty, None),
+                                    name='fnptr')
+    ser = pyapi.serialize_object(typ)
+    runtime_typ = pyapi.unserialize(ser)
+    attr_cstr = context.insert_const_string(builder.module, attr)
+    intobj = pyapi.call_method(runtime_typ, "get_func_pointer",
+        [pyapi.string_from_string(attr_cstr)])
+    with cgutils.if_likely(builder,
+                            cgutils.is_not_null(builder, intobj)):
+        ptr = pyapi.long_as_voidptr(intobj)
+        pyapi.decref(intobj)
+        builder.store(builder.bitcast(ptr, ptrty), ret)
+    return builder.load(ret)
 
 @registry.register
 class FFI_from_buffer(templates.AbstractTemplate):
@@ -406,14 +481,15 @@ def register_module(mod):
     """
     Add typing for all functions in an out-of-line CFFI module to the typemap
     """
+    _ool_libraries[mod.lib] = CFFILibrary(mod.lib)
     for t in mod.ffi.list_types()[0]:
         cffi_type = mod.ffi.typeof(t)
         register_type(cffi_type, map_struct_to_numba_type(cffi_type))
     for f in dir(mod.lib):
         f = getattr(mod.lib, f)
         if isinstance(f, BuiltinFunctionType):
-            _ool_func_types[f] = mod.ffi.typeof(f)
+            _ool_func_types[f.__name__] = mod.ffi.typeof(f)
             addr = mod.ffi.addressof(mod.lib, f.__name__)
-            _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
+            _ool_func_ptr[f.__name__] = int(mod.ffi.cast("uintptr_t", addr))
         _ffi_instances.add(mod.ffi)
 
