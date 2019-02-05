@@ -969,6 +969,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_clip(self):
+        # TODO: scalars are not tested (issue #3469)
         for a in (np.linspace(-10, 10, 101),
                   np.linspace(-10, 10, 40).reshape(5, 2, 4)):
             for pyfunc in [np_clip, array_clip]:
@@ -989,6 +990,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 np.testing.assert_equal(pyfunc(a, -5, 5, pyout),
                                         cfunc(a, -5, 5, cout))
                 np.testing.assert_equal(pyout, cout)
+
+                # this test exhibits undefined behaviour since min > max,
+                # but we'll make sure it's consistent with numpy, which
+                # has the `val < a_min` check go before `val > a_max`
+                np.testing.assert_equal(pyfunc(a, 8, 5), cfunc(a, 8, 5))
+
+                # verifies that type-inference is working on the return value
+                # this used to trigger issue #3489
+                def lower_clip_result(a):
+                    return np.expm1(pyfunc(a, -5, 5))
+                np.testing.assert_almost_equal(
+                    lower_clip_result(a),
+                    jit(nopython=True)(lower_clip_result)(a))
 
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
