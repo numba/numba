@@ -257,6 +257,25 @@ class ParallelOptions(object):
         else:
             raise ValueError("Expect parallel option to be either a bool or a dict")
 
+class InlineOptions(object):
+    """
+    Options for controlling inlining
+    """
+    def __init__(self, value):
+        ok = False
+        if isinstance(value, str):
+            if value in ('always', 'never'):
+                ok = True
+        else:
+            ok = getattr(value, '__call__', False)
+
+        if ok:
+            self.inline = value
+        else:
+            msg = ("kwarg 'inline' must be one of the strings 'always' or "
+                   "'never', or it can be a callable the returns True/False. "
+                   "Found value %s" % inline)
+            raise ValueError(msg)
 
 # ----------------------------------------------------------------------------
 # TargetOptions
@@ -275,6 +294,7 @@ class CPUTargetOptions(TargetOptions):
         "fastmath": FastMathOptions,
         "error_model": str,
         "parallel": ParallelOptions,
+        "inline": InlineOptions,
     }
 
 

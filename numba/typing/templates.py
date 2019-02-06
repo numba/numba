@@ -5,12 +5,17 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+from collections import namedtuple
 from types import MethodType, FunctionType
 
 from .. import types, utils
 from ..errors import TypingError, InternalError
 
 _IS_PY3 = sys.version_info >= (3,)
+
+# info store for inliner callback functions e.g. cost model
+_inline_info = namedtuple('inline_info',
+                          'func_ir typemap calltypes signature')
 
 
 class Signature(object):
@@ -426,9 +431,40 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, args, kws)
-        # Store the compiled overload for use in the lowering phase
-        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        # Store the compiled overload for use in the lowering phase if there's
+        # no inlining required (else functions are being compiled which will
+        # never be used as they are inlined)
+        if self._inline != 'never':
+            # need to run the compiler front end up to type inference to compute
+            # a signature
+            from numba.ir_utils import compile_to_numba_ir, get_ir_of_code
+            from numba import compiler
+            ir = get_ir_of_code(self._overload_func(*args, **kws).__globals__,
+                                disp_type.dispatcher.__code__)
+            typemap, return_type, calltypes = compiler.type_inference_stage(
+                                              self.context, ir, args, None)
+            sig = Signature(return_type, args, None)
+            # this stores a load of info for the cost model function if supplied
+            # it by default is None
+            self._inline_overloads[sig.args] = None
+            # this stores the compiled overloads, if there's no compiled
+            # overload available i.e. function is always inlined, the key still
+            # needs to exist for type resolution
+            self._compiled_overloads[sig.args] = None
+            if self._inline != "always":
+                # this branch is here because a user has supplied a function to
+                # determine whether to inline or not. As a result both compiled
+                # function and inliner info needed, delaying the computation of
+                # this leads to an internal state mess at present. TODO: Fix!
+                sig = disp_type.get_call_type(self.context, args, kws)
+                self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+                # store the inliner information, it's used later in the cost
+                # model function call
+                iinfo = _inline_info(ir, typemap, calltypes, sig)
+                self._inline_overloads[sig.args] = iinfo
+        else:
+            sig = disp_type.get_call_type(self.context, args, kws)
+            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
     def _get_impl(self, args, kws):
@@ -511,7 +547,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return self._compiled_overloads[sig.args]
 
 
-def make_overload_template(func, overload_func, jit_options, strict):
+def make_overload_template(func, overload_func, jit_options, strict,
+                           inline):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -521,7 +558,7 @@ def make_overload_template(func, overload_func, jit_options, strict):
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict)
+               _strict=strict, _inline=inline, _inline_overloads={})
     return type(base)(name, (base,), dct)
 
 

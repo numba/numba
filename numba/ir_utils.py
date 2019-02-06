@@ -1938,6 +1938,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
+
 def warn_deprecated(func_ir, typemap):
     # first pass, just walk the type map
     for name, ty in typemap.items():
@@ -1957,3 +1958,199 @@ def warn_deprecated(func_ir, typemap):
                         "'%s' of function '%s'.\n\nFor more information visit "
                         "%s" % (tyname, arg, fname, url))
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+
+
+def _check_inline_options(inline_arg):
+    ok = False
+    if isinstance(inline_arg, str):
+        if inline_arg in ('always', 'never'):
+            ok = True
+    else:
+        ok = getattr(inline_arg, '__call__', False)
+    if not ok:
+        msg = ("Keyword argument 'inline' must be one of the strings 'always' "
+               "or 'never', or it can be a callable the returns True/False. "
+                "Found value '%s'." % inline_arg)
+        raise ValueError(msg)
+
+
+class InlineInlinables(object):
+
+    def __init__(self, func_ir):
+        self.func_ir = func_ir
+
+    def run(self):
+        """Run inlining of inlinables
+        """
+        if config.DEBUG:
+            print('before inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+        modified = False
+        work_list = list(self.func_ir.blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        if guard(self._do_work, work_list, block, i, expr):
+                            modified = True
+                            break  # because block structure changed
+
+        if modified:
+            # clean up unconditional branches that appear due to inlined
+            # functions introducing blocks
+            simplify_CFG(self.func_ir.blocks)
+
+        if config.DEBUG:
+            print('after inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+
+    def _do_work(self, work_list, block, i, expr):
+        from numba.inline_closurecall import inline_closure_call
+        # try and get a definition for the call, this isn't always possible as
+        # it might be a eval(str)/part generated awaiting update etc. (parfors)
+        to_inline = None
+        try:
+            to_inline = self.func_ir.get_definition(expr.func)
+        except Exception as e:
+            return False
+        # do not handle closure inlining here, another pass deals with that.
+        if getattr(to_inline, 'op', False) == 'make_function':
+            return False
+        try:
+            val = getattr(to_inline, 'value', False)
+        except KeyError:
+            try:
+                val = getattr(to_inline, 'func', False)
+            except  KeyError:
+                raise GuardException
+
+        if val:
+            topt = getattr(val, 'targetoptions', False)
+            if topt:
+                inline_type = topt.get('inline', None)
+                if inline_type is not None:
+                    _check_inline_options(inline_type)
+                    if inline_type != 'never':
+                        do_inline = True
+                        pyfunc = to_inline.value.py_func
+                        if inline_type != 'always':
+                            # must be a function, run the function
+                            do_inline = inline_type(self.func_ir, pyfunc)
+                        if do_inline:
+                            inline_closure_call(self.func_ir,
+                                                pyfunc.__globals__,
+                                                block, i, pyfunc,
+                                                work_list=work_list)
+                    return True
+        return False
+
+
+class InlineOverloads(object):
+
+    _DEBUG = True
+
+    def __init__(self, func_ir, tyctx, cgctx, type_annotation):
+        self.func_ir = func_ir
+        self.tyctx = tyctx
+        self.cgctx = cgctx
+        self.type_annotation = type_annotation
+        self.typemap = type_annotation.typemap
+        self.calltypes = type_annotation.calltypes
+
+    def run(self):
+        """Run inlining of overloads
+        """
+        if config.DEBUG or self._DEBUG:
+            print('before overload inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+        modified = False
+        work_list = list(self.func_ir.blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        if guard(self._do_work, work_list, block, i, expr):
+                            modified = True
+                            break # because block structure changed
+
+        if modified:
+            dead_code_elimination(self.func_ir, typemap=self.typemap)
+            # clean up unconditional branches that appear due to inlined
+            # functions introducing blocks
+            simplify_CFG(self.func_ir.blocks)
+
+
+        if config.DEBUG or self._DEBUG:
+            print('after overload inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+
+    def _do_work(self, work_list, block, i, expr):
+        from numba.inline_closurecall import inline_closure_call
+
+        # try and get a definition for the call, this isn't always possible as
+        # it might be a eval(str)/part generated awaiting update etc. (parfors)
+        to_inline = None
+        try:
+            to_inline = self.func_ir.get_definition(expr.func)
+        except Exception as e:
+            return False
+
+        # do not handle closure inlining here, another pass deals with that.
+        if getattr(to_inline, 'op', False) == 'make_function':
+            return False
+
+        func_ty = self.typemap[expr.func.name]
+        if not hasattr(func_ty, 'get_call_type'):
+            return False
+
+
+        templates = getattr(func_ty, 'templates', None)
+        if templates is None:
+            return False
+
+        sig = self.calltypes[expr]
+
+        impl = None
+        for template in templates:
+            inline_type = getattr(template, '_inline', 'never')
+            if inline_type != 'never':
+                try:
+                    impl = template._overload_func(sig)
+                    break
+                except Exception:
+                    continue
+        else:
+            return False
+
+        # at this point we know we maybe want to inline something and there's
+        # definitely something that could be inlined.
+
+        do_inline = True
+        if inline_type != 'always':
+            from numba.typing.templates import _inline_info
+            caller_inline_info = _inline_info(self.func_ir, self.typemap,
+                                              self.calltypes, sig)
+
+            # must be a function, run the function
+            do_inline = inline_type(caller_inline_info,
+                                    template._inline_overloads[sig.args])
+
+        if do_inline:
+            arg_typs = tuple([self.typemap[x.name] for x in expr.args])
+            # pass is typed so use the callee globals
+            inline_closure_call(self.func_ir, impl.__globals__,
+                                block, i, impl, typingctx=self.tyctx,
+                                arg_typs=arg_typs, typemap=self.typemap,
+                                calltypes=self.calltypes, work_list=work_list)
+            return True
+        else:
+            return False
+
