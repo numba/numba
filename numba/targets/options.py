@@ -72,6 +72,9 @@ class TargetOptions(object):
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
 
+        if kws.pop('recursive_inlining', False):
+            flags.set('recursive_inlining')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

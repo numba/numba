@@ -15,7 +15,7 @@ from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
-from numba.ir_utils import raise_on_unsupported_feature
+from numba.ir_utils import raise_on_unsupported_feature, InlineInlinables
 from numba.compiler_lock import global_compiler_lock
 
 # terminal color markup
@@ -51,6 +51,7 @@ class Flags(utils.ConfigOptions):
         'error_model': 'python',
         'fastmath': False,
         'noalias': False,
+        'recursive_inlining': False,
     }
 
 
@@ -518,6 +519,11 @@ class BasePipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
+    def stage_inline_inlinables_pass(self):
+        inlineinline = InlineInlinables(self.func_ir,
+                                        recursive=self.flags.recursive_inlining)
+        inlineinline.run()
+
     def stage_pre_parfor_pass(self):
         """
         Preprocessing for data-parallel computations.
@@ -754,6 +760,7 @@ class BasePipeline(object):
         """Add any stages that go before type-inference.
         The current stages contain type-agnostic rewrite passes.
         """
+        pm.add_stage(self.stage_inline_inlinables_pass, "inline inlinables")
         if not self.flags.no_rewrites:
             if self.status.can_fallback:
                 pm.add_stage(self.stage_preserve_ir,

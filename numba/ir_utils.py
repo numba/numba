@@ -1854,3 +1854,65 @@ def raise_on_unsupported_feature(func_ir):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
+
+class InlineInlinables(object):
+
+    def __init__(self, func_ir, recursive=False):
+        self.func_ir = func_ir
+        self.recursive = recursive
+
+    def run(self):
+        """Run inlining of inlinables
+        """
+        if config.DEBUG:
+            print('before inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+        modified = False
+        work_list = list(self.func_ir.blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        if guard(self._do_work, work_list, block, i, expr):
+                            modified = True
+                            break # because block structure changed
+
+        if modified:
+            remove_dels(self.func_ir.blocks)
+            # repeat dead code elimination until nothing can be further
+            # removed
+            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names,
+                               self.func_ir)):
+                pass
+        if config.DEBUG:
+            print('after inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+
+    def _do_work(self, work_list, block, i, expr):
+        from numba.inline_closurecall import inline_closure_call
+        to_inline = self.func_ir.get_definition(expr.func)
+        val = getattr(to_inline, 'value', False)
+        if val:
+            topt = getattr(val, 'targetoptions', False)
+            if topt and topt.get('inlinable', False):
+                inline_closure_call(self.func_ir,
+                                    self.func_ir.func_id.func.__globals__,
+                                    block, i, to_inline.value.py_func,
+                                    work_list=work_list)
+                return True
+            elif self.recursive:
+                # if val is a python function, inline it
+                has_code = hasattr(val, 'code') or hasattr(val, '__code__')
+                if callable(val) and has_code:
+                    inline_closure_call(self.func_ir,
+                                        self.func_ir.func_id.func.__globals__,
+                                        block, i, val,
+                                        work_list=work_list)
+                    return True
+
+        return False
