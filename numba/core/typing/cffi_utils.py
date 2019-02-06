@@ -101,11 +101,13 @@ def is_cffi_struct(obj):
     """
     try:
         t = ffi.typeof(obj)
-        if t.kind == 'pointer':
-            return t.item in _type_map()
-        elif t.kind == 'struct':
-            return t in _type_map()
     except TypeError:
+        return False
+    if t.kind == 'pointer':
+        return t.item.kind == 'struct'
+    elif t.kind == 'struct':
+        return True
+    else:
         return False
 
 def get_func_pointer(cffi_func):
@@ -175,6 +177,9 @@ def map_type(cffi_type, use_record_dtype=False):
     """
     primed_map_type = partial(map_type, use_record_dtype=use_record_dtype)
     kind = getattr(cffi_type, 'kind', '')
+    result = _type_map().get(cffi_type)
+    if result is not None:
+        return result
     if kind == 'union':
         raise TypeError("No support for CFFI union")
     elif kind == 'function':
@@ -202,10 +207,8 @@ def map_type(cffi_type, use_record_dtype=False):
         else:
             return map_struct_to_numba_type(cffi_type)
     else:
-        result = _type_map().get(cffi_type)
-        if result is None:
-            raise TypeError(cffi_type)
-        return result
+        raise TypeError(cffi_type)
+
 
 class CFFIStructInstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
@@ -408,19 +411,26 @@ def struct_instance_box(typ, val, c):
     struct_addr = c.pyapi.long_from_ssize_t(cast_val)
     return c.pyapi.call_function_objargs(struct_from_ptr_runtime, [h, struct_addr])
 
+# this is the layout ob the CFFI's CDataObject
+# see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216
+cffi_cdata_type = ir.LiteralStructType([
+    ir.ArrayType(cgutils.int8_t, 16),  # 16-byte PyObject_HEAD
+    cgutils.voidptr_t,  # CTypeDescrObject* ctypes
+    cgutils.intp_t.as_pointer(),  #cdata
+    cgutils.voidptr_t,  # PyObject *c_weakreflist;
+])
+
+
 @unbox(CFFIPointer)
 def struct_instance_ptr_unbox(typ, val, c):
+    # this is roughtly 10 times faster than going back to python and
+    # calling ffi.cast('uintptr_t')
     ptrty = c.context.data_model_manager[typ].get_value_type()
     ret = c.builder.alloca(ptrty)
-    ser = c.pyapi.serialize_object(typ.get_pointer)
-    get_pointer = c.pyapi.unserialize(ser)
-    intobj = c.pyapi.call_function_objargs(get_pointer, (val, ))
-    c.pyapi.decref(get_pointer)
-    with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, intobj)):
-        ptr = c.pyapi.long_as_voidptr(intobj)
-        c.pyapi.decref(intobj)
-        c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
-    return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+    cffi_data_ptr = c.builder.bitcast(val, cffi_cdata_type.as_pointer())
+    intptr = c.builder.extract_value(c.builder.load(cffi_data_ptr), 2)
+    c.builder.store(c.builder.bitcast(intptr, ptrty), ret)
+    return NativeValue(c.builder.load(ret))
 
 class CFFILibrary(types.Type):
     def __init__(self, lib):
@@ -467,8 +477,8 @@ def lower_cffi_library(context, builder, ty, pyval):
 def lower_get_func(context, builder, typ, value, attr):
     pyapi = context.get_python_api(builder)
     if not typ.has_func(attr):
-        raise AttributeError("Function {} is not present in the library {}".format(
-                func_name, self._lib_name))
+        raise AttributeError("Function {} is not present in the library".format(
+                attr))
     func_typ = make_function_type(attr)
     # Call get_func_pointer() on the object to get the raw pointer value
     ptrty = context.get_function_pointer_type(func_typ)
