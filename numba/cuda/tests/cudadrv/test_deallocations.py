@@ -38,14 +38,18 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
         try:
             # change to a smaller ratio
             config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
-            self.assertEqual(deallocs._max_pending_bytes, max_pending)
+            # due to round off error (floor is used in calculating _max_pending_bytes)
+            # it can be off by 1.
+            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending, delta=1)
 
-            # deallocate half the max size
+            # allocate half the max size
+            # this will not trigger deallocation
             cuda.to_device(np.ones(max_pending // 2, dtype=np.int8))
             self.assertEqual(len(deallocs), 1)
 
-            # deallocate another remaining
-            cuda.to_device(np.ones(max_pending - deallocs._size, dtype=np.int8))
+            # allocate another remaining
+            # this will not trigger deallocation
+            cuda.to_device(np.ones(deallocs._max_pending_bytes - deallocs._size, dtype=np.int8))
             self.assertEqual(len(deallocs), 2)
 
             # another byte to trigger .clear()

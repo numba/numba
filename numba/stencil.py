@@ -28,7 +28,9 @@ class StencilFuncLowerer(object):
     def __call__(self, context, builder, sig, args):
         cres = self.stencilFunc.compile_for_argtys(sig.args, {},
                     sig.return_type, None)
-        return context.call_internal(builder, cres.fndesc, sig, args)
+        res = context.call_internal(builder, cres.fndesc, sig, args)
+        context.add_linking_libs([cres.library])
+        return res
 
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
@@ -542,6 +544,15 @@ class StencilFunc(object):
                 out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
                             out_name, shape_name, return_type_name)
             func_text += "    " + out_init
+        else: # result is present, if cval is set then use it
+            if "cval" in self.options:
+                cval = self.options["cval"]
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
+                    msg = "cval type does not match stencil return type."
+                    raise ValueError(msg)
+                out_init = "{}[:] = {}\n".format(out_name, cval)
+                func_text += "    " + out_init
 
         offset = 1
         # Add the loop nests to the new function.

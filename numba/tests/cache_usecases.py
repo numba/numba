@@ -10,7 +10,7 @@ import sys
 
 import numpy as np
 
-from numba import jit, generated_jit, types
+from numba import jit, generated_jit, types, prange
 
 from numba.tests.ctypes_usecases import c_sin
 from numba.tests.support import TestCase, captured_stderr
@@ -76,6 +76,14 @@ def looplifted(n):
 @jit(cache=True, nopython=True)
 def use_c_sin(x):
     return c_sin(x)
+
+@jit(cache=True, nopython=True)
+def use_c_sin_nest1(x):
+    return use_c_sin(x)
+
+@jit(cache=True, nopython=True)
+def use_c_sin_nest2(x):
+    return use_c_sin_nest1(x)
 
 
 @jit(cache=True, nopython=True)
@@ -156,3 +164,8 @@ class _TestModule(TestCase):
 def self_test():
     mod = sys.modules[__name__]
     _TestModule().check_module(mod)
+
+
+@jit(parallel=True, cache=True, nopython=True)
+def parfor_usecase(ary):
+    return ary * ary + ary

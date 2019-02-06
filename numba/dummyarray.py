@@ -338,6 +338,34 @@ class Array(object):
 
         return ret, list(self.iter_contiguous_extent())
 
+    def squeeze(self, axis=None):
+        newshape, newstrides = [], []
+        if axis is None:
+            for length, stride in zip(self.shape, self.strides):
+                if length != 1:
+                    newshape.append(length)
+                    newstrides.append(stride)
+        else:
+            if not isinstance(axis, tuple):
+                axis = (axis,)
+            for ax in axis:
+                if self.shape[ax] != 1:
+                    raise ValueError(
+                        "cannot select an axis to squeeze out which has size not equal "
+                        "to one"
+                    )
+            for i, (length, stride) in enumerate(zip(self.shape, self.strides)):
+                if i not in axis:
+                    newshape.append(length)
+                    newstrides.append(stride)
+        newarr = self.from_desc(
+            self.extent.begin,
+            shape=newshape,
+            strides=newstrides,
+            itemsize=self.itemsize,
+        )
+        return newarr, list(self.iter_contiguous_extent())
+
     def ravel(self, order='C'):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')

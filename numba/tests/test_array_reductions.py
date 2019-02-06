@@ -128,6 +128,9 @@ def array_percentile_global(arr, q):
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+def array_ptp_global(a):
+    return np.ptp(a)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -665,6 +668,171 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_cumulative(array_nancumsum)
         self.check_nan_cumulative(array_nancumsum)
 
+    def test_ptp_basic(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.array([-1.1, np.nan, 2.2])
+            yield np.array([-np.inf, 5])
+            yield (4, 2, 5)
+            yield (1,)
+            yield np.full(5, 5)
+            yield [2.2, -2.3, 0.1]
+            a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
+            yield a
+            yield np.asfortranarray(a)
+            yield a[::-1]
+            np.random.RandomState(0).shuffle(a)
+            yield a
+            yield 6
+            yield 6.5
+            yield -np.inf
+            yield 1 + 4j
+            yield [2.2, np.nan]
+            yield [2.2, np.inf]
+            yield ((4.1, 2.0, -7.6), (4.3, 2.7, 5.2))
+            yield np.full(5, np.nan)
+            yield 1 + np.nan * 1j
+            yield np.nan + np.nan * 1j
+            yield np.nan
+
+        for a in a_variations():
+            check(a)
+
+    def test_ptp_complex(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def make_array(real_nan=False, imag_nan=False):
+            real = np.linspace(-4, 4, 25)
+            if real_nan:
+                real[4:9] = np.nan
+            imag = np.linspace(-5, 5, 25)
+            if imag_nan:
+                imag[7:12] = np.nan
+            return (real + 1j * imag).reshape(5, 5)
+
+        for real_nan, imag_nan in product([True, False], repeat=2):
+            comp = make_array(real_nan, imag_nan)
+            check(comp)
+
+        real = np.ones(8)
+        imag = np.arange(-4, 4)
+        comp = real + 1j * imag
+        check(comp)
+        comp = real - 1j * imag
+        check(comp)
+
+        comp = np.full((4, 4), fill_value=(1 - 1j))
+        check(comp)
+
+    def test_ptp_exceptions(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Boolean dtype is unsupported (as per NumPy)"
+        self.assertIn(msg, str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([]))
+
+        msg = "zero-size array reduction not possible"
+        self.assertIn(msg, str(e.exception))
+
+    def test_min_max_complex_basic(self):
+        pyfuncs = array_min_global, array_max_global
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            imag = real * 2
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                dtype = self.random.choice([np.complex64, np.complex128])
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a.astype(dtype))
+
+    def test_nanmin_nanmax_complex_basic(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            real[5:9] = np.nan
+            imag = real * 2
+            imag[7:12] = np.nan
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a)
+
+    def test_nanmin_nanmax_non_array_inputs(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield [1, 6, 4, 2]
+            yield ((-10, 4, -12), (5, 200, -30))
+            yield np.array(3)
+            yield (2,)
+            yield 3.142
+            yield False
+            yield (np.nan, 3.142, -5.2, 3.0)
+            yield [np.inf, np.nan, -np.inf]
+            yield [(np.nan, 1.1), (-4.4, 8.7)]
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for a in a_variations():
+                check(a)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -677,16 +845,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_std, array_std_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
+                           array_min, array_min_global,
+                           array_max, array_max_global,
+                           array_nanmax, array_nanmin,
                            array_nansum,
                            ]
 
         # these functions only work in real space as no complex comparison
         # operator is implemented
-        reduction_funcs_rspace = [array_min, array_min_global,
-                                  array_max, array_max_global,
-                                  array_argmin, array_argmin_global,
-                                  array_argmax, array_argmax_global,
-                                  array_nanmax, array_nanmin]
+        reduction_funcs_rspace = [array_argmin, array_argmin_global,
+                                  array_argmax, array_argmax_global]
 
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]

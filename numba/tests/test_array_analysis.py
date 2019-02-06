@@ -7,7 +7,8 @@ import sys
 from collections import namedtuple
 
 from numba import unittest_support as unittest
-from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
+from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
+    jitclass, prange)
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
@@ -21,6 +22,15 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+
+
+# test class for #3700
+@jitclass([('L', types.int32), ('T', types.int32)])
+class ExampleClass3700(object):
+    def __init__(self, n):
+        self.L = n
+        self.T = n + 1
+
 
 class TestEquivSet(TestCase):
 
@@ -123,7 +133,7 @@ class ArrayAnalysisTester(Pipeline):
 
         pm.add_stage(stage_array_analysis, "analyze array equivalences")
         if test_idempotence:
-            # Do another pass of array analysis to test idempontence
+            # Do another pass of array analysis to test idempotence
             pm.add_stage(stage_array_analysis, "analyze array equivalences")
 
         pm.finalize()
@@ -537,6 +547,23 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.without_assert('B', 'C')],
                                idempotent=False)
 
+        def test_9(m):
+            # issues #3461 and #3554, checks equivalence on empty slices
+            # and across binop
+            A = np.zeros((m))
+            B = A[:0] # B = array([], dtype=int64)
+            C = A[1:]
+            D = A[:-1:-1] # D = array([], dtype=int64)
+            E = B + D
+            F = E
+            F += 1 # F = array([], dtype=int64)
+            return A, C, F
+        self._compile_and_test(test_9, (types.intp,),
+                               equivs=[self.without_equiv('B', 'C'),
+                                       self.with_equiv('A', 'm'),
+                                       self.with_equiv('B', 'D'),
+                                       self.with_equiv('F', 'D'),],)
+
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
@@ -872,6 +899,35 @@ class TestArrayAnalysisParallelRequired(TestCase):
             njit(test_bug2537, parallel=True)(10)
         except IndexError:
             self.fail("test_bug2537 raised IndexError!")
+
+    @skip_unsupported
+    def test_global_namedtuple(self):
+        Row = namedtuple('Row', ['A'])
+        row = Row(3)
+
+        def test_impl():
+            rr = row
+            res = rr.A
+            if res == 2:
+                res = 3
+            return res
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
+    @skip_unsupported
+    def test_array_T_issue_3700(self):
+
+        def test_impl(t_obj, X):
+            for i in prange(t_obj.T):
+                X[i] = i
+            return X.sum()
+
+        n = 5
+        t_obj = ExampleClass3700(n)
+        X1 = np.zeros(t_obj.T)
+        X2 = np.zeros(t_obj.T)
+        self.assertEqual(
+            njit(test_impl, parallel=True)(t_obj, X1), test_impl(t_obj, X2))
 
 if __name__ == '__main__':
     unittest.main()

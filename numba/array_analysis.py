@@ -535,7 +535,6 @@ class ShapeEquivSet(EquivSet):
             for x in self.ind_to_var[j]:
                 if x.name in names:
                     varlist.append(x)
-            assert(len(varlist) > 0)
             ind_to_var[i] = varlist
         newset.ind_to_var = ind_to_var
         return newset
@@ -1091,7 +1090,7 @@ class ArrayAnalysis(object):
 
     def _analyze_op_getattr(self, scope, equiv_set, expr):
         # TODO: getattr of npytypes.Record
-        if expr.attr == 'T':
+        if expr.attr == 'T' and self._isarray(expr.value.name):
             return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
         elif expr.attr == 'shape':
             shape = equiv_set.get_shape(expr.value)
@@ -1244,7 +1243,7 @@ class ArrayAnalysis(object):
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
-        require(expr.immutable_fn in INPLACE_BINARY_MAP_OP)
+        require(expr.fn in INPLACE_BINARY_MAP_OP)
         return self._analyze_broadcast(scope, equiv_set, expr.loc, [expr.lhs, expr.rhs])
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):

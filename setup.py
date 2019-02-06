@@ -338,6 +338,8 @@ metadata = dict(
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
         "numba.runtime": ["*.c", "*.h"],
+        # numba gdb hook init command language file
+        "numba.targets": ["cmdlang.gdb"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",

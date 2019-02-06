@@ -262,7 +262,7 @@ class Structure(object):
         self._context = context
         self._builder = builder
         if ref is None:
-            self._value = alloca_once(builder, self._type)
+            self._value = alloca_once(builder, self._type, zfill=True)
             if value is not None:
                 assert not is_pointer(value.type)
                 assert value.type == self._type, (value.type, self._type)
@@ -369,9 +369,13 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
+        # Zero-fill at the init-site
         if zfill:
             builder.store(ty(None), ptr)
-        return ptr
+    # Also zero-fill at the use-site
+    if zfill:
+        builder.store(ty(None), ptr)
+    return ptr
 
 
 def alloca_once_value(builder, value, name=''):
@@ -624,6 +628,17 @@ def pack_array(builder, values, ty=None):
     for i, v in enumerate(values):
         ary = builder.insert_value(ary, v, i)
     return ary
+
+
+def pack_struct(builder, values):
+    """
+    Pack a sequence of values into a LLVM struct.
+    """
+    structty = ir.LiteralStructType([v.type for v in values])
+    st = structty(ir.Undefined)
+    for i, v in enumerate(values):
+        st = builder.insert_value(st, v, i)
+    return st
 
 
 def unpack_tuple(builder, tup, count=None):

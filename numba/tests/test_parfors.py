@@ -22,7 +22,7 @@ import numba
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout
 from numba import njit, prange, stencil, inline_closurecall
-from numba import compiler, typing
+from numba import compiler, typing, errors
 from numba.targets import cpu
 from numba import types
 from numba.targets.registry import cpu_target
@@ -35,16 +35,17 @@ from numba import ir
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
-from .support import tag, override_env_config
+from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+
+
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_unsupported = skip_parfors_unsupported
 test_disabled = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
@@ -581,8 +582,7 @@ class TestParfors(TestParforsBase):
         This test is in place until issues with the 'parallel'
         target on Windows with Python 2.7 / 32 bit hardware are fixed.
         """
-
-        with self.assertRaises(RuntimeError) as raised:
+        with self.assertRaises(errors.UnsupportedParforsError) as raised:
             @njit(parallel=True)
             def ddot(a, v):
                 return np.dot(a, v)
@@ -1202,7 +1202,7 @@ class TestParfors(TestParforsBase):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
             for i in prange(10):
-                out[0] = 2 * out[0] 
+                out[0] = 2 * out[0]
             return out[0]
 
         out = np.ones(1)
@@ -1378,6 +1378,18 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, np.random.ranf(128))
 
+    @skip_unsupported
+    def test_array_compare_scalar(self):
+        """ issue3671: X != 0 becomes an arrayexpr with operator.ne.
+            That is turned into a parfor by devectorizing.  Make sure
+            the return type of the devectorized operator.ne
+            on integer types works properly.
+        """
+        def test_impl():
+            X = np.zeros(10, dtype=np.int_)
+            return X != 0
+
+        self.check(test_impl)
 
 class TestPrangeBase(TestParforsBase):
 
@@ -2027,7 +2039,70 @@ class TestPrange(TestPrangeBase):
                         "in non-deterministic or unintended results.")
         self.assertIn(expected_msg, str(warning_obj.message))
 
+    @skip_unsupported
+    def test_nested_parfor_push_call_vars(self):
+        """ issue 3686: if a prange has something inside it that causes
+            a nested parfor to be generated and both the inner and outer
+            parfor use the same call variable defined outside the parfors
+            then ensure that when that call variable is pushed into the
+            parfor that the call variable isn't duplicated with the same
+            name resulting in a redundant type lock.
+        """
+        def test_impl():
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
+            for i in range(2):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
 
+            return B
+        self.prange_tester(test_impl)
+
+    @skip_unsupported
+    def test_multiple_call_getattr_object(self):
+        def test_impl(n):
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.0)
+                B += f(n)
+
+            return B
+        self.prange_tester(test_impl, 1.0)
+
+    @skip_unsupported
+    def test_mutable_list_param(self):
+        """ issue3699: test that mutable variable to call in loop
+            is not hoisted.  The call in test_impl forces a manual
+            check here rather than using prange_tester.
+        """
+        @njit
+        def list_check(X):
+            """ If the variable X is hoisted in the test_impl prange
+                then subsequent list_check calls would return increasing
+                values.
+            """
+            ret = X[-1]
+            a = X[-1] + 1
+            X.append(a)
+            return ret
+        def test_impl(n):
+            for i in prange(n):
+                X = [100]
+                a = list_check(X)
+            return a
+        python_res = test_impl(10)
+        njit_res = njit(test_impl)(10)
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = pa_func(10)
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
+
+@skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
 
@@ -2426,6 +2501,16 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_unsupported
+    def test_parfor_slice19(self):
+        # issues #3561 and #3554, empty slice binop
+        def test_impl(X):
+            X[:0] += 1
+            return X
+
+        self.check(test_impl, np.ones(10))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
@@ -2548,26 +2633,27 @@ class TestParforsMisc(TestParforsBase):
     def test_warn_if_cache_set(self):
 
         def pyfunc():
-            return
+            arr = np.ones(100)
+            for i in prange(arr.size):
+                arr[i] += i
+            return arr
+
+        cfunc = njit(parallel=True, cache=True)(pyfunc)
 
         with warnings.catch_warnings(record=True) as raised_warnings:
             warnings.simplefilter('always')
-            cfunc = njit(parallel=True, cache=True)(pyfunc)
             cfunc()
 
         self.assertEqual(len(raised_warnings), 1)
-
         warning_obj = raised_warnings[0]
-
-        expected_msg = ("Caching is not available when the 'parallel' target "
-                        "is in use. Caching is now being disabled to allow "
-                        "execution to continue.")
-
-        # check warning message appeared
+        expected_msg = ("as it uses dynamic globals "
+                        "(such as ctypes pointers and large global arrays)")
         self.assertIn(expected_msg, str(warning_obj.message))
 
-        # make sure the cache is set to false, cf. NullCache
-        self.assertTrue(isinstance(cfunc._cache, numba.caching.NullCache))
+        # Make sure the dynamic globals flag is set
+        has_dynamic_globals = [cres.library.has_dynamic_globals
+                               for cres in cfunc.overloads.values()]
+        self.assertEqual(has_dynamic_globals, [True])
 
     @skip_unsupported
     def test_statement_reordering_respects_aliasing(self):

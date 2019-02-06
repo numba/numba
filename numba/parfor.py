@@ -26,7 +26,7 @@ import operator
 
 import numba
 from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
-from numba import array_analysis, postproc, typeinfer
+from numba import array_analysis, postproc, typeinfer, utils, errors
 from numba.numpy_support import as_dtype
 from numba.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
@@ -41,7 +41,6 @@ from numba.ir_utils import (
     get_np_ufunc_typ,
     mk_range_block,
     mk_loop_header,
-    find_op_typ,
     get_name_var_table,
     replace_vars,
     replace_vars_inner,
@@ -992,7 +991,7 @@ class ParforDiagnostics(object):
 #---------- compute various properties and orderings in the data for subsequent use
 
             # ensure adjacency lists are the same size for both sets of info
-            # (nests and fusion may not traverse the same space, for 
+            # (nests and fusion may not traverse the same space, for
             # convenience [] is used as a condition to halt recursion)
             fadj, froots = self.compute_graph_info(self.fusion_info)
             nadj, _nroots = self.compute_graph_info(self.nested_fusion_info)
@@ -1191,7 +1190,7 @@ class ParforDiagnostics(object):
             if print_allocation_hoist or print_instruction_hoist:
                 print_wrapped('Loop invariant code motion'.center(80, '-'))
 
-            if print_allocation_hoist: 
+            if print_allocation_hoist:
                 found = False
                 print('Allocation hoisting:')
                 for pf_id, data in self.hoist_info.items():
@@ -2537,13 +2536,13 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = find_op_typ(op, [el_typ1, el_typ2])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
-                func_typ = find_op_typ(op, [el_typ1])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
             calltypes[ir_expr] = func_typ
             el_typ = func_typ.return_type
@@ -3729,7 +3728,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
 ir_utils.apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 
-def push_call_vars(blocks, saved_globals, saved_getattrs):
+def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
     """push call variables to right before their call site.
     assuming one global/getattr is created for each call site and control flow
     doesn't change it.
@@ -3753,11 +3752,11 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                             saved_getattrs[lhs.name] = stmt
                             block_defs.add(lhs.name)
 
-            if isinstance(stmt, Parfor):
+            if not nested and isinstance(stmt, Parfor):
                 for s in stmt.init_block.body:
                     process_assign(s)
                 pblocks = stmt.loop_body.copy()
-                push_call_vars(pblocks, saved_globals, saved_getattrs)
+                push_call_vars(pblocks, saved_globals, saved_getattrs, nested=True)
                 new_body.append(stmt)
                 continue
             else:
@@ -3940,3 +3939,18 @@ class ReduceInfer(AbstractTemplate):
         assert len(args) == 3
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
+
+
+def ensure_parallel_support():
+    """Check if the platform supports parallel=True and raise if it does not.
+    """
+    is_win32 = config.IS_WIN32
+    is_py2 = not utils.IS_PY3
+    is_32bit = config.IS_32BITS
+    uns1 = is_win32 and is_py2
+    uns2 = is_32bit
+    if uns1 or uns2:
+        msg = ("The 'parallel' target is not currently supported on "
+            "Windows operating systems when using Python 2.7, or "
+            "on 32 bit hardware.")
+        raise errors.UnsupportedParforsError(msg)

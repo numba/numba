@@ -46,15 +46,15 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
 class TestUnsupportedReporting(unittest.TestCase):
 
     def test_unsupported_numpy_function(self):
-        # np.asarray(list) currently unsupported
+        # np.asanyarray(list) currently unsupported
         @njit
         def func():
-            np.asarray([1,2,3])
+            np.asanyarray([1,2,3])
 
         with self.assertRaises(errors.TypingError) as raises:
             func()
 
-        expected = "Use of unsupported NumPy function 'numpy.asarray'"
+        expected = "Use of unsupported NumPy function 'numpy.asanyarray'"
         self.assertIn(expected, str(raises.exception))
 
 
@@ -105,6 +105,25 @@ class TestMiscErrorHandling(unittest.TestCase):
 
         expected = 'File "unknown location", line 0:'
         self.assertIn(expected, str(raises.exception))
+
+
+class TestConstantInferenceErrorHandling(unittest.TestCase):
+
+    def test_basic_error(self):
+        # issue 3717
+        @njit
+        def problem(a,b):
+            if a == b:
+                raise Exception("Equal numbers: %i %i", a, b)
+            return a * b
+
+        with self.assertRaises(errors.ConstantInferenceError) as raises:
+            problem(1,2)
+
+        msg1 = "Constant inference not possible for: arg(0, name=a)"
+        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
+        self.assertIn(msg1, str(raises.exception))
+        self.assertIn(msg2, str(raises.exception))
 
 
 if __name__ == '__main__':

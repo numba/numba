@@ -206,7 +206,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_f))
         self.assertEqual(
-            "Can't copy F-contiguous array to a C-contiguous array",
+            "incompatible strides: {} vs. {}".format(a_c.strides, a_f.strides),
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_c))
@@ -217,11 +217,59 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_c))
         self.assertEqual(
-            "Can't copy C-contiguous array to a F-contiguous array",
+            "incompatible strides: {} vs. {}".format(a_f.strides, a_c.strides),
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_f))
         self.assertTrue(np.all(d.copy_to_host() == a_f))
+
+    def test_devicearray_broadcast_host_copy(self):
+        try:
+            broadcast_to = np.broadcast_to
+        except AttributeError:
+            # numpy<1.10 doesn't have broadcast_to. The following implements
+            # a limited broadcast_to that only works along already existing
+            # dimensions of length 1.
+            def broadcast_to(arr, new_shape):
+                new_strides = []
+                for new_length, length, stride in zip(
+                    new_shape, arr.shape, arr.strides
+                ):
+                    if length == 1 and new_length > 1:
+                        new_strides.append(0)
+                    elif new_length == length:
+                        new_strides.append(stride)
+                    else:
+                        raise ValueError(
+                            "cannot broadcast shape {} to shape {}"
+                            .format(arr.shape, new_shape)
+                        )
+                return np.ndarray(
+                    buffer=np.squeeze(arr),
+                    dtype=arr.dtype,
+                    shape=new_shape,
+                    strides=tuple(new_strides),
+                )
+
+        broadsize = 4
+        coreshape = (2, 3)
+        coresize = np.prod(coreshape)
+        core_c = np.arange(coresize).reshape(coreshape, order='C')
+        core_f = np.arange(coresize).reshape(coreshape, order='F')
+        for dim in range(len(coreshape)):
+            newindex = (slice(None),) * dim + (np.newaxis,)
+            broadshape = coreshape[:dim] + (broadsize,) + coreshape[dim:]
+            broad_c = broadcast_to(core_c[newindex], broadshape)
+            broad_f = broadcast_to(core_f[newindex], broadshape)
+            dbroad_c = cuda.to_device(broad_c)
+            dbroad_f = cuda.to_device(broad_f)
+            np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_c)
+            np.testing.assert_array_equal(dbroad_f.copy_to_host(), broad_f)
+            # Also test copying across different core orderings
+            dbroad_c.copy_to_device(broad_f)
+            dbroad_f.copy_to_device(broad_c)
+            np.testing.assert_array_equal(dbroad_c.copy_to_host(), broad_f)
+            np.testing.assert_array_equal(dbroad_f.copy_to_host(), broad_c)
 
     def test_devicearray_contiguous_host_strided(self):
         a_c = np.arange(10)
@@ -239,6 +287,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertEqual(
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
+        
 
 if __name__ == '__main__':
     unittest.main()
