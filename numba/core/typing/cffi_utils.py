@@ -396,7 +396,11 @@ def get_struct_type(cffi_struct):
 def struct_from_ptr(h, intptr):
     return ffi.cast(_cffi_types_cache.get_type_by_hash(h).cffi_ptr_t, intptr)
 
-
+@imputils.lower_constant(CFFIPointer)
+def lower_const_cffi_pointer(context, builder, ty, pyval):
+    ptrty = context.get_value_type(ty)
+    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval), info=str(pyval))
+    return builder.bitcast(ptrval, ptrty)
 
 @box(CFFIPointer)
 def struct_instance_box(typ, val, c):
@@ -554,28 +558,28 @@ class PtrCMPTemplate(templates.AbstractTemplate):
             return templates.signature(types.bool_, ptr1, ptr2)
 
 @imputils.lower_builtin(operator.ne, CFFINullPtrType, types.CPointer)
-def lower_null_ptr_cmp_pos1(context, builder, sig, args):
+def lower_null_ptr_ne_pos1(context, builder, sig, args):
     to_compare = args[1]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
     res = builder.icmp_unsigned('!=',int_ptr, cgutils.intp_t(0))
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 @imputils.lower_builtin(operator.ne, types.CPointer, CFFINullPtrType)
-def lower_null_ptr_cmp_pos2(context, builder, sig, args):
+def lower_null_ptr_ne_pos2(context, builder, sig, args):
     to_compare = args[0]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
     res = builder.icmp_unsigned('!=',int_ptr, cgutils.intp_t(0))
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 @imputils.lower_builtin(operator.eq, CFFINullPtrType, types.CPointer)
-def lower_null_ptr_cmp_pos1(context, builder, sig, args):
+def lower_null_ptr_eq_pos1(context, builder, sig, args):
     to_compare = args[1]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
     res = builder.icmp_unsigned('==',int_ptr, cgutils.intp_t(0))
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 @imputils.lower_builtin(operator.eq, types.CPointer, CFFINullPtrType)
-def lower_null_ptr_cmp_pos2(context, builder, sig, args):
+def lower_null_ptr_eq_pos2(context, builder, sig, args):
     to_compare = args[0]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
     res = builder.icmp_unsigned('==',int_ptr, cgutils.intp_t(0))
