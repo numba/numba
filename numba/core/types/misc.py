@@ -4,7 +4,6 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 
-
 class PyObject(Dummy):
     """
     A generic CPython object.
@@ -35,6 +34,11 @@ class RawPointer(Opaque):
     """
     A raw pointer without any specific meaning.
     """
+
+
+# No operation is defined on voidptr
+# Can only pass it around
+voidptr = RawPointer('void*')
 
 
 class StringLiteral(Literal, Dummy):
@@ -159,6 +163,21 @@ class CPointer(Type):
         self.dtype = dtype
         name = "%s*" % dtype
         super(CPointer, self).__init__(name)
+
+    def can_convert_to(self, typingctx, other):
+        if other.dtype == voidptr or self.dtype == voidptr:
+            # allow conversion to and from voidptr, C-style
+            return Conversion.unsafe
+        if isinstance(other, CPointer):
+            return typingctx.can_convert(self.dtype, other.dtype)
+
+    def can_convert_from(self, typingctx, other):
+        if other.dtype == voidptr or self.dtype == voidptr:
+            # allow conversion to and from voidptr, C-style
+            return Conversion.unsafe
+        if isinstance(other, CPointer):
+            return typingctx.can_convert(self.dtype, other.dtype)
+
 
     @property
     def key(self):

@@ -16,7 +16,8 @@ from .function_type import *
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
-ffi = Opaque('ffi')
+ffi = Opaque('ffi'
+cffi_lib = Opaque('ffi_lib')
 none = NoneType('none')
 ellipsis = EllipsisType('...')
 Any = Phantom('any')
@@ -166,5 +167,6 @@ c16
 optional
 ffi_forced_object
 ffi
+ffi_lib
 deferred_type
 '''.split()

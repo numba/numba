@@ -157,13 +157,10 @@ def setitem_cpointer(context, builder, sig, args):
     elem_ptr = builder.gep(base_ptr, [idx])
     builder.store(val, elem_ptr)
 
-# assert correct casting of deferred pointers
 @lower_cast(types.CPointer, types.CPointer)
 def cast_deferred(context, builder, fromty, toty, val):
-    if isinstance(fromty.dtype, types.DeferredType) or isinstance(toty.dtype, types.DeferredType):
-        target_type = context.get_value_type(toty)
-        return builder.bitcast(val, target_type)
-
+    target_type = context.get_value_type(toty)
+    return builder.bitcast(val, target_type)
 
 
 #-------------------------------------------------------------------------------
