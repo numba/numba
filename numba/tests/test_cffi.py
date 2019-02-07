@@ -1,10 +1,9 @@
 import array
 import numpy as np
 
-from numba import jit
-import numba.core.typing.cffi_utils as cffi_support
-from numba.core import types, errors
-from numba.core.compiler import compile_isolated, Flags
+from numba import unittest_support as unittest
+from numba import jit, njit, cffi_support, types, errors
+from numba.core.compiler import compile_isolated, Flags 
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
@@ -188,6 +187,48 @@ class TestCFFI(TestCase):
         # Error occurs when foo is being compiled
         x = 1.123
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
+
+class TestCFFILinkedList(TestCase):
+    def setUp(self):
+        ffi_mod = mod.load_ool_linkedlist()
+        self.lib = ffi_mod.lib
+        self.ffi = ffi_mod.ffi
+
+    def _create_linked_list(self, n):
+        lib = self.lib
+        @njit
+        def create_linked_list(n):
+            l = lib.list_new()
+            for i in range(n):
+                lib.list_append(l, i)
+            return l
+
+        return create_linked_list(n)
+
+    def test_create_linked_list(self):
+        n = 100
+        ll = self._create_linked_list(n)
+        self.assertEqual(self.lib.list_len(ll), n)
+        self.assertEqual(self.lib.list_sum(ll), sum(range(n)))
+
+    def test_traverse_list(self):
+        n = 100
+        ll = self._create_linked_list(n)
+        lib = self.lib
+        ffi = self.ffi
+
+        @njit
+        def list_sum(l):
+            n = l.node
+            s = 0
+            while n != ffi.NULL:
+                s += n.value
+                n = n.next
+            return s
+
+        s = list_sum(ll)
+
+        self.assertEqual(s, lib.list_sum(ll))
 
 
 if __name__ == '__main__':

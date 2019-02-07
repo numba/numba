@@ -117,6 +117,101 @@ def load_ool_module():
         sys.path.remove(tmpdir)
 
 
+def load_ool_linkedlist():
+    from cffi import FFI
+
+    structs = """
+    typedef struct Node {
+        int32_t value;
+        struct Node* next;
+    } Node;
+
+    typedef struct Head {
+        Node* node;
+    } Head;
+    """
+
+    declr = """
+
+    Node* find_by_val(int32_t value, Node* node);
+    Head* list_new(void);
+    void delete_node(Node* node);
+    void delete_list(Head* head);
+    int32_t list_len(Head* head);
+    int32_t list_sum(Head* head);
+    void list_append(Head* head, int32_t value);
+
+    """
+
+    impl = """
+    Node* find_by_val(int32_t value, Node* node) {
+        if (node == NULL) {
+            return NULL;
+        }
+        if (node->value == value) {
+            return node;
+        }
+        return find_by_val(value, node->next);
+    }
+
+    Head* list_new(void) {
+        Head* head = (Head*)malloc(sizeof(Head));
+        head->node = NULL;
+        return head;
+    }
+
+    void delete_node(Node* node) {
+        if (node != NULL) {
+            delete_node(node->next);
+            free(node);
+        }
+    }
+
+    int32_t list_len(Head* head) {
+        Node* n = head->node;
+        int32_t len = 0;
+        while (++len, (n = n->next) != NULL);
+        return len;
+    }
+
+    int32_t list_sum(Head* head) {
+        Node* n = head->node;
+        int32_t sum = 0;
+        do {
+            sum += n->value;
+            n = n->next;
+        } while (n != NULL);
+        return sum;
+    }
+
+    void delete_list(Head* head) {
+        delete_node(head->node);
+        free(head);
+    }
+
+    void list_append(Head* head, int32_t value) {
+        Node** node_ptr = &head->node;
+        while (*node_ptr != NULL) node_ptr = &(*node_ptr)->next;
+        *node_ptr = (Node*)malloc(sizeof(Node));
+        (*node_ptr)->next = NULL;
+        (*node_ptr)->value = value;
+    }
+
+    """
+    ffi = FFI()
+    ffi.cdef(structs + declr)
+    ffi.set_source('cffi_linkedlist_ool', structs + impl)
+    tmpdir = temp_directory('test_cffi')
+    ffi.compile(tmpdir=tmpdir)
+    sys.path.append(tmpdir)
+    try:
+        mod = import_dynamic('cffi_linkedlist_ool')
+        cffi_support.register_module(mod)
+        return mod
+    finally:
+        sys.path.remove(tmpdir)
+
+
 def init():
     """
     Initialize module globals.  This can invoke external utilities, hence not
