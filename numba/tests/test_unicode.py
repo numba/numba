@@ -38,9 +38,11 @@ def getitem_usecase(x, i):
 def concat_usecase(x, y):
     return x + y
 
+
 def inplace_concat_usecase(x, y):
     x += y
     return x
+
 
 def in_usecase(x, y):
     return x in y
