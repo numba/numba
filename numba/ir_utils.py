@@ -1999,6 +1999,9 @@ class InlineInlinables(object):
     def _do_work(self, work_list, block, i, expr):
         from numba.inline_closurecall import inline_closure_call
         to_inline = self.func_ir.get_definition(expr.func)
+        # do not handle closure inlining here, another pass deals with that.
+        if getattr(to_inline, 'op', False) == 'make_function':
+            return False
         val = getattr(to_inline, 'value', False)
         if val:
             topt = getattr(val, 'targetoptions', False)
