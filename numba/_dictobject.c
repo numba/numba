@@ -264,7 +264,8 @@ static
 int mem_cmp_zeros(void *obj, size_t n){
     int diff = 0;
     char *mem = obj;
-    for (char *it = mem; it < mem + n; ++it) {
+    char *it;
+    for (it = mem; it < mem + n; ++it) {
         if (*it != 0) diff += 1;
     }
     return diff;

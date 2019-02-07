@@ -4,7 +4,8 @@
 #define NUMBA_DICT_COMMON_H
 
 typedef struct {
-    Py_hash_t   hash;
+    /* Uses Py_ssize_t instead of Py_hash_t to guarantee word size alignment */
+    Py_ssize_t  hash;
     char        keyvalue[];
 } NB_DictEntry;
 
