@@ -977,17 +977,17 @@ numba_test_dict(void) {
     CHECK(d->keys->key_size == 4);
     CHECK(d->keys->val_size == 8);
     CHECK(ix_size(d->keys->size) == 1);
-    printf("align(index_size * size) = %zd\n", align(ix_size(d->keys->size) * d->keys->size));
+    printf("align(index_size * size) = %d\n", (int)(align(ix_size(d->keys->size) * d->keys->size)));
 
     printf("d %p\n", d);
-    printf("d->usable = %zu\n", d->keys->usable);
-    printf("d[0] 0x%zx\n", (char*)get_entry(d->keys, 0) - (char*)d->keys);
+    printf("d->usable = %u\n", (int)d->keys->usable);
+    printf("d[0] %d\n", (int)((char*)get_entry(d->keys, 0) - (char*)d->keys));
     CHECK ((char*)get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
-    printf("d[1] 0x%zx\n", (char*)get_entry(d->keys, 1) - (char*)d->keys);
+    printf("d[1] %d\n", (int)((char*)get_entry(d->keys, 1) - (char*)d->keys));
     CHECK ((char*)get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
 
     ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);
-    printf("ix = %zd\n", ix);
+    printf("ix = %d\n", (int)ix);
     CHECK (ix == DKIX_EMPTY);
 
     // insert 1st key
@@ -1045,7 +1045,7 @@ numba_test_dict(void) {
     CHECK (memcpy(got_value, "1234567", d->keys->val_size));
 
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
-    printf("ix = %zd\n", ix);
+    printf("ix = %d\n", (int)ix);
     CHECK (ix >= 0);
     CHECK (memcpy(got_value, "1234569", d->keys->val_size));
 
