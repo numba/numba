@@ -872,8 +872,8 @@ numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
 
 void
 numba_dict_dump_keys(NB_Dict *d) {
-    Py_ssize_t i, j;
-    Py_ssize_t size, n;
+    long long i, j;
+    long long size, n;
     NB_DictEntry *ep;
     NB_DictKeys *dk = d->keys;
 
@@ -885,11 +885,12 @@ numba_dict_dump_keys(NB_Dict *d) {
     for (i = 0, j = 0; i < size; i++) {
         ep = get_entry(dk, i);
         if (ep->hash != -1) {
-            printf("  key=%s hash=%zu value=%s\n", entry_get_key(dk, ep), ep->hash, entry_get_val(dk, ep));
+            long long hash = ep->hash;
+            printf("  key=%s hash=%llu value=%s\n", entry_get_key(dk, ep), hash, entry_get_val(dk, ep));
             j++;
         }
     }
-    printf("j = %zd; n = %zd\n", j, n);
+    printf("j = %lld; n = %lld\n", j, n);
     assert(j == n);
 }
 
