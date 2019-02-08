@@ -269,9 +269,7 @@ def get_free_ffi():
 
 def struct_from_ptr(hash_, intptr, owned):
     ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).cffi_ptr_t, intptr)
-    print("owned is", owned)
     if owned:
-        print("Binding collector")
         ret = ffi.gc(ret, get_free_ffi())
     return ret
 
