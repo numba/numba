@@ -230,6 +230,33 @@ class TestCFFILinkedList(TestCase):
 
         self.assertEqual(s, lib.list_sum(ll))
 
+    def test_create_list(self):
+        n = 100
+        ll_ref = self._create_linked_list(n)
+        lib = self.lib
+        ffi = self.ffi
+
+        @njit
+        def create_new_list(n):
+            head = ffi.new("Head*")
+            head.node = ffi.new("Node*")
+            head.node.value = 0
+            last = head.node
+            for i in range(1, n):
+                last.next = ffi.new("Node*")
+                last = last.next
+                last.value = i
+            return head
+
+        ll = create_new_list(n)
+        self.assertEqual(lib.list_len(ll_ref), lib.list_len(ll))
+        self.assertEqual(lib.list_sum(ll_ref), lib.list_sum(ll))
+        node = ll.node
+        for i in range(n):
+            self.assertEqual(node.value, i)
+            node = node.next
+        self.assertEqual(node, ffi.NULL)
+
 
 if __name__ == '__main__':
     unittest.main()
