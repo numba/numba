@@ -132,7 +132,6 @@ build_c_helpers_dict(void)
     declmethod(dict_insert);
     declmethod(dict_insert_ez);
     declmethod(dict_delitem);
-    declmethod(dict_delitem_ez);
     declmethod(dict_popitem);
     declmethod(dict_iter_sizeof);
     declmethod(dict_iter);

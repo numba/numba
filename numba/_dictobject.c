@@ -252,10 +252,12 @@ equally good collision statistics, needed less code & used less memory.
 
 typedef enum {
     OK = 0,
+    OK_REPLACED = 1,
     ERR_NO_MEMORY = -1,
     ERR_DICT_MUTATED = -2,
     ERR_ITER_EXHAUSTED = -3,
     ERR_DICT_EMPTY = -4,
+    ERR_CMP_FAILED = -5,
 } Status;
 
 
@@ -459,7 +461,10 @@ entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
     return out;
 }
 
-/* Allocate new dictionary keys */
+/* Allocate new dictionary keys
+
+Adapted from CPython's new_keys_object().
+*/
 int
 numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     Py_ssize_t usable = USABLE_FRACTION(size);
@@ -482,9 +487,8 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
     dk->entry_size = entry_size;
 
     assert (palign(dk->indices) == dk->indices );
-    memset(dk->indices, 0xff, entry_offset);
-    /* Ensure hash is (-1) for empty */
-    memset(dk->indices + entry_offset, 0xff, entry_size * usable);
+    /* Ensure hash is (-1) for empty entry */
+    memset(dk->indices, 0xff, entry_offset + entry_size * usable);
 
     *out = dk;
     return OK;
@@ -580,11 +584,11 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
         }
         if (ix >= 0) {
             NB_DictEntry *ep = get_entry(dk, ix);
-            STACK_ALLOC(char, startkey, dk->val_size);
+            const char *startkey = NULL;
             if (ep->hash == hash) {
                 int cmp;
 
-                copy_key(dk, startkey, entry_get_key(dk, ep));
+                startkey = entry_get_key(dk, ep);
                 cmp = key_equal(dk, startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
@@ -650,7 +654,7 @@ numba_dict_insert(
     Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
     if (ix == DKIX_ERROR) {
         // exception in key comparision in lookup.
-        goto Fail;
+        return ERR_CMP_FAILED;
     }
 
     if (ix == DKIX_EMPTY) {
@@ -658,11 +662,10 @@ numba_dict_insert(
         Py_ssize_t hashpos;
         NB_DictEntry *ep;
 
-        assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) == 0 );
         if (dk->usable <= 0) {
             /* Need to resize */
             if (insertion_resize(d) != OK)
-                goto Fail;
+                return ERR_NO_MEMORY;
             else
                 dk = d->keys;     // reload
         }
@@ -680,14 +683,10 @@ numba_dict_insert(
         assert (dk->usable >= 0);
         return OK;
     }
-
-    assert ( mem_cmp_zeros(oldval_bytes, dk->val_size) != 0 && "lookup found previous entry");
     // Replace the previous value
     copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
 
-    return OK;
-Fail:
-    return ERR_NO_MEMORY;
+    return OK_REPLACED;
 }
 
 /*
@@ -768,7 +767,6 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     else {
         Py_ssize_t i;
         size_t epi = 0;
-        // NB_DictEntry *ep;
         for (i=0; i<numentries; ++i) {
 
             /*
@@ -793,7 +791,7 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     numba_dictkeys_free(oldkeys);
 
     build_indices(d->keys, numentries);
-    d->keys->usable = numentries;
+    d->keys->usable -= numentries;
     d->keys->nentries = numentries;
     return OK;
 }
@@ -802,12 +800,11 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     Adapted from CPython delitem_common
  */
 int
-numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes)
+numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
 {
     Py_ssize_t hashpos;
     NB_DictEntry *ep;
     NB_DictKeys *dk = d->keys;
-    STACK_ALLOC(char, oldkey_bytes, dk->key_size);
 
     hashpos = lookdict_index(dk, hash, ix);
     assert(hashpos >= 0);
@@ -816,7 +813,6 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix, char *oldval_bytes
     ep = get_entry(dk, ix);
     set_index(dk, hashpos, DKIX_DUMMY);
 
-    copy_key(dk, oldkey_bytes, entry_get_key(dk, ep));
     zero_key(dk, entry_get_key(dk, ep));
     zero_val(dk, entry_get_val(dk, ep));
     ep->hash = DKIX_EMPTY; // to mark it as empty;
@@ -940,14 +936,6 @@ numba_dict_insert_ez(
 }
 
 int
-numba_dict_delitem_ez(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
-{
-    STACK_ALLOC(char, oldval_bytes, d->keys->key_size);
-    return numba_dict_delitem(d, hash, ix, oldval_bytes);
-}
-
-
-int
 numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
 {
     return numba_dict_new(out, D_MINSIZE, key_size, val_size);
@@ -968,6 +956,7 @@ numba_test_dict(void) {
     NB_Dict *d;
     int status;
     Py_ssize_t ix;
+    Py_ssize_t usable;
     STACK_ALLOC(char, got_value, 8);
     puts("test_dict");
 
@@ -981,6 +970,7 @@ numba_test_dict(void) {
 
     printf("d %p\n", d);
     printf("d->usable = %u\n", (int)d->keys->usable);
+    usable = d->keys->usable;
     printf("d[0] %d\n", (int)((char*)get_entry(d->keys, 0) - (char*)d->keys));
     CHECK ((char*)get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
     printf("d[1] %d\n", (int)((char*)get_entry(d->keys, 1) - (char*)d->keys));
@@ -994,43 +984,50 @@ numba_test_dict(void) {
     status = numba_dict_insert(d, "bef", 0xbeef, "1234567", got_value);
     CHECK (status == OK);
     CHECK (d->used == 1);
+    CHECK (d->keys->usable == usable - d->used);
 
     // insert same key
     status = numba_dict_insert(d, "bef", 0xbeef, "1234567", got_value);
-    CHECK (status == OK);
+    CHECK (status == OK_REPLACED);
     printf("got_value %s\n", got_value);
     CHECK (d->used == 1);
+    CHECK (d->keys->usable == usable - d->used);
 
     // insert 2nd key
     status = numba_dict_insert(d, "beg", 0xbeef, "1234568", got_value);
     CHECK (status == OK);
     CHECK (d->used == 2);
+    CHECK (d->keys->usable == usable - d->used);
 
     // insert 3rd key
     status = numba_dict_insert(d, "beh", 0xcafe, "1234569", got_value);
     CHECK (status == OK);
     CHECK (d->used == 3);
+    CHECK (d->keys->usable == usable - d->used);
 
     // replace key "bef"'s value
     status = numba_dict_insert(d, "bef", 0xbeef, "7654321", got_value);
-    CHECK (status == OK);
+    CHECK (status == OK_REPLACED);
     CHECK (d->used == 3);
-
+    CHECK (d->keys->usable == usable - d->used);
 
     // insert 4th key
     status = numba_dict_insert(d, "bei", 0xcafe, "0_0_0_1", got_value);
     CHECK (status == OK);
     CHECK (d->used == 4);
+    CHECK (d->keys->usable == usable - d->used);
 
     // insert 5th key
     status = numba_dict_insert(d, "bej", 0xcafe, "0_0_0_2", got_value);
     CHECK (status == OK);
     CHECK (d->used == 5);
+    CHECK (d->keys->usable == usable - d->used);
 
-    // insert 5th key & triggers resize
+    // insert 6th key & triggers resize
     status = numba_dict_insert(d, "bek", 0xcafe, "0_0_0_3", got_value);
     CHECK (status == OK);
     CHECK (d->used == 6);
+    CHECK (d->keys->usable == USABLE_FRACTION(d->keys->size) - d->used);
 
     // Dump
     numba_dict_dump_keys(d);
@@ -1063,7 +1060,7 @@ numba_test_dict(void) {
 
     // Test delete
     ix = numba_dict_lookup(d, "beg", 0xbeef, got_value);
-    status = numba_dict_delitem(d, 0xbeef, ix, got_value);
+    status = numba_dict_delitem(d, 0xbeef, ix);
     CHECK (status == OK);
 
     ix = numba_dict_lookup(d, "beg", 0xbeef, got_value);

@@ -97,7 +97,7 @@ class Dict(object):
         status = self.tc.numba_dict_insert_ez(
             self.dp, key_bytes, hashval, val_bytes,
         )
-        self.tc.assertEqual(status, 0)
+        self.tc.assertGreaterEqual(status, 0)
 
     def dict_lookup(self, key_bytes):
         hashval = hash(key_bytes)
@@ -113,7 +113,7 @@ class Dict(object):
         if ix == DKIX_EMPTY:
             return False
         hashval = hash(key_bytes)
-        status = self.tc.numba_dict_delitem_ez(self.dp, hashval, ix)
+        status = self.tc.numba_dict_delitem(self.dp, hashval, ix)
         self.tc.assertEqual(status, 0)
         return True
 
@@ -257,13 +257,13 @@ class TestDictImpl(TestCase):
                 ctypes.c_char_p,    # oldval_bytes
             ],
         )
-        # numba_dict_delitem_ez(
+        # numba_dict_delitem(
         #     NB_Dict *d,
         #     Py_hash_t hash,
         #     Py_ssize_t ix
         # )
-        self.numba_dict_delitem_ez = wrap(
-            'dict_delitem_ez',
+        self.numba_dict_delitem = wrap(
+            'dict_delitem',
             ctypes.c_int,
             [
                 dict_t,             # d
