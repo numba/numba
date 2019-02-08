@@ -8,6 +8,8 @@ from types import BuiltinFunctionType
 from numba import numpy_support
 from numba import types
 from numba.core.typing import templates
+from numba import cgutils
+
 
 class CFFITypeInfo(object):
     """
@@ -33,9 +35,11 @@ class CFFIStructTypeCache(object):
     def get_type_hash(self, cffi_type):
         return hash(cffi_type)
 
+
 cffi_types_cache = CFFIStructTypeCache()
 
 _cached_type_map = None
+
 
 def cffi_type_map():
     """
@@ -147,6 +151,13 @@ def get_func_pointer(cffi_func):
     return int(ffi.cast("uintptr_t", cffi_func))
 
 
+def get_struct_pointer(cffi_struct_ptr):
+    """
+    Convert struct pointer to integer
+    """
+    return int(ffi.cast("uintptr_t", cffi_struct_ptr))
+
+
 def map_struct_to_numba_type(cffi_type):
     """
     Convert a cffi type to a numba StructType
@@ -228,8 +239,41 @@ def get_struct_type(cffi_struct):
     return cffi_type_map()[t]
 
 
-def struct_from_ptr(h, intptr):
-    return ffi.cast(cffi_types_cache.get_type_by_hash(h).cffi_ptr_t, intptr)
+_free_ffi = None
+
+
+def get_free_ffi():
+    """We use it to resolve circular dependecies"""
+    global _free_ffi
+    if _free_ffi is None:
+        from numba import extending, njit
+
+        def free_ffi_new(typingctx, cffi_ptr):
+            if isinstance(cffi_ptr, types.CFFIPointer):
+                sig = templates.signature(types.void, cffi_ptr)
+
+                def codegen(context, builder, signature, args):
+                    ptr = builder.bitcast(args[0], cgutils.voidptr_t)
+                    context.nrt.free(builder, ptr)
+
+                return sig, codegen
+
+        free_intr = extending.intrinsic(free_ffi_new)
+
+        def free_impl(cffi_ptr):
+            free_intr(cffi_ptr)
+
+        _free_ffi = njit(free_impl)
+    return _free_ffi
+
+
+def struct_from_ptr(hash_, intptr, owned):
+    ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).cffi_ptr_t, intptr)
+    print("owned is", owned)
+    if owned:
+        print("Binding collector")
+        ret = ffi.gc(ret, get_free_ffi())
+    return ret
 
 
 def map_type(cffi_type, use_record_dtype=False):
@@ -278,12 +322,14 @@ def map_type(cffi_type, use_record_dtype=False):
     else:
         raise TypeError(cffi_type)
 
+
 def register_type(cffi_type, numba_type):
     """
     Add typing for a given CFFI type to the typemap
     """
     tm = cffi_type_map()
     tm[cffi_type] = numba_type
+
 
 def register_module(mod):
     """
