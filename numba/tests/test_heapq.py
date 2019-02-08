@@ -90,6 +90,33 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 parentpos = (pos - 1) >> 1
                 self.assertTrue(heap[parentpos] <= item)
 
+    def test_push_pop(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc_heappush = heappush
+        cfunc_heappush = jit(nopython=True)(pyfunc_heappush)
+
+        pyfunc_heappop = heappop
+        cfunc_heappop = jit(nopython=True)(pyfunc_heappop)
+
+        heap = [-1.0]
+        data = [-1.0]
+        self.check_invariant(heap)
+        for i in range(256):
+            item = self.rnd.randn(1).item(0)
+            data.append(item)
+            cfunc_heappush(heap, item)
+            self.check_invariant(heap)
+        results = []
+        while heap:
+            item = cfunc_heappop(heap)
+            self.check_invariant(heap)
+            results.append(item)
+        data_sorted = data[:]
+        data_sorted.sort()
+        self.assertPreciseEqual(data_sorted, results)
+        self.check_invariant(results)
+
     def test_heapify(self):
         # inspired by
         # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
@@ -212,3 +239,53 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             pyfunc(a, item)
             cfunc(b, item)
             self.assertPreciseEqual(a, b)
+
+    def heapiter(self, heap):
+        try:
+            while 1:
+                yield heappop(heap)
+        except IndexError:
+            pass
+
+    def test_nbest(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc_heapify = heapify
+        cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
+
+        pyfunc_heapreplace = heapreplace
+        cfunc_heapreplace = jit(nopython=True)(pyfunc_heapreplace)
+
+        data = self.rnd.choice(range(2000), 1000).tolist()
+        heap = data[:10]
+        cfunc_heapify(heap)
+
+        for item in data[10:]:
+            if item > heap[0]:
+                cfunc_heapreplace(heap, item)
+
+        self.assertPreciseEqual(list(self.heapiter(heap)), sorted(data)[-10:])
+
+    def test_heapsort(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc_heapify = heapify
+        cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
+
+        pyfunc_heappush = heappush
+        cfunc_heappush = jit(nopython=True)(pyfunc_heappush)
+
+        pyfunc_heappop = heappop
+        cfunc_heappop = jit(nopython=True)(pyfunc_heappop)
+
+        for trial in range(100):
+            data = self.rnd.choice(range(5), 10).tolist()
+            if trial & 1:
+                heap = data[:]
+                cfunc_heapify(heap)
+            else:
+                heap = [data[0]]
+                for item in data[1:]:
+                    cfunc_heappush(heap, item)
+            heap_sorted = [cfunc_heappop(heap) for _ in range(10)]
+            self.assertEqual(heap_sorted, sorted(data))
