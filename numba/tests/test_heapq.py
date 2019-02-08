@@ -26,6 +26,10 @@ def heappush(heap, item):
     return hq.heappush(heap, item)
 
 
+def heappushpop(heap, item):
+    return hq.heappushpop(heap, item)
+
+
 def heapreplace(heap, item):
     return hq.heapreplace(heap, item)
 
@@ -288,7 +292,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 for item in data[1:]:
                     cfunc_heappush(heap, item)
             heap_sorted = [cfunc_heappop(heap) for _ in range(10)]
-            self.assertEqual(heap_sorted, sorted(data))
+            self.assertPreciseEqual(heap_sorted, sorted(data))
 
     def test_nsmallest(self):
         # inspired by
@@ -299,7 +303,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         data = self.rnd.choice(range(2000), 1000).tolist()
 
         for n in (0, 1, 2, 10, 100, 400, 999, 1000, 1100):
-            self.assertEqual(list(cfunc(n, data)), sorted(data)[:n])
+            self.assertPreciseEqual(list(cfunc(n, data)), sorted(data)[:n])
 
     def test_nlargest(self):
         # inspired by
@@ -310,5 +314,43 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         data = self.rnd.choice(range(2000), 1000).tolist()
 
         for n in (0, 1, 2, 10, 100, 400, 999, 1000, 1100):
-            self.assertEqual(list(cfunc(n, data)),
+            self.assertPreciseEqual(list(cfunc(n, data)),
                              sorted(data, reverse=True)[:n])
+
+    def test_nbest_with_pushpop(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc_heappushpop = heappushpop
+        cfunc_heappushpop = jit(nopython=True)(pyfunc_heappushpop)
+
+        pyfunc_heapify = heapify
+        cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
+
+        data = self.rnd.choice(range(2000), 1000).tolist()
+        heap = data[:10]
+        cfunc_heapify(heap)
+
+        for item in data[10:]:
+            cfunc_heappushpop(heap, item)
+
+        self.assertPreciseEqual(list(self.heapiter(heap)), sorted(data)[-10:])
+
+    def test_heappushpop(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc = heappushpop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        h = [10]
+        x = cfunc(h, 10.0)
+        self.assertPreciseEqual((h, x), ([10], 10.0))
+        self.assertPreciseEqual(type(h[0]), int)
+        self.assertPreciseEqual(type(x), float)
+
+        h = [10]
+        x = cfunc(h, 9)
+        self.assertPreciseEqual((h, x), ([10], 9))
+
+        h = [10]
+        x = cfunc(h, 11)
+        self.assertPreciseEqual((h, x), ([11], 10))

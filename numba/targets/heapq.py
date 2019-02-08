@@ -157,6 +157,18 @@ def heapreplace(heap, item):
     return hq_heapreplace
 
 
+@overload(hq.heappushpop)
+def heappushpop(heap, item):
+
+    def hq_heappushpop_impl(heap, item):
+        if heap and heap[0] < item:
+            item, heap[0] = heap[0], item
+            _siftup(heap, 0)
+        return item
+
+    return hq_heappushpop_impl
+
+
 @overload(hq.nsmallest)
 def nsmallest(n, iterable):
 

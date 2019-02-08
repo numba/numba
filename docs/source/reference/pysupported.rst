@@ -570,9 +570,13 @@ The following functions from the :mod:`heapq` module are supported:
 * :func:`heapq.heapify`
 * :func:`heapq.heappop`
 * :func:`heapq.heappush`
+* :func:`heapq.heappushpop`
 * :func:`heapq.heapreplace`
 * :func:`heapq.nlargest` : first two arguments only
 * :func:`heapq.nsmallest` : first two arguments only
+
+Note: heap must be seeded with at least one value to allow type to be
+inferred; heap items assumed to be homogeneous type.
 
 
 Third-party modules
