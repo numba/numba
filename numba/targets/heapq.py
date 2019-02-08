@@ -162,7 +162,9 @@ def nsmallest(n, iterable):
 
     def hq_nsmallest_impl(n, iterable):
 
-        if n == 1:
+        if n == 0:
+            return [iterable[0] * x for x in range(0)]
+        elif n == 1:
             out = np.min(np.asarray(iterable))
             return [out]
 
@@ -193,7 +195,9 @@ def nlargest(n, iterable):
 
     def hq_nlargest_impl(n, iterable):
 
-        if n == 1:
+        if n == 0:
+            return [iterable[0] * x for x in range(0)]
+        elif n == 1:
             out = np.max(np.asarray(iterable))
             return [out]
 

@@ -289,3 +289,26 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                     cfunc_heappush(heap, item)
             heap_sorted = [cfunc_heappop(heap) for _ in range(10)]
             self.assertEqual(heap_sorted, sorted(data))
+
+    def test_nsmallest(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc = nsmallest
+        cfunc = jit(nopython=True)(pyfunc)
+
+        data = self.rnd.choice(range(2000), 1000).tolist()
+
+        for n in (0, 1, 2, 10, 100, 400, 999, 1000, 1100):
+            self.assertEqual(list(cfunc(n, data)), sorted(data)[:n])
+
+    def test_nlargest(self):
+        # inspired by
+        # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
+        pyfunc = nlargest
+        cfunc = jit(nopython=True)(pyfunc)
+
+        data = self.rnd.choice(range(2000), 1000).tolist()
+
+        for n in (0, 1, 2, 10, 100, 400, 999, 1000, 1100):
+            self.assertEqual(list(cfunc(n, data)),
+                             sorted(data, reverse=True)[:n])
