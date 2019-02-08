@@ -312,6 +312,8 @@ class EnumModel(ProxyModel):
 @register_default(types.RecursiveCall)
 @register_default(types.MakeFunctionLiteral)
 @register_default(types.Poison)
+@register_default(types.CFFILibraryType)
+@register_default(types.FFIType)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers

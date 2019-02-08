@@ -61,8 +61,8 @@ def load_ool_module():
     int foo(int a, int b, int c);
     void vsSin(int n, float* x, float* y);
     void vdSin(int n, double* x, double* y);
-    void vector_real(numba_complex *c, double *real, int n);
-    void vector_imag(numba_complex *c, double *imag, int n);
+    void vector_real(numba_complex *c, double *real, size_t n);
+    void vector_imag(numba_complex *c, double *imag, size_t n);
     """
 
     source = numba_complex + bool_define + """
@@ -88,14 +88,14 @@ def load_ool_module():
             y[i] = sin(x[i]);
     }
 
-    static void vector_real(numba_complex *c, double *real, int n) {
-        int i;
+    static void vector_real(numba_complex *c, double *real, size_t n) {
+        size_t i;
         for (i = 0; i < n; i++)
             real[i] = c[i].real;
     }
 
-    static void vector_imag(numba_complex *c, double *imag, int n) {
-        int i;
+    static void vector_imag(numba_complex *c, double *imag, size_t n) {
+        size_t i;
         for (i = 0; i < n; i++)
             imag[i] = c[i].imag;
     }

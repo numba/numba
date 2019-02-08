@@ -684,17 +684,8 @@ class BaseContext(object):
 class Context(BaseContext):
 
     def load_additional_registries(self):
-        from . import (
-            cffi_utils,
-            cmathdecl,
-            enumdecl,
-            listdecl,
-            mathdecl,
-            npydecl,
-            randomdecl,
-            setdecl,
-            dictdecl,
-        )
+        from . import (cffi_utils, cmathdecl, enumdecl, listdecl, mathdecl,
+                       npydecl, randomdecl, setdecl, dictdecl)
         self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)
