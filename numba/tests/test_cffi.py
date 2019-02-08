@@ -257,6 +257,23 @@ class TestCFFILinkedList(TestCase):
             node = node.next
         self.assertEqual(node, ffi.NULL)
 
+    def test_const_lowering(self):
+        n = 100
+        ll = self._create_linked_list(n)
+        lib = self.lib
+        ffi = self.ffi
+
+        @njit
+        def list_sum():
+            # we pass ll as constant
+            n = ll.node
+            s = 0
+            while n != ffi.NULL:
+                s += n.value
+                n = n.next
+            return s
+
+        self.assertEqual(lib.list_sum(ll), list_sum())
 
 if __name__ == '__main__':
     unittest.main()
