@@ -22,6 +22,10 @@ def heappop(heap):
     return hq.heappop(heap)
 
 
+def heappush(heap, item):
+    return hq.heappush(heap, item)
+
+
 class TestHeapq(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -124,3 +128,29 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 val_c = cfunc(b)
                 self.assertPreciseEqual(a, b)
                 self.assertPreciseEqual(val_py, val_c)
+
+    def test_heappush_basic(self):
+        pyfunc_push = heappush
+        cfunc_push = jit(nopython=True)(pyfunc_push)
+
+        pyfunc_pop = heappop
+        cfunc_pop = jit(nopython=True)(pyfunc_pop)
+
+        def iterables():
+            yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
+            a = np.linspace(-10, 2, 23)
+            yield a.tolist()
+            yield a[::-1].tolist()
+            self.rnd.shuffle(a)
+            yield a.tolist()
+
+        for iterable in iterables():
+            expected = sorted(iterable)
+
+            heap = [iterable.pop(0)]  # must initialise heap
+
+            for value in iterable:
+                cfunc_push(heap, value)
+
+            got = [cfunc_pop(heap) for _ in range(len(heap))]
+            self.assertPreciseEqual(expected, got)

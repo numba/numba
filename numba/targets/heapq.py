@@ -82,3 +82,13 @@ def hq_heappop(heap):
         return lastelt
 
     return hq_heappop_impl
+
+
+@overload(hq.heappush)
+def heappush(heap, item):
+
+    def hq_heappush_impl(heap, item):
+        heap.append(item)
+        _siftdown(heap, 0, len(heap) - 1)
+
+    return hq_heappush_impl

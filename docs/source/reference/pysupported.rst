@@ -569,6 +569,7 @@ The following functions from the :mod:`heapq` module are supported:
 
 * :func:`heapq.heapify`
 * :func:`heapq.heappop`
+* :func:`heapq.heappush`
 
 
 Third-party modules
