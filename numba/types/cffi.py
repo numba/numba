@@ -72,6 +72,17 @@ class CFFIPointer(types.CPointer):
     def get_pointer(struct_ptr):
         return get_struct_pointer(struct_ptr)
 
+    def __repr__(self):
+        return self.name
+
+
+class CFFIArrayType(CFFIPointer):
+    def __init__(self, dtype, length, owning=False):
+        super(CFFIArrayType, self).__init__(dtype, owning)
+        owning_str = "(Owning)" if self.owning else ''
+        self.length = length
+        self.name = '{}[{}]'.format(self.dtype.name, self.length) + owning_str
+
 
 class CFFIStructRefType(CFFIPointer):
     def __init__(self, ptrtype):

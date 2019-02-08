@@ -50,9 +50,14 @@ class FFI_new(types.BoundFunction):
         if cffi_type.kind == "pointer":
             pointee = cffi_type.item
             ret_type = types.CFFIPointer(cffi_type_map()[pointee], owning=True)
+        elif cffi_type.kind == "array":
+            length = cffi_type.length
+            pointee = cffi_type.item
+            ret_type = types.CFFIArrayType(
+                cffi_type_map()[pointee], length, owning=True
+            )
         else:
-            # TODO: handle arrays and check for incorrect types
-            ret_type = cffi_type_map()[cffi_type]
+            raise ValueError("Can only allocate memory for pointer and array types")
         return templates.signature(ret_type, *args)
 
 
@@ -87,6 +92,14 @@ class CFFIPointerModel(models.PointerModel):
         return builder.store(value, ptr)
 
 
+class CFFIArrayModel(models.PointerModel):
+    def get_item(self, builder, target, index):
+        pass
+
+    def set_item(self, builder, target, index):
+        pass
+
+
 def _mangle_attr(name):
     """
     Mangle attributes.
@@ -97,6 +110,7 @@ def _mangle_attr(name):
 
 default_manager.register(types.CFFIStructInstanceType, CFFIStructInstanceModel)
 default_manager.register(types.CFFIPointer, CFFIPointerModel)
+default_manager.register(types.CFFIArrayType, CFFIArrayModel)
 default_manager.register(types.CFFIStructRefType, CFFIPointerModel)
 
 
@@ -150,11 +164,27 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
         assert not kws
         ptr, idx = args
         if isinstance(ptr, types.CFFIPointer) and isinstance(idx, types.Integer):
+            # if it's an array, then the length
             return templates.signature(
                 types.CFFIStructRefType(ptr),
                 ptr,
                 typing.builtins.normalize_1d_index(idx),
             )
+
+
+@registry.register_global(len)
+class CFFIArrayLength(templates.AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        ptr = args[0]
+        if isinstance(ptr, types.CFFIArrayType):
+            return templates.signature(types.int64, ptr)
+
+
+@imputils.lower_builtin(len, types.CFFIArrayType)
+def len_cffiarray(context, builder, sig, args):
+    res = cgutils.intp_t(sig.args[0].length)
+    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @imputils.lower_builtin(operator.getitem, types.CFFIPointer, types.Integer)
@@ -233,9 +263,10 @@ def struct_instance_box(typ, val, c):
     cast_val = c.builder.ptrtoint(val, cgutils.intp_t)
     struct_addr = c.pyapi.long_from_ssize_t(cast_val)
     owning = c.pyapi.bool_from_bool(cgutils.bool_t(typ.owning))
-    return c.pyapi.call_function_objargs(
-        struct_from_ptr_runtime, [hash_, struct_addr, owning]
-    )
+    args = [hash_, struct_addr, owning]
+    if isinstance(typ, types.CFFIArrayType):
+        args.append(c.pyapi.long_from_ssize_t(cgutils.intp_t(typ.length)))
+    return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
 
 
 # this is the layout ob the CFFI's CDataObject
@@ -345,6 +376,11 @@ class FFI_new_direct(templates.AbstractTemplate):
 def from_buffer(context, builder, sig, args):
     retty = context.get_value_type(sig.return_type)
     struct_size = context.get_abi_sizeof(retty.pointee)
+
+    # if it's an array, adjust size accordingly
+    if isinstance(sig.return_type, types.CFFIArrayType):
+        struct_size *= sig.return_type.length
+
     # ffi.new allocates zero initialized memory, we do it too
     ptr = context.nrt.allocate(builder, cgutils.intp_t(struct_size))
     memset = builder.module.declare_intrinsic(

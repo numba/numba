@@ -19,7 +19,14 @@ class CFFITypeInfo(object):
     def __init__(self, ffi, cffi_type):
         self.cname = cffi_type.cname
         self.cffi_type = cffi_type
-        self.cffi_ptr_t = ffi.typeof(self.cffi_type.cname + "*")
+        self.ffi = ffi
+
+    @property
+    def ptr_t(self):
+        return self.ffi.typeof(self.ffi.getctype(self.cffi_type, "*"))
+
+    def get_struct_t(self, length):
+        return self.ffi.typeof(self.ffi.getctype(self.cffi_type, "[{}]".format(length)))
 
 
 class CFFIStructTypeCache(object):
@@ -129,7 +136,7 @@ def is_cffi_struct(obj):
         t = ffi.typeof(obj)
     except TypeError:
         return False
-    if t.kind == "pointer":
+    if t.kind == "pointer" or t.kind == "array":
         return t.item.kind == "struct"
     elif t.kind == "struct":
         return True
@@ -235,7 +242,8 @@ def get_struct_type(cffi_struct):
     t = ffi.typeof(cffi_struct)
     if t.kind == "pointer":
         return types.CFFIPointer(cffi_type_map()[t.item])
-
+    if t.kind == "array":
+        return types.CFFIArrayType(cffi_type_map()[t.item], t.length)
     return cffi_type_map()[t]
 
 
@@ -267,8 +275,14 @@ def get_free_ffi():
     return _free_ffi
 
 
-def struct_from_ptr(hash_, intptr, owned):
-    ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).cffi_ptr_t, intptr)
+def struct_from_ptr(hash_, intptr, owned, length=None):
+    if length is None:
+        # pointer type
+        ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).ptr_t, intptr)
+    else:
+        ret = ffi.cast(
+            cffi_types_cache.get_type_by_hash(hash_).get_struct_t(length), intptr
+        )
     if owned:
         ret = ffi.gc(ret, get_free_ffi())
     return ret

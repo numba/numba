@@ -275,5 +275,35 @@ class TestCFFILinkedList(TestCase):
 
         self.assertEqual(lib.list_sum(ll), list_sum())
 
+    def test_array(self):
+        n = 100
+        ffi = self.ffi
+        nodes = ffi.new('Node[{}]'.format(n))
+        for i in range(n):
+            nodes[i].value = i
+
+        @njit
+        def sum_array(nodes):
+            s = 0
+            for i in range(len(nodes)):
+                s += nodes[i].value
+            return s
+
+        self.assertEqual(sum_array(nodes), sum(range(n)))
+
+    def test_allocate_array(self):
+        ffi = self.ffi
+
+        @njit
+        def create_array():
+            nodes = ffi.new("Node[100]")
+            for i in range(len(nodes)):
+                nodes[i].value = i
+            return nodes
+
+        nodes = create_array()
+        self.assertEqual(sum(n.value for n in nodes), sum(range(100)))
+
+
 if __name__ == '__main__':
     unittest.main()
