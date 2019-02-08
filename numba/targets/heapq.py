@@ -201,8 +201,6 @@ def nlargest(n, iterable):
         if n >= size:
             return sorted(iterable)[::-1][:n]
 
-        # When key is none, use simpler decoration
-
         it = iter(iterable)
         result = [(elem, i) for i, elem in zip(range(0, -n, -1), it)]
 
