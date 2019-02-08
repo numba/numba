@@ -54,8 +54,6 @@ def hq_heapify(x):
     if not isinstance(x, types.List):
         raise TypingError('heap argument must be a list')
 
-    # what to do if list is empty?
-
     dt = x.dtype
     if isinstance(dt, types.Complex):
         msg = ("'<' not supported between instances "
@@ -109,8 +107,8 @@ def _siftup_max(heap, pos):
 @register_jitable
 def _heapify_max(x):
     n = len(x)
-    #for i in reversed(range(n//2)):
-    for i in range(n // 2 + 1, -1, -1):
+
+    for i in range(n // 2 - 1, -1, -1):
         _siftup_max(x, i)
 
 
