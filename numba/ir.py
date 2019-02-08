@@ -215,6 +215,12 @@ class Inst(object):
         else:
             return []
 
+    @property
+    def used(self):
+        """The set of used variables.
+        """
+        return set(self.list_vars())
+
 
 class Stmt(Inst):
     """
@@ -576,6 +582,9 @@ class Branch(Terminator):
     def get_targets(self):
         return [self.truebr, self.falsebr]
 
+    def list_vars(self):
+        return [self.cond]
+
 
 class Assign(Stmt):
     """
@@ -588,6 +597,15 @@ class Assign(Stmt):
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
+
+    @property
+    def used(self):
+        if isinstance(self.value, Var):
+            return {self.value}
+        elif isinstance(self.value, Inst):
+            return self.value.used
+        else:
+            return set()
 
 
 class Print(Stmt):
