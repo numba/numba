@@ -315,7 +315,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
         for n in (0, 1, 2, 10, 100, 400, 999, 1000, 1100):
             self.assertPreciseEqual(list(cfunc(n, data)),
-                             sorted(data, reverse=True)[:n])
+                                    sorted(data, reverse=True)[:n])
 
     def test_nbest_with_pushpop(self):
         # inspired by

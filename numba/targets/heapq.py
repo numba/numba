@@ -89,7 +89,7 @@ def _siftup_max(heap, pos):
     startpos = pos
     newitem = heap[pos]
 
-    childpos = 2*pos + 1
+    childpos = 2 * pos + 1
     while childpos < endpos:
 
         rightpos = childpos + 1
@@ -98,7 +98,7 @@ def _siftup_max(heap, pos):
 
         heap[pos] = heap[childpos]
         pos = childpos
-        childpos = 2*pos + 1
+        childpos = 2 * pos + 1
 
     heap[pos] = newitem
     _siftdown_max(heap, startpos, pos)
