@@ -26,8 +26,16 @@ def heappush(heap, item):
     return hq.heappush(heap, item)
 
 
+def heapreplace(heap, item):
+    return hq.heapreplace(heap, item)
+
+
 def nsmallest(n, iterable):
     return hq.nsmallest(n, iterable)
+
+
+def nlargest(n, iterable):
+    return hq.nlargest(n, iterable)
 
 
 class TestHeapq(MemoryLeakMixin, TestCase):
@@ -167,3 +175,40 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 expected = pyfunc(1, iterable)
                 got = cfunc(1, iterable)
                 self.assertPreciseEqual(expected, got)
+
+    def test_nlargest_basic(self):
+        pyfunc = nlargest
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for iterable in self.iterables():
+            for n in range(-5, len(iterable) + 3):
+                expected = pyfunc(1, iterable)
+                got = cfunc(1, iterable)
+                self.assertPreciseEqual(expected, got)
+
+    def test_heapreplace_basic(self):
+        pyfunc = heapreplace
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
+
+        heapify(a)
+        b = a[:]
+
+        for item in [-4, 4, 14]:
+            pyfunc(a, item)
+            cfunc(b, item)
+            self.assertPreciseEqual(a, b)
+
+        a = np.linspace(-3, 13, 20)
+        a[4] = np.nan
+        a[-1] = np.inf
+        a = a.tolist()
+
+        heapify(a)
+        b = a[:]
+
+        for item in [-4.0, 3.142, -np.inf, np.inf]:
+            pyfunc(a, item)
+            cfunc(b, item)
+            self.assertPreciseEqual(a, b)

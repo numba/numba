@@ -147,6 +147,18 @@ def heappush(heap, item):
     return hq_heappush_impl
 
 
+@overload(hq.heapreplace)
+def heapreplace(heap, item):
+
+    def hq_heapreplace(heap, item):
+        returnitem = heap[0]
+        heap[0] = item
+        _siftup(heap, 0)
+        return returnitem
+
+    return hq_heapreplace
+
+
 @overload(hq.nsmallest)
 def nsmallest(n, iterable):
 
@@ -166,13 +178,46 @@ def nsmallest(n, iterable):
         _heapify_max(result)
         top = result[0][0]
         order = n
-        _heapreplace = _heapreplace_max
+
         for elem in it:
             if elem < top:
-                _heapreplace(result, (elem, order))
+                _heapreplace_max(result, (elem, order))
                 top, _order = result[0]
                 order += 1
         result.sort()
         return [elem for (elem, order) in result]
 
     return hq_nsmallest_impl
+
+
+@overload(hq.nlargest)
+def nlargest(n, iterable):
+
+    def hq_nlargest_impl(n, iterable):
+
+        if n == 1:
+            out = np.max(np.asarray(iterable))
+            return [out]
+
+        size = len(iterable)
+        if n >= size:
+            return sorted(iterable)[::-1][:n]
+
+        # When key is none, use simpler decoration
+
+        it = iter(iterable)
+        result = [(elem, i) for i, elem in zip(range(0, -n, -1), it)]
+
+        hq.heapify(result)
+        top = result[0][0]
+        order = -n
+
+        for elem in it:
+            if top < elem:
+                hq.heapreplace(result, (elem, order))
+                top, _order = result[0]
+                order -= 1
+        result.sort(reverse=True)
+        return [elem for (elem, order) in result]
+
+    return hq_nlargest_impl

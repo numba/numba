@@ -570,6 +570,8 @@ The following functions from the :mod:`heapq` module are supported:
 * :func:`heapq.heapify`
 * :func:`heapq.heappop`
 * :func:`heapq.heappush`
+* :func:`heapq.heapreplace`
+* :func:`heapq.nlargest` : first two arguments only
 * :func:`heapq.nsmallest` : first two arguments only
 
 
