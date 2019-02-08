@@ -4,6 +4,7 @@
 from __future__ import print_function, absolute_import, division
 
 import heapq as hq
+import numpy as np
 
 from numba import types
 from numba.errors import TypingError
@@ -69,6 +70,58 @@ def hq_heapify(x):
     return hq_heapify_impl
 
 
+@register_jitable
+def _siftdown_max(heap, startpos, pos):
+    newitem = heap[pos]
+
+    while pos > startpos:
+        parentpos = (pos - 1) >> 1
+        parent = heap[parentpos]
+        if parent < newitem:
+            heap[pos] = parent
+            pos = parentpos
+            continue
+        break
+    heap[pos] = newitem
+
+
+@register_jitable
+def _siftup_max(heap, pos):
+    endpos = len(heap)
+    startpos = pos
+    newitem = heap[pos]
+
+    childpos = 2*pos + 1
+    while childpos < endpos:
+
+        rightpos = childpos + 1
+        if rightpos < endpos and not heap[rightpos] < heap[childpos]:
+            childpos = rightpos
+
+        heap[pos] = heap[childpos]
+        pos = childpos
+        childpos = 2*pos + 1
+
+    heap[pos] = newitem
+    _siftdown_max(heap, startpos, pos)
+
+
+@register_jitable
+def _heapify_max(x):
+    n = len(x)
+    #for i in reversed(range(n//2)):
+    for i in range(n // 2 + 1, -1, -1):
+        _siftup_max(x, i)
+
+
+@register_jitable
+def _heapreplace_max(heap, item):
+    returnitem = heap[0]
+    heap[0] = item
+    _siftup_max(heap, 0)
+    return returnitem
+
+
 @overload(hq.heappop)
 def hq_heappop(heap):
 
@@ -92,3 +145,34 @@ def heappush(heap, item):
         _siftdown(heap, 0, len(heap) - 1)
 
     return hq_heappush_impl
+
+
+@overload(hq.nsmallest)
+def nsmallest(n, iterable):
+
+    def hq_nsmallest_impl(n, iterable):
+
+        if n == 1:
+            out = np.min(np.asarray(iterable))
+            return [out]
+
+        size = len(iterable)
+        if n >= size:
+            return sorted(iterable)[:n]
+
+        it = iter(iterable)
+        result = [(elem, i) for i, elem in zip(range(n), it)]
+
+        _heapify_max(result)
+        top = result[0][0]
+        order = n
+        _heapreplace = _heapreplace_max
+        for elem in it:
+            if elem < top:
+                _heapreplace(result, (elem, order))
+                top, _order = result[0]
+                order += 1
+        result.sort()
+        return [elem for (elem, order) in result]
+
+    return hq_nsmallest_impl

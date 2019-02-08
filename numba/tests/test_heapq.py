@@ -26,6 +26,10 @@ def heappush(heap, item):
     return hq.heappush(heap, item)
 
 
+def nsmallest(n, iterable):
+    return hq.nsmallest(n, iterable)
+
+
 class TestHeapq(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -129,6 +133,14 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(a, b)
                 self.assertPreciseEqual(val_py, val_c)
 
+    def iterables(self):
+        yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
+        a = np.linspace(-10, 2, 23)
+        yield a.tolist()
+        yield a[::-1].tolist()
+        self.rnd.shuffle(a)
+        yield a.tolist()
+
     def test_heappush_basic(self):
         pyfunc_push = heappush
         cfunc_push = jit(nopython=True)(pyfunc_push)
@@ -136,17 +148,8 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         pyfunc_pop = heappop
         cfunc_pop = jit(nopython=True)(pyfunc_pop)
 
-        def iterables():
-            yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
-            a = np.linspace(-10, 2, 23)
-            yield a.tolist()
-            yield a[::-1].tolist()
-            self.rnd.shuffle(a)
-            yield a.tolist()
-
-        for iterable in iterables():
+        for iterable in self.iterables():
             expected = sorted(iterable)
-
             heap = [iterable.pop(0)]  # must initialise heap
 
             for value in iterable:
@@ -154,3 +157,13 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
             got = [cfunc_pop(heap) for _ in range(len(heap))]
             self.assertPreciseEqual(expected, got)
+
+    def test_nsmallest_basic(self):
+        pyfunc = nsmallest
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for iterable in self.iterables():
+            for n in range(-5, len(iterable) + 3):
+                expected = pyfunc(1, iterable)
+                got = cfunc(1, iterable)
+                self.assertPreciseEqual(expected, got)
