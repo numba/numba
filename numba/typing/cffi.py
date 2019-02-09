@@ -110,7 +110,7 @@ def _mangle_attr(name):
 
 default_manager.register(types.CFFIStructInstanceType, CFFIStructInstanceModel)
 default_manager.register(types.CFFIPointer, CFFIPointerModel)
-default_manager.register(types.CFFIArrayType, CFFIArrayModel)
+default_manager.register(types.CFFIArrayType, CFFIPointerModel)
 default_manager.register(types.CFFIStructRefType, CFFIPointerModel)
 
 
@@ -164,11 +164,10 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
         assert not kws
         ptr, idx = args
         if isinstance(ptr, types.CFFIPointer) and isinstance(idx, types.Integer):
-            # if it's an array, then the length
             return templates.signature(
                 types.CFFIStructRefType(ptr),
                 ptr,
-                typing.builtins.normalize_1d_index(idx),
+                idx,
             )
 
 
@@ -186,6 +185,42 @@ def len_cffiarray(context, builder, sig, args):
     res = cgutils.intp_t(sig.args[0].length)
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
+@imputils.lower_builtin('getiter', types.CFFIArrayType)
+def getiter_cffiarray(context, builder, sig, args):
+    iterobj = context.make_helper(builder, sig.return_type)
+
+    zero = context.get_constant(types.intp, 0)
+    indexptr = cgutils.alloca_once_value(builder, zero)
+
+    iterobj.index = indexptr
+    iterobj.array = args[0]
+
+    if context.enable_nrt:
+        context.nrt.incref(builder, sig.args[0], args[0])
+
+    res = iterobj._getvalue()
+
+    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@imputils.lower_builtin('iternext', types.CFFIIteratorType)
+@imputils.iternext_impl
+def iternext_cffiarray(context, builder, sig, args, result):
+    iterty = sig.args[0]
+    iter_ = args[0]
+    containerty = iterty.container
+
+    iterobj = context.make_helper(builder, iterty, value=iter_)
+    length = cgutils.intp_t(containerty.length)
+    index = builder.load(iterobj.index)
+    is_valid = builder.icmp_unsigned('<', index, length)
+    result.set_valid(is_valid)
+
+    with builder.if_then(is_valid):
+        value = builder.gep(iterobj.array, [index])
+        result.yield_(value)
+        nindex = cgutils.increment_index(builder, index)
+        builder.store(nindex, iterobj.index)
 
 @imputils.lower_builtin(operator.getitem, types.CFFIPointer, types.Integer)
 def getitem_cffipointer(context, builder, sig, args):
@@ -334,6 +369,16 @@ class CFFINullPtrType(types.CPointer):
 @register_default(CFFINullPtrType)
 class CFFINullPtrModel(models.PointerModel):
     pass
+
+
+@register_default(types.CFFIIteratorType)
+class CFFIIteratorModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        # We use an unsigned index to avoid the cost of negative index tests.
+        members = [('index', types.EphemeralPointer(types.uintp)),
+                   ('array', fe_type.container)]
+        super(CFFIIteratorModel, self).__init__(dmm, fe_type, members)
+
 
 
 @imputils.lower_getattr(types.FFIType, "NULL")

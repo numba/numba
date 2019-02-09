@@ -75,13 +75,42 @@ class CFFIPointer(types.CPointer):
     def __repr__(self):
         return self.name
 
-
-class CFFIArrayType(CFFIPointer):
+class CFFIArrayType(CFFIPointer, types.Sequence):
     def __init__(self, dtype, length, owning=False):
         super(CFFIArrayType, self).__init__(dtype, owning)
         owning_str = "(Owning)" if self.owning else ''
         self.length = length
         self.name = '{}[{}]'.format(self.dtype.name, self.length) + owning_str
+
+    @property
+    def iterator_type(self):
+        return CFFIIteratorType(self)
+
+    @property
+    def yield_type(self):
+        return CFFIStructRefType(self)
+
+
+class CFFIIteratorType(types.BaseContainerIterator):
+    container_class = CFFIArrayType
+
+    def __init__(self, container):
+        assert isinstance(container, self.container_class), container
+        self.container = container
+        yield_type = container.yield_type
+        name = 'iter(%s)' % container
+        super(types.BaseContainerIterator, self).__init__(name, yield_type)
+
+    def unify(self, typingctx, other):
+        cls = type(self)
+        if isinstance(other, cls):
+            container = typingctx.unify_pairs(self.container, other.container)
+            if container is not None:
+                return cls(container)
+
+    @property
+    def key(self):
+        return self.container
 
 
 class CFFIStructRefType(CFFIPointer):
@@ -101,3 +130,6 @@ class CFFIStructRefType(CFFIPointer):
             other, CFFIStructInstanceType
         ):
             return typingctx.can_convert(self.dtype, other)
+
+    def __repr__(self):
+        return self.name
