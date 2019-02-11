@@ -10,7 +10,6 @@ from .containers import Sequence, BaseContainerIterator
 from .misc import Opaque, NoneType, CPointer, voidptr
 
 
-
 class CFFILibraryType(Opaque):
     def __init__(self, lib):
         self._func_names = set(
