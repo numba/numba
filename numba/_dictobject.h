@@ -93,10 +93,10 @@ Parameters
 - const char *key_bytes
     The key as a byte buffer.
 - Py_hash_t hash
-    The precomputed hash of key.
+    The precomputed hash of the key.
 - char *oldval_bytes
     An output parameter to store the associated value if the key is found.
-    Must points to memory of enough space to store the value.
+    Must point to memory of sufficient size to store the value.
 */
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_bytes);
@@ -118,12 +118,12 @@ Parameters
     The value as a byte buffer.
 - char *oldval_bytes
     An output buffer to store the replaced value.
-    Must points to memory of enough space to store the value.
+    Must point to memory of sufficient size to store the value.
 
 Returns
 - < 0 for error
 - 0 for ok
-- 1 for ok and oldval_pointer has a copy of the replaced value.
+- 1 for ok and oldval_bytes has a copy of the replaced value.
 */
 NUMBA_EXPORT_FUNC(int)
 numba_dict_insert(NB_Dict *d, const char *key_bytes, Py_hash_t hash, const char *val_bytes, char *oldval_bytes);
@@ -166,7 +166,7 @@ numba_dict_iter_sizeof(void);
 Parameters
 - NB_DictIter *it
     Output.  Must points to memory of size at least `numba_dict_iter_sizeof()`.
-NB_Dict *d
+- NB_Dict *d
     The dictionary to be iterated.
 */
 NUMBA_EXPORT_FUNC(void)
