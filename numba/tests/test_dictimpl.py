@@ -89,7 +89,7 @@ class Dict(object):
         self.tc.assertEqual(status, 0)
         return dp
 
-    def dict_length(self, ):
+    def dict_length(self):
         return self.tc.numba_dict_length(self.dp)
 
     def dict_insert(self, key_bytes, val_bytes):
