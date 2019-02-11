@@ -1234,72 +1234,7 @@ lower_builtin(operator.not_, types.boolean)(number_not_impl)
 
 
 #------------------------------------------------------------------------------
-# Hashing numbers
-
-@lower_builtin(hash, types.Integer)
-@lower_builtin(hash, types.Boolean)
-def hash_int(context, builder, sig, args):
-    ty, = sig.args
-    retty = sig.return_type
-    val, = args
-
-    if isinstance(ty, types.Integer) and ty.bitwidth > retty.bitwidth:
-        # Value is wider than hash => fold MSB into LSB
-        nbits = ty.bitwidth - retty.bitwidth
-        val = builder.add(val,
-                          builder.lshr(val, ir.Constant(val.type, nbits)))
-
-    return context.cast(builder, val, ty, retty)
-
-@lower_builtin(hash, types.Float)
-def hash_float(context, builder, sig, args):
-    ty, = sig.args
-    retty = sig.return_type
-    val, = args
-
-    # NOTE: CPython's algorithm is more involved as it seeks to maintain
-    # the invariant that hash(float(x)) == hash(x) for every integer x
-    # exactly representable as a float.
-    # Numba doesn't care as it doesn't support heterogeneous associative
-    # containers.
-
-    intty = types.Integer("int%d" % ty.bitwidth)
-    ll_intty = ir.IntType(ty.bitwidth)
-
-    # XXX Disabled as llvm.canonicalize doesn't work:
-    # http://lists.llvm.org/pipermail/llvm-dev/2016-February/095746.html
-    #func_name = "llvm.canonicalize.f%d" % (ty.bitwidth,)
-    #fnty = ir.FunctionType(val.type, (val.type,))
-    #fn = builder.module.get_or_insert_function(fnty, func_name)
-    #val = builder.call(fn, (val,))
-
-    # Take the float's binary representation as an int
-    val_p = cgutils.alloca_once_value(builder, val)
-    # y = *(int *)(&val)
-    y = builder.load(builder.bitcast(val_p, ll_intty.as_pointer()))
-
-    if intty.bitwidth > retty.bitwidth:
-        # Value is wider than hash => fold MSB into LSB
-        nbits = intty.bitwidth - retty.bitwidth
-        y = builder.add(y,
-                        builder.lshr(y, ir.Constant(y.type, nbits)))
-
-    return context.cast(builder, y, intty, retty)
-
-@lower_builtin(hash, types.Complex)
-def hash_complex(context, builder, sig, args):
-    ty, = sig.args
-    val, = args
-    fltty = ty.underlying_float
-
-    z = context.make_complex(builder, ty, val)
-    float_hash_sig = typing.signature(sig.return_type, fltty)
-    h_real = hash_float(context, builder, float_hash_sig, (z.real,))
-    h_imag = hash_float(context, builder, float_hash_sig, (z.imag,))
-    mult = ir.Constant(h_imag.type, 1000003)
-
-    return builder.add(h_real, builder.mul(h_imag, mult))
-
+# Hashing numbers, see hashing.py
 
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics

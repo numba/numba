@@ -18,4 +18,5 @@ Developer Manual
    stencil.rst
    custom_pipeline.rst
    environment.rst
+   hashing.rst
    roadmap.rst

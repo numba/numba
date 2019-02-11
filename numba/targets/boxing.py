@@ -819,7 +819,7 @@ def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
                 native = c.unbox(typ.dtype, itemobj)
                 with c.builder.if_then(native.is_error, likely=False):
                     c.builder.store(cgutils.true_bit, errorptr)
-                inst.add(native.value, do_resize=False)
+                inst.add_pyapi(c.pyapi, native.value, do_resize=False)
 
             if typ.reflected:
                 inst.parent = obj
