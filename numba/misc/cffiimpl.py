@@ -204,7 +204,16 @@ def from_buffer(context, builder, sig, args):
     )
     builder.call(
         memset,
-        [ptr, cgutils.int8_t(0), cgutils.int32_t(struct_size), cgutils.bool_t(0)],
+        # FIXME: the actually correct call is the following, change it when memset
+        # is fixed for LLVM 7
+        # [ptr, cgutils.int8_t(0), cgutils.int32_t(struct_size), cgutils.bool_t(0)],
+        [
+            ptr,
+            cgutils.int8_t(0),
+            cgutils.int32_t(struct_size),
+            cgutils.int32_t(0),
+            cgutils.bool_t(0),
+        ],
     )
     ret = builder.bitcast(ptr, retty)
     return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
