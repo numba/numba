@@ -285,17 +285,17 @@ ix_size(Py_ssize_t size) {
     return sizeof(int64_t);
 }
 
-/* Align size *sz* to pointer width */
+/* Align size *aligned_size* to pointer width */
 static Py_ssize_t
-align(Py_ssize_t sz) {
+align(Py_ssize_t aligned_size) {
     Py_ssize_t alignment = sizeof(void*);
-    return sz + (alignment - sz % alignment) % alignment;
+    return aligned_size + (alignment - aligned_size % alignment) % alignment;
 }
 
-/* Align pointer *ptr* to pointer size */
+/* Align pointer *aligned_ptr* to pointer size */
 static void*
-palign(void *ptr) {
-    return (void*)align((size_t)ptr);
+palign(void *aligned_ptr) {
+    return (void*)align((size_t)aligned_ptr);
 }
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
