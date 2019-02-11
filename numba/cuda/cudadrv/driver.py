@@ -1832,12 +1832,7 @@ def host_to_device(dst, src, size, stream=0):
     else:
         fn = driver.cuMemcpyHtoD
 
-    fn(
-        device_pointer(dst),
-        host_pointer(src, readonly=True),
-        size,
-        *varargs,
-    )
+    fn(device_pointer(dst), host_pointer(src, readonly=True), size, *varargs)
 
 
 def device_to_host(dst, src, size, stream=0):
