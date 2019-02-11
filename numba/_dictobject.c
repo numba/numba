@@ -830,7 +830,7 @@ numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
 {
     Py_ssize_t i, j;
     char *key_ptr, *val_ptr;
-    NB_DictEntry *ep;
+    NB_DictEntry *ep = NULL;
 
     if (d->used == 0) {
         return ERR_DICT_EMPTY;
@@ -957,6 +957,11 @@ numba_test_dict(void) {
     int status;
     Py_ssize_t ix;
     Py_ssize_t usable;
+    Py_ssize_t it_count;
+    const char *it_key, *it_val;
+    NB_DictIter iter;
+
+    STACK_ALLOC(char, got_key, 4);
     STACK_ALLOC(char, got_value, 8);
     puts("test_dict");
 
@@ -1070,6 +1075,32 @@ numba_test_dict(void) {
     CHECK (ix >= 0);
     ix = numba_dict_lookup(d, "beh", 0xcafe, got_value);
     CHECK (ix >= 0);
+
+
+    // Test popitem
+    // They are always the last item
+    status = numba_dict_popitem(d, got_key, got_value);
+    CHECK(status == OK);
+    CHECK(memcmp("bek", got_key, d->keys->key_size) == 0);
+    CHECK(memcmp("0_0_0_3", got_value, d->keys->val_size) == 0);
+
+    status = numba_dict_popitem(d, got_key, got_value);
+    CHECK(status == OK);
+    CHECK(memcmp("bej", got_key, d->keys->key_size) == 0);
+    CHECK(memcmp("0_0_0_2", got_value, d->keys->val_size) == 0);
+
+    // Test iterator
+    CHECK( d->used > 0 );
+    numba_dict_iter(&iter, d);
+    it_count = 0;
+    while ( (status = numba_dict_iter_next(&iter, &it_key, &it_val)) == OK) {
+        it_count += 1;  // valid items
+        CHECK(it_key != NULL);
+        CHECK(it_val != NULL);
+    }
+
+    CHECK(status == ERR_ITER_EXHAUSTED);
+    CHECK(d->used == it_count);
 
     numba_dict_free(d);
     return 0;

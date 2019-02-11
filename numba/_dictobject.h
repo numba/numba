@@ -101,7 +101,8 @@ Parameters
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldval_bytes);
 
-/* Resize the dict */
+/* Resize the dict to at least *minsize*.
+*/
 NUMBA_EXPORT_FUNC(int)
 numba_dict_resize(NB_Dict *d, Py_ssize_t minsize);
 
