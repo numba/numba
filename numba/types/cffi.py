@@ -4,7 +4,7 @@ Types associated with cffi support
 import re
 from types import BuiltinFunctionType
 
-from numba.typing.cffi_utils import *
+from numba.typing.cffi_utils import get_func_pointer, get_struct_pointer
 from numba.typeconv import Conversion
 from numba import types
 
@@ -22,7 +22,7 @@ class CFFILibraryType(types.Opaque):
         return func_name in self._func_names
 
     def get_func_pointer(self, func_name):
-        if not func_name in self._func_names:
+        if func_name not in self._func_names:
             raise AttributeError(
                 "Function {} is not present in the library {}".format(
                     func_name, self._lib_name

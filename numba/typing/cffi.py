@@ -5,27 +5,22 @@ obtaining the pointer and numba signature.
 """
 from __future__ import print_function, division, absolute_import
 
-from types import BuiltinFunctionType
-import ctypes
-import re
-from functools import partial
-import numpy as np
 import operator
 
 from llvmlite import ir
 
 from numba import types
-from numba import numpy_support
 from numba import cgutils
-from numba import typing
 from numba.errors import TypingError
-from numba.targets import imputils
-from numba.datamodel import models, register_default
-from numba.datamodel import default_manager, models
-from numba.typeconv import Conversion
+from numba.datamodel import models, register_default, default_manager
 from numba.pythonapi import box, unbox, NativeValue
 from . import templates
-from .cffi_utils import *
+from .cffi_utils import (
+    cffi_type_map,
+    make_function_type,
+    struct_from_ptr,
+    cffi_types_cache,
+)
 
 
 class FFI_new(types.BoundFunction):
@@ -218,7 +213,6 @@ class PtrCMPTemplate(templates.AbstractTemplate):
             return templates.signature(types.bool_, ptr1, ptr2)
 
 
-
 @box(types.CFFIPointer)
 def struct_instance_box(typ, val, c):
     ser = c.pyapi.serialize_object(struct_from_ptr)
@@ -247,6 +241,7 @@ cffi_cdata_type = ir.LiteralStructType(
         cgutils.voidptr_t,  # PyObject *c_weakreflist;
     ]
 )
+
 
 @unbox(types.CFFIPointer)
 def struct_instance_ptr_unbox(typ, val, c):
