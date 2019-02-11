@@ -1226,6 +1226,10 @@ are automatically registered with numba. The access for attributes through both
 instances as well as pointer to instances is possible using the ``inst.attr``
 notation.
 
+You can convert a CFFI type to a numba type using:
+
+.. function:: numba.cffi_support.map_type(ffi.typeof("CFFIType"))
+
 In numba context new object can be created using ``ffi.new('type')`` with type
 being a pointer or array type. Numba function can receive and return ffi objects
 which are converted to the ``cffi`` objects in python context.

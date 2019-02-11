@@ -2,6 +2,24 @@
 Utility function and type cache for cffi support
 """
 
+
+_ool_func_ptr = {}
+_ool_libraries = set()
+_ool_func_types = {}
+_ool_struct_types = {}
+
+_ffi_instances = set()
+
+try:
+    import cffi
+
+    ffi = cffi.FFI()
+except ImportError:
+    ffi = None
+
+SUPPORTED = ffi is not None
+
+
 from functools import partial
 from types import BuiltinFunctionType
 import numpy as np
@@ -83,23 +101,6 @@ def cffi_type_map():
             ffi.typeof("void"): types.void,
         }
     return _cached_type_map
-
-
-_ool_func_ptr = {}
-_ool_libraries = set()
-_ool_func_types = {}
-_ool_struct_types = {}
-
-_ffi_instances = set()
-
-try:
-    import cffi
-
-    ffi = cffi.FFI()
-except ImportError:
-    ffi = None
-
-SUPPORTED = ffi is not None
 
 
 def is_ffi_lib(lib):

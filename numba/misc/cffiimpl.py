@@ -11,12 +11,18 @@ from numba.core.imputils import Registry
 from numba import types
 from numba.core import imputils
 from numba import cgutils
-from numba.core.typing.cffi_utils import make_function_type
+from numba.core.typing.cffi_utils import (
+    make_function_type,
+    get_func_pointer,
+    get_struct_pointer,
+)
 from numba.misc import arrayobj
+
 
 registry = Registry()
 
-@registry.lower('ffi.from_buffer', types.Buffer)
+
+@registry.lower("ffi.from_buffer", types.Buffer)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1
     assert len(args) == 1
@@ -28,7 +34,8 @@ def from_buffer(context, builder, sig, args):
     ary = arrayobj.make_array(fromty)(context, builder, val)
     return ary.data
 
-@imputils.lower_getattr_generic(types.CFFIStructInstanceType)
+
+@registry.lower_getattr_generic(types.CFFIStructInstanceType)
 def field_impl(context, builder, typ, value, attr):
     """
     Generic getattr for cffi.CFFIStructInstanceType
@@ -39,8 +46,7 @@ def field_impl(context, builder, typ, value, attr):
         return imputils.impl_ret_borrowed(context, builder, typ.struct[attr], data)
 
 
-
-@imputils.lower_getattr_generic(types.CFFIPointer)
+@registry.lower_getattr_generic(types.CFFIPointer)
 def pointer_field_impl(context, builder, typ, value, attr):
     """
     Generic getattr for cffi.CFFIStructInstanceType pointer
@@ -54,7 +60,7 @@ def pointer_field_impl(context, builder, typ, value, attr):
         )
 
 
-@imputils.lower_getattr_generic(types.CFFIStructRefType)
+@registry.lower_getattr_generic(types.CFFIStructRefType)
 def ref_field_impl(context, builder, typ, value, attr):
     """
     Generic getattr for cffi ref type
@@ -68,13 +74,13 @@ def ref_field_impl(context, builder, typ, value, attr):
         )
 
 
-@imputils.lower_builtin(len, types.CFFIArrayType)
+@registry.lower(len, types.CFFIArrayType)
 def len_cffiarray(context, builder, sig, args):
     res = cgutils.intp_t(sig.args[0].length)
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@imputils.lower_builtin("getiter", types.CFFIArrayType)
+@registry.lower("getiter", types.CFFIArrayType)
 def getiter_cffiarray(context, builder, sig, args):
     iterobj = context.make_helper(builder, sig.return_type)
 
@@ -92,7 +98,7 @@ def getiter_cffiarray(context, builder, sig, args):
     return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@imputils.lower_builtin("iternext", types.CFFIIteratorType)
+@registry.lower("iternext", types.CFFIIteratorType)
 @imputils.iternext_impl
 def iternext_cffiarray(context, builder, sig, args, result):
     iterty = sig.args[0]
@@ -112,14 +118,14 @@ def iternext_cffiarray(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
-@imputils.lower_builtin(operator.getitem, types.CFFIPointer, types.Integer)
+@registry.lower(operator.getitem, types.CFFIPointer, types.Integer)
 def getitem_cffipointer(context, builder, sig, args):
     base_ptr, idx = args
     res = builder.gep(base_ptr, [idx])
     return imputils.impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@imputils.lower_setattr_generic(types.CFFIStructInstanceType)
+@registry.lower_setattr_generic(types.CFFIStructInstanceType)
 def set_struct_field_impl(context, builder, sig, args, attr):
     """
     Generic setattr for cffi.CFFIStructInstanceType pointer
@@ -129,7 +135,7 @@ def set_struct_field_impl(context, builder, sig, args, attr):
     )
 
 
-@imputils.lower_setattr_generic(types.CFFIPointer)
+@registry.lower_setattr_generic(types.CFFIPointer)
 def set_pointer_field_impl(context, builder, sig, args, attr):
     """
     Generic setattr for cffi CFFIStructInstanceType pointer
@@ -144,22 +150,22 @@ def set_pointer_field_impl(context, builder, sig, args, attr):
         raise ValueError("Cannot setattr {} on {}".format(attr, sig))
 
 
-@imputils.lower_constant(types.CFFIPointer)
+@registry.lower_constant(types.CFFIPointer)
 def lower_const_cffi_pointer(context, builder, ty, pyval):
     ptrty = context.get_value_type(ty)
-    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval), info=str(pyval))
+    ptrval = context.add_dynamic_addr(
+        builder, get_struct_pointer(pyval), info=str(pyval)
+    )
     return builder.bitcast(ptrval, ptrty)
 
 
-@imputils.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
+@registry.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
 def cast_ref_to_struct(context, builder, fromty, toty, val):
     res = builder.load(val)
     return imputils.impl_ret_borrowed(context, builder, toty, res)
 
 
-
-
-@imputils.lower_getattr_generic(types.CFFILibraryType)
+@registry.lower_getattr_generic(types.CFFILibraryType)
 def lower_get_func(context, builder, typ, value, attr):
     pyapi = context.get_python_api(builder)
     if not typ.has_func(attr):
@@ -170,17 +176,19 @@ def lower_get_func(context, builder, typ, value, attr):
     ret = cgutils.alloca_once_value(builder, ir.Constant(ptrty, None), name="fnptr")
     # function address is constant and can't be overwritten from python
     # so we cache it
-    func_addr = cgutils.intp_t(typ.get_func_pointer(attr))
+    if not typ.has_func(attr):
+        raise AttributeError("Function {} is not present in the library".format(attr))
+    func_addr = cgutils.intp_t(get_func_pointer(attr))
     builder.store(builder.inttoptr(func_addr, ptrty), ret)
     return builder.load(ret)
 
 
-@imputils.lower_getattr(types.FFIType, "NULL")
+@registry.lower_getattr(types.FFIType, "NULL")
 def lower_ffi_null(context, builder, sig, args):
     return context.get_constant_null(types.CFFINullPtrType())
 
 
-@imputils.lower_builtin("ffi.new", types.Literal)
+@registry.lower("ffi.new", types.Literal)
 def from_buffer(context, builder, sig, args):
     retty = context.get_value_type(sig.return_type)
     struct_size = context.get_abi_sizeof(retty.pointee)
@@ -202,7 +210,7 @@ def from_buffer(context, builder, sig, args):
     return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
 
 
-@imputils.lower_builtin(operator.ne, types.CFFINullPtrType, types.CPointer)
+@registry.lower(operator.ne, types.CFFINullPtrType, types.CPointer)
 def lower_null_ptr_ne_pos1(context, builder, sig, args):
     to_compare = args[1]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
@@ -210,7 +218,7 @@ def lower_null_ptr_ne_pos1(context, builder, sig, args):
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@imputils.lower_builtin(operator.ne, types.CPointer, types.CFFINullPtrType)
+@registry.lower(operator.ne, types.CPointer, types.CFFINullPtrType)
 def lower_null_ptr_ne_pos2(context, builder, sig, args):
     to_compare = args[0]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
@@ -218,7 +226,7 @@ def lower_null_ptr_ne_pos2(context, builder, sig, args):
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@imputils.lower_builtin(operator.eq, types.CFFINullPtrType, types.CPointer)
+@registry.lower(operator.eq, types.CFFINullPtrType, types.CPointer)
 def lower_null_ptr_eq_pos1(context, builder, sig, args):
     to_compare = args[1]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
@@ -226,11 +234,10 @@ def lower_null_ptr_eq_pos1(context, builder, sig, args):
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@imputils.lower_builtin(operator.eq, types.CPointer, types.CFFINullPtrType)
+@registry.lower(operator.eq, types.CPointer, types.CFFINullPtrType)
 def lower_null_ptr_eq_pos2(context, builder, sig, args):
     to_compare = args[0]
     int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
     res = builder.icmp_unsigned("==", int_ptr, cgutils.intp_t(0))
     return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
-
 

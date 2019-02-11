@@ -188,6 +188,9 @@ class TestCFFI(TestCase):
         x = 1.123
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 
+
+@unittest.skipUnless(cffi_support.SUPPORTED,
+                     "CFFI not supported -- please install the cffi module")
 class TestCFFILinkedList(TestCase):
     def setUp(self):
         ffi_mod = mod.load_ool_linkedlist()

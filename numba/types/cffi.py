@@ -4,12 +4,14 @@ Types associated with cffi support
 import re
 from types import BuiltinFunctionType
 
-from numba.typing.cffi_utils import get_func_pointer, get_struct_pointer
 from numba.typeconv import Conversion
-from numba import types
+from .abstract import Type
+from .containers import Sequence, BaseContainerIterator
+from .misc import Opaque, NoneType, CPointer, voidptr
 
 
-class CFFILibraryType(types.Opaque):
+
+class CFFILibraryType(Opaque):
     def __init__(self, lib):
         self._func_names = set(
             f for f in dir(lib) if isinstance(getattr(lib, f), BuiltinFunctionType)
@@ -21,17 +23,8 @@ class CFFILibraryType(types.Opaque):
     def has_func(self, func_name):
         return func_name in self._func_names
 
-    def get_func_pointer(self, func_name):
-        if func_name not in self._func_names:
-            raise AttributeError(
-                "Function {} is not present in the library {}".format(
-                    func_name, self._lib_name
-                )
-            )
-        return get_func_pointer(func_name)
 
-
-class FFIType(types.Opaque):
+class FFIType(Opaque):
     def __init__(self, ffi):
         self.ffi = ffi
         name = "FFI#{}".format(hex(id(ffi)))
@@ -41,7 +34,7 @@ class FFIType(types.Opaque):
         return [], True
 
 
-class CFFIStructInstanceType(types.Type):
+class CFFIStructInstanceType(Type):
     def __init__(self, cffi_type):
         self.cffi_type = cffi_type
         name = "<instance> (" + self.cffi_type.cname + ")"
@@ -49,15 +42,15 @@ class CFFIStructInstanceType(types.Type):
         super(CFFIStructInstanceType, self).__init__(name)
 
     def can_convert_to(self, typingctx, other):
-        if other == types.voidptr:
+        if other == voidptr:
             return Conversion.safe
 
     def can_convert_from(self, typeingctx, other):
-        if other == types.voidptr:
+        if other == voidptr:
             return Conversion.safe
 
 
-class CFFIPointer(types.CPointer):
+class CFFIPointer(CPointer):
     def __init__(self, dtype, owning=False):
         super(CFFIPointer, self).__init__(dtype)
         self.owning = owning
@@ -68,28 +61,24 @@ class CFFIPointer(types.CPointer):
     def key(self):
         return (self.dtype, self.owning)
 
-    @staticmethod
-    def get_pointer(struct_ptr):
-        return get_struct_pointer(struct_ptr)
-
     def __repr__(self):
         return self.name
 
 
-class CFFINullPtrType(types.CPointer):
+class CFFINullPtrType(CPointer):
     def __init__(self):
-        super(CFFINullPtrType, self).__init__(types.void)
+        super(CFFINullPtrType, self).__init__(NoneType('nullptr'))
 
     def can_convert_from(self, typeingctx, other):
-        if isinstance(other, types.CFFIPointer):
+        if isinstance(other, CFFIPointer):
             return Conversion.safe
 
     def can_convert_to(self, typeingctx, other):
-        if isinstance(other, types.CFFIPointer):
+        if isinstance(other, CFFIPointer):
             return Conversion.safe
 
 
-class CFFIArrayType(CFFIPointer, types.Sequence):
+class CFFIArrayType(CFFIPointer, Sequence):
     def __init__(self, dtype, length, owning=False):
         super(CFFIArrayType, self).__init__(dtype, owning)
         owning_str = "(Owning)" if self.owning else ""
@@ -105,7 +94,7 @@ class CFFIArrayType(CFFIPointer, types.Sequence):
         return CFFIStructRefType(self)
 
 
-class CFFIIteratorType(types.BaseContainerIterator):
+class CFFIIteratorType(BaseContainerIterator):
     container_class = CFFIArrayType
 
     def __init__(self, container):
@@ -113,7 +102,7 @@ class CFFIIteratorType(types.BaseContainerIterator):
         self.container = container
         yield_type = container.yield_type
         name = "iter(%s)" % container
-        super(types.BaseContainerIterator, self).__init__(name, yield_type)
+        super(BaseContainerIterator, self).__init__(name, yield_type)
 
     def unify(self, typingctx, other):
         cls = type(self)

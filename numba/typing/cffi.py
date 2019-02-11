@@ -92,7 +92,7 @@ class CFFIPointerModel(models.PointerModel):
         return builder.store(value, ptr)
 
 
-@register_default(types.types.CFFINullPtrType)
+@register_default(types.CFFINullPtrType)
 class CFFINullPtrModel(models.PointerModel):
     pass
 
