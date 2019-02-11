@@ -199,22 +199,8 @@ def from_buffer(context, builder, sig, args):
 
     # ffi.new allocates zero initialized memory, we do it too
     ptr = context.nrt.allocate(builder, cgutils.intp_t(struct_size))
-    memset = builder.module.declare_intrinsic(
-        "llvm.memset", [cgutils.int8_t.as_pointer(), cgutils.int32_t]
-    )
-    builder.call(
-        memset,
-        # FIXME: the actually correct call is the following, change it when memset
-        # is fixed for LLVM 7
-        # [ptr, cgutils.int8_t(0), cgutils.int32_t(struct_size), cgutils.bool_t(0)],
-        [
-            ptr,
-            cgutils.int8_t(0),
-            cgutils.int32_t(struct_size),
-            cgutils.int32_t(0),
-            cgutils.bool_t(0),
-        ],
-    )
+    cgutils.memset(builder, ptr, cgutils.intp_t(struct_size), 0)
+
     ret = builder.bitcast(ptr, retty)
     return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
 
