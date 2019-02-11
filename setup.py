@@ -129,7 +129,8 @@ def get_ext_modules():
                                        "numba/_lapack.c",
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
-                                       "numba/mathnames.inc"],
+                                       "numba/_dictobject.c",
+                                       "numba/mathnames.inc",],
                               **np_compile_args)
 
     ext_typeconv = Extension(name="numba.typeconv._typeconv",
