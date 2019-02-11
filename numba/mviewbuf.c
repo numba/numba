@@ -75,13 +75,16 @@ memoryview_get_buffer(PyObject *self, PyObject *args){
         } else { /* old buffer api */
             PyErr_Clear();
             if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) {
-            if (!force)
-                return NULL;
-
-            ptr = (void*) roptr;
+                if (!force)
+                    return NULL;
+                /* Force writeable by getting a read-only buffer */
+                PyErr_Clear();
+                if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
+                    return NULL;
+                ptr = (void*) roptr;
             }
             ret = PyLong_FromVoidPtr(ptr);
-    }
+        }
     }
     return ret;
 }
