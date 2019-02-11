@@ -16,7 +16,7 @@ from .iterators import *
 from .misc import *
 from .npytypes import *
 from .scalars import *
-from .cffi import *
+from .cffitypes import *
 
 
 
