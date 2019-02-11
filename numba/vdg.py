@@ -60,9 +60,7 @@ class VarDependencyGraph(object):
             usepoints=usepoints,
             depmap=depmap,
         )
-        vdg.show_graph()
-
-        pprint(vdg.find_self_dependents())
+        return vdg
 
     def __init__(self, defpoints, usepoints, depmap):
         self._defpoints = defpoints
@@ -108,12 +106,45 @@ class VarDependencyGraph(object):
     def get_uses(self, var):
         """Returns a set of the use points of the *var*.
         """
+        var = self._norm_var(var)
         return self._usepoints[var]
 
     def get_definitions(self, var):
         """Returns a set of the defining points of the *var*.
         """
+        var = self._norm_var(var)
         return self._defpoints[var]
+
+    def get_uses_no_alias(self, var):
+        """Returns a set of the use points of the *var*.
+        """
+        uses = self.get_uses(var)
+        progress = True
+        while progress:
+            new = set()
+            progress = False
+            for u in uses:
+                if isinstance(u.value, ir.Var):
+                    new |= self.get_uses(u.target)
+                else:
+                    new.add(u)
+            defs = new
+        return defs
+
+    def get_defs_no_alias(self, var):
+        defs = self.get_definitions(var)
+        progress = True
+        while progress:
+            new = set()
+            progress = False
+            for d in defs:
+                if isinstance(d.value, ir.Var):
+                    new |= self.get_definitions(d.value)
+                    progress = True
+                else:
+                    new.add(d)
+            defs = new
+        return defs
 
     def get_predecessors(self, var):
         """Returns a set of predecessors of `var` in the dependency graph.
