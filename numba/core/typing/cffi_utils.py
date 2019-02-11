@@ -4,6 +4,7 @@ Utility function and type cache for cffi support
 
 from functools import partial
 from types import BuiltinFunctionType
+import numpy as np
 
 from numba import numpy_support
 from numba import types
@@ -250,7 +251,7 @@ def get_struct_type(cffi_struct):
 _free_ffi = None
 
 
-def get_free_ffi():
+def get_ffi_free():
     """We use it to resolve circular dependecies"""
     global _free_ffi
     if _free_ffi is None:
@@ -284,7 +285,7 @@ def struct_from_ptr(hash_, intptr, owned, length=None):
             cffi_types_cache.get_type_by_hash(hash_).get_struct_t(length), intptr
         )
     if owned:
-        ret = ffi.gc(ret, get_free_ffi())
+        ret = ffi.gc(ret, get_ffi_free())
     return ret
 
 

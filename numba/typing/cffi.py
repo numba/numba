@@ -10,8 +10,9 @@ import ctypes
 import re
 from functools import partial
 import numpy as np
-import llvmlite.ir as ir
 import operator
+
+from llvmlite import ir
 
 from numba import types
 from numba import numpy_support
@@ -64,6 +65,7 @@ class FFI_new(types.BoundFunction):
 default_manager.register(FFI_new, models.handle_bound_function)
 
 
+@register_default(types.CFFIStructInstanceType)
 class CFFIStructInstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         members = []
@@ -81,6 +83,9 @@ class CFFIStructInstanceModel(models.StructModel):
         return builder.extract_value(target, pos)
 
 
+@register_default(types.CFFIPointer)
+@register_default(types.CFFIArrayType)
+@register_default(types.CFFIStructRefType)
 class CFFIPointerModel(models.PointerModel):
     def get_field(self, builder, target, field):
         pos = self._pointee_model.get_field_pos(field)
@@ -92,68 +97,23 @@ class CFFIPointerModel(models.PointerModel):
         return builder.store(value, ptr)
 
 
-class CFFIArrayModel(models.PointerModel):
-    def get_item(self, builder, target, index):
-        pass
-
-    def set_item(self, builder, target, index):
-        pass
+@register_default(types.types.CFFINullPtrType)
+class CFFINullPtrModel(models.PointerModel):
+    pass
 
 
-def _mangle_attr(name):
-    """
-    Mangle attributes.
-    The resulting name does not startswith an underscore '_'.
-    """
-    return "m_" + name
-
-
-default_manager.register(types.CFFIStructInstanceType, CFFIStructInstanceModel)
-default_manager.register(types.CFFIPointer, CFFIPointerModel)
-default_manager.register(types.CFFIArrayType, CFFIPointerModel)
-default_manager.register(types.CFFIStructRefType, CFFIPointerModel)
+@register_default(types.CFFIIteratorType)
+class CFFIIteratorModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        # We use an unsigned index to avoid the cost of negative index tests.
+        members = [
+            ("index", types.EphemeralPointer(types.uintp)),
+            ("array", fe_type.container),
+        ]
+        super(CFFIIteratorModel, self).__init__(dmm, fe_type, members)
 
 
 registry = templates.Registry()
-
-
-@imputils.lower_getattr_generic(types.CFFIStructInstanceType)
-def field_impl(context, builder, typ, value, attr):
-    """
-    Generic getattr for cffi.CFFIStructInstanceType
-    """
-    if attr in typ.struct:
-        ddm = context.data_model_manager[typ]
-        data = ddm.get_field(builder, value, attr)
-        return imputils.impl_ret_borrowed(context, builder, typ.struct[attr], data)
-
-
-@imputils.lower_getattr_generic(types.CFFIPointer)
-def pointer_field_impl(context, builder, typ, value, attr):
-    """
-    Generic getattr for cffi.CFFIStructInstanceType pointer
-    """
-    pointee = typ.dtype
-    if attr in pointee.struct:
-        ddm = context.data_model_manager[typ]
-        ret = ddm.get_field(builder, value, attr)
-        return imputils.impl_ret_borrowed(
-            context, builder, typ.dtype.struct[attr], builder.load(ret)
-        )
-
-
-@imputils.lower_getattr_generic(types.CFFIStructRefType)
-def ref_field_impl(context, builder, typ, value, attr):
-    """
-    Generic getattr for cffi ref type
-    """
-    pointee = typ.dtype
-    if attr in pointee.struct:
-        ddm = context.data_model_manager[typ]
-        ret = ddm.get_field(builder, value, attr)
-        return imputils.impl_ret_borrowed(
-            context, builder, typ.dtype.struct[attr], builder.load(ret)
-        )
 
 
 # getattr on a cffi pointer should return a pointer to the element
@@ -164,11 +124,7 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
         assert not kws
         ptr, idx = args
         if isinstance(ptr, types.CFFIPointer) and isinstance(idx, types.Integer):
-            return templates.signature(
-                types.CFFIStructRefType(ptr),
-                ptr,
-                idx,
-            )
+            return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
 
 
 @registry.register_global(len)
@@ -178,86 +134,6 @@ class CFFIArrayLength(templates.AbstractTemplate):
         ptr = args[0]
         if isinstance(ptr, types.CFFIArrayType):
             return templates.signature(types.int64, ptr)
-
-
-@imputils.lower_builtin(len, types.CFFIArrayType)
-def len_cffiarray(context, builder, sig, args):
-    res = cgutils.intp_t(sig.args[0].length)
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
-
-@imputils.lower_builtin('getiter', types.CFFIArrayType)
-def getiter_cffiarray(context, builder, sig, args):
-    iterobj = context.make_helper(builder, sig.return_type)
-
-    zero = context.get_constant(types.intp, 0)
-    indexptr = cgutils.alloca_once_value(builder, zero)
-
-    iterobj.index = indexptr
-    iterobj.array = args[0]
-
-    if context.enable_nrt:
-        context.nrt.incref(builder, sig.args[0], args[0])
-
-    res = iterobj._getvalue()
-
-    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@imputils.lower_builtin('iternext', types.CFFIIteratorType)
-@imputils.iternext_impl
-def iternext_cffiarray(context, builder, sig, args, result):
-    iterty = sig.args[0]
-    iter_ = args[0]
-    containerty = iterty.container
-
-    iterobj = context.make_helper(builder, iterty, value=iter_)
-    length = cgutils.intp_t(containerty.length)
-    index = builder.load(iterobj.index)
-    is_valid = builder.icmp_unsigned('<', index, length)
-    result.set_valid(is_valid)
-
-    with builder.if_then(is_valid):
-        value = builder.gep(iterobj.array, [index])
-        result.yield_(value)
-        nindex = cgutils.increment_index(builder, index)
-        builder.store(nindex, iterobj.index)
-
-@imputils.lower_builtin(operator.getitem, types.CFFIPointer, types.Integer)
-def getitem_cffipointer(context, builder, sig, args):
-    base_ptr, idx = args
-    res = builder.gep(base_ptr, [idx])
-    return imputils.impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-@imputils.lower_setattr_generic(types.CFFIStructInstanceType)
-def set_struct_field_impl(context, builder, sig, args, attr):
-    """
-    Generic setattr for cffi.CFFIStructInstanceType pointer
-    """
-    raise ValueError(
-        "setfield on a struct is not implemented. Use setfield on ptr or ref type"
-    )
-
-
-@imputils.lower_setattr_generic(types.CFFIPointer)
-def set_pointer_field_impl(context, builder, sig, args, attr):
-    """
-    Generic setattr for cffi CFFIStructInstanceType pointer
-    """
-    target, val = args
-    targetty, valty = sig.args
-    pointee = targetty.dtype
-    if attr in pointee.struct:
-        ddm = context.data_model_manager[targetty]
-        return ddm.set_field(builder, target, attr, val)
-    else:
-        raise ValueError("Cannot setattr {} on {}".format(attr, sig))
-
-
-@imputils.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
-def cast_ref_to_struct(context, builder, fromty, toty, val):
-    res = builder.load(val)
-    return imputils.impl_ret_borrowed(context, builder, toty, res)
 
 
 @registry.register_attr
@@ -279,55 +155,6 @@ class cffi_poitner_attr(templates.AttributeTemplate):
             return pointee.struct[attr]
 
 
-@imputils.lower_constant(types.CFFIPointer)
-def lower_const_cffi_pointer(context, builder, ty, pyval):
-    ptrty = context.get_value_type(ty)
-    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval), info=str(pyval))
-    return builder.bitcast(ptrval, ptrty)
-
-
-@box(types.CFFIPointer)
-def struct_instance_box(typ, val, c):
-    ser = c.pyapi.serialize_object(struct_from_ptr)
-    struct_from_ptr_runtime = c.pyapi.unserialize(ser)
-    pointee = typ.dtype
-
-    hash_ = cffi_types_cache.get_type_hash(pointee.cffi_type)
-    hash_ = cgutils.intp_t(hash_)
-    hash_ = c.pyapi.long_from_longlong(hash_)
-    cast_val = c.builder.ptrtoint(val, cgutils.intp_t)
-    struct_addr = c.pyapi.long_from_ssize_t(cast_val)
-    owning = c.pyapi.bool_from_bool(cgutils.bool_t(typ.owning))
-    args = [hash_, struct_addr, owning]
-    if isinstance(typ, types.CFFIArrayType):
-        args.append(c.pyapi.long_from_ssize_t(cgutils.intp_t(typ.length)))
-    return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
-
-
-# this is the layout ob the CFFI's CDataObject
-# see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216
-cffi_cdata_type = ir.LiteralStructType(
-    [
-        ir.ArrayType(cgutils.int8_t, 16),  # 16-byte PyObject_HEAD
-        cgutils.voidptr_t,  # CTypeDescrObject* ctypes
-        cgutils.intp_t.as_pointer(),  # cdata
-        cgutils.voidptr_t,  # PyObject *c_weakreflist;
-    ]
-)
-
-
-@unbox(types.CFFIPointer)
-def struct_instance_ptr_unbox(typ, val, c):
-    # this is roughtly 10 times faster than going back to python and
-    # calling ffi.cast('uintptr_t')
-    ptrty = c.context.data_model_manager[typ].get_value_type()
-    ret = c.builder.alloca(ptrty)
-    cffi_data_ptr = c.builder.bitcast(val, cffi_cdata_type.as_pointer())
-    intptr = c.builder.extract_value(c.builder.load(cffi_data_ptr), 2)
-    c.builder.store(c.builder.bitcast(intptr, ptrty), ret)
-    return NativeValue(c.builder.load(ret))
-
-
 @registry.register_attr
 class CFFILibAttr(templates.AttributeTemplate):
     key = types.CFFILibraryType
@@ -335,55 +162,6 @@ class CFFILibAttr(templates.AttributeTemplate):
     def generic_resolve(self, instance, attr):
         if instance.has_func(attr):
             return make_function_type(attr)
-
-
-@imputils.lower_getattr_generic(types.CFFILibraryType)
-def lower_get_func(context, builder, typ, value, attr):
-    pyapi = context.get_python_api(builder)
-    if not typ.has_func(attr):
-        raise AttributeError("Function {} is not present in the library".format(attr))
-    func_typ = make_function_type(attr)
-    # Call get_func_pointer() on the object to get the raw pointer value
-    ptrty = context.get_function_pointer_type(func_typ)
-    ret = cgutils.alloca_once_value(builder, ir.Constant(ptrty, None), name="fnptr")
-    # function address is constant and can't be overwritten from python
-    # so we cache it
-    func_addr = cgutils.intp_t(typ.get_func_pointer(attr))
-    builder.store(builder.inttoptr(func_addr, ptrty), ret)
-    return builder.load(ret)
-
-
-class CFFINullPtrType(types.CPointer):
-    def __init__(self):
-        super(CFFINullPtrType, self).__init__(types.void)
-
-    def can_convert_from(self, typeingctx, other):
-        if isinstance(other, types.CFFIPointer):
-            return Conversion.safe
-
-    def can_convert_to(self, typeingctx, other):
-        if isinstance(other, types.CFFIPointer):
-            return Conversion.safe
-
-
-@register_default(CFFINullPtrType)
-class CFFINullPtrModel(models.PointerModel):
-    pass
-
-
-@register_default(types.CFFIIteratorType)
-class CFFIIteratorModel(models.StructModel):
-    def __init__(self, dmm, fe_type):
-        # We use an unsigned index to avoid the cost of negative index tests.
-        members = [('index', types.EphemeralPointer(types.uintp)),
-                   ('array', fe_type.container)]
-        super(CFFIIteratorModel, self).__init__(dmm, fe_type, members)
-
-
-
-@imputils.lower_getattr(types.FFIType, "NULL")
-def lower_ffi_null(context, builder, sig, args):
-    return context.get_constant_null(CFFINullPtrType())
 
 
 @registry.register
@@ -417,28 +195,6 @@ class FFI_new_direct(templates.AbstractTemplate):
         raise ValueError("Please call new through the ffi object (ffi.new)")
 
 
-@imputils.lower_builtin("ffi.new", types.Literal)
-def from_buffer(context, builder, sig, args):
-    retty = context.get_value_type(sig.return_type)
-    struct_size = context.get_abi_sizeof(retty.pointee)
-
-    # if it's an array, adjust size accordingly
-    if isinstance(sig.return_type, types.CFFIArrayType):
-        struct_size *= sig.return_type.length
-
-    # ffi.new allocates zero initialized memory, we do it too
-    ptr = context.nrt.allocate(builder, cgutils.intp_t(struct_size))
-    memset = builder.module.declare_intrinsic(
-        "llvm.memset", [cgutils.int8_t.as_pointer(), cgutils.int32_t]
-    )
-    builder.call(
-        memset,
-        [ptr, cgutils.int8_t(0), cgutils.int32_t(struct_size), cgutils.bool_t(0)],
-    )
-    ret = builder.bitcast(ptr, retty)
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
-
-
 @registry.register_attr
 class FFIAttribute(templates.AttributeTemplate):
     key = types.FFIType
@@ -447,7 +203,7 @@ class FFIAttribute(templates.AttributeTemplate):
         return types.BoundFunction(FFI_from_buffer, ffi)
 
     def resolve_NULL(self, ffi):
-        return CFFINullPtrType()
+        return types.CFFINullPtrType()
 
     def resolve_new(self, ffi):
         return FFI_new(ffi)
@@ -462,34 +218,43 @@ class PtrCMPTemplate(templates.AbstractTemplate):
             return templates.signature(types.bool_, ptr1, ptr2)
 
 
-@imputils.lower_builtin(operator.ne, CFFINullPtrType, types.CPointer)
-def lower_null_ptr_ne_pos1(context, builder, sig, args):
-    to_compare = args[1]
-    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
-    res = builder.icmp_unsigned("!=", int_ptr, cgutils.intp_t(0))
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+
+@box(types.CFFIPointer)
+def struct_instance_box(typ, val, c):
+    ser = c.pyapi.serialize_object(struct_from_ptr)
+    struct_from_ptr_runtime = c.pyapi.unserialize(ser)
+    pointee = typ.dtype
+
+    hash_ = cffi_types_cache.get_type_hash(pointee.cffi_type)
+    hash_ = cgutils.intp_t(hash_)
+    hash_ = c.pyapi.long_from_longlong(hash_)
+    cast_val = c.builder.ptrtoint(val, cgutils.intp_t)
+    struct_addr = c.pyapi.long_from_ssize_t(cast_val)
+    owning = c.pyapi.bool_from_bool(cgutils.bool_t(typ.owning))
+    args = [hash_, struct_addr, owning]
+    if isinstance(typ, types.CFFIArrayType):
+        args.append(c.pyapi.long_from_ssize_t(cgutils.intp_t(typ.length)))
+    return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
 
 
-@imputils.lower_builtin(operator.ne, types.CPointer, CFFINullPtrType)
-def lower_null_ptr_ne_pos2(context, builder, sig, args):
-    to_compare = args[0]
-    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
-    res = builder.icmp_unsigned("!=", int_ptr, cgutils.intp_t(0))
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
+# this is the layout ob the CFFI's CDataObject
+# see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216
+cffi_cdata_type = ir.LiteralStructType(
+    [
+        ir.ArrayType(cgutils.int8_t, 16),  # 16-byte PyObject_HEAD
+        cgutils.voidptr_t,  # CTypeDescrObject* ctypes
+        cgutils.intp_t.as_pointer(),  # cdata
+        cgutils.voidptr_t,  # PyObject *c_weakreflist;
+    ]
+)
 
-
-@imputils.lower_builtin(operator.eq, CFFINullPtrType, types.CPointer)
-def lower_null_ptr_eq_pos1(context, builder, sig, args):
-    to_compare = args[1]
-    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
-    res = builder.icmp_unsigned("==", int_ptr, cgutils.intp_t(0))
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@imputils.lower_builtin(operator.eq, types.CPointer, CFFINullPtrType)
-def lower_null_ptr_eq_pos2(context, builder, sig, args):
-    to_compare = args[0]
-    int_ptr = builder.ptrtoint(to_compare, cgutils.intp_t)
-    res = builder.icmp_unsigned("==", int_ptr, cgutils.intp_t(0))
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, res)
-
+@unbox(types.CFFIPointer)
+def struct_instance_ptr_unbox(typ, val, c):
+    # this is roughtly 10 times faster than going back to python and
+    # calling ffi.cast('uintptr_t')
+    ptrty = c.context.data_model_manager[typ].get_value_type()
+    ret = c.builder.alloca(ptrty)
+    cffi_data_ptr = c.builder.bitcast(val, cffi_cdata_type.as_pointer())
+    intptr = c.builder.extract_value(c.builder.load(cffi_data_ptr), 2)
+    c.builder.store(c.builder.bitcast(intptr, ptrty), ret)
+    return NativeValue(c.builder.load(ret))

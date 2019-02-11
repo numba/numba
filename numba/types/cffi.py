@@ -61,7 +61,7 @@ class CFFIPointer(types.CPointer):
     def __init__(self, dtype, owning=False):
         super(CFFIPointer, self).__init__(dtype)
         self.owning = owning
-        owning_str = "(Owning)" if self.owning else ''
+        owning_str = "(Owning)" if self.owning else ""
         self.name = "<ffi>(" + self.name + "*)" + owning_str
 
     @property
@@ -75,12 +75,26 @@ class CFFIPointer(types.CPointer):
     def __repr__(self):
         return self.name
 
+
+class CFFINullPtrType(types.CPointer):
+    def __init__(self):
+        super(CFFINullPtrType, self).__init__(types.void)
+
+    def can_convert_from(self, typeingctx, other):
+        if isinstance(other, types.CFFIPointer):
+            return Conversion.safe
+
+    def can_convert_to(self, typeingctx, other):
+        if isinstance(other, types.CFFIPointer):
+            return Conversion.safe
+
+
 class CFFIArrayType(CFFIPointer, types.Sequence):
     def __init__(self, dtype, length, owning=False):
         super(CFFIArrayType, self).__init__(dtype, owning)
-        owning_str = "(Owning)" if self.owning else ''
+        owning_str = "(Owning)" if self.owning else ""
         self.length = length
-        self.name = '{}[{}]'.format(self.dtype.name, self.length) + owning_str
+        self.name = "{}[{}]".format(self.dtype.name, self.length) + owning_str
 
     @property
     def iterator_type(self):
@@ -98,7 +112,7 @@ class CFFIIteratorType(types.BaseContainerIterator):
         assert isinstance(container, self.container_class), container
         self.container = container
         yield_type = container.yield_type
-        name = 'iter(%s)' % container
+        name = "iter(%s)" % container
         super(types.BaseContainerIterator, self).__init__(name, yield_type)
 
     def unify(self, typingctx, other):
