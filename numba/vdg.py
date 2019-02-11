@@ -116,7 +116,7 @@ class VarDependencyGraph(object):
         return self._defpoints[var]
 
     def get_uses_no_alias(self, var):
-        """Returns a set of the use points of the *var*.
+        """Similar to `.get_uses()` but alias are traced and resolved.
         """
         uses = self.get_uses(var)
         progress = True
@@ -132,6 +132,8 @@ class VarDependencyGraph(object):
         return defs
 
     def get_defs_no_alias(self, var):
+        """Similar to `.get_definitions()` but alias are traced and resolved.
+        """
         defs = self.get_definitions(var)
         progress = True
         while progress:
