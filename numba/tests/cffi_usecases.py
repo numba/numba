@@ -139,6 +139,7 @@ def load_ool_linkedlist():
     void delete_list(Head* head);
     int32_t list_len(Head* head);
     int32_t list_sum(Head* head);
+    void list_map(Head* head, void* map_func);
     void list_append(Head* head, int32_t value);
 
     """
@@ -177,11 +178,20 @@ def load_ool_linkedlist():
     int32_t list_sum(Head* head) {
         Node* n = head->node;
         int32_t sum = 0;
-        do {
+        while (n != NULL) {
             sum += n->value;
             n = n->next;
-        } while (n != NULL);
+        }
         return sum;
+    }
+
+    void list_map(Head* head, void* map_func) {
+        void (*cast_map_func)(Node* node) = map_func;
+        Node* n = head->node;
+        while (n != NULL) {
+            (*cast_map_func)(n);
+            n = n->next;
+        }
     }
 
     void delete_list(Head* head) {

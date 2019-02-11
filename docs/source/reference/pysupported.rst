@@ -1221,6 +1221,18 @@ of their functions from within Numba-compiled functions:
 
    Register the cffi out-of-line module ``mod`` with Numba.
 
+After registration the C-struct types defined in the out-of-line module
+are automatically registered with numba. The access for attributes through both
+instances as well as pointer to instances is possible using the ``inst.attr``
+notation.
+
+In numba context new object can be created using ``ffi.new('type')`` with type
+being a pointer or array type. Numba function can receive and return ffi objects
+which are converted to the ``cffi`` objects in python context.
+
+The external function and ffi methods can be called using either ``lib.func_name``
+or ``func_name`` notation inside the numba functions.
+
 Inline cffi modules require no registration.
 
 .. _cffi: https://cffi.readthedocs.org/

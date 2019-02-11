@@ -2,8 +2,8 @@ import array
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, njit, cffi_support, types, errors
-from numba.core.compiler import compile_isolated, Flags 
+from numba import jit, njit, cfunc, cffi_support, types, errors
+from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
@@ -328,6 +328,20 @@ class TestCFFILinkedList(TestCase):
         nodes2 = create_and_set_array()
         self.assertEqual(sum(n.value for n in nodes2), sum(range(100)))
 
+    def test_callback(self):
+        n = 100
+        ffi = self.ffi
+        lib = self.lib
+        ll = self._create_linked_list(n)
+        node_t = cffi_support.map_type(ffi.typeof("Node*"))
+
+        @cfunc(types.void(node_t))
+        def double_node_value(node):
+            node.value = node.value * 2
+
+        lib.list_map(ll, double_node_value.cffi)
+
+        self.assertEqual(lib.list_sum(ll), 2 * sum(range(n)))
 
 if __name__ == '__main__':
     unittest.main()
