@@ -285,17 +285,17 @@ ix_size(Py_ssize_t size) {
     return sizeof(int64_t);
 }
 
-/* Align size *aligned_size* to pointer width */
+/* Align size *sz* to pointer width */
 static Py_ssize_t
-align(Py_ssize_t aligned_size) {
+aligned_size(Py_ssize_t sz) {
     Py_ssize_t alignment = sizeof(void*);
-    return aligned_size + (alignment - aligned_size % alignment) % alignment;
+    return sz + (alignment - sz % alignment) % alignment;
 }
 
-/* Align pointer *aligned_ptr* to pointer size */
+/* Align pointer *ptr* to pointer size */
 static void*
-palign(void *aligned_ptr) {
-    return (void*)align((size_t)aligned_ptr);
+aligned_pointer(void *ptr) {
+    return (void*)aligned_size((size_t)ptr);
 }
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
@@ -450,14 +450,14 @@ key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
 static char *
 entry_get_key(NB_DictKeys *dk, NB_DictEntry* entry) {
     char * out = entry->keyvalue;
-    assert (out == palign(out));
+    assert (out == aligned_pointer(out));
     return out;
 }
 
 static char *
 entry_get_val(NB_DictKeys *dk, NB_DictEntry* entry) {
-    char * out = entry_get_key(dk, entry) + align(dk->key_size);
-    assert (out == palign(out));
+    char * out = entry_get_key(dk, entry) + aligned_size(dk->key_size);
+    assert (out == aligned_pointer(out));
     return out;
 }
 
@@ -469,11 +469,11 @@ int
 numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
     Py_ssize_t usable = USABLE_FRACTION(size);
     Py_ssize_t index_size = ix_size(size);
-    Py_ssize_t entry_size = align(sizeof(NB_DictEntry) + align(key_size) + align(val_size));
-    Py_ssize_t entry_offset = align(index_size * size);
+    Py_ssize_t entry_size = aligned_size(sizeof(NB_DictEntry) + aligned_size(key_size) + aligned_size(val_size));
+    Py_ssize_t entry_offset = aligned_size(index_size * size);
     Py_ssize_t alloc_size = sizeof(NB_DictKeys) + entry_offset + entry_size * usable;
 
-    NB_DictKeys *dk = malloc(align(alloc_size));
+    NB_DictKeys *dk = malloc(aligned_size(alloc_size));
     if (!dk) return ERR_NO_MEMORY;
 
     assert ( size >= D_MINSIZE );
@@ -486,7 +486,7 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
     dk->entry_offset = entry_offset;
     dk->entry_size = entry_size;
 
-    assert (palign(dk->indices) == dk->indices );
+    assert (aligned_pointer(dk->indices) == dk->indices );
     /* Ensure hash is (-1) for empty entry */
     memset(dk->indices, 0xff, entry_offset + entry_size * usable);
 
@@ -971,7 +971,7 @@ numba_test_dict(void) {
     CHECK(d->keys->key_size == 4);
     CHECK(d->keys->val_size == 8);
     CHECK(ix_size(d->keys->size) == 1);
-    printf("align(index_size * size) = %d\n", (int)(align(ix_size(d->keys->size) * d->keys->size)));
+    printf("aligned_size(index_size * size) = %d\n", (int)(aligned_size(ix_size(d->keys->size) * d->keys->size)));
 
     printf("d %p\n", d);
     printf("d->usable = %u\n", (int)d->keys->usable);
