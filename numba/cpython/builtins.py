@@ -135,7 +135,6 @@ def any_to_deferred(context, builder, fromty, toty, val):
 @lower_cast(types.DeferredType, types.Boolean)
 @lower_cast(types.DeferredType, types.Optional)
 def deferred_to_any(context, builder, fromty, toty, val):
-    import ipdb; ipdb.set_trace()
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
     return context.cast(builder, val, fromty.get(), toty)
