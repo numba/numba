@@ -53,10 +53,8 @@ class GetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 return signature(seq.dtype, seq, idx)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemSequence(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         seq, idx, value = args
         if isinstance(seq, types.MutableSequence):

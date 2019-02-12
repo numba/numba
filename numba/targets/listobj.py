@@ -512,7 +512,7 @@ def getitem_list(context, builder, sig, args):
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@lower_builtin('setitem', types.List, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -547,7 +547,7 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
-@lower_builtin('setitem', types.List, types.SliceType, types.Any)
+@lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
