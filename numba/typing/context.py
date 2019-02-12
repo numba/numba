@@ -5,6 +5,7 @@ import types as pytypes
 import weakref
 import threading
 import contextlib
+import operator
 
 import numba
 from numba import types, errors
@@ -308,7 +309,11 @@ class BaseContext(object):
         assert isinstance(index, types.Type), index
         args = target, index, value
         kws = {}
-        return self.resolve_function_type("setitem", args, kws)
+        sig = self.resolve_function_type("setitem", args, kws)
+        if sig is None:
+            fnty = self.resolve_value_type(operator.setitem)
+            sig = fnty.get_call_type(self, (target, index, value), {})
+        return sig
 
     def resolve_delitem(self, target, index):
         args = target, index

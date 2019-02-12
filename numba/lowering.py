@@ -411,7 +411,13 @@ class Lower(BaseLower):
         valuety = self.typeof(value_var.name)
         indexty = self.typeof(index_var.name)
 
-        impl = self.context.get_function('setitem', signature)
+        try:
+            impl = self.context.get_function('setitem', signature)
+        except NotImplementedError:
+            op = operator.setitem
+            fnop = self.context.typing_context.resolve_value_type(op)
+            fnop.get_call_type(self.context.typing_context, signature.args, {})
+            impl = self.context.get_function(fnop, signature)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
