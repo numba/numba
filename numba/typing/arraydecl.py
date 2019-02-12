@@ -168,10 +168,8 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemBuffer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args

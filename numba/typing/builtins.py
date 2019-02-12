@@ -549,10 +549,8 @@ class GetItemCPointer(AbstractTemplate):
             return signature(ptr.dtype, ptr, normalize_1d_index(idx))
 
 
-@infer
+@infer_global(operator.setitem)
 class SetItemCPointer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ptr, idx, val = args
