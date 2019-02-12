@@ -405,7 +405,7 @@ typedef double (*myfunc)(big_struct*, size_t);
         myfunc = ffi.typeof('myfunc')
         sig = cffi_support.map_type(myfunc, use_record_dtype=True)
         self.assertIsInstance(sig, typing.Signature)
-        self.assertEqual(sig.args[0], types.CPointer(nbtype))
+        self.assertEqual(sig.args[0], types.CFFIPointer(nbtype))
         self.assertEqual(sig.args[1], types.uintp)
         self.assertEqual(sig.return_type, types.float64)
 
