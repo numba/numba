@@ -6,8 +6,8 @@ import numpy as np
 from .support import TestCase, override_config, captured_stdout
 import numba
 from numba import unittest_support as unittest
-from numba import jit, njit, types, ir, compiler
-from numba.ir_utils import guard, find_callname, find_const
+from numba import jit, njit, types
+from numba.ir_utils import guard, find_callname
 from numba.inline_closurecall import inline_closure_call
 from .test_parfors import skip_unsupported
 
@@ -123,34 +123,6 @@ class TestInlining(TestCase):
                                                                     test_impl)
         A = np.arange(10)
         self.assertEqual(test_impl(A), j_func(A))
-
-    @skip_unsupported
-    def test_inline_update_target_def(self):
-
-        def test_impl(a):
-            if a == 1:
-                b = 2
-            else:
-                b = 3
-            return b
-
-        func_ir = compiler.run_frontend(test_impl)
-        blocks = list(func_ir.blocks.values())
-        for block in blocks:
-            for i, stmt in enumerate(block.body):
-                # match b = 2 and replace with lambda: 2
-                if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var)
-                        and guard(find_const, func_ir, stmt.value) == 2):
-                    # replace expr with a dummy call
-                    func_ir._definitions[stmt.target.name].remove(stmt.value)
-                    stmt.value = ir.Expr.call(None, (), (), stmt.loc)
-                    func_ir._definitions[stmt.target.name].append(stmt.value)
-                    #func = g.py_func#
-                    inline_closure_call(func_ir, {}, block, i, lambda: 2)
-                    break
-
-        self.assertEqual(len(func_ir._definitions['b']), 2)
-
 
 if __name__ == '__main__':
     unittest.main()
