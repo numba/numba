@@ -219,3 +219,7 @@ def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
+
+@typeof_impl.register(types.NumberClass)
+def typeof_number_class(val, c):
+    return val

@@ -222,7 +222,7 @@ class TestDictImpl(TestCase):
         # numba_dict_length(NB_Dict *d)
         self.numba_dict_length = wrap(
             'dict_length',
-            ctypes.c_int,
+            ctypes.c_ssize_t,
             [dict_t],
         )
         # numba_dict_insert_ez(

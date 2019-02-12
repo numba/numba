@@ -439,3 +439,17 @@ class SetEntry(Type):
     @property
     def key(self):
         return self.set_type
+
+
+class DictType(Type):
+    """Dictionary type
+    """
+    def __init__(self, keyty, valty):
+        self.key_type = keyty
+        self.value_type = valty
+        name = '{}[{},{}]'.format(
+            self.__class__.__name__,
+            keyty,
+            valty,
+        )
+        super(DictType, self).__init__(name)
