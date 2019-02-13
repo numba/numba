@@ -99,6 +99,24 @@ def getiter_cffiarray(context, builder, sig, args):
     return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@registry.lower("getiter", types.CFFIOwningArrayType)
+def getiter_owning_cffiarray(context, builder, sig, args):
+    iterobj = context.make_helper(builder, sig.return_type)
+
+    zero = context.get_constant(types.intp, 0)
+    indexptr = cgutils.alloca_once_value(builder, zero)
+
+    iterobj.index = indexptr
+    iterobj.array = args[0]
+
+    if context.enable_nrt:
+        context.nrt.incref(builder, sig.args[0], args[0])
+
+    res = iterobj._getvalue()
+
+    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
 @registry.lower("iternext", types.CFFIIteratorType)
 @imputils.iternext_impl
 def iternext_cffiarray(context, builder, sig, args, result):
@@ -119,6 +137,28 @@ def iternext_cffiarray(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
+
+@registry.lower("iternext", types.CFFIOwningIteratorType)
+@imputils.iternext_impl
+def iternext_cffiarray(context, builder, sig, args, result):
+    iterty = sig.args[0]
+    iter_ = args[0]
+    containerty = iterty.container
+
+    iterobj = context.make_helper(builder, iterty, value=iter_)
+    length = cgutils.intp_t(containerty.length)
+    index = builder.load(iterobj.index)
+    is_valid = builder.icmp_unsigned("<", index, length)
+    result.set_valid(is_valid)
+
+    with builder.if_then(is_valid):
+        import ipdb; ipdb.set_trace()
+        value = builder.gep(iterobj.array, [index])
+        result.yield_(value)
+        nindex = cgutils.increment_index(builder, index)
+        builder.store(nindex, iterobj.index)
+
+
 @registry.lower(operator.getitem, types.CFFIPointer, types.Integer)
 def getitem_cffipointer(context, builder, sig, args):
     base_ptr, idx = args
@@ -130,11 +170,15 @@ def getitem_cffipointer(context, builder, sig, args):
 def getitem_owned_cffipointer(context, builder, sig, args):
     obj, idx = args
     obj = context.make_helper(builder, sig.args[0], value=obj)
+    meminfo = obj.meminfo
     base_ptr = obj.data
-    res = builder.gep(base_ptr, [idx])
-    if context.enable_nrt:
-        context.nrt.incref(builder, sig.args[0], args[0])
-    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
+
+    res = context.make_helper(builder, sig.return_type)
+    res.meminfo = meminfo
+    res.data = builder.gep(base_ptr, [idx])
+    return imputils.impl_ret_borrowed(
+        context, builder, sig.return_type, res._getvalue()
+    )
 
 
 @registry.lower_setattr_generic(types.CFFIStructInstanceType)
@@ -173,8 +217,8 @@ def lower_const_cffi_pointer(context, builder, ty, pyval):
 
 @registry.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
 def cast_ref_to_struct(context, builder, fromty, toty, val):
-    res = builder.load(val)
-    return imputils.impl_ret_new_ref(context, builder, toty, res)
+    ref = context.make_helper(builder, fromty, value=val)
+    return imputils.impl_ret_new_ref(context, builder, toty, ref.data._getvalue())
 
 
 @registry.lower_cast(types.CFFIOwningType, types.CFFIPointer)

@@ -78,7 +78,6 @@ class CFFIStructInstanceModel(models.StructModel):
 
 @register_default(types.CFFIPointer)
 @register_default(types.CFFIArrayType)
-@register_default(types.CFFIStructRefType)
 class CFFIPointerModel(models.PointerModel):
     def get_field(self, builder, target, field):
         pos = self._pointee_model.get_field_pos(field)
@@ -92,7 +91,7 @@ class CFFIPointerModel(models.PointerModel):
 
 @register_default(types.CFFIOwningPointerType)
 @register_default(types.CFFIOwningArrayType)
-class CFFIOwningPointerModel(models.StructModel, models.MemInfoModel):
+class CFFIOwningPointerModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         # opaque ptr type trick to avoid recursion in meminfo
         # see also jitclass/base.py:35
@@ -121,11 +120,49 @@ class CFFIOwningPointerModel(models.StructModel, models.MemInfoModel):
             ])
         return builder.store(value, ptr)
 
-    def inner_types(self):
-        return []
 
-    def get_nrt_meminfo(self, builder, value):
-        return builder.extract_value(value, 0)
+@register_default(types.CFFIStructRefType)
+class CFFIRefTypeModel(models.PointerModel):
+
+    def get_field(self, builder, target, field):
+        pos = self._pointee_model.get_field_pos(field)
+        return builder.gep(target, [cgutils.int32_t(0), cgutils.int32_t(pos)])
+
+    def set_field(self, builder, target, field, value):
+        pos = self._pointee_model.get_field_pos(field)
+        ptr = builder.gep(target, [cgutils.int32_t(0), cgutils.int32_t(pos)])
+        return builder.store(value, ptr)
+
+
+@register_default(types.CFFIOwningStructRefType)
+class CFFIOwningRefTypeModel(models.StructModel):
+    def __init__(self, dmm, fe_typ):
+        # opaque ptr type trick to avoid recursion in meminfo
+        # see also jitclass/base.py:35
+        members = [
+            ("meminfo", types.MemInfoPointer(fe_typ)),
+            ("data", types.CFFIPointer(fe_typ.dtype)),
+        ]
+        self.dmodel = dmm.lookup(fe_typ.dtype)
+        super(CFFIOwningRefTypeModel, self).__init__(dmm, fe_typ, members)
+
+    def get_field(self, builder, target, field):
+        pos = self.dmodel.get_field_pos(field)
+        data = builder.extract_value(target, 1)
+        return builder.gep(data, [
+                cgutils.int32_t(0),
+                cgutils.int32_t(pos),
+            ])
+
+    def set_field(self, builder, target, field, value):
+        pos = self.dmodel.get_field_pos(field)
+        data = builder.extract_value(target, 1)
+        ptr = builder.gep(data, [
+                cgutils.int32_t(0),
+                cgutils.int32_t(pos),
+            ])
+        return builder.store(value, ptr)
+
 
 @register_default(types.CFFINullPtrType)
 class CFFINullPtrModel(models.PointerModel):
@@ -153,6 +190,8 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ptr, idx = args
+        if isinstance(ptr, types.CFFIOwningType) and isinstance(idx, types.Integer):
+            return templates.signature(types.CFFIOwningStructRefType(ptr), ptr, idx)
         if isinstance(ptr, types.CFFIPointer) and isinstance(idx, types.Integer):
             return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
 

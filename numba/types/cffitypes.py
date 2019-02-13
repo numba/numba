@@ -131,6 +131,32 @@ class CFFIOwningArrayType(CFFIOwningType, CFFIArrayType):
     def __init__(self, dtype, length):
         super(CFFIOwningArrayType, self).__init__(dtype, length)
 
+    @property
+    def iterator_type(self):
+        return CFFIOwningIteratorType(self)
+
+
+class CFFIOwningIteratorType(BaseContainerIterator):
+    container_class = CFFIOwningArrayType
+
+    def __init__(self, container):
+        assert isinstance(container, self.container_class), container
+        self.container = container
+        yield_type = container.yield_type
+        name = "owning_iter(%s)" % container
+        super(BaseContainerIterator, self).__init__(name, yield_type)
+
+    def unify(self, typingctx, other):
+        cls = type(self)
+        if isinstance(other, cls):
+            container = typingctx.unify_pairs(self.container, other.container)
+            if container is not None:
+                return cls(container)
+
+    @property
+    def key(self):
+        return self.container
+
 
 class CFFIStructRefType(CFFIPointer):
     def __init__(self, ptrtype):
@@ -152,3 +178,12 @@ class CFFIStructRefType(CFFIPointer):
 
     def __repr__(self):
         return self.name
+
+class CFFIOwningStructRefType(CFFIStructRefType):
+    def __init__(self, ptrtype):
+        super(CFFIOwningStructRefType, self).__init__(ptrtype)
+        self.name = "Owning" + self.name
+
+    @property
+    def key(self):
+        return self.dtype, "Owning"

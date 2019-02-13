@@ -342,10 +342,10 @@ class TestCFFILinkedList(TestCase):
         @njit
         def create_and_destroy():
             nodes = ffi.new('Node[100]')
-            nodes[10].value = random.randint(0, 100)
-            # for i in range(100):
-            #     nodes[i].value = random.randint(0, 100)
-            # return nodes[random.randint(0, 99)].value
+            # nodes[10].value = random.randint(0, 100)
+            for i in range(100):
+                nodes[i].value = random.randint(0, 100)
+            return nodes[random.randint(0, 99)].value
 
         create_and_destroy()
         # self.assertTrue(val > 0 and val < 99)
