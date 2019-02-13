@@ -242,16 +242,19 @@ class TestCFFILinkedList(TestCase):
         @njit
         def create_new_list(n):
             head = ffi.new("Head*")
-            head.node = ffi.new("Node*")
+            nodes = [ffi.new("Node*")]
+            head.node = nodes[0]
             head.node.value = 0
             last = head.node
             for i in range(1, n):
-                last.next = ffi.new("Node*")
+                node_ref = ffi.new("Node*")
+                nodes.append(node_ref)
+                last.next = node_ref
                 last = last.next
                 last.value = i
-            return head
+            return head, nodes
 
-        ll = create_new_list(n)
+        ll, nodes = create_new_list(n)
         self.assertEqual(lib.list_len(ll_ref), lib.list_len(ll))
         self.assertEqual(lib.list_sum(ll_ref), lib.list_sum(ll))
         node = ll.node
@@ -330,6 +333,23 @@ class TestCFFILinkedList(TestCase):
 
         nodes2 = create_and_set_array()
         self.assertEqual(sum(n.value for n in nodes2), sum(range(100)))
+
+    def test_create_destroy(self):
+        ffi = self.ffi
+        lib = self.lib
+        import random
+
+        @njit
+        def create_and_destroy():
+            nodes = ffi.new('Node[100]')
+            nodes[10].value = random.randint(0, 100)
+            # for i in range(100):
+            #     nodes[i].value = random.randint(0, 100)
+            # return nodes[random.randint(0, 99)].value
+
+        create_and_destroy()
+        # self.assertTrue(val > 0 and val < 99)
+
 
     def test_callback(self):
         n = 100

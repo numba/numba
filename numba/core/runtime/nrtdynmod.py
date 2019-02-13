@@ -8,7 +8,7 @@ from numba.core import types, cgutils
 from llvmlite import ir, binding
 
 # Flag to enable debug print in NRT_incref and NRT_decref
-_debug_print = False
+_debug_print = True
 
 _word_type = ir.IntType(MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
@@ -93,10 +93,13 @@ def _define_nrt_decref(module, atomic_decr):
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
     with cgutils.if_unlikely(builder, refct_eq_0):
+        if _debug_print:
+            cgutils.printf(builder, "*** NRT_Decref Releasing [%p]\n", ptr)
         # An acquire fence is used after the relevant read operation.
         # No-op on x86.  On POWER, it lowers to lwsync.
         builder.fence("acquire")
         builder.call(calldtor, [ptr])
+
     builder.ret_void()
 
 

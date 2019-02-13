@@ -50,15 +50,13 @@ class CFFIStructInstanceType(Type):
 
 
 class CFFIPointer(CPointer):
-    def __init__(self, dtype, owning=False):
+    def __init__(self, dtype):
         super(CFFIPointer, self).__init__(dtype)
-        self.owning = owning
-        owning_str = "(Owning)" if self.owning else ""
-        self.name = "<ffi>(" + self.name + "*)" + owning_str
+        self.name = "<ffi>(" + self.name + ")"
 
     @property
     def key(self):
-        return (self.dtype, self.owning)
+        return self.dtype
 
     def __repr__(self):
         return self.name
@@ -66,7 +64,7 @@ class CFFIPointer(CPointer):
 
 class CFFINullPtrType(CPointer):
     def __init__(self):
-        super(CFFINullPtrType, self).__init__(NoneType('nullptr'))
+        super(CFFINullPtrType, self).__init__(NoneType("nullptr"))
 
     def can_convert_from(self, typeingctx, other):
         if isinstance(other, CFFIPointer):
@@ -78,11 +76,10 @@ class CFFINullPtrType(CPointer):
 
 
 class CFFIArrayType(CFFIPointer, Sequence):
-    def __init__(self, dtype, length, owning=False):
-        super(CFFIArrayType, self).__init__(dtype, owning)
-        owning_str = "(Owning)" if self.owning else ""
+    def __init__(self, dtype, length):
+        super(CFFIArrayType, self).__init__(dtype)
         self.length = length
-        self.name = "{}[{}]".format(self.dtype.name, self.length) + owning_str
+        self.name = "{}[{}]".format(self.dtype.name, self.length)
 
     @property
     def iterator_type(self):
@@ -113,6 +110,26 @@ class CFFIIteratorType(BaseContainerIterator):
     @property
     def key(self):
         return self.container
+
+
+class CFFIOwningType(CFFIPointer):
+    def __init__(self, *args, **kwargs):
+        super(CFFIOwningType, self).__init__(*args, **kwargs)
+        self.name = self.name + "(Owning)"
+
+    @property
+    def key(self):
+        return (self.dtype, "owning")
+
+
+class CFFIOwningPointerType(CFFIOwningType):
+    def __init__(self, dtype):
+        super(CFFIOwningPointerType, self).__init__(dtype)
+
+
+class CFFIOwningArrayType(CFFIOwningType, CFFIArrayType):
+    def __init__(self, dtype, length):
+        super(CFFIOwningArrayType, self).__init__(dtype, length)
 
 
 class CFFIStructRefType(CFFIPointer):

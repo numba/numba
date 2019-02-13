@@ -15,6 +15,7 @@ from numba.core.typing.cffi_utils import (
     make_function_type,
     get_func_pointer,
     get_struct_pointer,
+    get_free_ffi_func,
 )
 from numba.misc import arrayobj
 
@@ -43,7 +44,7 @@ def field_impl(context, builder, typ, value, attr):
     if attr in typ.struct:
         ddm = context.data_model_manager[typ]
         data = ddm.get_field(builder, value, attr)
-        return imputils.impl_ret_borrowed(context, builder, typ.struct[attr], data)
+        return imputils.impl_ret_new_ref(context, builder, typ.struct[attr], data)
 
 
 @registry.lower_getattr_generic(types.CFFIPointer)
@@ -55,7 +56,7 @@ def pointer_field_impl(context, builder, typ, value, attr):
     if attr in pointee.struct:
         ddm = context.data_model_manager[typ]
         ret = ddm.get_field(builder, value, attr)
-        return imputils.impl_ret_borrowed(
+        return imputils.impl_ret_new_ref(
             context, builder, typ.dtype.struct[attr], builder.load(ret)
         )
 
@@ -122,7 +123,18 @@ def iternext_cffiarray(context, builder, sig, args, result):
 def getitem_cffipointer(context, builder, sig, args):
     base_ptr, idx = args
     res = builder.gep(base_ptr, [idx])
-    return imputils.impl_ret_borrowed(context, builder, sig.return_type, res)
+    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@registry.lower(operator.getitem, types.CFFIOwningType, types.Integer)
+def getitem_owned_cffipointer(context, builder, sig, args):
+    obj, idx = args
+    obj = context.make_helper(builder, sig.args[0], value=obj)
+    base_ptr = obj.data
+    res = builder.gep(base_ptr, [idx])
+    if context.enable_nrt:
+        context.nrt.incref(builder, sig.args[0], args[0])
+    return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @registry.lower_setattr_generic(types.CFFIStructInstanceType)
@@ -162,7 +174,14 @@ def lower_const_cffi_pointer(context, builder, ty, pyval):
 @registry.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
 def cast_ref_to_struct(context, builder, fromty, toty, val):
     res = builder.load(val)
-    return imputils.impl_ret_borrowed(context, builder, toty, res)
+    return imputils.impl_ret_new_ref(context, builder, toty, res)
+
+
+@registry.lower_cast(types.CFFIOwningType, types.CFFIPointer)
+def cast_owned_to_plain(context, builder, fromty, toty, val):
+    obj = context.make_helper(builder, fromty, value=val)
+    res = builder.bitcast(obj.data, context.get_value_type(toty))
+    return imputils.impl_ret_new_ref(context, builder, toty, res)
 
 
 @registry.lower_getattr_generic(types.CFFILibraryType)
@@ -189,20 +208,31 @@ def lower_ffi_null(context, builder, sig, args):
 
 
 @registry.lower("ffi.new", types.Literal)
-def from_buffer(context, builder, sig, args):
+def ffi_new(context, builder, sig, args):
     retty = context.get_value_type(sig.return_type)
-    struct_size = context.get_abi_sizeof(retty.pointee)
+    dataty = context.get_value_type(sig.return_type.dtype)
+    struct_size = context.get_abi_sizeof(dataty)
 
     # if it's an array, adjust size accordingly
     if isinstance(sig.return_type, types.CFFIArrayType):
         struct_size *= sig.return_type.length
 
-    # ffi.new allocates zero initialized memory, we do it too
-    ptr = context.nrt.allocate(builder, cgutils.intp_t(struct_size))
-    cgutils.memset(builder, ptr, cgutils.intp_t(struct_size), 0)
-
-    ret = builder.bitcast(ptr, retty)
-    return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
+    if isinstance(sig.return_type, types.CFFIOwningType):
+        ret = context.make_helper(builder, sig.return_type)
+        ret.meminfo = context.nrt.meminfo_alloc(builder, cgutils.intp_t(struct_size))
+        ret.data = builder.bitcast(
+            context.nrt.meminfo_data(builder, ret.meminfo), dataty.as_pointer()
+        )
+        cgutils.memset(builder, ret.data, cgutils.intp_t(struct_size), 0)
+        return imputils.impl_ret_new_ref(
+            context, builder, sig.return_type, ret._getvalue()
+        )
+    else:
+        # ffi.new allocates zero initialized memory, we do it too
+        ptr = context.nrt.allocate(builder, cgutils.intp_t(struct_size))
+        cgutils.memset(builder, ptr, cgutils.intp_t(struct_size), 0)
+        ret = builder.bitcast(ptr, retty)
+        return imputils.impl_ret_untracked(context, builder, sig.return_type, ret)
 
 
 @registry.lower(operator.ne, types.CFFINullPtrType, types.CPointer)

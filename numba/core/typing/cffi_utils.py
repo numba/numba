@@ -23,6 +23,7 @@ SUPPORTED = ffi is not None
 from functools import partial
 from types import BuiltinFunctionType
 import numpy as np
+import llvmlite.ir as ir
 
 from numba import numpy_support
 from numba import types
@@ -249,44 +250,69 @@ def get_struct_type(cffi_struct):
     return cffi_type_map()[t]
 
 
-_free_ffi = None
+_free_impl = None
+
+
+def get_free_ffi_func(context, module):
+    dtor_fn = module.get_or_insert_function(
+        ir.FunctionType(
+            ir.VoidType(), [cgutils.voidptr_t, cgutils.intp_t, cgutils.voidptr_t]
+        ),
+        "_numba_free_ffi_new",
+    )
+    if dtor_fn.is_declaration:
+
+        builder = ir.IRBuilder(dtor_fn.append_basic_block())
+        ptr = dtor_fn.args[0]
+        context.nrt.free(builder, ptr)
+        builder.ret_void()
+    return dtor_fn
 
 
 def get_ffi_free():
     """We use it to resolve circular dependecies"""
-    global _free_ffi
-    if _free_ffi is None:
-        from numba import extending, njit
+    global _free_impl
+    from numba import extending, njit
 
-        def free_ffi_new(typingctx, cffi_ptr):
-            if isinstance(cffi_ptr, types.CFFIPointer):
-                sig = templates.signature(types.void, cffi_ptr)
+    if _free_impl is None:
+
+        def free_ffi_new(typingctx, free_addr):
+            if isinstance(free_addr, types.Integer):
+                sig = templates.signature(types.void, free_addr)
 
                 def codegen(context, builder, signature, args):
-                    ptr = builder.bitcast(args[0], cgutils.voidptr_t)
-                    context.nrt.free(builder, ptr)
+                    dtor_fn = get_free_ffi_func(context, builder.module)
+                    builder.call(
+                        dtor_fn,
+                        [
+                            builder.inttoptr(args[0], cgutils.voidptr_t),
+                            cgutils.intp_t(0),
+                            cgutils.voidptr_t(None),
+                        ],
+                    )
 
                 return sig, codegen
 
         free_intr = extending.intrinsic(free_ffi_new)
 
-        def free_impl(cffi_ptr):
-            free_intr(cffi_ptr)
+        def free_impl(free_addr):
+            free_intr(free_addr)
 
-        _free_ffi = njit(free_impl)
-    return _free_ffi
+        _free_impl = njit(free_impl)
+    return _free_impl
 
 
-def struct_from_ptr(hash_, intptr, owned, length=None):
+def struct_from_ptr(hash_, data_addr, free_addr, owned, length=None):
     if length is None:
         # pointer type
-        ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).ptr_t, intptr)
+        ret = ffi.cast(cffi_types_cache.get_type_by_hash(hash_).ptr_t, data_addr)
     else:
         ret = ffi.cast(
-            cffi_types_cache.get_type_by_hash(hash_).get_struct_t(length), intptr
+            cffi_types_cache.get_type_by_hash(hash_).get_struct_t(length), data_addr
         )
     if owned:
-        ret = ffi.gc(ret, get_ffi_free())
+        assert free_addr != 0
+        ret = ffi.gc(ret, lambda _: get_ffi_free()(free_addr))
     return ret
 
 

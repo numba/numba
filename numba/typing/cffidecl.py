@@ -45,13 +45,11 @@ class FFI_new(types.BoundFunction):
 
         if cffi_type.kind == "pointer":
             pointee = cffi_type.item
-            ret_type = types.CFFIPointer(cffi_type_map()[pointee], owning=True)
+            ret_type = types.CFFIOwningPointerType(cffi_type_map()[pointee])
         elif cffi_type.kind == "array":
             length = cffi_type.length
             pointee = cffi_type.item
-            ret_type = types.CFFIArrayType(
-                cffi_type_map()[pointee], length, owning=True
-            )
+            ret_type = types.CFFIOwningArrayType(cffi_type_map()[pointee], length)
         else:
             raise ValueError("Can only allocate memory for pointer and array types")
         return templates.signature(ret_type, *args)
@@ -91,6 +89,43 @@ class CFFIPointerModel(models.PointerModel):
         ptr = builder.gep(target, [cgutils.int32_t(0), cgutils.int32_t(pos)])
         return builder.store(value, ptr)
 
+
+@register_default(types.CFFIOwningPointerType)
+@register_default(types.CFFIOwningArrayType)
+class CFFIOwningPointerModel(models.StructModel, models.MemInfoModel):
+    def __init__(self, dmm, fe_typ):
+        # opaque ptr type trick to avoid recursion in meminfo
+        # see also jitclass/base.py:35
+        opaque_typ = types.Opaque("Opaque." + str(fe_typ))
+        members = [
+            ("meminfo", types.MemInfoPointer(opaque_typ)),
+            ("data", types.CFFIPointer(fe_typ.dtype)),
+        ]
+        self.dmodel = dmm.lookup(fe_typ.dtype)
+        super(CFFIOwningPointerModel, self).__init__(dmm, fe_typ, members)
+
+    def get_field(self, builder, target, field):
+        pos = self.dmodel.get_field_pos(field)
+        data = builder.extract_value(target, 1)
+        return builder.gep(data, [
+                cgutils.int32_t(0),
+                cgutils.int32_t(pos),
+            ])
+
+    def set_field(self, builder, target, field, value):
+        pos = self.dmodel.get_field_pos(field)
+        data = builder.extract_value(target, 1)
+        ptr = builder.gep(data, [
+                cgutils.int32_t(0),
+                cgutils.int32_t(pos),
+            ])
+        return builder.store(value, ptr)
+
+    def inner_types(self):
+        return []
+
+    def get_nrt_meminfo(self, builder, value):
+        return builder.extract_value(value, 0)
 
 @register_default(types.CFFINullPtrType)
 class CFFINullPtrModel(models.PointerModel):
@@ -222,10 +257,19 @@ def struct_instance_box(typ, val, c):
     hash_ = cffi_types_cache.get_type_hash(pointee.cffi_type)
     hash_ = cgutils.intp_t(hash_)
     hash_ = c.pyapi.long_from_longlong(hash_)
-    cast_val = c.builder.ptrtoint(val, cgutils.intp_t)
-    struct_addr = c.pyapi.long_from_ssize_t(cast_val)
-    owning = c.pyapi.bool_from_bool(cgutils.bool_t(typ.owning))
-    args = [hash_, struct_addr, owning]
+    if isinstance(typ, types.CFFIOwningType):
+        obj = c.context.make_helper(c.builder, typ, value=val)
+        data_val = c.builder.ptrtoint(obj.data, cgutils.intp_t)
+        free_val = c.builder.ptrtoint(obj.meminfo, cgutils.intp_t)
+        owned = True
+    else:
+        data_val = c.builder.ptrtoint(val, cgutils.intp_t)
+        free_val = cgutils.intp_t(0)
+        owned = False
+    data_addr = c.pyapi.long_from_ssize_t(data_val)
+    free_addr = c.pyapi.long_from_ssize_t(free_val)
+    owning = c.pyapi.bool_from_bool(cgutils.bool_t(owned))
+    args = [hash_, data_addr, free_addr, owning]
     if isinstance(typ, types.CFFIArrayType):
         args.append(c.pyapi.long_from_ssize_t(cgutils.intp_t(typ.length)))
     return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
