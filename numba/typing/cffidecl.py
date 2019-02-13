@@ -14,6 +14,7 @@ from numba import cgutils
 from numba.errors import TypingError
 from numba.datamodel import models, register_default, default_manager
 from numba.pythonapi import box, unbox, NativeValue
+from numba.runtime import cffidynmod
 from . import templates
 from .cffi_utils import (
     cffi_type_map,
@@ -183,17 +184,22 @@ class CFFIIteratorModel(models.StructModel):
 registry = templates.Registry()
 
 
-# getattr on a cffi pointer should return a pointer to the element
-# to correspond to cffi's behaviour
 @registry.register_global(operator.getitem)
 class CFFIPointerGetitem(templates.AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ptr, idx = args
-        if isinstance(ptr, types.CFFIOwningType) and isinstance(idx, types.Integer):
-            return templates.signature(types.CFFIOwningStructRefType(ptr), ptr, idx)
-        if isinstance(ptr, types.CFFIPointer) and isinstance(idx, types.Integer):
-            return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
+        if isinstance(ptr, types.CFFIPointer):
+            if not isinstance(idx, types.Integer):
+                raise TypeError("Only integer indexing is supported on CFFI pointers")
+
+            if isinstance(ptr.dtype, types.CFFIStructInstanceType):
+                if isinstance(ptr, types.CFFIOwningType):
+                    return templates.signature(types.CFFIOwningStructRefType(ptr), ptr, idx)
+                else:
+                    return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
+            else:
+                return templates.signature(ptr.dtype, ptr, idx)
 
 
 @registry.register_global(len)
@@ -314,13 +320,14 @@ def struct_instance_box(typ, val, c):
     return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
 
 
+
 # this is the layout ob the CFFI's CDataObject
 # see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216
 cffi_cdata_type = ir.LiteralStructType(
     [
         ir.ArrayType(cgutils.int8_t, 16),  # 16-byte PyObject_HEAD
         cgutils.voidptr_t,  # CTypeDescrObject* ctypes
-        cgutils.intp_t.as_pointer(),  # cdata
+        cgutils.voidptr_t,  # cdata
         cgutils.voidptr_t,  # PyObject *c_weakreflist;
     ]
 )
@@ -332,7 +339,6 @@ def struct_instance_ptr_unbox(typ, val, c):
     # calling ffi.cast('uintptr_t')
     ptrty = c.context.data_model_manager[typ].get_value_type()
     ret = c.builder.alloca(ptrty)
-    cffi_data_ptr = c.builder.bitcast(val, cffi_cdata_type.as_pointer())
-    intptr = c.builder.extract_value(c.builder.load(cffi_data_ptr), 2)
-    c.builder.store(c.builder.bitcast(intptr, ptrty), ret)
+    cdataptr = cffidynmod.get_cffi_pointer(c.builder, val)
+    c.builder.store(c.builder.bitcast(cdataptr, ptrty), ret)
     return NativeValue(c.builder.load(ret))

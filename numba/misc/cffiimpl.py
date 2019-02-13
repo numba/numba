@@ -173,12 +173,32 @@ def getitem_owned_cffipointer(context, builder, sig, args):
     meminfo = obj.meminfo
     base_ptr = obj.data
 
-    res = context.make_helper(builder, sig.return_type)
-    res.meminfo = meminfo
-    res.data = builder.gep(base_ptr, [idx])
-    return imputils.impl_ret_borrowed(
-        context, builder, sig.return_type, res._getvalue()
-    )
+    if isinstance(sig.return_type, types.CFFIOwningStructRefType):
+        res = context.make_helper(builder, sig.return_type)
+        res.meminfo = meminfo
+        res.data = builder.gep(base_ptr, [idx])
+        return imputils.impl_ret_borrowed(
+            context, builder, sig.return_type, res._getvalue()
+        )
+    else:
+        res = builder.load(builder.gep(base_ptr, [idx]))
+        return imputils.impl_ret_borrowed(
+            context, builder, sig.return_type, res
+        )
+
+@registry.lower(operator.setitem, types.CFFIPointer, types.Integer, types.Any)
+def setitem_cpointer(context, builder, sig, args):
+    base_ptr, idx, val = args
+    elem_ptr = builder.get(base_ptr, [idx])
+    builder.store(val, elem_ptr)
+
+@registry.lower('setitem', types.CFFIOwningType, types.Integer, types.Any)
+def setitem_owning_cpointer(context, builder, sig, args):
+    obj_ptr, idx, val = args
+    obj = context.make_helper(builder, sig.args[0], value=obj_ptr)
+    data_ptr = obj.data
+    elem_ptr = builder.gep(data_ptr, [idx])
+    builder.store(val, elem_ptr)
 
 
 @registry.lower_setattr_generic(types.CFFIStructInstanceType)
@@ -218,7 +238,7 @@ def lower_const_cffi_pointer(context, builder, ty, pyval):
 @registry.lower_cast(types.CFFIStructRefType, types.CFFIStructInstanceType)
 def cast_ref_to_struct(context, builder, fromty, toty, val):
     ref = context.make_helper(builder, fromty, value=val)
-    return imputils.impl_ret_new_ref(context, builder, toty, ref.data._getvalue())
+    return imputils.impl_ret_new_ref(context, builder, toty, builder.load(ref.data))
 
 
 @registry.lower_cast(types.CFFIOwningType, types.CFFIPointer)
