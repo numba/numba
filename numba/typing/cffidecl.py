@@ -107,24 +107,17 @@ class CFFIOwningPointerModel(models.StructModel):
     def get_field(self, builder, target, field):
         pos = self.dmodel.get_field_pos(field)
         data = builder.extract_value(target, 1)
-        return builder.gep(data, [
-                cgutils.int32_t(0),
-                cgutils.int32_t(pos),
-            ])
+        return builder.gep(data, [cgutils.int32_t(0), cgutils.int32_t(pos)])
 
     def set_field(self, builder, target, field, value):
         pos = self.dmodel.get_field_pos(field)
         data = builder.extract_value(target, 1)
-        ptr = builder.gep(data, [
-                cgutils.int32_t(0),
-                cgutils.int32_t(pos),
-            ])
+        ptr = builder.gep(data, [cgutils.int32_t(0), cgutils.int32_t(pos)])
         return builder.store(value, ptr)
 
 
 @register_default(types.CFFIStructRefType)
 class CFFIRefTypeModel(models.PointerModel):
-
     def get_field(self, builder, target, field):
         pos = self._pointee_model.get_field_pos(field)
         return builder.gep(target, [cgutils.int32_t(0), cgutils.int32_t(pos)])
@@ -150,18 +143,12 @@ class CFFIOwningRefTypeModel(models.StructModel):
     def get_field(self, builder, target, field):
         pos = self.dmodel.get_field_pos(field)
         data = builder.extract_value(target, 1)
-        return builder.gep(data, [
-                cgutils.int32_t(0),
-                cgutils.int32_t(pos),
-            ])
+        return builder.gep(data, [cgutils.int32_t(0), cgutils.int32_t(pos)])
 
     def set_field(self, builder, target, field, value):
         pos = self.dmodel.get_field_pos(field)
         data = builder.extract_value(target, 1)
-        ptr = builder.gep(data, [
-                cgutils.int32_t(0),
-                cgutils.int32_t(pos),
-            ])
+        ptr = builder.gep(data, [cgutils.int32_t(0), cgutils.int32_t(pos)])
         return builder.store(value, ptr)
 
 
@@ -195,7 +182,9 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
 
             if isinstance(ptr.dtype, types.CFFIStructInstanceType):
                 if isinstance(ptr, types.CFFIOwningType):
-                    return templates.signature(types.CFFIOwningStructRefType(ptr), ptr, idx)
+                    return templates.signature(
+                        types.CFFIOwningStructRefType(ptr), ptr, idx
+                    )
                 else:
                     return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
             else:
@@ -318,7 +307,6 @@ def struct_instance_box(typ, val, c):
     if isinstance(typ, types.CFFIArrayType):
         args.append(c.pyapi.long_from_ssize_t(cgutils.intp_t(typ.length)))
     return c.pyapi.call_function_objargs(struct_from_ptr_runtime, args)
-
 
 
 # this is the layout ob the CFFI's CDataObject

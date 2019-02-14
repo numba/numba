@@ -137,7 +137,6 @@ def iternext_cffiarray(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
-
 @registry.lower("iternext", types.CFFIOwningIteratorType)
 @imputils.iternext_impl
 def iternext_cffiarray(context, builder, sig, args, result):
@@ -152,7 +151,6 @@ def iternext_cffiarray(context, builder, sig, args, result):
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
-        import ipdb; ipdb.set_trace()
         value = builder.gep(iterobj.array, [index])
         result.yield_(value)
         nindex = cgutils.increment_index(builder, index)
@@ -184,9 +182,8 @@ def getitem_owned_cffipointer(context, builder, sig, args):
         )
     else:
         res = builder.load(builder.gep(base_ptr, [idx]))
-        return imputils.impl_ret_borrowed(
-            context, builder, sig.return_type, res
-        )
+        return imputils.impl_ret_borrowed(context, builder, sig.return_type, res)
+
 
 @registry.lower(operator.setitem, types.CFFIPointer, types.Integer, types.Any)
 def setitem_cpointer(context, builder, sig, args):
@@ -194,7 +191,8 @@ def setitem_cpointer(context, builder, sig, args):
     elem_ptr = builder.get(base_ptr, [idx])
     builder.store(val, elem_ptr)
 
-@registry.lower('setitem', types.CFFIOwningType, types.Integer, types.Any)
+
+@registry.lower("setitem", types.CFFIOwningType, types.Integer, types.Any)
 def setitem_owning_cpointer(context, builder, sig, args):
     obj_ptr, idx, val = args
     obj = context.make_helper(builder, sig.args[0], value=obj_ptr)
