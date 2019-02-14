@@ -1,6 +1,7 @@
 import array
 import numpy as np
 
+from .support import MemoryLeakMixin
 from numba import unittest_support as unittest
 from numba import jit, njit, cfunc, cffi_support, types, errors
 from numba.core.compiler import compile_isolated, Flags
@@ -19,13 +20,14 @@ no_pyobj_flags = Flags()
 @unittest.skipUnless(
     cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
 )
-class TestCFFI(TestCase):
+class TestCFFI(MemoryLeakMixin, TestCase):
 
     # Need to run the tests serially because of race conditions in
     # cffi's OOL mode.
     _numba_parallel_test_ = False
 
     def setUp(self):
+        super(TestCFFI, self).setUp()
         mod.init()
         mod.init_ool()
 
@@ -255,8 +257,9 @@ class TestCFFI(TestCase):
 @unittest.skipUnless(
     cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
 )
-class TestCFFILinkedList(TestCase):
+class TestCFFILinkedList(MemoryLeakMixin, TestCase):
     def setUp(self):
+        super(TestCFFILinkedList, self).setUp()
         ffi_mod = mod.load_ool_linkedlist()
         self.lib = ffi_mod.lib
         self.ffi = ffi_mod.ffi

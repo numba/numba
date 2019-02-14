@@ -111,11 +111,13 @@ def cffi_type_map():
         }
     return _cached_type_map
 
+
 def cffi_reverse_type_map():
     global _cached_reverse_type_map
     if _cached_reverse_type_map is None:
         _cached_reverse_type_map = dict((v, k) for k, v in cffi_type_map().items())
     return _cached_reverse_type_map
+
 
 def is_ffi_lib(lib):
     # we register libs on register_module call
@@ -277,7 +279,10 @@ def get_free_ffi_func(context, module):
 
         builder = ir.IRBuilder(dtor_fn.append_basic_block())
         ptr = dtor_fn.args[0]
-        context.nrt.free(builder, ptr)
+        fn_decref = module.get_or_insert_function(
+            ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t]), name="NRT_decref"
+        )
+        builder.call(fn_decref, [ptr])
         builder.ret_void()
     return dtor_fn
 
@@ -288,6 +293,7 @@ def get_ffi_free():
     from numba import extending, njit
 
     if _free_impl is None:
+
         def free_ffi_new(typingctx, free_addr):
             if isinstance(free_addr, types.Integer):
                 sig = templates.signature(types.void, free_addr)
