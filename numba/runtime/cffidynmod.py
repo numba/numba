@@ -55,17 +55,17 @@ from numba import cgutils
 
 cffi_type_descr_t = ir.global_context.get_identified_type("_cffi_type_descr_t")
 cffi_type_descr_t.set_body(
-        ir.ArrayType(cgutils.int8_t, 24),  # 24-byte PyObject_VAR_HEAD, 0
-        cffi_type_descr_t.as_pointer(),  # ct_itemdescr, 1
-        cgutils.voidptr_t,  # ct_stuff, 2
-        cgutils.voidptr_t,  # ct_extra, 3
-        cgutils.voidptr_t,  # ct_weakreflist, 4
-        cgutils.voidptr_t,  # ct_uniquekey, 5
-        cgutils.intp_t,  # ct_size, 6
-        cgutils.intp_t,  # ct_length, 7
-        cgutils.int32_t,  # ct_flags, 8
-        cgutils.int32_t,  # ct_name_position, 9
-        ir.ArrayType(cgutils.int8_t, 1),  # ct_name, 10
+    ir.ArrayType(cgutils.int8_t, 24),  # 24-byte PyObject_VAR_HEAD, 0
+    cffi_type_descr_t.as_pointer(),  # ct_itemdescr, 1
+    cgutils.voidptr_t,  # ct_stuff, 2
+    cgutils.voidptr_t,  # ct_extra, 3
+    cgutils.voidptr_t,  # ct_weakreflist, 4
+    cgutils.voidptr_t,  # ct_uniquekey, 5
+    cgutils.intp_t,  # ct_size, 6
+    cgutils.intp_t,  # ct_length, 7
+    cgutils.int32_t,  # ct_flags, 8
+    cgutils.int32_t,  # ct_name_position, 9
+    ir.ArrayType(cgutils.int8_t, 1),  # ct_name, 10
 )
 
 # typedef struct {
@@ -114,4 +114,3 @@ def is_primitive_value(builder, ptr):
     return builder.icmp_unsigned(
         "!=", builder.and_(flags, cgutils.int32_t(primitive_any)), cgutils.int32_t(0)
     )
-
