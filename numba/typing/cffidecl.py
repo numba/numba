@@ -133,8 +133,9 @@ class CFFIOwningRefTypeModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         # opaque ptr type trick to avoid recursion in meminfo
         # see also jitclass/base.py:35
+        opaque_typ = types.Opaque("Opaque." + str(fe_typ))
         members = [
-            ("meminfo", types.MemInfoPointer(fe_typ)),
+            ("meminfo", types.MemInfoPointer(opaque_typ)),
             ("data", types.CFFIPointer(fe_typ.dtype)),
         ]
         self.dmodel = dmm.lookup(fe_typ.dtype)
