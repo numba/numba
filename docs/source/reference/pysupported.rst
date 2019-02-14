@@ -338,6 +338,7 @@ The following built-in functions are supported:
 * :func:`divmod`
 * :func:`enumerate`
 * :class:`float`
+* :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
 * :func:`len`
@@ -352,6 +353,25 @@ The following built-in functions are supported:
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
+
+.. _pysupported-hashing:
+
+Hashing
+-------
+
+The :func:`hash` built-in is supported and produces hash values for all
+supported hashable types with the following Python version specific behavior:
+
+Under Python 3, hash values computed by Numba will exactly match those computed
+in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
+``siphash24`` (default).
+
+Under Python 2, hash values computed by Numba will follow the behavior
+described for Python 3 with the :attr:`sys.hash_info.algorithm` emulated as
+``siphash24``. No attempt is made to replicate Python 2 hashing behavior.
+
+The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
+precisely the manner described in the CPython documentation.
 
 
 Standard library modules

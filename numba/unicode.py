@@ -26,7 +26,7 @@ from numba.pythonapi import (
     )
 from numba.targets import slicing
 from numba._helperlib import c_helpers
-
+from numba.targets.hashing import _Py_hash_t
 
 ### DATA MODEL
 
@@ -37,6 +37,7 @@ class UnicodeModel(models.StructModel):
             ('data', types.voidptr),
             ('length', types.intp),
             ('kind', types.int32),
+            ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
@@ -47,6 +48,7 @@ class UnicodeModel(models.StructModel):
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
 
 
 ### CAST
@@ -57,23 +59,25 @@ def compile_time_get_string_data(obj):
     the string data into the LLVM module.
     """
     from ctypes import (
-        CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
-        cast, c_ubyte,
+        CFUNCTYPE, c_void_p, c_int, c_long, c_ssize_t, c_ubyte, py_object,
+        POINTER, byref, cast,
     )
 
     extract_unicode_fn = c_helpers['extract_unicode']
-    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int))
+    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int),
+                      POINTER(c_ssize_t))
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
-    data = fn(obj, byref(length), byref(kind))
+    hashv = c_ssize_t()
+    data = fn(obj, byref(length), byref(kind), byref(hashv))
     if data is None:
         raise ValueError("cannot extract unicode data from the given string")
     length = length.value
     kind = kind.value
     nbytes = (length + 1) * _kind_to_byte_width(kind)
     out = (c_ubyte * nbytes).from_address(data)
-    return bytes(out), length, kind
+    return bytes(out), length, kind, hashv.value
 
 
 def make_string_from_constant(context, builder, typ, literal_string):
@@ -81,13 +85,15 @@ def make_string_from_constant(context, builder, typ, literal_string):
     Get string data by `compile_time_get_string_data()` and return a
     unicode_type LLVM value
     """
-    databytes, length, kind = compile_time_get_string_data(literal_string)
+    databytes, length, kind, hashv = \
+        compile_time_get_string_data(literal_string)
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
     uni_str = cgutils.create_struct_proxy(typ)(context, builder)
     uni_str.data = gv
     uni_str.length = uni_str.length.type(length)
     uni_str.kind = uni_str.kind.type(kind)
+    uni_str.hash = uni_str.hash.type(hashv)
     return uni_str._getvalue()
 
 
@@ -114,11 +120,12 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
-    ok, data, length, kind = c.pyapi.string_as_string_size_and_kind(obj)
+    ok, data, length, kind, hashv = c.pyapi.string_as_string_size_and_kind(obj)
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
     uni_str.kind = kind
+    uni_str.hash = hashv
     uni_str.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
         data,  # the borrowed data pointer
         obj,   # the owner pyobject; the call will incref it.
@@ -136,6 +143,10 @@ def box_unicode_str(typ, val, c):
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
     res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
+    # hash isn't needed now, just compute it so it ends up in the unicodeobject
+    # hash cache, cpython doesn't always do this, depends how a string was
+    # created it's safe, just burns the cycles required to hash on @box
+    c.pyapi.object_hash(res)
     c.context.nrt.decref(c.builder, typ, val)
     return res
 
@@ -190,6 +201,8 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
         uni_str.length = length_val
+        # empty string has hash value -1 to indicate "need to compute hash"
+        uni_str.hash = context.get_constant(_Py_hash_t, -1)
         uni_str.data = context.nrt.meminfo_data(builder, uni_str.meminfo)
         # Set parent to NULL
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
@@ -252,7 +265,6 @@ def set_uint32(typingctx, data, idx, ch):
     sig = types.void(types.voidptr, types.int64, types.uint32)
     return sig, make_set_codegen(32)
 
-
 @njit
 def _set_code_point(a, i, ch):
     ### WARNING: This method is very dangerous:
@@ -269,7 +281,6 @@ def _set_code_point(a, i, ch):
         set_uint32(a._data, i, ch)
     else:
         raise AssertionError("Unexpected unicode representation in _set_code_point")
-
 
 @njit
 def _pick_kind(kind1, kind2):
