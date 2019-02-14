@@ -165,15 +165,14 @@ class CFFIStructRefType(CFFIPointer):
         self.name = "Ref#{}".format(self.dtype.name)
 
     def can_convert_to(self, typingctx, other):
-        if isinstance(other, CFFIStructRefType) or isinstance(
-            other, CFFIStructInstanceType
-        ):
+        if isinstance(other, CFFIStructRefType) or \
+            isinstance(other, CFFIStructInstanceType):
             return typingctx.can_convert(self.dtype, other)
 
+
     def can_convert_from(self, typingctx, other):
-        if isinstance(other, CFFIStructRefType) or isinstance(
-            other, CFFIStructInstanceType
-        ):
+        if isinstance(other, CFFIStructRefType) or \
+            isinstance(other, CFFIStructInstanceType):
             return typingctx.can_convert(self.dtype, other)
 
     def __repr__(self):

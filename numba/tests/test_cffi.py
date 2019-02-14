@@ -188,6 +188,63 @@ class TestCFFI(TestCase):
         x = 1.123
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 
+    def test_allocate_int_array(self):
+        ffi = mod.ffi
+        @njit
+        def allocate_int():
+            arr = ffi.new("int32_t[100]")
+            for i in range(len(arr)):
+                arr[i] = i
+            return arr
+
+        arr = allocate_int()
+        self.assertEqual(sum(arr), sum(range(100)))
+
+    def test_allocate_float_array(self):
+        ffi = mod.ffi
+        @njit
+        def allocate_float():
+            arr = ffi.new("float[100]")
+            for i in range(len(arr)):
+                arr[i] = i / 100
+            return arr
+
+        arr = allocate_float()
+        self.assertAlmostEqual(sum(arr), sum(i / 100 for i in range(100)))
+
+    def test_sum_int_array(self):
+        ffi = mod.ffi
+        arr = ffi.new("int32_t[100]")
+        for i in range(len(arr)):
+            arr[i] = i
+
+        @njit
+        def array_sum(arr):
+            s = 0
+            for i in range(len(arr)):
+                s += arr[i]
+            return s
+
+        self.assertEqual(sum(arr), array_sum(arr))
+
+    def test_allocate_and_sum_array(self):
+        ffi = mod.ffi
+
+        @njit
+        def array_allocate_sum():
+            arr = ffi.new("int32_t[100]")
+            for i in range(len(arr)):
+                arr[i] = i
+
+            s = 0
+            for i in range(len(arr)):
+                s += arr[i]
+
+            return s
+
+        self.assertEqual(array_allocate_sum(), sum(range(100)))
+
+
 
 @unittest.skipUnless(cffi_support.SUPPORTED,
                      "CFFI not supported -- please install the cffi module")

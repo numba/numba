@@ -163,6 +163,8 @@ def iternext_cffiarray(context, builder, sig, args, result):
 def getitem_cffipointer(context, builder, sig, args):
     base_ptr, idx = args
     res = builder.gep(base_ptr, [idx])
+    if not isinstance(sig.return_type, types.CFFIStructRefType):
+        res = builder.load(res)
     return imputils.impl_ret_new_ref(context, builder, sig.return_type, res)
 
 

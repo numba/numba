@@ -59,13 +59,22 @@ class CFFIStructTypeCache(object):
     def get_type_by_hash(self, h):
         return self.ctypes_cache[h]
 
-    def get_type_hash(self, cffi_type):
-        return hash(cffi_type)
+    def get_type_hash(self, typ):
+        if isinstance(typ, types.CFFIStructInstanceType):
+            return hash(typ.cffi_type)
+        else:
+            cffi_type = cffi_reverse_type_map()[typ]
+            hash_ = hash(cffi_type)
+            # it's a primitive type so we can cache it with any ffi
+            self.ctypes_cache[hash_] = CFFITypeInfo(ffi, cffi_type)
+            return hash(cffi_type)
+
 
 
 cffi_types_cache = CFFIStructTypeCache()
 
 _cached_type_map = None
+_cached_reverse_type_map = None
 
 
 def cffi_type_map():
@@ -103,6 +112,11 @@ def cffi_type_map():
         }
     return _cached_type_map
 
+def cffi_reverse_type_map():
+    global _cached_reverse_type_map
+    if _cached_reverse_type_map is None:
+        _cached_reverse_type_map = dict((v, k) for k, v in cffi_type_map().items())
+    return _cached_reverse_type_map
 
 def is_ffi_lib(lib):
     # we register libs on register_module call
@@ -140,7 +154,7 @@ def is_cffi_struct(obj):
     except TypeError:
         return False
     if t.kind == "pointer" or t.kind == "array":
-        return t.item.kind == "struct"
+        return t.item.kind == "struct" or t.item.kind == "primitive"
     elif t.kind == "struct":
         return True
     else:

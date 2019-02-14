@@ -299,7 +299,7 @@ def struct_instance_box(typ, val, c):
     struct_from_ptr_runtime = c.pyapi.unserialize(ser)
     pointee = typ.dtype
 
-    hash_ = cffi_types_cache.get_type_hash(pointee.cffi_type)
+    hash_ = cffi_types_cache.get_type_hash(pointee)
     hash_ = cgutils.intp_t(hash_)
     hash_ = c.pyapi.long_from_longlong(hash_)
     if isinstance(typ, types.CFFIOwningType):
