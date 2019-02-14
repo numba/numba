@@ -70,7 +70,6 @@ class CFFIStructTypeCache(object):
             return hash(cffi_type)
 
 
-
 cffi_types_cache = CFFIStructTypeCache()
 
 _cached_type_map = None
@@ -289,7 +288,6 @@ def get_ffi_free():
     from numba import extending, njit
 
     if _free_impl is None:
-
         def free_ffi_new(typingctx, free_addr):
             if isinstance(free_addr, types.Integer):
                 sig = templates.signature(types.void, free_addr)
@@ -312,7 +310,7 @@ def get_ffi_free():
         def free_impl(free_addr):
             free_intr(free_addr)
 
-        _free_impl = njit(free_impl)
+        _free_impl = njit(types.void(types.int64))(free_impl)
     return _free_impl
 
 
@@ -326,7 +324,8 @@ def struct_from_ptr(hash_, data_addr, free_addr, owned, length=None):
         )
     if owned:
         assert free_addr != 0
-        ret = ffi.gc(ret, lambda _: get_ffi_free()(free_addr))
+        ffi_free = get_ffi_free()
+        ret = ffi.gc(ret, lambda _: ffi_free(free_addr))
     return ret
 
 

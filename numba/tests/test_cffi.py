@@ -16,8 +16,9 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED,
-                     "CFFI not supported -- please install the cffi module")
+@unittest.skipUnless(
+    cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
+)
 class TestCFFI(TestCase):
 
     # Need to run the tests serially because of race conditions in
@@ -81,7 +82,8 @@ class TestCFFI(TestCase):
             (mod.cffi_sin, mod.cffi_cos_ool, 1.0),
             (mod.cffi_sin, mod.cffi_cos_ool, -1.0),
             (mod.cffi_cos, mod.cffi_sin_ool, 1.0),
-            (mod.cffi_cos, mod.cffi_sin_ool, -1.0)]:
+            (mod.cffi_cos, mod.cffi_sin_ool, -1.0),
+        ]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)
@@ -135,19 +137,20 @@ class TestCFFI(TestCase):
         y = np.zeros_like(x)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(x, y)
-        self.assertIn("from_buffer() unsupported on non-contiguous buffers",
-                      str(raises.exception))
+        self.assertIn(
+            "from_buffer() unsupported on non-contiguous buffers", str(raises.exception)
+        )
 
     def test_from_buffer_numpy_multi_array(self):
-        c1 = np.array([1, 2], order='C', dtype=np.float32)
+        c1 = np.array([1, 2], order="C", dtype=np.float32)
         c1_zeros = np.zeros_like(c1)
-        c2 = np.array([[1, 2], [3, 4]], order='C', dtype=np.float32)
+        c2 = np.array([[1, 2], [3, 4]], order="C", dtype=np.float32)
         c2_zeros = np.zeros_like(c2)
-        f1 = np.array([1, 2], order='F', dtype=np.float32)
+        f1 = np.array([1, 2], order="F", dtype=np.float32)
         f1_zeros = np.zeros_like(f1)
-        f2 = np.array([[1, 2], [3, 4]], order='F', dtype=np.float32)
+        f2 = np.array([[1, 2], [3, 4]], order="F", dtype=np.float32)
         f2_zeros = np.zeros_like(f2)
-        f2_copy = f2.copy('K')
+        f2_copy = f2.copy("K")
         pyfunc = mod.vector_sin_float32
         cfunc = jit(nopython=True)(pyfunc)
         # No exception because of C layout and single dimension
@@ -163,8 +166,10 @@ class TestCFFI(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(f2, f2_zeros)
         np.testing.assert_allclose(f2, f2_copy)
-        self.assertIn("from_buffer() only supports multidimensional arrays with C layout",
-                      str(raises.exception))
+        self.assertIn(
+            "from_buffer() only supports multidimensional arrays with C layout",
+            str(raises.exception),
+        )
 
     def test_indirect_multiple_use(self):
         """
@@ -190,6 +195,7 @@ class TestCFFI(TestCase):
 
     def test_allocate_int_array(self):
         ffi = mod.ffi
+
         @njit
         def allocate_int():
             arr = ffi.new("int32_t[100]")
@@ -202,6 +208,7 @@ class TestCFFI(TestCase):
 
     def test_allocate_float_array(self):
         ffi = mod.ffi
+
         @njit
         def allocate_float():
             arr = ffi.new("float[100]")
@@ -245,9 +252,9 @@ class TestCFFI(TestCase):
         self.assertEqual(array_allocate_sum(), sum(range(100)))
 
 
-
-@unittest.skipUnless(cffi_support.SUPPORTED,
-                     "CFFI not supported -- please install the cffi module")
+@unittest.skipUnless(
+    cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
+)
 class TestCFFILinkedList(TestCase):
     def setUp(self):
         ffi_mod = mod.load_ool_linkedlist()
@@ -256,6 +263,7 @@ class TestCFFILinkedList(TestCase):
 
     def _create_linked_list(self, n):
         lib = self.lib
+
         @njit
         def create_linked_list(n):
             l = lib.list_new()
@@ -341,7 +349,7 @@ class TestCFFILinkedList(TestCase):
     def test_array(self):
         n = 100
         ffi = self.ffi
-        nodes = ffi.new('Node[{}]'.format(n))
+        nodes = ffi.new("Node[{}]".format(n))
         for i in range(n):
             nodes[i].value = i
 
@@ -354,7 +362,7 @@ class TestCFFILinkedList(TestCase):
 
         self.assertEqual(sum_array(nodes), sum(range(n)))
 
-    def test_allocate_array(self):
+    def test_allocate_struct_array(self):
         ffi = self.ffi
 
         @njit
@@ -366,6 +374,21 @@ class TestCFFILinkedList(TestCase):
 
         nodes = create_array()
         self.assertEqual(sum(n.value for n in nodes), sum(range(100)))
+
+    def test_allocate_set_struct_array(self):
+        ffi = self.ffi
+
+        @njit
+        def create_array():
+            nodes = ffi.new("Node[200]")
+            for i in range(len(nodes)):
+                new_node = ffi.new("Node[1]")
+                new_node.value = i
+                nodes[i] = new_node[0]
+            return nodes
+
+        nodes = create_array()
+        self.assertEqual(sum(n.value for n in nodes), sum(range(200)))
 
     def test_iter_arry(self):
         ffi = self.ffi
@@ -383,7 +406,7 @@ class TestCFFILinkedList(TestCase):
 
         @njit
         def create_and_set_array():
-            nodes = ffi.new('Node[100]')
+            nodes = ffi.new("Node[100]")
             for i in range(len(nodes)):
                 nodes[i].value = i
             return nodes
@@ -398,15 +421,13 @@ class TestCFFILinkedList(TestCase):
 
         @njit
         def create_and_destroy():
-            nodes = ffi.new('Node[100]')
-            # nodes[10].value = random.randint(0, 100)
+            nodes = ffi.new("Node[100]")
             for i in range(100):
                 nodes[i].value = random.randint(0, 100)
             return nodes[random.randint(0, 99)].value
 
-        create_and_destroy()
-        # self.assertTrue(val > 0 and val < 99)
-
+        val = create_and_destroy()
+        self.assertTrue(val >= 0 and val <= 99)
 
     def test_callback(self):
         n = 100
@@ -423,5 +444,6 @@ class TestCFFILinkedList(TestCase):
 
         self.assertEqual(lib.list_sum(ll), 2 * sum(range(n)))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

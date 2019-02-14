@@ -89,6 +89,10 @@ class CFFIArrayType(CFFIPointer, Sequence):
     def yield_type(self):
         return CFFIStructRefType(self)
 
+    @property
+    def key(self):
+        return self.dtype, self.length
+
 
 class CFFIIteratorType(BaseContainerIterator):
     container_class = CFFIArrayType
@@ -134,6 +138,10 @@ class CFFIOwningArrayType(CFFIOwningType, CFFIArrayType):
     @property
     def iterator_type(self):
         return CFFIOwningIteratorType(self)
+
+    @property
+    def key(self):
+        return self.dtype, self.length, "owning"
 
 
 class CFFIOwningIteratorType(BaseContainerIterator):
