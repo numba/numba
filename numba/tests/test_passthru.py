@@ -6,7 +6,7 @@ from numba.config import MACHINE_BITS
 from numba.datamodel import models
 from numba.extending import box, NativeValue, register_model, typeof_impl, unbox, make_attribute_wrapper
 from numba.runtime.nrt import rtsys
-from numba.jitclass.passthru import PassThruType, pass_thru_type
+from numba.passthru import PassThruType, pass_thru_type
 from sys import getrefcount
 from unittest import TestCase
 

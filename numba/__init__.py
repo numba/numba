@@ -34,7 +34,7 @@ from .numpy_support import carray, farray, from_dtype
 from .jitclass import jitclass
 
 # Re-export PassThruContainer
-from .jitclass import PassThruContainer
+from .passthru import PassThruContainer
 
 # Initialize withcontexts
 import numba.withcontexts

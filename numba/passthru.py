@@ -1,10 +1,10 @@
-from .. import cgutils, types
-from ..datamodel import models
-from ..extending import make_attribute_wrapper, overload, register_model, type_callable
-from ..pythonapi import NativeValue, unbox, box
-from ..six import PY3
-from ..targets.imputils import lower_builtin
-from ..typing.typeof import typeof_impl
+from numba import cgutils, types
+from numba.datamodel import models
+from numba.extending import make_attribute_wrapper, overload, register_model, type_callable
+from numba.pythonapi import NativeValue, unbox, box
+from numba.six import PY3
+from numba.targets.imputils import lower_builtin
+from numba.typing.typeof import typeof_impl
 
 from operator import is_, eq
 from llvmlite.llvmpy.core import Constant
