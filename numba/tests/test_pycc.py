@@ -7,8 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from unittest import skip
-from ctypes import *
+from ctypes import c_int, c_double, c_float, c_void_p, POINTER, CDLL, byref
 
 import numpy as np
 try:
@@ -19,10 +18,14 @@ except ImportError:
 import llvmlite.binding as ll
 
 from numba import unittest_support as unittest
+from numba import utils
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
 from numba.pycc.platform import _external_compiler_ok
+
+from .matmul_usecase import has_blas
+from .support import TestCase, tag, import_dynamic, temp_directory
 
 # if suitable compilers are not present then skip.
 _skip_reason = 'AOT compatible compilers missing'
@@ -32,9 +35,7 @@ _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
 
-from .matmul_usecase import has_blas
-from .support import TestCase, tag, import_dynamic, temp_directory
-
+_needs_py3 = unittest.skipUnless(utils.IS_PY3, "needs python 3")
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -46,6 +47,7 @@ def unset_macosx_deployment_target():
     if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
+
 class TestCompilerChecks(TestCase):
 
     # NOTE: THIS TEST MUST ALWAYS RUN ON WINDOWS, DO NOT SKIP
@@ -54,7 +56,8 @@ class TestCompilerChecks(TestCase):
         # When inside conda-build VSINSTALLDIR should be set and windows should
         # have a valid compiler available, `_external_compiler_ok` should  agree
         # with this. If this is not the case then error out to alert devs.
-        is_running_conda_build = os.environ.get('CONDA_BUILD', None) is not None
+        is_running_conda_build = os.environ.get(
+            'CONDA_BUILD', None) is not None
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
                 self.assertTrue(_external_compiler_ok)
@@ -145,7 +148,8 @@ class TestLegacyAPI(BasePYCCTest):
         Test creating a LLVM bitcode file using pycc.
         """
         modulename = os.path.join(base_path, 'compile_with_pycc')
-        bitcode_modulename = os.path.join(self.tmpdir, 'test_bitcode_legacy.bc')
+        bitcode_modulename = os.path.join(
+            self.tmpdir, 'test_bitcode_legacy.bc')
         if os.path.exists(bitcode_modulename):
             os.unlink(bitcode_modulename)
 
@@ -158,7 +162,8 @@ class TestLegacyAPI(BasePYCCTest):
 
         bitcode_wrapper_magic = b'\xde\xc0\x17\x0b'
         bitcode_magic = b'BC\xc0\xde'
-        self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
+        self.assertTrue(bc.startswith(
+            (bitcode_magic, bitcode_wrapper_magic)), bc)
 
 
 @_skip_missing_compilers
@@ -301,6 +306,21 @@ class TestCC(BasePYCCTest):
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    @tag('important')
+    @_needs_py3
+    def test_compile_unicode_hashsecret(self):
+        # this should simply fail to compile as AOT does not support the use of
+        # hashsecret which is needed for hash(unicode_type)
+        with self.check_cc_compiled(self._test_module.cc_hash_unicode) as lib:
+            self.assertEqual(lib.hash_unicode(), hash("numba"))
+            code = """if 1:
+                from numpy.testing import assert_equal
+                result = lib.hash_unicode()
+                expected = hash('numba')
+                assert_equal(result, expected)
+                """
+            self.check_cc_compiled_in_subprocess(lib, code)
+
 
 @_skip_missing_compilers
 class TestDistutilsSupport(TestCase):
@@ -350,7 +370,8 @@ class TestDistutilsSupport(TestCase):
     def test_setup_py_distutils(self):
         if sys.version_info < (3,) and sys.platform == "win32":
             # See e.g. https://stackoverflow.com/questions/28931875/problems-finding-vcvarsall-bat-when-using-distutils
-            self.skipTest("must use setuptools to build extensions for Python 2")
+            self.skipTest(
+                "must use setuptools to build extensions for Python 2")
         self.check_setup_py("setup_distutils.py")
 
     @unittest.skipIf(setuptools is None, "test needs setuptools")

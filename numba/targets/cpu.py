@@ -5,11 +5,12 @@ import platform
 
 import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
+from llvmlite import ir as llvmir
 
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
-from numba import utils, cgutils, types
+from numba import utils, cgutils, types, errors
 from numba.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
 from .options import TargetOptions
@@ -184,6 +185,12 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
+    def get_address_of_hash_secret(self, builder):
+        i64 = llvmir.IntType(64)
+        secret = llvmir.GlobalVariable(builder.module, cgutils.voidptr_t,
+                                       '_Py_HashSecret')
+        return builder.ptrtoint(secret, i64)
 
 
 class ParallelOptions(object):

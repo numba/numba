@@ -157,6 +157,11 @@ def _load_global_helpers():
     # This is Py_None's real C name
     ll.add_symbol("_Py_NoneStruct", id(None))
 
+    # This is the _Py_HashSecret_t struct
+    import ctypes as ct
+    addr = ct.addressof(ct.c_void_p.in_dll(ct.pythonapi, "_Py_HashSecret"))
+    ll.add_symbol("_Py_HashSecret", addr)
+
     # Add Numba C helper functions
     for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
         for py_name, c_address in c_helpers.items():
@@ -1114,7 +1119,6 @@ class BaseContext(object):
         colib = self.active_code_library
         for lib in libs:
             colib.add_linking_library(lib)
-
 
 class _wrap_impl(object):
     """

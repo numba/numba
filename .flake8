@@ -265,7 +265,6 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/test_numpy_support.py
-    numba/tests/compile_with_pycc.py
     numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
@@ -295,7 +294,6 @@ exclude =
     numba/tests/test_cfunc.py
     numba/tests/test_conversion.py
     numba/tests/test_indexing.py
-    numba/tests/test_pycc.py
     numba/tests/annotation_usecases.py
     numba/tests/test_unicode_names.py
     numba/tests/test_unicode_literals.py

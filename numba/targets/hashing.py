@@ -515,7 +515,8 @@ if _Py_hashfunc_name == 'siphash24':
             for i in range(4):
                 jmp = i * 8
                 mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + i)) << jmp)
+                t = (t & mask) | (types.uint64(
+                    grab_byte(src, boffset + i)) << jmp)
         if src_sz >= 3:
             jmp = (2 * 8)
             mask = ~types.uint64(ohexefef << jmp)
@@ -539,11 +540,19 @@ if _Py_hashfunc_name == 'siphash24':
         return t
 
 elif _Py_hashfunc_name == 'fnv':
-    #TODO: Should this instead warn and switch to siphash24?
+    # TODO: Should this instead warn and switch to siphash24?
     raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)
+
+
+@intrinsic
+def get_address_of_hash_secret(typingctx):
+    def codegen(context, builder, typ, args):
+        return context.get_address_of_hash_secret(builder)
+    sig = types.uint64()
+    return sig, codegen
 
 # This is a translation of CPythons's _Py_HashBytes:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
@@ -554,6 +563,9 @@ def _Py_HashBytes(val, _len):
     if (_len == 0):
         return process_return(0)
 
+    # need to get the hash secret, the is a llvm global in the module
+    secret_addr = get_address_of_hash_secret()
+
     if (_len < _Py_HASH_CUTOFF):
         # TODO: this branch needs testing, needs a CPython setup for it!
         # /* Optimize hashing of very small strings with inline DJBX33A. */
@@ -562,8 +574,11 @@ def _Py_HashBytes(val, _len):
             _hash = ((_hash << 5) + _hash) + np.uint8(grab_byte(val, idx))
 
         _hash ^= _len
+        _Py_HashSecret_djbx33a_suffix = grab_uint64_t(secret_addr, 2)
         _hash ^= _Py_HashSecret_djbx33a_suffix
     else:
+        _Py_HashSecret_siphash_k0 = grab_uint64_t(secret_addr, 0)
+        _Py_HashSecret_siphash_k1 = grab_uint64_t(secret_addr, 1)
         tmp = _siphash24(types.uint64(_Py_HashSecret_siphash_k0),
                          types.uint64(_Py_HashSecret_siphash_k1),
                          val, _len)
@@ -581,13 +596,20 @@ def unicode_hash(val):
     def impl(val):
         kindwidth = _kind_to_byte_width(val._kind)
         _len = len(val)
+        # NOTE This branching is disabled until a way of working out if the code
+        # is being loaded from the numba cache is written. The issue is
+        # basically that the current_hash gets baked in as a constant and even
+        # if were it possible to make it volatile then there's no knowing if
+        # the value stored in the native unicode struct hash slot is the hash
+        # computed from the current hashsecret.
+        #
         # use the cache if possible
-        current_hash = val._hash
-        if current_hash != -1:
-            return current_hash
-        else:
-            # cannot write hash value to cache in the unicode struct due to
-            # pass by value on the struct making the struct member immutable
-            return _Py_HashBytes(val._data, kindwidth * _len)
+        #current_hash = val._hash
+        # if current_hash != -1:
+        # return current_hash
+        # else:
+        # cannot write hash value to cache in the unicode struct due to
+        # pass by value on the struct making the struct member immutable
+        return _Py_HashBytes(val._data, kindwidth * _len)
 
     return impl

@@ -6,6 +6,8 @@ from __future__ import print_function
 
 import numba.unittest_support as unittest
 
+import os
+import subprocess
 import sys
 from collections import defaultdict
 
@@ -13,8 +15,9 @@ import numpy as np
 
 from numba import jit, types, utils
 import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache
 from numba.targets import hashing
+from .support import TestCase, tag
+from .test_dispatcher import BaseCacheTest
 
 if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
@@ -354,6 +357,72 @@ class TestUnicodeHashing(BaseTest):
         a = (compile_time_get_string_data(expected))
         b = (compile_time_get_string_data(got))
         self.assertEqual(a, b)
+
+
+class TestHashInCache(BaseCacheTest):
+    """ Tests that caching works in the cache=True use case, main concern is
+    hash(unicode_type) as that requires the use of the PYTHONHASHSEED which
+    by default changes across process invocations.
+    """
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "hash_cache_usecases.py")
+    modname = "hash_caching_test_fodder"
+
+    def run_in_separate_process(self):
+        # Cached functions can be run from a distinct process.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+
+            # checks hash replay from cache, asserts the cache hit count is
+            # correct and that the values are as expected
+            mod.self_test(assert_run_from_cache=True)
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            msg = "process failed with code %s: stderr follows\n%s\n"
+            raise AssertionError(msg % (popen.returncode, err.decode()))
+
+    def check_module(self, mod):
+        mod.self_test()
+
+    def check_hits(self, func, hits, misses=None):
+        st = func.stats
+        self.assertEqual(sum(st.cache_hits.values()), hits, st.cache_hits)
+        if misses is not None:
+            self.assertEqual(sum(st.cache_misses.values()), misses,
+                             st.cache_misses)
+
+    @tag('important')
+    def test_caching(self):
+        unicode_used = int(utils.IS_PY3)
+        ntypes = 10
+        ndata = 1
+
+        self.check_pycache(0)
+        mod = self.import_module()
+
+        self.check_module(mod)
+        # cache set for ntypes types + unicode if py3 + 1 data file
+        self.check_pycache(ndata + ntypes + unicode_used)
+        # no reuse yet
+        self.check_hits(mod.simple_usecase, 0)
+
+        # Reload module to hit the cache
+        mod = self.import_module()
+        self.check_pycache(ndata + ntypes + unicode_used)
+
+        # check reuse from cache
+        self.check_module(mod)
+        self.check_hits(mod.simple_usecase, ntypes + unicode_used)
+
+        # run from cache in a separate process
+        self.run_in_separate_process()
 
 
 if __name__ == "__main__":
