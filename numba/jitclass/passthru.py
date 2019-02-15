@@ -10,7 +10,7 @@ from operator import is_, eq
 from llvmlite.llvmpy.core import Constant
 
 
-__all__ = ['PassThruContainer']
+__all__ = ['PassThruContainer', 'pass_thru_container_type']
 
 
 NULL = Constant.null(cgutils.voidptr_t)
@@ -37,7 +37,7 @@ class PassThruModel(models.StructModel):
 @unbox(PassThruType)
 def unbox_pass_thru_type(typ, obj, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder)
-    pass_thru.meminfo = context.pyapi.nrt_meminfo_new_from_pyobject(obj, obj)    # store obj on meminfo.data
+    pass_thru.meminfo = context.pyapi.nrt_meminfo_new_from_pyobject(obj, obj)
 
     return NativeValue(pass_thru._getvalue())
 
@@ -47,47 +47,10 @@ def box_pass_thru_type(typ, val, context):
     val = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
     obj = context.context.nrt.meminfo_data(context.builder, val.meminfo)
 
-    # obj is allowed to be NULL to make this re-usable for derived pass through
-    # types that can be nopython created, it is the responsibility of the boxer
-    # of the derived type to clear the error
-    with context.builder.if_else(cgutils.is_null(context.builder, obj)) as (no_python_created, python_created):
-        with no_python_created:
-            context.pyapi.err_set_string(
-                "PyExc_NotImplementedError", "Native creation of '{}' not implemented.".format(typ.name)
-            )
-
-        with python_created:
-            context.pyapi.incref(obj)
-
+    context.pyapi.incref(obj)
     context.context.nrt.decref(context.builder, typ, val._getvalue())
 
     return obj
-
-
-class PassThru(object):
-    pass
-
-
-@type_callable(PassThru)
-def type_pass_thru_constructor(context):
-    def pass_thru_constructor_typer():
-        return pass_thru_type
-
-    return pass_thru_constructor_typer
-
-
-@lower_builtin(PassThru)
-def pass_thru_constructor(context, builder, sig, args):
-    typ = sig.return_type
-
-    pass_thru = cgutils.create_struct_proxy(typ)(context, builder)
-
-    meminfo = context.nrt.meminfo_alloc(builder, context.get_constant(types.intp, 0))
-    context.nrt.meminfo_set_data(builder, meminfo, NULL)
-
-    pass_thru.meminfo = meminfo
-
-    return pass_thru._getvalue()
 
 
 class PassThruContainer(object):
@@ -169,20 +132,21 @@ def opaque_is(context, builder, sig, args):
 
 
 @overload(eq)
-def generic_passthru_eq(xty, yty):
+def pass_thru_container_eq(xty, yty):
     if xty is PassThruContainerType():
         if yty is PassThruContainerType():
-            def generic_passthru_generic_passthru_eq(x, y):
+            def pass_thru_container_pass_thru_container_eq_impl(x, y):
                 return x.wrapped_obj is y.wrapped_obj
 
-            return generic_passthru_generic_passthru_eq
+            return pass_thru_container_pass_thru_container_eq_impl
         else:
-            def generic_passthru_any_eq(x, y):
+            def pass_thru_container_any_eq_impl(x, y):
                 return False
 
-            return generic_passthru_any_eq
+            return pass_thru_container_any_eq_impl
 
 
+# TODO: I'd assume hashing impl can be improved once the PR has landed https://github.com/numba/numba/pull/3703
 @type_callable(hash)
 def type_hash_pass_thru(context):
     def hash_pass_thru_typer(typ):

@@ -179,19 +179,6 @@ class NRTContext(object):
                                         name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
-    def meminfo_set_data(self, builder, meminfo, data_ptr):
-        """
-        Given a MemInfo pointer sets its data pointer to `data_ptr`
-        """
-        self._require_nrt()
-
-        from numba.runtime.nrtdynmod import meminfo_set_data_ty
-
-        mod = builder.module
-        fn = mod.get_or_insert_function(meminfo_set_data_ty,
-                                        name="NRT_MemInfo_set_data")
-        return builder.call(fn, [meminfo, data_ptr])
-
     def _call_incref_decref(self, builder, root_type, typ, value,
                                 funcname, getters=()):
         self._require_nrt()

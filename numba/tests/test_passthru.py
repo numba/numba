@@ -4,11 +4,9 @@ from numba import jit, objmode, PassThruContainer, types
 from numba import cgutils
 from numba.config import MACHINE_BITS
 from numba.datamodel import models
-from numba.extending import box, lower_builtin, NativeValue, register_model, type_callable, typeof_impl, unbox, \
-    make_attribute_wrapper
-from numba.jitclass import _box
+from numba.extending import box, NativeValue, register_model, typeof_impl, unbox, make_attribute_wrapper
 from numba.runtime.nrt import rtsys
-from numba.jitclass.passthru import PassThru, PassThruType, pass_thru_type, pass_thru_constructor
+from numba.jitclass.passthru import PassThruType, pass_thru_type
 from sys import getrefcount
 from unittest import TestCase
 
@@ -20,14 +18,6 @@ def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, r
     for k, v in refcount_changes.items():
         refcounts[k] += v
 
-    for k, v in track_refcounts.items():
-        if isinstance(v, _box.Box):
-            self.assertEqual(_box.box_get_meminfoptr(v), 0, "'{}' already has meminfo.".format(k))
-
-    if track_refcounts:
-        # if loop ran at least once clean-up v
-        del v
-
     before = rtsys.get_allocation_stats()
 
     try:
@@ -36,15 +26,6 @@ def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, r
         del tracked
 
         refcounts_after = {k: getrefcount(v) for k, v in track_refcounts.items()}
-        for k, v in track_refcounts.items():
-            if isinstance(v, _box.Box):
-                self.assertEqual(
-                    get_nrt_refcount(v), 1, "'{}'s meminfo refcount is {} != 1.".format(k, get_nrt_refcount(v))
-                )
-
-        if track_refcounts:
-            # if loop ran at least once clean-up v
-            del v
         del track_refcounts
 
         after = rtsys.get_allocation_stats()
@@ -156,9 +137,10 @@ class PassThruContainerTest(TestCase):
             del c
 
 
-############################ PassThru ############################
-# simple pass through type, no attributes accessible from nopython
-##################################################################
+################################ MyPassThru ################################
+# simple pass through extension type, no attributes accessible from nopython
+# use case for this might be to dispatch on this type
+############################################################################
 class MyPassThru(object):
     def __init__(self):
         self.something_not_boxable = object()
@@ -166,7 +148,7 @@ class MyPassThru(object):
 
 @typeof_impl.register(MyPassThru)
 def type_my_passthru(val, context):
-    return pass_thru_type
+    return PassThruType('MyPassThruType')
 
 
 class MyPassThruTest(TestCase):
@@ -254,22 +236,13 @@ class MyPassThruTest(TestCase):
 
             del x, y, z, l, l2, l3
 
-    def test_native_create(self):
-        @jit(nopython=True)
-        def create_pass_thru():
-            # this will raise NotImplementedError from boxer
-            return PassThru()
-
-        with check_numba_allocations(self, (lambda: {})):
-            with self.assertRaises(NotImplementedError) as raises:
-                create_pass_thru()
-
-        self.assertIn("Native creation of 'PassThruType' not implemented.", str(raises.exception))
-
 
 ############################# PassThruComplex #############################
-# pass through type with several attrs accessible from nopython,
-# including another pass through type and a list
+# pass through extension type with several attrs accessible from nopython,
+# including another pass through type and a list, changes to any attribute
+# from the nopython side will NOT be reflected back to Python. The direct
+# members are read-only in nopython but there is currently no way to stop
+# mutating, for example, the list attribute in nopython.
 ###########################################################################
 
 class PassThruComplex(object):
@@ -348,78 +321,15 @@ def unbox_passthru_complex(typ, obj, context):
 def box_passthru_complex(typ, val, context):
     pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
 
-    # try to box parent, if this succeeds we are done else create a new Python object
-    # we need to incref here as the boxer will decref and we might still need the parent
-    # to create a new Python object
+    # just unwrap the parent Python object, no attempt at reflecting attribute mutations back
+    # incref pass_thru.parent, then box pass_thru.parent (which will decref again),
+    # finally decref val
     context.context.nrt.incref(context.builder, pass_thru_type, pass_thru.parent)
     obj = context.box(pass_thru_type, pass_thru.parent)
 
-    with context.builder.if_else(cgutils.is_null(context.builder, obj)) as (no_python_created, python_created):
-        with python_created:
-            context.context.nrt.decref(context.builder, typ, val)
-            bb_python_created = context.builder.basic_block
+    context.context.nrt.decref(context.builder, typ, val)
 
-        with no_python_created:
-            # clear the NotImplementedError set by context.box(pass_thru_type, val)
-            context.pyapi.err_clear()
-
-            int_attr = context.box(types.intp, pass_thru.int_attr)
-            passthru_attr = context.box(pass_thru_type, pass_thru.passthru_attr)
-            list_attr = context.box(types.List(pass_thru_type), pass_thru.list_attr)
-
-            class_obj = context.pyapi.unserialize(context.pyapi.serialize_object(PassThruComplex))
-            new_obj = context.pyapi.call_function_objargs(class_obj, (int_attr, passthru_attr, list_attr))
-
-            # store the newly created object onto the meminfo such that only one instance is created
-            # even if the same nopython instance gets returned twice (or more)
-            parent = cgutils.create_struct_proxy(pass_thru_type)(
-                context.context, context.builder, value=pass_thru.parent
-            )
-            context.context.nrt.meminfo_set_data(context.builder, parent.meminfo, new_obj)
-
-            context.pyapi.decref(int_attr)
-            context.pyapi.decref(passthru_attr)
-            context.pyapi.decref(list_attr)
-
-            # only need to decref parent, other members already decref'ed by the boxers
-            context.context.nrt.decref(context.builder, pass_thru_type, pass_thru.parent)
-
-            bb_no_python_created = context.builder.basic_block
-
-    res = context.builder.phi(cgutils.voidptr_t)
-    res.add_incoming(obj, bb_python_created)
-    res.add_incoming(new_obj, bb_no_python_created)
-
-    return res
-
-
-@type_callable(PassThruComplex)
-def type_passthru_complex_constructor(context):
-    def passthru_complex_constructor_typer(int_attr, passthru_attr, list_attr):
-        return PassThruComplexType()
-
-    return passthru_complex_constructor_typer
-
-
-@lower_builtin(PassThruComplex, types.Integer, pass_thru_type, types.List)
-def passthru_complex_constructor(context, builder, sig, args):
-    typ = sig.return_type
-    int_attr_ty, passthru_attr_ty, list_attr_ty = sig.args
-    int_attr, passthru_attr, list_attr = args
-
-    pass_thru = cgutils.create_struct_proxy(typ)(context, builder)
-
-    pass_thru.parent = pass_thru_constructor(context, builder, pass_thru_type(), [])
-
-    context.nrt.incref(builder, int_attr_ty, int_attr)
-    context.nrt.incref(builder, passthru_attr_ty, passthru_attr)
-    context.nrt.incref(builder, list_attr_ty, list_attr)
-
-    pass_thru.int_attr = int_attr
-    pass_thru.passthru_attr = passthru_attr
-    pass_thru.list_attr = list_attr
-
-    return pass_thru._getvalue()
+    return obj
 
 
 class PassThruComplexTest(TestCase):
@@ -528,29 +438,6 @@ class PassThruComplexTest(TestCase):
             self.assertIs(one, 1)
             del x, y, z, l, o
 
-    def test_native_create(self):
-        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = create_passthru_complex_native(43, x, y, z)
-
-            self.assertEqual(o.int_attr, 43)
-            self.assertIs(o.passthru_attr, x)
-            self.assertEqual(o.list_attr[0], y)
-            self.assertEqual(o.list_attr[1], z)
-
-            del o, x, y, z
-
-    def test_native_create_and_double(self):
-        with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o1, o2 = create_passthru_complex_native_and_double(43, x, y, z)
-
-            self.assertIs(o1, o2)
-            self.assertEqual(o1.int_attr, 43)
-            self.assertIs(o1.passthru_attr, x)
-            self.assertEqual(o1.list_attr[0], y)
-            self.assertEqual(o1.list_attr[1], z)
-
-            del o1, o2, x, y, z
-
 
 ############################ test functions ############################
 # test function for basic allocation tests
@@ -585,29 +472,3 @@ def attr_access(o, *names):
 def create_passthru_list(list_attr1, list_attr2):
     return [list_attr1, list_attr2]
 
-
-@jit(nopython=True)
-def create_passthru_complex_native(int_attr, passthru_attr, list_attr1, list_attr2):
-    l = [list_attr1, list_attr2]
-    o = PassThruComplex(int_attr, passthru_attr, l)
-    return o
-
-
-@jit(nopython=True)
-def create_passthru_complex_native_and_double(int_attr, passthru_attr, list_attr1, list_attr2):
-    l = [list_attr1, list_attr2]
-    o = PassThruComplex(int_attr, passthru_attr, l)
-
-    return o, o
-
-
-def get_nrt_refcount(box_obj):
-    from ctypes import cast, c_int32, c_int64, POINTER
-
-    refcount_ctype = c_int64 if MACHINE_BITS == 64 else c_int32
-
-    ptr = _box.box_get_meminfoptr(box_obj)
-    if ptr == 0:
-        raise ValueError("'MemInfo' not initialized, yet.")
-
-    return cast(ptr, POINTER(refcount_ctype)).contents.value
