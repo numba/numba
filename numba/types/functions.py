@@ -129,6 +129,8 @@ class BaseFunction(Callable):
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
                     sig = None
+                    import traceback
+                    traceback.print_exc()
                     failures.add_error(temp_cls, e)
                 else:
                     if sig is not None:

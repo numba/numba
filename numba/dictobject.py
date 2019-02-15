@@ -20,7 +20,11 @@ from numba.types import DictType, Type
 ll_dict_type = cgutils.voidptr_t
 ll_status = cgutils.int32_t
 ll_ssize_t = cgutils.intp_t
+ll_hash = ll_ssize_t
 
+
+def new_dict():
+    raise NotImplementedError
 
 
 @register_model(DictType)
@@ -33,10 +37,6 @@ class DictModel(models.StructModel):
 
 
 make_attribute_wrapper(types.DictType, 'data', '_data')
-
-
-def new_dict(key_type, value_type):
-    raise NotImplementedError
 
 
 @intrinsic
@@ -68,6 +68,47 @@ def _dict_new_minsize(typingctx, keyty, valty):
         status = builder.call(fn, [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)])
         dp = builder.load(refdp)
         return dp
+
+    return sig, codegen
+
+
+@intrinsic
+def _dict_insert(typingctx, d, key, hashval, val):
+    resty = types.int32
+    sig = resty(d, d.key_type, types.intp, d.value_type)
+    ll_bytes = cgutils.voidptr_t
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_dict_type, ll_bytes, ll_hash, ll_bytes, ll_bytes],
+        )
+        [d, key, hashval, val] = args
+        [td, tkey, thashval, tval] = sig.args
+        fn = ir.Function(builder.module, fnty, name='numba_dict_insert')
+
+        dm_key = context.data_model_manager[tkey]
+        dm_val = context.data_model_manager[tval]
+
+        data_key = dm_key.as_data(builder, key)
+        data_val = dm_val.as_data(builder, val)
+
+        ptr_key = cgutils.alloca_once_value(builder, data_key)
+        ptr_val = cgutils.alloca_once_value(builder, data_val)
+        ptr_oldval = cgutils.alloca_once(builder, data_val.type)
+
+        dp = _dict_get_data(context, builder, td, d)
+        status = builder.call(
+            fn,
+            [
+                dp,
+                _as_bytes(builder, ptr_key),
+                hashval,
+                _as_bytes(builder, ptr_val),
+                _as_bytes(builder, ptr_oldval),
+            ],
+        )
+        return status
 
     return sig, codegen
 
@@ -117,6 +158,16 @@ def _make_dict(typingctx, keyty, valty, ptr):
     return sig, codegen
 
 
+def _dict_get_data(context, builder, dict_ty, d):
+    ctor = cgutils.create_struct_proxy(dict_ty)
+    dstruct = ctor(context, builder, value=d)
+    return dstruct.data
+
+
+def _as_bytes(builder, ptr):
+    return builder.bitcast(ptr, cgutils.voidptr_t)
+
+
 @overload(new_dict)
 def impl_new_dict(key, value):
     """Creates a new dictionary with *key* and *value* as the type
@@ -151,15 +202,26 @@ def impl_len(d):
     return impl
 
 
+@intrinsic
+def _cast(typingctx, val, typ):
+    def codegen(context, builder, signature, args):
+        [val, typ] = args
+        return val
+    casted = typ.dtype
+    sig = casted(casted, typ)
+    return sig, codegen
+
+
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
-    print('>>>', d, key, value)
     if not isinstance(d, types.DictType):
         return
 
+    keyty, valty = d.key_type, d.value_type
+
     def impl(d, key, value):
-        hashval = hash(key)
-        print(hashval)
-        # return _dict_insert(d, key, hashval, value)
+        key = _cast(key, keyty)
+        val = _cast(value, valty)
+        status = _dict_insert(d, key, hash(key), val)
 
     return impl

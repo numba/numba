@@ -13,8 +13,18 @@ from .support import TestCase, MemoryLeakMixin
 class TestDictObject(MemoryLeakMixin, TestCase):
     def test_dict_create(self):
         @njit
-        def foo():
+        def foo(n):
             d = dictobject.new_dict(int32, float32)
+            for i in range(n):
+                d[i] = i + 1
             return len(d)
 
-        self.assertEqual(foo(), 0)
+        # Insert nothing
+        self.assertEqual(foo(n=0), 0)
+        # Insert 1 entry
+        self.assertEqual(foo(n=1), 1)
+        # Insert 2 entries
+        self.assertEqual(foo(n=2), 2)
+        # Insert 100 entries
+        self.assertEqual(foo(n=100), 100)
+
