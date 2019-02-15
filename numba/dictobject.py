@@ -145,7 +145,7 @@ def _make_dict(typingctx, keyty, valty, ptr):
     ptr : llvm pointer value
         Points to the dictionary object.
     """
-    dict_ty = types.DictType(keyty.dtype, valty.dtype)
+    dict_ty = types.DictType(keyty.instance_type, valty.instance_type)
 
     def codegen(context, builder, signature, args):
         [_, _, ptr] = args
@@ -207,7 +207,7 @@ def _cast(typingctx, val, typ):
     def codegen(context, builder, signature, args):
         [val, typ] = args
         return val
-    casted = typ.dtype
+    casted = typ.instance_type
     sig = casted(casted, typ)
     return sig, codegen
 

@@ -223,3 +223,13 @@ def typeof_array(val, c):
 @typeof_impl.register(types.NumberClass)
 def typeof_number_class(val, c):
     return val
+
+
+@typeof_impl.register(types.TypeRef)
+def typeof_typeref(val, c):
+    return val
+
+
+@typeof_impl.register(types.Type)
+def typeof_typeref(val, c):
+    return types.TypeRef(val)

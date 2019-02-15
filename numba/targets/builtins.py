@@ -261,6 +261,7 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
+@lower_builtin(types.TypeRef, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
