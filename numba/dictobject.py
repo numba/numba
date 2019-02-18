@@ -1,8 +1,6 @@
 
 import ctypes
 import operator
-from pprint import pprint
-import ctypes
 
 from llvmlite import ir
 
@@ -37,7 +35,15 @@ ll_ssize_t = cgutils.intp_t
 ll_hash = ll_ssize_t
 ll_bytes = cgutils.voidptr_t
 
+# The following enums must match _dictobject.c
 DKIX_EMPTY = -1
+
+OK_REPLACED = 1
+ERR_NO_MEMORY = -1
+ERR_DICT_MUTATED = -2
+ERR_ITER_EXHAUSTED = -3
+ERR_DICT_EMPTY = -4
+ERR_CMP_FAILED = -5
 
 
 def new_dict():
@@ -49,7 +55,6 @@ class DictIterState(Type):
 
 
 _DictIterState = DictIterState('dict_iterator_state')
-
 
 
 @register_model(DictType)
@@ -75,6 +80,11 @@ class DictIterModel(models.StructModel):
 
 
 make_attribute_wrapper(types.DictType, 'data', '_data')
+
+
+def _raise_user_error(context, builder, status, msg):
+    with builder.if_then(builder.icmp_signed('!=', status, status.type(0))):
+        context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
 @intrinsic
@@ -103,7 +113,14 @@ def _dict_new_minsize(typingctx, keyty, valty):
         sz_key = context.get_abi_sizeof(ll_key)
         sz_val = context.get_abi_sizeof(ll_val)
         refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
-        status = builder.call(fn, [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)])
+        status = builder.call(
+            fn,
+            [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
+        )
+        _raise_user_error(
+            context, builder, status,
+            msg="Failed to allocate dictionary",
+        )
         dp = builder.load(refdp)
         return dp
 
@@ -114,7 +131,6 @@ def _dict_new_minsize(typingctx, keyty, valty):
 def _dict_insert(typingctx, d, key, hashval, val):
     resty = types.int32
     sig = resty(d, d.key_type, types.intp, d.value_type)
-
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
@@ -193,6 +209,7 @@ def _dict_dump_keys(typingctx, d):
         builder.call(fn, [dp])
 
     return sig, codegen
+
 
 @intrinsic
 def _dict_lookup(typingctx, d, key, hashval):
@@ -296,6 +313,7 @@ def _dict_popitem(typingctx, d):
         return cgutils.pack_struct(builder, [status, out])
 
     return sig, codegen
+
 
 @intrinsic
 def _dict_delitem(typingctx, d, hk, ix):
@@ -463,7 +481,16 @@ def impl_setitem(d, key, value):
         key = _cast(key, keyty)
         val = _cast(value, valty)
         status = _dict_insert(d, key, hash(key), val)
-
+        if status == 0:
+            return
+        elif status == 1:
+            # replaced
+            # XXX handle refcount
+            return
+        elif status == ERR_CMP_FAILED:
+            raise ValueError('key comparison failed')
+        else:
+            raise RuntimeError('dict.__setitem__ failed unexpectedly')
     return impl
 
 
@@ -553,7 +580,6 @@ def impl_pop(dct, k, d=None):
 #     if not isinstance(d, types.DictType):
 #         return
 #     print(">>>>>>>")
-
 
 
 @overload_method(types.DictType, 'clear')
