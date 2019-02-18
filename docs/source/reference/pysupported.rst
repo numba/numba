@@ -179,13 +179,13 @@ will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
 
 .. warning::
-    The performance of some operations is known to be slower than Python.
-    These include substring search (``in``, ``.contains()`` and ``find()``)
-    and string creation (like ``.split()``).  Improving the string performance
-    is an ongoing task, but the speed of CPython is unlikely to be surpassed
-    for for basic string operation in isolation. Numba is most successfuly
-    used for larger algorithms that happen to involve strings, where basic
-    string operations are not the bottleneck.
+    The performance of some operations is known to be slower than the CPython
+    implementation. These include substring search (``in``, ``.contains()``
+    and ``find()``) and string creation (like ``.split()``).  Improving the
+    string performance is an ongoing task, but the speed of CPython is
+    unlikely to be surpassed for basic string operation in isolation.
+    Numba is most successfuly used for larger algorithms that happen to
+    involve strings, where basic string operations are not the bottleneck.
 
 
 tuple

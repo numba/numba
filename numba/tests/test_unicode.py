@@ -322,12 +322,10 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         # Handle empty separator exception
-        with self.assertRaises(ValueError) as raises:
-                pyfunc('a', '')
-        self.assertIn('empty separator', str(raises.exception))
-        with self.assertRaises(ValueError) as raises:
-                cfunc('a', '')
-        self.assertIn('empty separator', str(raises.exception))
+        for func in [pyfunc, cfunc]:
+            with self.assertRaises(ValueError) as raises:
+                    func('a', '')
+            self.assertIn('empty separator', str(raises.exception))
 
     def test_split(self):
         pyfunc = split_usecase
