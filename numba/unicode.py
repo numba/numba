@@ -591,6 +591,12 @@ def unicode_join(sep, parts):
             parts_list = [p for p in parts]
             return join_list(sep, parts_list)
         return join_iter_impl
+    elif isinstance(parts, types.UnicodeType):
+        # Temporary workaround until UnicodeType is iterable
+        def join_str_impl(sep, parts):
+            parts_list = [parts[i] for i in range(len(parts))]
+            return join_list(sep, parts_list)
+        return join_str_impl
 
 
 ### String creation

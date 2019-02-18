@@ -440,6 +440,21 @@ class TestUnicode(BaseTest):
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
 
+    def test_join_interleave_str(self):
+        # can pass a string as the parts iterable
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('abc', '123'),
+            ('🐍🐍🐍', '⚡⚡'),
+        ]
+
+        for sep, parts in CASES:
+            self.assertEqual(pyfunc(sep, parts),
+                             cfunc(sep, parts),
+                             "'%s'.join('%s')?" % (sep, parts))
+
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
         cfunc = njit(pyfunc)
