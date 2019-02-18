@@ -38,6 +38,9 @@ def getitem_usecase(x, i):
 def concat_usecase(x, y):
     return x + y
 
+def inplace_concat_usecase(x, y):
+    x += y
+    return x
 
 def in_usecase(x, y):
     return x in y
@@ -291,6 +294,15 @@ class TestUnicode(BaseTest):
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
 
+    def test_inplace_concat(self, flags=no_pyobj_flags):
+        pyfunc = inplace_concat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            for b in UNICODE_EXAMPLES[::-1]:
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b),
+                                 "'%s' + '%s'?" % (a, b))
+
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
             return a[:]
@@ -433,6 +445,38 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeInTuple(BaseTest):
+
+    def test_const_unicode_in_tuple(self):
+        # Issue 3673
+        @njit
+        def f():
+            return ('aa',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('cc',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+    def test_const_unicode_in_hetero_tuple(self):
+        @njit
+        def f():
+            return ('aa', 1) < ('bb', 1)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('aa', 1) < ('aa', 2)
+
+        self.assertEqual(f.py_func(), f())
 
 
 if __name__ == '__main__':

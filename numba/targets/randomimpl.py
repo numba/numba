@@ -1217,15 +1217,15 @@ def shuffle_impl(arr):
     return do_shuffle_impl(arr, "np")
 
 @overload(np.random.permutation)
-def permutation_impl(arr):
-    if isinstance(arr, types.Integer):
-        def permutation_impl(n):
-            arr = np.arange(n)
-            np.random.shuffle(arr)
-            return arr
-    elif isinstance(arr, types.Array):
-        def permutation_impl(arr):
-            arr_copy = arr.copy()
+def permutation_impl(x):
+    if isinstance(x, types.Integer):
+        def permutation_impl(x):
+            y = np.arange(x)
+            np.random.shuffle(y)
+            return y
+    elif isinstance(x, types.Array):
+        def permutation_impl(x):
+            arr_copy = x.copy()
             np.random.shuffle(arr_copy)
             return arr_copy
     else:
@@ -1301,7 +1301,7 @@ for typing_key, arity in [
 def rand(*size):
     if len(size) == 0:
         # Scalar output
-        def rand_impl():
+        def rand_impl(*size):
             return np.random.random()
 
     else:
@@ -1315,7 +1315,7 @@ def rand(*size):
 def randn(*size):
     if len(size) == 0:
         # Scalar output
-        def randn_impl():
+        def randn_impl(*size):
             return np.random.standard_normal()
 
     else:

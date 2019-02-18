@@ -610,9 +610,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            return tup.types[idx]
+            ret = tup.types[idx]
         elif isinstance(idx, slice):
-            return types.BaseTuple.from_types(tup.types[idx])
+            ret = types.BaseTuple.from_types(tup.types[idx])
+        return signature(ret, *args)
 
 
 # Generic implementation for "not in"
@@ -818,16 +819,6 @@ class Round(ConcreteTemplate):
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]
-
-
-@infer_global(hash)
-class Hash(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        arg, = args
-        if isinstance(arg, types.Hashable):
-            return signature(types.intp, *args)
 
 
 #------------------------------------------------------------------------------

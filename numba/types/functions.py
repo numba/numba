@@ -116,15 +116,12 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        return self.get_call_type_with_literals(context, args, kws)
-
-    def get_call_type_with_literals(self, context, args, kws, literals=None):
         failures = _ResolutionFailures(context, self, args, kws)
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            for support_literals in [True, False]:
+            for uselit in [True, False]:
                 try:
-                    if support_literals:
+                    if uselit:
                         sig = temp.apply(args, kws)
                     else:
                         nolitargs = tuple([unliteral(a) for a in args])
@@ -138,7 +135,7 @@ class BaseFunction(Callable):
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         return sig
                     else:
-                        haslit= '' if support_literals else 'out'
+                        haslit= '' if uselit else 'out'
                         msg = "All templates rejected with%s literals." % haslit
                         failures.add_error(temp_cls, msg)
 
@@ -218,12 +215,6 @@ class BoundFunction(Callable, Opaque):
         if out is None and e is not None:
             raise e
         return out
-
-    def get_call_type_with_literals(self, context, args, kws, literals):
-        if literals is not None and self.template.support_literals:
-            return self.template(context).apply(*literals)
-        else:
-            return self.get_call_type(context, args, kws)
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
@@ -369,26 +360,6 @@ class ExternalFunction(Function):
     @property
     def key(self):
         return self.symbol, self.sig
-
-
-class NumbaFunction(Function):
-    """
-    A named native function with the Numba calling convention
-    (resolvable by LLVM).
-    For internal use only.
-    """
-
-    def __init__(self, fndesc, sig):
-        from .. import typing
-        self.fndesc = fndesc
-        self.sig = sig
-        template = typing.make_concrete_template(fndesc.qualname,
-                                                 fndesc.qualname, [sig])
-        super(NumbaFunction, self).__init__(template)
-
-    @property
-    def key(self):
-        return self.fndesc.unique_name, self.sig
 
 
 class NamedTupleClass(Callable, Opaque):

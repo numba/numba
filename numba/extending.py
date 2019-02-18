@@ -50,7 +50,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}):
+def overload(func, jit_options={}, strict=True):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -71,6 +71,10 @@ def overload(func, jit_options={}):
 
     Compiler options can be passed as an dictionary using the **jit_options**
     argument.
+
+    Overloading strictness (that the typing and implementing signatures match)
+    is enforced by the **strict** keyword argument, it is recommended that this
+    is set to True (default).
     """
     from .typing.templates import make_overload_template, infer_global
 
@@ -79,7 +83,7 @@ def overload(func, jit_options={}):
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts)
+        template = make_overload_template(func, overload_func, opts, strict)
         infer(template)
         if hasattr(func, '__module__'):
             infer_global(func, types.Function(template))
@@ -107,7 +111,7 @@ def register_jitable(*args, **kwargs):
     """
     def wrap(fn):
         # It is just a wrapper for @overload
-        @overload(fn, jit_options=kwargs)
+        @overload(fn, jit_options=kwargs, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
         return fn
@@ -223,10 +227,9 @@ class _Intrinsic(object):
 
     __uuid = None
 
-    def __init__(self, name, defn, support_literals=False):
+    def __init__(self, name, defn):
         self._name = name
         self._defn = defn
-        self._support_literals = support_literals
 
     @property
     def _uuid(self):
@@ -252,7 +255,6 @@ class _Intrinsic(object):
         from .typing.templates import make_intrinsic_template, infer_global
 
         template = make_intrinsic_template(self, self._defn, self._name)
-        template.support_literals = self._support_literals
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -327,18 +329,6 @@ def intrinsic(*args, **kwargs):
                     llrtype = context.get_value_type(rtype)
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
-
-    Optionally, keyword arguments can be provided to configure the intrinsic; e.g.
-
-        @intrinsic(support_literals=True)
-        def example(typingctx, ...):
-            ...
-
-    Supported keyword arguments are:
-
-    - support_literals : bool
-        Indicates to the type inferencer that the typing logic accepts and can specialize to
-        `Const` type.
     """
     # Make inner function for the actual work
     def _intrinsic(func):

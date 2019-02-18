@@ -1,6 +1,21 @@
 from __future__ import print_function, absolute_import
 
-from . import _typeconv, castgraph, Conversion
+try:
+    # This is usually the the first C extension import performed when importing
+    # Numba, if it fails to import, provide some feedback
+    from . import _typeconv
+except ImportError as e:
+    from ..errors import feedback_details as reportme
+    url = "http://numba.pydata.org/numba-doc/latest/developer/contributing.html"
+    msg = ("Numba could not be imported.\nIf you are seeing this message and "
+           "are undertaking Numba development work, you may need to re-run:\n\n"
+           "python setup.py build_ext --inplace\n\n(Also, please check the "
+           "development set up guide %s.)\n\nIf you are not working on Numba "
+           "development:\n%s\nThe original error was: '%s'") % \
+           (url, reportme, str(e))
+    raise ImportError(msg)
+
+from . import castgraph, Conversion
 from .. import types
 
 
@@ -17,11 +32,12 @@ class TypeManager(object):
         self._ptr = _typeconv.new_type_manager()
         self._types = set()
 
-    def select_overload(self, sig, overloads, allow_unsafe):
+    def select_overload(self, sig, overloads, allow_unsafe,
+                        exact_match_required):
         sig = [t._code for t in sig]
         overloads = [[t._code for t in s] for s in overloads]
         return _typeconv.select_overload(self._ptr, sig, overloads,
-                                         allow_unsafe)
+                                         allow_unsafe, exact_match_required)
 
     def check_compatible(self, fromty, toty):
         if not isinstance(toty, types.Type):
