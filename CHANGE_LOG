@@ -1,3 +1,10 @@
+Version 0.42.1
+--------------
+
+Bugfix release to fix the incorrect hash in OSX wheel packages.
+No change in source code.
+
+
 Version 0.42.0
 --------------
 
