@@ -12,6 +12,7 @@ import string
 from numba import njit
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.errors import TypingError
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
@@ -407,6 +408,21 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(sep),
                              cfunc(sep),
                              "'%s'.join([])?" % (sep,))
+
+    def test_join_non_string_exception(self):
+        # Verify that join of list of integers raises typing exception
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        with self.assertRaises(TypingError) as raises:
+            cfunc('', [1,2,3])
+        # This error message is obscure, but indicates the error was trapped in typing of str.join()
+        # Feel free to change this as we update error messages.
+        self.assertIn("Invalid use of BoundFunction(("
+                      "<class 'numba.types.misc.UnicodeType'>, 'join')"
+                      " for unicode_type) with parameters (reflected list(int64))",
+                      str(raises.exception))
 
     def test_join(self):
         pyfunc = join_usecase

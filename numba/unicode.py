@@ -30,6 +30,7 @@ from numba.targets.hashing import _Py_hash_t
 
 ### DATA MODEL
 
+
 @register_model(types.UnicodeType)
 class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
@@ -59,8 +60,8 @@ def compile_time_get_string_data(obj):
     the string data into the LLVM module.
     """
     from ctypes import (
-        CFUNCTYPE, c_void_p, c_int, c_long, c_ssize_t, c_ubyte, py_object,
-        POINTER, byref, cast,
+        CFUNCTYPE, c_void_p, c_int, c_ssize_t, c_ubyte, py_object,
+        POINTER, byref,
     )
 
     extract_unicode_fn = c_helpers['extract_unicode']
@@ -278,6 +279,7 @@ def set_uint32(typingctx, data, idx, ch):
     sig = types.void(types.voidptr, types.int64, types.uint32)
     return sig, make_set_codegen(32)
 
+
 @njit(_nrt=False)
 def _set_code_point(a, i, ch):
     ### WARNING: This method is very dangerous:
@@ -294,6 +296,7 @@ def _set_code_point(a, i, ch):
         set_uint32(a._data, i, ch)
     else:
         raise AssertionError("Unexpected unicode representation in _set_code_point")
+
 
 @njit
 def _pick_kind(kind1, kind2):
@@ -577,9 +580,12 @@ def join_list(sep, parts):
 @overload_method(types.UnicodeType, 'join')
 def unicode_join(sep, parts):
     if isinstance(parts, types.List):
-        def join_list_impl(sep, parts):
-            return join_list(sep, parts)
-        return join_list_impl
+        if isinstance(parts.dtype, types.UnicodeType):
+            def join_list_impl(sep, parts):
+                return join_list(sep, parts)
+            return join_list_impl
+        else:
+            pass # lists of any other type not supported
     elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
