@@ -245,3 +245,83 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         keys = [1, 2, 3]
         vals = [0.1, 0.2, 0.3]
         self.assertEqual(foo(keys, vals), (3, 0))
+
+    def test_dict_items(self):
+        """
+        Exercise dict.items
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            out = []
+            for kv in d.items():
+                out.append(kv)
+            return out
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            list(zip(keys, vals)),
+        )
+
+        # Test .items() on empty dict
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            out = []
+            for kv in d.items():
+                out.append(kv)
+            return out
+
+        self.assertEqual(foo(), [])
+
+    def test_dict_keys(self):
+        """
+        Exercise dict.keys
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            out = []
+            for k in d.keys():
+                out.append(k)
+            return out
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            keys,
+        )
+
+    def test_dict_values(self):
+        """
+        Exercise dict.values
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            out = []
+            for k in d.values():
+                out.append(k)
+            return out
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            vals,
+        )
