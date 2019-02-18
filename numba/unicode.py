@@ -27,6 +27,7 @@ from numba.pythonapi import (
 from numba.targets import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
+from numba.unsafe.bytes import memcpy_region
 
 ### DATA MODEL
 
@@ -210,19 +211,6 @@ def _malloc_string(typingctx, kind, char_bytes, length):
 
     sig = types.unicode_type(types.int32, types.intp, types.intp)
     return sig, details
-
-
-@intrinsic
-def _memcpy(typingctx, dst, dst_offset, src, src_offset, nbytes):
-    def codegen(context, builder, signature, args):
-        [dst_val, dst_offset_val, src_val, src_offset_val, nbytes_val] = args
-        src_ptr = builder.gep(src_val, [src_offset_val])
-        dst_ptr = builder.gep(dst_val, [dst_offset_val])
-        cgutils.raw_memcpy(builder, dst_ptr, src_ptr, nbytes_val, 1)
-        return context.get_dummy_value()
-
-    sig = types.void(types.voidptr, types.intp, types.voidptr, types.intp, types.intp)
-    return sig, codegen
 
 
 @njit
@@ -672,7 +660,7 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
         src_byte_offset = byte_width * src_offset
         dst_byte_offset = byte_width * dst_offset
         nbytes = n * byte_width
-        _memcpy(dst._data, dst_byte_offset, src._data, src_byte_offset, nbytes)
+        memcpy_region(dst._data, dst_byte_offset, src._data, src_byte_offset, nbytes, align=1)
     else:
         for i in range(n):
             _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))

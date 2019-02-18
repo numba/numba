@@ -8,6 +8,7 @@ from .support import TestCase
 from numba import njit
 from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
+from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 
 
@@ -109,3 +110,23 @@ class TestNdarrayIntrinsic(TestCase):
         got = func()
         expect = np.asarray([3.1] * 10)
         np.testing.assert_array_equal(got, expect)
+
+
+class TestBytesIntrinsic(TestCase):
+    """Tests for numba.unsafe.tuple
+    """
+    def test_memcpy_region(self):
+        @njit
+        def foo(dst, dst_index, src, src_index, nbytes):
+            # last arg is assume 1 byte alignment
+            memcpy_region(dst.ctypes.data, dst_index,
+                          src.ctypes.data, src_index, nbytes, 1)
+
+        d = np.zeros(10, dtype=np.int8)
+        s = np.arange(10, dtype=np.int8)
+
+        # copy s[1:6] to d[4:9]
+        foo(d, 4, s, 1, 5)
+
+        expected = [0, 0, 0, 0, 1, 2, 3, 4, 5, 0]
+        np.testing.assert_array_equal(d, expected)
