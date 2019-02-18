@@ -353,3 +353,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             foo(keys, vals),
             [1, 2, 3]
         )
+
+    def test_dict_contains(self):
+        """
+        Exercise operator.contains
+        """
+        @njit
+        def foo(keys, vals, checklist):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            out = []
+            for k in checklist:
+                out.append(k in d)
+            return out
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals, [2, 3, 4, 1, 0]),
+            [True, True, False, True, False],
+        )

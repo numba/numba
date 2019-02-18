@@ -585,6 +585,20 @@ def impl_delitem(d, k):
     return impl
 
 
+@overload(operator.contains)
+def impl_contains(d, k):
+    if not isinstance(d, types.DictType):
+        return
+
+    keyty = d.key_type
+
+    def impl(d, k):
+        k = _cast(k, keyty)
+        ix, val = _dict_lookup(d, k, hash(k))
+        return ix > DKIX_EMPTY
+    return impl
+
+
 @overload_method(types.DictType, 'clear')
 def impl_clear(d):
     if not isinstance(d, types.DictType):
