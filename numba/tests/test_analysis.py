@@ -8,6 +8,7 @@ from .support import TestCase, MemoryLeakMixin
 
 from numba.analysis import dead_branch_prune
 
+
 def compile_to_ir(func):
     func_ir = run_frontend(func)
 
@@ -130,20 +131,20 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
 
         def impl(x):
             if x == 10:
-                z = 3.14159 # noqa: F841 # no effect
+                z = 3.14159  # noqa: F841 # no effect
 
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
-        #TODO: cannot handle this without const prop
-        #def impl(x):
-            #z = None
-            #y = z
-            #if x == y:
-                #print("x is 10")
+        # TODO: cannot handle this without const prop
+        # def impl(x):
+        #     z = None
+        #     y = z
+        #     if x == y:
+        #         print("x is 10")
 
-        #self.assert_prune(impl, (types.NoneType('none'),), [None], None)
-        #self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
+        # self.assert_prune(impl, (types.NoneType('none'),), [None], None)
+        # self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
     def test_single_if_else(self):
 
@@ -197,7 +198,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             if x is None:
                 x_is_none_work = True
             else:
-                dead = 7 # noqa: F841 # no effect
+                dead = 7  # noqa: F841 # no effect
 
             if x_is_none_work:
                 y = 10
@@ -232,7 +233,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             if x is None:
                 x_is_none_work = 100
             else:
-                dead = 7 # noqa: F841 # no effect
+                dead = 7  # noqa: F841 # no effect
 
             if x_is_none_work == one_hundred:
                 y = 10

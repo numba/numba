@@ -388,7 +388,7 @@ def dead_branch_prune(func_ir, called_args):
 
     # 'ERE BE DRAGONS...
     # It is the evaluation of the condition expression that often trips up type
-    # inference so ideally it would be removed as it is effectively rendered
+    # inference, so ideally it would be removed as it is effectively rendered
     # dead by the unconditional jump if a branch was pruned. However, there may
     # be references to the condition that exist in multiple places (e.g. dels)
     # and we cannot run DCE here as typing has not taken place to give enough
@@ -399,7 +399,7 @@ def dead_branch_prune(func_ir, called_args):
     for _, condition, blk in branch_info:
         if condition in nullified_conditions:
             for x in blk.body:
-                if getattr(x, 'value', None) == condition:
+                if isinstance(x, ir.Assign) and x.value is condition:
                     x.value = ir.Const(0, loc=x.loc)
 
     # Remove dead blocks, this is safe as it relies on the CFG only.
