@@ -94,3 +94,61 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         with self.assertRaises(KeyError):
             foo(keys, vals, 4)
 
+    def test_dict_popitem(self):
+        """
+        Exercise dictionary .popitem
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+
+            # popitem
+            return d.popitem()
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        for i in range(1, len(keys)):
+            self.assertEqual(
+                foo(keys[:i], vals[:i]),
+                (keys[i - 1], vals[i - 1]),
+            )
+
+    def test_dict_popitem_many(self):
+        """
+        Exercise dictionary .popitem
+        """
+
+        @njit
+        def core(d, npop):
+            # popitem
+            keysum, valsum = 0, 0
+            for _ in range(npop):
+                k, v = d.popitem()
+                keysum += k
+                valsum -= v
+            return keysum, valsum
+
+        @njit
+        def foo(keys, vals, npop):
+            d = dictobject.new_dict(int32, int32)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+
+            return core(d, npop)
+
+        keys = [1, 2, 3]
+        vals = [10, 20, 30]
+
+        for i in range(len(keys)):
+            self.assertEqual(
+                foo(keys, vals, npop=3),
+                core.py_func(dict(zip(keys, vals)), npop=3),
+            )
+
+        with self.assertRaises(KeyError):
+            foo(keys, vals, npop=4)
+

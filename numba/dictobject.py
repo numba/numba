@@ -209,7 +209,60 @@ def _dict_lookup(typingctx, d, key, hashval):
             builder.store(loaded, pout)
 
         out = builder.load(pout)
-        return cgutils.pack_struct(builder, [ix, out])
+        return context.make_tuple(builder, resty, [ix, out])
+
+    return sig, codegen
+
+
+@intrinsic
+def _dict_popitem(typingctx, d):
+    """Wrap numba_dict_popitem
+    """
+
+    keyvalty = types.Tuple([d.key_type, d.value_type])
+    resty = types.Tuple([types.int32, types.Optional(keyvalty)])
+    sig = resty(d)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_dict_type, ll_bytes, ll_bytes],
+        )
+        [d] = args
+        [td] = sig.args
+        fn = ir.Function(builder.module, fnty, name='numba_dict_popitem')
+
+        dm_key = context.data_model_manager[td.key_type]
+        dm_val = context.data_model_manager[td.value_type]
+
+        # data_key = dm_key.as_data(builder, key)
+        # data_val = dm_val.as_data(builder, val)
+
+        ptr_key = cgutils.alloca_once(builder, dm_key.get_data_type())
+        ptr_val = cgutils.alloca_once(builder, dm_val.get_data_type())
+
+        dp = _dict_get_data(context, builder, td, d)
+        status = builder.call(
+            fn,
+            [
+                dp,
+                _as_bytes(builder, ptr_key),
+                _as_bytes(builder, ptr_val),
+            ],
+        )
+        out = context.make_optional_none(builder, keyvalty)
+        pout = cgutils.alloca_once_value(builder, out)
+
+        cond = builder.icmp_signed('==', status, status.type(0))
+        with builder.if_then(cond):
+            key = dm_key.load_from_data_pointer(builder, ptr_key)
+            val = dm_val.load_from_data_pointer(builder, ptr_val)
+            keyval = context.make_tuple(builder, keyvalty, [key, val])
+            optkeyval = context.make_optional_value(builder, keyvalty, keyval)
+            builder.store(optkeyval, pout)
+
+        out = builder.load(pout)
+        return cgutils.pack_struct(builder, [status, out])
 
     return sig, codegen
 
@@ -292,6 +345,18 @@ def _cast(typingctx, val, typ):
     return sig, codegen
 
 
+@intrinsic
+def _nonoptional(typingctx, val):
+    if not isinstance(val, types.Optional):
+        raise TypeError('expected an optional')
+
+    def codegen(context, builder, sig, args):
+        return args[0]
+
+    casted = val.type
+    sig = casted(casted)
+    return sig, codegen
+
 
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
@@ -344,3 +409,18 @@ def impl_getitem(d, key):
     return impl
 
 
+@overload_method(types.DictType, 'popitem')
+def impl_popitem(d):
+    if not isinstance(d, types.DictType):
+        return
+
+    def impl(d):
+        status, keyval = _dict_popitem(d)
+        if status == 0:
+            return _nonoptional(keyval)
+        elif status == -4:
+            raise KeyError()
+        else:
+            raise AssertionError('internal dict error during popitem')
+
+    return impl
