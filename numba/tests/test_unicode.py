@@ -86,6 +86,10 @@ def split_with_maxsplit_usecase(x, y, maxsplit):
     return x.split(y, maxsplit)
 
 
+def split_with_maxsplit_kwarg_usecase(x, y, maxsplit):
+    return x.split(y, maxsplit=maxsplit)
+
+
 def split_whitespace_usecase(x):
     return x.split()
 
@@ -355,9 +359,6 @@ class TestUnicode(BaseTest):
                              "'%s'.split('%s')?" % (test_str, splitter))
 
     def test_split_with_maxsplit(self):
-        pyfunc = split_with_maxsplit_usecase
-        cfunc = njit(pyfunc)
-
         CASES = [
             ('', '⚡', 1),
             ('abcabc', '⚡', 1),
@@ -370,10 +371,15 @@ class TestUnicode(BaseTest):
             ('abababa', 'aba', 5),
         ]
 
-        for test_str, splitter, maxsplit in CASES:
-            self.assertEqual(pyfunc(test_str, splitter, maxsplit),
-                             cfunc(test_str, splitter, maxsplit),
-                             "'%s'.split('%s', %d)?" % (test_str, splitter, maxsplit))
+        for pyfunc, fmt_str in [
+            (split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
+            (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
+
+            cfunc = njit(pyfunc)
+            for test_str, splitter, maxsplit in CASES:
+                self.assertEqual(pyfunc(test_str, splitter, maxsplit),
+                                cfunc(test_str, splitter, maxsplit),
+                                fmt_str % (test_str, splitter, maxsplit))
 
     def test_split_whitespace(self):
         pyfunc = split_whitespace_usecase
