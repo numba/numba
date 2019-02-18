@@ -314,8 +314,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             for k, v in zip(keys, vals):
                 d[k] = v
             out = []
-            for k in d.values():
-                out.append(k)
+            for v in d.values():
+                out.append(v)
             return out
 
         keys = [1, 2, 3]
@@ -324,4 +324,27 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(
             foo(keys, vals),
             vals,
+        )
+
+    def test_dict_iter(self):
+        """
+        Exercise iter(dict)
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            out = []
+            for k in d:
+                out.append(k)
+            return out
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            [1, 2, 3]
         )

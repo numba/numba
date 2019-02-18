@@ -605,9 +605,9 @@ def impl_values(d):
 @lower_builtin('getiter', types.DictItemsIterableType)
 @lower_builtin('getiter', types.DictKeysIterableType)
 @lower_builtin('getiter', types.DictValuesIterableType)
-def impl_items_getiter(context, builder, sig, args):
-    itemiterablety = sig.args[0]
-    it = context.make_helper(builder, itemiterablety.iterator_type, args[0])
+def impl_iterable_getiter(context, builder, sig, args):
+    iterablety = sig.args[0]
+    it = context.make_helper(builder, iterablety.iterator_type, args[0])
 
     fnty = ir.FunctionType(
         ir.VoidType(),
@@ -623,14 +623,38 @@ def impl_items_getiter(context, builder, sig, args):
     pstate = cgutils.alloca_once(builder, state_type, zfill=True)
     it.state = _as_bytes(builder, pstate)
 
-    dp = _dict_get_data(context, builder, itemiterablety.parent, it.parent)
+    dp = _dict_get_data(context, builder, iterablety.parent, it.parent)
+    builder.call(fn, [it.state, dp])
+    return it._getvalue()
+
+
+@lower_builtin('getiter', types.DictType)
+def impl_dict_getiter(context, builder, sig, args):
+    iterablety = types.DictKeysIterableType(sig.args[0])
+    it = context.make_helper(builder, iterablety.iterator_type)
+
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_dictiter_type, ll_dict_type],
+    )
+
+    fn = ir.Function(builder.module, fnty, name='numba_dict_iter')
+
+    proto = ctypes.CFUNCTYPE(ctypes.c_size_t)
+    dictiter_sizeof = proto(_helperlib.c_helpers['dict_iter_sizeof'])
+    state_type = ir.ArrayType(ir.IntType(8), dictiter_sizeof())
+
+    pstate = cgutils.alloca_once(builder, state_type, zfill=True)
+    it.state = _as_bytes(builder, pstate)
+
+    dp = _dict_get_data(context, builder, iterablety.parent, args[0])
     builder.call(fn, [it.state, dp])
     return it._getvalue()
 
 
 @lower_builtin('iternext', types.DictIteratorType)
 @iternext_impl
-def impl_items_iternext(context, builder, sig, args, result):
+def impl_iterator_iternext(context, builder, sig, args, result):
     iter_type = sig.args[0]
     it = context.make_helper(builder, iter_type, args[0])
 

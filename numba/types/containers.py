@@ -441,7 +441,7 @@ class SetEntry(Type):
         return self.set_type
 
 
-class DictType(Type):
+class DictType(IterableType):
     """Dictionary type
     """
     def __init__(self, keyty, valty):
@@ -456,6 +456,10 @@ class DictType(Type):
             valty,
         )
         super(DictType, self).__init__(name)
+
+    @property
+    def iterator_type(self):
+        return DictKeysIterableType(self).iterator_type
 
 
 class DictItemsIterableType(SimpleIterableType):
