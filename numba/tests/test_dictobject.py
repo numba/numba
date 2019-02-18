@@ -395,3 +395,20 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         out = foo(keys, vals)
         self.assertEqual(out, list(zip(keys, vals)))
 
+    def test_dict_setdefault(self):
+        """
+        Exercise dict.setdefault
+        """
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d.setdefault(1, 1.2) # used because key is not in
+            a = d.get(1)
+            d[1] = 2.3
+            b = d.get(1)
+            d[2] = 3.4
+            d.setdefault(2, 4.5)  # not used because key is in
+            c = d.get(2)
+            return a, b, c
+
+        self.assertEqual(foo(), (1.2, 2.3, 3.4))

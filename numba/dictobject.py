@@ -627,6 +627,18 @@ def impl_copy(d):
     return impl
 
 
+@overload_method(types.DictType, 'setdefault')
+def impl_setdefault(dct, k, d=None):
+    if not isinstance(dct, types.DictType):
+        return
+
+    def impl(dct, k, d=None):
+        if k not in dct:
+            dct[k] = d
+
+    return impl
+
+
 @overload_method(types.DictType, 'items')
 def impl_items(d):
     if not isinstance(d, types.DictType):
