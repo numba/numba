@@ -214,18 +214,23 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             core.py_func(dict(zip(keys, vals)), pops),
         )
 
-    # def test_dict_delitem(self):
-    #     @njit
-    #     def foo(keys, vals):
-    #         d = dictobject.new_dict(int32, float64)
-    #         # insertion
-    #         for k, v in zip(keys, vals):
-    #             d[k] = v
-    #         del d[k]
+    def test_dict_delitem(self):
+        @njit
+        def foo(keys, vals, target):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            del d[target]
+            return len(d), d.get(target)
 
-    #     keys = [1, 2, 3]
-    #     vals = [0.1, 0.2, 0.3]
-    #     foo(keys, vals)
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertEqual(foo(keys, vals, 1), (2, None))
+        self.assertEqual(foo(keys, vals, 2), (2, None))
+        self.assertEqual(foo(keys, vals, 3), (2, None))
+        with self.assertRaises(KeyError):
+            foo(keys, vals, 0)
 
     def test_dict_clear(self):
         """

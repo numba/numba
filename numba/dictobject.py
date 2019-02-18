@@ -575,11 +575,14 @@ def impl_pop(dct, k, d=None):
     return impl
 
 
-# @overload(operator.delitem)
-# def impl_delitem(d, key):
-#     if not isinstance(d, types.DictType):
-#         return
-#     print(">>>>>>>")
+@overload(operator.delitem)
+def impl_delitem(d, k):
+    if not isinstance(d, types.DictType):
+        return
+
+    def impl(d, k):
+        d.pop(k)
+    return impl
 
 
 @overload_method(types.DictType, 'clear')
