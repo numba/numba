@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import sys
 from itertools import permutations
+import string
 
 from numba import njit
 import numba.unittest_support as unittest
@@ -82,6 +83,10 @@ def split_usecase(x, y):
 
 def split_with_maxsplit_usecase(x, y, maxsplit):
     return x.split(y, maxsplit)
+
+
+def split_whitespace_usecase(x):
+    return x.split()
 
 
 def join_usecase(x, y):
@@ -368,6 +373,24 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str, splitter, maxsplit),
                              cfunc(test_str, splitter, maxsplit),
                              "'%s'.split('%s', %d)?" % (test_str, splitter, maxsplit))
+
+    def test_split_whitespace(self):
+        pyfunc = split_whitespace_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            '',
+            'abcabc',
+            '🐍 ⚡',
+            '🐍 ⚡ 🐍',
+            '🐍   ⚡ 🐍  ',
+            '  🐍   ⚡ 🐍',
+            ' 🐍' + string.whitespace + '⚡ 🐍  ',
+        ]
+        for test_str in CASES:
+            self.assertEqual(pyfunc(test_str),
+                             cfunc(test_str),
+                             "'%s'.split()?" % (test_str,))
 
     def test_join_empty(self):
         # Can't pass empty list to nopython mode, so we have to make a

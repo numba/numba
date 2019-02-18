@@ -345,6 +345,25 @@ def _find(substr, s):
     return -1
 
 
+_WHITESPACE_SPACE = ord(' ')
+_WHITESPACE_NEWLINE = ord('\n')
+_WHITESPACE_RETURN = ord('\r')
+_WHITESPACE_TAB = ord('\t')
+_WHITESPACE_FORMFEED = ord('\f')
+_WHITESPACE_VERTICAL_TAB = ord('\v')
+
+
+@njit
+def _is_whitespace(code_point):
+    # unrolling this for speed
+    return code_point == _WHITESPACE_SPACE or \
+        code_point == _WHITESPACE_NEWLINE or \
+        code_point == _WHITESPACE_RETURN or \
+        code_point == _WHITESPACE_TAB or \
+        code_point == _WHITESPACE_FORMFEED or \
+        code_point == _WHITESPACE_VERTICAL_TAB
+
+
 #### PUBLIC API
 
 @overload(len)
@@ -454,7 +473,7 @@ def unicode_endswith(a, b):
 
 
 @overload_method(types.UnicodeType, 'split')
-def unicode_split(a, sep, maxsplit=-1):
+def unicode_split(a, sep=None, maxsplit=-1):
     if isinstance(sep, types.UnicodeType):
         def split_impl(a, sep, maxsplit=-1):
             a_len = len(a)
@@ -482,6 +501,36 @@ def unicode_split(a, sep, maxsplit=-1):
 
             return parts
         return split_impl
+    elif sep is None:
+        def split_whitespace_impl(a):
+            a_len = len(a)
+
+            parts = []
+            last = 0
+            idx = 0
+            in_whitespace_block = True
+
+            for idx in range(a_len):
+                code_point = _get_code_point(a, idx)
+                is_whitespace = _is_whitespace(code_point)
+                if in_whitespace_block:
+                    if is_whitespace:
+                        pass  # keep consuming space
+                    else:
+                        last = idx # this is the start of the next string
+                        in_whitespace_block = False
+                else:
+                    if not is_whitespace:
+                        pass # keep searching for whitespace transition
+                    else:
+                        parts.append(a[last:idx])
+                        in_whitespace_block = True
+
+            if last <= a_len and not in_whitespace_block:
+                parts.append(a[last:])
+
+            return parts
+        return split_whitespace_impl
 
 
 @njit
