@@ -472,3 +472,23 @@ def impl_pop(dct, k, d=None):
             return val
 
     return impl
+
+
+# @overload(operator.delitem)
+# def impl_delitem(d, key):
+#     if not isinstance(d, types.DictType):
+#         return
+#     print(">>>>>>>")
+
+
+
+@overload_method(types.DictType, 'clear')
+def impl_clear(d):
+    if not isinstance(d, types.DictType):
+        return
+
+    def impl(d):
+        while len(d):
+            d.popitem()
+
+    return impl
