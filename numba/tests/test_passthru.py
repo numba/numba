@@ -471,4 +471,3 @@ def attr_access(o, *names):
 @jit(nopython=True)
 def create_passthru_list(list_attr1, list_attr2):
     return [list_attr1, list_attr2]
-

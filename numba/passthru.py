@@ -97,15 +97,15 @@ make_attribute_wrapper(PassThruContainerType, 'wrapped_obj', 'wrapped_obj')
 
 @unbox(PassThruContainerType)
 def unbox_pass_thru_container_type(typ, obj, context):
-        container = cgutils.create_struct_proxy(typ)(context.context, context.builder)
+    container = cgutils.create_struct_proxy(typ)(context.context, context.builder)
 
-        container.container = context.unbox(pass_thru_type, obj).value
+    container.container = context.unbox(pass_thru_type, obj).value
 
-        wrapped_obj = context.pyapi.object_getattr_string(obj, "obj")
-        context.pyapi.decref(wrapped_obj)
-        container.wrapped_obj = wrapped_obj
+    wrapped_obj = context.pyapi.object_getattr_string(obj, "obj")
+    context.pyapi.decref(wrapped_obj)
+    container.wrapped_obj = wrapped_obj
 
-        return NativeValue(container._getvalue())
+    return NativeValue(container._getvalue())
 
 
 @box(PassThruContainerType)
