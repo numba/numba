@@ -8,6 +8,7 @@ from llvmlite import ir
 from numba import cgutils
 from numba.extending import (
     overload,
+    overload_method,
     intrinsic,
     register_model,
     models,
@@ -21,6 +22,9 @@ ll_dict_type = cgutils.voidptr_t
 ll_status = cgutils.int32_t
 ll_ssize_t = cgutils.intp_t
 ll_hash = ll_ssize_t
+ll_bytes = cgutils.voidptr_t
+
+DKIX_EMPTY = -1
 
 
 def new_dict():
@@ -60,8 +64,8 @@ def _dict_new_minsize(typingctx, keyty, valty):
             [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
         )
         fn = ir.Function(builder.module, fnty, name='numba_dict_new_minsize')
-        ll_key = context.get_data_type(keyty)
-        ll_val = context.get_data_type(valty)
+        ll_key = context.get_data_type(keyty.instance_type)
+        ll_val = context.get_data_type(valty.instance_type)
         sz_key = context.get_abi_sizeof(ll_key)
         sz_val = context.get_abi_sizeof(ll_val)
         refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
@@ -76,7 +80,7 @@ def _dict_new_minsize(typingctx, keyty, valty):
 def _dict_insert(typingctx, d, key, hashval, val):
     resty = types.int32
     sig = resty(d, d.key_type, types.intp, d.value_type)
-    ll_bytes = cgutils.voidptr_t
+
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
@@ -130,6 +134,82 @@ def _dict_length(typingctx, d):
         fn = ir.Function(builder.module, fnty, name='numba_dict_length')
         n = builder.call(fn, args)
         return n
+
+    return sig, codegen
+
+
+@intrinsic
+def _dict_dump_keys(typingctx, d):
+    """Dump the dictionary key and values.
+    Wraps numba_dict_dump_keys for debugging.
+    """
+    resty = types.void
+    sig = resty(d)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            [ll_dict_type],
+        )
+        [td] = sig.args
+        [d] = args
+        dp = _dict_get_data(context, builder, td, d)
+        fn = ir.Function(builder.module, fnty, name='numba_dict_dump_keys')
+
+        builder.call(fn, [dp])
+
+    return sig, codegen
+
+@intrinsic
+def _dict_lookup(typingctx, d, key, hashval):
+    """Wrap numba_dict_lookup
+
+    Returns 2-tuple of (intp, value_type?)
+    """
+    resty = types.Tuple([types.intp, types.Optional(d.value_type)])
+    sig = resty(d, key, hashval)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_dict_type, ll_bytes, ll_hash, ll_bytes],
+        )
+        [td, tkey, thashval] = sig.args
+        [d, key, hashval] = args
+        fn = ir.Function(builder.module, fnty, name='numba_dict_lookup')
+
+        dm_key = context.data_model_manager[tkey]
+        dm_val = context.data_model_manager[td.value_type]
+
+        data_key = dm_key.as_data(builder, key)
+        ptr_key = cgutils.alloca_once_value(builder, data_key)
+
+        ll_val = context.get_data_type(td.value_type)
+        ptr_val = cgutils.alloca_once(builder, ll_val)
+
+        dp = _dict_get_data(context, builder, td, d)
+        ix = builder.call(
+            fn,
+            [
+                dp,
+                _as_bytes(builder, ptr_key),
+                hashval,
+                _as_bytes(builder, ptr_val),
+            ],
+        )
+        # Load value is output is available
+        found = builder.icmp_signed('>=', ix, ix.type(DKIX_EMPTY))
+
+        out = context.make_optional_none(builder, td.value_type)
+        pout = cgutils.alloca_once_value(builder, out)
+
+        with builder.if_then(found):
+            val = dm_val.load_from_data_pointer(builder, ptr_val)
+            loaded = context.make_optional_value(builder, td.value_type, val)
+            builder.store(loaded, pout)
+
+        out = builder.load(pout)
+        return cgutils.pack_struct(builder, [ix, out])
 
     return sig, codegen
 
@@ -212,6 +292,7 @@ def _cast(typingctx, val, typ):
     return sig, codegen
 
 
+
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
     if not isinstance(d, types.DictType):
@@ -223,5 +304,20 @@ def impl_setitem(d, key, value):
         key = _cast(key, keyty)
         val = _cast(value, valty)
         status = _dict_insert(d, key, hash(key), val)
+
+    return impl
+
+
+@overload_method(types.DictType, 'get')
+def impl_get(d, key):
+    if not isinstance(d, types.DictType):
+        return
+    keyty = d.key_type
+
+    def impl(d, key):
+        key = _cast(key, keyty)
+        ix, val = _dict_lookup(d, key, hash(key))
+        if ix > DKIX_EMPTY:
+            return val
 
     return impl

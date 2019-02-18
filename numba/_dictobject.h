@@ -191,4 +191,8 @@ NUMBA_EXPORT_FUNC(int)
 numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr);
 
 
+NUMBA_EXPORT_FUNC(void)
+numba_dict_dump_keys(NB_Dict *);
+
+
 #endif
