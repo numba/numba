@@ -152,3 +152,64 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         with self.assertRaises(KeyError):
             foo(keys, vals, npop=4)
 
+    def test_dict_pop(self):
+        """
+        Exercise dictionary .pop
+        """
+        @njit
+        def foo(keys, vals, target):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+
+            # popitem
+            return d.pop(target, None), len(d)
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(foo(keys, vals, 1), (0.1, 2))
+        self.assertEqual(foo(keys, vals, 2), (0.2, 2))
+        self.assertEqual(foo(keys, vals, 3), (0.3, 2))
+        self.assertEqual(foo(keys, vals, 0), (None, 3))
+
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # popitem
+            return d.pop(0)
+
+        with self.assertRaises(KeyError):
+            foo()
+
+    def test_dict_pop_many(self):
+        """
+        Exercise dictionary .pop
+        """
+
+        @njit
+        def core(d, pops):
+            total = 0
+            for k in pops:
+                total += k + d.pop(k, 0.123) + len(d)
+                total *= 2
+            return total
+
+        @njit
+        def foo(keys, vals, pops):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            # popitem
+            return core(d, pops)
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        pops = [2, 3, 3, 1, 0, 2, 1, 0, -1]
+
+        self.assertEqual(
+            foo(keys, vals, pops),
+            core.py_func(dict(zip(keys, vals)), pops),
+        )

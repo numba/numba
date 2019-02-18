@@ -235,9 +235,6 @@ def _dict_popitem(typingctx, d):
         dm_key = context.data_model_manager[td.key_type]
         dm_val = context.data_model_manager[td.value_type]
 
-        # data_key = dm_key.as_data(builder, key)
-        # data_val = dm_val.as_data(builder, val)
-
         ptr_key = cgutils.alloca_once(builder, dm_key.get_data_type())
         ptr_val = cgutils.alloca_once(builder, dm_val.get_data_type())
 
@@ -263,6 +260,29 @@ def _dict_popitem(typingctx, d):
 
         out = builder.load(pout)
         return cgutils.pack_struct(builder, [status, out])
+
+    return sig, codegen
+
+@intrinsic
+def _dict_delitem(typingctx, d, hk, ix):
+    """Wrap numba_dict_delitem
+    """
+    resty = types.int32
+    sig = resty(d, hk, types.intp)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_dict_type, ll_hash, ll_ssize_t],
+        )
+        [d, hk, ix] = args
+        [td, thk, tix] = sig.args
+
+        fn = ir.Function(builder.module, fnty, name='numba_dict_delitem')
+
+        dp = _dict_get_data(context, builder, td, d)
+        status = builder.call(fn, [dp, hk, ix])
+        return status
 
     return sig, codegen
 
@@ -422,5 +442,33 @@ def impl_popitem(d):
             raise KeyError()
         else:
             raise AssertionError('internal dict error during popitem')
+
+    return impl
+
+
+@overload_method(types.DictType, 'pop')
+def impl_pop(dct, k, d=None):
+    if not isinstance(dct, types.DictType):
+        return
+
+    keyty = dct.key_type
+    should_raise = isinstance(d, types.Omitted)
+
+    def impl(dct, k, d=None):
+        key = _cast(k, keyty)
+        hashed = hash(key)
+        ix, val = _dict_lookup(dct, key, hashed)
+        if ix == DKIX_EMPTY:
+            if should_raise:
+                raise KeyError()
+            else:
+                return d
+        elif ix < DKIX_EMPTY:
+            raise AssertionError("internal dict error during lookup")
+        else:
+            status = _dict_delitem(dct,hashed, ix)
+            if status != 0:
+                raise AssertionError("internal dict error during delitem")
+            return val
 
     return impl
