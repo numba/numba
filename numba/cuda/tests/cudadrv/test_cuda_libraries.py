@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 from numba.cuda.testing import unittest
-from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
 from numba.cuda.testing import skip_on_cudasim
 from numba.findlib import find_lib
 
