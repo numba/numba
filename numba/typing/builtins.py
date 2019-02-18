@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 import operator
 
-from numba import types, prange
+from numba import types, prange, errors
 from numba.parfor import internal_prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, IS_PY3
@@ -755,7 +755,7 @@ class TypeRefAttribute(AttributeTemplate):
         ty = classty.instance_type
 
         if not isinstance(ty, types.Number):
-            raise TypingError("invalid use of non-number types")
+            raise errors.TypingError("invalid use of non-number types")
 
         def typer(val):
             # Scalar constructor, e.g. int32(42)

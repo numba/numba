@@ -232,4 +232,9 @@ def typeof_typeref(val, c):
 
 @typeof_impl.register(types.Type)
 def typeof_typeref(val, c):
-    return types.TypeRef(val)
+    if isinstance(val, types.BaseFunction):
+        return val
+    elif isinstance(val, (types.Number, types.Boolean)):
+        return types.NumberClass(val)
+    else:
+        return types.TypeRef(val)
