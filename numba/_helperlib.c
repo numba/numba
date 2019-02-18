@@ -1110,8 +1110,8 @@ numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
             *hash = ((PyASCIIObject *)(obj))->hash;
         }
         else {
-            /* cast is not safe, set the hash as -1 to force eval as needed */
-            *hash = -1;
+            /* cast is not safe, fail */
+            return NULL;
         }
         return PyUnicode_DATA(obj);
     } else {
