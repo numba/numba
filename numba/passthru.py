@@ -132,9 +132,9 @@ def opaque_is(context, builder, sig, args):
 
 
 @overload(eq)
-def pass_thru_container_eq(xty, yty):
-    if xty is PassThruContainerType():
-        if yty is PassThruContainerType():
+def pass_thru_container_eq(x, y):
+    if x is PassThruContainerType():
+        if y is PassThruContainerType():
             def pass_thru_container_pass_thru_container_eq_impl(x, y):
                 return x.wrapped_obj is y.wrapped_obj
 
