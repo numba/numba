@@ -12,7 +12,7 @@ a Numba transformation pass that attempts to automatically parallelize and
 perform other optimizations on (part of) a function. At the moment, this
 feature only works on CPUs.
 
-Some operations inside a user defined function, e.g., adding a scalar value to
+Some operations inside a user defined function, e.g. adding a scalar value to
 an array, are known to have parallel semantics.  A user program may contain
 many such operations and while each operation could be parallelized
 individually, such an approach often has lackluster performance due to poor
@@ -73,11 +73,11 @@ parallel semantics and for which we attempt to parallelize.
 Explicit Parallel Loops
 ========================
 
-Another feature of the code transformation pass (when ``parallel=True``) is support for explicit
-parallel loops. One can use Numba's ``prange`` instead of ``range`` to specify
-that a loop can be parallelized. The user is required to make sure that the
-loop does not have cross iteration dependencies except for supported
-reductions.
+Another feature of the code transformation pass (when ``parallel=True``) is
+support for explicit parallel loops. One can use Numba's ``prange`` instead of
+``range`` to specify that a loop can be parallelized. The user is required to
+make sure that the loop does not have cross iteration dependencies except for
+supported reductions.
 
 A reduction is inferred automatically if a variable is updated by a binary
 function/operator using its previous value in the loop body. The initial value
@@ -94,8 +94,8 @@ reduction (``A`` is a one-dimensional Numpy array)::
     @njit(parallel=True)
     def prange_test(A):
         s = 0
-        # Without the "parallel=True" in the jit-decorator
-        # the prange would be equivalent to range
+        # Without "parallel=True" in the jit-decorator
+        # the prange statement is equivalent to range
         for i in prange(A.shape[0]):
             s += A[i]
         return s
