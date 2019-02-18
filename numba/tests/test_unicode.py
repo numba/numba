@@ -371,15 +371,14 @@ class TestUnicode(BaseTest):
             ('abababa', 'aba', 5),
         ]
 
-        for pyfunc, fmt_str in [
-            (split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
-            (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
+        for pyfunc, fmt_str in [(split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
+                                (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
 
             cfunc = njit(pyfunc)
             for test_str, splitter, maxsplit in CASES:
                 self.assertEqual(pyfunc(test_str, splitter, maxsplit),
-                                cfunc(test_str, splitter, maxsplit),
-                                fmt_str % (test_str, splitter, maxsplit))
+                                 cfunc(test_str, splitter, maxsplit),
+                                 fmt_str % (test_str, splitter, maxsplit))
 
     def test_split_whitespace(self):
         pyfunc = split_whitespace_usecase
