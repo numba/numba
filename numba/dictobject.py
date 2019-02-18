@@ -309,16 +309,17 @@ def impl_setitem(d, key, value):
 
 
 @overload_method(types.DictType, 'get')
-def impl_get(d, key):
-    if not isinstance(d, types.DictType):
+def impl_get(dct, k, d=None):
+    if not isinstance(dct, types.DictType):
         return
-    keyty = d.key_type
+    keyty = dct.key_type
 
-    def impl(d, key):
-        key = _cast(key, keyty)
-        ix, val = _dict_lookup(d, key, hash(key))
+    def impl(dct, k, d=None):
+        k = _cast(k, keyty)
+        ix, val = _dict_lookup(dct, k, hash(k))
         if ix > DKIX_EMPTY:
             return val
+        return d
 
     return impl
 

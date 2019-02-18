@@ -53,6 +53,22 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(10, [0, 1, 9]), [0, 1, 9])
         self.assertEqual(foo(10, [-1, 9, 1]), [None, 9, 1])
 
+    def test_dict_get_with_default(self):
+        """
+        Exercise dict.get(k, d) where d is set
+        """
+        @njit
+        def foo(n, target, default):
+            d = dictobject.new_dict(int32, float64)
+            # insertion loop
+            for i in range(n):
+                d[i] = i
+            # retrieval loop
+            return d.get(target, d=default)
+
+        self.assertEqual(foo(5, 3, -1), 3)
+        self.assertEqual(foo(5, 5, -1), -1)
+
     def test_dict_getitem(self):
         """
         Exercise dictionary __getitem__
