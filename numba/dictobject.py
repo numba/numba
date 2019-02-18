@@ -321,3 +321,25 @@ def impl_get(d, key):
             return val
 
     return impl
+
+
+@overload(operator.getitem)
+def impl_getitem(d, key):
+    if not isinstance(d, types.DictType):
+        return
+
+    keyty = d.key_type
+
+    def impl(d, key):
+        key = _cast(key, keyty)
+        ix, val = _dict_lookup(d, key, hash(key))
+        if ix == DKIX_EMPTY:
+            raise KeyError()
+        elif ix < DKIX_EMPTY:
+            raise AssertionError("internal dict error during lookup")
+        else:
+            return val
+
+    return impl
+
+

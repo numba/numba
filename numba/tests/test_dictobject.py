@@ -1,7 +1,9 @@
 """
-Testing C implementation of the numba dictionary
+Testing numba implementation of the numba dictionary
 """
 from __future__ import print_function, absolute_import, division
+
+import random
 
 
 from numba import njit
@@ -49,4 +51,30 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(5, [0, 1, 9]), [0, 1, None])
         self.assertEqual(foo(10, [0, 1, 9]), [0, 1, 9])
+        self.assertEqual(foo(10, [-1, 9, 1]), [None, 9, 1])
+
+    def test_dict_getitem(self):
+        """
+        Exercise dictionary __getitem__
+        """
+        @njit
+        def foo(keys, vals, target):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+
+            # lookup
+            return d[target]
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertEqual(foo(keys, vals, 1), 0.1)
+        self.assertEqual(foo(keys, vals, 2), 0.2)
+        self.assertEqual(foo(keys, vals, 3), 0.3)
+
+        with self.assertRaises(KeyError):
+            foo(keys, vals, 0)
+        with self.assertRaises(KeyError):
+            foo(keys, vals, 4)
 
