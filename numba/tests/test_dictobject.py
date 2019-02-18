@@ -1,10 +1,11 @@
 """
-Testing numba implementation of the numba dictionary
+Testing numba implementation of the numba dictionary.
+
+The tests here only checks that the numba typing and codegen are working
+correctly.  Detail testing of the underlying dictionary operations is done
+in test_dictimpl.py.
 """
 from __future__ import print_function, absolute_import, division
-
-import random
-
 
 from numba import njit
 from numba import int32, float32, float64
@@ -376,3 +377,21 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             foo(keys, vals, [2, 3, 4, 1, 0]),
             [True, True, False, True, False],
         )
+
+    def test_dict_copy(self):
+        """
+        Exercise dict.copy
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return list(d.copy().items())
+
+        keys = list(range(20))
+        vals = [x + i / 100 for i, x in enumerate(keys)]
+        out = foo(keys, vals)
+        self.assertEqual(out, list(zip(keys, vals)))
+

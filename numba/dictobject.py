@@ -611,6 +611,22 @@ def impl_clear(d):
     return impl
 
 
+@overload_method(types.DictType, 'copy')
+def impl_copy(d):
+    if not isinstance(d, types.DictType):
+        return
+
+    key_type, val_type = d.key_type, d.value_type
+
+    def impl(d):
+        newd = new_dict(key_type, val_type)
+        for k, v in d.items():
+            newd[k] = v
+        return newd
+
+    return impl
+
+
 @overload_method(types.DictType, 'items')
 def impl_items(d):
     if not isinstance(d, types.DictType):
