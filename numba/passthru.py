@@ -1,3 +1,34 @@
+###############################################################################################################
+# Tools to ferry arbitrary Python objects through nopython mode
+#
+# This has two typical use-cases:
+#   1. ferrying data structures not currently supported by Numba into `objmode` blocks via `PassThruContainer`
+#   2. creating extension types that are simplified representations of the Python class and keep a link to the
+#      Python object
+#
+# Example for the latter case (``test.test_passthru.PassThruComplex`` for a working example):
+#
+#   >>> class BloatedPythonClass(object):
+#   >>>     def __init__(numba_supported_attribute, not_numba_supported_attribute):
+#   >>>         self.numba_supported_attribute = numba_supported_attribute
+#   >>>         self.not_numba_supported_attribute = not_numba_supported_attribute
+#   >>>
+#   >>> BloatedPythonClassModel(models.StructModel):
+#   >>>     def __init__(self, dmm, fe_typ):
+#   >>>         members = [
+#   >>>             ('parent', PassThruType('OpaqueBloatedPythonClass')),
+#   >>>             ('numba_supported_attribute', NumbaSupportedAttributeType),
+#   >>>         ]
+#   >>>         super(BloatedPythonClassModel, self).__init__(dmm, fe_typ, members)
+#   >>>
+#
+# The full Python object is passed through *nopython-mode* in the ``parent`` attribute (obviously nothing can
+# be done with it there), any Numba supported attributes could be made available for *nopython-mode*. Since the
+# boxer has access to the ``parent`` object you might even reflect changes done to the attributes available in
+# *nopython-mode* back onto the parent (though there are good reason to be careful with this, see history of
+# list/set support https://github.com/numba/numba/issues/3546).
+###############################################################################################################
+
 from numba import cgutils, types
 from numba.datamodel import models
 from numba.extending import make_attribute_wrapper, overload, register_model, type_callable
@@ -18,6 +49,9 @@ opaque_pyobject = types.Opaque('Opaque(PyObject)')
 
 
 class PassThruType(types.Type):
+    """Wraps arbitrary Python objects to pass around *nopython-mode*. The created MemInfo will aquire a
+       reference to the Python object.
+    """
     def __init__(self, name=None):
         super(PassThruType, self).__init__(name or self.__class__.__name__)
 
@@ -54,6 +88,10 @@ def box_pass_thru_type(typ, val, context):
 
 
 class PassThruContainer(object):
+    """A container to ferry arbitrary Python objects through *nopython* mode. The only operation supported
+       in *nopython-mode* is ``==``. Two instances of ``PassThruContainer`` are equal if the wrapped objects
+       are identical, ie if ``a.obj is b.obj``.
+    """
     def __init__(self, obj):
         self._obj = obj
 
@@ -146,7 +184,7 @@ def pass_thru_container_eq(x, y):
             return pass_thru_container_any_eq_impl
 
 
-# TODO: I'd assume hashing impl can be improved once the PR has landed https://github.com/numba/numba/pull/3703
+# TODO: I'd assume hashing impl can be improved once this PR has landed https://github.com/numba/numba/pull/3703
 @type_callable(hash)
 def type_hash_pass_thru(context):
     def hash_pass_thru_typer(typ):

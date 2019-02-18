@@ -32,3 +32,25 @@ The ``objmode`` context-manager
     this feature.
 
 .. autofunction:: numba.objmode
+
+Data structures not available in Numba can be made available for use inside
+*object-mode* blocks using ``PassThruContainer``.
+
+.. autoclass:: numba.PassThruContainer
+
+Example::
+
+    from numba import njit, objmode, PassThruContainer
+
+    class Config(object):
+        the_parameter = 42
+
+    config_container = PassThruContainer(Config())
+
+    @njit
+    def foo(config_container):
+        assert config_container == config_container
+
+        with objmode(the_parameter='int8'):
+            the_parameter = config_container.obj.the_parameter
+        return the_parameter
