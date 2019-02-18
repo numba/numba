@@ -364,7 +364,11 @@ class Lower(BaseLower):
 
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('delitem', signature)
+
+            op = operator.delitem
+            fnop = self.context.typing_context.resolve_value_type(op)
+            fnop.get_call_type(self.context.typing_context, signature.args, {})
+            impl = self.context.get_function(fnop, signature)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,

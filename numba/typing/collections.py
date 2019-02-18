@@ -70,10 +70,8 @@ class SetItemSequence(AbstractTemplate):
                 return signature(types.none, seq, idx, seq.dtype)
 
 
-@infer
+@infer_global(operator.delitem)
 class DelItemSequence(AbstractTemplate):
-    key = "delitem"
-
     def generic(self, args, kws):
         seq, idx = args
         if isinstance(seq, types.MutableSequence):
