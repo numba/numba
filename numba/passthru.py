@@ -31,7 +31,7 @@
 
 from numba import cgutils, types
 from numba.datamodel import models
-from numba.extending import make_attribute_wrapper, overload, register_model, type_callable
+from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
 from numba.pythonapi import NativeValue, unbox, box
 from numba.six import PY3
 from numba.targets.imputils import lower_builtin
@@ -103,7 +103,6 @@ class PassThruContainer(object):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
 
     def __hash__(self):
-        # TODO: probably not the best choice but easy to implement on native side
         return id(self.obj)
 
 
@@ -153,6 +152,20 @@ def box_pass_thru_container_type(typ, val, context):
     return context.box(pass_thru_type, val.container)
 
 
+@lower_builtin(int, types.Opaque)
+def opaque_to_int(context, builder, sig, args):
+    return builder.ptrtoint(args[0], cgutils.intp_t)
+
+
+@type_callable(int)
+def type_opaque_to_int(context):
+    def opaque_to_int_typer(typ):
+        if isinstance(typ, types.Opaque):
+            return types.intp if not PY3 else types.uintp
+
+    return opaque_to_int_typer
+
+
 @lower_builtin(is_, types.Opaque, types.Opaque)
 def opaque_is(context, builder, sig, args):
     """
@@ -184,39 +197,9 @@ def pass_thru_container_eq(x, y):
             return pass_thru_container_any_eq_impl
 
 
-# TODO: I'd assume hashing impl can be improved once this PR has landed https://github.com/numba/numba/pull/3703
-@type_callable(hash)
-def type_hash_pass_thru(context):
-    def hash_pass_thru_typer(typ):
-        if isinstance(typ, PassThruType):
-            return types.intp if not PY3 else types.uintp
+@overload_method(PassThruContainerType, '__hash__')
+def pass_thru_container_hash_overload(container):
+    def pass_thru_container_hash_impl(container):
+        return int(container.wrapped_obj)
 
-    return hash_pass_thru_typer
-
-
-@lower_builtin(hash, pass_thru_container_type)
-def passthru_container_hash(context, builder, sig, args):
-    typ, = sig.args
-
-    val = cgutils.create_struct_proxy(typ)(context, builder, value=args[0])
-
-    ll_return_type = context.get_value_type(sig.return_type)
-    ptr_as_int = builder.ptrtoint(val.wrapped_obj, ll_return_type)
-
-    if PY3:
-        # for py3 we have to emulate the cast to unsigned long from PyLong_FromVoidPtr
-        bb_not_casted = builder.basic_block
-
-        from sys import maxsize as MAXSIZE
-        with builder.if_then(cgutils.is_neg_int(builder, ptr_as_int)):
-            bb_casted = builder.basic_block
-            casted_res = builder.sub(ptr_as_int, context.get_constant(types.intp, MAXSIZE))
-
-        res = builder.phi(cgutils.intp_t)
-        res.add_incoming(ptr_as_int, bb_not_casted)
-        res.add_incoming(casted_res, bb_casted)
-
-        return res
-
-    else:
-        return ptr_as_int
+    return pass_thru_container_hash_impl
