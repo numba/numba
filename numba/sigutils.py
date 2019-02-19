@@ -33,8 +33,9 @@ def normalize_signature(sig):
     else:
         raise TypeError("invalid signature: %r (type: %r) evaluates to %r "
                         "instead of tuple or Signature" % (
-            sig, sig.__class__.__name__, parsed.__class__.__name__
-        ))
+                            sig, sig.__class__.__name__,
+                            parsed.__class__.__name__
+                        ))
 
     def check_type(ty):
         if not isinstance(ty, types.Type):
