@@ -220,6 +220,10 @@ class DeviceNDArrayBase(object):
 
             result_array = d_arr.copy_to_host()
         """
+        if any(s < 0 for s in self.strides):
+            msg = 'D->H copy not implemented for negative strides: {}'
+            raise NotImplementedError(msg.format(self.strides))
+        assert self.alloc_size >= 0, "Negative memory size"
         stream = self._default_stream(stream)
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
@@ -227,7 +231,6 @@ class DeviceNDArrayBase(object):
             check_array_compatibility(self, ary)
             hostary = ary
 
-        assert self.alloc_size >= 0, "Negative memory size"
         if self.alloc_size != 0:
             _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 
