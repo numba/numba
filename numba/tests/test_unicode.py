@@ -435,7 +435,7 @@ class TestUnicode(BaseTest):
         # Feel free to change this as we update error messages.
         exc_message = str(raises.exception)
         self.assertIn("Invalid use of BoundFunction", exc_message)
-        self.assertIn("(reflected list(int64))", exc_message)
+        self.assertIn("(reflected list(int", exc_message)  # could be int32 or int64
 
     def test_join(self):
         pyfunc = join_usecase
