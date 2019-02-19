@@ -961,8 +961,15 @@ numba_test_dict(void) {
     const char *it_key, *it_val;
     NB_DictIter iter;
 
-    STACK_ALLOC(char, got_key, 4);
-    STACK_ALLOC(char, got_value, 8);
+#if defined(_MSC_VER)
+    /* So that VS2008 compiler is happy */
+    char *got_key, *got_value;
+    got_key = _alloca(4);
+    got_value = _alloca(8);
+#else
+    char got_key[4];
+    char got_value[8];
+#endif
     puts("test_dict");
 
     status = numba_dict_new(&d, D_MINSIZE, 4, 8);
