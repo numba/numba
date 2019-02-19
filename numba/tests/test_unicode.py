@@ -424,10 +424,9 @@ class TestUnicode(BaseTest):
             cfunc('', [1,2,3])
         # This error message is obscure, but indicates the error was trapped in typing of str.join()
         # Feel free to change this as we update error messages.
-        self.assertIn("Invalid use of BoundFunction(("
-                      "<class 'numba.types.misc.UnicodeType'>, 'join')"
-                      " for unicode_type) with parameters (reflected list(int64))",
-                      str(raises.exception))
+        exc_message = str(raises.exception)
+        self.assertIn("Invalid use of BoundFunction", exc_message)
+        self.assertIn("(reflected list(int64))", exc_message)
 
     def test_join(self):
         pyfunc = join_usecase
