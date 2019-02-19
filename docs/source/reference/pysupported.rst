@@ -171,15 +171,21 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
+* ``.split()``
+* ``.join()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
 
 .. warning::
-    The performance of the substring search operations (``in``,
-    ``.contains()`` and ``find()``) is poor in version 0.41 and will be improved in
-    version 0.42.
+    The performance of some operations is known to be slower than the CPython
+    implementation. These include substring search (``in``, ``.contains()``
+    and ``find()``) and string creation (like ``.split()``).  Improving the
+    string performance is an ongoing task, but the speed of CPython is
+    unlikely to be surpassed for basic string operation in isolation.
+    Numba is most successfuly used for larger algorithms that happen to
+    involve strings, where basic string operations are not the bottleneck.
 
 
 tuple
