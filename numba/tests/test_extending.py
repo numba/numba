@@ -262,6 +262,14 @@ def overload_add_dummy(arg1, arg2):
         return dummy_add_impl
 
 
+@overload(operator.delitem)
+def overload_dummy_delitem(obj, idx):
+    if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+        def dummy_delitem_impl(obj, idx):
+            print('del', obj, idx)
+        return dummy_delitem_impl
+
+
 @overload(operator.getitem)
 def overload_dummy_getitem(obj, idx):
     if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
@@ -307,6 +315,10 @@ def call_iadd_binop(arg1, arg2):
     arg1 += arg2
 
     return arg1
+
+
+def call_delitem(obj, idx):
+    del obj[idx]
 
 
 def call_getitem(obj, idx):
@@ -638,6 +650,22 @@ class TestHighLevelExtending(TestCase):
 
         # this will call add(Number, Number) as MyDummy implicitly casts to Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
+
+    def test_delitem(self):
+        pyfunc = call_delitem
+        cfunc = jit(nopython=True)(pyfunc)
+        obj = MyDummy()
+        e = None
+
+        with captured_stdout() as out:
+            try:
+                cfunc(obj, 321)
+            except Exception as exc:
+                e = exc
+
+        if e is not None:
+            raise e
+        self.assertEqual(out.getvalue(), 'del hello! 321\n')
 
     def test_getitem(self):
         pyfunc = call_getitem

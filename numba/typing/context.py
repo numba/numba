@@ -316,7 +316,9 @@ class BaseContext(object):
     def resolve_delitem(self, target, index):
         args = target, index
         kws = {}
-        return self.resolve_function_type("delitem", args, kws)
+        fnty = self.resolve_value_type(operator.delitem)
+        sig = fnty.get_call_type(self, args, kws)
+        return sig
 
     def resolve_module_constants(self, typ, attr):
         """
