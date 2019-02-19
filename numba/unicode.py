@@ -492,32 +492,35 @@ def unicode_endswith(a, b):
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if isinstance(sep, types.UnicodeType):
-        def split_impl(a, sep, maxsplit=-1):
-            a_len = len(a)
-            sep_len = len(sep)
+        if maxsplit == -1 or isinstance(maxsplit, (types.Omitted, types.Integer, types.IntegerLiteral)):
+            def split_impl(a, sep, maxsplit=-1):
+                a_len = len(a)
+                sep_len = len(sep)
 
-            if sep_len == 0:
-                raise ValueError('empty separator')
+                if sep_len == 0:
+                    raise ValueError('empty separator')
 
-            parts = []
-            last = 0
-            idx = 0
-            split_count = 0
+                parts = []
+                last = 0
+                idx = 0
+                split_count = 0
 
-            while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
-                if _cmp_region(a, idx, sep, 0, sep_len) == 0:
-                    parts.append(a[last:idx])
-                    idx += sep_len
-                    last = idx
-                    split_count += 1
-                else:
-                    idx += 1
+                while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
+                    if _cmp_region(a, idx, sep, 0, sep_len) == 0:
+                        parts.append(a[last:idx])
+                        idx += sep_len
+                        last = idx
+                        split_count += 1
+                    else:
+                        idx += 1
 
-            if last <= a_len:
-                parts.append(a[last:])
+                if last <= a_len:
+                    parts.append(a[last:])
 
-            return parts
-        return split_impl
+                return parts
+            return split_impl
+        else:
+            pass  # fail typing if maxsplit is not an integer
     elif sep is None or isinstance(sep, types.NoneType) or getattr(sep, 'value', False) is None:
         def split_whitespace_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)

@@ -324,7 +324,7 @@ class TestUnicode(BaseTest):
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
 
-    def test_split_exception(self):
+    def test_split_exception_empty_sep(self):
         self.disable_leak_check()
 
         pyfunc = split_usecase
@@ -335,6 +335,15 @@ class TestUnicode(BaseTest):
             with self.assertRaises(ValueError) as raises:
                     func('a', '')
             self.assertIn('empty separator', str(raises.exception))
+
+    def test_split_exception_noninteger_maxsplit(self):
+        pyfunc = split_with_maxsplit_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle non-integer maxsplit exception
+        with self.assertRaises(TypingError) as raises:
+                cfunc('a', ' ', 2.4)
+        self.assertIn('float64', str(raises.exception))
 
     def test_split(self):
         pyfunc = split_usecase
