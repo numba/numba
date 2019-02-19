@@ -575,8 +575,8 @@ The following functions from the :mod:`heapq` module are supported:
 * :func:`heapq.nlargest` : first two arguments only
 * :func:`heapq.nsmallest` : first two arguments only
 
-Note: heap must be seeded with at least one value to allow type to be
-inferred; heap items assumed to be homogeneous type.
+Note: the heap must be seeded with at least one value to allow its type to be
+inferred; heap items are assumed to be homogeneous in type.
 
 
 Third-party modules
