@@ -1,5 +1,4 @@
-
-# A port of https://github.com/python/cpython/blob/3.7/Lib/heapq.py
+# A port of https://github.com/python/cpython/blob/e42b7051/Lib/heapq.py
 
 from __future__ import print_function, absolute_import, division
 
@@ -175,7 +174,7 @@ def nsmallest(n, iterable):
     def hq_nsmallest_impl(n, iterable):
 
         if n == 0:
-            return [iterable[0] * x for x in range(0)]
+            return [iterable[0] for _ in range(0)]
         elif n == 1:
             out = np.min(np.asarray(iterable))
             return [out]
@@ -208,7 +207,7 @@ def nlargest(n, iterable):
     def hq_nlargest_impl(n, iterable):
 
         if n == 0:
-            return [iterable[0] * x for x in range(0)]
+            return [iterable[0] for _ in range(0)]
         elif n == 1:
             out = np.max(np.asarray(iterable))
             return [out]
