@@ -122,6 +122,9 @@ def _heapreplace_max(heap, item):
 @overload(hq.heappop)
 def hq_heappop(heap):
 
+    if not isinstance(heap, types.List):
+        raise TypingError('heap argument must be a list')
+
     def hq_heappop_impl(heap):
         lastelt = heap.pop()
         if heap:
@@ -137,6 +140,9 @@ def hq_heappop(heap):
 @overload(hq.heappush)
 def heappush(heap, item):
 
+    if not isinstance(heap, types.List):
+        raise TypingError('heap argument must be a list')
+
     def hq_heappush_impl(heap, item):
         heap.append(item)
         _siftdown(heap, 0, len(heap) - 1)
@@ -146,6 +152,9 @@ def heappush(heap, item):
 
 @overload(hq.heapreplace)
 def heapreplace(heap, item):
+
+    if not isinstance(heap, types.List):
+        raise TypingError('heap argument must be a list')
 
     def hq_heapreplace(heap, item):
         returnitem = heap[0]
@@ -158,6 +167,9 @@ def heapreplace(heap, item):
 
 @overload(hq.heappushpop)
 def heappushpop(heap, item):
+
+    if not isinstance(heap, types.List):
+        raise TypingError('heap argument must be a list')
 
     def hq_heappushpop_impl(heap, item):
         if heap and heap[0] < item:

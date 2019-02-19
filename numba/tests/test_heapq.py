@@ -171,6 +171,19 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(a, b)
                 self.assertPreciseEqual(val_py, val_c)
 
+    def test_heappop_exceptions(self):
+        pyfunc = heappop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc((1, 5, 4))
+
+        msg = 'heap argument must be a list'
+        self.assertIn(msg, str(e.exception))
+
     def iterables(self):
         yield [1, 3, 5, 7, 9, 2, 4, 6, 8, 0]
         a = np.linspace(-10, 2, 23)
@@ -195,6 +208,19 @@ class TestHeapq(MemoryLeakMixin, TestCase):
 
             got = [cfunc_pop(heap) for _ in range(len(heap))]
             self.assertPreciseEqual(expected, got)
+
+    def test_heappush_exceptions(self):
+        pyfunc = heappush
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc((1, 5, 4), 6)
+
+        msg = 'heap argument must be a list'
+        self.assertIn(msg, str(e.exception))
 
     def test_nsmallest_basic(self):
         pyfunc = nsmallest
@@ -242,6 +268,19 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             pyfunc(a, item)
             cfunc(b, item)
             self.assertPreciseEqual(a, b)
+
+    def test_heapreplace_exceptions(self):
+        pyfunc = heapreplace
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc((1, 5, 4), -1)
+
+        msg = 'heap argument must be a list'
+        self.assertIn(msg, str(e.exception))
 
     def heapiter(self, heap):
         try:
@@ -348,3 +387,16 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         h = [10]
         x = cfunc(h, 11)
         self.assertPreciseEqual((h, x), ([11], 10))
+
+    def test_heappushpop_exceptions(self):
+        pyfunc = heappushpop
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc((1, 5, 4), -1)
+
+        msg = 'heap argument must be a list'
+        self.assertIn(msg, str(e.exception))
