@@ -341,9 +341,11 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         # Handle non-integer maxsplit exception
-        with self.assertRaises(TypingError) as raises:
-                cfunc('a', ' ', 2.4)
-        self.assertIn('float64', str(raises.exception))
+        for sep in [' ', None]:
+            with self.assertRaises(TypingError) as raises:
+                    cfunc('a', sep, 2.4)
+            self.assertIn('float64', str(raises.exception),
+                          'non-integer maxsplit with sep = %s' % sep)
 
     def test_split(self):
         pyfunc = split_usecase
