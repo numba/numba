@@ -103,7 +103,8 @@ class PassThruContainer(object):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
 
     def __hash__(self):
-        return id(self.obj)
+        """this should coincide with object.__hash__"""
+        return id(self.obj) >> 4
 
 
 class PassThruContainerType(PassThruType):
@@ -161,7 +162,7 @@ def opaque_to_int(context, builder, sig, args):
 def type_opaque_to_int(context):
     def opaque_to_int_typer(typ):
         if isinstance(typ, types.Opaque):
-            return types.intp if not PY3 else types.uintp
+            return types.intp
 
     return opaque_to_int_typer
 
@@ -171,6 +172,9 @@ def opaque_is(context, builder, sig, args):
     """
     Implementation for `x is y` for Opaque types. `x is y` iff the pointers are equal
     """
+    # TODO: would like to use high-level extension here (int(x) == int(y)), however
+    #  currently @overload(is_) does not seem to work, generic impl takes precedence
+
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
@@ -199,7 +203,20 @@ def pass_thru_container_eq(x, y):
 
 @overload_method(PassThruContainerType, '__hash__')
 def pass_thru_container_hash_overload(container):
-    def pass_thru_container_hash_impl(container):
-        return int(container.wrapped_obj)
+    if PY3:
+        from sys import maxsize as MAXSIZE
 
-    return pass_thru_container_hash_impl
+        def pass_thru_container_hash_impl_py3(container):
+            res = int(container.wrapped_obj)
+
+            if res < 0:
+                res = res - MAXSIZE
+
+            return res >> 4
+
+        return pass_thru_container_hash_impl_py3
+    else:
+        def pass_thru_container_hash_impl_py2(container):
+            return int(container.wrapped_obj) >> 4
+
+        return pass_thru_container_hash_impl_py2
