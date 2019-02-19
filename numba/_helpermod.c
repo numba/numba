@@ -181,6 +181,18 @@ build_npymath_exports_dict(void)
     return dct;
 }
 
+
+/*
+ * Helper to deal with flushing stdout
+ */
+PyAPI_FUNC(void) _numba_flush_stdout(void) ;
+
+void
+_numba_flush_stdout(void) {
+  fflush(stdout);
+}
+
+
 static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) _numba_rnd_get_state, METH_O, NULL },
     { "rnd_get_py_state_ptr", (PyCFunction) _numba_rnd_get_py_state_ptr, METH_NOARGS, NULL },

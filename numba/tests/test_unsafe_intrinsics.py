@@ -1,13 +1,13 @@
 from __future__ import print_function
 
 import random
-
 import numpy as np
 
-from .support import TestCase
-from numba import njit
+from .support import TestCase, captured_stdout
+from numba import njit, types
 from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
+from numba.unsafe.refcount import dump_refcount
 from numba.errors import TypingError
 
 
@@ -109,3 +109,25 @@ class TestNdarrayIntrinsic(TestCase):
         got = func()
         expect = np.asarray([3.1] * 10)
         np.testing.assert_array_equal(got, expect)
+
+
+class TestRefCount(TestCase):
+    def test_dump_refcount(self):
+        @njit
+        def use_dump_refcount():
+            a = np.ones(10)
+            b = (a, a)
+            dump_refcount(a)
+            dump_refcount(b)
+
+        # Capture output to sys.stdout
+        with captured_stdout() as stream:
+            use_dump_refcount()
+
+        output = stream.getvalue()
+        # Check that it printed
+        pat = "dump refct of {}"
+        aryty = types.float64[::1]
+        tupty = types.Tuple.from_types([aryty] * 2)
+        self.assertIn(pat.format(aryty), output)
+        self.assertIn(pat.format(tupty), output)

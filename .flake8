@@ -62,7 +62,6 @@ exclude =
     numba/dataflow.py
     numba/special.py
     numba/controlflow.py
-    numba/cgutils.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
