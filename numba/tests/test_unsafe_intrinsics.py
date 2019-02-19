@@ -113,7 +113,7 @@ class TestNdarrayIntrinsic(TestCase):
 
 
 class TestBytesIntrinsic(TestCase):
-    """Tests for numba.unsafe.tuple
+    """Tests for numba.unsafe.bytes
     """
     def test_memcpy_region(self):
         @njit

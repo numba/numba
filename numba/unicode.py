@@ -347,23 +347,38 @@ def _find(substr, s):
     return -1
 
 
-_WHITESPACE_SPACE = ord(' ')
-_WHITESPACE_NEWLINE = ord('\n')
-_WHITESPACE_RETURN = ord('\r')
-_WHITESPACE_TAB = ord('\t')
-_WHITESPACE_FORMFEED = ord('\f')
-_WHITESPACE_VERTICAL_TAB = ord('\v')
-
-
 @njit
 def _is_whitespace(code_point):
-    # unrolling this for speed
-    return code_point == _WHITESPACE_SPACE or \
-        code_point == _WHITESPACE_NEWLINE or \
-        code_point == _WHITESPACE_RETURN or \
-        code_point == _WHITESPACE_TAB or \
-        code_point == _WHITESPACE_FORMFEED or \
-        code_point == _WHITESPACE_VERTICAL_TAB
+    # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+    return code_point == 0x0009 \
+        or code_point == 0x000A \
+        or code_point == 0x000B \
+        or code_point == 0x000C \
+        or code_point == 0x000D \
+        or code_point == 0x001C \
+        or code_point == 0x001D \
+        or code_point == 0x001E \
+        or code_point == 0x001F \
+        or code_point == 0x0020 \
+        or code_point == 0x0085 \
+        or code_point == 0x00A0 \
+        or code_point == 0x1680 \
+        or code_point == 0x2000 \
+        or code_point == 0x2001 \
+        or code_point == 0x2002 \
+        or code_point == 0x2003 \
+        or code_point == 0x2004 \
+        or code_point == 0x2005 \
+        or code_point == 0x2006 \
+        or code_point == 0x2007 \
+        or code_point == 0x2008 \
+        or code_point == 0x2009 \
+        or code_point == 0x200A \
+        or code_point == 0x2028 \
+        or code_point == 0x2029 \
+        or code_point == 0x202F \
+        or code_point == 0x205F \
+        or code_point == 0x3000
 
 
 #### PUBLIC API
@@ -503,13 +518,14 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             return parts
         return split_impl
-    elif sep is None:
-        def split_whitespace_impl(a):
+    elif sep is None or isinstance(sep, types.NoneType) or getattr(sep, 'value', False) is None:
+        def split_whitespace_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
 
             parts = []
             last = 0
             idx = 0
+            split_count = 0
             in_whitespace_block = True
 
             for idx in range(a_len):
@@ -527,6 +543,9 @@ def unicode_split(a, sep=None, maxsplit=-1):
                     else:
                         parts.append(a[last:idx])
                         in_whitespace_block = True
+                        split_count += 1
+                        if maxsplit != -1 and split_count == maxsplit:
+                            break
 
             if last <= a_len and not in_whitespace_block:
                 parts.append(a[last:])

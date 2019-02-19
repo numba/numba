@@ -7,7 +7,6 @@ from __future__ import print_function
 
 import sys
 from itertools import permutations
-import string
 
 from numba import njit
 import numba.unittest_support as unittest
@@ -342,6 +341,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         CASES = [
+            (' a ', None),
             ('', '⚡'),
             ('abcabc', '⚡'),
             ('🐍⚡', '⚡'),
@@ -360,6 +360,7 @@ class TestUnicode(BaseTest):
 
     def test_split_with_maxsplit(self):
         CASES = [
+            (' a ', None, 1),
             ('', '⚡', 1),
             ('abcabc', '⚡', 1),
             ('🐍⚡', '⚡', 1),
@@ -381,8 +382,16 @@ class TestUnicode(BaseTest):
                                  fmt_str % (test_str, splitter, maxsplit))
 
     def test_split_whitespace(self):
+        # explicit sep=None cases covered in test_split and test_split_with_maxsplit
         pyfunc = split_whitespace_usecase
         cfunc = njit(pyfunc)
+
+        #list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+        all_whitespace = ''.join(map(chr, [
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020,
+            0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+            0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+        ]))
 
         CASES = [
             '',
@@ -391,7 +400,7 @@ class TestUnicode(BaseTest):
             '🐍 ⚡ 🐍',
             '🐍   ⚡ 🐍  ',
             '  🐍   ⚡ 🐍',
-            ' 🐍' + string.whitespace + '⚡ 🐍  ',
+            ' 🐍' + all_whitespace + '⚡ 🐍  ',
         ]
         for test_str in CASES:
             self.assertEqual(pyfunc(test_str),
