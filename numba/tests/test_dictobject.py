@@ -8,7 +8,7 @@ in test_dictimpl.py.
 from __future__ import print_function, absolute_import, division
 
 from numba import njit
-from numba import int32, float32, float64
+from numba import int32, int64, float32, float64
 from numba import dictobject
 from .support import TestCase, MemoryLeakMixin
 
@@ -412,3 +412,85 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             return a, b, c
 
         self.assertEqual(foo(), (1.2, 2.3, 3.4))
+
+    def test_dict_equality(self):
+        """
+        Exercise dict.__eq__ and .__ne__
+        """
+        @njit
+        def foo(na, nb, fa, fb):
+            da = dictobject.new_dict(int32, float64)
+            db = dictobject.new_dict(int32, float64)
+            for i in range(na):
+                da[i] = i * fa
+            for i in range(nb):
+                db[i] = i * fb
+            return da == db, da != db
+
+        # Same keys and values
+        self.assertEqual(foo(10, 10, 3, 3), (True, False))
+        # Same keys and diff values
+        self.assertEqual(foo(10, 10, 3, 3.1), (False, True))
+        # LHS has more keys
+        self.assertEqual(foo(11, 10, 3, 3), (False, True))
+        # RHS has more keys
+        self.assertEqual(foo(10, 11, 3, 3), (False, True))
+
+    def test_dict_equality_more(self):
+        """
+        Exercise dict.__eq__
+        """
+        @njit
+        def foo(ak, av, bk, bv):
+            # The key-value types are different in the two dictionaries
+            da = dictobject.new_dict(int32, float64)
+            db = dictobject.new_dict(int64, float32)
+            for i in range(len(ak)):
+                da[ak[i]] = av[i]
+            for i in range(len(bk)):
+                db[bk[i]] = bv[i]
+            return da == db
+
+        # Simple equal case
+        ak = [1, 2, 3]
+        av = [2, 3, 4]
+        bk = [1, 2, 3]
+        bv = [2, 3, 4]
+        self.assertTrue(foo(ak, av, bk, bv))
+
+        # Equal with replacement
+        ak = [1, 2, 3]
+        av = [2, 3, 4]
+        bk = [1, 2, 2, 3]
+        bv = [2, 1, 3, 4]
+        self.assertTrue(foo(ak, av, bk, bv))
+
+        # Diff values
+        ak = [1, 2, 3]
+        av = [2, 3, 4]
+        bk = [1, 2, 3]
+        bv = [2, 1, 4]
+        self.assertFalse(foo(ak, av, bk, bv))
+
+        # Diff keys
+        ak = [0, 2, 3]
+        av = [2, 3, 4]
+        bk = [1, 2, 3]
+        bv = [2, 3, 4]
+        self.assertFalse(foo(ak, av, bk, bv))
+
+    def test_dict_equality_diff_type(self):
+        """
+        Exercise dict.__eq__
+        """
+        @njit
+        def foo(na, b):
+            da = dictobject.new_dict(int32, float64)
+            for i in range(na):
+                da[i] = i
+            return da == b
+
+        # dict != int
+        self.assertFalse(foo(10, 1))
+        # dict != tuple[int]
+        self.assertFalse(foo(10, (1,)))

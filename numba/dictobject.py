@@ -673,6 +673,47 @@ def impl_values(d):
     return impl
 
 
+@overload(operator.eq)
+def impl_equality(da, db):
+    if not isinstance(da, types.DictType):
+        return
+    if not isinstance(db, types.DictType):
+        # If RHS is not a dictionary, always returns False
+        def impl_type_mismatch(da, db):
+            return False
+        return impl_type_mismatch
+
+    otherkeyty = db.key_type
+
+    def impl_type_matched(da, db):
+        if len(da) != len(db):
+            return False
+        for ka, va in da.items():
+            # Cast key from LHS to the key-type of RHS
+            kb = _cast(ka, otherkeyty)
+            ix, vb = _dict_lookup(db, kb, hash(kb))
+            if ix <= DKIX_EMPTY:
+                # Quit early if the key is not found
+                return False
+            if va != vb:
+                # Quit early if the values do not match
+                return False
+        return True
+
+    return impl_type_matched
+
+
+@overload(operator.ne)
+def impl_equality(da, db):
+    if not isinstance(da, types.DictType):
+        return
+
+    def impl(da, db):
+        return not (da == db)
+
+    return impl
+
+
 @lower_builtin('getiter', types.DictItemsIterableType)
 @lower_builtin('getiter', types.DictKeysIterableType)
 @lower_builtin('getiter', types.DictValuesIterableType)
