@@ -4,6 +4,7 @@ import numba.unittest_support as unittest
 from .support import TestCase
 
 import sys
+import operator
 
 # deliberately imported twice for different use cases
 import numpy as np
@@ -371,7 +372,10 @@ class TestArrayComprehension(unittest.TestCase):
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Cannot resolve setitem', str(raises.exception))
+        self.assertIn(
+            'Invalid use of Function({})'.format(operator.setitem),
+            str(raises.exception),
+        )
 
     @tag('important')
     def test_no_array_comp(self):
@@ -458,8 +462,14 @@ class TestArrayComprehension(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(array_comp)
             cfunc(10, 2.3j)
-        self.assertIn("setitem: array({}, 1d, C)[0] = complex128".format(types.intp),
-                      str(raises.exception))
+        self.assertIn(
+            "Invalid use of Function({})".format(operator.setitem),
+            str(raises.exception),
+        )
+        self.assertIn(
+            "(array({}, 1d, C), Literal[int](0), complex128)".format(types.intp),
+            str(raises.exception),
+        )
 
     def test_array_comp_shuffle_sideeffect(self):
         nelem = 100
