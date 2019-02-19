@@ -351,9 +351,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 6. replace Return with assignment to LHS
     topo_order = find_topo_order(callee_blocks)
     _replace_returns(callee_blocks, instr.target, new_label)
-    #    remove the old definition of instr.target too
-    if (instr.target.name in func_ir._definitions):
-        func_ir._definitions[instr.target.name] = []
+
+    # remove the old definition of instr.target too
+    if (instr.target.name in func_ir._definitions
+            and call_expr in func_ir._definitions[instr.target.name]):
+        # NOTE: target can have multiple definitions due to control flow
+        func_ir._definitions[instr.target.name].remove(call_expr)
 
     # 7. insert all new blocks, and add back definitions
     for label in topo_order:
