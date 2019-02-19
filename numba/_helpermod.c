@@ -123,6 +123,20 @@ build_c_helpers_dict(void)
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);
 
+    /* for dictionary support */
+    declmethod(test_dict);
+    declmethod(dict_new_minsize);
+    declmethod(dict_free);
+    declmethod(dict_length);
+    declmethod(dict_lookup);
+    declmethod(dict_insert);
+    declmethod(dict_insert_ez);
+    declmethod(dict_delitem);
+    declmethod(dict_popitem);
+    declmethod(dict_iter_sizeof);
+    declmethod(dict_iter);
+    declmethod(dict_iter_next);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"
@@ -166,6 +180,18 @@ build_npymath_exports_dict(void)
     }
     return dct;
 }
+
+
+/*
+ * Helper to deal with flushing stdout
+ */
+PyAPI_FUNC(void) _numba_flush_stdout(void) ;
+
+void
+_numba_flush_stdout(void) {
+  fflush(stdout);
+}
+
 
 static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) _numba_rnd_get_state, METH_O, NULL },

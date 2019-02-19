@@ -3,6 +3,7 @@ from __future__ import print_function
 import math
 import re
 import textwrap
+import operator
 
 import numpy as np
 
@@ -152,7 +153,14 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(array_setitem_invalid_cast, ())
 
         errmsg = str(raises.exception)
-        self.assertIn("setitem: array(float64, 1d, C)[0] = complex128", errmsg)
+        self.assertIn(
+            "Invalid use of Function({})".format(operator.setitem),
+            errmsg,
+        )
+        self.assertIn(
+            "(array(float64, 1d, C), Literal[int](0), complex128)",
+            errmsg,
+        )
 
     def test_template_rejection_error_message_cascade(self):
         from numba import njit

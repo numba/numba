@@ -11,7 +11,7 @@ def pndindex(*args):
 
 class prange(object):
     """ Provides a 1D parallel iterator that generates a sequence of integers.
-    Sequentially, prange is identical to range.
+    In non-parallel contexts, prange is identical to range.
     """
     def __new__(cls, *args):
         return range(*args)
