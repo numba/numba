@@ -4,7 +4,7 @@
 Live Variable Analysis
 ======================
 
-(Releated issue https://github.com/numba/numba/pull/1611)
+(Related issue https://github.com/numba/numba/pull/1611)
 
 Numba uses reference-counting for garbage collection, a technique that
 requires cooperation by the compiler.  The Numba IR encodes the location
