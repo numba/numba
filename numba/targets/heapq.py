@@ -180,11 +180,18 @@ def heappushpop(heap, item):
     return hq_heappushpop_impl
 
 
-@overload(hq.nsmallest)
-def nsmallest(n, iterable):
+def check_input_types(n, iterable):
 
     if not isinstance(n, (types.Integer, types.Boolean)):
         raise TypingError("First argument 'n' must be an integer")
+
+    if not isinstance(iterable, types.Sequence):
+        raise TypingError("Second argument 'iterable' must be iterable")
+
+
+@overload(hq.nsmallest)
+def nsmallest(n, iterable):
+    check_input_types(n, iterable)
 
     def hq_nsmallest_impl(n, iterable):
 
@@ -218,9 +225,7 @@ def nsmallest(n, iterable):
 
 @overload(hq.nlargest)
 def nlargest(n, iterable):
-
-    if not isinstance(n, (types.Integer, types.Boolean)):
-        raise TypingError("First argument 'n' must be an integer")
+    check_input_types(n, iterable)
 
     def hq_nlargest_impl(n, iterable):
 

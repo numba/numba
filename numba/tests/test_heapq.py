@@ -239,9 +239,11 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         out = cfunc(True, [3, 2, 1])
         self.assertPreciseEqual(out, [1])
 
-    def test_nsmallest_exceptions(self):
-        pyfunc = nsmallest
-        cfunc = jit(nopython=True)(pyfunc)
+        # iterable is not a list
+        out = cfunc(2, (6, 5, 4, 3, 2, 1))
+        self.assertPreciseEqual(out, [1, 2])
+
+    def _assert_exception_raised(self, cfunc):
 
         # Exceptions leak references
         self.disable_leak_check()
@@ -250,6 +252,12 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             cfunc(2.2, [3, 2, 1])
 
         msg = "First argument 'n' must be an integer"
+        self.assertIn(msg, str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc(2, 100)
+
+        msg = "Second argument 'iterable' must be iterable"
         self.assertIn(msg, str(e.exception))
 
     def test_nlargest_basic(self):
@@ -269,18 +277,19 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         out = cfunc(True, [3, 2, 1])
         self.assertPreciseEqual(out, [3])
 
+        # iterable is not a list
+        out = cfunc(2, (6, 5, 4, 3, 2, 1))
+        self.assertPreciseEqual(out, [6, 5])
+
+    def test_nsmallest_exceptions(self):
+        pyfunc = nsmallest
+        cfunc = jit(nopython=True)(pyfunc)
+        self._assert_exception_raised(cfunc)
+
     def test_nlargest_exceptions(self):
         pyfunc = nlargest
         cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        with self.assertTypingError() as e:
-            cfunc(2.2, [3, 2, 1])
-
-        msg = "First argument 'n' must be an integer"
-        self.assertIn(msg, str(e.exception))
+        self._assert_exception_raised(cfunc)
 
     def test_heapreplace_basic(self):
         pyfunc = heapreplace
