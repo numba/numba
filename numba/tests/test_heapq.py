@@ -272,14 +272,9 @@ class TestHeapq(MemoryLeakMixin, TestCase):
     def test_heapsort(self):
         # inspired by
         # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
-        pyfunc_heapify = heapify
-        cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
-
-        pyfunc_heappush = heappush
-        cfunc_heappush = jit(nopython=True)(pyfunc_heappush)
-
-        pyfunc_heappop = heappop
-        cfunc_heappop = jit(nopython=True)(pyfunc_heappop)
+        cfunc_heapify = jit(nopython=True)(heapify)
+        cfunc_heappush = jit(nopython=True)(heappush)
+        cfunc_heappop = jit(nopython=True)(heappop)
 
         for trial in range(100):
             data = self.rnd.choice(range(5), 10).tolist()
