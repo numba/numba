@@ -232,7 +232,7 @@ class TestHeapq(MemoryLeakMixin, TestCase):
                 got = cfunc(1, iterable)
                 self.assertPreciseEqual(expected, got)
 
-        # edge case: n is boolean
+        # n is boolean
         out = cfunc(False, [3, 2, 1])
         self.assertPreciseEqual(out, [])
 
@@ -243,7 +243,34 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         out = cfunc(2, (6, 5, 4, 3, 2, 1))
         self.assertPreciseEqual(out, [1, 2])
 
-    def _assert_exception_raised(self, cfunc):
+        out = cfunc(3, np.arange(6))
+        self.assertPreciseEqual(out, [0, 1, 2])
+
+    def test_nlargest_basic(self):
+        pyfunc = nlargest
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for iterable in self.iterables():
+            for n in range(-5, len(iterable) + 3):
+                expected = pyfunc(1, iterable)
+                got = cfunc(1, iterable)
+                self.assertPreciseEqual(expected, got)
+
+        # n is boolean
+        out = cfunc(False, [3, 2, 1])
+        self.assertPreciseEqual(out, [])
+
+        out = cfunc(True, [3, 2, 1])
+        self.assertPreciseEqual(out, [3])
+
+        # iterable is not a list
+        out = cfunc(2, (6, 5, 4, 3, 2, 1))
+        self.assertPreciseEqual(out, [6, 5])
+
+        out = cfunc(3, np.arange(6))
+        self.assertPreciseEqual(out, [5, 4, 3])
+
+    def _assert_typing_error(self, cfunc):
 
         # Exceptions leak references
         self.disable_leak_check()
@@ -260,36 +287,15 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         msg = "Second argument 'iterable' must be iterable"
         self.assertIn(msg, str(e.exception))
 
-    def test_nlargest_basic(self):
-        pyfunc = nlargest
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for iterable in self.iterables():
-            for n in range(-5, len(iterable) + 3):
-                expected = pyfunc(1, iterable)
-                got = cfunc(1, iterable)
-                self.assertPreciseEqual(expected, got)
-
-        # edge case: n is boolean
-        out = cfunc(False, [3, 2, 1])
-        self.assertPreciseEqual(out, [])
-
-        out = cfunc(True, [3, 2, 1])
-        self.assertPreciseEqual(out, [3])
-
-        # iterable is not a list
-        out = cfunc(2, (6, 5, 4, 3, 2, 1))
-        self.assertPreciseEqual(out, [6, 5])
-
     def test_nsmallest_exceptions(self):
         pyfunc = nsmallest
         cfunc = jit(nopython=True)(pyfunc)
-        self._assert_exception_raised(cfunc)
+        self._assert_typing_error(cfunc)
 
     def test_nlargest_exceptions(self):
         pyfunc = nlargest
         cfunc = jit(nopython=True)(pyfunc)
-        self._assert_exception_raised(cfunc)
+        self._assert_typing_error(cfunc)
 
     def test_heapreplace_basic(self):
         pyfunc = heapreplace

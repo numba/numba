@@ -184,8 +184,10 @@ def check_input_types(n, iterable):
 
     if not isinstance(n, (types.Integer, types.Boolean)):
         raise TypingError("First argument 'n' must be an integer")
+        # heapq also accepts 1.0 (but not 0.0, 2.0, 3.0...) but
+        # this isn't replicated
 
-    if not isinstance(iterable, types.Sequence):
+    if not isinstance(iterable, (types.Sequence, types.Array)):
         raise TypingError("Second argument 'iterable' must be iterable")
 
 
