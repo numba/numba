@@ -1715,7 +1715,7 @@ def device_memory_size(devmem):
         s, e = device_extents(devmem)
         sz = e - s
         devmem._cuda_memsize_ = sz
-    assert sz > 0, "zero length array"
+    assert sz >= 0, "{} length array".format(sz)
     return sz
 
 

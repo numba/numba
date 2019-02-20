@@ -12,7 +12,7 @@ a Numba transformation pass that attempts to automatically parallelize and
 perform other optimizations on (part of) a function. At the moment, this
 feature only works on CPUs.
 
-Some operations inside a user defined function, e.g., adding a scalar value to
+Some operations inside a user defined function, e.g. adding a scalar value to
 an array, are known to have parallel semantics.  A user program may contain
 many such operations and while each operation could be parallelized
 individually, such an approach often has lackluster performance due to poor
@@ -73,11 +73,11 @@ parallel semantics and for which we attempt to parallelize.
 Explicit Parallel Loops
 ========================
 
-Another feature of this code transformation pass is support for explicit
-parallel loops. One can use Numba's ``prange`` instead of ``range`` to specify
-that a loop can be parallelized. The user is required to make sure that the
-loop does not have cross iteration dependencies except for supported
-reductions.
+Another feature of the code transformation pass (when ``parallel=True``) is
+support for explicit parallel loops. One can use Numba's ``prange`` instead of
+``range`` to specify that a loop can be parallelized. The user is required to
+make sure that the loop does not have cross iteration dependencies except for
+supported reductions.
 
 A reduction is inferred automatically if a variable is updated by a binary
 function/operator using its previous value in the loop body. The initial value
@@ -90,9 +90,12 @@ The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
 
     from numba import njit, prange
+
     @njit(parallel=True)
     def prange_test(A):
         s = 0
+        # Without "parallel=True" in the jit-decorator
+        # the prange statement is equivalent to range
         for i in prange(A.shape[0]):
             s += A[i]
         return s
@@ -195,18 +198,18 @@ produces::
     ================================================================================
 
 
-    Parallel loop listing for  Function test, example.py (4) 
+    Parallel loop listing for  Function test, example.py (4)
     --------------------------------------|loop #ID
-    @njit(parallel=True)                  | 
-    def test(x):                          | 
-        n = x.shape[0]                    | 
+    @njit(parallel=True)                  |
+    def test(x):                          |
+        n = x.shape[0]                    |
         a = np.sin(x)---------------------| #0
         b = np.cos(a * a)-----------------| #1
-        acc = 0                           | 
+        acc = 0                           |
         for i in prange(n - 2):-----------| #3
             for j in prange(n - 1):-------| #2
-                acc += b[i] + b[j + 1]    | 
-        return acc                        | 
+                acc += b[i] + b[j + 1]    |
+        return acc                        |
     --------------------------------- Fusing loops ---------------------------------
     Attempting fusion of parallel loops (combines loops with similar properties)...
     Trying to fuse loops #0 and #1:
@@ -351,18 +354,18 @@ The report is split into the following sections:
 
     .. code-block:: python
 
-        Parallel loop listing for  Function test, example.py (4) 
+        Parallel loop listing for  Function test, example.py (4)
         --------------------------------------|loop #ID
-        @njit(parallel=True)                  | 
-        def test(x):                          | 
-            n = x.shape[0]                    | 
+        @njit(parallel=True)                  |
+        def test(x):                          |
+            n = x.shape[0]                    |
             a = np.sin(x)---------------------| #0
             b = np.cos(a * a)-----------------| #1
-            acc = 0                           | 
+            acc = 0                           |
             for i in prange(n - 2):-----------| #3
                 for j in prange(n - 1):-------| #2
-                    acc += b[i] + b[j + 1]    | 
-            return acc                        | 
+                    acc += b[i] + b[j + 1]    |
+            return acc                        |
 
     It is worth noting that the loop IDs are enumerated in the order they are
     discovered which is not necessarily the same order as present in the source.

@@ -232,7 +232,7 @@ supported by the service.  Travis CI automatically tests all pull requests on OS
 X and Linux, as well as a sampling of different Python and NumPy versions.  If
 you see problems on platforms you are unfamiliar with, feel free to ask for
 help in your pull request.  The Numba core developers can help diagnose
-cross-platform compatibiliy issues.
+cross-platform compatibility issues.
 
 
 Documentation

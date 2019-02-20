@@ -35,7 +35,6 @@ exclude =
     numba/withcontexts.py
     numba/analysis.py
     numba/_version.py
-    numba/unicode.py
     numba/inline_closurecall.py
     numba/ir_utils.py
     numba/pylowering.py
@@ -62,7 +61,6 @@ exclude =
     numba/dataflow.py
     numba/special.py
     numba/controlflow.py
-    numba/cgutils.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
@@ -230,7 +228,6 @@ exclude =
     numba/tests/enum_usecases.py
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
-    numba/tests/test_unicode.py
     numba/tests/test_return_values.py
     numba/tests/test_parallel_backend.py
     numba/tests/test_nrt.py
@@ -297,8 +294,6 @@ exclude =
     numba/tests/test_indexing.py
     numba/tests/test_pycc.py
     numba/tests/annotation_usecases.py
-    numba/tests/test_unicode_names.py
-    numba/tests/test_unicode_literals.py
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
