@@ -240,10 +240,11 @@ NRT_meminfo_as_pyobject(NRT_MemInfo *meminfo) {
 
 /*
 Return a MemInfo* from a MemInfoObject*
-The NRT reference to the MemInfo is borrowed.
+A new reference is returned.
 */
 NUMBA_EXPORT_FUNC(NRT_MemInfo*)
 NRT_meminfo_from_pyobject(MemInfoObject *miobj) {
+    NRT_MemInfo_acquire(miobj->meminfo);
     return miobj->meminfo;
 }
 

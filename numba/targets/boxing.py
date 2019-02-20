@@ -1086,3 +1086,7 @@ def unbox_meminfo_pointer(typ, obj, c):
     res = c.pyapi.nrt_meminfo_from_pyobject(obj)
     errored = cgutils.is_null(c.builder, res)
     return NativeValue(res, is_error=errored)
+
+@unbox(types.TypeRef)
+def unbox_typeref(typ, val, c):
+    return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)

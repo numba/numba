@@ -11,6 +11,7 @@ from numba import njit
 from numba import int32, int64, float32, float64
 from numba import dictobject
 from numba import types
+from numba.nbdict import NBDict
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -542,3 +543,42 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         got = unboxer(mi)
         expected = list(make_content.py_func(10))
         self.assertEqual(got, expected)
+
+
+class TestDictPy(MemoryLeakMixin, TestCase):
+    def test_basic(self):
+        d = NBDict(int32, float32)
+        # len
+        self.assertEqual(len(d), 0)
+        # setitems
+        d[1] = 1
+        d[2] = 2.3
+        d[3] = 3.4
+        self.assertEqual(len(d), 3)
+        # keys
+        self.assertEqual(list(d.keys()), [1, 2, 3])
+        # values
+        for x, y in zip(list(d.values()), [1, 2.3, 3.4]):
+            self.assertAlmostEqual(x, y, places=4)
+        # getitem
+        self.assertAlmostEqual(d[1], 1)
+        self.assertAlmostEqual(d[2], 2.3, places=4)
+        self.assertAlmostEqual(d[3], 3.4, places=4)
+        # deltiem
+        del d[2]
+        self.assertEqual(len(d), 2)
+        # get
+        self.assertIsNone(d.get(2))
+        # setdefault
+        d.setdefault(2, 100)
+        d.setdefault(3, 200)
+        self.assertEqual(d[2], 100)
+        self.assertAlmostEqual(d[3], 3.4, places=4)
+
+    def test_copy_from_dct(self):
+        expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
+        nbd = NBDict(int32, float64)
+        for k, v in expect.items():
+            nbd[k] = v
+        got = dict(nbd)
+        self.assertEqual(got, expect)

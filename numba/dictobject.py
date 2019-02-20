@@ -775,6 +775,7 @@ def impl_setdefault(dct, k, d=None):
     def impl(dct, k, d=None):
         if k not in dct:
             dct[k] = d
+        return dct[k]
 
     return impl
 
