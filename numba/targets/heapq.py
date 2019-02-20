@@ -47,26 +47,6 @@ def _siftup(heap, pos):
     _siftdown(heap, startpos, pos)
 
 
-@overload(hq.heapify)
-def hq_heapify(x):
-
-    if not isinstance(x, types.List):
-        raise TypingError('heap argument must be a list')
-
-    dt = x.dtype
-    if isinstance(dt, types.Complex):
-        msg = ("'<' not supported between instances "
-               "of 'complex' and 'complex'")
-        raise TypingError(msg)
-
-    def hq_heapify_impl(x):
-        n = len(x)
-        for i in range(n // 2 - 1, -1, -1):
-            _siftup(x, i)
-
-    return hq_heapify_impl
-
-
 @register_jitable
 def _siftdown_max(heap, startpos, pos):
     newitem = heap[pos]
@@ -119,11 +99,32 @@ def _heapreplace_max(heap, item):
     return returnitem
 
 
-@overload(hq.heappop)
-def hq_heappop(heap):
-
+def assert_heap_type(heap):
     if not isinstance(heap, types.List):
         raise TypingError('heap argument must be a list')
+
+
+@overload(hq.heapify)
+def hq_heapify(x):
+    assert_heap_type(x)
+
+    dt = x.dtype
+    if isinstance(dt, types.Complex):
+        msg = ("'<' not supported between instances "
+               "of 'complex' and 'complex'")
+        raise TypingError(msg)
+
+    def hq_heapify_impl(x):
+        n = len(x)
+        for i in range(n // 2 - 1, -1, -1):
+            _siftup(x, i)
+
+    return hq_heapify_impl
+
+
+@overload(hq.heappop)
+def hq_heappop(heap):
+    assert_heap_type(heap)
 
     def hq_heappop_impl(heap):
         lastelt = heap.pop()
@@ -139,9 +140,7 @@ def hq_heappop(heap):
 
 @overload(hq.heappush)
 def heappush(heap, item):
-
-    if not isinstance(heap, types.List):
-        raise TypingError('heap argument must be a list')
+    assert_heap_type(heap)
 
     def hq_heappush_impl(heap, item):
         heap.append(item)
@@ -152,9 +151,7 @@ def heappush(heap, item):
 
 @overload(hq.heapreplace)
 def heapreplace(heap, item):
-
-    if not isinstance(heap, types.List):
-        raise TypingError('heap argument must be a list')
+    assert_heap_type(heap)
 
     def hq_heapreplace(heap, item):
         returnitem = heap[0]
@@ -167,9 +164,7 @@ def heapreplace(heap, item):
 
 @overload(hq.heappushpop)
 def heappushpop(heap, item):
-
-    if not isinstance(heap, types.List):
-        raise TypingError('heap argument must be a list')
+    assert_heap_type(heap)
 
     def hq_heappushpop_impl(heap, item):
         if heap and heap[0] < item:
