@@ -26,6 +26,7 @@ from numba.types import (
     DictIteratorType,
     Type,
 )
+from numba.errors import TypingError
 
 
 ll_dict_type = cgutils.voidptr_t
@@ -61,6 +62,7 @@ _DictIterState = DictIterState('dict_iterator_state')
 class DictModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
+            ('meminfo', types.MemInfoPointer(types.voidptr)),
             ('data', types.voidptr),
         ]
         super(DictModel, self).__init__(dmm, fe_type, members)
@@ -85,6 +87,43 @@ make_attribute_wrapper(types.DictType, 'data', '_data')
 def _raise_user_error(context, builder, status, msg):
     with builder.if_then(builder.icmp_signed('!=', status, status.type(0))):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
+
+
+def _call_dict_free(context, builder, ptr):
+    """Call numba_dict_free
+    """
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_dict_type],
+    )
+    free = ir.Function(builder.module, fnty, name='numba_dict_free')
+    builder.call(free, [ptr])
+
+
+def _imp_dtor(context, module):
+    """Define the dtor for dictionary
+    """
+    llvoidptr = context.get_value_type(types.voidptr)
+    llsize = context.get_value_type(types.uintp)
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [llvoidptr, llsize, llvoidptr],
+    )
+    fname = '_numba_dict_dtor'
+    fn = module.get_or_insert_function(fnty, name=fname)
+
+    if fn.is_declaration:
+        # Set linkage
+        fn.linkage = 'linkonce_odr'
+        # Define
+        builder = ir.IRBuilder(fn.append_basic_block())
+        dp = builder.bitcast(fn.args[0], ll_dict_type.as_pointer())
+        d = builder.load(dp)
+        _call_dict_free(context, builder, d)
+        builder.ret_void()
+
+    return fn
 
 
 @intrinsic
@@ -397,6 +436,23 @@ def _make_dict(typingctx, keyty, valty, ptr):
         ctor = cgutils.create_struct_proxy(dict_ty)
         dstruct = ctor(context, builder)
         dstruct.data = ptr
+
+        alloc_size = context.get_abi_sizeof(
+            context.get_value_type(types.voidptr),
+        )
+        dtor = _imp_dtor(context, builder.module)
+        meminfo = context.nrt.meminfo_alloc_dtor(
+            builder,
+            context.get_constant(types.uintp, alloc_size),
+            dtor,
+        )
+
+        data_pointer = context.nrt.meminfo_data(builder, meminfo)
+        data_pointer = builder.bitcast(data_pointer, ll_dict_type.as_pointer())
+        builder.store(ptr, data_pointer)
+
+        dstruct.meminfo = meminfo
+
         return dstruct._getvalue()
 
     sig = dict_ty(keyty, valty, ptr)
