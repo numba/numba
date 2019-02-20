@@ -13,7 +13,6 @@ from numba.extending import (
     intrinsic,
     register_model,
     models,
-    make_attribute_wrapper,
     lower_builtin,
 )
 from numba.targets.imputils import iternext_impl
