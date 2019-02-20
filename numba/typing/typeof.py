@@ -238,3 +238,4 @@ def typeof_typeref(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+

@@ -1264,6 +1264,32 @@ class PythonAPI(object):
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [data, pyobj])
 
+    def nrt_meminfo_as_pyobject(self, miptr):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            self.pyobj,
+            [cgutils.voidptr_t]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_as_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miptr])
+
+    def nrt_meminfo_from_pyobject(self, miobj):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [self.pyobj]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_from_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miobj])
+
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])

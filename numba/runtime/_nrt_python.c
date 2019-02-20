@@ -34,6 +34,7 @@ NRT_meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
     return NRT_MemInfo_new(data, dummy_size, pyobject_dtor, ownerobj);
 }
 
+
 /*
  * A Python object wrapping a NRT meminfo.
  */
@@ -42,6 +43,7 @@ typedef struct {
     PyObject_HEAD
     NRT_MemInfo *meminfo;
 } MemInfoObject;
+
 
 static
 int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
@@ -216,6 +218,34 @@ static PyTypeObject MemInfoType = {
     0,                                        /* tp_alloc */
     0,                                        /* tp_new */
 };
+
+
+/*
+Return a MemInfo* as a MemInfoObject*
+The NRT reference to the MemInfo is borrowed.
+*/
+NUMBA_EXPORT_FUNC(MemInfoObject*)
+NRT_meminfo_as_pyobject(NRT_MemInfo *meminfo) {
+    MemInfoObject *mi;
+    PyObject *addr;
+
+    addr = PyLong_FromVoidPtr(meminfo);
+    if (!addr) return NULL;
+    mi = (MemInfoObject*)PyObject_CallFunctionObjArgs(&MemInfoType, addr, NULL);
+    if (!mi) return mi;
+    Py_DECREF(addr);
+    return mi;
+}
+
+
+/*
+Return a MemInfo* from a MemInfoObject*
+The NRT reference to the MemInfo is borrowed.
+*/
+NUMBA_EXPORT_FUNC(NRT_MemInfo*)
+NRT_meminfo_from_pyobject(MemInfoObject *miobj) {
+    return miobj->meminfo;
+}
 
 
 /*

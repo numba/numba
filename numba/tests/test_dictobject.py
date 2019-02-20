@@ -10,6 +10,7 @@ from __future__ import print_function, absolute_import, division
 from numba import njit
 from numba import int32, int64, float32, float64
 from numba import dictobject
+from numba import types
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -511,3 +512,33 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertFalse(foo(10, 1))
         # dict != tuple[int]
         self.assertFalse(foo(10, (1,)))
+
+    def test_dict_box(self):
+        """
+        Exercise dictobject._box
+        """
+        @njit
+        def make_content(nelem):
+            for i in range(nelem):
+                yield i, i + (i + 1) / 100
+
+        @njit
+        def boxer(nelem):
+            d = dictobject.new_dict(int32, float64)
+            for k, v in make_content(nelem):
+                d[k] = v
+            return dictobject._box(d)
+
+        dcttype = types.DictType(int32, float64)
+
+        @njit
+        def unboxer(mi):
+            d = dictobject._unbox(mi, dcttype)
+            return list(d.items())
+
+        mi = boxer(10)
+        self.assertEqual(mi.refcount, 1)
+
+        got = unboxer(mi)
+        expected = list(make_content.py_func(10))
+        self.assertEqual(got, expected)
