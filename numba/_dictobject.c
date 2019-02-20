@@ -672,7 +672,7 @@ numba_dict_insert(
         hashpos = find_empty_slot(dk, hash);
         ep = get_entry(dk, dk->nentries);
         set_index(dk, hashpos, dk->nentries);
-        copy_val(dk, entry_get_key(dk, ep), key_bytes);
+        copy_key(dk, entry_get_key(dk, ep), key_bytes);
         assert ( hash != -1 );
         ep->hash = hash;
         copy_val(dk, entry_get_val(dk, ep), val_bytes);
