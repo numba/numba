@@ -359,11 +359,8 @@ class TestHeapq(MemoryLeakMixin, TestCase):
     def test_nbest(self):
         # inspired by
         # https://github.com/python/cpython/blob/e42b7051/Lib/test/test_heapq.py
-        pyfunc_heapify = heapify
-        cfunc_heapify = jit(nopython=True)(pyfunc_heapify)
-
-        pyfunc_heapreplace = heapreplace
-        cfunc_heapreplace = jit(nopython=True)(pyfunc_heapreplace)
+        cfunc_heapify = jit(nopython=True)(heapify)
+        cfunc_heapreplace = jit(nopython=True)(heapreplace)
 
         data = self.rnd.choice(range(2000), 1000).tolist()
         heap = data[:10]
