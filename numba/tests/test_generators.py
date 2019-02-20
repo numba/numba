@@ -122,6 +122,14 @@ def gen_unification_error():
     yield 1j
 
 
+def gen_optional_and_type_unification_error():
+    # yields complex and optional(literalint)
+    i = 0
+    yield 1j
+    while True:
+        i = yield i
+
+
 class TestGenerators(MemoryLeakMixin, TestCase):
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
@@ -332,6 +340,15 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
         msg = ("Can't unify yield type from the following types: complex128, "
                "none")
+        self.assertIn(msg, str(e.exception))
+
+    def test_optional_expansion_type_unification_error(self):
+        pyfunc = gen_optional_and_type_unification_error
+        with self.assertTypingError() as e:
+            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+
+        msg = ("Can't unify yield type from the following types: complex128, "
+               "int64, none")
         self.assertIn(msg, str(e.exception))
 
 

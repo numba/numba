@@ -1012,9 +1012,16 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                             typdict[y.inst.value.name],
                                             y.inst.loc.strformat()))
 
+            explain_ty = set()
+            for ty in yield_types:
+                if isinstance(ty, types.Optional):
+                    explain_ty.add(ty.type)
+                    explain_ty.add(types.NoneType('none'))
+                else:
+                    explain_ty.add(ty)
             raise TypingError("Can't unify yield type from the "
                               "following types: %s"
-                              % ", ".join(sorted(map(str, yield_types))) +
+                              % ", ".join(sorted(map(str, explain_ty))) +
                               "\n\n" + "\n".join(yp_highlights))
 
         return types.Generator(self.func_id.func, yield_type, arg_types,
