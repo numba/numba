@@ -428,7 +428,7 @@ class Literal(Type):
 class TypeRef(Dummy):
     """Reference to a type.
 
-    Used when a type is passed as a value
+    Used when a type is passed as a value.
     """
     def __init__(self, instance_type):
         self.instance_type = instance_type

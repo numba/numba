@@ -47,15 +47,15 @@ ERR_DICT_EMPTY = -4
 ERR_CMP_FAILED = -5
 
 
-def new_dict():
+def new_dict(key, value):
+    """Construct a new dict. (Not implemented in the interpreter yet)
+
+    Parameters
+    ----------
+    key, value : TypeRef
+        Key type and value type of the new dict.
+    """
     raise NotImplementedError
-
-
-class DictIterState(Type):
-    pass
-
-
-_DictIterState = DictIterState('dict_iterator_state')
 
 
 @register_model(DictType)
@@ -63,7 +63,7 @@ class DictModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('meminfo', types.MemInfoPointer(types.voidptr)),
-            ('data', types.voidptr),
+            ('data', types.voidptr),   # ptr to the C dict
         ]
         super(DictModel, self).__init__(dmm, fe_type, members)
 
@@ -75,22 +75,21 @@ class DictModel(models.StructModel):
 class DictIterModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('parent', fe_type.parent),
-            ('state', types.voidptr),
+            ('parent', fe_type.parent),  # reference to the dict
+            ('state', types.voidptr),    # iterator state in C code
         ]
         super(DictIterModel, self).__init__(dmm, fe_type, members)
 
 
-make_attribute_wrapper(types.DictType, 'data', '_data')
-
-
-def _raise_user_error(context, builder, status, msg):
+def _raise_if_error(context, builder, status, msg):
+    """Raise an internal error depending on the value of *status*
+    """
     with builder.if_then(builder.icmp_signed('!=', status, status.type(0))):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
 def _call_dict_free(context, builder, ptr):
-    """Call numba_dict_free
+    """Call numba_dict_free(ptr)
     """
     fnty = ir.FunctionType(
         ir.VoidType(),
@@ -146,6 +145,7 @@ def _dict_new_minsize(typingctx, keyty, valty):
             [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
         )
         fn = ir.Function(builder.module, fnty, name='numba_dict_new_minsize')
+        # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
         sz_key = context.get_abi_sizeof(ll_key)
@@ -155,7 +155,7 @@ def _dict_new_minsize(typingctx, keyty, valty):
             fn,
             [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
         )
-        _raise_user_error(
+        _raise_if_error(
             context, builder, status,
             msg="Failed to allocate dictionary",
         )
@@ -167,6 +167,8 @@ def _dict_new_minsize(typingctx, keyty, valty):
 
 @intrinsic
 def _dict_insert(typingctx, d, key, hashval, val):
+    """Wrap numba_dict_insert
+    """
     resty = types.int32
     sig = resty(d, d.key_type, types.intp, d.value_type)
 
@@ -187,6 +189,7 @@ def _dict_insert(typingctx, d, key, hashval, val):
 
         ptr_key = cgutils.alloca_once_value(builder, data_key)
         ptr_val = cgutils.alloca_once_value(builder, data_val)
+        # TODO: the ptr_oldval is not used.  needed for refct
         ptr_oldval = cgutils.alloca_once(builder, data_val.type)
 
         dp = _dict_get_data(context, builder, td, d)
@@ -220,7 +223,10 @@ def _dict_length(typingctx, d):
             [ll_dict_type],
         )
         fn = ir.Function(builder.module, fnty, name='numba_dict_length')
-        n = builder.call(fn, args)
+        [d] = args
+        [td] = sig.args
+        dp = _dict_get_data(context, builder, td, d)
+        n = builder.call(fn, [dp])
         return n
 
     return sig, codegen
@@ -378,6 +384,10 @@ def _dict_delitem(typingctx, d, hk, ix):
 
 
 def _iterator_codegen(resty):
+    """The common codegen for iterator intrinsic.
+
+    Populates the iterator struct and incref.
+    """
 
     def codegen(context, builder, sig, args):
         [d] = args
@@ -464,12 +474,16 @@ def _make_dict(typingctx, keyty, valty, ptr):
 
 
 def _dict_get_data(context, builder, dict_ty, d):
+    """Helper to get the C dict pointer in a numba dict.
+    """
     ctor = cgutils.create_struct_proxy(dict_ty)
     dstruct = ctor(context, builder, value=d)
     return dstruct.data
 
 
 def _as_bytes(builder, ptr):
+    """Helper to do (void*)ptr
+    """
     return builder.bitcast(ptr, cgutils.voidptr_t)
 
 
@@ -502,16 +516,19 @@ def impl_len(d):
         return
 
     def impl(d):
-        return _dict_length(d._data)
+        return _dict_length(d)
 
     return impl
 
 
 @intrinsic
 def _cast(typingctx, val, typ):
+    """Cast *val* to *typ*
+    """
     def codegen(context, builder, signature, args):
         [val, typ] = args
         return val
+    # Using implicit casting in argument types
     casted = typ.instance_type
     sig = casted(casted, typ)
     return sig, codegen
@@ -519,6 +536,8 @@ def _cast(typingctx, val, typ):
 
 @intrinsic
 def _nonoptional(typingctx, val):
+    """Typing trick to cast Optional[T] to T
+    """
     if not isinstance(val, types.Optional):
         raise TypeError('expected an optional')
 
@@ -778,6 +797,8 @@ def impl_not_equal(da, db):
 @lower_builtin('getiter', types.DictKeysIterableType)
 @lower_builtin('getiter', types.DictValuesIterableType)
 def impl_iterable_getiter(context, builder, sig, args):
+    """Implement iter() for .keys(), .values(), .items()
+    """
     iterablety = sig.args[0]
     it = context.make_helper(builder, iterablety.iterator_type, args[0])
 
@@ -807,6 +828,8 @@ def impl_iterable_getiter(context, builder, sig, args):
 
 @lower_builtin('getiter', types.DictType)
 def impl_dict_getiter(context, builder, sig, args):
+    """Implement iter(Dict).  Semantically equivalent to dict.keys()
+    """
     [td] = sig.args
     [d] = args
     iterablety = types.DictKeysIterableType(td)
@@ -882,12 +905,18 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         key = dm_key.load_from_data_pointer(builder, key_ptr)
         val = dm_val.load_from_data_pointer(builder, val_ptr)
 
+        # All dict iterator uses this common implementation.
+        # There differences are resolved here.
         if isinstance(iter_type.iterable, DictItemsIterableType):
+            # .items()
             tup = context.make_tuple(builder, yield_type, [key, val])
             result.yield_(tup)
         elif isinstance(iter_type.iterable, DictKeysIterableType):
+            # .keys()
             result.yield_(key)
         elif isinstance(iter_type.iterable, DictValuesIterableType):
+            # .values()
             result.yield_(val)
         else:
+            # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
