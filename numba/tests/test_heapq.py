@@ -222,6 +222,12 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         msg = 'heap argument must be a list'
         self.assertIn(msg, str(e.exception))
 
+        with self.assertTypingError() as e:
+            cfunc([1, 5, 4], 6.0)
+
+        msg = 'heap type must be the same as item type'
+        self.assertIn(msg, str(e.exception))
+
     def test_nsmallest_basic(self):
         pyfunc = nsmallest
         cfunc = jit(nopython=True)(pyfunc)
@@ -337,6 +343,12 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         msg = 'heap argument must be a list'
         self.assertIn(msg, str(e.exception))
 
+        with self.assertTypingError() as e:
+            cfunc([1, 5, 4], -1.0)
+
+        msg = 'heap type must be the same as item type'
+        self.assertIn(msg, str(e.exception))
+
     def heapiter(self, heap):
         try:
             while 1:
@@ -429,10 +441,10 @@ class TestHeapq(MemoryLeakMixin, TestCase):
         pyfunc = heappushpop
         cfunc = jit(nopython=True)(pyfunc)
 
-        h = [10]
+        h = [1.0]
         x = cfunc(h, 10.0)
-        self.assertPreciseEqual((h, x), ([10], 10.0))
-        self.assertPreciseEqual(type(h[0]), int)
+        self.assertPreciseEqual((h, x), ([10.0], 1.0))
+        self.assertPreciseEqual(type(h[0]), float)
         self.assertPreciseEqual(type(x), float)
 
         h = [10]
@@ -454,4 +466,10 @@ class TestHeapq(MemoryLeakMixin, TestCase):
             cfunc((1, 5, 4), -1)
 
         msg = 'heap argument must be a list'
+        self.assertIn(msg, str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc([1, 5, 4], False)
+
+        msg = 'heap type must be the same as item type'
         self.assertIn(msg, str(e.exception))

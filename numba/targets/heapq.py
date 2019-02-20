@@ -103,16 +103,21 @@ def assert_heap_type(heap):
     if not isinstance(heap, types.List):
         raise TypingError('heap argument must be a list')
 
-
-@overload(hq.heapify)
-def hq_heapify(x):
-    assert_heap_type(x)
-
-    dt = x.dtype
+    dt = heap.dtype
     if isinstance(dt, types.Complex):
         msg = ("'<' not supported between instances "
                "of 'complex' and 'complex'")
         raise TypingError(msg)
+
+
+def assert_item_type_consistent_with_heap_type(heap, item):
+    if not heap.dtype == item:
+        raise TypingError('heap type must be the same as item type')
+
+
+@overload(hq.heapify)
+def hq_heapify(x):
+    assert_heap_type(x)
 
     def hq_heapify_impl(x):
         n = len(x)
@@ -141,6 +146,7 @@ def hq_heappop(heap):
 @overload(hq.heappush)
 def heappush(heap, item):
     assert_heap_type(heap)
+    assert_item_type_consistent_with_heap_type(heap, item)
 
     def hq_heappush_impl(heap, item):
         heap.append(item)
@@ -152,6 +158,7 @@ def heappush(heap, item):
 @overload(hq.heapreplace)
 def heapreplace(heap, item):
     assert_heap_type(heap)
+    assert_item_type_consistent_with_heap_type(heap, item)
 
     def hq_heapreplace(heap, item):
         returnitem = heap[0]
@@ -165,6 +172,7 @@ def heapreplace(heap, item):
 @overload(hq.heappushpop)
 def heappushpop(heap, item):
     assert_heap_type(heap)
+    assert_item_type_consistent_with_heap_type(heap, item)
 
     def hq_heappushpop_impl(heap, item):
         if heap and heap[0] < item:
