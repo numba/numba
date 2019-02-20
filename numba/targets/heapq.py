@@ -84,10 +84,16 @@ def _siftup_max(heap, pos):
 
 
 @register_jitable
+def reversed_range(x):
+    # analogous to reversed(range(x))
+    return range(x - 1, -1, -1)
+
+
+@register_jitable
 def _heapify_max(x):
     n = len(x)
 
-    for i in range(n // 2 - 1, -1, -1):
+    for i in reversed_range(n // 2):
         _siftup_max(x, i)
 
 
@@ -121,7 +127,7 @@ def hq_heapify(x):
 
     def hq_heapify_impl(x):
         n = len(x)
-        for i in range(n // 2 - 1, -1, -1):
+        for i in reversed_range(n // 2):
             _siftup(x, i)
 
     return hq_heapify_impl
