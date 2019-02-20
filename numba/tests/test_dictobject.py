@@ -89,7 +89,10 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(keys, vals, 1), 0.1)
         self.assertEqual(foo(keys, vals, 2), 0.2)
         self.assertEqual(foo(keys, vals, 3), 0.3)
-
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
         with self.assertRaises(KeyError):
             foo(keys, vals, 0)
         with self.assertRaises(KeyError):
@@ -150,6 +153,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
                 core.py_func(dict(zip(keys, vals)), npop=3),
             )
 
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
+
         with self.assertRaises(KeyError):
             foo(keys, vals, npop=4)
 
@@ -174,6 +182,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(keys, vals, 2), (0.2, 2))
         self.assertEqual(foo(keys, vals, 3), (0.3, 2))
         self.assertEqual(foo(keys, vals, 0), (None, 3))
+
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
 
         @njit
         def foo():
@@ -230,6 +243,10 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(keys, vals, 1), (2, None))
         self.assertEqual(foo(keys, vals, 2), (2, None))
         self.assertEqual(foo(keys, vals, 3), (2, None))
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
         with self.assertRaises(KeyError):
             foo(keys, vals, 0)
 

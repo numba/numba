@@ -26,6 +26,7 @@ from numba.types import (
     DictIteratorType,
     Type,
 )
+from numba.targets.imputils import impl_ret_borrowed, impl_ret_new_ref
 from numba.errors import TypingError
 
 
@@ -386,7 +387,12 @@ def _iterator_codegen(resty):
         iterhelper = context.make_helper(builder, resty)
         iterhelper.parent = d
         iterhelper.state = iterhelper.state.type(None)
-        return iterhelper._getvalue()
+        return impl_ret_borrowed(
+            context,
+            builder,
+            resty,
+            iterhelper._getvalue(),
+        )
 
     return codegen
 
@@ -793,12 +799,19 @@ def impl_iterable_getiter(context, builder, sig, args):
 
     dp = _dict_get_data(context, builder, iterablety.parent, it.parent)
     builder.call(fn, [it.state, dp])
-    return it._getvalue()
+    return impl_ret_borrowed(
+        context,
+        builder,
+        sig.return_type,
+        it._getvalue(),
+    )
 
 
 @lower_builtin('getiter', types.DictType)
 def impl_dict_getiter(context, builder, sig, args):
-    iterablety = types.DictKeysIterableType(sig.args[0])
+    [td] = sig.args
+    [d] = args
+    iterablety = types.DictKeysIterableType(td)
     it = context.make_helper(builder, iterablety.iterator_type)
 
     fnty = ir.FunctionType(
@@ -814,10 +827,16 @@ def impl_dict_getiter(context, builder, sig, args):
 
     pstate = cgutils.alloca_once(builder, state_type, zfill=True)
     it.state = _as_bytes(builder, pstate)
+    it.parent = d
 
     dp = _dict_get_data(context, builder, iterablety.parent, args[0])
     builder.call(fn, [it.state, dp])
-    return it._getvalue()
+    return impl_ret_borrowed(
+        context,
+        builder,
+        sig.return_type,
+        it._getvalue(),
+    )
 
 
 @lower_builtin('iternext', types.DictIteratorType)
