@@ -26,8 +26,7 @@ from numba.types import (
     DictIteratorType,
     Type,
 )
-from numba.targets.imputils import impl_ret_borrowed, impl_ret_new_ref
-from numba.errors import TypingError
+from numba.targets.imputils import impl_ret_borrowed
 
 
 ll_dict_type = cgutils.voidptr_t
@@ -88,7 +87,6 @@ make_attribute_wrapper(types.DictType, 'data', '_data')
 def _raise_user_error(context, builder, status, msg):
     with builder.if_then(builder.icmp_signed('!=', status, status.type(0))):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
-
 
 
 def _call_dict_free(context, builder, ptr):
@@ -736,7 +734,7 @@ def impl_values(d):
 
 
 @overload(operator.eq)
-def impl_equality(da, db):
+def impl_equal(da, db):
     if not isinstance(da, types.DictType):
         return
     if not isinstance(db, types.DictType):
@@ -766,7 +764,7 @@ def impl_equality(da, db):
 
 
 @overload(operator.ne)
-def impl_equality(da, db):
+def impl_not_equal(da, db):
     if not isinstance(da, types.DictType):
         return
 
