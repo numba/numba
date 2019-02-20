@@ -549,10 +549,8 @@ class GetItemCPointer(AbstractTemplate):
             return signature(ptr.dtype, ptr, normalize_1d_index(idx))
 
 
-@infer
+@infer_global(operator.setitem)
 class SetItemCPointer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ptr, idx, val = args
@@ -819,16 +817,6 @@ class Round(ConcreteTemplate):
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]
-
-
-@infer_global(hash)
-class Hash(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        arg, = args
-        if isinstance(arg, types.Hashable):
-            return signature(types.intp, *args)
 
 
 #------------------------------------------------------------------------------

@@ -111,7 +111,7 @@ def getitem_cpointer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('setitem', types.CPointer, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.CPointer, types.Integer, types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
     elem_ptr = builder.gep(base_ptr, [idx])

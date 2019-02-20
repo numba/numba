@@ -262,7 +262,7 @@ class BaseContext(object):
         # Populate built-in registry
         from . import (arraymath, enumimpl, iterators, linalg, numbers,
                        optional, polynomial, rangeobj, slicing, smartarray,
-                       tupleobj, gdb_hook, heapq)
+                       tupleobj, gdb_hook, hashing, heapq)
         try:
             from . import npdatetime
         except NotImplementedError:

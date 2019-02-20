@@ -107,5 +107,24 @@ class TestMiscErrorHandling(unittest.TestCase):
         self.assertIn(expected, str(raises.exception))
 
 
+class TestConstantInferenceErrorHandling(unittest.TestCase):
+
+    def test_basic_error(self):
+        # issue 3717
+        @njit
+        def problem(a,b):
+            if a == b:
+                raise Exception("Equal numbers: %i %i", a, b)
+            return a * b
+
+        with self.assertRaises(errors.ConstantInferenceError) as raises:
+            problem(1,2)
+
+        msg1 = "Constant inference not possible for: arg(0, name=a)"
+        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
+        self.assertIn(msg1, str(raises.exception))
+        self.assertIn(msg2, str(raises.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

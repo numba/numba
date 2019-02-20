@@ -179,44 +179,48 @@ class NRTContext(object):
                                         name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
-    def _call_incref_decref(self, builder, root_type, typ, value,
-                                funcname, getters=()):
+    def get_meminfos(self, builder, ty, val):
+        """Return a list of *(type, meminfo)* inside the given value.
+        """
+        datamodel = self._context.data_model_manager[ty]
+        members = datamodel.traverse(builder)
+
+        meminfos = []
+        if datamodel.has_nrt_meminfo():
+            mi = datamodel.get_nrt_meminfo(builder, val)
+            meminfos.append((ty, mi))
+
+        for mtyp, getter in members:
+            field = getter(val)
+            inner_meminfos = self.get_meminfos(builder, mtyp, field)
+            meminfos.extend(inner_meminfos)
+        return meminfos
+
+    def _call_incref_decref(self, builder, typ, value, funcname):
+        """Call function of *funcname* on every meminfo found in *value*.
+        """
         self._require_nrt()
 
         from numba.runtime.nrtdynmod import incref_decref_ty
 
-        data_model = self._context.data_model_manager[typ]
-
-        members = data_model.traverse(builder)
-        for mtyp, getter in members:
-            self._call_incref_decref(builder, root_type, mtyp, value,
-                                     funcname, getters + (getter,))
-
-        if data_model.has_nrt_meminfo():
-            # Call the chain of getters to compute the member value
-            for getter in getters:
-                value = getter(value)
-            try:
-                meminfo = data_model.get_nrt_meminfo(builder, value)
-            except NotImplementedError as e:
-                raise NotImplementedError("%s: %s" % (root_type, str(e)))
-            assert meminfo is not None  # since has_nrt_meminfo()
+        meminfos = self.get_meminfos(builder, typ, value)
+        for _, mi in meminfos:
             mod = builder.module
             fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
             fn.args[0].add_attribute("nocapture")
-            builder.call(fn, [meminfo])
+            builder.call(fn, [mi])
 
     def incref(self, builder, typ, value):
         """
         Recursively incref the given *value* and its members.
         """
-        self._call_incref_decref(builder, typ, typ, value, "NRT_incref")
+        self._call_incref_decref(builder, typ, value, "NRT_incref")
 
     def decref(self, builder, typ, value):
         """
         Recursively decref the given *value* and its members.
         """
-        self._call_incref_decref(builder, typ, typ, value, "NRT_decref")
+        self._call_incref_decref(builder, typ, value, "NRT_decref")

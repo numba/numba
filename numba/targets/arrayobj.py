@@ -444,7 +444,7 @@ def getitem_array_tuple(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('setitem', types.Buffer, types.Any, types.Any)
+@lower_builtin(operator.setitem, types.Buffer, types.Any, types.Any)
 def setitem_array(context, builder, sig, args):
     """
     array[a] = scalar_or_array
@@ -3007,7 +3007,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('setitem', types.NumpyFlatType, types.Integer,
+@lower_builtin(operator.setitem, types.NumpyFlatType, types.Integer,
            types.Any)
 def iternext_numpy_getitem(context, builder, sig, args):
     flatiterty = sig.args[0]
