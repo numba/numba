@@ -27,10 +27,13 @@ from .errors import (TypingError, UntypedAttributeError, new_error_context,
 from .funcdesc import qualifying_prefix
 
 
-class NOTSET: pass
+class NOTSET:
+    pass
+
 
 # terminal color markup
 _termcolor = termcolor()
+
 
 class TypeVar(object):
     def __init__(self, context, var):
@@ -954,13 +957,13 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', ir.unknown_loc)
                 msg = ("Type of variable '%s' cannot be determined, operation:"
-                      " %s, location: %s")
+                       " %s, location: %s")
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
-                      "have imprecise type: %s. %s")
+                       "have imprecise type: %s. %s")
                 istmp = " (temporary variable)" if var.startswith('$') else ""
                 loc = getattr(offender, 'loc', ir.unknown_loc)
                 # is this an untyped list? try and provide help
@@ -999,9 +1002,21 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             msg = "Cannot type generator: it does not yield any value"
             raise TypingError(msg)
         yield_type = self.context.unify_types(*yield_types)
-        if yield_type is None:
+        if yield_type is None or isinstance(yield_type, types.Optional):
             msg = "Cannot type generator: cannot unify yielded types %s"
-            raise TypingError(msg % (yield_types,))
+            yp_highlights = []
+            for y in gi.get_yield_points():
+                msg = (_termcolor.errmsg("Yield of: IR '%s', type '%s', "
+                                         "location: %s"))
+                yp_highlights.append(msg % (str(y.inst),
+                                            typdict[y.inst.value.name],
+                                            y.inst.loc.strformat()))
+
+            raise TypingError("Can't unify yield type from the "
+                              "following types: %s"
+                              % ", ".join(sorted(map(str, yield_types))) +
+                              "\n\n" + "\n".join(yp_highlights))
+
         return types.Generator(self.func_id.func, yield_type, arg_types,
                                state_types, has_finalizer=True)
 
@@ -1304,9 +1319,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
             self.calls.append((inst.value, constraint))
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(
-                inst, target, operator.getitem, expr.value, expr.index,
-                )
+            self.typeof_intrinsic_call(inst, target, operator.getitem,
+                                       expr.value, expr.index,)
         elif expr.op == 'getattr':
             constraint = GetAttrConstraint(target.name, attr=expr.attr,
                                            value=expr.value, loc=inst.loc,

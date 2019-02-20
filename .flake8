@@ -56,7 +56,6 @@ exclude =
     numba/debuginfo.py
     numba/pretty_annotate.py
     numba/six.py
-    numba/typeinfer.py
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
@@ -268,7 +267,6 @@ exclude =
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
-    numba/tests/test_generators.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
     numba/tests/test_exceptions.py

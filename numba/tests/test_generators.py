@@ -116,6 +116,12 @@ def gen_ndenumerate(arr):
 def gen_bool():
     yield True
 
+
+def gen_unification_error():
+    yield None
+    yield 1j
+
+
 class TestGenerators(MemoryLeakMixin, TestCase):
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
@@ -185,7 +191,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def test_gen5(self):
         with self.assertTypingError() as cm:
-            cr = compile_isolated(gen5, ())
+            compile_isolated(gen5, ())
         self.assertIn("Cannot type generator: it does not yield any value",
                       str(cm.exception))
 
@@ -318,6 +324,15 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def test_ndenumerate_objmode(self):
         self.check_np_flat(gen_ndenumerate, flags=forceobj_flags)
+
+    def test_type_unification_error(self):
+        pyfunc = gen_unification_error
+        with self.assertTypingError() as e:
+            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+
+        msg = ("Can't unify yield type from the following types: complex128, "
+               "none")
+        self.assertIn(msg, str(e.exception))
 
 
 class TestGenExprs(MemoryLeakMixin, TestCase):
