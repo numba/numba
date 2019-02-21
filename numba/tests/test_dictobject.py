@@ -7,8 +7,9 @@ in test_dictimpl.py.
 """
 from __future__ import print_function, absolute_import, division
 
+import numpy as np
 from numba import njit
-from numba import int32, int64, float32, float64
+from numba import int32, int64, float32, float64, types
 from numba import dictobject
 from .support import TestCase, MemoryLeakMixin
 
@@ -511,3 +512,346 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertFalse(foo(10, 1))
         # dict != tuple[int]
         self.assertFalse(foo(10, (1,)))
+
+    def test_001(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad key type
+            z = d.get(1j)
+            return z
+
+        foo(10)
+
+    def test_002(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad default type
+            z = d.get(2 * n, 1j)
+            return z
+
+        foo(10)
+
+    def test_003(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad cast!?
+            z = d.get(2.4)
+            return z
+
+        # should raise
+        foo(10)
+
+    def test_004(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # should raise TypingError
+            d[1j] = 7.
+
+        foo()
+
+    def test_005(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # should raise TypingError
+            d[1] = 1j
+
+        foo()
+
+    def test_006(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # raise TypingError
+            d[11.5]
+
+        foo()
+
+    def test_007(self):
+        # this checks collisions in real life for 64bit systems
+        @njit
+        def foo(v1, v2):
+            d = dictobject.new_dict(int64, float64)
+            c1 = np.uint64(2 ** 61 - 1)
+            c2 = np.uint64(0)
+            assert hash(c1) == hash(c2)
+            d[c1] = v1
+            d[c2] = v2
+            return (d[c1], d[c2])
+
+        a, b = 10., 20.
+        x, y = foo(a, b)
+        self.assertEqual(x, a)
+        self.assertEqual(y, b)
+
+    def test_008(self):
+        # check that (keys, vals) are LIFO .popitem()
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            keys = []
+            vals = []
+            for i in range(n):
+                tmp = d.popitem()
+                keys.append(tmp[0])
+                vals.append(tmp[1])
+            return keys, vals
+
+        z = 10
+        gk, gv = foo(z)
+
+        self.assertEqual(gk, [x for x in reversed(range(z))])
+        self.assertEqual(gv, [x + 1 for x in reversed(range(z))])
+
+    def test_009(self):
+        # check that (keys, vals) are LIFO in .pop()
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            vals = []
+            for i in range(n):
+                vals.append(d.pop)
+            return vals
+
+        z = 10
+        gv = foo(z)
+
+        self.assertEqual(gv, [x + 1 for x in reversed(range(z))])
+
+    def test_010(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            d[1] = 7.
+            # pop'd default must have same type as value
+            d.pop(11, 12j)
+
+        foo()
+
+    def test_011(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            d[1] = 7.
+            # pop'd key must have same type as key
+            d.pop(11j)
+
+        foo()
+
+    def test_012(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            # invalid key type
+            return 1j in d
+
+        foo()
+
+    def test_013(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # contains on empty dict
+            return 1 in d
+
+        self.assertFalse(foo())
+
+    def test_014(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # not contains empty dict
+            return 1 not in d
+
+        self.assertTrue(foo())
+
+    def test_014(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # not contains empty dict
+            return 1 not in d
+
+        self.assertTrue(foo())
+
+    def test_015(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            x = len(d)
+            d.clear()
+            y = len(d)
+            return x, y
+
+        m = 10
+        self.assertEqual(foo(m), (m, 0))
+
+    def test_016(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # key is wrong type
+            d.setdefault(1j, 12.)
+        foo()
+
+    def test_017(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # default value is wrong type
+            d.setdefault(1, 12.j)
+        foo()
+
+    def test_018(self):
+        # this is broken somewhere in llvmlite, intent of test is to check if
+        # keys behaves like a view or not
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[11] = 12.
+            k1 = d.keys()
+            d[22] = 9.
+            k2 = d.keys()
+            rk1 = [x for x in k1]
+            rk2 = [x for x in k2]
+            return rk1, rk2
+
+        print(foo())
+
+    def test_019(self):
+        # should keys/vals be set-like?
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[11] = 12.
+            d[22] = 9.
+            k2 = d.keys() & {12,}
+            return k2
+
+        print(foo())
+
+    def test_020(self):
+        # this should work ?!
+        @njit
+        def foo():
+            d = dictobject.new_dict(types.unicode_type, float64)
+            d['a'] = 1.
+            d['b'] = 2.
+            d['c'] = 3.
+            d['d'] = 4.
+            for x in d.items():
+                print(x)
+            return d['a']
+
+        print(foo())
+
+    def test_021(self):
+        # this should work ?!
+        @njit
+        def foo():
+            d = dictobject.new_dict(types.unicode_type, float64)
+            tmp = []
+            for i in range(10000):
+                tmp.append('a')
+            s = ''.join(tmp)
+            print(s)
+            d[s] = 1.
+            # this prints out weirdly, issue may well be print related.
+            for x in d.items():
+                print(x)
+
+        print(foo())
+
+    def test_022(self):
+        # this should work, llvmlite level broken, probably the same problem as
+        # before, intent of test is to juggle references about
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            e = d
+            d[1] = 12.
+            e[2] = 14.
+            e = dictobject.new_dict(int32, float64)
+            e[1] = 100.
+            e[2] = 1000.
+            f = d
+            d = e
+
+            k1 = [x for x in d.items()]
+            k2 = [x for x in e.items()]
+            k3 = [x for x in f.items()]
+
+            print(k1)
+            print(k2)
+            print(k3)
+
+        print(foo())
+
+    def test_022(self):
+        # this should work, llvmlite level broken, probably the same problem as
+        # before, intent of test is to juggle references about
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            e = d
+            d[1] = 12.
+            e[2] = 14.
+            e = dictobject.new_dict(int32, float64)
+            e[1] = 100.
+            e[2] = 1000.
+            f = d
+            d = e
+
+            k1 = [x for x in d.items()]
+            k2 = [x for x in e.items()]
+            k3 = [x for x in f.items()]
+
+            print(k1)
+            print(k2)
+            print(k3)
+
+        print(foo())
+
+    def test_023(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            def bar():
+                d[1] = 12.
+                d[2] = 14.
+            bar()
+            return [x for x in d.keys()]
+
+        self.assertEqual(foo(), [1, 2])
+
+    def test_023(self):
+        @njit
+        def foo():
+            def bar():
+                d = dictobject.new_dict(int32, float64)
+                d[1] = 12.
+                d[2] = 14.
+                return d
+            g = bar()
+            return [x for x in g.keys()]
+
+        self.assertEqual(foo(), [1, 2])
