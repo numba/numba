@@ -93,6 +93,10 @@ def typeof_type(val, c):
     if issubclass(val, np.generic):
         return types.NumberClass(numpy_support.from_dtype(val))
 
+    from numba.nbdict import NBDict
+    if issubclass(val, NBDict):
+        return types.TypeRef(types.DictType)
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):

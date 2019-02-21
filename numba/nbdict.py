@@ -3,8 +3,11 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 """
 from collections import MutableMapping
 
-from numba.types import DictType
+from numba.types import DictType, TypeRef
 from numba import njit, dictobject
+from numba.extending import (
+    overload_method
+)
 
 
 @njit
@@ -60,6 +63,11 @@ def _iter(opaque):
     return list(d.keys())
 
 
+def _from_meminfo_ptr(ptr, dicttype):
+    d = NBDict(meminfo=ptr, dcttype=dicttype)
+    return d
+
+
 class NBDict(MutableMapping):
     @classmethod
     def empty(cls, key_type, value_type):
@@ -75,17 +83,24 @@ class NBDict(MutableMapping):
         dcttype : numba.types.DictType; keyword-only
             The dictionary type
         """
-        if len(kwargs) != 1:
-            raise TypeError("too many keyword parameters")
+        # if len(kwargs) != 1:
+        #     raise TypeError("too many keyword parameters")
         dcttype = kwargs['dcttype']
         if not isinstance(dcttype, DictType):
             raise TypeError('*dcttype* must be a DictType')
         self._dict_type = dcttype
-        ptr = _make_dict(
-            self._dict_type.key_type,
-            self._dict_type.value_type,
-        )
+        if 'meminfo' in kwargs:
+            ptr = kwargs['meminfo']
+        else:
+            ptr = _make_dict(
+                self._dict_type.key_type,
+                self._dict_type.value_type,
+            )
         self._opaque = (ptr, self._dict_type)
+
+    @property
+    def _numba_type_(self):
+        return self._dict_type
 
     def __getitem__(self, key):
         return _getitem(self._opaque, key)
@@ -110,3 +125,15 @@ class NBDict(MutableMapping):
 
     def setdefault(self, key, default=None):
         return _setdefault(self._opaque, key, default)
+
+
+# XXX: should we have a better way to classmethod
+@overload_method(TypeRef, 'empty')
+def nbdict_empty(cls,  key_type, value_type):
+    if cls.instance_type is not DictType:
+        return
+
+    def impl(cls, key_type, value_type):
+        return dictobject.new_dict(key_type, value_type)
+
+    return impl

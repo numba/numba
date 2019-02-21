@@ -1090,3 +1090,59 @@ def unbox_meminfo_pointer(typ, obj, c):
 @unbox(types.TypeRef)
 def unbox_typeref(typ, val, c):
     return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)
+
+
+@box(types.DictType)
+def box_dicttype(typ, val, c):
+    context = c.context
+    builder = c.builder
+
+    # XXX deduplicate
+    # context.nrt.incref(builder, typ, val)
+    ctor = cgutils.create_struct_proxy(typ)
+    dstruct = ctor(context, builder, value=val)
+    # Returns the plain MemInfo
+    boxed_meminfo = c.box(
+        types.MemInfoPointer(types.voidptr),
+        dstruct.meminfo,
+    )
+
+    numba_name = c.context.insert_const_string(c.builder.module, 'numba')
+    numba_mod = c.pyapi.import_module_noblock(numba_name)
+    nbdict_mod = c.pyapi.object_getattr_string(numba_mod, 'nbdict')
+    fmp_fn = c.pyapi.object_getattr_string(nbdict_mod, '_from_meminfo_ptr')
+
+    dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
+
+    res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
+    c.pyapi.decref(boxed_meminfo)
+    c.pyapi.decref(fmp_fn)
+    c.pyapi.decref(numba_mod)
+    c.pyapi.decref(nbdict_mod)
+    return res
+
+
+@unbox(types.DictType)
+def unbox_dicttype(typ, val, c):
+    from numba.dictobject import ll_dict_type
+    context = c.context
+    builder = c.builder
+
+    opaque = c.pyapi.object_getattr_string(val, '_opaque')
+    miptr = c.pyapi.tuple_getitem(opaque, 0)
+
+    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+    c.pyapi.decref(opaque)
+    c.pyapi.decref(miptr)
+
+    mi = native.value
+    ctor = cgutils.create_struct_proxy(typ)
+    dstruct = ctor(context, builder)
+
+    data_pointer = context.nrt.meminfo_data(builder, mi)
+    data_pointer = builder.bitcast(data_pointer, ll_dict_type.as_pointer())
+
+    dstruct.data = builder.load(data_pointer)
+    dstruct.meminfo = mi
+
+    return NativeValue(dstruct._getvalue())

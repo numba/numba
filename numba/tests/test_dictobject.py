@@ -582,3 +582,18 @@ class TestDictPy(MemoryLeakMixin, TestCase):
             nbd[k] = v
         got = dict(nbd)
         self.assertEqual(got, expect)
+
+    def test_compiled(self):
+        @njit
+        def producer():
+            d = NBDict.empty(int32, float64)
+            d[1] = 1.23
+            return d
+
+        @njit
+        def consumer(d):
+            return d[1]
+
+        d = producer()
+        val = consumer(d)
+        self.assertEqual(val, 1.23)
