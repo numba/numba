@@ -61,9 +61,30 @@ def _iter(box, dct_type):
 
 
 class NBDict(MutableMapping):
-    def __init__(self, key_type, value_type):
-        self._dict_type = DictType(key_type, value_type)
-        self._opaque = _make_dict(key_type, value_type)
+    @classmethod
+    def empty(cls, key_type, value_type):
+        """
+        """
+        dcttype = DictType(key_type, value_type)
+        return cls(dcttype=dcttype)
+
+    def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        dcttype : numba.types.DictType; keyword-only
+            The dictionary type
+        """
+        if len(kwargs) != 1:
+            raise TypeError("too many keyword parameters")
+        dcttype = kwargs['dcttype']
+        if not isinstance(dcttype, DictType):
+            raise TypeError('*dcttype* must be a DictType')
+        self._dict_type = dcttype
+        self._opaque = _make_dict(
+            self._dict_type.key_type,
+            self._dict_type.value_type,
+        )
 
     def __getitem__(self, key):
         return _getitem(self._opaque, self._dict_type, key)
