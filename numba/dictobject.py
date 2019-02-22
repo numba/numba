@@ -32,10 +32,12 @@ from numba.types import (
 from numba.typeconv import Conversion
 from numba.targets.imputils import impl_ret_borrowed
 from numba.errors import TypingError
+from numba import typing
 
 
 ll_dict_type = cgutils.voidptr_t
 ll_dictiter_type = cgutils.voidptr_t
+ll_voidptr_type = cgutils.voidptr_t
 ll_status = cgutils.int32_t
 ll_ssize_t = cgutils.intp_t
 ll_hash = ll_ssize_t
@@ -297,6 +299,137 @@ def _dict_new_minsize(typingctx, keyty, valty):
         )
         dp = builder.load(refdp)
         return dp
+
+    return sig, codegen
+
+
+def _get_incref_decref(context, module, datamodel):
+    assert datamodel.contains_nrt_meminfo()
+
+    fe_type = datamodel.fe_type
+    data_ptr_ty = datamodel.get_data_type().as_pointer()
+    refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
+    incref_fn = module.get_or_insert_function(
+        refct_fnty,
+        name='.numba_dict_incref${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(incref_fn.append_basic_block())
+    context.nrt.incref(builder, fe_type, builder.load(incref_fn.args[0]))
+    builder.ret_void()
+
+    decref_fn = module.get_or_insert_function(
+        refct_fnty,
+        name='.numba_dict_decref${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(decref_fn.append_basic_block())
+    context.nrt.decref(builder, fe_type, builder.load(decref_fn.args[0]))
+    builder.ret_void()
+
+    return incref_fn, decref_fn
+
+
+def _get_equal(context, module, datamodel):
+    assert datamodel.contains_nrt_meminfo()
+
+    fe_type = datamodel.fe_type
+    data_ptr_ty = datamodel.get_data_type().as_pointer()
+
+    wrapfnty = context.call_conv.get_function_type(types.int32, [fe_type, fe_type])
+    argtypes = [fe_type, fe_type]
+
+    def build_wrapper(fn):
+        builder = ir.IRBuilder(fn.append_basic_block())
+        args = context.call_conv.decode_arguments(builder, argtypes, fn)
+
+        sig = typing.signature(types.boolean, fe_type, fe_type)
+        op = operator.eq
+        fnop = context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(context.typing_context, sig.args, {})
+        eqfn = context.get_function(fnop, sig)
+        res = eqfn(builder, args)
+        intres = context.cast(builder, res, types.boolean, types.int32)
+        context.call_conv.return_value(builder, intres)
+
+    wrapfn = module.get_or_insert_function(
+        wrapfnty,
+        name='.numba_dict_key_equal.wrap${}'.format(fe_type)
+    )
+    build_wrapper(wrapfn)
+
+    equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
+    equal_fn = module.get_or_insert_function(
+        equal_fnty,
+        name='.numba_dict_key_equal${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(equal_fn.append_basic_block())
+    lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
+    rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
+
+    status, retval = context.call_conv.call_function(
+        builder, wrapfn, types.boolean, argtypes, [lhs, rhs],
+    )
+    with builder.if_then(status.is_ok, likely=True):
+        with builder.if_then(status.is_none):
+            builder.ret(context.get_constant(types.int32, 0))
+        retval = context.cast(builder, retval, types.boolean, types.int32)
+        builder.ret(retval)
+    # Error out
+    builder.ret(context.get_constant(types.int32, -1))
+
+    return equal_fn
+
+
+@intrinsic
+def _dict_set_method_table(typingctx, dp, keyty, valty):
+    """Wrap numba_dict_set_method_table
+    """
+    resty = types.void
+    sig = resty(dp, keyty, valty)
+
+    def codegen(context, builder, sig, args):
+        vtablety = ir.LiteralStructType([
+            ll_voidptr_type,  # equal
+            ll_voidptr_type,  # key incref
+            ll_voidptr_type,  # key decref
+            ll_voidptr_type,  # val incref
+            ll_voidptr_type,  # val decref
+        ])
+        setmethod_fnty = ir.FunctionType(
+            ir.VoidType(),
+            [ll_dict_type, vtablety.as_pointer()]
+        )
+        setmethod_fn = ir.Function(
+            builder.module,
+            setmethod_fnty,
+            name='numba_dict_set_method_table',
+        )
+        dp = args[0]
+        vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
+
+
+        # install key incref/decref
+        key_equal_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+        key_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
+        key_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 2)
+
+        dm_key = context.data_model_manager[keyty.instance_type]
+        if dm_key.contains_nrt_meminfo():
+            equal = _get_equal(context, builder.module, dm_key)
+            incref, decref = _get_incref_decref(context, builder.module, dm_key)
+            builder.store(
+                builder.bitcast(equal, key_equal_ptr.type.pointee),
+                key_equal_ptr,
+            )
+            builder.store(
+                builder.bitcast(incref, key_incref_ptr.type.pointee),
+                key_incref_ptr,
+            )
+            builder.store(
+                builder.bitcast(decref, key_decref_ptr.type.pointee),
+                key_decref_ptr,
+            )
+
+        builder.call(setmethod_fn, [dp, vtable])
 
     return sig, codegen
 
@@ -624,6 +757,7 @@ def impl_new_dict(key, value):
 
     def imp(key, value):
         dp = _dict_new_minsize(keyty, valty)
+        _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
 
@@ -1004,13 +1138,17 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         # Their differences are resolved here.
         if isinstance(iter_type.iterable, DictItemsIterableType):
             # .items()
+            context.nrt.incref(builder, key_ty, key)
+            context.nrt.incref(builder, val_ty, key)
             tup = context.make_tuple(builder, yield_type, [key, val])
             result.yield_(tup)
         elif isinstance(iter_type.iterable, DictKeysIterableType):
             # .keys()
+            context.nrt.incref(builder, key_ty, key)
             result.yield_(key)
         elif isinstance(iter_type.iterable, DictValuesIterableType):
             # .values()
+            context.nrt.incref(builder, val_ty, key)
             result.yield_(val)
         else:
             # unreachable

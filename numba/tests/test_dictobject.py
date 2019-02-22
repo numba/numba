@@ -608,8 +608,10 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
                 value_type=types.int32,
             )
             d["123"] = 123
+            d["321"] = 321
             return d
 
         d = foo()
-        print(dict(d))
-
+        self.assertEqual(d['123'], 123)
+        self.assertEqual(d['321'], 321)
+        self.assertEqual(dict(d), {'123': 123, '321': 321})
