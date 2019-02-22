@@ -4,9 +4,12 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 from collections import MutableMapping
 
 from numba.types import DictType, TypeRef
-from numba import njit, dictobject
+from numba import njit, dictobject, types, cgutils
 from numba.extending import (
-    overload_method
+    overload_method,
+    box,
+    unbox,
+    NativeValue
 )
 
 
@@ -16,8 +19,8 @@ def _make_dict(keyty, valty):
 
 
 @njit
-def _length(opaque):
-    d = dictobject._unbox(*opaque)
+def _length(d):
+    # d = dictobject._unbox(*opaque)
     return len(d)
 
 
@@ -115,7 +118,7 @@ class TypedDict(MutableMapping):
         return iter(_iter(self._opaque))
 
     def __len__(self):
-        return _length(self._opaque)
+        return _length(self)
 
     def __contains__(self, key):
         return _contains(self._opaque, key)
@@ -137,3 +140,62 @@ def typeddict_empty(cls,  key_type, value_type):
         return dictobject.new_dict(key_type, value_type)
 
     return impl
+
+
+@box(types.DictType)
+def box_dicttype(typ, val, c):
+    context = c.context
+    builder = c.builder
+
+    # XXX deduplicate
+    # context.nrt.incref(builder, typ, val)
+    ctor = cgutils.create_struct_proxy(typ)
+    dstruct = ctor(context, builder, value=val)
+    # Returns the plain MemInfo
+    boxed_meminfo = c.box(
+        types.MemInfoPointer(types.voidptr),
+        dstruct.meminfo,
+    )
+
+    numba_name = c.context.insert_const_string(c.builder.module, 'numba')
+    numba_mod = c.pyapi.import_module_noblock(numba_name)
+    typeddict_mod = c.pyapi.object_getattr_string(numba_mod, 'typeddict')
+    fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
+
+    dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
+
+    res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
+    c.pyapi.decref(boxed_meminfo)
+    c.pyapi.decref(fmp_fn)
+    c.pyapi.decref(numba_mod)
+    c.pyapi.decref(typeddict_mod)
+    return res
+
+
+@unbox(types.DictType)
+def unbox_dicttype(typ, val, c):
+    context = c.context
+    builder = c.builder
+
+    opaque = c.pyapi.object_getattr_string(val, '_opaque')
+    miptr = c.pyapi.tuple_getitem(opaque, 0)
+
+    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+
+    mi = native.value
+    ctor = cgutils.create_struct_proxy(typ)
+    dstruct = ctor(context, builder)
+
+    data_pointer = context.nrt.meminfo_data(builder, mi)
+    data_pointer = builder.bitcast(
+        data_pointer,
+        dictobject.ll_dict_type.as_pointer(),
+    )
+
+    dstruct.data = builder.load(data_pointer)
+    dstruct.meminfo = mi
+
+    dctobj = dstruct._getvalue()
+    c.pyapi.decref(opaque)
+
+    return NativeValue(dctobj)
