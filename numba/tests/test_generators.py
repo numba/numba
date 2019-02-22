@@ -348,8 +348,8 @@ class TestGenerators(MemoryLeakMixin, TestCase):
             compile_isolated(pyfunc, (), flags=no_pyobj_flags)
 
         msg = ("Can't unify yield type from the following types: complex128, "
-               "int64, none")
-        self.assertIn(msg, str(e.exception))
+               "int%s, none")
+        self.assertIn(msg % types.intp.bitwidth, str(e.exception))
 
 
 class TestGenExprs(MemoryLeakMixin, TestCase):
