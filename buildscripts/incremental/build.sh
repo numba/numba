@@ -2,6 +2,10 @@
 
 source activate $CONDA_ENV
 
+# switch on the windows dll search mod
+export CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1
+
+
 # Make sure any error below is reported as such
 set -v -e
 

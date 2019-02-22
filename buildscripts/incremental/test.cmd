@@ -15,6 +15,9 @@ set NUMBA_DEVELOPER_MODE=1
 @rem enable the faulthandler
 set PYTHONFAULTHANDLER=1
 
+@rem switch on the windows dll search mod
+set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1
+
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests
 @rem Now run the Numba test suite

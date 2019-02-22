@@ -21,6 +21,9 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
+# switch on the windows dll search mod
+export CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1
+
 # deal with threading layers
 if [ -z ${TEST_THREADING+x} ]; then
     echo "INFO: Threading layer not explicitly set."

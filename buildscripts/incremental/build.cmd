@@ -1,6 +1,10 @@
 
 call activate %CONDA_ENV%
 
+@rem switch on the windows dll search mod
+set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1
+
+
 @rem Build numba extensions without silencing compile errors
 python setup.py build_ext -q --inplace
 
