@@ -1109,8 +1109,8 @@ def box_dicttype(typ, val, c):
 
     numba_name = c.context.insert_const_string(c.builder.module, 'numba')
     numba_mod = c.pyapi.import_module_noblock(numba_name)
-    nbdict_mod = c.pyapi.object_getattr_string(numba_mod, 'nbdict')
-    fmp_fn = c.pyapi.object_getattr_string(nbdict_mod, '_from_meminfo_ptr')
+    typeddict_mod = c.pyapi.object_getattr_string(numba_mod, 'typeddict')
+    fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
@@ -1118,7 +1118,7 @@ def box_dicttype(typ, val, c):
     c.pyapi.decref(boxed_meminfo)
     c.pyapi.decref(fmp_fn)
     c.pyapi.decref(numba_mod)
-    c.pyapi.decref(nbdict_mod)
+    c.pyapi.decref(typeddict_mod)
     return res
 
 

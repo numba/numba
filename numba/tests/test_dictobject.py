@@ -11,7 +11,7 @@ from numba import njit
 from numba import int32, int64, float32, float64
 from numba import dictobject
 from numba import types
-from numba.nbdict import NBDict
+from numba.typeddict import TypedDict
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -545,9 +545,9 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(got, expected)
 
 
-class TestDictPy(MemoryLeakMixin, TestCase):
+class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_basic(self):
-        d = NBDict.empty(int32, float32)
+        d = TypedDict.empty(int32, float32)
         # len
         self.assertEqual(len(d), 0)
         # setitems
@@ -577,7 +577,7 @@ class TestDictPy(MemoryLeakMixin, TestCase):
 
     def test_copy_from_dict(self):
         expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
-        nbd = NBDict.empty(int32, float64)
+        nbd = TypedDict.empty(int32, float64)
         for k, v in expect.items():
             nbd[k] = v
         got = dict(nbd)
@@ -586,7 +586,7 @@ class TestDictPy(MemoryLeakMixin, TestCase):
     def test_compiled(self):
         @njit
         def producer():
-            d = NBDict.empty(int32, float64)
+            d = TypedDict.empty(int32, float64)
             d[1] = 1.23
             return d
 

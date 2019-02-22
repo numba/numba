@@ -93,8 +93,8 @@ def typeof_type(val, c):
     if issubclass(val, np.generic):
         return types.NumberClass(numpy_support.from_dtype(val))
 
-    from numba.nbdict import NBDict
-    if issubclass(val, NBDict):
+    from numba.typeddict import TypedDict
+    if issubclass(val, TypedDict):
         return types.TypeRef(types.DictType)
 
 

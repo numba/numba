@@ -64,11 +64,11 @@ def _iter(opaque):
 
 
 def _from_meminfo_ptr(ptr, dicttype):
-    d = NBDict(meminfo=ptr, dcttype=dicttype)
+    d = TypedDict(meminfo=ptr, dcttype=dicttype)
     return d
 
 
-class NBDict(MutableMapping):
+class TypedDict(MutableMapping):
     @classmethod
     def empty(cls, key_type, value_type):
         """
@@ -115,7 +115,7 @@ class NBDict(MutableMapping):
         return iter(_iter(self._opaque))
 
     def __len__(self):
-        return _length((self._opaque))
+        return _length(self._opaque)
 
     def __contains__(self, key):
         return _contains(self._opaque, key)
@@ -129,7 +129,7 @@ class NBDict(MutableMapping):
 
 # XXX: should we have a better way to classmethod
 @overload_method(TypeRef, 'empty')
-def nbdict_empty(cls,  key_type, value_type):
+def typeddict_empty(cls,  key_type, value_type):
     if cls.instance_type is not DictType:
         return
 
