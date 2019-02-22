@@ -13,7 +13,6 @@ from numba.extending import (
     intrinsic,
     register_model,
     models,
-    make_attribute_wrapper,
     lower_builtin,
 )
 from numba.targets.imputils import iternext_impl
@@ -94,8 +93,8 @@ def _raise_if_error(context, builder, status, msg):
 
 
 @intrinsic
-def _box(typingctx, dctobj):
-    """Box a dictionary into a MemInfoPointer
+def _as_meminfo(typingctx, dctobj):
+    """Returns the MemInfoPointer of a dictionary.
     """
     if not isinstance(dctobj, types.DictType):
         raise TypingError('expected *dctobj* to be a DictType')
@@ -115,8 +114,8 @@ def _box(typingctx, dctobj):
 
 
 @intrinsic
-def _unbox(typingctx, mi, dicttyperef):
-    """Unbox a dictionary from a MemInfoPointer
+def _from_meminfo(typingctx, mi, dicttyperef):
+    """Recreate a dictionary from a MemInfoPointer
     """
     if mi != _meminfo_dictptr:
         raise TypingError('expected a MemInfoPointer for dict.')

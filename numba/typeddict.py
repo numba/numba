@@ -15,54 +15,46 @@ from numba.extending import (
 
 @njit
 def _make_dict(keyty, valty):
-    return dictobject._box(dictobject.new_dict(keyty, valty))
+    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty))
 
 
 @njit
 def _length(d):
-    # d = dictobject._unbox(*opaque)
     return len(d)
 
 
 @njit
-def _setitem(opaque, key, value):
-    d = dictobject._unbox(*opaque)
+def _setitem(d, key, value):
     d[key] = value
 
 
 @njit
-def _getitem(opaque, key):
-    d = dictobject._unbox(*opaque)
+def _getitem(d, key):
     return d[key]
 
 
 @njit
-def _delitem(opaque, key):
-    d = dictobject._unbox(*opaque)
+def _delitem(d, key):
     del d[key]
 
 
 @njit
-def _contains(opaque, key):
-    d = dictobject._unbox(*opaque)
+def _contains(d, key):
     return key in d
 
 
 @njit
-def _get(opaque, key, default):
-    d = dictobject._unbox(*opaque)
+def _get(d, key, default):
     return d.get(key, default)
 
 
 @njit
-def _setdefault(opaque, key, default):
-    d = dictobject._unbox(*opaque)
+def _setdefault(d, key, default):
     return d.setdefault(key, default)
 
 
 @njit
-def _iter(opaque):
-    d = dictobject._unbox(*opaque)
+def _iter(d):
     return list(d.keys())
 
 
@@ -72,12 +64,16 @@ def _from_meminfo_ptr(ptr, dicttype):
 
 
 class TypedDict(MutableMapping):
+    """A typed-dictionary usable in Numba.
+
+    Implements the MutableMapping interface.
+    """
     @classmethod
     def empty(cls, key_type, value_type):
+        """Create a new empty TypedDict with *key_type* and *value_type*
+        as the types for the keys and values of the dictionary.
         """
-        """
-        dcttype = DictType(key_type, value_type)
-        return cls(dcttype=dcttype)
+        return cls(dcttype=DictType(key_type, value_type))
 
     def __init__(self, **kwargs):
         """
@@ -85,49 +81,48 @@ class TypedDict(MutableMapping):
         ----------
         dcttype : numba.types.DictType; keyword-only
             The dictionary type
+        meminfo : MemInfo; keyword-only
+            Used internally to pass the MemInfo object when boxing.
         """
-        # if len(kwargs) != 1:
-        #     raise TypeError("too many keyword parameters")
-        dcttype = kwargs['dcttype']
+        self._dict_type, self._opaque = self._parse_arg(**kwargs)
+
+    def _parse_arg(self, dcttype, meminfo=None):
         if not isinstance(dcttype, DictType):
             raise TypeError('*dcttype* must be a DictType')
-        self._dict_type = dcttype
-        if 'meminfo' in kwargs:
-            ptr = kwargs['meminfo']
+
+        if meminfo is not None:
+            opaque = meminfo
         else:
-            ptr = _make_dict(
-                self._dict_type.key_type,
-                self._dict_type.value_type,
-            )
-        self._opaque = (ptr, self._dict_type)
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type)
+        return dcttype, opaque
 
     @property
     def _numba_type_(self):
         return self._dict_type
 
     def __getitem__(self, key):
-        return _getitem(self._opaque, key)
+        return _getitem(self, key)
 
     def __setitem__(self, key, value):
-        return _setitem(self._opaque, key, value)
+        return _setitem(self, key, value)
 
     def __delitem__(self, key):
-        _delitem(self._opaque, key)
+        _delitem(self, key)
 
     def __iter__(self):
-        return iter(_iter(self._opaque))
+        return iter(_iter(self))
 
     def __len__(self):
         return _length(self)
 
     def __contains__(self, key):
-        return _contains(self._opaque, key)
+        return _contains(self, key)
 
     def get(self, key, default=None):
-        return _get(self._opaque, key, default)
+        return _get(self, key, default)
 
     def setdefault(self, key, default=None):
-        return _setdefault(self._opaque, key, default)
+        return _setdefault(self, key, default)
 
 
 # XXX: should we have a better way to classmethod
@@ -148,7 +143,6 @@ def box_dicttype(typ, val, c):
     builder = c.builder
 
     # XXX deduplicate
-    # context.nrt.incref(builder, typ, val)
     ctor = cgutils.create_struct_proxy(typ)
     dstruct = ctor(context, builder, value=val)
     # Returns the plain MemInfo
@@ -177,8 +171,7 @@ def unbox_dicttype(typ, val, c):
     context = c.context
     builder = c.builder
 
-    opaque = c.pyapi.object_getattr_string(val, '_opaque')
-    miptr = c.pyapi.tuple_getitem(opaque, 0)
+    miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
     native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
 
@@ -196,6 +189,6 @@ def unbox_dicttype(typ, val, c):
     dstruct.meminfo = mi
 
     dctobj = dstruct._getvalue()
-    c.pyapi.decref(opaque)
+    c.pyapi.decref(miptr)
 
     return NativeValue(dctobj)

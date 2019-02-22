@@ -514,9 +514,9 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         # dict != tuple[int]
         self.assertFalse(foo(10, (1,)))
 
-    def test_dict_box(self):
+    def test_dict_to_from_meminfo(self):
         """
-        Exercise dictobject._box
+        Exercise dictobject.{_as_meminfo, _from_meminfo}
         """
         @njit
         def make_content(nelem):
@@ -528,13 +528,13 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d = dictobject.new_dict(int32, float64)
             for k, v in make_content(nelem):
                 d[k] = v
-            return dictobject._box(d)
+            return dictobject._as_meminfo(d)
 
         dcttype = types.DictType(int32, float64)
 
         @njit
         def unboxer(mi):
-            d = dictobject._unbox(mi, dcttype)
+            d = dictobject._from_meminfo(mi, dcttype)
             return list(d.items())
 
         mi = boxer(10)
