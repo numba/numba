@@ -597,3 +597,19 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+
+class TestDictRefctTypes(MemoryLeakMixin, TestCase):
+    def test_str_key(self):
+        @njit
+        def foo():
+            d = TypedDict.empty(
+                key_type=types.unicode_type,
+                value_type=types.int32,
+            )
+            d["123"] = 123
+            return d
+
+        d = foo()
+        print(dict(d))
+
