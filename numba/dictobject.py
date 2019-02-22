@@ -9,6 +9,7 @@ from llvmlite import ir
 
 from numba import cgutils
 from numba import _helperlib
+from numba.targets.registry import cpu_target
 
 from numba.extending import (
     overload,
@@ -28,7 +29,9 @@ from numba.types import (
     DictIteratorType,
     Type,
 )
+from numba.typeconv import Conversion
 from numba.targets.imputils import impl_ret_borrowed
+from numba.errors import TypingError
 
 
 ll_dict_type = cgutils.voidptr_t
@@ -151,6 +154,21 @@ def _as_bytes(builder, ptr):
     return builder.bitcast(ptr, cgutils.voidptr_t)
 
 
+def _sentry_safe_cast(fromty, toty):
+    """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
+    """
+    tyctxt = cpu_target.typing_context
+    by = tyctxt.can_convert(fromty, toty)
+    if by > Conversion.safe:
+        if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            # Accept if both types are ints
+            return
+        if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
+            # Accept if ints to floats
+            return
+        raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
+
+
 @intrinsic
 def _cast(typingctx, val, typ):
     """Cast *val* to *typ*
@@ -160,6 +178,7 @@ def _cast(typingctx, val, typ):
         return val
     # Using implicit casting in argument types
     casted = typ.instance_type
+    _sentry_safe_cast(val, casted)
     sig = casted(casted, typ)
     return sig, codegen
 
