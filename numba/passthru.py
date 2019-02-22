@@ -104,7 +104,7 @@ class PassThruContainer(object):
 
     def __hash__(self):
         """this should coincide with object.__hash__"""
-        return id(self.obj) >> 4
+        return id(self.obj) #>> 4
 
 
 class PassThruContainerType(PassThruType):
@@ -205,16 +205,19 @@ def pass_thru_container_eq(x, y):
 def pass_thru_container_hash_overload(container):
     if PY3:
         from sys import maxsize as MAXSIZE
+
+        def pass_thru_container_hash_impl_py3(container):
+            res = int(container.wrapped_obj)
+            #res = res >> 4
+
+            if res < 0:
+                res = res - MAXSIZE
+
+            return res
+
+        return pass_thru_container_hash_impl_py3
     else:
-        from sys import maxint as MAXSIZE
+        def pass_thru_container_hash_impl_py2(container):
+            return int(container.wrapped_obj) #>> 4
 
-    def pass_thru_container_hash_impl(container):
-        res = int(container.wrapped_obj)
-        res = res >> 4
-
-        if res > MAXSIZE:
-            res = res - MAXSIZE
-
-        return res
-
-    return pass_thru_container_hash_impl
+        return pass_thru_container_hash_impl_py2
