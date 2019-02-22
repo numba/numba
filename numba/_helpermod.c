@@ -136,7 +136,7 @@ build_c_helpers_dict(void)
     declmethod(dict_iter_sizeof);
     declmethod(dict_iter);
     declmethod(dict_iter_next);
-    declmethod(dict_dump_keys);
+    declmethod(dict_dump);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
