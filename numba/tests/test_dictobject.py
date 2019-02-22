@@ -615,3 +615,19 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(d['123'], 123)
         self.assertEqual(d['321'], 321)
         self.assertEqual(dict(d), {'123': 123, '321': 321})
+
+    def test_str_val(self):
+        @njit
+        def foo():
+            d = TypedDict.empty(
+                key_type=types.int32,
+                value_type=types.unicode_type,
+            )
+            d[123] = "123"
+            d[321] = "321"
+            return d
+
+        d = foo()
+        self.assertEqual(d[123], '123')
+        self.assertEqual(d[321], '321')
+        self.assertEqual(dict(d), {123: '123', 321: '321'})

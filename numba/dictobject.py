@@ -411,22 +411,40 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
         key_equal_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
         key_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
         key_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 2)
+        val_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 3)
+        val_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 4)
 
         dm_key = context.data_model_manager[keyty.instance_type]
         if dm_key.contains_nrt_meminfo():
             equal = _get_equal(context, builder.module, dm_key)
-            incref, decref = _get_incref_decref(context, builder.module, dm_key)
+            key_incref, key_decref = _get_incref_decref(
+                context, builder.module, dm_key,
+            )
             builder.store(
                 builder.bitcast(equal, key_equal_ptr.type.pointee),
                 key_equal_ptr,
             )
             builder.store(
-                builder.bitcast(incref, key_incref_ptr.type.pointee),
+                builder.bitcast(key_incref, key_incref_ptr.type.pointee),
                 key_incref_ptr,
             )
             builder.store(
-                builder.bitcast(decref, key_decref_ptr.type.pointee),
+                builder.bitcast(key_decref, key_decref_ptr.type.pointee),
                 key_decref_ptr,
+            )
+
+        dm_val = context.data_model_manager[valty.instance_type]
+        if dm_val.contains_nrt_meminfo():
+            val_incref, val_decref = _get_incref_decref(
+                context, builder.module, dm_val,
+            )
+            builder.store(
+                builder.bitcast(val_incref, val_incref_ptr.type.pointee),
+                val_incref_ptr,
+            )
+            builder.store(
+                builder.bitcast(val_decref, val_decref_ptr.type.pointee),
+                val_decref_ptr,
             )
 
         builder.call(setmethod_fn, [dp, vtable])
