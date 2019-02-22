@@ -127,7 +127,7 @@ def _imp_dtor(context, module):
 def _dict_new_minsize(typingctx, keyty, valty):
     """Wrap numba_dict_new_minsize.
 
-    Allocate a new dictionary object at the minimum capacity.
+    Allocate a new dictionary object with the minimum capacity.
 
     Parameters
     ----------
@@ -233,7 +233,7 @@ def _dict_length(typingctx, d):
 
 @intrinsic
 def _dict_dump_keys(typingctx, d):
-    """Dump the dictionary key and values.
+    """Dump the dictionary keys and values.
     Wraps numba_dict_dump_keys for debugging.
     """
     resty = types.void
@@ -258,7 +258,7 @@ def _dict_dump_keys(typingctx, d):
 def _dict_lookup(typingctx, d, key, hashval):
     """Wrap numba_dict_lookup
 
-    Returns 2-tuple of (intp, value_type?)
+    Returns 2-tuple of (intp, ?value_type)
     """
     resty = types.Tuple([types.intp, types.Optional(d.value_type)])
     sig = resty(d, key, hashval)
@@ -291,7 +291,7 @@ def _dict_lookup(typingctx, d, key, hashval):
                 _as_bytes(builder, ptr_val),
             ],
         )
-        # Load value is output is available
+        # Load value if output is available
         found = builder.icmp_signed('>=', ix, ix.type(DKIX_EMPTY))
 
         out = context.make_optional_none(builder, td.value_type)
@@ -383,9 +383,9 @@ def _dict_delitem(typingctx, d, hk, ix):
 
 
 def _iterator_codegen(resty):
-    """The common codegen for iterator intrinsic.
+    """The common codegen for iterator intrinsics.
 
-    Populates the iterator struct and incref.
+    Populates the iterator struct and increfs.
     """
 
     def codegen(context, builder, sig, args):
@@ -881,7 +881,7 @@ def impl_iterator_iternext(context, builder, sig, args, result):
 
     status = builder.call(iternext, (it.state, key_raw_ptr, val_raw_ptr))
     # TODO: no handling of error state i.e. mutated dictionary
-    #       any error are treated as exhausted iterator
+    #       all errors are treated as exhausted iterator
     is_valid = builder.icmp_unsigned('==', status, status.type(0))
     result.set_valid(is_valid)
 
@@ -904,8 +904,8 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         key = dm_key.load_from_data_pointer(builder, key_ptr)
         val = dm_val.load_from_data_pointer(builder, val_ptr)
 
-        # All dict iterator uses this common implementation.
-        # There differences are resolved here.
+        # All dict iterators use this common implementation.
+        # Their differences are resolved here.
         if isinstance(iter_type.iterable, DictItemsIterableType):
             # .items()
             tup = context.make_tuple(builder, yield_type, [key, val])
