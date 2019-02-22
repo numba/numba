@@ -1,6 +1,9 @@
-
+"""
+Compiler-side implementation of the dictionary.
+"""
 import ctypes
 import operator
+from enum import IntEnum
 
 from llvmlite import ir
 
@@ -35,15 +38,25 @@ ll_ssize_t = cgutils.intp_t
 ll_hash = ll_ssize_t
 ll_bytes = cgutils.voidptr_t
 
-# The following enums must match _dictobject.c
-DKIX_EMPTY = -1
 
-OK_REPLACED = 1
-ERR_NO_MEMORY = -1
-ERR_DICT_MUTATED = -2
-ERR_ITER_EXHAUSTED = -3
-ERR_DICT_EMPTY = -4
-ERR_CMP_FAILED = -5
+# The following enums must match _dictobject.c
+
+class DKIX(IntEnum):
+    """Special return value of dict lookup.
+    """
+    EMPTY = -1
+
+
+class Status(IntEnum):
+    """Status code for other dict operations.
+    """
+    OK = 0
+    OK_REPLACED = 1
+    ERR_NO_MEMORY = -1
+    ERR_DICT_MUTATED = -2
+    ERR_ITER_EXHAUSTED = -3
+    ERR_DICT_EMPTY = -4
+    ERR_CMP_FAILED = -5
 
 
 def new_dict(key, value):
@@ -83,7 +96,8 @@ class DictIterModel(models.StructModel):
 def _raise_if_error(context, builder, status, msg):
     """Raise an internal error depending on the value of *status*
     """
-    with builder.if_then(builder.icmp_signed('!=', status, status.type(0))):
+    ok_status = status.type(int(Status.OK))
+    with builder.if_then(builder.icmp_signed('!=', status, ok_status)):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
@@ -121,6 +135,48 @@ def _imp_dtor(context, module):
         builder.ret_void()
 
     return fn
+
+
+def _dict_get_data(context, builder, dict_ty, d):
+    """Helper to get the C dict pointer in a numba dict.
+    """
+    ctor = cgutils.create_struct_proxy(dict_ty)
+    dstruct = ctor(context, builder, value=d)
+    return dstruct.data
+
+
+def _as_bytes(builder, ptr):
+    """Helper to do (void*)ptr
+    """
+    return builder.bitcast(ptr, cgutils.voidptr_t)
+
+
+@intrinsic
+def _cast(typingctx, val, typ):
+    """Cast *val* to *typ*
+    """
+    def codegen(context, builder, signature, args):
+        [val, typ] = args
+        return val
+    # Using implicit casting in argument types
+    casted = typ.instance_type
+    sig = casted(casted, typ)
+    return sig, codegen
+
+
+@intrinsic
+def _nonoptional(typingctx, val):
+    """Typing trick to cast Optional[T] to T
+    """
+    if not isinstance(val, types.Optional):
+        raise TypeError('expected an optional')
+
+    def codegen(context, builder, sig, args):
+        return args[0]
+
+    casted = val.type
+    sig = casted(casted)
+    return sig, codegen
 
 
 @intrinsic
@@ -232,9 +288,9 @@ def _dict_length(typingctx, d):
 
 
 @intrinsic
-def _dict_dump_keys(typingctx, d):
+def _dict_dump(typingctx, d):
     """Dump the dictionary keys and values.
-    Wraps numba_dict_dump_keys for debugging.
+    Wraps numba_dict_dump for debugging.
     """
     resty = types.void
     sig = resty(d)
@@ -247,7 +303,7 @@ def _dict_dump_keys(typingctx, d):
         [td] = sig.args
         [d] = args
         dp = _dict_get_data(context, builder, td, d)
-        fn = ir.Function(builder.module, fnty, name='numba_dict_dump_keys')
+        fn = ir.Function(builder.module, fnty, name='numba_dict_dump')
 
         builder.call(fn, [dp])
 
@@ -292,7 +348,7 @@ def _dict_lookup(typingctx, d, key, hashval):
             ],
         )
         # Load value if output is available
-        found = builder.icmp_signed('>=', ix, ix.type(DKIX_EMPTY))
+        found = builder.icmp_signed('>=', ix, ix.type(int(DKIX.EMPTY)))
 
         out = context.make_optional_none(builder, td.value_type)
         pout = cgutils.alloca_once_value(builder, out)
@@ -344,7 +400,7 @@ def _dict_popitem(typingctx, d):
         out = context.make_optional_none(builder, keyvalty)
         pout = cgutils.alloca_once_value(builder, out)
 
-        cond = builder.icmp_signed('==', status, status.type(0))
+        cond = builder.icmp_signed('==', status, status.type(int(Status.OK)))
         with builder.if_then(cond):
             key = dm_key.load_from_data_pointer(builder, ptr_key)
             val = dm_val.load_from_data_pointer(builder, ptr_val)
@@ -472,20 +528,6 @@ def _make_dict(typingctx, keyty, valty, ptr):
     return sig, codegen
 
 
-def _dict_get_data(context, builder, dict_ty, d):
-    """Helper to get the C dict pointer in a numba dict.
-    """
-    ctor = cgutils.create_struct_proxy(dict_ty)
-    dstruct = ctor(context, builder, value=d)
-    return dstruct.data
-
-
-def _as_bytes(builder, ptr):
-    """Helper to do (void*)ptr
-    """
-    return builder.bitcast(ptr, cgutils.voidptr_t)
-
-
 @overload(new_dict)
 def impl_new_dict(key, value):
     """Creates a new dictionary with *key* and *value* as the type
@@ -495,7 +537,7 @@ def impl_new_dict(key, value):
         not isinstance(key, Type),
         not isinstance(value, Type),
     ]):
-        raise TypeError
+        raise TypeError("expecting *key* and *value* to be a numba Type")
 
     keyty, valty = key, value
 
@@ -520,34 +562,6 @@ def impl_len(d):
     return impl
 
 
-@intrinsic
-def _cast(typingctx, val, typ):
-    """Cast *val* to *typ*
-    """
-    def codegen(context, builder, signature, args):
-        [val, typ] = args
-        return val
-    # Using implicit casting in argument types
-    casted = typ.instance_type
-    sig = casted(casted, typ)
-    return sig, codegen
-
-
-@intrinsic
-def _nonoptional(typingctx, val):
-    """Typing trick to cast Optional[T] to T
-    """
-    if not isinstance(val, types.Optional):
-        raise TypeError('expected an optional')
-
-    def codegen(context, builder, sig, args):
-        return args[0]
-
-    casted = val.type
-    sig = casted(casted)
-    return sig, codegen
-
-
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
     if not isinstance(d, types.DictType):
@@ -559,13 +573,13 @@ def impl_setitem(d, key, value):
         key = _cast(key, keyty)
         val = _cast(value, valty)
         status = _dict_insert(d, key, hash(key), val)
-        if status == 0:
+        if status == Status.OK:
             return
-        elif status == 1:
+        elif status == Status.OK_REPLACED:
             # replaced
             # XXX handle refcount
             return
-        elif status == ERR_CMP_FAILED:
+        elif status == Status.ERR_CMP_FAILED:
             raise ValueError('key comparison failed')
         else:
             raise RuntimeError('dict.__setitem__ failed unexpectedly')
@@ -573,17 +587,17 @@ def impl_setitem(d, key, value):
 
 
 @overload_method(types.DictType, 'get')
-def impl_get(dct, k, d=None):
+def impl_get(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
     keyty = dct.key_type
 
-    def impl(dct, k, d=None):
-        k = _cast(k, keyty)
-        ix, val = _dict_lookup(dct, k, hash(k))
-        if ix > DKIX_EMPTY:
+    def impl(dct, key, default=None):
+        castedkey = _cast(key, keyty)
+        ix, val = _dict_lookup(dct, key, hash(castedkey))
+        if ix > DKIX.EMPTY:
             return val
-        return d
+        return default
 
     return impl
 
@@ -598,9 +612,9 @@ def impl_getitem(d, key):
     def impl(d, key):
         key = _cast(key, keyty)
         ix, val = _dict_lookup(d, key, hash(key))
-        if ix == DKIX_EMPTY:
+        if ix == DKIX.EMPTY:
             raise KeyError()
-        elif ix < DKIX_EMPTY:
+        elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:
             return val
@@ -615,9 +629,9 @@ def impl_popitem(d):
 
     def impl(d):
         status, keyval = _dict_popitem(d)
-        if status == 0:
+        if status == Status.OK:
             return _nonoptional(keyval)
-        elif status == -4:
+        elif status == Status.ERR_DICT_EMPTY:
             raise KeyError()
         else:
             raise AssertionError('internal dict error during popitem')
@@ -626,27 +640,27 @@ def impl_popitem(d):
 
 
 @overload_method(types.DictType, 'pop')
-def impl_pop(dct, k, d=None):
+def impl_pop(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
 
     keyty = dct.key_type
-    should_raise = isinstance(d, types.Omitted)
+    should_raise = isinstance(default, types.Omitted)
 
-    def impl(dct, k, d=None):
-        key = _cast(k, keyty)
-        hashed = hash(key)
-        ix, val = _dict_lookup(dct, key, hashed)
-        if ix == DKIX_EMPTY:
+    def impl(dct, key, default=None):
+        castedkey = _cast(key, keyty)
+        hashed = hash(castedkey)
+        ix, val = _dict_lookup(dct, castedkey, hashed)
+        if ix == DKIX.EMPTY:
             if should_raise:
                 raise KeyError()
             else:
-                return d
-        elif ix < DKIX_EMPTY:
+                return default
+        elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:
             status = _dict_delitem(dct,hashed, ix)
-            if status != 0:
+            if status != Status.OK:
                 raise AssertionError("internal dict error during delitem")
             return val
 
@@ -673,7 +687,7 @@ def impl_contains(d, k):
     def impl(d, k):
         k = _cast(k, keyty)
         ix, val = _dict_lookup(d, k, hash(k))
-        return ix > DKIX_EMPTY
+        return ix > DKIX.EMPTY
     return impl
 
 
@@ -706,13 +720,13 @@ def impl_copy(d):
 
 
 @overload_method(types.DictType, 'setdefault')
-def impl_setdefault(dct, k, d=None):
+def impl_setdefault(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
 
-    def impl(dct, k, d=None):
-        if k not in dct:
-            dct[k] = d
+    def impl(dct, key, default=None):
+        if key not in dct:
+            dct[key] = default
 
     return impl
 
@@ -770,7 +784,7 @@ def impl_equal(da, db):
             # Cast key from LHS to the key-type of RHS
             kb = _cast(ka, otherkeyty)
             ix, vb = _dict_lookup(db, kb, hash(kb))
-            if ix <= DKIX_EMPTY:
+            if ix <= DKIX.EMPTY:
                 # Quit early if the key is not found
                 return False
             if va != vb:

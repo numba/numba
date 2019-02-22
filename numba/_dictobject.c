@@ -866,7 +866,7 @@ numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
 }
 
 void
-numba_dict_dump_keys(NB_Dict *d) {
+numba_dict_dump(NB_Dict *d) {
     long long i, j, k;
     long long size, n;
     char *cp;
@@ -876,7 +876,7 @@ numba_dict_dump_keys(NB_Dict *d) {
     n = d->used;
     size = dk->nentries;
 
-    printf("Key dump\n");
+    printf("Dict dump\n");
     printf("   key_size = %lld\n", (long long)d->keys->key_size);
     printf("   val_size = %lld\n", (long long)d->keys->val_size);
 
@@ -1052,7 +1052,7 @@ numba_test_dict(void) {
     CHECK (d->keys->usable == USABLE_FRACTION(d->keys->size) - d->used);
 
     // Dump
-    numba_dict_dump_keys(d);
+    numba_dict_dump(d);
 
     // Make sure everything are still in there
     ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);

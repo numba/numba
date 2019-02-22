@@ -65,7 +65,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             for i in range(n):
                 d[i] = i
             # retrieval loop
-            return d.get(target, d=default)
+            return d.get(target, default)
 
         self.assertEqual(foo(5, 3, -1), 3)
         self.assertEqual(foo(5, 5, -1), -1)
