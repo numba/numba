@@ -225,6 +225,9 @@ def _sentry_safe_cast(fromty, toty):
         if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
             # Accept if ints to floats
             return
+        if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
+            # Accept if floats to floats
+            return
         raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
 
 
