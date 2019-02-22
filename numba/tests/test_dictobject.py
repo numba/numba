@@ -1,8 +1,8 @@
 """
 Testing numba implementation of the numba dictionary.
 
-The tests here only checks that the numba typing and codegen are working
-correctly.  Detail testing of the underlying dictionary operations is done
+The tests here only check that the numba typing and codegen are working
+correctly.  Detailed testing of the underlying dictionary operations is done
 in test_dictimpl.py.
 """
 from __future__ import print_function, absolute_import, division
