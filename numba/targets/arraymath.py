@@ -1551,32 +1551,23 @@ def np_interp_impl_inner(x, xp, fp, dtype):
     else:
         out = np.empty(x_arr.shape, dtype=dtype)
 
-        # pre-cache slopes
+        # pre-cache slopes (make this lazy?)
         slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
 
         for i in range(x_arr.size):
             if x_arr.flat[i] >= xp_arr[-1]:
                 out.flat[i] = fp_arr[-1]
-                last_idx = -1
             elif x_arr.flat[i] <= xp_arr[0]:
                 out.flat[i] = fp_arr[0]
-                last_idx = 0
             else:
-                # the following looks weird, but is a placeholder
-                # for putting back search space truncation
-                if i == 0:
-                    idx = np.searchsorted(xp_arr, x_arr.flat[i])
-                else:
-                    if x_arr.flat[i] > x_arr.flat[i - 1]:
-                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
-                    elif x_arr.flat[i] == x_arr.flat[i - 1]:
-                        idx = last_idx
-                    else:
-                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
+                # use prior index to truncate search space?
+                idx = np.searchsorted(xp_arr, x_arr.flat[i])
 
                 if x_arr.flat[i] == xp_arr[idx]:
-                    # attempt to replicate numpy behaviour
-                    if np.isnan(slopes[idx]):
+                    # replicate numpy behaviour which is present
+                    # up to (and including) 1.15.4, but fixed in
+                    # this PR: https://github.com/numpy/numpy/pull/11440
+                    if not np.isfinite(slopes[idx]):
                         out.flat[i] = np.nan
                     else:
                         out.flat[i] = fp_arr[idx]

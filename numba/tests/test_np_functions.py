@@ -2056,6 +2056,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.array([np.nan, 2, np.nan, 4, np.nan])
         _check({'x': x, 'xp': xp, 'fp': fp})
 
+        x = np.array([1, 2, 2.5, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, np.inf, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* no NumPy...
@@ -2240,20 +2245,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         xp = np.arange(0, 10, 0.0001)
         fp = np.sin(xp)
         np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
-
-    @unittest.skip('Numpy bug not replicated')
-    def test_interp_fails(self):
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        # numba implementation behaves per this numpy bugfix:
-        # https://github.com/numpy/numpy/issues/11439, so will
-        # fail for all numpy versions until it's released
-        x = np.array([1, 2, 2.5, 3, 4])
-        xp = np.array([1, 2, 3, 4])
-        fp = np.array([1, 2, np.inf, 4])
-        _check({'x': x, 'xp': xp, 'fp': fp})
 
     def test_asarray(self):
 
