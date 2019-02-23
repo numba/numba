@@ -1554,8 +1554,6 @@ def np_interp_impl_inner(x, xp, fp, dtype):
         # pre-cache slopes
         slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
 
-        last_idx = 0
-
         for i in range(x_arr.size):
             if x_arr.flat[i] >= xp_arr[-1]:
                 out.flat[i] = fp_arr[-1]
@@ -1564,25 +1562,27 @@ def np_interp_impl_inner(x, xp, fp, dtype):
                 out.flat[i] = fp_arr[0]
                 last_idx = 0
             else:
+                # the following looks weird, but is a placeholder
+                # for putting back search space truncation
                 if i == 0:
-                    idx = np.searchsorted(xp_arr[1:-1], x_arr.flat[i])
+                    idx = np.searchsorted(xp_arr, x_arr.flat[i])
                 else:
                     if x_arr.flat[i] > x_arr.flat[i - 1]:
-                        idx = np.searchsorted(xp_arr[last_idx - 1:-1],
-                                              x_arr.flat[i])
+                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
                     elif x_arr.flat[i] == x_arr.flat[i - 1]:
                         idx = last_idx
                     else:
-                        idx = np.searchsorted(xp_arr[1:last_idx], x_arr.flat[i])
+                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
 
                 if x_arr.flat[i] == xp_arr[idx]:
-                    out.flat[i] = fp_arr[idx]
+                    # attempt to replicate numpy behaviour
+                    if np.isnan(slopes[idx]):
+                        out.flat[i] = np.nan
+                    else:
+                        out.flat[i] = fp_arr[idx]
                 else:
                     delta_x = x_arr.flat[i] - xp_arr[idx - 1]
                     out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
-
-                # reduce subsequent search space
-                last_idx = idx
 
         return out
 
