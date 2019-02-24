@@ -1529,6 +1529,10 @@ def np_roll(a, shift):
 # Mathematical functions
 
 @register_jitable
+def slope_at_index(fp, xp, index):
+    return (fp[index] - fp[index - 1]) / (xp[index] - xp[index - 1])
+
+@register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype):
     x_arr = np.asarray(x)
     xp_arr = np.asarray(xp)
@@ -1540,19 +1544,21 @@ def np_interp_impl_inner(x, xp, fp, dtype):
     if len(xp_arr) != len(fp_arr):
         raise ValueError('fp and xp are not of the same size.')
 
-    if xp_arr.size > 1 and not np.all(np.diff(xp_arr) > 0):
+    if xp_arr.size > 1 and not np.all(xp_arr[1:] > xp_arr[:-1]):
         msg = 'xp must be monotonically increasing'
         raise ValueError(msg)
         # note: NumPy docs suggest this is required but it is not
-        # checked for or enforced
+        # checked for or enforced; see:
+        # https://github.com/numpy/numpy/issues/10448
+        # This check is quite expensive.
 
     if xp_arr.size == 1:
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
     else:
         out = np.empty(x_arr.shape, dtype=dtype)
 
-        # pre-cache slopes (make this lazy?)
-        slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
+        idx = 0
+        slope = slope_at_index(fp_arr, xp_arr, idx + 1)
 
         for i in range(x_arr.size):
             if x_arr.flat[i] >= xp_arr[-1]:
@@ -1560,20 +1566,23 @@ def np_interp_impl_inner(x, xp, fp, dtype):
             elif x_arr.flat[i] <= xp_arr[0]:
                 out.flat[i] = fp_arr[0]
             else:
-                # use prior index to truncate search space?
-                idx = np.searchsorted(xp_arr, x_arr.flat[i])
+                if xp_arr[idx] < x_arr.flat[i]:
+                    # binary search if needed
+                    idx = np.searchsorted(xp_arr, x_arr.flat[i])
+                    slope = slope_at_index(fp_arr, xp_arr, idx)
 
                 if x_arr.flat[i] == xp_arr[idx]:
                     # replicate numpy behaviour which is present
                     # up to (and including) 1.15.4, but fixed in
                     # this PR: https://github.com/numpy/numpy/pull/11440
-                    if not np.isfinite(slopes[idx]):
+                    next_slope = slope_at_index(fp_arr, xp_arr, idx + 1)
+                    if not np.isfinite(next_slope):
                         out.flat[i] = np.nan
                     else:
                         out.flat[i] = fp_arr[idx]
                 else:
                     delta_x = x_arr.flat[i] - xp_arr[idx - 1]
-                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
+                    out.flat[i] = fp_arr[idx - 1] + slope * delta_x
 
         return out
 
