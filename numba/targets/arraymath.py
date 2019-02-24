@@ -1540,7 +1540,10 @@ def np_interp_impl_inner(x, xp, fp, dtype):
     if len(xp_arr) != len(fp_arr):
         raise ValueError('fp and xp are not of the same size.')
 
-    if xp_arr.size > 1 and not np.all(xp_arr[1:] > xp_arr[:-1]):
+    if xp_arr.size == 1:
+        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
+
+    if not np.all(xp_arr[1:] > xp_arr[:-1]):
         msg = 'xp must be monotonically increasing'
         raise ValueError(msg)
         # note: NumPy docs suggest this is required but it is not
@@ -1548,34 +1551,31 @@ def np_interp_impl_inner(x, xp, fp, dtype):
         # https://github.com/numpy/numpy/issues/10448
         # This check is quite expensive.
 
-    if xp_arr.size == 1:
-        return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
-    else:
-        out = np.empty(x_arr.shape, dtype=dtype)
+    out = np.empty(x_arr.shape, dtype=dtype)
 
-        # pre-cache slopes
-        slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
+    # pre-cache slopes
+    slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
 
-        for i in range(x_arr.size):
-            if x_arr.flat[i] >= xp_arr[-1]:
-                out.flat[i] = fp_arr[-1]
-            elif x_arr.flat[i] <= xp_arr[0]:
-                out.flat[i] = fp_arr[0]
-            else:
-                idx = np.searchsorted(xp_arr, x_arr.flat[i])
+    for i in range(x_arr.size):
+        if x_arr.flat[i] >= xp_arr[-1]:
+            out.flat[i] = fp_arr[-1]
+        elif x_arr.flat[i] <= xp_arr[0]:
+            out.flat[i] = fp_arr[0]
+        else:
+            idx = np.searchsorted(xp_arr, x_arr.flat[i])
 
-                if x_arr.flat[i] == xp_arr[idx]:
-                    # replicate numpy behaviour which is present
-                    # up to (and including) 1.15.4, but fixed in
-                    # this PR: https://github.com/numpy/numpy/pull/11440
-                    if not np.isfinite(slopes[idx]):
-                        out.flat[i] = np.nan
-                    else:
-                        out.flat[i] = fp_arr[idx]
+            if x_arr.flat[i] == xp_arr[idx]:
+                # replicate numpy behaviour which is present
+                # up to (and including) 1.15.4, but fixed in
+                # this PR: https://github.com/numpy/numpy/pull/11440
+                if not np.isfinite(slopes[idx]):
+                    out.flat[i] = np.nan
                 else:
-                    delta_x = x_arr.flat[i] - xp_arr[idx - 1]
-                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
-        return out
+                    out.flat[i] = fp_arr[idx]
+            else:
+                delta_x = x_arr.flat[i] - xp_arr[idx - 1]
+                out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
+    return out
 
 if numpy_version >= (1, 10):
     # replicate behaviour change of 1.10+
