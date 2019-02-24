@@ -2061,6 +2061,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.array([1, 2, np.inf, 4])
         _check({'x': x, 'xp': xp, 'fp': fp})
 
+        x = np.array([3.10034867, 3.0999066, 3.10001529])
+        xp = np.linspace(0, 10, 1 + 20000)
+        fp = np.sin(xp / 2.0)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* to NumPy; see:

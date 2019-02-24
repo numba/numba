@@ -1552,7 +1552,9 @@ def np_interp_impl_inner(x, xp, fp, dtype):
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
     else:
         out = np.empty(x_arr.shape, dtype=dtype)
-        idx = 0
+
+        # pre-cache slopes
+        slopes = (fp_arr[1:] - fp_arr[:-1]) / (xp_arr[1:] - xp_arr[:-1])
 
         for i in range(x_arr.size):
             if x_arr.flat[i] >= xp_arr[-1]:
@@ -1560,36 +1562,19 @@ def np_interp_impl_inner(x, xp, fp, dtype):
             elif x_arr.flat[i] <= xp_arr[0]:
                 out.flat[i] = fp_arr[0]
             else:
-                if xp_arr[idx] < x_arr.flat[i]:
-                    if xp_arr[idx + 1] >= x_arr.flat[i]:
-                        idx += 1
-                    else:
-                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
-                    calc_slope = True
+                idx = np.searchsorted(xp_arr, x_arr.flat[i])
 
                 if x_arr.flat[i] == xp_arr[idx]:
                     # replicate numpy behaviour which is present
                     # up to (and including) 1.15.4, but fixed in
                     # this PR: https://github.com/numpy/numpy/pull/11440
-
-                    numerator = fp_arr[idx + 1] - fp_arr[idx]
-                    denominator = xp_arr[idx + 1] - xp_arr[idx]
-                    next_slope = numerator / denominator
-
-                    if not np.isfinite(next_slope):
+                    if not np.isfinite(slopes[idx]):
                         out.flat[i] = np.nan
                     else:
                         out.flat[i] = fp_arr[idx]
                 else:
-                    if calc_slope:
-                        numerator = fp_arr[idx] - fp_arr[idx - 1]
-                        denominator = xp_arr[idx] - xp_arr[idx - 1]
-                        slope = numerator / denominator
-                        calc_slope = False
-
                     delta_x = x_arr.flat[i] - xp_arr[idx - 1]
-                    out.flat[i] = fp_arr[idx - 1] + slope * delta_x
-
+                    out.flat[i] = fp_arr[idx - 1] + slopes[idx - 1] * delta_x
         return out
 
 if numpy_version >= (1, 10):
