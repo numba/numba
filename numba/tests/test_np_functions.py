@@ -2231,7 +2231,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x0 = np.nan
         np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
 
-        # test complex interpolation
         x = np.linspace(0, 1, 5)
         y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
         x0 = 0.3

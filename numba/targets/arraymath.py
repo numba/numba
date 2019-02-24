@@ -1529,10 +1529,6 @@ def np_roll(a, shift):
 # Mathematical functions
 
 @register_jitable
-def slope_at_index(fp, xp, index):
-    return (fp[index] - fp[index - 1]) / (xp[index] - xp[index - 1])
-
-@register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype):
     x_arr = np.asarray(x)
     xp_arr = np.asarray(xp)
@@ -1556,9 +1552,7 @@ def np_interp_impl_inner(x, xp, fp, dtype):
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
     else:
         out = np.empty(x_arr.shape, dtype=dtype)
-
         idx = 0
-        slope = slope_at_index(fp_arr, xp_arr, idx + 1)
 
         for i in range(x_arr.size):
             if x_arr.flat[i] >= xp_arr[-1]:
@@ -1567,20 +1561,29 @@ def np_interp_impl_inner(x, xp, fp, dtype):
                 out.flat[i] = fp_arr[0]
             else:
                 if xp_arr[idx] < x_arr.flat[i]:
-                    # binary search if needed
-                    idx = np.searchsorted(xp_arr, x_arr.flat[i])
-                    slope = slope_at_index(fp_arr, xp_arr, idx)
+                    if xp_arr[idx + 1] >= x_arr.flat[i]:
+                        idx += 1
+                    else:
+                        idx = np.searchsorted(xp_arr, x_arr.flat[i])
 
                 if x_arr.flat[i] == xp_arr[idx]:
                     # replicate numpy behaviour which is present
                     # up to (and including) 1.15.4, but fixed in
                     # this PR: https://github.com/numpy/numpy/pull/11440
-                    next_slope = slope_at_index(fp_arr, xp_arr, idx + 1)
+
+                    numerator = fp_arr[idx + 1] - fp_arr[idx]
+                    denominator = xp_arr[idx + 1] - xp_arr[idx]
+                    next_slope = numerator / denominator
+
                     if not np.isfinite(next_slope):
                         out.flat[i] = np.nan
                     else:
                         out.flat[i] = fp_arr[idx]
                 else:
+                    numerator = fp_arr[idx] - fp_arr[idx - 1]
+                    denominator = xp_arr[idx] - xp_arr[idx - 1]
+                    slope = numerator / denominator
+
                     delta_x = x_arr.flat[i] - xp_arr[idx - 1]
                     out.flat[i] = fp_arr[idx - 1] + slope * delta_x
 
