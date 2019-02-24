@@ -1552,6 +1552,7 @@ def np_interp_impl_inner(x, xp, fp, dtype):
         return np.full(x_arr.shape, fill_value=fp_arr[0], dtype=dtype)
     else:
         out = np.empty(x_arr.shape, dtype=dtype)
+        last_idx = 0
         idx = 0
 
         for i in range(x_arr.size):
@@ -1580,12 +1581,15 @@ def np_interp_impl_inner(x, xp, fp, dtype):
                     else:
                         out.flat[i] = fp_arr[idx]
                 else:
-                    numerator = fp_arr[idx] - fp_arr[idx - 1]
-                    denominator = xp_arr[idx] - xp_arr[idx - 1]
-                    slope = numerator / denominator
+                    if idx > last_idx:
+                        numerator = fp_arr[idx] - fp_arr[idx - 1]
+                        denominator = xp_arr[idx] - xp_arr[idx - 1]
+                        slope = numerator / denominator
 
                     delta_x = x_arr.flat[i] - xp_arr[idx - 1]
                     out.flat[i] = fp_arr[idx - 1] + slope * delta_x
+
+                last_idx = idx
 
         return out
 
