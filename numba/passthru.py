@@ -33,7 +33,6 @@ from numba import cgutils, types
 from numba.datamodel import models
 from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
 from numba.pythonapi import NativeValue, unbox, box
-from numba.six import PY3
 from numba.targets.imputils import lower_builtin
 from numba.typing.typeof import typeof_impl
 
@@ -103,8 +102,7 @@ class PassThruContainer(object):
         return isinstance(other, PassThruContainer) and self.obj is other.obj
 
     def __hash__(self):
-        """this should coincide with object.__hash__"""
-        return id(self.obj) #>> 4
+        return object.__hash__(self.obj)
 
 
 class PassThruContainerType(PassThruType):
@@ -203,21 +201,13 @@ def pass_thru_container_eq(x, y):
 
 @overload_method(PassThruContainerType, '__hash__')
 def pass_thru_container_hash_overload(container):
-    if PY3:
-        from sys import maxsize as MAXSIZE
+    ptr_width = cgutils.intp_t.width
 
-        def pass_thru_container_hash_impl_py3(container):
-            res = int(container.wrapped_obj)
-            #res = res >> 4
+    def pass_thru_container_hash_impl(container):
+        val = int(container.wrapped_obj)
 
-            if res < 0:
-                res = res - MAXSIZE
+        val = (val >> 4) | (val << (ptr_width - 4))
 
-            return res
+        return val
 
-        return pass_thru_container_hash_impl_py3
-    else:
-        def pass_thru_container_hash_impl_py2(container):
-            return int(container.wrapped_obj) #>> 4
-
-        return pass_thru_container_hash_impl_py2
+    return pass_thru_container_hash_impl
