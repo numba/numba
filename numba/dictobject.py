@@ -239,6 +239,7 @@ def _cast(typingctx, val, typ):
     """
     def codegen(context, builder, signature, args):
         [val, typ] = args
+        context.nrt.incref(builder, signature.return_type, val)
         return val
     # Using implicit casting in argument types
     casted = typ.instance_type
@@ -255,6 +256,7 @@ def _nonoptional(typingctx, val):
         raise TypeError('expected an optional')
 
     def codegen(context, builder, sig, args):
+        context.nrt.incref(builder, sig.return_type, args[0])
         return args[0]
 
     casted = val.type
@@ -843,8 +845,8 @@ def impl_getitem(d, key):
     keyty = d.key_type
 
     def impl(d, key):
-        key = _cast(key, keyty)
-        ix, val = _dict_lookup(d, key, hash(key))
+        castedkey = _cast(key, keyty)
+        ix, val = _dict_lookup(d, castedkey, hash(castedkey))
         if ix == DKIX.EMPTY:
             raise KeyError()
         elif ix < DKIX.EMPTY:
