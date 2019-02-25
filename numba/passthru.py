@@ -206,7 +206,7 @@ def pass_thru_container_hash_overload(container):
 
     def pass_thru_container_hash_impl(container):
         val = int(container.wrapped_obj)
-
+        val = types.uintp(val)
         val = (val >> 4) | (val << (ptr_width - 4))
 
         asint = _Py_hash_t(val)
