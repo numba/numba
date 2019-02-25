@@ -33,6 +33,7 @@ from numba import cgutils, types
 from numba.datamodel import models
 from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
 from numba.pythonapi import NativeValue, unbox, box
+from numba.targets.hashing import _Py_hash_t
 from numba.targets.imputils import lower_builtin
 from numba.typing.typeof import typeof_impl
 
@@ -208,6 +209,10 @@ def pass_thru_container_hash_overload(container):
 
         val = (val >> 4) | (val << (ptr_width - 4))
 
-        return val
+        asint = _Py_hash_t(val)
+        if (asint == int(-1)):
+            asint = int(-2)
+
+        return asint
 
     return pass_thru_container_hash_impl
