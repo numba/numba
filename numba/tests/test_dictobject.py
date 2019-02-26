@@ -725,7 +725,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         m = 10
         self.assertEqual(foo(m), (m, 0))
 
-    def test_016(self):
+    def test_016_cannot_downcast_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -739,7 +739,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
-    def test_017(self):
+    def test_017_cannot_downcast_default(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -753,7 +753,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
-    def test_018(self):
+    def test_018_keys_iter_are_views(self):
         # this is broken somewhere in llvmlite, intent of test is to check if
         # keys behaves like a view or not
         @njit
@@ -767,7 +767,9 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             rk2 = [x for x in k2]
             return rk1, rk2
 
-        print(foo())
+        a, b = foo()
+        self.assertEqual(a, b)
+        self.assertEqual(a, [11, 22])
 
     def test_019(self):
         # should keys/vals be set-like?
