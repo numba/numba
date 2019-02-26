@@ -2066,6 +2066,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.sin(xp / 2.0)
         _check({'x': x, 'xp': xp, 'fp': fp})
 
+        x = self.rnd.uniform(0, 2 * np.pi, (100,))
+        xp = np.linspace(0, 2 * np.pi, 1000)
+        fp = np.cos(xp)
+        exact = np.cos(x)
+        got = cfunc(x, xp, fp)
+        np.testing.assert_allclose(exact, got, atol=1e-5)
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
         # this is *different* to NumPy; see:
@@ -2184,6 +2191,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn(complex_dtype_msg, str(e.exception))
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_non_finite_calibration(self):
         # examples from
         # https://github.com/numpy/numpy/issues/12951
@@ -2203,6 +2211,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x, 'xp': xp, 'fp': fp}
         _check(params)
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_supplemental_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
