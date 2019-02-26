@@ -614,7 +614,22 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         d = foo()
         self.assertEqual(d['123'], 123)
         self.assertEqual(d['321'], 321)
-        self.assertEqual(dict(d), {'123': 123, '321': 321})
+        expect = {'123': 123, '321': 321}
+        self.assertEqual(dict(d), expect)
+        # Test insert replacement
+        d['123'] = 231
+        expect['123'] = 231
+        self.assertEqual(d['123'], 231)
+        self.assertEqual(dict(d), expect)
+        # Test dictionary growth
+        nelem = 100
+        for i in range(nelem):
+            d[str(i)] = i
+            expect[str(i)] = i
+        for i in range(nelem):
+            self.assertEqual(d[str(i)], i)
+        self.assertEqual(dict(d), expect)
+
 
     def test_str_val(self):
         @njit

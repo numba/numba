@@ -805,9 +805,9 @@ def impl_setitem(d, key, value):
     keyty, valty = d.key_type, d.value_type
 
     def impl(d, key, value):
-        key = _cast(key, keyty)
-        val = _cast(value, valty)
-        status = _dict_insert(d, key, hash(key), val)
+        castedkey = _cast(key, keyty)
+        castedval = _cast(value, valty)
+        status = _dict_insert(d, castedkey, hash(castedkey), castedval)
         if status == Status.OK:
             return
         elif status == Status.OK_REPLACED:
@@ -1158,17 +1158,13 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         # Their differences are resolved here.
         if isinstance(iter_type.iterable, DictItemsIterableType):
             # .items()
-            context.nrt.incref(builder, key_ty, key)
-            context.nrt.incref(builder, val_ty, key)
             tup = context.make_tuple(builder, yield_type, [key, val])
             result.yield_(tup)
         elif isinstance(iter_type.iterable, DictKeysIterableType):
             # .keys()
-            context.nrt.incref(builder, key_ty, key)
             result.yield_(key)
         elif isinstance(iter_type.iterable, DictValuesIterableType):
             # .values()
-            context.nrt.incref(builder, val_ty, key)
             result.yield_(val)
         else:
             # unreachable

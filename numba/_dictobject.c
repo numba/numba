@@ -485,7 +485,7 @@ numba_dictkeys_free(NB_DictKeys *dk) {
 
     for (i = 0; i < dk->nentries; i++) {
         ep = get_entry(dk, i);
-        if (ep->hash != -1) {
+        if (ep->hash != DKIX_EMPTY) {
             dk_decref_key(dk, entry_get_key(dk, ep));
             dk_decref_val(dk, entry_get_val(dk, ep));
         }
@@ -733,14 +733,13 @@ numba_dict_insert(
         assert (dk->usable >= 0);
         return OK;
     }
+    /* decref old value */
     dk_decref_val(dk, oldval_bytes);
     // Replace the previous value
     copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
 
     /* incref */
-    dk_incref_key(dk, key_bytes);
     dk_incref_val(dk, val_bytes);
-
     return OK_REPLACED;
 }
 
@@ -808,6 +807,8 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
     }
     // New table must be large enough.
     assert(d->keys->usable >= d->used);
+    // Copy method table
+    memcpy(&d->keys->methods, &oldkeys->methods, sizeof(type_based_methods_table));
 
     numentries = d->used;
 
@@ -817,6 +818,8 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
         oldentries = get_entry(oldkeys, 0);
         newentries = get_entry(d->keys, 0);
         memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
+        // to avoid decref
+        memset(oldentries, 0xff, numentries * oldkeys->entry_size);
     }
     else {
         Py_ssize_t i;
@@ -836,6 +839,7 @@ numba_dict_resize(NB_Dict *d, Py_ssize_t minsize) {
                 get_entry(oldkeys, epi),
                 oldkeys->entry_size
             );
+            get_entry(oldkeys, epi)->hash = DKIX_EMPTY;  // to avoid decref
             epi += 1;
 
         }
@@ -939,7 +943,7 @@ numba_dict_dump(NB_Dict *d) {
 
     for (i = 0, j = 0; i < size; i++) {
         ep = get_entry(dk, i);
-        if (ep->hash != -1) {
+        if (ep->hash != DKIX_EMPTY) {
             long long hash = ep->hash;
             printf("  key=");
             for (cp=entry_get_key(dk, ep), k=0; k < d->keys->key_size; ++k, ++cp){
