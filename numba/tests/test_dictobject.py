@@ -12,7 +12,11 @@ from numba import int32, int64, float32, float64
 from numba import dictobject
 from numba import types
 from numba.typeddict import TypedDict
-from .support import TestCase, MemoryLeakMixin
+from numba.utils import IS_PY3
+from .support import TestCase, MemoryLeakMixin, unittest
+
+
+skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -600,6 +604,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
 
 
 class TestDictRefctTypes(MemoryLeakMixin, TestCase):
+    @skip_py2
     def test_str_key(self):
         @njit
         def foo():
@@ -630,7 +635,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(d[str(i)], i)
         self.assertEqual(dict(d), expect)
 
-
+    @skip_py2
     def test_str_val(self):
         @njit
         def foo():
