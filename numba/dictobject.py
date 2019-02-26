@@ -159,7 +159,7 @@ def _sentry_safe_cast(fromty, toty):
     """
     tyctxt = cpu_target.typing_context
     by = tyctxt.can_convert(fromty, toty)
-    if by > Conversion.safe:
+    if by is None or by > Conversion.safe:
         if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
             # Accept if both types are ints
             return
@@ -589,9 +589,9 @@ def impl_setitem(d, key, value):
     keyty, valty = d.key_type, d.value_type
 
     def impl(d, key, value):
-        key = _cast(key, keyty)
-        val = _cast(value, valty)
-        status = _dict_insert(d, key, hash(key), val)
+        castedkey = _cast(key, keyty)
+        castedval = _cast(value, valty)
+        status = _dict_insert(d, castedkey, hash(castedkey), castedval)
         if status == Status.OK:
             return
         elif status == Status.OK_REPLACED:
@@ -610,13 +610,16 @@ def impl_get(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
     keyty = dct.key_type
+    valty = dct.value_type
+    if default is not None and not isinstance(default, types.Omitted):
+        _sentry_safe_cast(default, valty)
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
         ix, val = _dict_lookup(dct, key, hash(castedkey))
         if ix > DKIX.EMPTY:
             return val
-        return default
+        return default,
 
     return impl
 
@@ -664,7 +667,10 @@ def impl_pop(dct, key, default=None):
         return
 
     keyty = dct.key_type
+    valty = dct.value_type
     should_raise = isinstance(default, types.Omitted)
+    if default is not None and not isinstance(default, types.Omitted):
+        _sentry_safe_cast(default, valty)
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)

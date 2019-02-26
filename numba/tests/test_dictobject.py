@@ -11,6 +11,7 @@ import numpy as np
 from numba import njit
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
+from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -513,7 +514,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         # dict != tuple[int]
         self.assertFalse(foo(10, (1,)))
 
-    def test_001(self):
+    def test_001_cannot_downcast_key(self):
         @njit
         def foo(n):
             d = dictobject.new_dict(int32, float64)
@@ -523,9 +524,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             z = d.get(1j)
             return z
 
-        foo(10)
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast complex128 to int32',
+            str(raises.exception),
+        )
 
-    def test_002(self):
+    def test_002_cannot_downcast_default(self):
         @njit
         def foo(n):
             d = dictobject.new_dict(int32, float64)
@@ -535,9 +541,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             z = d.get(2 * n, 1j)
             return z
 
-        foo(10)
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast complex128 to float64',
+            str(raises.exception),
+        )
 
-    def test_003(self):
+    def test_003_cannot_downcast_key(self):
         @njit
         def foo(n):
             d = dictobject.new_dict(int32, float64)
@@ -548,36 +559,56 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             return z
 
         # should raise
-        foo(10)
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast float64 to int32',
+            str(raises.exception),
+        )
 
-    def test_004(self):
+    def test_004_cannot_downcast_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
             # should raise TypingError
             d[1j] = 7.
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast complex128 to int32',
+            str(raises.exception),
+        )
 
-    def test_005(self):
+    def test_005_cannot_downcast_value(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
             # should raise TypingError
             d[1] = 1j
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast complex128 to float64',
+            str(raises.exception),
+        )
 
-    def test_006(self):
+    def test_006_cannot_downcast_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
             # raise TypingError
             d[11.5]
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast float64 to int32',
+            str(raises.exception),
+        )
 
-    def test_007(self):
+    def test_007_collision_checks(self):
         # this checks collisions in real life for 64bit systems
         @njit
         def foo(v1, v2):
@@ -594,7 +625,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(x, a)
         self.assertEqual(y, b)
 
-    def test_008(self):
+    def test_008_lifo_popitem(self):
         # check that (keys, vals) are LIFO .popitem()
         @njit
         def foo(n):
@@ -615,24 +646,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(gk, [x for x in reversed(range(z))])
         self.assertEqual(gv, [x + 1 for x in reversed(range(z))])
 
-    def test_009(self):
-        # check that (keys, vals) are LIFO in .pop()
-        @njit
-        def foo(n):
-            d = dictobject.new_dict(int32, float64)
-            for i in range(n):
-                d[i] = i + 1
-            vals = []
-            for i in range(n):
-                vals.append(d.pop)
-            return vals
-
-        z = 10
-        gv = foo(z)
-
-        self.assertEqual(gv, [x + 1 for x in reversed(range(z))])
-
-    def test_010(self):
+    def test_010_cannot_downcast_default(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -641,9 +655,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             # pop'd default must have same type as value
             d.pop(11, 12j)
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to float64",
+            str(raises.exception),
+        )
 
-    def test_011(self):
+    def test_011_cannot_downcast_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -652,9 +671,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             # pop'd key must have same type as key
             d.pop(11j)
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
 
-    def test_012(self):
+    def test_012_cannot_downcast_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -662,9 +686,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             # invalid key type
             return 1j in d
 
-        foo()
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
 
-    def test_013(self):
+    def test_013_contains_empty_dict(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -673,7 +702,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertFalse(foo())
 
-    def test_014(self):
+    def test_014_not_contains_empty_dict(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -682,16 +711,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertTrue(foo())
 
-    def test_014(self):
-        @njit
-        def foo():
-            d = dictobject.new_dict(int32, float64)
-            # not contains empty dict
-            return 1 not in d
-
-        self.assertTrue(foo())
-
-    def test_015(self):
+    def test_015_dict_clear(self):
         @njit
         def foo(n):
             d = dictobject.new_dict(int32, float64)
@@ -711,7 +731,13 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d = dictobject.new_dict(int32, float64)
             # key is wrong type
             d.setdefault(1j, 12.)
-        foo()
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
 
     def test_017(self):
         @njit
@@ -719,7 +745,13 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d = dictobject.new_dict(int32, float64)
             # default value is wrong type
             d.setdefault(1, 12.j)
-        foo()
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
 
     def test_018(self):
         # this is broken somewhere in llvmlite, intent of test is to check if
