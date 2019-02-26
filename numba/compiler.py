@@ -17,7 +17,7 @@ from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
-                            InlineInlinables)
+                            InlineInlinables, InlineOverloads)
 from numba.compiler_lock import global_compiler_lock
 from numba.analysis import dead_branch_prune
 
@@ -55,6 +55,7 @@ class Flags(utils.ConfigOptions):
         'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
         'recursive_inlining': False,
+        'inlinable': False,
     }
 
 
@@ -544,6 +545,12 @@ class BasePipeline(object):
                                         recursive=self.flags.recursive_inlining)
         inlineinline.run()
 
+    def stage_inline_overloads_pass(self):
+        inlineoverloads = InlineOverloads(self.func_ir, self.typingctx,
+                                          self.targetctx,
+                                          self.type_annotation)
+        inlineoverloads.run()
+
     def stage_pre_parfor_pass(self):
         """
         Preprocessing for data-parallel computations.
@@ -812,6 +819,7 @@ class BasePipeline(object):
     def add_optimization_stage(self, pm):
         """Add optimization stages.
         """
+        pm.add_stage(self.stage_inline_overloads_pass, "inline overloads")
         if self.flags.auto_parallel.enabled:
             pm.add_stage(self.stage_pre_parfor_pass,
                          "Preprocessing for parfors")

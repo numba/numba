@@ -50,7 +50,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True):
+def overload(func, jit_options={}, strict=True, force_inline=False):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -81,6 +81,10 @@ def overload(func, jit_options={}, strict=True):
     the ``signature`` is a ``typing.Signature`` specifying the precise
     signature to be used; and ``impl_function`` is the same implementation
     function as in the simple case.
+
+    If the kwarg force_inline is set to True then the type resolved function
+    implementing the overload detail will be forcibly inlined as IR at its
+    call site.
     """
     from .typing.templates import make_overload_template, infer_global
 
@@ -89,7 +93,8 @@ def overload(func, jit_options={}, strict=True):
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts, strict)
+        template = make_overload_template(func, overload_func, opts, strict,
+                                          force_inline)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))

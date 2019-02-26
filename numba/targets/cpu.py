@@ -276,6 +276,7 @@ class CPUTargetOptions(TargetOptions):
         "error_model": str,
         "parallel": ParallelOptions,
         "recursive_inlining": bool,
+        "inlinable": bool,
     }
 
 

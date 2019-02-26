@@ -2023,3 +2023,86 @@ class InlineInlinables(object):
 
         return False
 
+class InlineOverloads(object):
+
+    _DEBUG = False
+
+    def __init__(self, func_ir, tyctx, cgctx, type_annotation):
+        self.func_ir = func_ir
+        self.tyctx = tyctx
+        self.cgctx = cgctx
+        self.type_annotation = type_annotation
+        self.typemap = type_annotation.typemap
+        self.calltypes = type_annotation.calltypes
+
+    def run(self):
+        """Run inlining of overloads
+        """
+        if config.DEBUG or self._DEBUG:
+            print('before inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+        modified = False
+        work_list = list(self.func_ir.blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                        if guard(self._do_work, work_list, block, i, expr):
+                            modified = True
+                            break # because block structure changed
+
+        if modified:
+            remove_dels(self.func_ir.blocks)
+            # repeat dead code elimination until nothing can be further
+            # removed
+            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names,
+                               self.func_ir)):
+                pass
+
+            # clean up unconditional branches that appear due to inlined
+            # functions introducing blocks
+            simplify_CFG(self.func_ir.blocks)
+
+            # generate ir.Dels
+            from numba import postproc
+            post_proc = postproc.PostProcessor(self.func_ir)
+            post_proc.run()
+
+        if config.DEBUG or self._DEBUG:
+            print('after inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+
+    def _do_work(self, work_list, block, i, expr):
+        from numba.inline_closurecall import inline_closure_call
+        to_inline = self.func_ir.get_definition(expr.func)
+        # do not handle closure inlining here, another pass deals with that.
+        if getattr(to_inline, 'op', False) == 'make_function':
+            return False
+
+        func_ty = self.typemap[expr.func.name]
+
+        arg_typs = tuple([self.typemap[x.name] for x in expr.args])
+        sig = func_ty.get_call_type(self.tyctx, arg_typs, {})
+
+        impl = None
+        for template in func_ty.templates:
+            if template._force_inline:
+                try:
+                    impl = template._overload_func(sig)
+                    break
+                except Exception:
+                    continue
+
+        if impl is not None:
+            inline_closure_call(self.func_ir,
+                                self.func_ir.func_id.func.__globals__,
+                                block, i, impl, typingctx=self.tyctx,
+                                arg_typs=arg_typs,typemap=self.typemap,
+                                calltypes=self.calltypes, work_list=work_list)
+            return True
+
+        return False

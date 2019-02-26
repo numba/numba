@@ -75,6 +75,9 @@ class TargetOptions(object):
         if kws.pop('recursive_inlining', False):
             flags.set('recursive_inlining')
 
+        if kws.pop('inlinable', False):
+            flags.set('inlinable')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:
