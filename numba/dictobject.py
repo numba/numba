@@ -169,6 +169,18 @@ def _sentry_safe_cast(fromty, toty):
         raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
 
 
+def _sentry_safe_cast_default(default, valty):
+    """Similar to _sentry_safe_cast but handle default value.
+    """
+    # Handle default values
+    # TODO: simplify default values; too many possible way to spell None
+    if default is None:
+        return
+    if isinstance(default, (types.Omitted, types.NoneType)):
+        return
+    return _sentry_safe_cast(default, valty)
+
+
 @intrinsic
 def _cast(typingctx, val, typ):
     """Cast *val* to *typ*
@@ -611,15 +623,14 @@ def impl_get(dct, key, default=None):
         return
     keyty = dct.key_type
     valty = dct.value_type
-    if default is not None and not isinstance(default, types.Omitted):
-        _sentry_safe_cast(default, valty)
+    _sentry_safe_cast_default(default, valty)
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
         ix, val = _dict_lookup(dct, key, hash(castedkey))
         if ix > DKIX.EMPTY:
             return val
-        return default,
+        return default
 
     return impl
 
@@ -669,8 +680,7 @@ def impl_pop(dct, key, default=None):
     keyty = dct.key_type
     valty = dct.value_type
     should_raise = isinstance(default, types.Omitted)
-    if default is not None and not isinstance(default, types.Omitted):
-        _sentry_safe_cast(default, valty)
+    _sentry_safe_cast_default(default, valty)
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)

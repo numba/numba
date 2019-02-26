@@ -12,7 +12,7 @@ from numba import njit
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
 from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, unittest
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -749,7 +749,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "cannot safely cast complex128 to int32",
+            "cannot safely cast complex128 to float64",
             str(raises.exception),
         )
 
@@ -771,6 +771,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(a, b)
         self.assertEqual(a, [11, 22])
 
+    # Not implemented yet
+    @unittest.expectedFailure
     def test_019(self):
         # should keys/vals be set-like?
         @njit
@@ -783,6 +785,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         print(foo())
 
+    @unittest.skip("refct")
     def test_020(self):
         # this should work ?!
         @njit
@@ -798,6 +801,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         print(foo())
 
+    @unittest.skip("refct")
     def test_021(self):
         # this should work ?!
         @njit
@@ -815,7 +819,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         print(foo())
 
-    def test_022(self):
+    def test_022_references_juggle(self):
         # this should work, llvmlite level broken, probably the same problem as
         # before, intent of test is to juggle references about
         @njit
@@ -834,38 +838,14 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             k2 = [x for x in e.items()]
             k3 = [x for x in f.items()]
 
-            print(k1)
-            print(k2)
-            print(k3)
+            return k1, k2, k3
 
-        print(foo())
+        k1, k2, k3 = foo()
+        self.assertEqual(k1, [(1, 100.0), (2, 1000.0)])
+        self.assertEqual(k2, [(1, 100.0), (2, 1000.0)])
+        self.assertEqual(k3, [(1, 12), (2, 14)])
 
-    def test_022(self):
-        # this should work, llvmlite level broken, probably the same problem as
-        # before, intent of test is to juggle references about
-        @njit
-        def foo():
-            d = dictobject.new_dict(int32, float64)
-            e = d
-            d[1] = 12.
-            e[2] = 14.
-            e = dictobject.new_dict(int32, float64)
-            e[1] = 100.
-            e[2] = 1000.
-            f = d
-            d = e
-
-            k1 = [x for x in d.items()]
-            k2 = [x for x in e.items()]
-            k3 = [x for x in f.items()]
-
-            print(k1)
-            print(k2)
-            print(k3)
-
-        print(foo())
-
-    def test_023(self):
+    def test_023_closure(self):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -874,18 +854,5 @@ class TestDictObject(MemoryLeakMixin, TestCase):
                 d[2] = 14.
             bar()
             return [x for x in d.keys()]
-
-        self.assertEqual(foo(), [1, 2])
-
-    def test_023(self):
-        @njit
-        def foo():
-            def bar():
-                d = dictobject.new_dict(int32, float64)
-                d[1] = 12.
-                d[2] = 14.
-                return d
-            g = bar()
-            return [x for x in g.keys()]
 
         self.assertEqual(foo(), [1, 2])
