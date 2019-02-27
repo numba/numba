@@ -1039,16 +1039,38 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             value_type=types.float64[:],
         )
         expect = []
-        expect.append(np.arange(10).astype(np.float64))
+        expect.append(np.random.random(10))
         d['mass'] = expect[-1]
-        expect.append(np.arange(10, 30).astype(np.float64))
+        expect.append(np.random.random(20))
         d['velocity'] = expect[-1]
         for i in range(100):
-            expect.append(np.arange(i).astype(np.float64))
+            expect.append(np.random.random(i))
             d[str(i)] = expect[-1]
         self.assertEqual(len(d), len(expect))
-        self.assertPreciseEqual(d['mass'], np.arange(10).astype(np.float64))
-        self.assertPreciseEqual(d['velocity'], np.arange(10, 30).astype(np.float64))
+        self.assertPreciseEqual(d['mass'], expect[0])
+        self.assertPreciseEqual(d['velocity'], expect[1])
+        # Ordering is kept
+        for got, exp in zip(d.values(), expect):
+            self.assertPreciseEqual(got, exp)
+
+        # Try deleting
+        self.assertTrue('mass' in d)
+        self.assertTrue('velocity' in d)
+        del d['mass']
+        self.assertFalse('mass' in d)
+        del d['velocity']
+        self.assertFalse('velocity' in d)
+        del expect[0:2]
+
+        for i in range(90):
+            k, v = d.popitem()
+            w = expect.pop()
+            self.assertPreciseEqual(v, w)
+
+        # Trigger a resize
+        expect.append(np.random.random(10))
+        d["last"] = expect[-1]
+
         # Ordering is kept
         for got, exp in zip(d.values(), expect):
             self.assertPreciseEqual(got, exp)
