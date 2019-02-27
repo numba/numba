@@ -7,8 +7,9 @@ in test_dictimpl.py.
 """
 from __future__ import print_function, absolute_import, division
 
+import sys
 import numpy as np
-from numba import njit
+from numba import njit, utils
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
 from numba.errors import TypingError
@@ -608,6 +609,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    @unittest.skipUnless(utils.IS_PY3 and sys.maxsize > 2 ** 32,
+                         "Python 3, 64 bit test only")
     def test_007_collision_checks(self):
         # this checks collisions in real life for 64bit systems
         @njit
@@ -849,6 +852,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
+
             def bar():
                 d[1] = 12.
                 d[2] = 14.
