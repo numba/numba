@@ -1982,7 +1982,7 @@ class InlineInlinables(object):
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         if guard(self._do_work, work_list, block, i, expr):
                             modified = True
-                            break # because block structure changed
+                            break  # because block structure changed
 
         if modified:
             remove_dels(self.func_ir.blocks)
@@ -2088,21 +2088,25 @@ class InlineOverloads(object):
         arg_typs = tuple([self.typemap[x.name] for x in expr.args])
         sig = func_ty.get_call_type(self.tyctx, arg_typs, {})
 
+        templates = getattr(func_ty, 'templates', None)
+
+        if templates is None:
+            return False
+
         impl = None
-        for template in func_ty.templates:
+        for template in templates:
             if template._force_inline:
                 try:
                     impl = template._overload_func(sig)
                     break
                 except Exception:
                     continue
+        else:
+            return False
 
-        if impl is not None:
-            inline_closure_call(self.func_ir,
-                                self.func_ir.func_id.func.__globals__,
-                                block, i, impl, typingctx=self.tyctx,
-                                arg_typs=arg_typs,typemap=self.typemap,
-                                calltypes=self.calltypes, work_list=work_list)
-            return True
-
-        return False
+        inline_closure_call(self.func_ir,
+                            self.func_ir.func_id.func.__globals__,
+                            block, i, impl, typingctx=self.tyctx,
+                            arg_typs=arg_typs, typemap=self.typemap,
+                            calltypes=self.calltypes, work_list=work_list)
+        return True
