@@ -353,7 +353,9 @@ The following built-in functions are supported:
 * :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
-  a range object is returned instead of an array of values.
+  a range object is returned instead of an array of values. The only permitted
+  use of range is as a callable function (cannot pass range as an argument to a
+  jitted function or return a range from a jitted function).
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
 * :func:`type`: only the one-argument form, and only on some types
@@ -587,6 +589,22 @@ startup with entropy drawn from the operating system.
 .. seealso::
    Numba also supports most additional distributions from the :ref:`Numpy
    random module <numpy-random>`.
+
+``heapq``
+------------
+
+The following functions from the :mod:`heapq` module are supported:
+
+* :func:`heapq.heapify`
+* :func:`heapq.heappop`
+* :func:`heapq.heappush`
+* :func:`heapq.heappushpop`
+* :func:`heapq.heapreplace`
+* :func:`heapq.nlargest` : first two arguments only
+* :func:`heapq.nsmallest` : first two arguments only
+
+Note: the heap must be seeded with at least one value to allow its type to be
+inferred; heap items are assumed to be homogeneous in type.
 
 
 Third-party modules
