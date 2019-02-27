@@ -12,7 +12,6 @@ import numpy as np
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
-from numba import types
 from numba.typeddict import TypedDict
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
@@ -892,6 +891,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             return [x for x in d.keys()]
 
         self.assertEqual(foo(), [1, 2])
+
 
 class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_basic(self):
