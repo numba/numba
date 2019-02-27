@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 import operator
 
-from numba import types, prange
+from numba import types, prange, errors
 from numba.parfor import internal_prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, IS_PY3
@@ -744,16 +744,24 @@ class NumberClassAttribute(AttributeTemplate):
         return types.Function(make_callable_template(key=ty, typer=typer))
 
 
-def register_number_classes(register_global):
-    nb_types = set(types.number_domain)
-    nb_types.add(types.bool_)
+@infer_getattr
+class TypeRefAttribute(AttributeTemplate):
+    key = types.TypeRef
 
-    for ty in nb_types:
-        register_global(ty, types.NumberClass(ty))
+    def resolve___call__(self, classty):
+        """
+        Resolve a number class's constructor (e.g. calling int(...))
+        """
+        ty = classty.instance_type
 
+        if not isinstance(ty, types.Number):
+            raise errors.TypingError("invalid use of non-number types")
 
-register_number_classes(infer_global)
+        def typer(val):
+            # Scalar constructor, e.g. int32(42)
+            return ty
 
+        return types.Function(make_callable_template(key=ty, typer=typer))
 
 #------------------------------------------------------------------------------
 

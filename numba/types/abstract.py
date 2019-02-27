@@ -423,3 +423,14 @@ class Literal(Type):
 
         return self._literal_type_cache
 
+
+
+class TypeRef(Dummy):
+    """Reference to a type.
+
+    Used when a type is passed as a value.
+    """
+    def __init__(self, instance_type):
+        self.instance_type = instance_type
+        super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
+

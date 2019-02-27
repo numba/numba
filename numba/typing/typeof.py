@@ -219,3 +219,22 @@ def typeof_array(val, c):
     arrty = typeof_impl(val.get('host'), c)
     return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
+
+@typeof_impl.register(types.NumberClass)
+def typeof_number_class(val, c):
+    return val
+
+
+@typeof_impl.register(types.TypeRef)
+def typeof_typeref(val, c):
+    return val
+
+
+@typeof_impl.register(types.Type)
+def typeof_typeref(val, c):
+    if isinstance(val, types.BaseFunction):
+        return val
+    elif isinstance(val, (types.Number, types.Boolean)):
+        return types.NumberClass(val)
+    else:
+        return types.TypeRef(val)

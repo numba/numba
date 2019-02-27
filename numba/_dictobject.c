@@ -672,7 +672,7 @@ numba_dict_insert(
         hashpos = find_empty_slot(dk, hash);
         ep = get_entry(dk, dk->nentries);
         set_index(dk, hashpos, dk->nentries);
-        copy_val(dk, entry_get_key(dk, ep), key_bytes);
+        copy_key(dk, entry_get_key(dk, ep), key_bytes);
         assert ( hash != -1 );
         ep->hash = hash;
         copy_val(dk, entry_get_val(dk, ep), val_bytes);
@@ -865,24 +865,34 @@ numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
     return OK;
 }
 
-
 void
-numba_dict_dump_keys(NB_Dict *d) {
-    long long i, j;
+numba_dict_dump(NB_Dict *d) {
+    long long i, j, k;
     long long size, n;
+    char *cp;
     NB_DictEntry *ep;
     NB_DictKeys *dk = d->keys;
 
     n = d->used;
     size = dk->nentries;
 
-    printf("Key dump\n");
+    printf("Dict dump\n");
+    printf("   key_size = %lld\n", (long long)d->keys->key_size);
+    printf("   val_size = %lld\n", (long long)d->keys->val_size);
 
     for (i = 0, j = 0; i < size; i++) {
         ep = get_entry(dk, i);
         if (ep->hash != -1) {
             long long hash = ep->hash;
-            printf("  key=%s hash=%llu value=%s\n", entry_get_key(dk, ep), hash, entry_get_val(dk, ep));
+            printf("  key=");
+            for (cp=entry_get_key(dk, ep), k=0; k < d->keys->key_size; ++k, ++cp){
+                printf("%02x ", ((int)*cp) & 0xff);
+            }
+            printf(" hash=%llu value=", hash);
+            for (cp=entry_get_val(dk, ep), k=0; k < d->keys->val_size; ++k, ++cp){
+                printf("%02x ", ((int)*cp) & 0xff);
+            }
+            printf("\n");
             j++;
         }
     }
@@ -1042,7 +1052,7 @@ numba_test_dict(void) {
     CHECK (d->keys->usable == USABLE_FRACTION(d->keys->size) - d->used);
 
     // Dump
-    numba_dict_dump_keys(d);
+    numba_dict_dump(d);
 
     // Make sure everything are still in there
     ix = numba_dict_lookup(d, "bef", 0xbeef, got_value);

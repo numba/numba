@@ -439,3 +439,69 @@ class SetEntry(Type):
     @property
     def key(self):
         return self.set_type
+
+
+class DictType(IterableType):
+    """Dictionary type
+    """
+    def __init__(self, keyty, valty):
+        assert not isinstance(keyty, TypeRef)
+        assert not isinstance(valty, TypeRef)
+        self.key_type = keyty
+        self.value_type = valty
+        self.keyvalue_type = Tuple([keyty, valty])
+        name = '{}[{},{}]'.format(
+            self.__class__.__name__,
+            keyty,
+            valty,
+        )
+        super(DictType, self).__init__(name)
+
+    @property
+    def iterator_type(self):
+        return DictKeysIterableType(self).iterator_type
+
+
+class DictItemsIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.keyvalue_type
+        name = "items[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictItemsIterableType, self).__init__(name, iterator_type)
+
+
+class DictKeysIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.key_type
+        name = "keys[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictKeysIterableType, self).__init__(name, iterator_type)
+
+
+class DictValuesIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.value_type
+        name = "values[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictValuesIterableType, self).__init__(name, iterator_type)
+
+
+class DictIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.yield_type
+        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        super(DictIteratorType, self).__init__(name, yield_type)

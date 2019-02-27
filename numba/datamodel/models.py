@@ -299,6 +299,7 @@ class EnumModel(ProxyModel):
 @register_default(types.EnumClass)
 @register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
+@register_default(types.TypeRef)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
 @register_default(types.RecursiveCall)

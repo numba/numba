@@ -253,6 +253,17 @@ def unbox_charseq(typ, obj, c):
     return NativeValue(ret, is_error=c.builder.not_(ok))
 
 
+
+@box(types.Optional)
+def box_optional(typ, val, c):
+    optval = c.context.make_helper(c.builder, typ, val)
+    ret = cgutils.alloca_once_value(c.builder, c.pyapi.borrow_none())
+    with c.builder.if_then(optval.valid):
+        validres = c.box(typ.type, optval.data)
+        c.builder.store(validres, ret)
+    return c.builder.load(ret)
+
+
 @unbox(types.Optional)
 def unbox_optional(typ, obj, c):
     """
