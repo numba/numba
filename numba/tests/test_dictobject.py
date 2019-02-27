@@ -945,3 +945,23 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+    def check_stringify(self, strfn):
+        nbd = TypedDict.empty(int32, int32)
+        d = {}
+        nbd[1] = 2
+        d[1] = 2
+        self.assertEqual(strfn(nbd), strfn(d))
+        nbd[2] = 3
+        d[2] = 3
+        self.assertEqual(strfn(nbd), strfn(d))
+        for i in range(10, 20):
+            nbd[i] = i + 1
+            d[i] = i + 1
+        self.assertEqual(strfn(nbd), strfn(d))
+
+    def test_repr(self):
+        self.check_stringify(repr)
+
+    def test_str(self):
+        self.check_stringify(str)
