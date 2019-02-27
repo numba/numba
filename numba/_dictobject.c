@@ -127,7 +127,7 @@ converting the dict to the combined table.
 
 
 #if defined(_MSC_VER)
-#   if _MSC_VER < 1800  /* Visual Studio 2013 */
+#   if _MSC_VER <= 1900  /* Visual Studio 2014 */
         typedef __int8 int8_t;
         typedef __int16 int16_t;
         typedef __int32 int32_t;
