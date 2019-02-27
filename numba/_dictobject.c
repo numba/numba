@@ -292,11 +292,14 @@ aligned_size(Py_ssize_t sz) {
     return sz + (alignment - sz % alignment) % alignment;
 }
 
+#ifndef NDEBUG
+/* NOTE: This function is only used in assert()s */
 /* Align pointer *ptr* to pointer size */
 static void*
 aligned_pointer(void *ptr) {
     return (void*)aligned_size((size_t)ptr);
 }
+#endif
 
 /* lookup indices.  returns DKIX_EMPTY, DKIX_DUMMY, or ix >=0 */
 static Py_ssize_t
