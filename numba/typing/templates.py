@@ -426,9 +426,25 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, args, kws)
-        # Store the compiled overload for use in the lowering phase
-        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        # Store the compiled overload for use in the lowering phase if there's
+        # no inlining required (else functions are being compiled which will
+        # never be used as they are inlined)
+        if self._force_inline:
+            # need to run the compiler front end up to type inference to compute
+            # a signature
+            from numba.ir_utils import compile_to_numba_ir, get_ir_of_code
+            from numba import compiler
+            ir = get_ir_of_code(self._overload_func(*args, **kws).__globals__,
+                                disp_type.dispatcher.__code__)
+            typemap, return_type, calltypes = compiler.type_inference_stage(
+                                              self.context, ir, args, None)
+            sig = Signature(return_type, args, None)
+            # there's no compiled overload available, but the key still needs to
+            # exist for type resolution
+            self._compiled_overloads[sig.args] = None
+        else:
+            sig = disp_type.get_call_type(self.context, args, kws)
+            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
     def _get_impl(self, args, kws):
