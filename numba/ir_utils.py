@@ -2095,7 +2095,7 @@ class InlineOverloads(object):
 
         impl = None
         for template in templates:
-            if template._force_inline:
+            if getattr(template, '_force_inline', False):
                 try:
                     impl = template._overload_func(sig)
                     break
