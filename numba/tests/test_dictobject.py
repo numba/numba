@@ -823,9 +823,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         print(foo())
 
-    @unittest.skip("refct")
-    def test_020(self):
-        # this should work ?!
+    @skip_py2
+    def test_020_string_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(types.unicode_type, float64)
@@ -833,15 +832,17 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d['b'] = 2.
             d['c'] = 3.
             d['d'] = 4.
+            out = []
             for x in d.items():
-                print(x)
-            return d['a']
+                out.append(x)
+            return out, d['a']
 
-        print(foo())
+        items, da = foo()
+        self.assertEqual(items, [('a', 1.), ('b', 2.), ('c', 3.), ('d', 4)])
+        self.assertEqual(da, 1.)
 
-    @unittest.skip("refct")
-    def test_021(self):
-        # this should work ?!
+    @skip_py2
+    def test_021_long_str_key(self):
         @njit
         def foo():
             d = dictobject.new_dict(types.unicode_type, float64)
@@ -849,13 +850,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             for i in range(10000):
                 tmp.append('a')
             s = ''.join(tmp)
-            print(s)
             d[s] = 1.
             # this prints out weirdly, issue may well be print related.
-            for x in d.items():
-                print(x)
-
-        print(foo())
+            out = list(d.items())
+            return out
+        self.assertEqual(foo(), [('a' * 10000, 1)])
 
     def test_022_references_juggle(self):
         # this should work, llvmlite level broken, probably the same problem as
