@@ -16,7 +16,6 @@ from numba.typeddict import TypedDict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
-from .support import TestCase, MemoryLeakMixin, unittest
 
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
@@ -1034,3 +1033,23 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(d[i], str(i))
         self.assertEqual(dict(d), expect)
 
+    @skip_py2
+    def test_str_key_array_value(self):
+        d = TypedDict.empty(
+            key_type=types.unicode_type,
+            value_type=types.float64[:],
+        )
+        expect = []
+        expect.append(np.arange(10).astype(np.float64))
+        d['mass'] = expect[-1]
+        expect.append(np.arange(10, 30).astype(np.float64))
+        d['velocity'] = expect[-1]
+        for i in range(100):
+            expect.append(np.arange(i).astype(np.float64))
+            d[str(i)] = expect[-1]
+        self.assertEqual(len(d), len(expect))
+        self.assertPreciseEqual(d['mass'], np.arange(10).astype(np.float64))
+        self.assertPreciseEqual(d['velocity'], np.arange(10, 30).astype(np.float64))
+        # Ordering is kept
+        for got, exp in zip(d.values(), expect):
+            self.assertPreciseEqual(got, exp)
