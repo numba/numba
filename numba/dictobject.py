@@ -589,6 +589,7 @@ def _dict_lookup(typingctx, d, key, hashval):
 
         with builder.if_then(found):
             val = dm_val.load_from_data_pointer(builder, ptr_val)
+            context.nrt.incref(builder, td.value_type, val)
             loaded = context.make_optional_value(builder, td.value_type, val)
             builder.store(loaded, pout)
 
