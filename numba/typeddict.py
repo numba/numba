@@ -118,6 +118,12 @@ class TypedDict(MutableMapping):
     def __contains__(self, key):
         return _contains(self, key)
 
+    def __repr__(self):
+        buf = []
+        for k, v in self.items():
+            buf.append("{}: {}".format(k, v))
+        return '{{{0}}}'.format(', '.join(buf))
+
     def get(self, key, default=None):
         return _get(self, key, default)
 

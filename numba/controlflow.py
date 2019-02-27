@@ -234,6 +234,8 @@ class CFGraph(object):
         pprint.pprint(self._loops, stream=file)
         print("CFG node-to-loops:", file=file)
         pprint.pprint(self._in_loops, stream=file)
+        print("CFG backbone:", file=file)
+        pprint.pprint(self.backbone(), stream=file)
 
     # Internal APIs
 
@@ -443,7 +445,7 @@ class CFGraph(object):
         self._in_loops = in_loops
 
     def _dump_adj_lists(self, file):
-        adj_lists = dict((src, list(dests))
+        adj_lists = dict((src, sorted(list(dests)))
                          for src, dests in self._succs.items())
         import pprint
         pprint.pprint(adj_lists, stream=file)

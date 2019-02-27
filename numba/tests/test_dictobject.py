@@ -7,12 +7,15 @@ in test_dictimpl.py.
 """
 from __future__ import print_function, absolute_import, division
 
-from numba import njit
-from numba import int32, int64, float32, float64
+import sys
+import numpy as np
+from numba import njit, utils
+from numba import int32, int64, float32, float64, types
 from numba import dictobject
-from numba import types
 from numba.typeddict import TypedDict
 from numba.utils import IS_PY3
+from numba.errors import TypingError
+from .support import TestCase, MemoryLeakMixin, unittest
 from .support import TestCase, MemoryLeakMixin, unittest
 
 
@@ -548,6 +551,352 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         expected = list(make_content.py_func(10))
         self.assertEqual(got, expected)
 
+    def test_001_cannot_downcast_key(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad key type
+            z = d.get(1j)
+            return z
+
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast complex128 to int32',
+            str(raises.exception),
+        )
+
+    def test_002_cannot_downcast_default(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad default type
+            z = d.get(2 * n, 1j)
+            return z
+
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast complex128 to float64',
+            str(raises.exception),
+        )
+
+    def test_003_cannot_downcast_key(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            # bad cast!?
+            z = d.get(2.4)
+            return z
+
+        # should raise
+        with self.assertRaises(TypingError) as raises:
+            foo(10)
+        self.assertIn(
+            'cannot safely cast float64 to int32',
+            str(raises.exception),
+        )
+
+    def test_004_cannot_downcast_key(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # should raise TypingError
+            d[1j] = 7.
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast complex128 to int32',
+            str(raises.exception),
+        )
+
+    def test_005_cannot_downcast_value(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # should raise TypingError
+            d[1] = 1j
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast complex128 to float64',
+            str(raises.exception),
+        )
+
+    def test_006_cannot_downcast_key(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # raise TypingError
+            d[11.5]
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            'cannot safely cast float64 to int32',
+            str(raises.exception),
+        )
+
+    @unittest.skipUnless(utils.IS_PY3 and sys.maxsize > 2 ** 32,
+                         "Python 3, 64 bit test only")
+    def test_007_collision_checks(self):
+        # this checks collisions in real life for 64bit systems
+        @njit
+        def foo(v1, v2):
+            d = dictobject.new_dict(int64, float64)
+            c1 = np.uint64(2 ** 61 - 1)
+            c2 = np.uint64(0)
+            assert hash(c1) == hash(c2)
+            d[c1] = v1
+            d[c2] = v2
+            return (d[c1], d[c2])
+
+        a, b = 10., 20.
+        x, y = foo(a, b)
+        self.assertEqual(x, a)
+        self.assertEqual(y, b)
+
+    def test_008_lifo_popitem(self):
+        # check that (keys, vals) are LIFO .popitem()
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            keys = []
+            vals = []
+            for i in range(n):
+                tmp = d.popitem()
+                keys.append(tmp[0])
+                vals.append(tmp[1])
+            return keys, vals
+
+        z = 10
+        gk, gv = foo(z)
+
+        self.assertEqual(gk, [x for x in reversed(range(z))])
+        self.assertEqual(gv, [x + 1 for x in reversed(range(z))])
+
+    def test_010_cannot_downcast_default(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            d[1] = 7.
+            # pop'd default must have same type as value
+            d.pop(11, 12j)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to float64",
+            str(raises.exception),
+        )
+
+    def test_011_cannot_downcast_key(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            d[1] = 7.
+            # pop'd key must have same type as key
+            d.pop(11j)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
+
+    def test_012_cannot_downcast_key(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[0] = 6.
+            # invalid key type
+            return 1j in d
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
+
+    def test_013_contains_empty_dict(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # contains on empty dict
+            return 1 in d
+
+        self.assertFalse(foo())
+
+    def test_014_not_contains_empty_dict(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # not contains empty dict
+            return 1 not in d
+
+        self.assertTrue(foo())
+
+    def test_015_dict_clear(self):
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float64)
+            for i in range(n):
+                d[i] = i + 1
+            x = len(d)
+            d.clear()
+            y = len(d)
+            return x, y
+
+        m = 10
+        self.assertEqual(foo(m), (m, 0))
+
+    def test_016_cannot_downcast_key(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # key is wrong type
+            d.setdefault(1j, 12.)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to int32",
+            str(raises.exception),
+        )
+
+    def test_017_cannot_downcast_default(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            # default value is wrong type
+            d.setdefault(1, 12.j)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "cannot safely cast complex128 to float64",
+            str(raises.exception),
+        )
+
+    def test_018_keys_iter_are_views(self):
+        # this is broken somewhere in llvmlite, intent of test is to check if
+        # keys behaves like a view or not
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[11] = 12.
+            k1 = d.keys()
+            d[22] = 9.
+            k2 = d.keys()
+            rk1 = [x for x in k1]
+            rk2 = [x for x in k2]
+            return rk1, rk2
+
+        a, b = foo()
+        self.assertEqual(a, b)
+        self.assertEqual(a, [11, 22])
+
+    # Not implemented yet
+    @unittest.expectedFailure
+    def test_019(self):
+        # should keys/vals be set-like?
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            d[11] = 12.
+            d[22] = 9.
+            k2 = d.keys() & {12,}
+            return k2
+
+        print(foo())
+
+    @unittest.skip("refct")
+    def test_020(self):
+        # this should work ?!
+        @njit
+        def foo():
+            d = dictobject.new_dict(types.unicode_type, float64)
+            d['a'] = 1.
+            d['b'] = 2.
+            d['c'] = 3.
+            d['d'] = 4.
+            for x in d.items():
+                print(x)
+            return d['a']
+
+        print(foo())
+
+    @unittest.skip("refct")
+    def test_021(self):
+        # this should work ?!
+        @njit
+        def foo():
+            d = dictobject.new_dict(types.unicode_type, float64)
+            tmp = []
+            for i in range(10000):
+                tmp.append('a')
+            s = ''.join(tmp)
+            print(s)
+            d[s] = 1.
+            # this prints out weirdly, issue may well be print related.
+            for x in d.items():
+                print(x)
+
+        print(foo())
+
+    def test_022_references_juggle(self):
+        # this should work, llvmlite level broken, probably the same problem as
+        # before, intent of test is to juggle references about
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+            e = d
+            d[1] = 12.
+            e[2] = 14.
+            e = dictobject.new_dict(int32, float64)
+            e[1] = 100.
+            e[2] = 1000.
+            f = d
+            d = e
+
+            k1 = [x for x in d.items()]
+            k2 = [x for x in e.items()]
+            k3 = [x for x in f.items()]
+
+            return k1, k2, k3
+
+        k1, k2, k3 = foo()
+        self.assertEqual(k1, [(1, 100.0), (2, 1000.0)])
+        self.assertEqual(k2, [(1, 100.0), (2, 1000.0)])
+        self.assertEqual(k3, [(1, 12), (2, 14)])
+
+    def test_023_closure(self):
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, float64)
+
+            def bar():
+                d[1] = 12.
+                d[2] = 14.
+            bar()
+            return [x for x in d.keys()]
+
+        self.assertEqual(foo(), [1, 2])
+
 
 class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_basic(self):
@@ -601,6 +950,26 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+    def check_stringify(self, strfn):
+        nbd = TypedDict.empty(int32, int32)
+        d = {}
+        nbd[1] = 2
+        d[1] = 2
+        self.assertEqual(strfn(nbd), strfn(d))
+        nbd[2] = 3
+        d[2] = 3
+        self.assertEqual(strfn(nbd), strfn(d))
+        for i in range(10, 20):
+            nbd[i] = i + 1
+            d[i] = i + 1
+        self.assertEqual(strfn(nbd), strfn(d))
+
+    def test_repr(self):
+        self.check_stringify(repr)
+
+    def test_str(self):
+        self.check_stringify(str)
 
 
 class TestDictRefctTypes(MemoryLeakMixin, TestCase):
@@ -664,3 +1033,4 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         for i in range(nelem):
             self.assertEqual(d[i], str(i))
         self.assertEqual(dict(d), expect)
+
