@@ -420,7 +420,6 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
         dp = args[0]
         vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
-
         # install key incref/decref
         key_equal_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
         key_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
