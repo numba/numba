@@ -165,10 +165,10 @@ def box_dicttype(typ, val, c):
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
     res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
-    c.pyapi.decref(boxed_meminfo)
     c.pyapi.decref(fmp_fn)
-    c.pyapi.decref(numba_mod)
     c.pyapi.decref(typeddict_mod)
+    c.pyapi.decref(numba_mod)
+    c.pyapi.decref(boxed_meminfo)
     return res
 
 
