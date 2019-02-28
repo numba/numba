@@ -995,22 +995,25 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         val = consumer(d)
         self.assertEqual(val, 1.23)
 
-    def check_stringify(self, strfn):
+    def check_stringify(self, strfn, prefix=False):
         nbd = TypedDict.empty(int32, int32)
         d = {}
         nbd[1] = 2
         d[1] = 2
-        self.assertEqual(strfn(nbd), strfn(d))
+        checker = self.assertIn if prefix else self.assertEqual
+        checker(strfn(d), strfn(nbd))
         nbd[2] = 3
         d[2] = 3
-        self.assertEqual(strfn(nbd), strfn(d))
+        checker(strfn(d), strfn(nbd))
         for i in range(10, 20):
             nbd[i] = i + 1
             d[i] = i + 1
-        self.assertEqual(strfn(nbd), strfn(d))
+        checker(strfn(d), strfn(nbd))
+        if prefix:
+            self.assertTrue(strfn(nbd).startswith('DictType'))
 
     def test_repr(self):
-        self.check_stringify(repr)
+        self.check_stringify(repr, prefix=True)
 
     def test_str(self):
         self.check_stringify(str)

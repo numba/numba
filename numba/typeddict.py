@@ -118,11 +118,16 @@ class TypedDict(MutableMapping):
     def __contains__(self, key):
         return _contains(self, key)
 
-    def __repr__(self):
+    def __str__(self):
         buf = []
         for k, v in self.items():
             buf.append("{}: {}".format(k, v))
         return '{{{0}}}'.format(', '.join(buf))
+
+    def __repr__(self):
+        body = str(self)
+        prefix = str(self._dict_type)
+        return "{prefix}({body})".format(prefix=prefix, body=body)
 
     def get(self, key, default=None):
         return _get(self, key, default)
