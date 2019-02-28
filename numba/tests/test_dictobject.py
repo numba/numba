@@ -1142,3 +1142,15 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
                 self.assertEqual(kk, vv)
 
         self.assertEqual(ct, 100)
+
+    def test_delitem(self):
+        d = TypedDict.empty(types.int64, types.unicode_type)
+        d[1] = 'apple'
+
+        @njit
+        def foo(x, k):
+            del x[1]
+
+        foo(d, 1)
+        self.assertEqual(len(d), 0)
+        self.assertFalse(d)
