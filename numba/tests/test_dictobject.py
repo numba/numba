@@ -953,6 +953,24 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d.setdefault(3, 200)
         self.assertEqual(d[2], 100)
         self.assertAlmostEqual(d[3], 3.4, places=4)
+        # update
+        d.update({4: 5, 5: 6})
+        self.assertAlmostEqual(d[4], 5)
+        self.assertAlmostEqual(d[5], 6)
+        # contains
+        self.assertTrue(4 in d)
+        # items
+        pyd = dict(d.items())
+        self.assertEqual(len(pyd), len(d))
+        # pop
+        self.assertAlmostEqual(d.pop(4), 5)
+        # popitem
+        nelem = len(d)
+        k, v = d.popitem()
+        self.assertEqual(len(d), nelem - 1)
+        self.assertTrue(k not in d)
+        # __eq__
+        self.assertEqual(d, d)
 
     def test_copy_from_dict(self):
         expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
