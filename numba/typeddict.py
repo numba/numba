@@ -58,6 +58,11 @@ def _iter(d):
     return list(d.keys())
 
 
+@njit
+def _copy(d):
+    return d.copy()
+
+
 def _from_meminfo_ptr(ptr, dicttype):
     d = TypedDict(meminfo=ptr, dcttype=dicttype)
     return d
@@ -134,6 +139,9 @@ class TypedDict(MutableMapping):
 
     def setdefault(self, key, default=None):
         return _setdefault(self, key, default)
+
+    def copy(self):
+        return _copy(self)
 
 
 # XXX: should we have a better way to classmethod

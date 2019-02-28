@@ -969,8 +969,9 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         k, v = d.popitem()
         self.assertEqual(len(d), nelem - 1)
         self.assertTrue(k not in d)
-        # __eq__
-        self.assertEqual(d, d)
+        # __eq__ & copy
+        copied = d.copy()
+        self.assertEqual(copied, d)
 
     def test_copy_from_dict(self):
         expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
