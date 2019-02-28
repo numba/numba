@@ -893,6 +893,37 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), [1, 2])
 
 
+class TestDictTypeCasting(TestCase):
+    def check_good(self, fromty, toty):
+        dictobject._sentry_safe_cast(fromty, toty)
+
+    def check_bad(self, fromty, toty):
+        with self.assertRaises(TypingError) as raises:
+            dictobject._sentry_safe_cast(fromty, toty)
+        self.assertIn(
+            'cannot safely cast {fromty} to {toty}'.format(**locals()),
+            str(raises.exception),
+        )
+
+    def test_cast_int_to(self):
+        self.check_good(types.int32, types.float32)
+        self.check_good(types.int32, types.float64)
+        self.check_good(types.int32, types.complex128)
+        self.check_good(types.int64, types.complex128)
+        self.check_bad(types.int32, types.complex64)
+        self.check_good(types.int8, types.complex64)
+
+    def test_cast_float_to(self):
+        self.check_good(types.float32, types.float64)
+        self.check_good(types.float32, types.complex64)
+        self.check_good(types.float64, types.complex128)
+
+    def test_cast_bool_to(self):
+        self.check_good(types.boolean, types.int32)
+        self.check_good(types.boolean, types.float64)
+        self.check_good(types.boolean, types.complex128)
+
+
 class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_basic(self):
         d = TypedDict.empty(int32, float32)
