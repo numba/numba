@@ -1074,3 +1074,28 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Ordering is kept
         for got, exp in zip(d.values(), expect):
             self.assertPreciseEqual(got, exp)
+
+    def test_dict_of_dict_int_keyval(self):
+        def make_inner_dict():
+            d = TypedDict.empty(
+                key_type=types.intp,
+                value_type=types.intp,
+            )
+            return d
+
+        d = TypedDict.empty(
+            key_type=types.intp,
+            value_type=types.DictType(types.intp, types.intp),
+        )
+
+        def usecase(d, make_inner_dict):
+            for i in range(100):
+                mid = make_inner_dict()
+                for j in range(i + 1):
+                    mid[j] = j * 10000
+                d[i] = mid
+            return d
+
+        got = usecase(d, make_inner_dict)
+        expect = usecase({}, dict)
+        self.assertEqual(dict(got), expect)
