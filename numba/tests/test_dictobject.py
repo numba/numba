@@ -1076,7 +1076,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, exp)
 
     def test_dict_of_dict_int_keyval(self):
-        def make_inner_dict():
+        def inner_numba_dict():
             d = TypedDict.empty(
                 key_type=types.intp,
                 value_type=types.intp,
@@ -1096,6 +1096,15 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
                 d[i] = mid
             return d
 
-        got = usecase(d, make_inner_dict)
+        got = usecase(d, inner_numba_dict)
         expect = usecase({}, dict)
+
+        self.assertIsInstance(expect, dict)
+
         self.assertEqual(dict(got), expect)
+
+        # Delete items
+        for where in [12, 3, 6, 8, 10]:
+            del got[where]
+            del expect[where]
+            self.assertEqual(dict(got), expect)
