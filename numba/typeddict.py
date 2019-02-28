@@ -69,14 +69,14 @@ def _from_meminfo_ptr(ptr, dicttype):
 
 
 class TypedDict(MutableMapping):
-    """A typed-dictionary usable in Numba.
+    """A typed-dictionary usable in Numba compiled functions.
 
     Implements the MutableMapping interface.
     """
     @classmethod
     def empty(cls, key_type, value_type):
         """Create a new empty TypedDict with *key_type* and *value_type*
-        as the types for the keys and values of the dictionary.
+        as the types for the keys and values of the dictionary respectively.
         """
         return cls(dcttype=DictType(key_type, value_type))
 
