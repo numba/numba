@@ -972,6 +972,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         # __eq__ & copy
         copied = d.copy()
         self.assertEqual(copied, d)
+        self.assertEqual(list(copied.items()), list(d.items()))
 
     def test_copy_from_dict(self):
         expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
