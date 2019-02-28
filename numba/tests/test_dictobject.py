@@ -1108,3 +1108,37 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             del got[where]
             del expect[where]
             self.assertEqual(dict(got), expect)
+
+    def test_dict_of_dict_npm(self):
+        inner_dict_ty = types.DictType(types.intp, types.intp)
+
+        @njit
+        def inner_numba_dict():
+            d = TypedDict.empty(
+                key_type=types.intp,
+                value_type=types.intp,
+            )
+            return d
+
+        @njit
+        def foo(count):
+            d = TypedDict.empty(
+                key_type=types.intp,
+                value_type=inner_dict_ty,
+            )
+            for i in range(count):
+                d[i] = inner_numba_dict()
+                for j in range(i + 1):
+                    d[i][j] = j
+
+            return d
+
+        d = foo(100)
+        ct = 0
+        for k, dd in d.items():
+            ct += 1
+            self.assertEqual(len(dd), k + 1)
+            for kk, vv in dd.items():
+                self.assertEqual(kk, vv)
+
+        self.assertEqual(ct, 100)
