@@ -732,15 +732,17 @@ numba_dict_insert(
         dk->nentries += 1;
         assert (dk->usable >= 0);
         return OK;
-    }
-    /* decref old value */
-    dk_decref_val(dk, oldval_bytes);
-    // Replace the previous value
-    copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
+    } else {
+        /* Replace existing value in the slot at ix */
+        /* decref old value */
+        dk_decref_val(dk, oldval_bytes);
+        // Replace the previous value
+        copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
 
-    /* incref */
-    dk_incref_val(dk, val_bytes);
-    return OK_REPLACED;
+        /* incref */
+        dk_incref_val(dk, val_bytes);
+        return OK_REPLACED;
+    }
 }
 
 /*

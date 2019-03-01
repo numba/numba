@@ -851,14 +851,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
                 tmp.append('a')
             s = ''.join(tmp)
             d[s] = 1.
-            # this prints out weirdly, issue may well be print related.
             out = list(d.items())
             return out
         self.assertEqual(foo(), [('a' * 10000, 1)])
 
     def test_022_references_juggle(self):
-        # this should work, llvmlite level broken, probably the same problem as
-        # before, intent of test is to juggle references about
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
@@ -1088,6 +1085,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
     def test_str_key_array_value(self):
+        np.random.seed(123)
         d = TypedDict.empty(
             key_type=types.unicode_type,
             value_type=types.float64[:],

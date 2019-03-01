@@ -40,6 +40,7 @@ typedef struct {
     /* Byte offset from indices to the first entry. */
     Py_ssize_t      entry_offset;
 
+    /* Method table for type-dependent operations. */
     type_based_methods_table methods;
 
     /* hash table */
