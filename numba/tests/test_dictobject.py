@@ -1197,6 +1197,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertEqual(ct, 100)
 
+    @skip_py2
     def test_delitem(self):
         d = TypedDict.empty(types.int64, types.unicode_type)
         d[1] = 'apple'
