@@ -8,7 +8,9 @@ in test_dictimpl.py.
 from __future__ import print_function, absolute_import, division
 
 import sys
+
 import numpy as np
+
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
@@ -1207,3 +1209,37 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         foo(d, 1)
         self.assertEqual(len(d), 0)
         self.assertFalse(d)
+
+
+class TestDictForbiddenTypes(TestCase):
+    def assert_disallow(self, expect, callable):
+        with self.assertRaises(TypingError) as raises:
+            callable()
+        msg = str(raises.exception)
+        self.assertIn(expect, msg)
+
+    def assert_disallow_key(self, ty):
+        msg = '{} as key is forbidded'.format(ty)
+        self.assert_disallow(msg, lambda: TypedDict.empty(ty, types.intp))
+
+        @njit
+        def foo():
+            TypedDict.empty(ty, types.intp)
+        self.assert_disallow(msg, foo)
+
+    def assert_disallow_value(self, ty):
+        msg = '{} as value is forbidded'.format(ty)
+        self.assert_disallow(msg, lambda: TypedDict.empty(types.intp, ty))
+
+        @njit
+        def foo():
+            TypedDict.empty(types.intp, ty)
+        self.assert_disallow(msg, foo)
+
+    def test_disallow_list(self):
+        self.assert_disallow_key(types.List(types.intp))
+        self.assert_disallow_value(types.List(types.intp))
+
+    def test_disallow_set(self):
+        self.assert_disallow_key(types.Set(types.intp))
+        self.assert_disallow_value(types.Set(types.intp))

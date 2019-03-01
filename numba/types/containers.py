@@ -4,6 +4,7 @@ from .abstract import *
 from .common import *
 from .misc import Undefined, unliteral
 from ..typeconv import Conversion
+from ..errors import TypingError
 
 
 class Pair(Type):
@@ -441,12 +442,21 @@ class SetEntry(Type):
         return self.set_type
 
 
+def _sentry_forbidden_types(key, value):
+    # Forbids List and Set for now
+    if isinstance(key, (Set, List)):
+        raise TypingError('{} as key is forbidded'.format(key))
+    if isinstance(value, (Set, List)):
+        raise TypingError('{} as value is forbidded'.format(value))
+
+
 class DictType(IterableType):
     """Dictionary type
     """
     def __init__(self, keyty, valty):
         assert not isinstance(keyty, TypeRef)
         assert not isinstance(valty, TypeRef)
+        _sentry_forbidden_types(keyty, valty)
         self.key_type = keyty
         self.value_type = valty
         self.keyvalue_type = Tuple([keyty, valty])
