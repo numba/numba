@@ -232,8 +232,8 @@ NRT_meminfo_as_pyobject(NRT_MemInfo *meminfo) {
     addr = PyLong_FromVoidPtr(meminfo);
     if (!addr) return NULL;
     mi = (MemInfoObject*)PyObject_CallFunctionObjArgs(&MemInfoType, addr, NULL);
-    if (!mi) return mi;
     Py_DECREF(addr);
+    if (!mi) return NULL;
     return mi;
 }
 

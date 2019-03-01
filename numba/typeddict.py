@@ -63,20 +63,25 @@ def _popitem(d):
     return d.popitem()
 
 
+@njit
+def _copy(d):
+    return d.copy()
+
+
 def _from_meminfo_ptr(ptr, dicttype):
     d = TypedDict(meminfo=ptr, dcttype=dicttype)
     return d
 
 
 class TypedDict(MutableMapping):
-    """A typed-dictionary usable in Numba.
+    """A typed-dictionary usable in Numba compiled functions.
 
     Implements the MutableMapping interface.
     """
     @classmethod
     def empty(cls, key_type, value_type):
         """Create a new empty TypedDict with *key_type* and *value_type*
-        as the types for the keys and values of the dictionary.
+        as the types for the keys and values of the dictionary respectively.
         """
         return cls(dcttype=DictType(key_type, value_type))
 
@@ -123,11 +128,16 @@ class TypedDict(MutableMapping):
     def __contains__(self, key):
         return _contains(self, key)
 
-    def __repr__(self):
+    def __str__(self):
         buf = []
         for k, v in self.items():
             buf.append("{}: {}".format(k, v))
         return '{{{0}}}'.format(', '.join(buf))
+
+    def __repr__(self):
+        body = str(self)
+        prefix = str(self._dict_type)
+        return "{prefix}({body})".format(prefix=prefix, body=body)
 
     def get(self, key, default=None):
         return _get(self, key, default)
@@ -137,6 +147,9 @@ class TypedDict(MutableMapping):
 
     def popitem(self):
         return _popitem(self)
+
+    def copy(self):
+        return _copy(self)
 
 
 # XXX: should we have a better way to classmethod
@@ -173,10 +186,10 @@ def box_dicttype(typ, val, c):
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
     res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
-    c.pyapi.decref(boxed_meminfo)
     c.pyapi.decref(fmp_fn)
-    c.pyapi.decref(numba_mod)
     c.pyapi.decref(typeddict_mod)
+    c.pyapi.decref(numba_mod)
+    c.pyapi.decref(boxed_meminfo)
     return res
 
 
