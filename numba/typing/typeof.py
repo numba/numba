@@ -93,6 +93,10 @@ def typeof_type(val, c):
     if issubclass(val, np.generic):
         return types.NumberClass(numpy_support.from_dtype(val))
 
+    from numba.typeddict import TypedDict
+    if issubclass(val, TypedDict):
+        return types.TypeRef(types.DictType)
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
@@ -238,3 +242,4 @@ def typeof_typeref(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+

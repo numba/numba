@@ -1068,9 +1068,26 @@ def box_unsupported(typ, val, c):
 
 
 @box(types.Literal)
-def box(typ, val, c):
+def box_literal(typ, val, c):
     # Const type contains the python object of the constant value,
     # which we can directly return.
     retval = typ.literal_value
     # Serialize the value into the IR
     return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
+
+
+@box(types.MemInfoPointer)
+def box_meminfo_pointer(typ, val, c):
+    return c.pyapi.nrt_meminfo_as_pyobject(val)
+
+
+@unbox(types.MemInfoPointer)
+def unbox_meminfo_pointer(typ, obj, c):
+    res = c.pyapi.nrt_meminfo_from_pyobject(obj)
+    errored = cgutils.is_null(c.builder, res)
+    return NativeValue(res, is_error=errored)
+
+@unbox(types.TypeRef)
+def unbox_typeref(typ, val, c):
+    return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)
+

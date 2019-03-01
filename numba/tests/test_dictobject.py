@@ -12,6 +12,7 @@ import numpy as np
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
+from numba.typeddict import TypedDict
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
@@ -515,6 +516,36 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         # dict != tuple[int]
         self.assertFalse(foo(10, (1,)))
 
+    def test_dict_to_from_meminfo(self):
+        """
+        Exercise dictobject.{_as_meminfo, _from_meminfo}
+        """
+        @njit
+        def make_content(nelem):
+            for i in range(nelem):
+                yield i, i + (i + 1) / 100
+
+        @njit
+        def boxer(nelem):
+            d = dictobject.new_dict(int32, float64)
+            for k, v in make_content(nelem):
+                d[k] = v
+            return dictobject._as_meminfo(d)
+
+        dcttype = types.DictType(int32, float64)
+
+        @njit
+        def unboxer(mi):
+            d = dictobject._from_meminfo(mi, dcttype)
+            return list(d.items())
+
+        mi = boxer(10)
+        self.assertEqual(mi.refcount, 1)
+
+        got = unboxer(mi)
+        expected = list(make_content.py_func(10))
+        self.assertEqual(got, expected)
+
     def test_001_cannot_downcast_key(self):
         @njit
         def foo(n):
@@ -860,3 +891,131 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             return [x for x in d.keys()]
 
         self.assertEqual(foo(), [1, 2])
+
+
+class TestDictTypeCasting(TestCase):
+    def check_good(self, fromty, toty):
+        dictobject._sentry_safe_cast(fromty, toty)
+
+    def check_bad(self, fromty, toty):
+        with self.assertRaises(TypingError) as raises:
+            dictobject._sentry_safe_cast(fromty, toty)
+        self.assertIn(
+            'cannot safely cast {fromty} to {toty}'.format(**locals()),
+            str(raises.exception),
+        )
+
+    def test_cast_int_to(self):
+        self.check_good(types.int32, types.float32)
+        self.check_good(types.int32, types.float64)
+        self.check_good(types.int32, types.complex128)
+        self.check_good(types.int64, types.complex128)
+        self.check_bad(types.int32, types.complex64)
+        self.check_good(types.int8, types.complex64)
+
+    def test_cast_float_to(self):
+        self.check_good(types.float32, types.float64)
+        self.check_good(types.float32, types.complex64)
+        self.check_good(types.float64, types.complex128)
+
+    def test_cast_bool_to(self):
+        self.check_good(types.boolean, types.int32)
+        self.check_good(types.boolean, types.float64)
+        self.check_good(types.boolean, types.complex128)
+
+
+class TestTypedDict(MemoryLeakMixin, TestCase):
+    def test_basic(self):
+        d = TypedDict.empty(int32, float32)
+        # len
+        self.assertEqual(len(d), 0)
+        # setitems
+        d[1] = 1
+        d[2] = 2.3
+        d[3] = 3.4
+        self.assertEqual(len(d), 3)
+        # keys
+        self.assertEqual(list(d.keys()), [1, 2, 3])
+        # values
+        for x, y in zip(list(d.values()), [1, 2.3, 3.4]):
+            self.assertAlmostEqual(x, y, places=4)
+        # getitem
+        self.assertAlmostEqual(d[1], 1)
+        self.assertAlmostEqual(d[2], 2.3, places=4)
+        self.assertAlmostEqual(d[3], 3.4, places=4)
+        # deltiem
+        del d[2]
+        self.assertEqual(len(d), 2)
+        # get
+        self.assertIsNone(d.get(2))
+        # setdefault
+        d.setdefault(2, 100)
+        d.setdefault(3, 200)
+        self.assertEqual(d[2], 100)
+        self.assertAlmostEqual(d[3], 3.4, places=4)
+        # update
+        d.update({4: 5, 5: 6})
+        self.assertAlmostEqual(d[4], 5)
+        self.assertAlmostEqual(d[5], 6)
+        # contains
+        self.assertTrue(4 in d)
+        # items
+        pyd = dict(d.items())
+        self.assertEqual(len(pyd), len(d))
+        # pop
+        self.assertAlmostEqual(d.pop(4), 5)
+        # popitem
+        nelem = len(d)
+        k, v = d.popitem()
+        self.assertEqual(len(d), nelem - 1)
+        self.assertTrue(k not in d)
+        # __eq__ & copy
+        copied = d.copy()
+        self.assertEqual(copied, d)
+        self.assertEqual(list(copied.items()), list(d.items()))
+
+    def test_copy_from_dict(self):
+        expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
+        nbd = TypedDict.empty(int32, float64)
+        for k, v in expect.items():
+            nbd[k] = v
+        got = dict(nbd)
+        self.assertEqual(got, expect)
+
+    def test_compiled(self):
+        @njit
+        def producer():
+            d = TypedDict.empty(int32, float64)
+            d[1] = 1.23
+            return d
+
+        @njit
+        def consumer(d):
+            return d[1]
+
+        d = producer()
+        val = consumer(d)
+        self.assertEqual(val, 1.23)
+
+    def check_stringify(self, strfn, prefix=False):
+        nbd = TypedDict.empty(int32, int32)
+        d = {}
+        nbd[1] = 2
+        d[1] = 2
+        checker = self.assertIn if prefix else self.assertEqual
+        checker(strfn(d), strfn(nbd))
+        nbd[2] = 3
+        d[2] = 3
+        checker(strfn(d), strfn(nbd))
+        for i in range(10, 20):
+            nbd[i] = i + 1
+            d[i] = i + 1
+        checker(strfn(d), strfn(nbd))
+        if prefix:
+            self.assertTrue(strfn(nbd).startswith('DictType'))
+
+    def test_repr(self):
+        self.check_stringify(repr, prefix=True)
+
+    def test_str(self):
+        self.check_stringify(str)

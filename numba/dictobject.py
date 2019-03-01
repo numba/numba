@@ -42,6 +42,9 @@ ll_hash = ll_ssize_t
 ll_bytes = cgutils.voidptr_t
 
 
+_meminfo_dictptr = types.MemInfoPointer(types.voidptr)
+
+
 # The following enums must match _dictobject.c
 
 class DKIX(IntEnum):
@@ -77,7 +80,7 @@ def new_dict(key, value):
 class DictModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('meminfo', types.MemInfoPointer(types.voidptr)),
+            ('meminfo', _meminfo_dictptr),
             ('data', types.voidptr),   # ptr to the C dict
         ]
         super(DictModel, self).__init__(dmm, fe_type, members)
@@ -102,6 +105,62 @@ def _raise_if_error(context, builder, status, msg):
     ok_status = status.type(int(Status.OK))
     with builder.if_then(builder.icmp_signed('!=', status, ok_status)):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
+
+@intrinsic
+def _as_meminfo(typingctx, dctobj):
+    """Returns the MemInfoPointer of a dictionary.
+    """
+    if not isinstance(dctobj, types.DictType):
+        raise TypingError('expected *dctobj* to be a DictType')
+
+    def codegen(context, builder, sig, args):
+        [td] = sig.args
+        [d] = args
+        # Incref
+        context.nrt.incref(builder, td, d)
+        ctor = cgutils.create_struct_proxy(td)
+        dstruct = ctor(context, builder, value=d)
+        # Returns the plain MemInfo
+        return dstruct.meminfo
+
+    sig = _meminfo_dictptr(dctobj)
+    return sig, codegen
+
+
+@intrinsic
+def _from_meminfo(typingctx, mi, dicttyperef):
+    """Recreate a dictionary from a MemInfoPointer
+    """
+    if mi != _meminfo_dictptr:
+        raise TypingError('expected a MemInfoPointer for dict.')
+    dicttype = dicttyperef.instance_type
+    if not isinstance(dicttype, DictType):
+        raise TypingError('expected a {}'.format(DictType))
+
+    def codegen(context, builder, sig, args):
+        [tmi, tdref] = sig.args
+        td = tdref.instance_type
+        [mi, _] = args
+
+        ctor = cgutils.create_struct_proxy(td)
+        dstruct = ctor(context, builder)
+
+        data_pointer = context.nrt.meminfo_data(builder, mi)
+        data_pointer = builder.bitcast(data_pointer, ll_dict_type.as_pointer())
+
+        dstruct.data = builder.load(data_pointer)
+        dstruct.meminfo = mi
+
+        return impl_ret_borrowed(
+            context,
+            builder,
+            dicttype,
+            dstruct._getvalue(),
+        )
+
+    sig = dicttype(mi, dicttyperef)
+    return sig, codegen
 
 
 def _call_dict_free(context, builder, ptr):
@@ -165,6 +224,9 @@ def _sentry_safe_cast(fromty, toty):
             return
         if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
             # Accept if ints to floats
+            return
+        if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
+            # Accept if floats to floats
             return
         raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
 
@@ -762,6 +824,7 @@ def impl_setdefault(dct, key, default=None):
     def impl(dct, key, default=None):
         if key not in dct:
             dct[key] = default
+        return dct[key]
 
     return impl
 
