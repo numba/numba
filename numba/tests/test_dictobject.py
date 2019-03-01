@@ -14,7 +14,7 @@ import numpy as np
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
 from numba import dictobject
-from numba.typeddict import TypedDict
+from numba.typed import Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
@@ -928,7 +928,7 @@ class TestDictTypeCasting(TestCase):
 
 class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_basic(self):
-        d = TypedDict.empty(int32, float32)
+        d = Dict.empty(int32, float32)
         # len
         self.assertEqual(len(d), 0)
         # setitems
@@ -978,7 +978,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
 
     def test_copy_from_dict(self):
         expect = {k: float(v) for k, v in zip(range(10), range(10, 20))}
-        nbd = TypedDict.empty(int32, float64)
+        nbd = Dict.empty(int32, float64)
         for k, v in expect.items():
             nbd[k] = v
         got = dict(nbd)
@@ -987,7 +987,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_compiled(self):
         @njit
         def producer():
-            d = TypedDict.empty(int32, float64)
+            d = Dict.empty(int32, float64)
             d[1] = 1.23
             return d
 
@@ -1000,7 +1000,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         self.assertEqual(val, 1.23)
 
     def check_stringify(self, strfn, prefix=False):
-        nbd = TypedDict.empty(int32, int32)
+        nbd = Dict.empty(int32, int32)
         d = {}
         nbd[1] = 2
         d[1] = 2
@@ -1028,7 +1028,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
     def test_str_key(self):
         @njit
         def foo():
-            d = TypedDict.empty(
+            d = Dict.empty(
                 key_type=types.unicode_type,
                 value_type=types.int32,
             )
@@ -1059,7 +1059,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
     def test_str_val(self):
         @njit
         def foo():
-            d = TypedDict.empty(
+            d = Dict.empty(
                 key_type=types.int32,
                 value_type=types.unicode_type,
             )
@@ -1088,7 +1088,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
     @skip_py2
     def test_str_key_array_value(self):
         np.random.seed(123)
-        d = TypedDict.empty(
+        d = Dict.empty(
             key_type=types.unicode_type,
             value_type=types.float64[:],
         )
@@ -1131,13 +1131,13 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_dict_of_dict_int_keyval(self):
         def inner_numba_dict():
-            d = TypedDict.empty(
+            d = Dict.empty(
                 key_type=types.intp,
                 value_type=types.intp,
             )
             return d
 
-        d = TypedDict.empty(
+        d = Dict.empty(
             key_type=types.intp,
             value_type=types.DictType(types.intp, types.intp),
         )
@@ -1168,7 +1168,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
         @njit
         def inner_numba_dict():
-            d = TypedDict.empty(
+            d = Dict.empty(
                 key_type=types.intp,
                 value_type=types.intp,
             )
@@ -1176,7 +1176,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(count):
-            d = TypedDict.empty(
+            d = Dict.empty(
                 key_type=types.intp,
                 value_type=inner_dict_ty,
             )
@@ -1199,7 +1199,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
     def test_delitem(self):
-        d = TypedDict.empty(types.int64, types.unicode_type)
+        d = Dict.empty(types.int64, types.unicode_type)
         d[1] = 'apple'
 
         @njit
@@ -1220,20 +1220,20 @@ class TestDictForbiddenTypes(TestCase):
 
     def assert_disallow_key(self, ty):
         msg = '{} as key is forbidded'.format(ty)
-        self.assert_disallow(msg, lambda: TypedDict.empty(ty, types.intp))
+        self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
         def foo():
-            TypedDict.empty(ty, types.intp)
+            Dict.empty(ty, types.intp)
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
         msg = '{} as value is forbidded'.format(ty)
-        self.assert_disallow(msg, lambda: TypedDict.empty(types.intp, ty))
+        self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit
         def foo():
-            TypedDict.empty(types.intp, ty)
+            Dict.empty(types.intp, ty)
         self.assert_disallow(msg, foo)
 
     def test_disallow_list(self):
