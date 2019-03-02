@@ -1948,6 +1948,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         xp = np.arange(-4, 8)
         fp = xp + 1.5
         _check(params={'x': x, 'xp': xp, 'fp': fp})
+        self.rnd.shuffle(x)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        self.rnd.shuffle(fp)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        x[:5] = np.nan
+        x[-5:] = np.inf
+        self.rnd.shuffle(x)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        fp[:5] = np.nan
+        fp[-5:] = -np.inf
+        self.rnd.shuffle(fp)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
 
         x = np.arange(-4, 8)
         xp = x + 1
@@ -2072,6 +2084,108 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         exact = np.cos(x)
         got = cfunc(x, xp, fp)
         np.testing.assert_allclose(exact, got, atol=1e-5)
+
+        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0, 7])
+        xp = np.array([1, 2, 3, 4, 5, 6])
+        fp = np.array([1, 2, np.nan, 4, 3, np.inf])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        # very dense calibration
+        x = self.rnd.randn(10)
+        xp = np.linspace(-10, 10, 1000)
+        fp = np.ones_like(xp)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        # very sparse calibration
+        x = self.rnd.randn(1000)
+        xp = np.linspace(-10, 10, 10)
+        fp = np.ones_like(xp)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+    @staticmethod
+    def _set_some_values_to_nan(a):
+        p = a.size // 4  # set approx 1/4 elements to NaN
+        np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_stress_tests(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        ndata = 20000
+
+        def arrays():
+            # much_finer_grid
+            yield np.linspace(2.0, 7.0, 1 + ndata * 5)
+            # finer_grid
+            yield np.linspace(2.0, 7.0, 1 + ndata)
+            # similar_grid
+            yield np.linspace(2.1, 6.8, 1 + ndata // 2)
+            # coarser_grid
+            yield np.linspace(2.1, 7.5, 1 + ndata // 2)
+            # much_coarser_grid
+            yield np.linspace(1.1, 9.5, 1 + ndata // 5)
+            # finer_stretched_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) * 1.09
+            # similar_stretched_grid
+            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 1.09
+            # finer_compressed_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) * 0.91
+            # similar_compressed_grid
+            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 0.91
+            # warped_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata // 2) + 0.3 * np.sin(
+                np.arange(1 + ndata / 2) * np.pi / (1 + ndata / 2))
+            # very_low_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=0.5 / ndata)
+            # low_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=2.0 / ndata)
+            # med_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=5.0 / ndata)
+            # high_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=20.0 / ndata)
+            # very_high_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=50.0 / ndata)
+            # extreme_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=200.0 / ndata)
+            # random_fine_grid
+            yield self.rnd.rand(1 + ndata) * 9.0 + 0.6
+            # random_grid
+            yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
+
+        xp = np.linspace(0, 10, 1 + ndata)
+        fp = np.sin(xp / 2.0)
+
+        for x in arrays():
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
+            self.rnd.shuffle(x)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
+            self.rnd.shuffle(fp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
+            self._set_some_values_to_nan(x)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
+            self._set_some_values_to_nan(fp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
