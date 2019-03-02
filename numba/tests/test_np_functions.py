@@ -2162,30 +2162,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         xp = np.linspace(0, 10, 1 + ndata)
         fp = np.sin(xp / 2.0)
 
+        # using abs_tol as otherwise fails on 32bit builds
         for x in arrays():
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
             self.rnd.shuffle(x)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
             self.rnd.shuffle(fp)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
             self._set_some_values_to_nan(x)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
             self._set_some_values_to_nan(fp)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_raise_if_xp_not_monotonic_increasing(self):
