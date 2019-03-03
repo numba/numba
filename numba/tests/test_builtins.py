@@ -982,27 +982,34 @@ class TestBuiltins(TestCase):
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_usecase(x, y))
 
-    def _check(self, pyfunc):
+    def _check_min_max(self, pyfunc):
         cfunc = njit()(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(expected, got)
 
-        for i in range(1, 11):
-            expected = pyfunc(i)
-            got = cfunc(i)
-            self.assertPreciseEqual(expected, got)
+    def test_min_max_iterable_input(self):
 
-    def test_min_range_input(self):
+        @njit
+        def frange(start, stop, step):
+            i = start
+            while i < stop:
+                yield i
+                i += step
 
-        def pyfunc_0(x):
-            return min(range(x))
+        def sample_functions(op):
+            yield lambda: op(range(10))
+            yield lambda: op(range(4, 12))
+            yield lambda: op(range(-4, -15, -1))
+            yield lambda: op([6.6, 5.5, 7.7])
+            yield lambda: op([(3, 4), (1, 2)])
+            yield lambda: op(frange(1.1, 3.3, 0.1))
 
-        def pyfunc_1(x):
-            return min(range(x, x * 2))
+        for fn in sample_functions(op=min):
+            self._check_min_max(fn)
 
-        def pyfunc_2(x):
-            return min(range(-1 * x, -1 * x - 2, -1))
-
-        for fn in pyfunc_0, pyfunc_1, pyfunc_2:
-            self._check(fn)
+        for fn in sample_functions(op=max):
+            self._check_min_max(fn)
 
 
 if __name__ == '__main__':

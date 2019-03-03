@@ -448,6 +448,7 @@ def impl_index_value(context, builder, sig, args):
 
 @overload(min)
 def indval_min(indval1, indval2=None):
+
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def min_impl(indval1, indval2):
@@ -456,19 +457,21 @@ def indval_min(indval1, indval2=None):
             return indval1
         return min_impl
 
-    if isinstance(indval1, types.RangeType) and indval2 is None:
-        def min_impl(indval1, indval2=None):
-            it = iter(indval1)
-            min_val = next(it)
-            for val in it:
-                if val < min_val:
-                    min_val = val
-            return min_val
-
-        return min_impl
+    if indval2 is None:
+        iterable_types = types.RangeType, types.List, types.Generator
+        if isinstance(indval1, iterable_types):
+            def min_impl(indval1, indval2=None):
+                it = iter(indval1)
+                min_val = next(it)
+                for val in it:
+                    if val < min_val:
+                        min_val = val
+                return min_val
+            return min_impl
 
 @overload(max)
-def indval_max(indval1, indval2):
+def indval_max(indval1, indval2=None):
+
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def max_impl(indval1, indval2):
@@ -476,3 +479,15 @@ def indval_max(indval1, indval2):
                 return indval2
             return indval1
         return max_impl
+
+    if indval2 is None:
+        iterable_types = types.RangeType, types.List, types.Generator
+        if isinstance(indval1, iterable_types):
+            def max_impl(indval1, indval2=None):
+                it = iter(indval1)
+                max_val = next(it)
+                for val in it:
+                    if val > max_val:
+                        max_val = val
+                return max_val
+            return max_impl
