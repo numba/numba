@@ -124,6 +124,9 @@ def max_usecase2(x, y):
 def max_usecase3(x):
     return max(x)
 
+def max_usecase4():
+    return max(())
+
 
 def min_usecase1(x, y):
     return min(x, y)
@@ -136,9 +139,6 @@ def min_usecase3(x):
 
 def min_usecase4():
     return min(())
-
-def min_range(range_like):
-    return min(range_like)
 
 
 def oct_usecase(x):

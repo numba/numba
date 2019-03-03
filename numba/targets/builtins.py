@@ -434,7 +434,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 from numba.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
@@ -446,48 +446,38 @@ def impl_index_value(context, builder, sig, args):
     index_value.value = value
     return index_value._getvalue()
 
-@overload(min)
-def indval_min(indval1, indval2=None):
+
+less_than = register_jitable(lambda a, b: a < b)
+greater_than = register_jitable(lambda a, b: a > b)
+
+
+def min_max_impl(indval1, indval2, op):
 
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
-        def min_impl(indval1, indval2):
-            if indval1.value > indval2.value:
-                return indval2
-            return indval1
-        return min_impl
+        def impl(indval1, indval2):
+            if op(indval1.value, indval2.value):
+                return indval1
+            return indval2
+        return impl
 
     if indval2 is None:
-        iterable_types = types.RangeType, types.List, types.Generator
-        if isinstance(indval1, iterable_types):
-            def min_impl(indval1, indval2=None):
+        if isinstance(indval1, types.IterableType):
+            def impl(indval1, indval2=None):
                 it = iter(indval1)
-                min_val = next(it)
+                return_val = next(it)
                 for val in it:
-                    if val < min_val:
-                        min_val = val
-                return min_val
-            return min_impl
+                    if op(val, return_val):
+                        return_val = val
+                return return_val
+            return impl
+
+
+@overload(min)
+def indval_min(indval1, indval2=None):
+    return min_max_impl(indval1, indval2, less_than)
+
 
 @overload(max)
 def indval_max(indval1, indval2=None):
-
-    if isinstance(indval1, IndexValueType) and \
-       isinstance(indval2, IndexValueType):
-        def max_impl(indval1, indval2):
-            if indval2.value > indval1.value:
-                return indval2
-            return indval1
-        return max_impl
-
-    if indval2 is None:
-        iterable_types = types.RangeType, types.List, types.Generator
-        if isinstance(indval1, iterable_types):
-            def max_impl(indval1, indval2=None):
-                it = iter(indval1)
-                max_val = next(it)
-                for val in it:
-                    if val > max_val:
-                        max_val = val
-                return max_val
-            return max_impl
+    return min_max_impl(indval1, indval2, greater_than)
