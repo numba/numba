@@ -447,13 +447,24 @@ def impl_index_value(context, builder, sig, args):
     return index_value._getvalue()
 
 @overload(min)
-def indval_min(indval1, indval2):
+def indval_min(indval1, indval2=None):
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def min_impl(indval1, indval2):
             if indval1.value > indval2.value:
                 return indval2
             return indval1
+        return min_impl
+
+    if isinstance(indval1, types.RangeType) and indval2 is None:
+        def min_impl(indval1, indval2=None):
+            it = iter(indval1)
+            min_val = next(it)
+            for val in it:
+                if val < min_val:
+                    min_val = val
+            return min_val
+
         return min_impl
 
 @overload(max)
