@@ -8,7 +8,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, typeof, errors, types, utils, config
+from numba import jit, typeof, errors, types, utils, config, njit
 from .support import TestCase, tag
 
 
@@ -124,9 +124,6 @@ def max_usecase2(x, y):
 def max_usecase3(x):
     return max(x)
 
-def max_usecase4():
-    return max(())
-
 
 def min_usecase1(x, y):
     return min(x, y)
@@ -139,6 +136,9 @@ def min_usecase3(x):
 
 def min_usecase4():
     return min(())
+
+def min_range(range_like):
+    return min(range_like)
 
 
 def oct_usecase(x):
@@ -981,6 +981,28 @@ class TestBuiltins(TestCase):
                                     flags=no_pyobj_flags)
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_usecase(x, y))
+
+    def _check(self, pyfunc):
+        cfunc = njit()(pyfunc)
+
+        for i in range(1, 11):
+            expected = pyfunc(i)
+            got = cfunc(i)
+            self.assertPreciseEqual(expected, got)
+
+    def test_min_range_input(self):
+
+        def pyfunc_0(x):
+            return min(range(x))
+
+        def pyfunc_1(x):
+            return min(range(x, x * 2))
+
+        def pyfunc_2(x):
+            return min(range(-1 * x, -1 * x - 2, -1))
+
+        for fn in pyfunc_0, pyfunc_1, pyfunc_2:
+            self._check(fn)
 
 
 if __name__ == '__main__':
