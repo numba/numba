@@ -189,5 +189,15 @@ class TestPrint(TestCase):
                     "keyword arguments.")
         self.assertIn(raises.exception.msg, expected)
 
+    def test_print_no_truncation(self):
+        ''' See: https://github.com/numba/numba/issues/3811
+        '''
+        @jit(nopython=True)
+        def foo():
+            print(''.join(['a'] * 10000))
+        with captured_stdout():
+            foo()
+            self.assertEqual(sys.stdout.getvalue(), ''.join(['a'] * 10000) + '\n')
+
 if __name__ == '__main__':
     unittest.main()
