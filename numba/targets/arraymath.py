@@ -167,6 +167,10 @@ def array_sum(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+@register_jitable
+def _array_sum_axis_nop(arr, v):
+    return arr
+
 @lower_builtin(np.sum, types.Array, types.intp)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
@@ -181,8 +185,15 @@ def array_sum_axis(context, builder, sig, args):
     """
     # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
     # It is one dimension less than the input array.
-    zero = sig.return_type.dtype(0)
 
+    retty = sig.return_type
+    zero = getattr(retty, 'dtype', retty)(0)
+    # if the return is scalar in type then "take" the 0th element of the
+    # 0d array accumulator as the return value
+    if getattr(retty, 'ndim', None) is None:
+        op = np.take
+    else:
+        op = _array_sum_axis_nop
     [ty_array, ty_axis] = sig.args
     is_axis_const = False
     const_axis_val = 0
@@ -209,7 +220,7 @@ def array_sum_axis(context, builder, sig, args):
         if not is_axis_const:
             # Catch where axis is negative or greater than 3.
             if axis < 0 or axis > 3:
-                raise ValueError("Numba does not support sum with axis"
+                raise ValueError("Numba does not support sum with axis "
                                  "parameter outside the range 0 to 3.")
 
         # Catch the case where the user misspecifies the axis to be
@@ -252,7 +263,7 @@ def array_sum_axis(context, builder, sig, args):
                     index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
                     result += arr[index_tuple4]
 
-        return result
+        return op(result, 0)
 
     res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
