@@ -1517,6 +1517,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
+        def _check_raises_type_error(params, arg):
+            with self.assertRaises(TypeError) as raises:
+                _check(params)
+            msg = 'dtype of %s must be compatible with input ary' % arg
+            self.assertIn(msg, str(raises.exception))
+
         def input_variations():
             yield ((1, 2, 3), (4, 5, 6))
             yield [4, 5, 6]
@@ -1535,17 +1541,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
         _check(params)
 
-        # example of unsafe type casting (np.nan to np.int32)
+        ## example of unsafe type casting (np.nan to np.int32)
+        ## fixed here: https://github.com/numpy/numpy/pull/12713 for np 1.16
         to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
-        _check(params)
+        if np_version < (1, 16):
+            _check(params)
+        else:
+            # np 1.16 raises, cannot cast float64 array to intp array
+            _check_raises_type_error(params, 'to_begin')
 
         # scalar inputs
         params = {'ary': 3.142}
         _check(params)
 
         params = {'ary': 3, 'to_begin': 3.142}
-        _check(params)
+        if np_version < (1, 16):
+            _check(params)
+        else:
+            _check_raises_type_error(params, 'to_begin')
+            # now use 2 floats
+            params = {'ary': 3., 'to_begin': 3.142}
+            _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
         _check(params)
