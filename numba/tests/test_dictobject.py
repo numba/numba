@@ -1210,6 +1210,18 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(len(d), 0)
         self.assertFalse(d)
 
+    def test_getitem_return_type(self):
+        # Dict.__getitem__ must return non-optional type.
+        d = Dict.empty(types.int64, types.int64[:])
+        d[1] = np.arange(10)
+
+        @njit
+        def foo(d):
+            d[1] += 100
+
+        foo(d)
+        self.assertPreciseEqual(d[1], np.arange(10) + 100)
+
 
 class TestDictForbiddenTypes(TestCase):
     def assert_disallow(self, expect, callable):
@@ -1243,3 +1255,4 @@ class TestDictForbiddenTypes(TestCase):
     def test_disallow_set(self):
         self.assert_disallow_key(types.Set(types.intp))
         self.assert_disallow_value(types.Set(types.intp))
+

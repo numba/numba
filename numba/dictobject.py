@@ -866,7 +866,7 @@ def impl_getitem(d, key):
         elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:
-            return val
+            return _nonoptional(val)
 
     return impl
 
