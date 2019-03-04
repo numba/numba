@@ -1052,10 +1052,10 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
             """
             Resets the internal state of the variables used for tracking
             """
-            self.list_vars.clear()
-            self.dead_vars.clear()
-            self.list_items.clear()
-            self.dels.clear()
+            self.list_vars = []
+            self.dead_vars = []
+            self.list_items = []
+            self.dels = []
 
         def list_var_used(self, inst):
             """
@@ -1113,7 +1113,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                             continue
                         body.append(inst)
                     state.stmts = body
-                    state.dead_vars.clear()
+                    state.dead_vars = []
                     state.modified = True
                     continue
         state.stmts.append(inst)
