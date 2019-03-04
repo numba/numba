@@ -1011,6 +1011,24 @@ class TestBuiltins(TestCase):
         for fn in sample_functions(op=max):
             self._check_min_max(fn)
 
+    def test_min_max_supplemental(self):
+        # check the parallel implementations of
+        # argmin and argmax, which depend on
+        # min and max builtins, respectively
+
+        def argmin(arr):
+            return np.argmin(arr)
+
+        def argmax(arr):
+            return np.argmax(arr)
+
+        for pyfunc in argmin, argmax:
+            cfunc = njit(parallel=True)(pyfunc)
+            arr = np.arange(10, 2, -1)
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
 
 if __name__ == '__main__':
     unittest.main()

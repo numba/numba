@@ -455,7 +455,7 @@ def min_max_impl(indval1, indval2, op):
 
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
-        def impl(indval1, indval2):
+        def impl(indval1, indval2=None):
             if op(indval1.value, indval2.value):
                 return indval1
             return indval2
