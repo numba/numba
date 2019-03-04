@@ -6,7 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, errors
+from numba import jit, types, errors, utils
 from .support import captured_stdout, tag, TestCase
 
 
@@ -188,6 +188,17 @@ class TestPrint(TestCase):
         expected = ("Numba's print() function implementation does not support "
                     "keyword arguments.")
         self.assertIn(raises.exception.msg, expected)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_print_no_truncation(self):
+        ''' See: https://github.com/numba/numba/issues/3811
+        '''
+        @jit(nopython=True)
+        def foo():
+            print(''.join(['a'] * 10000))
+        with captured_stdout():
+            foo()
+            self.assertEqual(sys.stdout.getvalue(), ''.join(['a'] * 10000) + '\n')
 
 if __name__ == '__main__':
     unittest.main()

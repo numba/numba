@@ -1213,7 +1213,10 @@ class PythonAPI(object):
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
-        fn = self._get_function(fnty, name="PySys_WriteStdout")
+        if PYVERSION >= (3, 2):
+            fn = self._get_function(fnty, name="PySys_FormatStdout")
+        else:
+            fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
 
     def object_dump(self, obj):
