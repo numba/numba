@@ -324,6 +324,10 @@ the Python ``dict``.  It implements the ``collections.MutableMapping``
 interface.  It is usable in both interpreted Python code and JIT-compiled
 Numba functions.
 
+An important difference of typed dictionary is that **implicit casting** occurs
+when a key or value is stored.  *Setitem* operation may fail when the
+typecasting fail.
+
 .. note::
   One cannot construct a ``numba.typed.Dict`` with ``Dict()`` yet.
   Use the ``Dict.empty(key_type, value_type)`` classmethod to construct a typed
