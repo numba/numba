@@ -59,23 +59,28 @@ def _iter(d):
 
 
 @njit
+def _popitem(d):
+    return d.popitem()
+
+
+@njit
 def _copy(d):
     return d.copy()
 
 
 def _from_meminfo_ptr(ptr, dicttype):
-    d = TypedDict(meminfo=ptr, dcttype=dicttype)
+    d = Dict(meminfo=ptr, dcttype=dicttype)
     return d
 
 
-class TypedDict(MutableMapping):
+class Dict(MutableMapping):
     """A typed-dictionary usable in Numba compiled functions.
 
     Implements the MutableMapping interface.
     """
     @classmethod
     def empty(cls, key_type, value_type):
-        """Create a new empty TypedDict with *key_type* and *value_type*
+        """Create a new empty Dict with *key_type* and *value_type*
         as the types for the keys and values of the dictionary respectively.
         """
         return cls(dcttype=DictType(key_type, value_type))
@@ -140,6 +145,9 @@ class TypedDict(MutableMapping):
     def setdefault(self, key, default=None):
         return _setdefault(self, key, default)
 
+    def popitem(self):
+        return _popitem(self)
+
     def copy(self):
         return _copy(self)
 
@@ -170,9 +178,10 @@ def box_dicttype(typ, val, c):
         dstruct.meminfo,
     )
 
-    numba_name = c.context.insert_const_string(c.builder.module, 'numba')
-    numba_mod = c.pyapi.import_module_noblock(numba_name)
-    typeddict_mod = c.pyapi.object_getattr_string(numba_mod, 'typeddict')
+    modname = c.context.insert_const_string(
+        c.builder.module, 'numba.typed.typeddict',
+    )
+    typeddict_mod = c.pyapi.import_module_noblock(modname)
     fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
@@ -180,7 +189,6 @@ def box_dicttype(typ, val, c):
     res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
     c.pyapi.decref(fmp_fn)
     c.pyapi.decref(typeddict_mod)
-    c.pyapi.decref(numba_mod)
     c.pyapi.decref(boxed_meminfo)
     return res
 

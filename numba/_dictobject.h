@@ -9,6 +9,20 @@ typedef struct {
     char        keyvalue[];
 } NB_DictEntry;
 
+
+typedef int (*dict_key_comparator_t)(const char *lhs, const char *rhs);
+typedef void (*dict_refcount_op_t)(const void*);
+
+
+typedef struct {
+    dict_key_comparator_t    key_equal;
+    dict_refcount_op_t       key_incref;
+    dict_refcount_op_t       key_decref;
+    dict_refcount_op_t       value_incref;
+    dict_refcount_op_t       value_decref;
+} type_based_methods_table;
+
+
 typedef struct {
    /* hash table size */
     Py_ssize_t      size;
@@ -25,6 +39,9 @@ typedef struct {
     Py_ssize_t      key_size, val_size, entry_size;
     /* Byte offset from indices to the first entry. */
     Py_ssize_t      entry_offset;
+
+    /* Method table for type-dependent operations. */
+    type_based_methods_table methods;
 
     /* hash table */
     char            indices[];
@@ -84,6 +101,11 @@ See numba_dict_new().
 */
 NUMBA_EXPORT_FUNC(int)
 numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size);
+
+/* Set the method table for type specific operations
+*/
+NUMBA_EXPORT_FUNC(void)
+numba_dict_set_method_table(NB_Dict *d, type_based_methods_table *methods);
 
 /* Lookup a key
 
