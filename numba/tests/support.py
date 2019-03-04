@@ -399,6 +399,11 @@ class TestCase(unittest.TestCase):
         if isinstance(first, self._complex_types):
             _assertNumberEqual(first.real, second.real, delta)
             _assertNumberEqual(first.imag, second.imag, delta)
+        elif isinstance(first, (np.timedelta64, np.datetime64)):
+            if np.isnat(first):
+                self.assertEqual(np.isnat(first), np.isnat(second))
+            else:
+                _assertNumberEqual(first, second, delta)
         else:
             _assertNumberEqual(first, second, delta)
 

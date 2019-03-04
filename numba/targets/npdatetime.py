@@ -8,7 +8,7 @@ import operator
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import npdatetime, types, cgutils
+from numba import npdatetime, types, cgutils, numpy_support
 from .imputils import lower_builtin, lower_constant, impl_ret_untracked
 from ..utils import IS_PY3
 
@@ -301,8 +301,16 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                 else:
                     builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                # No scaling when comparing NaTs
-                builder.store(builder.icmp(ll_op, va, vb), ret)
+                if numpy_support.version < (1, 16):
+                    # No scaling when comparing NaTs
+                    builder.store(builder.icmp(ll_op, va, vb), ret)
+                else:
+                    # NumPy >= 1.16 switched to NaT ==/>=/>/</<= NaT being
+                    # False and NaT != <anything, including NaT> being True
+                    if ll_op == lc.ICMP_NE:
+                        builder.store(cgutils.true_bit, ret)
+                    else:
+                        builder.store(cgutils.false_bit, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -319,10 +327,14 @@ def _create_timedelta_ordering_impl(ll_op):
                 norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                # No scaling when comparing NaT with something else
-                # (i.e. NaT is <= everything else, since it's the smallest
-                #  int64 value)
-                builder.store(builder.icmp(ll_op, va, vb), ret)
+                if numpy_support.version < (1, 16):
+                    # No scaling when comparing NaT with something else
+                    # (i.e. NaT is <= everything else, since it's the smallest
+                    #  int64 value)
+                    builder.store(builder.icmp(ll_op, va, vb), ret)
+                else:
+                    # NumPy >= 1.16 switched to NaT >=/>/</<= NaT being False
+                    builder.store(cgutils.false_bit, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -565,8 +577,14 @@ def _create_datetime_comparison_impl(ll_op):
                 ret_val = builder.icmp(ll_op, norm_a, norm_b)
                 builder.store(ret_val, ret)
             with otherwise:
-                # No scaling when comparing NaTs
-                ret_val = builder.icmp(ll_op, va, vb)
+                if numpy_support.version < (1, 16):
+                    # No scaling when comparing NaTs
+                    ret_val= builder.icmp(ll_op, va, vb)
+                else:
+                    if ll_op == lc.ICMP_NE:
+                        ret_val = cgutils.true_bit
+                    else:
+                        ret_val = cgutils.false_bit
                 builder.store(ret_val, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
