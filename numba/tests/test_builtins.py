@@ -1004,6 +1004,8 @@ class TestBuiltins(TestCase):
             yield lambda: op([6.6, 5.5, 7.7])
             yield lambda: op([(3, 4), (1, 2)])
             yield lambda: op(frange(1.1, 3.3, 0.1))
+            yield lambda: op([np.nan, -np.inf, np.inf, np.nan])
+            yield lambda: op([(1,), (1,), (1,)])
 
         for fn in sample_functions(op=min):
             self._check_min_max(fn)
@@ -1022,12 +1024,17 @@ class TestBuiltins(TestCase):
         def argmax(arr):
             return np.argmax(arr)
 
+        def arrays():
+            yield np.arange(10, 2, -1)
+            yield np.ones(365)
+            yield self.random.randn(10)
+
         for pyfunc in argmin, argmax:
             cfunc = njit(parallel=True)(pyfunc)
-            arr = np.arange(10, 2, -1)
-            expected = pyfunc(arr)
-            got = cfunc(arr)
-            self.assertPreciseEqual(expected, got)
+            for arr in arrays():
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+                self.assertPreciseEqual(expected, got)
 
 
 if __name__ == '__main__':

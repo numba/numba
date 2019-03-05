@@ -447,18 +447,15 @@ def impl_index_value(context, builder, sig, args):
     return index_value._getvalue()
 
 
-less_than = register_jitable(lambda a, b: a < b)
-greater_than = register_jitable(lambda a, b: a > b)
-
-
-def min_max_impl(indval1, indval2, op):
+@overload(min)
+def indval_min(indval1, indval2=None):
 
     if isinstance(indval1, IndexValueType) and \
        isinstance(indval2, IndexValueType):
         def impl(indval1, indval2=None):
-            if op(indval1.value, indval2.value):
-                return indval1
-            return indval2
+            if indval1.value > indval2.value:
+                return indval2
+            return indval1
         return impl
 
     if indval2 is None:
@@ -467,17 +464,30 @@ def min_max_impl(indval1, indval2, op):
                 it = iter(indval1)
                 return_val = next(it)
                 for val in it:
-                    if op(val, return_val):
+                    if val < return_val:
                         return_val = val
                 return return_val
             return impl
 
 
-@overload(min)
-def indval_min(indval1, indval2=None):
-    return min_max_impl(indval1, indval2, less_than)
-
-
 @overload(max)
 def indval_max(indval1, indval2=None):
-    return min_max_impl(indval1, indval2, greater_than)
+
+    if isinstance(indval1, IndexValueType) and \
+       isinstance(indval2, IndexValueType):
+        def impl(indval1, indval2=None):
+            if indval2.value > indval1.value:
+                return indval2
+            return indval1
+        return impl
+
+    if indval2 is None:
+        if isinstance(indval1, types.IterableType):
+            def impl(indval1, indval2=None):
+                it = iter(indval1)
+                return_val = next(it)
+                for val in it:
+                    if val > return_val:
+                        return_val = val
+                return return_val
+            return impl
