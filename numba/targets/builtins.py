@@ -434,7 +434,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 from numba.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload, register_jitable
+from numba.extending import overload
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
