@@ -294,6 +294,9 @@ pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
     if (modname == NULL) goto FAIL;
 
     funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, modname);
+    Py_DECREF(closure);
+    Py_DECREF(modname);
+
     return funcobj;
 
 FAIL:
