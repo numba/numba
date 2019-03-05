@@ -38,6 +38,8 @@ def find_lib(libname, libdir=None, platform=None):
 def find_file(pat, libdir=None):
     if libdir is None:
         libdirs = get_lib_dirs()
+    elif isinstance(libdir, str):
+        libdirs = [libdir,]
     else:
         libdirs = list(libdir)
     files = []
