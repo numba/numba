@@ -4,7 +4,7 @@ import sys
 import subprocess
 import threading
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
 
@@ -50,6 +50,7 @@ class TestCUDAFindLibs(SerialMixin, unittest.TestCase):
         cmdline = [sys.executable, "-c", code]
         return self.run_cmd(cmdline, env_copy)
 
+    @skip_on_cudasim('Simulator does not hit device library search code path')
     @unittest.skipIf(not sys.platform.startswith('linux'), "linux only")
     def test_cuda_find_lib_errors(self):
         """
