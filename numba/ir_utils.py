@@ -2084,6 +2084,8 @@ class InlineOverloads(object):
             return False
 
         func_ty = self.typemap[expr.func.name]
+        if not hasattr(func_ty, 'get_call_type'):
+            return False
 
         arg_typs = tuple([self.typemap[x.name] for x in expr.args])
         sig = func_ty.get_call_type(self.tyctx, arg_typs, {})
