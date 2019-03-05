@@ -1213,7 +1213,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
     def test_getitem_return_type(self):
         # Dict.__getitem__ must return non-optional type.
         d = Dict.empty(types.int64, types.int64[:])
-        d[1] = np.arange(10)
+        d[1] = np.arange(10, dtype=np.int64)
 
         @njit
         def foo(d):
