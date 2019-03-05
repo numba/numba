@@ -11,7 +11,7 @@ features supported in :term:`nopython mode`.
 .. warning::
     Numba behavior differs from Python semantics in some situations.  We
     strongly advise reviewing :ref:`pysemantics` to become familiar with these
-    differences. 
+    differences.
 
 
 .. _pysupported-language:
@@ -307,11 +307,77 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
+dict
+----
+
+.. warning::
+  ``numba.typed.Dict`` is an experimental feature.  The API may change
+  in the future releases.
+
+Numba does not directly support the Python ``dict`` because it is an untyped
+container that can have any Python types as members. To generate efficient
+machine code, Numba needs the keys and the values of the dictionary to have
+fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
+``numba.typed.Dict``, for which the user must explicitly declare the key-type
+and the value-type using the ``Dict.empty()`` constructor method.
+This typed dictionary has the same API as the Python ``dict``,  it implements
+the ``collections.MutableMapping`` interface and is usable in both interpreted
+Python code and JIT-compiled Numba functions.
+Because the typed dictionary stores keys and values in Numba's native,
+unboxed data layout, passing a Numba dictionary into nopython mode has very low
+overhead. However, this means that using a typed dictionary from the Python
+interpreter is slower than a regular dictionary because Numba has to box and
+unbox key and value objects when getting or setting items.
+
+An important difference of the typed dictionary in comparison to Python's
+``dict`` is that **implicit casting** occurs when a key or value is stored.
+As a result the *setitem* operation may fail should the type-casting fail.
+
+.. note::
+  A ``numba.typed.Dict`` cannot yet be constructed with ``Dict()``, the
+  ``Dict.empty(key_type, value_type)`` class method must be used to construct a
+  typed dictionary instead.
+
+It should be noted that the Numba typed dictionary is implemented using the same
+algorithm as the CPython 3.7 dictionary. As a consequence, the typed dictionary
+is ordered and has the same collision resolution as the CPython implementation.
+
+Further to the above in relation to type specification, there are limitations
+placed on the types that can be used as keys and/or values in the typed
+dictionary, most notably the Numba ``Set`` and ``List`` types are currently
+unsupported. Acceptable key/value types include but are not limited to: unicode
+strings, arrays, scalars, tuples. It is expected that these limitations will
+be relaxed as Numba continues to improve.
+
+Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
+code and using the dictionary in jit code:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_typed_dict_from_cpython.begin
+   :end-before: magictoken.ex_typed_dict_from_cpython.end
+   :dedent: 4
+   :linenos:
+
+Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
+using the dictionary in interpreted code:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_typed_dict_njit.begin
+   :end-before: magictoken.ex_typed_dict_njit.end
+   :dedent: 4
+   :linenos:
+
+
 None
 ----
 
 The None value is supported for identity testing (when using an
 :class:`~numba.optional` type).
+
 
 bytes, bytearray, memoryview
 ----------------------------
