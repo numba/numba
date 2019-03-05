@@ -314,34 +314,40 @@ dict
   ``numba.typed.Dict`` is an experimental feature.  The API may change
   in the future releases.
 
-Numba does not directly support the Python ``dict`` because it is an untyped container
-that can have any Python types as members.  To generate efficient machine code,
-Numba needs to know the types of the keys and the values, respectively.
-To achieve that, Numba implements the ``numba.typed.Dict``,
-a typed dictionary for which the user must explicitly declare the key-type
-and the value-type using ``Dict.empty()``. This typed dictionary is similar to
-the Python ``dict``.  It implements the ``collections.MutableMapping``
-interface.  It is usable in both interpreted Python code and JIT-compiled
-Numba functions.
+Numba does not directly support the Python ``dict`` because it is an untyped
+container that can have any Python types as members. To generate efficient
+machine code, Numba needs the keys and the values of the dictionary to have
+fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
+``numba.typed.Dict``, for which the user must explicitly declare the key-type
+and the value-type using the ``Dict.empty()`` constructor method.
+This typed dictionary has the same API as the Python ``dict``,  it implements
+the ``collections.MutableMapping`` interface and is usable in both interpreted
+Python code and JIT-compiled Numba functions.
+Because the typed dictionary stores keys and values in Numba's native,
+unboxed data layout, passing a Numba dictionary into nopython mode has very low
+overhead. However, this means that using a typed dictionary from the Python
+interpreter is slower than a regular dictionary because Numba has to box and
+unbox key and value objects when getting or setting items.
 
-An important difference of typed dictionary is that **implicit casting** occurs
-when a key or value is stored.  *Setitem* operation may fail when the
-typecasting fail.
+An important difference of the typed dictionary in comparison to Python's
+``dict`` is that **implicit casting** occurs when a key or value is stored.
+As a result the *setitem* operation may fail should the type-casting fail.
 
 .. note::
-  One cannot construct a ``numba.typed.Dict`` with ``Dict()`` yet.
-  Use the ``Dict.empty(key_type, value_type)`` classmethod to construct a typed
-  dictionary.
+  A ``numba.typed.Dict`` cannot yet be constructed with ``Dict()``, the
+  ``Dict.empty(key_type, value_type)`` class method must be used to construct a
+  typed dictionary instead.
 
-For details, the numba typed dictionary is implemented using the same algorithm
-as the CPython 3.7 dictionary.  The typed dictionary is ordered and has the
-same collision resolution as the CPython implementation.
+It should be noted that the Numba typed dictionary is implemented using the same
+algorithm as the CPython 3.7 dictionary. As a consequence, the typed dictionary
+is ordered and has the same collision resolution as the CPython implementation.
 
-There are limitations for what types can be used as keys and/or values of
-the typed dictionary.  For instance, ``Set`` and ``List`` are forbidden
-currently.  Acceptable key/value types are unicode strings, arrays, scalars,
-tuples, etc.  It is expected that these limitations will be relaxed as we
-continue to improve Numba.
+Further to the above in relation to type specification, there are limitations
+placed on the types that can be used as keys and/or values in the typed
+dictionary, most notably the Numba ``Set`` and ``List`` types are currently
+unsupported. Acceptable key/value types include but are not limited to: unicode
+strings, arrays, scalars, tuples. It is expected that these limitations will
+be relaxed as Numba continues to improve.
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
