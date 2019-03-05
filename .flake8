@@ -180,7 +180,6 @@ exclude =
     numba/cuda/tests/cudadrv/test_linker.py
     numba/cuda/tests/cudadrv/test_cuda_driver.py
     numba/cuda/tests/cudadrv/test_cuda_ndarray.py
-    numba/cuda/tests/cudadrv/test_detect.py
     numba/cuda/tests/cudadrv/test_inline_ptx.py
     numba/cuda/tests/cudadrv/test_profiler.py
     numba/cuda/tests/cudadrv/test_deallocations.py
