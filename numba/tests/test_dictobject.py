@@ -1210,6 +1210,24 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(len(d), 0)
         self.assertFalse(d)
 
+    def test_getitem_return_type(self):
+        # Dict.__getitem__ must return non-optional type.
+        d = Dict.empty(types.int64, types.int64[:])
+        d[1] = np.arange(10, dtype=np.int64)
+
+        @njit
+        def foo(d):
+            d[1] += 100
+            return d[1]
+
+        foo(d)
+        # Return type is an array, not optional
+        retty = foo.nopython_signatures[0].return_type
+        self.assertIsInstance(retty, types.Array)
+        self.assertNotIsInstance(retty, types.Optional)
+        # Value is correctly updated
+        self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
+
 
 class TestDictForbiddenTypes(TestCase):
     def assert_disallow(self, expect, callable):
