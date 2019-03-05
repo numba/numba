@@ -1226,7 +1226,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         self.assertIsInstance(retty, types.Array)
         self.assertNotIsInstance(retty, types.Optional)
         # Value is correctly updated
-        self.assertPreciseEqual(d[1], np.arange(10) + 100)
+        self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
 
 class TestDictForbiddenTypes(TestCase):
