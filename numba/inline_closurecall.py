@@ -1029,76 +1029,102 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.extend(dels)
         return True
 
-    # list_vars keep track of the variable created from the latest
-    # build_list instruction, as well as its synonyms.
-    list_vars = []
-    # dead_vars keep track of those in list_vars that are considered dead.
-    dead_vars = []
-    # list_items keep track of the elements used in build_list.
-    list_items = []
-    stmts = []
-    # dels keep track of the deletion of list_items, which will need to be
-    # moved after array initialization.
-    dels = []
-    modified = False
+    class State(object):
+        """
+        This class is used to hold the state in the following loop so as to make
+        it easy to reset the state of the variables tracking the various
+        statement kinds
+        """
+
+        def __init__(self):
+            # list_vars keep track of the variable created from the latest
+            # build_list instruction, as well as its synonyms.
+            self.list_vars = []
+            # dead_vars keep track of those in list_vars that are considered dead.
+            self.dead_vars = []
+            # list_items keep track of the elements used in build_list.
+            self.list_items = []
+            self.stmts = []
+            # dels keep track of the deletion of list_items, which will need to be
+            # moved after array initialization.
+            self.dels = []
+            # tracks if a modification has taken place
+            self.modified = False
+
+        def reset(self):
+            """
+            Resets the internal state of the variables used for tracking
+            """
+            self.list_vars = []
+            self.dead_vars = []
+            self.list_items = []
+            self.dels = []
+
+        def list_var_used(self, inst):
+            """
+            Returns True if the list being analysed is used between the
+            build_list and the array call.
+            """
+            return any([x.name in self.list_vars for x in inst.list_vars()])
+
+    state = State()
+
     for inst in block.body:
         if isinstance(inst, ir.Assign):
             if isinstance(inst.value, ir.Var):
-                if inst.value.name in list_vars:
-                    list_vars.append(inst.target.name)
-                    stmts.append(inst)
+                if inst.value.name in state.list_vars:
+                    state.list_vars.append(inst.target.name)
+                    state.stmts.append(inst)
                     continue
             elif isinstance(inst.value, ir.Expr):
                 expr = inst.value
                 if expr.op == 'build_list':
-                    list_vars = [inst.target.name]
-                    list_items = [x.name for x in expr.items]
-                    stmts.append(inst)
+                    # new build_list encountered, reset state
+                    state.reset()
+                    state.list_items = [x.name for x in expr.items]
+                    state.list_vars = [inst.target.name]
+                    state.stmts.append(inst)
                     continue
                 elif expr.op == 'call' and expr in calltypes:
                     arr_var = inst.target
                     if guard(inline_array, inst.target, expr,
-                                           stmts, list_vars, dels):
-                        modified = True
+                             state.stmts, state.list_vars, state.dels):
+                        state.modified = True
                         continue
         elif isinstance(inst, ir.Del):
             removed_var = inst.value
-            if removed_var in list_items:
-                dels.append(inst)
+            if removed_var in state.list_items:
+                state.dels.append(inst)
                 continue
-            elif removed_var in list_vars:
+            elif removed_var in state.list_vars:
                 # one of the list_vars is considered dead.
-                dead_vars.append(removed_var)
-                list_vars.remove(removed_var)
-                stmts.append(inst)
-                if list_vars == []:
+                state.dead_vars.append(removed_var)
+                state.list_vars.remove(removed_var)
+                state.stmts.append(inst)
+                if state.list_vars == []:
                     # if all list_vars are considered dead, we need to filter
                     # them out from existing stmts to completely remove
                     # build_list.
                     # Note that if a translation didn't take place, dead_vars
                     # will also be empty when we reach this point.
                     body = []
-                    for inst in stmts:
+                    for inst in state.stmts:
                         if ((isinstance(inst, ir.Assign) and
-                             inst.target.name in dead_vars) or
+                             inst.target.name in state.dead_vars) or
                              (isinstance(inst, ir.Del) and
-                             inst.value in dead_vars)):
+                             inst.value in state.dead_vars)):
                             continue
                         body.append(inst)
-                    stmts = body
-                    dead_vars = []
-                    modified = True
+                    state.stmts = body
+                    state.dead_vars = []
+                    state.modified = True
                     continue
-        stmts.append(inst)
+        state.stmts.append(inst)
 
         # If the list is used in any capacity between build_list and array
         # call, then we must call off the translation for this list because
         # it could be mutated and list_items would no longer be applicable.
-        list_var_used = any([ x.name in list_vars for x in inst.list_vars() ])
-        if list_var_used:
-            list_vars = []
-            dead_vars = []
-            list_items = []
-            dels = []
+        if state.list_var_used(inst):
+            state.reset()
 
-    return stmts if modified else None
+    return state.stmts if state.modified else None
