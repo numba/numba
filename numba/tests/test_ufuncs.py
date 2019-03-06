@@ -1477,7 +1477,7 @@ class _LoopTypesTester(TestCase):
         cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
         # Ensure a good mix of input values
-        c_args = [self._arg_for_type(t, index=index).repeat(2)
+        c_args = [self._arg_for_type(t, index=index).repeat(10)
                   for index, t in enumerate(dtypes)]
         for arr in c_args:
             self.random.shuffle(arr)
