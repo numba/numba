@@ -148,7 +148,7 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @lower_builtin('iternext', types.UniTupleIter)
-@iternext_impl
+@iternext_impl()
 def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args

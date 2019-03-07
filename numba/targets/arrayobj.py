@@ -277,7 +277,7 @@ def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     return load_item(context, builder, arrayty, ptr)
 
 @lower_builtin('iternext', types.ArrayIterator)
-@iternext_impl
+@iternext_impl()
 def iternext_array(context, builder, sig, args, result):
     [iterty] = sig.args
     [iter] = args
@@ -2976,7 +2976,7 @@ def make_array_flatiter(context, builder, arrty, arr):
 
 
 @lower_builtin('iternext', types.NumpyFlatType)
-@iternext_impl
+@iternext_impl()
 def iternext_numpy_flatiter(context, builder, sig, args, result):
     [flatiterty] = sig.args
     [flatiter] = args
@@ -3054,7 +3054,7 @@ def make_array_ndenumerate(context, builder, sig, args):
 
 
 @lower_builtin('iternext', types.NumpyNdEnumerateType)
-@iternext_impl
+@iternext_impl()
 def iternext_numpy_nditer(context, builder, sig, args, result):
     [nditerty] = sig.args
     [nditer] = args
@@ -3106,7 +3106,7 @@ def make_array_ndindex(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.NumpyNdIndexType)
-@iternext_impl
+@iternext_impl()
 def iternext_numpy_ndindex(context, builder, sig, args, result):
     [nditerty] = sig.args
     [nditer] = args
@@ -3137,7 +3137,7 @@ def make_array_nditer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, nditerty, res)
 
 @lower_builtin('iternext', types.NumpyNdIterType)
-@iternext_impl
+@iternext_impl()
 def iternext_numpy_ndindex(context, builder, sig, args, result):
     [nditerty] = sig.args
     [nditer] = args

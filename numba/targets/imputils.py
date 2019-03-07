@@ -234,7 +234,7 @@ def iterator_impl(iterable_type, iterator_type):
         # These are unbound methods
         iternext = cls.iternext
 
-        @iternext_impl
+        @iternext_impl()
         def iternext_wrapper(context, builder, sig, args, result):
             (value,) = args
             iterobj = cls(context, builder, value)
@@ -294,24 +294,31 @@ class _IternextResult(object):
         return self._pairobj.first
 
 
-def iternext_impl(func):
+def iternext_impl(new_ref=False):
     """
     Wrap the given iternext() implementation so that it gets passed
     an _IternextResult() object easing the returning of the iternext()
     result pair.
 
+    new_ref: indicates whether the yielded item is a new ref or a borrowed
+
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
-
-    def wrapper(context, builder, sig, args):
-        pair_type = sig.return_type
-        pairobj = context.make_helper(builder, pair_type)
-        func(context, builder, sig, args,
-             _IternextResult(context, builder, pairobj))
-        return impl_ret_borrowed(context, builder,
-                                 pair_type, pairobj._getvalue())
-    return wrapper
+    def outer(func):
+        def wrapper(context, builder, sig, args):
+            pair_type = sig.return_type
+            pairobj = context.make_helper(builder, pair_type)
+            func(context, builder, sig, args,
+                _IternextResult(context, builder, pairobj))
+            if new_ref:
+                impl_ret = impl_ret_new_ref
+            else:
+                impl_ret = impl_ret_borrowed
+            return impl_ret(context, builder,
+                                    pair_type, pairobj._getvalue())
+        return wrapper
+    return outer
 
 
 def call_getiter(context, builder, iterable_type, val):

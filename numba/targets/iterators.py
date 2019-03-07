@@ -44,7 +44,7 @@ def make_enumerate_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.EnumerateType)
-@iternext_impl
+@iternext_impl()
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
@@ -87,7 +87,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
-@iternext_impl
+@iternext_impl()
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args
@@ -125,7 +125,7 @@ def iternext_zip(context, builder, sig, args, result):
 # generator implementation
 
 @lower_builtin('iternext', types.Generator)
-@iternext_impl
+@iternext_impl()
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args
     gen, = args

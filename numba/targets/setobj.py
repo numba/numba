@@ -1215,7 +1215,7 @@ def getiter_set(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 @lower_builtin('iternext', types.SetIter)
-@iternext_impl
+@iternext_impl()
 def iternext_listiter(context, builder, sig, args, result):
     inst = SetIterInstance(context, builder, sig.args[0], args[0])
     inst.iternext(result)
