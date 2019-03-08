@@ -5,14 +5,15 @@
 static int
 get_string(PyObject *obj, char **s, const char *type_error_message)
 {
-    *s = NULL;
+    const char * tmp = *s;
+    tmp = NULL;
     if (!PyString_Check(obj) && obj != Py_None) {
         PyErr_SetString(PyExc_TypeError, type_error_message);
         return -1;
     }
     if (obj != Py_None) {
-        *s = PyString_AsString(obj);
-        if (!*s)
+        tmp = PyString_AsString(obj);
+        if (tmp == NULL)
             return -1;
     }
     return 0;
