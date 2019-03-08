@@ -474,11 +474,21 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(SimpleIterableType):
+class UnicodeType(IterableType):
 
     def __init__(self, name):
-        super(SimpleIterableType, self).__init__(name)
-        self._iterator_type = UnicodeIteratorType(self)
+        # this is updated on first call to `.iterator_type`.
+        self._iterator_type = None
+        super(UnicodeType, self).__init__(name)
+
+    @property
+    def iterator_type(self):
+        # lazily grab the iterator_type, self needs to init before the
+        # iterator_type is instantiated else variety of pickle failures
+        if self._iterator_type is None:
+            self._iterator_type = UnicodeIteratorType(self)
+        return self._iterator_type
+
 
 class UnicodeIteratorType(SimpleIteratorType):
 
