@@ -8,7 +8,8 @@ import operator
 
 from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
                        lower_constant,
-                       iternext_impl, impl_ret_borrowed, impl_ret_untracked)
+                       iternext_impl, impl_ret_borrowed, impl_ret_untracked,
+                       RefType)
 from .. import typing, types, cgutils
 from ..extending import overload_method
 
@@ -148,7 +149,7 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @lower_builtin('iternext', types.UniTupleIter)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args

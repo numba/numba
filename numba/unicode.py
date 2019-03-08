@@ -15,7 +15,7 @@ from numba.extending import (
     intrinsic,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
-                                    iternext_impl, impl_ret_new_ref)
+                                    iternext_impl, impl_ret_new_ref, RefType)
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
@@ -771,7 +771,7 @@ def getiter_unicode(context, builder, sig, args):
 
 @lower_builtin('iternext', types.UnicodeIteratorType)
 # a new ref counted object is put into result._yield so set the new_ref to True!
-@iternext_impl(new_ref=True)
+@iternext_impl(RefType.NEW)
 def iternext_unicode(context, builder, sig, args, result):
     [iterty] = sig.args
     [iter] = args

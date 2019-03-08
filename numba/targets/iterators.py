@@ -5,7 +5,7 @@ Implementation of various iterable and iterator types.
 from numba import types, cgutils
 from numba.targets.imputils import (
     lower_builtin, iternext_impl, call_iternext, call_getiter,
-    impl_ret_borrowed, impl_ret_new_ref)
+    impl_ret_borrowed, impl_ret_new_ref, RefType)
 
 
 
@@ -44,7 +44,7 @@ def make_enumerate_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.EnumerateType)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
@@ -87,7 +87,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args
@@ -125,7 +125,7 @@ def iternext_zip(context, builder, sig, args, result):
 # generator implementation
 
 @lower_builtin('iternext', types.Generator)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args
     gen, = args

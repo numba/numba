@@ -11,7 +11,8 @@ from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+                                    impl_ret_new_ref, impl_ret_untracked,
+                                    RefType)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -487,7 +488,7 @@ def getiter_list(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 @lower_builtin('iternext', types.ListIter)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
 
