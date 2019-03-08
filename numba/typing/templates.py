@@ -141,7 +141,25 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - default_handler(index, param, default) is called for omitted arguments
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
-    ba = pysig.bind(*args, **kws)
+
+    # deal with kwonly args
+    params = pysig.parameters
+    kwonly = []
+    for name, p in params.items():
+        if p.kind == p.KEYWORD_ONLY:
+            kwonly.append(name)
+
+    if kwonly:
+        bind_args = args[:-len(kwonly)]
+    else:
+        bind_args = args
+    bind_kws = kws.copy()
+    if kwonly:
+        for idx, n in enumerate(kwonly):
+            bind_kws[n] = args[len(kwonly) + idx]
+
+    # now bind
+    ba = pysig.bind(*bind_args, **bind_kws)
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default

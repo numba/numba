@@ -619,26 +619,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
-    def test_generator_method(self):
-        spec = []
-
-        @jitclass(spec)
-        class TestClass(object):
-            def __init__(self):
-                pass
-
-            def gen(self, niter):
-                for i in range(niter):
-                    yield np.arange(i)
-
-        def expected_gen(niter):
-            for i in range(niter):
-                yield np.arange(i)
-
-        for niter in range(10):
-            for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
-                self.assertPreciseEqual(expect, got)
-
     def test_default_args(self):
         spec = [('x', int32),
                 ('y', int32),
@@ -692,6 +672,40 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.y, 4)
         self.assertEqual(tc.z, 100)
         self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2, a=42)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+
+    def test_generator_method(self):
+        spec = []
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                pass
+
+            def gen(self, niter):
+                for i in range(niter):
+                    yield np.arange(i)
+
+        def expected_gen(niter):
+            for i in range(niter):
+                yield np.arange(i)
+
+        for niter in range(10):
+            for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
+                self.assertPreciseEqual(expect, got)
+
 
 
 if __name__ == '__main__':

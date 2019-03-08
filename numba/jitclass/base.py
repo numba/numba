@@ -78,7 +78,7 @@ def _getargs(fn_sig):
     Returns list of positional and keyword argument names in order.
     """
     params = fn_sig.parameters
-    args = [k for k, v in params.items() 
+    args = [k for k, v in params.items()
             if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
     return args
 
