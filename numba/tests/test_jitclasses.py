@@ -8,7 +8,7 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof, errors
+from numba import njit, typeof, types, errors
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
@@ -685,6 +685,26 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_starargs_and_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('args', types.UniTuple(int32, 2)),
+                ('a', int32)]
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            @jitclass(spec)
+            class TestClass(object):
+                def __init__(self, x, y, z=1, *args, a=5):
+                    self.x = x
+                    self.y = y
+                    self.z = z
+                    self.args = args
+                    self.a = a
+
+        msg = "VAR_POSITIONAL argument type unsupported"
+        self.assertIn(msg, str(raises.exception))
 
     def test_generator_method(self):
         spec = []
