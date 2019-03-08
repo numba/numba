@@ -141,6 +141,10 @@ def interp(x, xp, fp):
     return np.interp(x, xp, fp)
 
 
+def np_repeat(a, repeats):
+    return np.repeat(a, repeats)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2502,6 +2506,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+
+    def test_repeat(self):
+        pyfunc = np_repeat
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, repeats):
+            np.testing.assert_equal(pyfunc(a, repeats), cfunc(a, repeats))
+
+        check(np.array([3]), repeats=4)
+        check(np.array(np.zeros(5)), repeats=3)
+        check(np.array([[1, 2], [3, 4]]), repeats=3)
+        check(np.array([]), repeats=2)
 
 
 class TestNPMachineParameters(TestCase):

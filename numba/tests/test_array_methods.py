@@ -192,10 +192,6 @@ def np_unique(a):
     return np.unique(a)
 
 
-def np_repeat(a, repeats):
-    return np.repeat(a, repeats)
-
-
 def array_dot(a, b):
     return a.dot(b)
 
@@ -1009,18 +1005,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
-
-    def test_repeat(self):
-        pyfunc = np_repeat
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def check(a, repeats):
-            np.testing.assert_equal(pyfunc(a, repeats), cfunc(a, repeats))
-
-        check(np.array([3]), repeats=4)
-        check(np.array(np.zeros(5)), repeats=3)
-        check(np.array([[1, 2], [3, 4]]), repeats=3)
-        check(np.array([]), repeats=2)
 
     @needs_blas
     def test_array_dot(self):
