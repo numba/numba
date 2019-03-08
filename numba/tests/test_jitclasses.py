@@ -16,6 +16,9 @@ from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.errors import LoweringError
 
+# there are some python 3 specific syntax tests
+if sys.version_info >= (3,):
+    from .jitclass_usecases import TestClass1, TestClass2
 
 def _get_meminfo(box):
     ptr = _box.box_get_meminfoptr(box)
@@ -653,13 +656,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('z', int32),
                 ('a', int32)]
 
-        @jitclass(spec)
-        class TestClass(object):
-            def __init__(self, x, y, z=1, *, a=5):
-                self.x = x
-                self.y = y
-                self.z = z
-                self.a = a
+        TestClass = jitclass(spec)(TestClass1)
 
         tc = TestClass(2, 3)
         self.assertEqual(tc.x, 2)
@@ -694,14 +691,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('a', int32)]
 
         with self.assertRaises(errors.UnsupportedError) as raises:
-            @jitclass(spec)
-            class TestClass(object):
-                def __init__(self, x, y, z=1, *args, a=5):
-                    self.x = x
-                    self.y = y
-                    self.z = z
-                    self.args = args
-                    self.a = a
+            jitclass(spec)(TestClass2)
 
         msg = "VAR_POSITIONAL argument type unsupported"
         self.assertIn(msg, str(raises.exception))
