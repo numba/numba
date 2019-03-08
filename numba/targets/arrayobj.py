@@ -1847,10 +1847,6 @@ def np_repeat(a, repeats):
         n = shape[0]
         return_size = n*repeats
         to_return = np.empty(return_size)
-        # if a.ndim > 1:
-        #     to_return = np.zeros((return_size, shape[1]))
-        # else:
-        #     to_return = np.zeros(return_size)
         for i in range(n):
             count = 1
             ind = i*repeats
