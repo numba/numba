@@ -200,7 +200,7 @@ size_t NRT_MemInfo_refcount(NRT_MemInfo *mi) {
 
 static
 void nrt_internal_dtor_safe(void *ptr, size_t size, void *info) {
-    NRT_Debug(nrt_debug_print("NRT_internal_dtor_safe %p, %p\n", ptr, info));
+    NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
     /* See NRT_MemInfo_alloc_safe() */
     memset(ptr, 0xDE, MIN(size, 256));
 }
@@ -218,7 +218,7 @@ void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out) {
 static
 void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
     NRT_dtor_function dtor = info;
-    NRT_Debug(nrt_debug_print("NRT_internal_custom_dtor_safe %p, %p\n",
+    NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
                               ptr, info));
     if (dtor) {
         dtor(ptr, size, NULL);
@@ -339,7 +339,7 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
 
 static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
-    NRT_Debug(nrt_debug_print("NRT_varsize_dtor %p\n", ptr));
+    NRT_Debug(nrt_debug_print("nrt_varsize_dtor %p\n", ptr));
     if (info) {
         /* call element dtor */
         typedef void dtor_fn_t(void *ptr);
