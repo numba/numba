@@ -74,7 +74,7 @@ class TestParforsBase(TestCase):
         self.fast_pflags = Flags()
         self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
         self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath')
+        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):

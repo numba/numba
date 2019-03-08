@@ -11,6 +11,7 @@ from itertools import chain, combinations
 
 import numba
 from numba import prange, unittest_support as unittest
+from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
 from numba.six import exec_
 from .support import TestCase, tag, override_env_config
@@ -225,7 +226,9 @@ class TestSVMLGeneration(TestCase):
             flags.set('error_model', 'numpy')
             flags.__name__ = '_'.join(ft+('usecase',))
             for f in ft:
-                flags.set(f)
+                flags.set(f, {
+                    'fastmath': cpu.FastMathOptions(True)
+                }.get(f, True))
             flag_list.append(flags)
         # main loop covering all the modes and use-cases
         for dtype in ('complex64', 'float64', 'float32', 'int32', ):
@@ -268,7 +271,7 @@ class TestSVML(TestCase):
         # flags for njit(fastmath=True)
         self.fastflags = Flags()
         self.fastflags.set('nrt')
-        self.fastflags.set('fastmath')
+        self.fastflags.set('fastmath', cpu.FastMathOptions(True))
         super(TestSVML, self).__init__(*args)
 
     def compile(self, func, *args, **kwargs):
@@ -366,6 +369,7 @@ class TestSVML(TestCase):
                     # then to override using `numba.config`
                     import numba
                     from numba import config
+                    from numba.targets import cpu
                     from numba.tests.support import override_env_config
                     from numba.compiler import compile_isolated, Flags
 
@@ -376,7 +380,7 @@ class TestSVML(TestCase):
                         f = Flags()
                         f.set('nrt')
                         std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.set('fastmath')
+                        f.set('fastmath', cpu.FastMathOptions(True))
                         fast = compile_isolated(math_sin_loop, sig, flags=f)
                         fns = std, fast
 

@@ -11,6 +11,7 @@ from numba.decorators import jit
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
+from numba.targets.cpu import FastMathOptions
 from numba import utils, compiler, types, sigutils
 from numba.numpy_support import as_dtype
 from . import _internal
@@ -24,7 +25,7 @@ class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython" : bool,
         "forceobj" : bool,
-        "fastmath" : bool,
+        "fastmath" : FastMathOptions,
     }
 
 
