@@ -1998,7 +1998,13 @@ class InlineInlinables(object):
 
     def _do_work(self, work_list, block, i, expr):
         from numba.inline_closurecall import inline_closure_call
-        to_inline = self.func_ir.get_definition(expr.func)
+        # try and get a definition for the call, this isn't always possible as
+        # it might be a eval(str)/part generated awaiting update etc. (parfors)
+        to_inline = None
+        try:
+            to_inline = self.func_ir.get_definition(expr.func)
+        except Exception as e:
+            return False
         # do not handle closure inlining here, another pass deals with that.
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
@@ -2078,7 +2084,15 @@ class InlineOverloads(object):
 
     def _do_work(self, work_list, block, i, expr):
         from numba.inline_closurecall import inline_closure_call
-        to_inline = self.func_ir.get_definition(expr.func)
+
+        # try and get a definition for the call, this isn't always possible as
+        # it might be a eval(str)/part generated awaiting update etc. (parfors)
+        to_inline = None
+        try:
+            to_inline = self.func_ir.get_definition(expr.func)
+        except Exception as e:
+            return False
+
         # do not handle closure inlining here, another pass deals with that.
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
