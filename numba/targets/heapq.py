@@ -3,7 +3,6 @@
 from __future__ import print_function, absolute_import, division
 
 import heapq as hq
-import numpy as np
 
 from numba import types
 from numba.errors import TypingError
