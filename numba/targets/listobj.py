@@ -512,7 +512,7 @@ def getitem_list(context, builder, sig, args):
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@lower_builtin('setitem', types.List, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -547,7 +547,7 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
-@lower_builtin('setitem', types.List, types.SliceType, types.Any)
+@lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
@@ -608,7 +608,7 @@ def setitem_list(context, builder, sig, args):
 
 
 
-@lower_builtin('delitem', types.List, types.Integer)
+@lower_builtin(operator.delitem, types.List, types.Integer)
 def delitem_list_index(context, builder, sig, args):
 
     def list_delitem_impl(lst, i):
@@ -617,7 +617,7 @@ def delitem_list_index(context, builder, sig, args):
     return context.compile_internal(builder, list_delitem_impl, sig, args)
 
 
-@lower_builtin('delitem', types.List, types.SliceType)
+@lower_builtin(operator.delitem, types.List, types.SliceType)
 def delitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = context.make_helper(builder, sig.args[1], args[1])

@@ -165,6 +165,11 @@ def array_sum_const_multi(arr, axis):
     e = np.sum(arr, axis=-1)
     return a, b, c, d, e
 
+def array_sum_const_axis_neg_one(a, axis):
+    # use .sum with -1 axis, this is for use with 1D arrays where the above
+    # "const_multi" variant would raise errors
+    return a.sum(axis=-1)
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
 
@@ -777,6 +782,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
         # OK
         self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
+
+    def test_sum_1d_kws(self):
+        # check 1d reduces to scalar
+        pyfunc = array_sum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a, axis=0), cfunc(a, axis=0))
+        pyfunc = array_sum_const_axis_neg_one
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a, axis=-1), cfunc(a, axis=-1))
 
     def test_sum_const(self):
         pyfunc = array_sum_const_multi

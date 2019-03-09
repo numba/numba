@@ -168,10 +168,8 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemBuffer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
@@ -627,10 +625,15 @@ def sum_expand(self, args, kws):
         out = signature(_expand_integer(self.this.dtype), *args,
                         recvr=self.this)
     else:
-        # There is an axis paramter so the return type of this summation is
-        # an array of dimension one less than the input array.
-        return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                                  ndim=self.this.ndim-1, layout='C')
+        # There is an axis parameter
+        if self.this.ndim == 1:
+            # 1d reduces to a scalar
+            return_type = self.this.dtype
+        else:
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                                    ndim=self.this.ndim-1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
     return out.replace(pysig=pysig)
 

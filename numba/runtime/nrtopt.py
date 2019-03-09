@@ -8,7 +8,7 @@ from numba import cgutils
 
 _regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')
-_regex_bb = re.compile(r'([\'"]?[-a-zA-Z$._][-a-zA-Z$._0-9]*[\'"]?:)|^define')
+_regex_bb = re.compile(r'([\'"]?[-a-zA-Z$._][-a-zA-Z$._0-9]*[\'"]?:)|^define|^;\s*<label>')
 
 
 def _remove_redundant_nrt_refct(llvmir):

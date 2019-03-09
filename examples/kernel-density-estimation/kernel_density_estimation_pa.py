@@ -1,7 +1,7 @@
-#                                                                               
-# Copyright (c) 2017 Intel Corporation                                          
-# SPDX-License-Identifier: BSD-2-Clause                                         
-#                                                                               
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
 
 from numba import njit, prange
 import numpy as np

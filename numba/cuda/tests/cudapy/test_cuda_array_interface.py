@@ -170,6 +170,39 @@ class TestCudaArrayInterface(CUDATestCase):
             h_arr[1::2]
         )
 
+    def test_negative_strided_issue(self):
+        # issue #3705
+        h_arr = np.random.random(10)
+        c_arr = cuda.to_device(h_arr)
+
+        def base_offset(orig, sliced):
+            return sliced['data'][0] - orig['data'][0]
+
+        h_ai = h_arr.__array_interface__
+        c_ai = c_arr.__cuda_array_interface__
+
+        h_ai_sliced = h_arr[::-1].__array_interface__
+        c_ai_sliced = c_arr[::-1].__cuda_array_interface__
+
+        # Check data offset is correct
+        self.assertEqual(
+            base_offset(h_ai, h_ai_sliced),
+            base_offset(c_ai, c_ai_sliced),
+        )
+        # Check shape and strides are correct
+        self.assertEqual(h_ai_sliced['shape'], c_ai_sliced['shape'])
+        self.assertEqual(h_ai_sliced['strides'], c_ai_sliced['strides'])
+
+    def test_negative_strided_copy_to_host(self):
+        # issue #3705
+        h_arr = np.random.random(10)
+        c_arr = cuda.to_device(h_arr)
+        sliced = c_arr[::-1]
+        with self.assertRaises(NotImplementedError) as raises:
+            sliced.copy_to_host()
+        expected_msg = 'D->H copy not implemented for negative strides'
+        self.assertIn(expected_msg, str(raises.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
