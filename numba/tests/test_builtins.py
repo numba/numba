@@ -1005,7 +1005,7 @@ class TestBuiltins(TestCase):
             yield lambda: op([(3, 4), (1, 2)])
             yield lambda: op(frange(1.1, 3.3, 0.1))
             yield lambda: op([np.nan, -np.inf, np.inf, np.nan])
-            yield lambda: op([(1,), (1,), (1,)])
+            yield lambda: op([(3,), (1,), (2,)])
 
         for fn in sample_functions(op=min):
             self._check_min_max(fn)
