@@ -209,7 +209,7 @@ def nsmallest(n, iterable):
         if n == 0:
             return [iterable[0] for _ in range(0)]
         elif n == 1:
-            out = np.min(np.asarray(iterable))
+            out = min(iterable)
             return [out]
 
         size = len(iterable)
@@ -243,7 +243,7 @@ def nlargest(n, iterable):
         if n == 0:
             return [iterable[0] for _ in range(0)]
         elif n == 1:
-            out = np.max(np.asarray(iterable))
+            out = max(iterable)
             return [out]
 
         size = len(iterable)
