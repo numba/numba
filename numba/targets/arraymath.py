@@ -1555,9 +1555,10 @@ def binary_search_with_guess(key, arr, length, guess):
     # If len <= 4 use linear search.
     # From above we know key >= arr[0] when we start.
     if length <= 4:
-        for i in range(1, length):
-            if key < arr[i]:
-                return i - 1
+        i = 1
+        while i < length and key >= arr[i]:
+            i += 1
+        return i - 1
 
     if guess > length - 3:
         guess = length - 3
