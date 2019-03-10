@@ -1810,6 +1810,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     @unittest.skip('NumPy behaviour questionable')
     def test_trapz_numpy_questionable(self):
+        # https://github.com/numpy/numpy/issues/12858
         pyfunc = np_trapz
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -1937,25 +1938,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 cfunc(y, None, 1.0)
 
             self.assertIn('y cannot be a scalar', str(e.exception))
-
-
-    def test_interp_DELETE_ME(self):
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-
-        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1])
-        x = x.reshape(3, 2, order='F')
-        xp = np.linspace(-4, 4, 10)
-        fp = np.arange(-5, 5)
-        params = {'x': x, 'xp': xp, 'fp': fp}
-
-        expected = pyfunc(**params)
-        got = cfunc(**params)
-
-        print(expected)
-        print(got)
-
-
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
@@ -2126,65 +2108,73 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         p = a.size // 4  # set approx 1/4 elements to NaN
         np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
 
+    def arrays(self, ndata):
+        # much_finer_grid
+        yield np.linspace(2.0, 7.0, 1 + ndata * 5)
+        # finer_grid
+        yield np.linspace(2.0, 7.0, 1 + ndata)
+        # similar_grid
+        yield np.linspace(2.1, 6.8, 1 + ndata // 2)
+        # coarser_grid
+        yield np.linspace(2.1, 7.5, 1 + ndata // 2)
+        # much_coarser_grid
+        yield np.linspace(1.1, 9.5, 1 + ndata // 5)
+        # finer_stretched_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) * 1.09
+        # similar_stretched_grid
+        yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 1.09
+        # finer_compressed_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) * 0.91
+        # similar_compressed_grid
+        yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 0.91
+        # warped_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata // 2) + 0.3 * np.sin(
+            np.arange(1 + ndata / 2) * np.pi / (1 + ndata / 2))
+        # very_low_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=0.5 / ndata)
+        # low_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=2.0 / ndata)
+        # med_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=5.0 / ndata)
+        # high_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=20.0 / ndata)
+        # very_high_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=50.0 / ndata)
+        # extreme_noise_grid
+        yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+            size=1 + ndata, scale=200.0 / ndata)
+        # random_fine_grid
+        yield self.rnd.rand(1 + ndata) * 9.0 + 0.6
+        # random_grid
+        yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
         ndata = 20000
-
-        def arrays():
-            # much_finer_grid
-            yield np.linspace(2.0, 7.0, 1 + ndata * 5)
-            # finer_grid
-            yield np.linspace(2.0, 7.0, 1 + ndata)
-            # similar_grid
-            yield np.linspace(2.1, 6.8, 1 + ndata // 2)
-            # coarser_grid
-            yield np.linspace(2.1, 7.5, 1 + ndata // 2)
-            # much_coarser_grid
-            yield np.linspace(1.1, 9.5, 1 + ndata // 5)
-            # finer_stretched_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) * 1.09
-            # similar_stretched_grid
-            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 1.09
-            # finer_compressed_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) * 0.91
-            # similar_compressed_grid
-            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 0.91
-            # warped_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata // 2) + 0.3 * np.sin(
-                np.arange(1 + ndata / 2) * np.pi / (1 + ndata / 2))
-            # very_low_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=0.5 / ndata)
-            # low_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=2.0 / ndata)
-            # med_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=5.0 / ndata)
-            # high_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=20.0 / ndata)
-            # very_high_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=50.0 / ndata)
-            # extreme_noise_grid
-            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
-                size=1 + ndata, scale=200.0 / ndata)
-            # random_fine_grid
-            yield self.rnd.rand(1 + ndata) * 9.0 + 0.6
-            # random_grid
-            yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
-
         xp = np.linspace(0, 10, 1 + ndata)
         fp = np.sin(xp / 2.0)
 
         # using abs_tol as otherwise fails on 32bit builds
-        for x in arrays():
+        for x in self.arrays(ndata):
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+            # no longer require xp to be monotonically increasing
+            # (in keeping with numpy) even if the output might not
+            # be meaningful
+            xp_shuffled = xp[:]
+            self.rnd.shuffle(xp_shuffled)
+            expected = pyfunc(x, xp_shuffled, fp)
+            got = cfunc(x, xp_shuffled, fp)
             self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
             self.rnd.shuffle(x)
@@ -2208,36 +2198,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got, abs_tol=1e-14)
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    def test_interp_raise_if_xp_not_monotonic_increasing(self):
-        # this is *different* to NumPy; see:
-        # https://github.com/numpy/numpy/issues/10448
+    def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
-        # Exceptions leak references
-        self.disable_leak_check()
+        ndata = 20000
+        xp = np.linspace(0, 10, 1 + ndata)
 
-        def _check(x, xp, fp):
-            msg = 'xp must be monotonically increasing'
-            with self.assertRaises(ValueError) as e:
-                cfunc(x, xp, fp)
+        real = np.sin(xp / 2.0)
+        real[:200] = self.rnd.choice([np.inf, -np.inf, np.nan], 200)
+        self.rnd.shuffle(real)
 
-            self.assertIn(msg, str(e.exception))
+        imag = np.cos(xp / 2.0)
+        imag[:200] = self.rnd.choice([np.inf, -np.inf, np.nan], 200)
+        self.rnd.shuffle(imag)
 
-        x = np.arange(6)
-        xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
-        fp = np.arange(6)
-        _check(x, xp, fp)
+        fp = real + 1j * imag
 
-        x = np.arange(6)
-        xp = 10 - np.arange(6)  # distinct but not increasing values
-        fp = np.arange(6)
-        _check(x, xp, fp)
-
-        x = np.arange(6)
-        xp = np.ones(6)  # constant value
-        fp = np.arange(6)
-        _check(x, xp, fp)
+        for x in self.arrays(ndata):
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            np.testing.assert_allclose(expected, got, equal_nan=True)
 
     @unittest.skipUnless(np_version >= (1, 12), "complex handling per Numpy 1.12+")
     def test_interp_complex_edge_case(self):
