@@ -1576,7 +1576,7 @@ def binary_search_with_guess(key, arr, length, guess):
                     key >= arr[guess - LIKELY_IN_CACHE_SIZE]:
                 imin = guess - LIKELY_IN_CACHE_SIZE
         else:
-            # key >= arr[guess - 1
+            # key >= arr[guess - 1]
             return guess - 1
     else:
         # key >= arr[guess]
@@ -1590,7 +1590,7 @@ def binary_search_with_guess(key, arr, length, guess):
                 # key >= arr[guess + 2]
                 imin = guess + 2
                 # last attempt to restrict search to items in cache
-                if (guess < length - LIKELY_IN_CACHE_SIZE - 1) and \
+                if (guess < (length - LIKELY_IN_CACHE_SIZE - 1)) and \
                         (key < arr[guess + LIKELY_IN_CACHE_SIZE]):
                     imax = guess + LIKELY_IN_CACHE_SIZE
 
@@ -1606,9 +1606,9 @@ def binary_search_with_guess(key, arr, length, guess):
 
 @register_jitable
 def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
-    dz = np.asarray(x)
-    dx = np.asarray(xp)
-    dy = np.asarray(fp)
+    dz = np.asarray(x).astype(np.float64)
+    dx = np.asarray(xp).astype(np.float64)
+    dy = np.asarray(fp).astype(np.complex128)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -1644,9 +1644,9 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
 
         # only pre-calculate slopes if there are relatively few of them.
         if lenxp <= lenx:
-            slopes = np.empty((lenxp - 1), dtype=np.complex128)
+            slopes = np.empty((lenxp - 1), dtype=dtype)
         else:
-            slopes = np.empty(0, dtype=np.complex128)
+            slopes = np.empty(0, dtype=dtype)
 
         if slopes.size:
             for i in range(lenxp - 1):
@@ -1700,9 +1700,9 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
-    dz = np.asarray(x)
-    dx = np.asarray(xp)
-    dy = np.asarray(fp)
+    dz = np.asarray(x).astype(np.float64)
+    dx = np.asarray(xp).astype(np.float64)
+    dy = np.asarray(fp).astype(np.float64)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -1738,12 +1738,9 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
 
         # only pre-calculate slopes if there are relatively few of them.
         if lenxp <= lenx:
-            slopes = np.empty((lenxp - 1), dtype=np.float64)
-        else:
-            slopes = np.empty(0, dtype=np.float64)
-
-        if slopes.size:
             slopes = (dy[1:] - dy[:-1]) / (dx[1:] - dx[:-1])
+        else:
+            slopes = np.empty(0, dtype=dtype)
 
         for i in range(lenx):
             x_val = dz.flat[i]
