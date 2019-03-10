@@ -1571,7 +1571,8 @@ def binary_search_with_guess(key, arr, length, guess):
             imax = guess - 1
 
             # last attempt to restrict search to items in cache
-            if guess > LIKELY_IN_CACHE_SIZE and key >= arr[guess - LIKELY_IN_CACHE_SIZE]:
+            if guess > LIKELY_IN_CACHE_SIZE and \
+                    key >= arr[guess - LIKELY_IN_CACHE_SIZE]:
                 imin = guess - LIKELY_IN_CACHE_SIZE
         else:
             # key >= arr[guess - 1
@@ -1588,7 +1589,8 @@ def binary_search_with_guess(key, arr, length, guess):
                 # key >= arr[guess + 2]
                 imin = guess + 2
                 # last attempt to restrict search to items in cache
-                if (guess < length - LIKELY_IN_CACHE_SIZE - 1) and (key < arr[guess + LIKELY_IN_CACHE_SIZE]):
+                if (guess < length - LIKELY_IN_CACHE_SIZE - 1) and \
+                        (key < arr[guess + LIKELY_IN_CACHE_SIZE]):
                     imax = guess + LIKELY_IN_CACHE_SIZE
 
     # finally, find index by bisection
@@ -1600,6 +1602,100 @@ def binary_search_with_guess(key, arr, length, guess):
             imax = imid
 
     return imin - 1
+
+@register_jitable
+def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
+
+    if len(dx) == 0:
+        raise ValueError('array of sample points is empty')
+
+    if len(dx) != len(dy):
+        raise ValueError('fp and xp are not of the same size.')
+
+    if dx.size == 1:
+        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
+
+    dres = np.empty(dz.shape, dtype=dtype)
+
+    lenx = dz.size
+    lenxp = len(dx)
+    lval = dy[0]
+    rval = dy[lenxp - 1]
+
+    if lenxp == 1:
+        xp_val = dx[0]
+        fp_val = dy[0]
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+            if x_val < xp_val:
+                dres.flat[i] = lval
+            elif x_val > xp_val:
+                dres.flat[i] = rval
+            else:
+                dres.flat[i] = fp_val
+
+    else:
+        j = 0
+
+        # only pre-calculate slopes if there are relatively few of them.
+        if lenxp <= lenx:
+            slopes = np.empty((lenxp - 1), dtype=np.complex128)
+        else:
+            slopes = np.empty(0, dtype=np.complex128)
+
+        if slopes.size:
+            for i in range(lenxp - 1):
+                inv_dx = 1 / (dx[i + 1] - dx[i])
+                real = (dy[i + 1].real - dy[i].real) * inv_dx
+                imag = (dy[i + 1].imag - dy[i].imag) * inv_dx
+                slopes[i] = real + 1j * imag
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+
+            if np.isnan(x_val):
+                real = x_val
+                imag = 0.0
+                dres.flat[i] = real + 1j * imag
+                continue
+
+            j = binary_search_with_guess(x_val, dx, lenxp, j)
+
+            if j == -1:
+                dres.flat[i] = lval
+            elif j == lenxp:
+                dres.flat[i] = rval
+            elif j == lenxp - 1:
+                dres.flat[i] = dy[j]
+
+            elif dx[j] == x_val:
+                if nan_handling_per_116:
+                    # Avoid potential non-finite interpolation
+                    dres.flat[i] = dy[j]
+
+            else:
+                if slopes.size:
+                    slope = slopes[j]
+                else:
+                    inv_dx = 1 / (dx[j + 1] - dx[j])
+                    real = (dy[j + 1].real - dy[j].real) * inv_dx
+                    imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
+                    slope = real + 1j * imag
+
+                real = slope.real * (x_val - dx[j]) + dy[j].real
+                imag = slope.imag * (x_val - dx[j]) + dy[j].imag
+                dres.flat[i] = real + 1j * imag
+
+                # NOTE: I think this is not in any 1.16.x yet...
+                #
+                # If we get nan in one direction, try the other
+                # ... (not implemented)
+
+    return dres
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
@@ -1664,7 +1760,6 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
 
-            # TODO: check which version this was added in...
             elif dx[j] == x_val:
                 if nan_handling_per_116:
                     # Avoid potential non-finite interpolation
@@ -1678,14 +1773,14 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
 
                 dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
 
-                # FIXME : needs a version gate (1.16.?)
-                if False:
-                    # If we get nan in one direction, try the other
-                    if np.isnan(dres.flat[i]):
-                        dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]
-
-                        if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
-                            dres.flat[i] = dy[j]
+                # NOTE: I think this is not in any 1.16.x yet...
+                #
+                # If we get nan in one direction, try the other
+                # if np.isnan(dres.flat[i]):
+                #     dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]
+                #
+                #     if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
+                #         dres.flat[i] = dy[j]
 
     return dres
 
@@ -1693,8 +1788,6 @@ if numpy_version >= (1, 10):
     # replicate behaviour change of 1.10+
     @overload(np.interp)
     def np_interp(x, xp, fp):
-
-        # TODO: branch if fp is complex
 
         if hasattr(xp, 'ndim') and xp.ndim > 1:
             raise TypingError('xp must be 1D')
@@ -1716,13 +1809,16 @@ if numpy_version >= (1, 10):
         # rather than branch logic within one impl
         nan_handling_per_116 = numpy_version >= (1, 16)
 
+        if np.issubdtype(dtype, np.complexfloating):
+            inner = np_interp_impl_complex_fp_inner
+        else:
+            inner = np_interp_impl_inner
+
         def np_interp_impl(x, xp, fp):
-            return np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116)
+            return inner(x, xp, fp, dtype, nan_handling_per_116)
 
         def np_interp_scalar_impl(x, xp, fp):
-            return np_interp_impl_inner(
-                x, xp, fp, dtype, nan_handling_per_116
-            ).flat[0]
+            return inner(x, xp, fp, dtype, nan_handling_per_116).flat[0]
 
         if isinstance(x, types.Number):
             if isinstance(x, types.Complex):
@@ -3063,6 +3159,7 @@ def np_extract(condition, arr):
             raise ValueError('Cannot extract from an empty array')
 
         # the following looks odd but replicates NumPy...
+        # https://github.com/numpy/numpy/issues/12859
         if np.any(cond[a.size:]) and cond.size > a.size:
             msg = 'condition shape inconsistent with arr shape'
             raise ValueError(msg)
