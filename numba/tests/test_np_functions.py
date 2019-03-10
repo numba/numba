@@ -1938,6 +1938,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertIn('y cannot be a scalar', str(e.exception))
 
+
+    def test_interp_DELETE_ME(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1])
+        x = x.reshape(3, 2, order='F')
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        params = {'x': x, 'xp': xp, 'fp': fp}
+
+        expected = pyfunc(**params)
+        got = cfunc(**params)
+
+        print(expected)
+        print(got)
+
+
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
