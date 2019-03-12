@@ -30,7 +30,7 @@ from numba.types import (
     Type,
 )
 from numba.typeconv import Conversion
-from numba.targets.imputils import impl_ret_borrowed
+from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
 from numba import typing
 
@@ -1126,7 +1126,7 @@ def impl_dict_getiter(context, builder, sig, args):
 
 
 @lower_builtin('iternext', types.DictIteratorType)
-@iternext_impl()
+@iternext_impl(RefType.BORROWED)
 def impl_iterator_iternext(context, builder, sig, args, result):
     iter_type = sig.args[0]
     it = context.make_helper(builder, iter_type, args[0])
