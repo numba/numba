@@ -333,7 +333,7 @@ class TestUnicode(BaseTest):
         # Handle empty separator exception
         for func in [pyfunc, cfunc]:
             with self.assertRaises(ValueError) as raises:
-                    func('a', '')
+                func('a', '')
             self.assertIn('empty separator', str(raises.exception))
 
     def test_split_exception_noninteger_maxsplit(self):
@@ -343,7 +343,7 @@ class TestUnicode(BaseTest):
         # Handle non-integer maxsplit exception
         for sep in [' ', None]:
             with self.assertRaises(TypingError) as raises:
-                    cfunc('a', sep, 2.4)
+                cfunc('a', sep, 2.4)
             self.assertIn('float64', str(raises.exception),
                           'non-integer maxsplit with sep = %s' % sep)
 
