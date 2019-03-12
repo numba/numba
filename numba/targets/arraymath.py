@@ -1606,9 +1606,9 @@ def binary_search_with_guess(key, arr, length, guess):
 
 @register_jitable
 def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
-    dz = np.asarray(x).astype(np.float64)
-    dx = np.asarray(xp).astype(np.float64)
-    dy = np.asarray(fp).astype(np.complex128)
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -1673,10 +1673,9 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
 
-            elif dx[j] == x_val:
-                if nan_handling_per_116:
-                    # Avoid potential non-finite interpolation
-                    dres.flat[i] = dy[j]
+            elif dx[j] == x_val and nan_handling_per_116:
+                # Avoid potential non-finite interpolation
+                dres.flat[i] = dy[j]
 
             else:
                 if slopes.size:
@@ -1694,15 +1693,15 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
                 # NOTE: I think this is not in any 1.16.x yet...
                 #
                 # If we get nan in one direction, try the other
-                # ... (not implemented)
+                # ... (not implemented yet)
 
     return dres
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
-    dz = np.asarray(x).astype(np.float64)
-    dx = np.asarray(xp).astype(np.float64)
-    dy = np.asarray(fp).astype(np.float64)
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -1758,10 +1757,9 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
 
-            elif dx[j] == x_val:
-                if nan_handling_per_116:
-                    # Avoid potential non-finite interpolation
-                    dres.flat[i] = dy[j]
+            elif dx[j] == x_val and nan_handling_per_116:
+                # Avoid potential non-finite interpolation
+                dres.flat[i] = dy[j]
 
             else:
                 if slopes.size:

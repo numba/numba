@@ -2327,66 +2327,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    def test_interp_supplemental_tests_single_1(self):
-        # debug 1
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        for size in [1]:
-            xp = np.arange(size, dtype=np.double)
-            yp = np.ones(size, dtype=np.double)
-            incpts = np.array([-1, 0, size - 1, size], dtype=np.double)
-            decpts = incpts[::-1]
-
-            incres = cfunc(incpts, xp, yp)
-            decres = cfunc(decpts, xp, yp)
-            inctgt = np.array([1, 1, 1, 1], dtype=float)
-            dectgt = inctgt[::-1]
-            np.testing.assert_almost_equal(incres, inctgt)
-            np.testing.assert_almost_equal(decres, dectgt)
-
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    def test_interp_supplemental_tests_single_2(self):
-        # debug 2
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        for size in [2]:
-            xp = np.arange(size, dtype=np.double)
-            yp = np.ones(size, dtype=np.double)
-            incpts = np.array([-1, 0, size - 1, size], dtype=np.double)
-            decpts = incpts[::-1]
-
-            incres = cfunc(incpts, xp, yp)
-            decres = cfunc(decpts, xp, yp)
-            inctgt = np.array([1, 1, 1, 1], dtype=float)
-            dectgt = inctgt[::-1]
-            np.testing.assert_almost_equal(incres, inctgt)
-            np.testing.assert_almost_equal(decres, dectgt)
-
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    def test_interp_supplemental_tests_single_3(self):
-        # debug 3
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
-
-        for size in [3]:
-            xp = np.arange(size, dtype=np.double)
-            yp = np.ones(size, dtype=np.double)
-            incpts = np.array([-1, 0, size - 1, size], dtype=np.double)
-            decpts = incpts[::-1]
-
-            incres = cfunc(incpts, xp, yp)
-            decres = cfunc(decpts, xp, yp)
-            inctgt = np.array([1, 1, 1, 1], dtype=float)
-            dectgt = inctgt[::-1]
-            np.testing.assert_almost_equal(incres, inctgt)
-            np.testing.assert_almost_equal(decres, dectgt)
-
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_supplemental_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
