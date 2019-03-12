@@ -14,6 +14,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, jit, npdatetime, types, vectorize, numpy_support
+from numba.numpy_support import numpy_version
 from numba.errors import TypingError
 from .support import TestCase, tag
 
@@ -254,6 +255,7 @@ class TestMiscCompiling(TestCase):
         check(TD('NaT', 'D'))
 
 
+@unittest.skipIf(numpy_version >= (1, 16), "Known issue on NumPy 1.16+")
 class TestTimedeltaArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -505,6 +507,7 @@ class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
     jitargs = dict(nopython=True)
 
 
+@unittest.skipIf(numpy_version >= (1, 16), "Known issue on NumPy 1.16+")
 class TestDatetimeArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
