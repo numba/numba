@@ -233,6 +233,7 @@ class TestMiscCompiling(TestCase):
         sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"
         _check_explicit_signature(sig)
 
+    @unittest.skipIf(numpy_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_constant_datetime(self):
         def check(const):
             pyfunc = make_add_constant(const)
@@ -243,6 +244,7 @@ class TestMiscCompiling(TestCase):
         check(DT('2001-01-01'))
         check(DT('NaT', 'D'))
 
+    @unittest.skipIf(numpy_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_constant_timedelta(self):
         def check(const):
             pyfunc = make_add_constant(const)
