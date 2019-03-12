@@ -90,6 +90,7 @@ except ImportError:
         # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3
         # This patch is from https://github.com/aliles/funcsigs/pull/30/files
         # with minor modifications, and thanks!
+        # See LICENSES.third-party.
         def apply_defaults(self):
             arguments = self.arguments
 
