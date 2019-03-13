@@ -13,7 +13,7 @@ environment:
     # and a subset of the test suite (see test_script below)
     - PYTHON: "3.7"
       ARCH: "64"
-      NUMPY: "1.15"
+      NUMPY: "1.16"
       CONDA_ENV: testenv
 
 init:
