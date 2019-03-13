@@ -16,6 +16,7 @@ from numba.targets import imputils
 from numba import cgutils, utils
 from numba.config import PYVERSION
 from numba.six import exec_
+from . import _box
 
 
 if PYVERSION >= (3, 3):
@@ -23,12 +24,9 @@ if PYVERSION >= (3, 3):
 else:
     from collections import Sequence
 
-
-from . import _box
-
-
 ##############################################################################
 # Data model
+
 
 class InstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
@@ -146,6 +144,7 @@ def _fix_up_private_attr(clsname, spec):
             k = '_' + clsname + k
         out[k] = v
     return out
+
 
 def _add_linking_libs(context, call):
     """
@@ -267,6 +266,7 @@ def _drop_ignored_attrs(dct):
     for k in drop:
         del dct[k]
 
+
 class ClassBuilder(object):
     """
     A jitclass builder for a mutable jitclass.  This will register
@@ -316,7 +316,7 @@ class ClassBuilder(object):
                 out = call(builder, args)
                 _add_linking_libs(context, call)
                 return imputils.impl_ret_new_ref(context, builder,
-                                                sig.return_type, out)
+                                                 sig.return_type, out)
             return imp
 
         def _getsetitem_gen(getset):
@@ -326,7 +326,7 @@ class ClassBuilder(object):
             @templates.infer_global(op)
             class GetSetItem(templates.AbstractTemplate):
                 def generic(self, args, kws):
-                    instance  = args[0]
+                    instance = args[0]
                     if isinstance(instance, types.ClassInstanceType) and \
                             _dunder_meth in instance.jitmethods:
                         meth = instance.jitmethods[_dunder_meth]
@@ -337,16 +337,19 @@ class ClassBuilder(object):
             # lower both {g,s}etitem and __{g,s}etitem__ to catch the calls
             # from python and numba
             imputils.lower_builtin((types.ClassInstanceType, _dunder_meth),
-                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+                                   types.ClassInstanceType,
+                                   types.VarArg(types.Any))(get_imp())
             imputils.lower_builtin(op,
-                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+                                   types.ClassInstanceType,
+                                   types.VarArg(types.Any))(get_imp())
 
         dunder_stripped = attr.strip('_')
         if dunder_stripped in ("getitem", "setitem"):
             _getsetitem_gen(dunder_stripped)
         else:
             registry.lower((types.ClassInstanceType, attr),
-                            types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+                           types.ClassInstanceType,
+                           types.VarArg(types.Any))(get_imp())
 
 
 @templates.infer_getattr
@@ -383,7 +386,7 @@ class ClassAttribute(templates.AttributeTemplate):
 
 
 @ClassBuilder.class_impl_registry.lower_getattr_generic(types.ClassInstanceType)
-def attr_impl(context, builder, typ, value, attr):
+def get_attr_impl(context, builder, typ, value, attr):
     """
     Generic getattr() for @jitclass instances.
     """
@@ -411,7 +414,7 @@ def attr_impl(context, builder, typ, value, attr):
 
 
 @ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
-def attr_impl(context, builder, sig, args, attr):
+def set_attr_impl(context, builder, sig, args, attr):
     """
     Generic setattr() for @jitclass instances.
     """
@@ -446,7 +449,8 @@ def attr_impl(context, builder, sig, args, attr):
         call(builder, (target, val))
         _add_linking_libs(context, call)
     else:
-        raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+        raise NotImplementedError(
+            'attribute {0!r} not implemented'.format(attr))
 
 
 def imp_dtor(context, module, instance_type):
@@ -475,7 +479,8 @@ def imp_dtor(context, module, instance_type):
     return dtor_fn
 
 
-@ClassBuilder.class_impl_registry.lower(types.ClassType, types.VarArg(types.Any))
+@ClassBuilder.class_impl_registry.lower(types.ClassType,
+                                        types.VarArg(types.Any))
 def ctor_impl(context, builder, sig, args):
     """
     Generic constructor (__new__) for jitclasses.

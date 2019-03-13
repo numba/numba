@@ -226,7 +226,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                     cur = cur.next
                 cur.next = other
 
-
         node_type.define(LinkedNode.class_type.instance_type)
 
         first = LinkedNode(123, None)
@@ -293,7 +292,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_is(self):
         Vector = self._make_Vector2()
         vec_a = Vector(1, 2)
-        vec_b = Vector(1, 2)
 
         @njit
         def do_is(a, b):
@@ -529,7 +527,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def check_private_method(self, factor):
                 return self.__private_method(factor)
 
-
         value = 123
         inst = MyClass(value)
         # test attributes
@@ -717,6 +714,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         @njit
         def get_key(t, real, imag):
             return t[complex(real, imag)]
+
         @njit
         def set_key(t, real, imag, data):
             t[complex(real, imag)] = data
