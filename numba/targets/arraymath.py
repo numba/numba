@@ -1604,8 +1604,25 @@ def binary_search_with_guess(key, arr, length, guess):
 
     return imin - 1
 
+# Note to reader
+# --------------
+# You might be offended by the apparent duplication in the following
+# four functions; I can relate, if so.
+#
+# The implementations attempt to replicate numpy as faithfully as
+# possible across versions, bugs and all.
+#
+# It would be possible to refactor and take out some
+# of the duplication, but at the cost of making the translation back
+# to numpy source more opaque.  Having spent many hours tracking down
+# subtle bugs in reproducing numpy behaviour, please refactor with
+# caution, if you feel compelled to do so (and keep an eye on
+# performance if you branch within implementation(s)).
+
 @register_jitable
-def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
+def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
+    # this is a facsimile of arr_interp_complex prior to 1.16:
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1673,7 +1690,100 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
 
-            elif dx[j] == x_val and nan_handling_per_116:
+            else:
+                if slopes.size:
+                    slope = slopes[j]
+                else:
+                    inv_dx = 1 / (dx[j + 1] - dx[j])
+                    real = (dy[j + 1].real - dy[j].real) * inv_dx
+                    imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
+                    slope = real + 1j * imag
+
+                real = slope.real * (x_val - dx[j]) + dy[j].real
+                imag = slope.imag * (x_val - dx[j]) + dy[j].imag
+                dres.flat[i] = real + 1j * imag
+
+                # NOTE: there's a change in master which is not
+                # in any released version of 1.16.x yet... as
+                # per the real value implementation, but
+                # interpolate real and imaginary parts
+                # independently; this will need to be added in
+                # due course
+
+    return dres
+
+@register_jitable
+def np_interp_impl_complex_fp_inner_116(x, xp, fp, dtype):
+    # this is a facsimile of arr_interp_complex post 1.16:
+    # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
+
+    if len(dx) == 0:
+        raise ValueError('array of sample points is empty')
+
+    if len(dx) != len(dy):
+        raise ValueError('fp and xp are not of the same size.')
+
+    if dx.size == 1:
+        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
+
+    dres = np.empty(dz.shape, dtype=dtype)
+
+    lenx = dz.size
+    lenxp = len(dx)
+    lval = dy[0]
+    rval = dy[lenxp - 1]
+
+    if lenxp == 1:
+        xp_val = dx[0]
+        fp_val = dy[0]
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+            if x_val < xp_val:
+                dres.flat[i] = lval
+            elif x_val > xp_val:
+                dres.flat[i] = rval
+            else:
+                dres.flat[i] = fp_val
+
+    else:
+        j = 0
+
+        # only pre-calculate slopes if there are relatively few of them.
+        if lenxp <= lenx:
+            slopes = np.empty((lenxp - 1), dtype=dtype)
+        else:
+            slopes = np.empty(0, dtype=dtype)
+
+        if slopes.size:
+            for i in range(lenxp - 1):
+                inv_dx = 1 / (dx[i + 1] - dx[i])
+                real = (dy[i + 1].real - dy[i].real) * inv_dx
+                imag = (dy[i + 1].imag - dy[i].imag) * inv_dx
+                slopes[i] = real + 1j * imag
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+
+            if np.isnan(x_val):
+                real = x_val
+                imag = 0.0
+                dres.flat[i] = real + 1j * imag
+                continue
+
+            j = binary_search_with_guess(x_val, dx, lenxp, j)
+
+            if j == -1:
+                dres.flat[i] = lval
+            elif j == lenxp:
+                dres.flat[i] = rval
+            elif j == lenxp - 1:
+                dres.flat[i] = dy[j]
+
+            elif dx[j] == x_val:
                 # Avoid potential non-finite interpolation
                 dres.flat[i] = dy[j]
 
@@ -1690,15 +1800,19 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype, nan_handling_per_116):
                 imag = slope.imag * (x_val - dx[j]) + dy[j].imag
                 dres.flat[i] = real + 1j * imag
 
-                # NOTE: I think this is not in any 1.16.x yet...
-                #
-                # If we get nan in one direction, try the other
-                # ... (not implemented yet)
+                # NOTE: there's a change in master which is not
+                # in any released version of 1.16.x yet... as
+                # per the real value implementation, but
+                # interpolate real and imaginary parts
+                # independently; this will need to be added in
+                # due course
 
     return dres
 
 @register_jitable
-def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
+def np_interp_impl_inner(x, xp, fp, dtype):
+    # this is a facsimile of arr_interp prior to 1.16:
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1757,7 +1871,89 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
 
-            elif dx[j] == x_val and nan_handling_per_116:
+            else:
+                if slopes.size:
+                    slope = slopes[j]
+                else:
+                    slope = (dy[j + 1] - dy[j]) / (dx[j + 1] - dx[j])
+
+                dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
+
+                # NOTE: this is in master but not in any released
+                # version of 1.16.x yet...
+                #
+                # If we get nan in one direction, try the other
+                # if np.isnan(dres.flat[i]):
+                #     dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]
+                #
+                #     if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
+                #         dres.flat[i] = dy[j]
+
+    return dres
+
+@register_jitable
+def np_interp_impl_inner_116(x, xp, fp, dtype):
+    # this is a facsimile of arr_interp post 1.16:
+    # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
+
+    if len(dx) == 0:
+        raise ValueError('array of sample points is empty')
+
+    if len(dx) != len(dy):
+        raise ValueError('fp and xp are not of the same size.')
+
+    if dx.size == 1:
+        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
+
+    dres = np.empty(dz.shape, dtype=dtype)
+
+    lenx = dz.size
+    lenxp = len(dx)
+    lval = dy[0]
+    rval = dy[lenxp - 1]
+
+    if lenxp == 1:
+        xp_val = dx[0]
+        fp_val = dy[0]
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+            if x_val < xp_val:
+                dres.flat[i] = lval
+            elif x_val > xp_val:
+                dres.flat[i] = rval
+            else:
+                dres.flat[i] = fp_val
+
+    else:
+        j = 0
+
+        # only pre-calculate slopes if there are relatively few of them.
+        if lenxp <= lenx:
+            slopes = (dy[1:] - dy[:-1]) / (dx[1:] - dx[:-1])
+        else:
+            slopes = np.empty(0, dtype=dtype)
+
+        for i in range(lenx):
+            x_val = dz.flat[i]
+
+            if np.isnan(x_val):
+                dres.flat[i] = x_val
+                continue
+
+            j = binary_search_with_guess(x_val, dx, lenxp, j)
+
+            if j == -1:
+                dres.flat[i] = lval
+            elif j == lenxp:
+                dres.flat[i] = rval
+            elif j == lenxp - 1:
+                dres.flat[i] = dy[j]
+
+            elif dx[j] == x_val:
                 # Avoid potential non-finite interpolation
                 dres.flat[i] = dy[j]
 
@@ -1769,7 +1965,8 @@ def np_interp_impl_inner(x, xp, fp, dtype, nan_handling_per_116):
 
                 dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
 
-                # NOTE: I think this is not in any 1.16.x yet...
+                # NOTE: this is in master but not in any released
+                # version of 1.16.x yet...
                 #
                 # If we get nan in one direction, try the other
                 # if np.isnan(dres.flat[i]):
@@ -1798,23 +1995,31 @@ if numpy_version >= (1, 10):
         if np.issubdtype(xp_dt, np.complexfloating):
             raise TypingError(complex_dtype_msg)
 
+        if numpy_version < (1, 12):
+            fp_dt = determine_dtype(fp)
+            if np.issubdtype(fp_dt, np.complexfloating):
+                raise TypingError(complex_dtype_msg)
+
+        if numpy_version >= (1, 16):
+            impl = np_interp_impl_inner_116
+            impl_complex = np_interp_impl_complex_fp_inner_116
+        else:
+            impl = np_interp_impl_inner
+            impl_complex = np_interp_impl_complex_fp_inner
+
         fp_dt = determine_dtype(fp)
         dtype = np.result_type(fp_dt, np.float64)
 
-        # TODO : use gate to dispatch to relevant implementation
-        # rather than branch logic within one impl
-        nan_handling_per_116 = numpy_version >= (1, 16)
-
         if np.issubdtype(dtype, np.complexfloating):
-            inner = np_interp_impl_complex_fp_inner
+            inner = impl_complex
         else:
-            inner = np_interp_impl_inner
+            inner = impl
 
         def np_interp_impl(x, xp, fp):
-            return inner(x, xp, fp, dtype, nan_handling_per_116)
+            return inner(x, xp, fp, dtype)
 
         def np_interp_scalar_impl(x, xp, fp):
-            return inner(x, xp, fp, dtype, nan_handling_per_116).flat[0]
+            return inner(x, xp, fp, dtype).flat[0]
 
         if isinstance(x, types.Number):
             if isinstance(x, types.Complex):

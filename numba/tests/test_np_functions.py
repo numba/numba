@@ -2220,22 +2220,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             np.testing.assert_allclose(expected, got, equal_nan=True)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex handling per Numpy 1.12+")
-    def test_interp_complex_edge_case(self):
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
-
-        for x in range(-2, 4):
-            xp = np.arange(3) + 0.01
-            fp = np.arange(3) + 1j
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
-
-        # note: in versions of NumPy prior to 1.12, this test causes
-        # Numpy to raise: TypeError: Cannot cast array data from
-        # dtype('complex128')  to dtype('float64') according to the
-        # rule 'safe'
-
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
