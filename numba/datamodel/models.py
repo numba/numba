@@ -190,7 +190,15 @@ class BooleanModel(DataModel):
         return self.as_data(builder, value)
 
     def from_data(self, builder, value):
-        return builder.trunc(value, self.get_value_type())
+        ty = self.get_value_type()
+        resalloca = cgutils.alloca_once(builder, ty)
+        cond = builder.icmp_unsigned('==', value, value.type(0))
+        with builder.if_else(cond) as (then, otherwise):
+            with then:
+                builder.store(ty(0), resalloca)
+            with otherwise:
+                builder.store(ty(1), resalloca)
+        return builder.load(resalloca)
 
     def from_argument(self, builder, value):
         return self.from_data(builder, value)
