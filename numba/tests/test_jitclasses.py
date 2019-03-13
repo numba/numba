@@ -666,9 +666,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             return t[n]
 
         t = create_and_set_indices()
-        assert get_index(t, 1) == 1
-        assert get_index(t, 2) == 2
-        assert get_index(t, 3) == 3
+        self.assertEqual(get_index(t, 1), 1)
+        self.assertEqual(get_index(t, 2), 2)
+        self.assertEqual(get_index(t, 3), 3)
 
     def test_getitem_unbox(self):
         spec = [('data', int32[:])]
@@ -693,8 +693,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             return t[1]
 
         t_1 = set2return1(t)
-        assert t_1 == 10
-        assert t[2] == 20
+        self.assertEqual(t_1, 10)
+        self.assertEqual(t[2], 20)
 
     def test_getitem_complex_key(self):
         spec = [('data', int32[:, :])]
@@ -711,7 +711,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 return self.data[int(key.real), int(key.imag)]
 
         t = TestClass()
-        # save value 4 at position 3
+
         t[complex(1, 1)] = 3
 
         @njit
@@ -721,9 +721,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def set_key(t, real, imag, data):
             t[complex(real, imag)] = data
 
-        assert get_key(t, 1, 1) == 3
+        self.assertEqual(get_key(t, 1, 1), 3)
         set_key(t, 2, 2, 4)
-        assert t[complex(2, 2)] == 4
+        self.assertEqual(t[complex(2, 2)], 4)
 
     def test_getitem_tuple_key(self):
         spec = [('data', int32[:, :])]
@@ -750,9 +750,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def set22(t, data):
             t[2, 2] = data
 
-        assert get11(t) == 11
+        self.assertEqual(get11(t), 11)
         set22(t, 22)
-        assert t[2, 2] == 22
+        self.assertEqual(t[2, 2], 22)
 
     def test_getitem_slice_key(self):
         spec = [('data', int32[:])]
@@ -773,14 +773,14 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         # set t.data[1] = 1 and t.data[5] = 2
         t[1:5:1] = 1
 
-        assert t[1:1:1] == 1
-        assert t[5:5:5] == 2
+        self.assertEqual(t[1:1:1], 1)
+        self.assertEqual(t[5:5:5], 2)
 
         @njit
         def get5(t):
             return t[5:6:1]
 
-        assert get5(t) == 2
+        self.assertEqual(get5(t), 2)
 
         # sets t.data[2] = data, and t.data[6] = data + 1
         @njit
@@ -788,8 +788,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             t[2:6:1] = data
 
         set26(t, 2)
-        assert t[2:2:1] == 2
-        assert t[6:6:1] == 3
+        self.assertEqual(t[2:2:1], 2)
+        self.assertEqual(t[6:6:1], 3)
 
 
 if __name__ == '__main__':

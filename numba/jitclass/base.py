@@ -267,7 +267,6 @@ def _drop_ignored_attrs(dct):
     for k in drop:
         del dct[k]
 
-
 class ClassBuilder(object):
     """
     A jitclass builder for a mutable jitclass.  This will register
@@ -320,46 +319,31 @@ class ClassBuilder(object):
                                                 sig.return_type, out)
             return imp
 
-        if attr == "__getitem__":
-            @templates.infer_global(operator.getitem)
-            class GetItem(templates.AbstractTemplate):
-                def generic(self, args, kws):
-                    instance, value = args
-                    if isinstance(instance, types.ClassInstanceType) and \
-                            '__getitem__' in instance.jitmethods:
-                        meth = instance.jitmethods['__getitem__']
-                        disp_type = types.Dispatcher(meth)
-                        sig = disp_type.get_call_type(self.context, args, kws)
+        def _getsetitem_gen(getset):
+            _dunder_meth = "__%s__" % getset
+            op = getattr(operator, getset)
 
-                        return sig
-
-            # lower both getitem and __getitem__ to catch the calls
-            # from python and numba
-            imputils.lower_builtin((types.ClassInstanceType, "__getitem__"),
-                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
-            imputils.lower_builtin(operator.getitem,
-                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
-        elif attr == "__setitem__":
-            # create new class to bind closure
-            @templates.infer
-            class SetItem(templates.AbstractTemplate):
-                key = "setitem"
+            @templates.infer_global(op)
+            class GetSetItem(templates.AbstractTemplate):
                 def generic(self, args, kws):
                     instance  = args[0]
                     if isinstance(instance, types.ClassInstanceType) and \
-                            '__setitem__' in instance.jitmethods:
-                        meth = instance.jitmethods['__setitem__']
+                            _dunder_meth in instance.jitmethods:
+                        meth = instance.jitmethods[_dunder_meth]
                         disp_type = types.Dispatcher(meth)
                         sig = disp_type.get_call_type(self.context, args, kws)
-
                         return sig
 
-            # lower both setitem and __setitem__ to catch the calls
+            # lower both {g,s}etitem and __{g,s}etitem__ to catch the calls
             # from python and numba
-            imputils.lower_builtin((types.ClassInstanceType, "__setitem__"),
+            imputils.lower_builtin((types.ClassInstanceType, _dunder_meth),
                 types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
-            imputils.lower_builtin(
-                'setitem', types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+            imputils.lower_builtin(op,
+                types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
+
+        dunder_stripped = attr.strip('_')
+        if dunder_stripped in ("getitem", "setitem"):
+            _getsetitem_gen(dunder_stripped)
         else:
             registry.lower((types.ClassInstanceType, attr),
                             types.ClassInstanceType, types.VarArg(types.Any))(get_imp())
