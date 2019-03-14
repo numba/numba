@@ -183,7 +183,13 @@ class VarMap(object):
         return self._con.iterkeys()
 
 
-class Inst(object):
+class AbstractRHS(object):
+    """Abstract base class for anything that can be the RHS of an assignment.
+    This class **do not** define any methods.
+    """
+
+
+class Inst(AbstractRHS):
     """
     Base class for all IR instructions.
     """
@@ -254,6 +260,8 @@ class Expr(Inst):
     """
 
     def __init__(self, op, loc, **kws):
+        assert isinstance(op, str)
+        assert isinstance(loc, Loc)
         self.op = op
         self.loc = loc
         self._kws = kws
@@ -272,6 +280,8 @@ class Expr(Inst):
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
         assert not isinstance(fn, str)
+        assert isinstance(lhs, Var)
+        assert isinstance(rhs, Var)
         op = 'binop'
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
@@ -280,6 +290,8 @@ class Expr(Inst):
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         assert not isinstance(fn, str)
         assert not isinstance(immutable_fn, str)
+        assert isinstance(lhs, Var)
+        assert isinstance(rhs, Var)
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
@@ -287,12 +299,15 @@ class Expr(Inst):
 
     @classmethod
     def unary(cls, fn, value, loc):
+        assert isinstance(fn, Var)
+        assert isinstance(value, Var)
         op = 'unary'
         fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
     def call(cls, func, args, kws, loc, vararg=None):
+        assert isinstance(func, Var)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
                    vararg=vararg)
@@ -319,41 +334,53 @@ class Expr(Inst):
 
     @classmethod
     def pair_first(cls, value, loc):
+        assert isinstance(value, Var)
         op = 'pair_first'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def pair_second(cls, value, loc):
+        assert isinstance(value, Var)
         op = 'pair_second'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def getiter(cls, value, loc):
+        assert isinstance(value, Var)
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def iternext(cls, value, loc):
+        assert isinstance(value, Var)
         op = 'iternext'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def exhaust_iter(cls, value, count, loc):
+        assert isinstance(value, Var)
+        assert isinstance(count, int)
         op = 'exhaust_iter'
         return cls(op=op, loc=loc, value=value, count=count)
 
     @classmethod
     def getattr(cls, value, attr, loc):
+        assert isinstance(value, Var)
+        assert isinstance(attr, str)
         op = 'getattr'
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
     def getitem(cls, value, index, loc):
+        assert isinstance(value, Var)
+        assert isinstance(index, Var)
         op = 'getitem'
         return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
     def static_getitem(cls, value, index, index_var, loc):
+        assert isinstance(value, Var)
+        assert index_var is None or isinstance(index_var, Var)
         op = 'static_getitem'
         return cls(op=op, loc=loc, value=value, index=index,
                    index_var=index_var)
@@ -363,6 +390,7 @@ class Expr(Inst):
         """
         A node for implicit casting at the return statement
         """
+        assert isinstance(value, Var)
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
@@ -406,6 +434,10 @@ class SetItem(Stmt):
     """
 
     def __init__(self, target, index, value, loc):
+        assert isinstance(target, Var)
+        assert isinstance(index, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.value = value
@@ -421,6 +453,11 @@ class StaticSetItem(Stmt):
     """
 
     def __init__(self, target, index, index_var, value, loc):
+        assert isinstance(target, Var)
+        assert not isinstance(index, Var)
+        assert isinstance(index_var, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.index_var = index_var
@@ -437,6 +474,9 @@ class DelItem(Stmt):
     """
 
     def __init__(self, target, index, loc):
+        assert isinstance(target, Var)
+        assert isinstance(index, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.loc = loc
@@ -447,6 +487,10 @@ class DelItem(Stmt):
 
 class SetAttr(Stmt):
     def __init__(self, target, attr, value, loc):
+        assert isinstance(target, Var)
+        assert isinstance(attr, str)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
         self.value = value
@@ -458,6 +502,9 @@ class SetAttr(Stmt):
 
 class DelAttr(Stmt):
     def __init__(self, target, attr, loc):
+        assert isinstance(target, Var)
+        assert isinstance(attr, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
         self.loc = loc
@@ -468,6 +515,10 @@ class DelAttr(Stmt):
 
 class StoreMap(Stmt):
     def __init__(self, dct, key, value, loc):
+        assert instance(dct, Var)
+        assert instance(key, Var)
+        assert instance(value, Var)
+        assert instance(loc, Loc)
         self.dct = dct
         self.key = key
         self.value = value
@@ -479,6 +530,8 @@ class StoreMap(Stmt):
 
 class Del(Stmt):
     def __init__(self, value, loc):
+        assert isinstance(value, str)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
 
@@ -490,6 +543,8 @@ class Raise(Terminator):
     is_exit = True
 
     def __init__(self, exception, loc):
+        assert isinstance(exception, Var)
+        assert isinstance(loc, Loc)
         self.exception = exception
         self.loc = loc
 
@@ -509,6 +564,9 @@ class StaticRaise(Terminator):
     is_exit = True
 
     def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
         self.loc = loc
@@ -533,6 +591,8 @@ class Return(Terminator):
     is_exit = True
 
     def __init__(self, value, loc):
+        assert isinstance(value, Var), type(value)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
 
@@ -549,6 +609,7 @@ class Jump(Terminator):
     """
 
     def __init__(self, target, loc):
+        assert isinstance(loc, Loc)
         self.target = target
         self.loc = loc
 
@@ -565,6 +626,8 @@ class Branch(Terminator):
     """
 
     def __init__(self, cond, truebr, falsebr, loc):
+        assert isinstance(cond, Var)
+        assert isinstance(loc, Loc)
         self.cond = cond
         self.truebr = truebr
         self.falsebr = falsebr
@@ -582,6 +645,9 @@ class Assign(Stmt):
     Assign to a variable.
     """
     def __init__(self, value, target, loc):
+        assert isinstance(value, AbstractRHS)
+        assert isinstance(target, Var)
+        assert isinstance(loc, Loc)
         self.value = value
         self.target = target
         self.loc = loc
@@ -595,7 +661,10 @@ class Print(Stmt):
     Print some values.
     """
     def __init__(self, args, vararg, loc):
-        self.args = args
+        assert all(isinstance(x, Var) for x in args)
+        assert vararg is None or isinstance(vararg, Var)
+        assert isinstance(loc, Loc)
+        self.args = tuple(args)
         self.vararg = vararg
         # Constant-inferred arguments
         self.consts = {}
@@ -607,6 +676,8 @@ class Print(Stmt):
 
 class Yield(Inst):
     def __init__(self, value, loc, index):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
         self.index = index
@@ -631,6 +702,8 @@ class EnterWith(Stmt):
         loc : int
             Source location
         """
+        assert isinstance(contextmanager, Var)
+        assert isinstance(loc, Loc)
         self.contextmanager = contextmanager
         self.begin = begin
         self.end = end
@@ -643,8 +716,11 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(object):
+class Arg(AbstractRHS):
     def __init__(self, name, index, loc):
+        assert isinstance(name, str)
+        assert isinstance(index, int)
+        assert isinstance(loc, Loc)
         self.name = name
         self.index = index
         self.loc = loc
@@ -656,8 +732,9 @@ class Arg(object):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(object):
+class Const(AbstractRHS):
     def __init__(self, value, loc, use_literal_type=True):
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
         # Note: need better way to tell if this is a literal or not.
@@ -669,8 +746,9 @@ class Const(object):
     def infer_constant(self):
         return self.value
 
-class Global(object):
+class Global(AbstractRHS):
     def __init__(self, name, value, loc):
+        assert isinstance(loc, Loc)
         self.name = name
         self.value = value
         self.loc = loc
@@ -687,13 +765,16 @@ class Global(object):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(object):
+class FreeVar(AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
     """
 
     def __init__(self, index, name, value, loc):
+        assert isinstance(index, int)
+        assert isinstance(name, str)
+        assert isinstance(loc, Loc)
         # index inside __code__.co_freevars
         self.index = index
         # variable name
@@ -709,7 +790,7 @@ class FreeVar(object):
         return self.value
 
 
-class Var(object):
+class Var(AbstractRHS):
     """
     Attributes
     -----------
@@ -722,6 +803,14 @@ class Var(object):
     """
 
     def __init__(self, scope, name, loc):
+        if scope is None:
+            # XXX: THIS SHOULD GO AWAY
+            import warnings
+            # warnings.warn("Var(scope=None, ...)")
+        else:
+            assert isinstance(scope, Scope)
+        assert isinstance(name, str)
+        assert isinstance(loc, Loc)
         self.scope = scope
         self.name = name
         self.loc = loc
@@ -776,6 +865,8 @@ class Scope(object):
     """
 
     def __init__(self, parent, loc):
+        assert parent is None or isinstance(parent, Scope)
+        assert isinstance(loc, Loc)
         self.parent = parent
         self.localvars = VarMap()
         self.loc = loc
@@ -858,6 +949,8 @@ class Block(object):
     """
 
     def __init__(self, scope, loc):
+        assert isinstance(scope, Scope)
+        assert isinstance(loc, Loc)
         self.scope = scope
         self.body = []
         self.loc = loc
