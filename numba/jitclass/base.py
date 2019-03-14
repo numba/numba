@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function
 from collections import OrderedDict
 import types as pytypes
 import inspect
+import operator
 
 from llvmlite import ir as llvmir
 
@@ -15,6 +16,7 @@ from numba.targets import imputils
 from numba import cgutils, utils, errors
 from numba.config import PYVERSION
 from numba.six import exec_
+from . import _box
 
 
 if PYVERSION >= (3, 3):
@@ -22,12 +24,9 @@ if PYVERSION >= (3, 3):
 else:
     from collections import Sequence
 
-
-from . import _box
-
-
 ##############################################################################
 # Data model
+
 
 class InstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
@@ -155,6 +154,7 @@ def _fix_up_private_attr(clsname, spec):
             k = '_' + clsname + k
         out[k] = v
     return out
+
 
 def _add_linking_libs(context, call):
     """
@@ -307,6 +307,7 @@ class ClassBuilder(object):
         Register method implementations for the given instance type.
         """
         for meth in instance_type.jitmethods:
+
             # There's no way to retrive the particular method name
             # inside the implementation function, so we have to register a
             # specific closure for each different name
@@ -315,18 +316,50 @@ class ClassBuilder(object):
                 self.implemented_methods.add(meth)
 
     def _implement_method(self, registry, attr):
-        @registry.lower((types.ClassInstanceType, attr),
-                        types.ClassInstanceType, types.VarArg(types.Any))
-        def imp(context, builder, sig, args):
-            instance_type = sig.args[0]
-            method = instance_type.jitmethods[attr]
-            disp_type = types.Dispatcher(method)
-            call = context.get_function(disp_type, sig)
-            out = call(builder, args)
-            _add_linking_libs(context, call)
-            return imputils.impl_ret_new_ref(context, builder,
-                                             sig.return_type, out)
+        # create a separate instance of imp method to avoid closure clashing
+        def get_imp():
+            def imp(context, builder, sig, args):
+                instance_type = sig.args[0]
+                method = instance_type.jitmethods[attr]
+                disp_type = types.Dispatcher(method)
+                call = context.get_function(disp_type, sig)
+                out = call(builder, args)
+                _add_linking_libs(context, call)
+                return imputils.impl_ret_new_ref(context, builder,
+                                                 sig.return_type, out)
+            return imp
 
+        def _getsetitem_gen(getset):
+            _dunder_meth = "__%s__" % getset
+            op = getattr(operator, getset)
+
+            @templates.infer_global(op)
+            class GetSetItem(templates.AbstractTemplate):
+                def generic(self, args, kws):
+                    instance = args[0]
+                    if isinstance(instance, types.ClassInstanceType) and \
+                            _dunder_meth in instance.jitmethods:
+                        meth = instance.jitmethods[_dunder_meth]
+                        disp_type = types.Dispatcher(meth)
+                        sig = disp_type.get_call_type(self.context, args, kws)
+                        return sig
+
+            # lower both {g,s}etitem and __{g,s}etitem__ to catch the calls
+            # from python and numba
+            imputils.lower_builtin((types.ClassInstanceType, _dunder_meth),
+                                   types.ClassInstanceType,
+                                   types.VarArg(types.Any))(get_imp())
+            imputils.lower_builtin(op,
+                                   types.ClassInstanceType,
+                                   types.VarArg(types.Any))(get_imp())
+
+        dunder_stripped = attr.strip('_')
+        if dunder_stripped in ("getitem", "setitem"):
+            _getsetitem_gen(dunder_stripped)
+        else:
+            registry.lower((types.ClassInstanceType, attr),
+                           types.ClassInstanceType,
+                           types.VarArg(types.Any))(get_imp())
 
 
 @templates.infer_getattr
@@ -363,7 +396,7 @@ class ClassAttribute(templates.AttributeTemplate):
 
 
 @ClassBuilder.class_impl_registry.lower_getattr_generic(types.ClassInstanceType)
-def attr_impl(context, builder, typ, value, attr):
+def get_attr_impl(context, builder, typ, value, attr):
     """
     Generic getattr() for @jitclass instances.
     """
@@ -391,7 +424,7 @@ def attr_impl(context, builder, typ, value, attr):
 
 
 @ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
-def attr_impl(context, builder, sig, args, attr):
+def set_attr_impl(context, builder, sig, args, attr):
     """
     Generic setattr() for @jitclass instances.
     """
@@ -426,7 +459,8 @@ def attr_impl(context, builder, sig, args, attr):
         call(builder, (target, val))
         _add_linking_libs(context, call)
     else:
-        raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+        raise NotImplementedError(
+            'attribute {0!r} not implemented'.format(attr))
 
 
 def imp_dtor(context, module, instance_type):
@@ -455,7 +489,8 @@ def imp_dtor(context, module, instance_type):
     return dtor_fn
 
 
-@ClassBuilder.class_impl_registry.lower(types.ClassType, types.VarArg(types.Any))
+@ClassBuilder.class_impl_registry.lower(types.ClassType,
+                                        types.VarArg(types.Any))
 def ctor_impl(context, builder, sig, args):
     """
     Generic constructor (__new__) for jitclasses.
