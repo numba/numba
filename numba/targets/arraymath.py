@@ -1604,21 +1604,6 @@ def binary_search_with_guess(key, arr, length, guess):
 
     return imin - 1
 
-# Note to reader
-# --------------
-# You might be offended by the apparent duplication in the following
-# four functions; I can relate, if so.
-#
-# The implementations attempt to replicate numpy as faithfully as
-# possible across versions, bugs and all.
-#
-# It would be possible to refactor and take out some
-# of the duplication, but at the cost of making the translation back
-# to numpy source more opaque.  Having spent many hours tracking down
-# subtle bugs in reproducing numpy behaviour, please refactor with
-# caution, if you feel compelled to do so (and keep an eye on
-# performance if you branch within implementation(s)).
-
 @register_jitable
 def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
     # this is a facsimile of arr_interp_complex prior to 1.16:
@@ -1689,7 +1674,6 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
                 dres.flat[i] = rval
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
-
             else:
                 if slopes.size:
                     slope = slopes[j]
@@ -1782,11 +1766,9 @@ def np_interp_impl_complex_fp_inner_116(x, xp, fp, dtype):
                 dres.flat[i] = rval
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
-
             elif dx[j] == x_val:
                 # Avoid potential non-finite interpolation
                 dres.flat[i] = dy[j]
-
             else:
                 if slopes.size:
                     slope = slopes[j]
@@ -1870,7 +1852,6 @@ def np_interp_impl_inner(x, xp, fp, dtype):
                 dres.flat[i] = rval
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
-
             else:
                 if slopes.size:
                     slope = slopes[j]
@@ -1952,11 +1933,9 @@ def np_interp_impl_inner_116(x, xp, fp, dtype):
                 dres.flat[i] = rval
             elif j == lenxp - 1:
                 dres.flat[i] = dy[j]
-
             elif dx[j] == x_val:
                 # Avoid potential non-finite interpolation
                 dres.flat[i] = dy[j]
-
             else:
                 if slopes.size:
                     slope = slopes[j]
