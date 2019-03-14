@@ -234,7 +234,7 @@ static PyTypeObject ClosureType = {
 static char *
 dup_string(PyObject *strobj)
 {
-    const char *tmp;
+    const char *tmp = NULL;
     char *str;
     tmp = PyString_AsString(strobj);
     if (tmp == NULL)

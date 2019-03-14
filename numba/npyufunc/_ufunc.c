@@ -9,6 +9,7 @@ get_string(PyObject *obj, const char **s, const char *type_error_message)
         PyErr_SetString(PyExc_TypeError, type_error_message);
         return -1;
     }
+    *s = NULL;
     if (obj != Py_None) {
         *s = PyString_AsString(obj);
         if (*s == NULL)
