@@ -2103,10 +2103,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.ones_like(xp)
         _check({'x': x, 'xp': xp, 'fp': fp})
 
-    @staticmethod
-    def _set_some_values_to_nan(a):
-        p = a.size // 4  # set approx 1/4 elements to NaN
-        np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
+    def _make_some_values_non_finite(self, a):
+        p = a.size // 100
+        np.put(a, self.rnd.choice(range(a.size), p, replace=False), np.nan)
+        np.put(a, self.rnd.choice(range(a.size), p, replace=False), -np.inf)
+        np.put(a, self.rnd.choice(range(a.size), p, replace=False), np.inf)
 
     def arrays(self, ndata):
         # much_finer_grid
@@ -2162,42 +2163,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         xp = np.linspace(0, 10, 1 + ndata)
         fp = np.sin(xp / 2.0)
 
-        # using abs_tol as otherwise fails on 32bit builds
         for x in self.arrays(ndata):
+            atol = 1e-14  # using abs_tol as otherwise fails on 32bit builds
+
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
 
             # no longer require xp to be monotonically increasing
             # (in keeping with numpy) even if the output might not
-            # be meaningful
-            xp_shuffled = xp[:]
-            self.rnd.shuffle(xp_shuffled)
-            expected = pyfunc(x, xp_shuffled, fp)
-            got = cfunc(x, xp_shuffled, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
-
+            # be meaningful; shuffle all inputs
             self.rnd.shuffle(x)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
+
+            self.rnd.shuffle(xp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
 
             self.rnd.shuffle(fp)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-            self._set_some_values_to_nan(x)
+            # add some values non finite
+            self._make_some_values_non_finite(x)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-            self._set_some_values_to_nan(fp)
+            self._make_some_values_non_finite(xp)
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
-            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+            self._make_some_values_non_finite(fp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=atol)
+
+    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.12+")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2218,6 +2225,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for x in self.arrays(ndata):
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
+            np.testing.assert_allclose(expected, got, equal_nan=True)
+
+            self.rnd.shuffle(x)
+            self.rnd.shuffle(xp)
+            self.rnd.shuffle(fp)
             np.testing.assert_allclose(expected, got, equal_nan=True)
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
@@ -2290,6 +2302,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn(complex_dtype_msg, str(e.exception))
 
+    @unittest.skipUnless((1, 10) <= np_version < (1, 12), 'complex interp: Numpy 1.12+')
+    def test_interp_pre_112_exceptions(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        x = np.arange(6)
+        xp = np.arange(6)
+        fp = np.arange(6) * 1j
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        complex_dtype_msg = (
+            "Cannot cast array data from complex dtype "
+            "to float64 dtype"
+        )
+        self.assertIn(complex_dtype_msg, str(e.exception))
+
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_non_finite_calibration(self):
         # examples from
@@ -2345,12 +2378,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
 
         x = np.linspace(0, 1, 5)
-        y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
-        x0 = 0.3
-        y0 = x0 + (1 + x0) * 1.0j
-        np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
-
-        x = np.linspace(0, 1, 5)
         y = np.linspace(0, 1, 5)
         x0 = np.array(0.3)
         np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
@@ -2358,6 +2385,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         xp = np.arange(0, 10, 0.0001)
         fp = np.sin(xp)
         np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
+
+    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.10+")
+    def test_interp_supplemental_complex_tests(self):
+        # inspired by class TestInterp
+        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        x = np.linspace(0, 1, 5)
+        y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
+        x0 = 0.3
+        y0 = x0 + (1 + x0) * 1.0j
+        np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
 
     def test_asarray(self):
 
