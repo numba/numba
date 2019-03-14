@@ -754,14 +754,12 @@ class TypeRefAttribute(AttributeTemplate):
         """
         ty = classty.instance_type
 
-        if not isinstance(ty, types.Number):
-            raise errors.TypingError("invalid use of non-number types")
+        if isinstance(ty, types.Number):
+            def typer(val):
+                # Scalar constructor, e.g. int32(42)
+                return ty
 
-        def typer(val):
-            # Scalar constructor, e.g. int32(42)
-            return ty
-
-        return types.Function(make_callable_template(key=ty, typer=typer))
+            return types.Function(make_callable_template(key=ty, typer=typer))
 
 #------------------------------------------------------------------------------
 
