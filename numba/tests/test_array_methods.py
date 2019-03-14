@@ -419,6 +419,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.arange(16, dtype=np.int32)[::2]
         check(arr, np.uint64)
 
+        # check read only attr does not get copied
+        arr = np.arange(16, dtype=np.int32)
+        arr.flags.writeable = False
+        check(arr, np.int32)
+
         # Invalid conversion
         dt = np.dtype([('x', np.int8)])
         with self.assertTypingError() as raises:

@@ -449,7 +449,9 @@ class ArrayAttribute(AttributeTemplate):
                             "cannot convert from %s to %s"
                             % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
-        retty = ary.copy(dtype=dtype, layout=layout)
+        # reset the write bit irrespective of whether the cast type is the same
+        # as the current dtype, this replicates numpy
+        retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
         return signature(retty, *args)
 
     @bound_function("array.ravel")
