@@ -63,10 +63,6 @@ Continuous Integration
     :target: https://travis-ci.org/numba/numba
     :alt: Travis CI
 
-.. image:: https://ci.appveyor.com/api/projects/status/klm0dk21innm33mi?svg=true)
-    :target: https://ci.appveyor.com/project/seibert/numba-j46mi
-    :alt: AppVeyor
-
 .. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
     :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master
     :alt: Azure Pipelines
