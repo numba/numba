@@ -14,7 +14,9 @@ from numba.extending import (
     overload_method,
     intrinsic,
 )
-from numba.targets.imputils import lower_constant, lower_cast
+from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
+                                    iternext_impl, impl_ret_new_ref, RefType)
+from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -29,7 +31,7 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 
-### DATA MODEL
+# DATA MODEL
 
 
 @register_model(types.UnicodeType)
@@ -53,7 +55,14 @@ make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
 make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
 
 
-### CAST
+@register_default(types.UnicodeIteratorType)
+class UnicodeIteratorModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('index', types.EphemeralPointer(types.uintp)),
+                   ('data', fe_type.data)]
+        super(UnicodeIteratorModel, self).__init__(dmm, fe_type, members)
+
+# CAST
 
 
 def compile_time_get_string_data(obj):
@@ -106,14 +115,14 @@ def cast_from_literal(context, builder, fromty, toty, val):
     )
 
 
-### CONSTANT
+# CONSTANT
 
 @lower_constant(types.unicode_type)
 def constant_unicode(context, builder, typ, pyval):
     return make_string_from_constant(context, builder, typ, pyval)
 
 
-### BOXING
+# BOXING
 
 
 @unbox(types.UnicodeType)
@@ -143,7 +152,8 @@ def box_unicode_str(typ, val, c):
     Convert a native unicode structure to a unicode string
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-    res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
+    res = c.pyapi.string_from_kind_and_data(
+        uni_str.kind, uni_str.data, uni_str.length)
     # hash isn't needed now, just compute it so it ends up in the unicodeobject
     # hash cache, cpython doesn't always do this, depends how a string was
     # created it's safe, just burns the cycles required to hash on @box
@@ -152,7 +162,7 @@ def box_unicode_str(typ, val, c):
     return res
 
 
-#### HELPER FUNCTIONS
+# HELPER FUNCTIONS
 
 
 def make_deref_codegen(bitsize):
@@ -270,7 +280,7 @@ def set_uint32(typingctx, data, idx, ch):
 
 @njit(_nrt=False)
 def _set_code_point(a, i, ch):
-    ### WARNING: This method is very dangerous:
+    # WARNING: This method is very dangerous:
     #   * Assumes that data contents can be changed (only allowed for new
     #     strings)
     #   * Assumes that the kind of unicode string is sufficiently wide to
@@ -283,7 +293,8 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
-        raise AssertionError("Unexpected unicode representation in _set_code_point")
+        raise AssertionError(
+            "Unexpected unicode representation in _set_code_point")
 
 
 @njit
@@ -381,7 +392,7 @@ def _is_whitespace(code_point):
         or code_point == 0x3000
 
 
-#### PUBLIC API
+# PUBLIC API
 
 @overload(len)
 def unicode_len(s):
@@ -539,11 +550,11 @@ def unicode_split(a, sep=None, maxsplit=-1):
                     if is_whitespace:
                         pass  # keep consuming space
                     else:
-                        last = idx # this is the start of the next string
+                        last = idx  # this is the start of the next string
                         in_whitespace_block = False
                 else:
                     if not is_whitespace:
-                        pass # keep searching for whitespace transition
+                        pass  # keep searching for whitespace transition
                     else:
                         parts.append(a[last:idx])
                         in_whitespace_block = True
@@ -596,7 +607,7 @@ def unicode_join(sep, parts):
                 return join_list(sep, parts)
             return join_list_impl
         else:
-            pass # lists of any other type not supported
+            pass  # lists of any other type not supported
     elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
@@ -610,7 +621,7 @@ def unicode_join(sep, parts):
         return join_str_impl
 
 
-### String creation
+# String creation
 
 @njit
 def normalize_str_idx(idx, length, is_start=True):
@@ -683,10 +694,12 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
         src_byte_offset = byte_width * src_offset
         dst_byte_offset = byte_width * dst_offset
         nbytes = n * byte_width
-        memcpy_region(dst._data, dst_byte_offset, src._data, src_byte_offset, nbytes, align=1)
+        memcpy_region(dst._data, dst_byte_offset, src._data,
+                      src_byte_offset, nbytes, align=1)
     else:
         for i in range(n):
-            _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))
+            _set_code_point(dst, dst_offset + i,
+                            _get_code_point(src, src_offset + i))
 
 
 @overload(operator.getitem)
@@ -730,3 +743,70 @@ def unicode_concat(a, b):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
         return concat_impl
+
+
+@lower_builtin('getiter', types.UnicodeType)
+def getiter_unicode(context, builder, sig, args):
+    [ty] = sig.args
+    [data] = args
+
+    iterobj = context.make_helper(builder, sig.return_type)
+
+    # set the index to zero
+    zero = context.get_constant(types.uintp, 0)
+    indexptr = cgutils.alloca_once_value(builder, zero)
+
+    iterobj.index = indexptr
+
+    # wire in the unicode type data
+    iterobj.data = data
+
+    # incref as needed
+    if context.enable_nrt:
+        context.nrt.incref(builder, ty, data)
+
+    res = iterobj._getvalue()
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@lower_builtin('iternext', types.UnicodeIteratorType)
+# a new ref counted object is put into result._yield so set the new_ref to True!
+@iternext_impl(RefType.NEW)
+def iternext_unicode(context, builder, sig, args, result):
+    [iterty] = sig.args
+    [iter] = args
+
+    tyctx = context.typing_context
+
+    # get ref to unicode.__getitem__
+    fnty = tyctx.resolve_value_type(operator.getitem)
+    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, types.uintp),
+                                     {})
+    getitem_impl = context.get_function(fnty, getitem_sig)
+
+    # get ref to unicode.__len__
+    fnty = tyctx.resolve_value_type(len)
+    len_sig = fnty.get_call_type(tyctx, (types.unicode_type,), {})
+    len_impl = context.get_function(fnty, len_sig)
+
+    # grab unicode iterator struct
+    iterobj = context.make_helper(builder, iterty, value=iter)
+
+    # find the length of the string
+    strlen = len_impl(builder, (iterobj.data,))
+
+    # find the current index
+    index = builder.load(iterobj.index)
+
+    # see if the index is in range
+    is_valid = builder.icmp_unsigned('<', index, strlen)
+    result.set_valid(is_valid)
+
+    with builder.if_then(is_valid):
+        # return value at index
+        gotitem = getitem_impl(builder, (iterobj.data, index,))
+        result.yield_(gotitem)
+
+        # bump index for next cycle
+        nindex = cgutils.increment_index(builder, index)
+        builder.store(nindex, iterobj.index)
