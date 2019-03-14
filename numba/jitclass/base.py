@@ -12,7 +12,7 @@ from numba import njit
 from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
-from numba import cgutils, utils
+from numba import cgutils, utils, errors
 from numba.config import PYVERSION
 from numba.six import exec_
 
@@ -73,14 +73,18 @@ def ctor({args}):
 """
 
 
-def _getargs(fn):
+def _getargs(fn_sig):
     """
     Returns list of positional and keyword argument names in order.
     """
-    sig = utils.pysignature(fn)
-    params = sig.parameters
-    args = [k for k, v in params.items()
-            if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD]
+    params = fn_sig.parameters
+    args = []
+    for k, v in params.items():
+        if (v.kind & v.POSITIONAL_OR_KEYWORD) == v.POSITIONAL_OR_KEYWORD:
+            args.append(k)
+        else:
+            msg = "%s argument type unsupported in jitclass" % v.kind
+            raise errors.UnsupportedError(msg)
     return args
 
 
@@ -105,9 +109,11 @@ class JitClassType(type):
         Note the wrapper will only accept positional arguments.
         """
         init = cls.class_type.instance_type.methods['__init__']
+        init_sig = utils.pysignature(init)
         # get postitional and keyword arguments
         # offset by one to exclude the `self` arg
-        args = _getargs(init)[1:]
+        args = _getargs(init_sig)[1:]
+        cls._ctor_sig = init_sig
         ctor_source = _ctor_template.format(args=', '.join(args))
         glbls = {"__numba_cls_": cls}
         exec_(ctor_source, glbls)
@@ -120,7 +126,11 @@ class JitClassType(type):
         return False
 
     def __call__(cls, *args, **kwargs):
-        return cls._ctor(*args, **kwargs)
+        # The first argument of _ctor_sig is `cls`, which here
+        # is bound to None and then skipped when invoking the constructor.
+        bind = cls._ctor_sig.bind(None, *args, **kwargs)
+        bind.apply_defaults()
+        return cls._ctor(*bind.args[1:], **bind.kwargs)
 
 
 ##############################################################################

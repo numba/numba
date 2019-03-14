@@ -8,7 +8,7 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof, errors
+from numba import njit, typeof, types, errors
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
@@ -16,6 +16,9 @@ from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.errors import LoweringError
 
+# there are some python 3 specific syntax tests
+if sys.version_info >= (3,):
+    from .jitclass_usecases import TestClass1, TestClass2
 
 def _get_meminfo(box):
     ptr = _box.box_get_meminfoptr(box)
@@ -619,6 +622,80 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
+    def test_default_args(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32)]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self, x, y, z=1):
+                self.x = x
+                self.y = y
+                self.z = z
+
+        tc = TestClass(1, 2, 3)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 3)
+
+        tc = TestClass(1, 2)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 1)
+
+        tc = TestClass(y=2, z=5, x=1)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 5)
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('a', int32)]
+
+        TestClass = jitclass(spec)(TestClass1)
+
+        tc = TestClass(2, 3)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 3)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+        tc = TestClass(y=4, x=2, a=42, z=100)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 100)
+        self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2, a=42)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_starargs_and_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('args', types.UniTuple(int32, 2)),
+                ('a', int32)]
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            jitclass(spec)(TestClass2)
+
+        msg = "VAR_POSITIONAL argument type unsupported"
+        self.assertIn(msg, str(raises.exception))
+
     def test_generator_method(self):
         spec = []
 
@@ -638,6 +715,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         for niter in range(10):
             for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
                 self.assertPreciseEqual(expect, got)
+
 
 
 if __name__ == '__main__':
