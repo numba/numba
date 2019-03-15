@@ -14,6 +14,7 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import logging
 import operator
 import contextlib
 import itertools
@@ -25,6 +26,9 @@ from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -138,6 +142,7 @@ class ConstraintNetwork(object):
         errors = []
         for constraint in self.constraints:
             loc = constraint.loc
+            _logger.debug("propagate: %r (%s)", constraint, loc)
             with typeinfer.warnings.catch_warnings(filename=loc.filename,
                                                    lineno=loc.line):
                 try:
@@ -489,6 +494,8 @@ class CallConstraint(object):
         if (isinstance(target_type, types.Array)
                 and isinstance(sig.return_type.dtype, types.Undefined)):
             typeinfer.refine_map[self.target] = self
+        if isinstance(target_type, types.DictType) and not target_type.is_precise():
+            typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
         # Is getitem?
@@ -500,6 +507,9 @@ class CallConstraint(object):
                 assert updated_type.is_precise()
                 newtype = aryty.copy(dtype=updated_type.dtype)
                 typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
+        else:
+            raise TypingError((self.func, updated_type))
+
 
     def get_call_signature(self):
         return self.signature
@@ -567,6 +577,8 @@ class SetItemConstraint(object):
             idxty = typevars[self.index.name].getone()
             valty = typevars[self.value.name].getone()
 
+            _logger.debug("setitem targetty=%s", targetty)
+
             sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
             if sig is None:
                 raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
@@ -600,6 +612,13 @@ class StaticSetItemConstraint(object):
             targetty = typevars[self.target.name].getone()
             idxty = typevars[self.index_var.name].getone()
             valty = typevars[self.value.name].getone()
+
+            if not targetty.is_precise() and isinstance(targetty, types.DictType):
+                typeinfer.add_type(
+                    self.target.name,
+                    targetty.refine(idxty, valty),
+                    loc=self.loc,
+                )
 
             sig = typeinfer.context.resolve_static_setitem(targetty,
                                                            self.index, valty)

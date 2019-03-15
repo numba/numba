@@ -761,6 +761,12 @@ class TypeRefAttribute(AttributeTemplate):
 
             return types.Function(make_callable_template(key=ty, typer=typer))
 
+        if ty is types.DictType:
+            def typer():
+                return types.DictType(keyty=types.undefined, valty=types.undefined)
+
+            return types.Function(make_callable_template(key=ty, typer=typer))
+
 #------------------------------------------------------------------------------
 
 

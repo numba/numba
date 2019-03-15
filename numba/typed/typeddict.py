@@ -219,3 +219,4 @@ def unbox_dicttype(typ, val, c):
     c.pyapi.decref(miptr)
 
     return NativeValue(dctobj)
+
