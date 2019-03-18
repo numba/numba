@@ -1939,11 +1939,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn('y cannot be a scalar', str(e.exception))
 
     def test_average(self):
-        #array of random numbers
-        N = 100
+        #array of random floats
+        N = 5
         a = np.random.ranf(N)*100
         w = np.random.ranf(N)*100
         w0 = np.zeros(N)
+
+        #boolean array and weights
+        a_bool = np.random.ranf(N) > 0.5
+        w_bool = np.random.ranf(N) > 0.5
+
+        #array of random ints
+        a_int = np.random.randint(101, size=N)
+        w_int = np.random.randint(101, size=N)
 
         #3D array of random numbers
         d0 = 100
@@ -1952,12 +1960,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a_3d = np.random.rand(d0,d1,d2)*100
         w_3d = np.random.rand(d0,d1,d2)*100
 
+
         pyfunc = array_average
         cfunc = jit(nopython=True)(pyfunc)
 
         #test case for average with weights (number of elements in array and weight array are equal)
         self.assertAlmostEqual(pyfunc(a,weights=w), cfunc(a,weights=w), places=10)
         self.assertAlmostEqual(pyfunc(a_3d,weights=w_3d), cfunc(a_3d,weights=w_3d), places=10)
+
+        #test case for average with array and weights with
+        #int datatype (number of elements in array and weight array are equal)
+        self.assertAlmostEqual(pyfunc(a_int,weights=w_int), cfunc(a_int,weights=w_int), places=10)
+
+        #test case for average with boolean weights
+        self.assertAlmostEqual(pyfunc(a,weights=w_bool), cfunc(a,weights=w_bool), places=10)
+        self.assertAlmostEqual(pyfunc(a_bool,weights=w), cfunc(a_bool,weights=w), places=10)
+        self.assertAlmostEqual(pyfunc(a_bool, weights=w_bool), cfunc(a_bool, weights=w_bool), places=10)
 
         #test case for average without weights
         self.assertAlmostEqual(pyfunc(a), cfunc(a), places=10)
