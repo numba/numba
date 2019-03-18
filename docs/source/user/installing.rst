@@ -6,7 +6,7 @@ Compatibility
 -------------
 
 Numba is compatible with Python 2.7 and 3.5 or later, and Numpy versions 1.7 to
-1.15.
+1.16 (see :ref:`this note <numpy-support>` for 1.16 support restrictions).
 
 Our supported platforms are:
 

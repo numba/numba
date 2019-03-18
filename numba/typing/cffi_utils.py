@@ -124,7 +124,9 @@ def map_type(cffi_type, use_record_dtype=False):
         else:
             return types.CPointer(primed_map_type(pointee))
     elif kind == 'array':
-        return primed_map_type(cffi_type.item)
+        dtype = primed_map_type(cffi_type.item)
+        nelem = cffi_type.length
+        return types.NestedArray(dtype=dtype, shape=(nelem,))
     elif kind == 'struct' and use_record_dtype:
         return map_struct_to_record_dtype(cffi_type)
     else:

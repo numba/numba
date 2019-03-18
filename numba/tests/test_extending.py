@@ -12,11 +12,12 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, types, errors, typing, compiler
+from numba import njit, jit, types, errors, typing, compiler
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
+from numba.errors import LoweringError
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -261,12 +262,32 @@ def overload_add_dummy(arg1, arg2):
         return dummy_add_impl
 
 
+@overload(operator.delitem)
+def overload_dummy_delitem(obj, idx):
+    if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+        def dummy_delitem_impl(obj, idx):
+            print('del', obj, idx)
+        return dummy_delitem_impl
+
+
 @overload(operator.getitem)
 def overload_dummy_getitem(obj, idx):
     if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
         def dummy_getitem_impl(obj, idx):
             return idx + 123
         return dummy_getitem_impl
+
+
+@overload(operator.setitem)
+def overload_dummy_setitem(obj, idx, val):
+    if all([
+        isinstance(obj, MyDummyType),
+        isinstance(idx, types.Integer),
+        isinstance(val, types.Integer)
+    ]):
+        def dummy_setitem_impl(obj, idx, val):
+            print(idx, val)
+        return dummy_setitem_impl
 
 
 def call_add_operator(arg1, arg2):
@@ -296,8 +317,16 @@ def call_iadd_binop(arg1, arg2):
     return arg1
 
 
+def call_delitem(obj, idx):
+    del obj[idx]
+
+
 def call_getitem(obj, idx):
     return obj[idx]
+
+
+def call_setitem(obj, idx, val):
+    obj[idx] = val
 
 
 @overload_method(MyDummyType, 'length')
@@ -622,10 +651,42 @@ class TestHighLevelExtending(TestCase):
         # this will call add(Number, Number) as MyDummy implicitly casts to Number
         self.assertPreciseEqual(cfunc(MyDummy(), MyDummy()), 84)
 
+    def test_delitem(self):
+        pyfunc = call_delitem
+        cfunc = jit(nopython=True)(pyfunc)
+        obj = MyDummy()
+        e = None
+
+        with captured_stdout() as out:
+            try:
+                cfunc(obj, 321)
+            except Exception as exc:
+                e = exc
+
+        if e is not None:
+            raise e
+        self.assertEqual(out.getvalue(), 'del hello! 321\n')
+
     def test_getitem(self):
         pyfunc = call_getitem
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(MyDummy(), 321), 321 + 123)
+
+    def test_setitem(self):
+        pyfunc = call_setitem
+        cfunc = jit(nopython=True)(pyfunc)
+        obj = MyDummy()
+        e = None
+
+        with captured_stdout() as out:
+            try:
+                cfunc(obj, 321, 123)
+            except Exception as exc:
+                e = exc
+
+        if e is not None:
+            raise e
+        self.assertEqual(out.getvalue(), '321 123\n')
 
     def test_no_cpython_wrapper(self):
         """
@@ -866,6 +927,43 @@ class TestHighLevelExtending(TestCase):
         self.assertIn("use of VAR_KEYWORD (e.g. **kwargs) is unsupported", msg)
         self.assertIn("offending argument name is '**kws'", msg)
 
+    def test_overload_method_kwargs(self):
+        # Issue #3489
+        @overload_method(types.Array, 'foo')
+        def fooimpl(arr, a_kwarg=10):
+            def impl(arr, a_kwarg=10):
+                return a_kwarg
+            return impl
+
+        @njit
+        def bar(A):
+            return A.foo(), A.foo(20), A.foo(a_kwarg=30)
+
+        Z = np.arange(5)
+
+        self.assertEqual(bar(Z), (10, 20, 30))
+
+    def test_overload_method_literal_unpack(self):
+        # Issue #3683
+        @overload_method(types.Array, 'litfoo')
+        def litfoo(arr, val):
+            # Must be an integer
+            if isinstance(val, types.Integer):
+                # Must not be literal
+                if not isinstance(val, types.Literal):
+                    def impl(arr, val):
+                        return val
+                    return impl
+
+        @njit
+        def bar(A):
+            return A.litfoo(0xcafe)
+
+        A = np.zeros(1)
+        bar(A)
+        self.assertEqual(bar(A), 0xcafe)
+
+
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
     if hit != expect_hit:
@@ -924,6 +1022,45 @@ def run_caching_overload_method(q, cache_dir):
         _assert_cache_stats(cfunc, 1, 0)
 
 class TestIntrinsic(TestCase):
+    def test_void_return(self):
+        """
+        Verify that returning a None from codegen function is handled
+        automatically for void functions, otherwise raise exception.
+        """
+
+        @intrinsic
+        def void_func(typingctx, a):
+            sig = types.void(types.int32)
+            def codegen(context, builder, signature, args):
+                pass  # do nothing, return None, should be turned into
+                      # dummy value
+
+            return sig, codegen
+
+        @intrinsic
+        def non_void_func(typingctx, a):
+            sig = types.int32(types.int32)
+            def codegen(context, builder, signature, args):
+                pass # oops, should be returning a value here, raise exception
+            return sig, codegen
+
+        @jit(nopython=True)
+        def call_void_func():
+            void_func(1)
+            return 0
+
+        @jit(nopython=True)
+        def call_non_void_func():
+            non_void_func(1)
+            return 0
+
+        # void func should work
+        self.assertEqual(call_void_func(), 0)
+        # not void function should raise exception
+        with self.assertRaises(LoweringError) as e:
+            call_non_void_func()
+        self.assertIn('non-void function returns None', e.exception.msg)
+
     def test_ll_pointer_cast(self):
         """
         Usecase test: custom reinterpret cast to turn int values to pointers

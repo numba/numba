@@ -1,7 +1,19 @@
 
+.. _numpy-support:
+
 ========================
 Supported NumPy features
 ========================
+
+.. note::
+   The vast majority of NumPy 1.16 behaviour is supported, however
+   ``datetime`` and ``timedelta`` use involving ``NaT`` matches the behaviour
+   present in earlier release. The ufunc suite has not been extending to
+   accommodate the two new time computation related additions present in NumPy
+   1.16. In addition the functions ``ediff1d`` and ``interp`` have known minor
+   issues in replicating outputs exactly when ``NaN``'s occur in certain input
+   patterns.
+
 
 One objective of Numba is having a seamless integration with `NumPy`_.
 NumPy arrays provide an efficient storage method for homogeneous sets of
@@ -287,6 +299,9 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10;
+  complex dtype handling per NumPy 1.12+; ``xp`` must be monotonically
+  increasing)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`

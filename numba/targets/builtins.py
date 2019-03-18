@@ -111,7 +111,7 @@ def getitem_cpointer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('setitem', types.CPointer, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.CPointer, types.Integer, types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
     elem_ptr = builder.gep(base_ptr, [idx])
@@ -261,6 +261,7 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
+@lower_builtin(types.TypeRef, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
@@ -434,7 +435,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 from numba.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
@@ -446,6 +447,7 @@ def impl_index_value(context, builder, sig, args):
     index_value.value = value
     return index_value._getvalue()
 
+
 @overload(min)
 def indval_min(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -456,6 +458,7 @@ def indval_min(indval1, indval2):
             return indval1
         return min_impl
 
+
 @overload(max)
 def indval_max(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -465,3 +468,30 @@ def indval_max(indval1, indval2):
                 return indval2
             return indval1
         return max_impl
+
+
+greater_than = register_jitable(lambda a, b: a > b)
+less_than = register_jitable(lambda a, b: a < b)
+
+
+@register_jitable
+def min_max_impl(iterable, op):
+    if isinstance(iterable, types.IterableType):
+        def impl(iterable):
+            it = iter(iterable)
+            return_val = next(it)
+            for val in it:
+                if op(val, return_val):
+                    return_val = val
+            return return_val
+        return impl
+
+
+@overload(min)
+def iterable_min(iterable):
+    return min_max_impl(iterable, less_than)
+
+
+@overload(max)
+def iterable_max(iterable):
+    return min_max_impl(iterable, greater_than)

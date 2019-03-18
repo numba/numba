@@ -595,10 +595,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.arange(10).astype(dtype='m8[s]')
         self._do_check_nptimedelta(pyfunc, arr)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_min_npdatetime(self):
         self.check_npdatetime(array_min)
         self.check_nptimedelta(array_min)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_max_npdatetime(self):
         self.check_npdatetime(array_max)
         self.check_nptimedelta(array_max)
@@ -611,15 +613,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_npdatetime(array_argmax)
         self.check_nptimedelta(array_argmax)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_median_npdatetime(self):
         self.check_nptimedelta(array_median_global)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_sum_npdatetime(self):
         self.check_nptimedelta(array_sum)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_cumsum_npdatetime(self):
         self.check_nptimedelta(array_cumsum)
 
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_mean_npdatetime(self):
         self.check_nptimedelta(array_mean)
 
@@ -757,6 +763,82 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         msg = "zero-size array reduction not possible"
         self.assertIn(msg, str(e.exception))
 
+    def test_min_max_complex_basic(self):
+        pyfuncs = array_min_global, array_max_global
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            imag = real * 2
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                dtype = self.random.choice([np.complex64, np.complex128])
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a.astype(dtype))
+
+    def test_nanmin_nanmax_complex_basic(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            real[5:9] = np.nan
+            imag = real * 2
+            imag[7:12] = np.nan
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a)
+
+    def test_nanmin_nanmax_non_array_inputs(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield [1, 6, 4, 2]
+            yield ((-10, 4, -12), (5, 200, -30))
+            yield np.array(3)
+            yield (2,)
+            yield 3.142
+            yield False
+            yield (np.nan, 3.142, -5.2, 3.0)
+            yield [np.inf, np.nan, -np.inf]
+            yield [(np.nan, 1.1), (-4.4, 8.7)]
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for a in a_variations():
+                check(a)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -769,16 +851,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_std, array_std_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
+                           array_min, array_min_global,
+                           array_max, array_max_global,
+                           array_nanmax, array_nanmin,
                            array_nansum,
                            ]
 
         # these functions only work in real space as no complex comparison
         # operator is implemented
-        reduction_funcs_rspace = [array_min, array_min_global,
-                                  array_max, array_max_global,
-                                  array_argmin, array_argmin_global,
-                                  array_argmax, array_argmax_global,
-                                  array_nanmax, array_nanmin]
+        reduction_funcs_rspace = [array_argmin, array_argmin_global,
+                                  array_argmax, array_argmax_global]
 
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]

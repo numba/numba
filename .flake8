@@ -33,9 +33,7 @@ exclude =
     numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
-    numba/analysis.py
     numba/_version.py
-    numba/unicode.py
     numba/inline_closurecall.py
     numba/ir_utils.py
     numba/pylowering.py
@@ -48,7 +46,6 @@ exclude =
     numba/itanium_mangler.py
     numba/unittest_support.py
     numba/array_analysis.py
-    numba/consts.py
     numba/generators.py
     numba/appdirs.py
     numba/cffi_support.py
@@ -58,13 +55,10 @@ exclude =
     numba/debuginfo.py
     numba/pretty_annotate.py
     numba/six.py
-    numba/typeinfer.py
-    numba/errors.py
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
     numba/controlflow.py
-    numba/cgutils.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
@@ -86,7 +80,6 @@ exclude =
     numba/types/common.py
     numba/types/iterators.py
     numba/types/scalars.py
-    numba/jitclass/base.py
     numba/targets/fastmathpass.py
     numba/targets/setobj.py
     numba/targets/options.py
@@ -185,7 +178,6 @@ exclude =
     numba/cuda/tests/cudadrv/test_linker.py
     numba/cuda/tests/cudadrv/test_cuda_driver.py
     numba/cuda/tests/cudadrv/test_cuda_ndarray.py
-    numba/cuda/tests/cudadrv/test_detect.py
     numba/cuda/tests/cudadrv/test_inline_ptx.py
     numba/cuda/tests/cudadrv/test_profiler.py
     numba/cuda/tests/cudadrv/test_deallocations.py
@@ -232,7 +224,6 @@ exclude =
     numba/tests/enum_usecases.py
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
-    numba/tests/test_unicode.py
     numba/tests/test_return_values.py
     numba/tests/test_parallel_backend.py
     numba/tests/test_nrt.py
@@ -252,7 +243,6 @@ exclude =
     numba/tests/matmul_usecase.py
     numba/tests/complex_usecases.py
     numba/tests/test_array_exprs.py
-    numba/tests/test_jitclasses.py
     numba/tests/test_polynomial.py
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
@@ -273,7 +263,6 @@ exclude =
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
-    numba/tests/test_generators.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
     numba/tests/test_exceptions.py
@@ -299,8 +288,6 @@ exclude =
     numba/tests/test_indexing.py
     numba/tests/test_pycc.py
     numba/tests/annotation_usecases.py
-    numba/tests/test_unicode_names.py
-    numba/tests/test_unicode_literals.py
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py

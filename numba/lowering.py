@@ -364,7 +364,11 @@ class Lower(BaseLower):
 
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('delitem', signature)
+
+            op = operator.delitem
+            fnop = self.context.typing_context.resolve_value_type(op)
+            fnop.get_call_type(self.context.typing_context, signature.args, {})
+            impl = self.context.get_function(fnop, signature)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,
@@ -411,7 +415,10 @@ class Lower(BaseLower):
         valuety = self.typeof(value_var.name)
         indexty = self.typeof(index_var.name)
 
-        impl = self.context.get_function('setitem', signature)
+        op = operator.setitem
+        fnop = self.context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(fnop, signature)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
@@ -697,6 +704,18 @@ class Lower(BaseLower):
 
         else:
             res = self._lower_call_normal(fnty, expr, signature)
+
+        # If lowering the call returned None, interpret that as returning dummy
+        # value if the return type of the function is void, otherwise there is
+        # a problem
+        if res is None:
+            if signature.return_type == types.void:
+                res = self.context.get_dummy_value()
+            else:
+                raise LoweringError(
+                    msg="non-void function returns None from implementation",
+                    loc=self.loc
+                )
 
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)

@@ -1715,7 +1715,7 @@ def device_memory_size(devmem):
         s, e = device_extents(devmem)
         sz = e - s
         devmem._cuda_memsize_ = sz
-    assert sz > 0, "zero length array"
+    assert sz >= 0, "{} length array".format(sz)
     return sz
 
 
@@ -1734,9 +1734,11 @@ def _workaround_for_datetime(obj):
         obj = obj.view(np.int64)
     return obj
 
+def host_pointer(obj, readonly=False):
+    """Get host pointer from an obj.
 
-def host_pointer(obj):
-    """
+    If `readonly` is False, the buffer must be writable.
+
     NOTE: The underlying data pointer from the host data buffer is used and
     it should not be changed until the operation which can be asynchronous
     completes.
@@ -1744,10 +1746,12 @@ def host_pointer(obj):
     if isinstance(obj, (int, long)):
         return obj
 
-    forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
-    obj = _workaround_for_datetime(obj)
-    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
+    forcewritable = False
+    if not readonly:
+        forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
 
+    obj = _workaround_for_datetime(obj)
+    return mviewbuf.memoryview_get_buffer(obj, forcewritable, readonly)
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
@@ -1828,7 +1832,7 @@ def host_to_device(dst, src, size, stream=0):
     else:
         fn = driver.cuMemcpyHtoD
 
-    fn(device_pointer(dst), host_pointer(src), size, *varargs)
+    fn(device_pointer(dst), host_pointer(src, readonly=True), size, *varargs)
 
 
 def device_to_host(dst, src, size, stream=0):

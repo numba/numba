@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils
+from . import utils, config
 
 
 bool_t = ir.IntType(1)
@@ -51,6 +51,7 @@ def make_bytearray(buf):
 
 
 _struct_proxy_cache = {}
+
 
 def create_struct_proxy(fe_type, kind='value'):
     """
@@ -177,7 +178,7 @@ class _StructProxy(object):
         value = self._cast_member_from_value(index, value)
         if value.type != ptr.type.pointee:
             if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
-                and value.type.pointee == ptr.type.pointee.pointee):
+                    and value.type.pointee == ptr.type.pointee.pointee):
                 # Differ by address-space only
                 # Auto coerce it
                 value = self._context.addrspacecast(self._builder,
@@ -262,7 +263,7 @@ class Structure(object):
         self._context = context
         self._builder = builder
         if ref is None:
-            self._value = alloca_once(builder, self._type)
+            self._value = alloca_once(builder, self._type, zfill=True)
             if value is not None:
                 assert not is_pointer(value.type)
                 assert value.type == self._type, (value.type, self._type)
@@ -369,9 +370,13 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
+        # Zero-fill at the init-site
         if zfill:
             builder.store(ty(None), ptr)
-        return ptr
+    # Also zero-fill at the use-site
+    if zfill:
+        builder.store(ty(None), ptr)
+    return ptr
 
 
 def alloca_once_value(builder, value, name=''):
@@ -440,6 +445,7 @@ def increment_index(builder, val):
 
 
 Loop = collections.namedtuple('Loop', ('index', 'do_break'))
+
 
 @contextmanager
 def for_range(builder, count, start=None, intp=None):
@@ -744,6 +750,7 @@ def is_scalar_zero_or_nan(builder, value):
     return _scalar_pred_against_zero(
         builder, value, functools.partial(builder.fcmp_unordered, '=='), '==')
 
+
 is_true = is_not_scalar_zero
 is_false = is_scalar_zero
 
@@ -766,6 +773,7 @@ def guard_null(context, builder, value, exc_tuple):
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
 
+
 def guard_memory_error(context, builder, pointer, msg=None):
     """
     Guard against *pointer* being NULL (and raise a MemoryError).
@@ -774,6 +782,7 @@ def guard_memory_error(context, builder, pointer, msg=None):
     exc_args = (msg,) if msg else ()
     with builder.if_then(is_null(builder, pointer), likely=False):
         context.call_conv.return_user_exc(builder, MemoryError, exc_args)
+
 
 @contextmanager
 def if_zero(builder, value, likely=False):
@@ -849,8 +858,6 @@ def memset(builder, ptr, size, value):
     """
     Fill *size* bytes starting from *ptr* with *value*.
     """
-    sizety = size.type
-    memset = "llvm.memset.p0i8.i%d" % (sizety.width)
     fn = builder.module.declare_intrinsic('llvm.memset', (voidptr_t, size.type))
     ptr = builder.bitcast(ptr, voidptr_t)
     if isinstance(value, int):
@@ -961,6 +968,7 @@ def raw_memcpy(builder, dst, src, count, itemsize, align=1):
     """
     return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
 
+
 def raw_memmove(builder, dst, src, count, itemsize, align=1):
     """
     Emit a raw memmove() call for `count` items of size `itemsize`
@@ -1007,6 +1015,45 @@ def printf(builder, format, *args):
     # Call
     ptr_fmt = builder.bitcast(global_fmt, cstring)
     return builder.call(fn, [ptr_fmt] + list(args))
+
+
+def snprintf(builder, buffer, bufsz, format, *args):
+    """Calls libc snprintf(buffer, bufsz, format, ...args)
+    """
+    assert isinstance(format, str)
+    mod = builder.module
+    # Make global constant for format string
+    cstring = voidptr_t
+    fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
+    global_fmt = global_constant(mod, "snprintf_format", fmt_bytes)
+    fnty = ir.FunctionType(
+        int32_t, [cstring, intp_t, cstring], var_arg=True,
+    )
+    # Actual symbol name of snprintf is different on win32.
+    symbol = 'snprintf'
+    if config.IS_WIN32:
+        symbol = '_' + symbol
+    # Insert snprintf()
+    try:
+        fn = mod.get_global(symbol)
+    except KeyError:
+        fn = ir.Function(mod, fnty, name=symbol)
+    # Call
+    ptr_fmt = builder.bitcast(global_fmt, cstring)
+    return builder.call(fn, [buffer, bufsz, ptr_fmt] + list(args))
+
+
+def snprintf_stackbuffer(builder, bufsz, format, *args):
+    """Similar to `snprintf()` but the buffer is stack allocated to size *bufsz*.
+
+    Returns the buffer pointer as i8*.
+    """
+    assert isinstance(bufsz, int)
+    spacety = ir.ArrayType(ir.IntType(8), bufsz)
+    space = alloca_once(builder, spacety, zfill=True)
+    buffer = builder.bitcast(space, voidptr_t)
+    snprintf(builder, buffer, intp_t(bufsz), format, *args)
+    return buffer
 
 
 if utils.PY3:

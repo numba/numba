@@ -13,8 +13,10 @@ from numba.extending import (
     overload,
     overload_method,
     intrinsic,
-    )
-from numba.targets.imputils import lower_constant, lower_cast
+)
+from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
+                                    iternext_impl, impl_ret_new_ref, RefType)
+from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
 from numba import njit
@@ -23,12 +25,14 @@ from numba.pythonapi import (
     PY_UNICODE_2BYTE_KIND,
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
-    )
+)
 from numba.targets import slicing
 from numba._helperlib import c_helpers
+from numba.targets.hashing import _Py_hash_t
+from numba.unsafe.bytes import memcpy_region
 
+# DATA MODEL
 
-### DATA MODEL
 
 @register_model(types.UnicodeType)
 class UnicodeModel(models.StructModel):
@@ -37,19 +41,28 @@ class UnicodeModel(models.StructModel):
             ('data', types.voidptr),
             ('length', types.intp),
             ('kind', types.int32),
+            ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
             ('parent', types.pyobject),
-            ]
+        ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
 
 
-### CAST
+@register_default(types.UnicodeIteratorType)
+class UnicodeIteratorModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('index', types.EphemeralPointer(types.uintp)),
+                   ('data', fe_type.data)]
+        super(UnicodeIteratorModel, self).__init__(dmm, fe_type, members)
+
+# CAST
 
 
 def compile_time_get_string_data(obj):
@@ -57,23 +70,25 @@ def compile_time_get_string_data(obj):
     the string data into the LLVM module.
     """
     from ctypes import (
-        CFUNCTYPE, c_void_p, c_int, py_object, c_ssize_t, POINTER, byref,
-        cast, c_ubyte,
+        CFUNCTYPE, c_void_p, c_int, c_ssize_t, c_ubyte, py_object,
+        POINTER, byref,
     )
 
     extract_unicode_fn = c_helpers['extract_unicode']
-    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int))
+    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int),
+                      POINTER(c_ssize_t))
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
-    data = fn(obj, byref(length), byref(kind))
+    hashv = c_ssize_t()
+    data = fn(obj, byref(length), byref(kind), byref(hashv))
     if data is None:
         raise ValueError("cannot extract unicode data from the given string")
     length = length.value
     kind = kind.value
     nbytes = (length + 1) * _kind_to_byte_width(kind)
     out = (c_ubyte * nbytes).from_address(data)
-    return bytes(out), length, kind
+    return bytes(out), length, kind, hashv.value
 
 
 def make_string_from_constant(context, builder, typ, literal_string):
@@ -81,13 +96,15 @@ def make_string_from_constant(context, builder, typ, literal_string):
     Get string data by `compile_time_get_string_data()` and return a
     unicode_type LLVM value
     """
-    databytes, length, kind = compile_time_get_string_data(literal_string)
+    databytes, length, kind, hashv = \
+        compile_time_get_string_data(literal_string)
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
     uni_str = cgutils.create_struct_proxy(typ)(context, builder)
     uni_str.data = gv
     uni_str.length = uni_str.length.type(length)
     uni_str.kind = uni_str.kind.type(kind)
+    uni_str.hash = uni_str.hash.type(hashv)
     return uni_str._getvalue()
 
 
@@ -98,15 +115,14 @@ def cast_from_literal(context, builder, fromty, toty, val):
     )
 
 
-### CONSTANT
+# CONSTANT
 
 @lower_constant(types.unicode_type)
 def constant_unicode(context, builder, typ, pyval):
     return make_string_from_constant(context, builder, typ, pyval)
 
 
-
-### BOXING
+# BOXING
 
 
 @unbox(types.UnicodeType)
@@ -114,11 +130,12 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
-    ok, data, length, kind = c.pyapi.string_as_string_size_and_kind(obj)
+    ok, data, length, kind, hashv = c.pyapi.string_as_string_size_and_kind(obj)
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
     uni_str.kind = kind
+    uni_str.hash = hashv
     uni_str.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
         data,  # the borrowed data pointer
         obj,   # the owner pyobject; the call will incref it.
@@ -135,12 +152,17 @@ def box_unicode_str(typ, val, c):
     Convert a native unicode structure to a unicode string
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-    res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
+    res = c.pyapi.string_from_kind_and_data(
+        uni_str.kind, uni_str.data, uni_str.length)
+    # hash isn't needed now, just compute it so it ends up in the unicodeobject
+    # hash cache, cpython doesn't always do this, depends how a string was
+    # created it's safe, just burns the cycles required to hash on @box
+    c.pyapi.object_hash(res)
     c.context.nrt.decref(c.builder, typ, val)
     return res
 
 
-#### HELPER FUNCTIONS
+# HELPER FUNCTIONS
 
 
 def make_deref_codegen(bitsize):
@@ -190,6 +212,8 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
         uni_str.length = length_val
+        # empty string has hash value -1 to indicate "need to compute hash"
+        uni_str.hash = context.get_constant(_Py_hash_t, -1)
         uni_str.data = context.nrt.meminfo_data(builder, uni_str.meminfo)
         # Set parent to NULL
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
@@ -223,6 +247,7 @@ def _get_code_point(a, i):
 
 ####
 
+
 def make_set_codegen(bitsize):
     def codegen(context, builder, signature, args):
         data, idx, ch = args
@@ -253,9 +278,9 @@ def set_uint32(typingctx, data, idx, ch):
     return sig, make_set_codegen(32)
 
 
-@njit
+@njit(_nrt=False)
 def _set_code_point(a, i, ch):
-    ### WARNING: This method is very dangerous:
+    # WARNING: This method is very dangerous:
     #   * Assumes that data contents can be changed (only allowed for new
     #     strings)
     #   * Assumes that the kind of unicode string is sufficiently wide to
@@ -268,7 +293,8 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
-        raise AssertionError("Unexpected unicode representation in _set_code_point")
+        raise AssertionError(
+            "Unexpected unicode representation in _set_code_point")
 
 
 @njit
@@ -303,7 +329,7 @@ def _kind_to_byte_width(kind):
         raise AssertionError("Unexpected unicode encoding encountered")
 
 
-@njit
+@njit(_nrt=False)
 def _cmp_region(a, a_offset, b, b_offset, n):
     if n == 0:
         return 0
@@ -323,7 +349,7 @@ def _cmp_region(a, a_offset, b, b_offset, n):
     return 0
 
 
-@njit
+@njit(_nrt=False)
 def _find(substr, s):
     # Naive, slow string matching for now
     for i in range(len(s) - len(substr) + 1):
@@ -332,7 +358,41 @@ def _find(substr, s):
     return -1
 
 
-#### PUBLIC API
+@njit
+def _is_whitespace(code_point):
+    # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+    return code_point == 0x0009 \
+        or code_point == 0x000A \
+        or code_point == 0x000B \
+        or code_point == 0x000C \
+        or code_point == 0x000D \
+        or code_point == 0x001C \
+        or code_point == 0x001D \
+        or code_point == 0x001E \
+        or code_point == 0x001F \
+        or code_point == 0x0020 \
+        or code_point == 0x0085 \
+        or code_point == 0x00A0 \
+        or code_point == 0x1680 \
+        or code_point == 0x2000 \
+        or code_point == 0x2001 \
+        or code_point == 0x2002 \
+        or code_point == 0x2003 \
+        or code_point == 0x2004 \
+        or code_point == 0x2005 \
+        or code_point == 0x2006 \
+        or code_point == 0x2007 \
+        or code_point == 0x2008 \
+        or code_point == 0x2009 \
+        or code_point == 0x200A \
+        or code_point == 0x2028 \
+        or code_point == 0x2029 \
+        or code_point == 0x202F \
+        or code_point == 0x205F \
+        or code_point == 0x3000
+
+
+# PUBLIC API
 
 @overload(len)
 def unicode_len(s):
@@ -440,7 +500,128 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
-### String creation
+@overload_method(types.UnicodeType, 'split')
+def unicode_split(a, sep=None, maxsplit=-1):
+    if not (maxsplit == -1 or
+            isinstance(maxsplit, (types.Omitted, types.Integer, types.IntegerLiteral))):
+        return None  # fail typing if maxsplit is not an integer
+
+    if isinstance(sep, types.UnicodeType):
+        def split_impl(a, sep, maxsplit=-1):
+            a_len = len(a)
+            sep_len = len(sep)
+
+            if sep_len == 0:
+                raise ValueError('empty separator')
+
+            parts = []
+            last = 0
+            idx = 0
+            split_count = 0
+
+            while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
+                if _cmp_region(a, idx, sep, 0, sep_len) == 0:
+                    parts.append(a[last:idx])
+                    idx += sep_len
+                    last = idx
+                    split_count += 1
+                else:
+                    idx += 1
+
+            if last <= a_len:
+                parts.append(a[last:])
+
+            return parts
+        return split_impl
+    elif sep is None or isinstance(sep, types.NoneType) or getattr(sep, 'value', False) is None:
+        def split_whitespace_impl(a, sep=None, maxsplit=-1):
+            a_len = len(a)
+
+            parts = []
+            last = 0
+            idx = 0
+            split_count = 0
+            in_whitespace_block = True
+
+            for idx in range(a_len):
+                code_point = _get_code_point(a, idx)
+                is_whitespace = _is_whitespace(code_point)
+                if in_whitespace_block:
+                    if is_whitespace:
+                        pass  # keep consuming space
+                    else:
+                        last = idx  # this is the start of the next string
+                        in_whitespace_block = False
+                else:
+                    if not is_whitespace:
+                        pass  # keep searching for whitespace transition
+                    else:
+                        parts.append(a[last:idx])
+                        in_whitespace_block = True
+                        split_count += 1
+                        if maxsplit != -1 and split_count == maxsplit:
+                            break
+
+            if last <= a_len and not in_whitespace_block:
+                parts.append(a[last:])
+
+            return parts
+        return split_whitespace_impl
+
+
+@njit
+def join_list(sep, parts):
+    parts_len = len(parts)
+    if parts_len == 0:
+        return ''
+
+    # Precompute size and char_width of result
+    sep_len = len(sep)
+    length = (parts_len - 1) * sep_len
+    kind = sep._kind
+    for p in parts:
+        length += len(p)
+        kind = _pick_kind(kind, p._kind)
+
+    result = _empty_string(kind, length)
+
+    # populate string
+    part = parts[0]
+    _strncpy(result, 0, part, 0, len(part))
+    dst_offset = len(part)
+    for idx in range(1, parts_len):
+        _strncpy(result, dst_offset, sep, 0, sep_len)
+        dst_offset += sep_len
+        part = parts[idx]
+        _strncpy(result, dst_offset, part, 0, len(part))
+        dst_offset += len(part)
+
+    return result
+
+
+@overload_method(types.UnicodeType, 'join')
+def unicode_join(sep, parts):
+    if isinstance(parts, types.List):
+        if isinstance(parts.dtype, types.UnicodeType):
+            def join_list_impl(sep, parts):
+                return join_list(sep, parts)
+            return join_list_impl
+        else:
+            pass  # lists of any other type not supported
+    elif isinstance(parts, types.IterableType):
+        def join_iter_impl(sep, parts):
+            parts_list = [p for p in parts]
+            return join_list(sep, parts_list)
+        return join_iter_impl
+    elif isinstance(parts, types.UnicodeType):
+        # Temporary workaround until UnicodeType is iterable
+        def join_str_impl(sep, parts):
+            parts_list = [parts[i] for i in range(len(parts))]
+            return join_list(sep, parts_list)
+        return join_str_impl
+
+
+# String creation
 
 @njit
 def normalize_str_idx(idx, length, is_start=True):
@@ -489,6 +670,7 @@ def _normalize_slice(typingctx, sliceobj, length):
 
     return sig, codegen
 
+
 @intrinsic
 def _slice_span(typingctx, sliceobj):
     """Compute the span from the given slice object.
@@ -503,6 +685,21 @@ def _slice_span(typingctx, sliceobj):
         return result_size
 
     return sig, codegen
+
+
+@njit(_nrt=False)
+def _strncpy(dst, dst_offset, src, src_offset, n):
+    if src._kind == dst._kind:
+        byte_width = _kind_to_byte_width(src._kind)
+        src_byte_offset = byte_width * src_offset
+        dst_byte_offset = byte_width * dst_offset
+        nbytes = n * byte_width
+        memcpy_region(dst._data, dst_byte_offset, src._data,
+                      src_byte_offset, nbytes, align=1)
+    else:
+        for i in range(n):
+            _set_code_point(dst, dst_offset + i,
+                            _get_code_point(src, src_offset + i))
 
 
 @overload(operator.getitem)
@@ -520,15 +717,20 @@ def unicode_getitem(s, idx):
                 slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
                 ret = _empty_string(s._kind, span)
-                cur = slice_idx.start
-                for i in range(span):
-                    _set_code_point(ret, i, _get_code_point(s, cur))
-                    cur += slice_idx.step
+
+                if slice_idx.step == 1:
+                    _strncpy(ret, 0, s, slice_idx.start, span)
+                else:
+                    cur = slice_idx.start
+                    for i in range(span):
+                        _set_code_point(ret, i, _get_code_point(s, cur))
+                        cur += slice_idx.step
                 return ret
             return getitem_slice
 
 
 @overload(operator.add)
+@overload(operator.iadd)
 def unicode_concat(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def concat_impl(a, b):
@@ -541,3 +743,70 @@ def unicode_concat(a, b):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
         return concat_impl
+
+
+@lower_builtin('getiter', types.UnicodeType)
+def getiter_unicode(context, builder, sig, args):
+    [ty] = sig.args
+    [data] = args
+
+    iterobj = context.make_helper(builder, sig.return_type)
+
+    # set the index to zero
+    zero = context.get_constant(types.uintp, 0)
+    indexptr = cgutils.alloca_once_value(builder, zero)
+
+    iterobj.index = indexptr
+
+    # wire in the unicode type data
+    iterobj.data = data
+
+    # incref as needed
+    if context.enable_nrt:
+        context.nrt.incref(builder, ty, data)
+
+    res = iterobj._getvalue()
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@lower_builtin('iternext', types.UnicodeIteratorType)
+# a new ref counted object is put into result._yield so set the new_ref to True!
+@iternext_impl(RefType.NEW)
+def iternext_unicode(context, builder, sig, args, result):
+    [iterty] = sig.args
+    [iter] = args
+
+    tyctx = context.typing_context
+
+    # get ref to unicode.__getitem__
+    fnty = tyctx.resolve_value_type(operator.getitem)
+    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, types.uintp),
+                                     {})
+    getitem_impl = context.get_function(fnty, getitem_sig)
+
+    # get ref to unicode.__len__
+    fnty = tyctx.resolve_value_type(len)
+    len_sig = fnty.get_call_type(tyctx, (types.unicode_type,), {})
+    len_impl = context.get_function(fnty, len_sig)
+
+    # grab unicode iterator struct
+    iterobj = context.make_helper(builder, iterty, value=iter)
+
+    # find the length of the string
+    strlen = len_impl(builder, (iterobj.data,))
+
+    # find the current index
+    index = builder.load(iterobj.index)
+
+    # see if the index is in range
+    is_valid = builder.icmp_unsigned('<', index, strlen)
+    result.set_valid(is_valid)
+
+    with builder.if_then(is_valid):
+        # return value at index
+        gotitem = getitem_impl(builder, (iterobj.data, index,))
+        result.yield_(gotitem)
+
+        # bump index for next cycle
+        nindex = cgutils.increment_index(builder, index)
+        builder.store(nindex, iterobj.index)

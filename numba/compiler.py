@@ -17,6 +17,7 @@ from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
 from numba.compiler_lock import global_compiler_lock
+from numba.analysis import dead_branch_prune
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -467,6 +468,23 @@ class BasePipeline(object):
         self.calltypes = defaultdict(lambda: types.pyobject)
         self.return_type = types.pyobject
 
+    def stage_dead_branch_prune(self):
+        """
+        This prunes dead branches, a dead branch is one which is derivable as
+        not taken at compile time purely based on const/literal evaluation.
+        """
+        assert self.func_ir
+        msg = ('Internal error in pre-inference dead branch pruning '
+               'pass encountered during compilation of '
+               'function "%s"' % (self.func_id.func_name,))
+        with self.fallback_context(msg):
+            dead_branch_prune(self.func_ir, self.args)
+
+        if config.DEBUG or config.DUMP_IR:
+            print('branch_pruned_ir'.center(80, '-'))
+            print(self.func_ir.dump())
+            print('end branch_pruned_ir'.center(80, '-'))
+
     def stage_nopython_frontend(self):
         """
         Type inference and legalization
@@ -759,6 +777,7 @@ class BasePipeline(object):
                 pm.add_stage(self.stage_preserve_ir,
                              "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
 

@@ -140,6 +140,10 @@ def np_trapz_x_dx(y, x, dx):
 def array_average(a, axis=None, weights=None):
     return np.average(a, axis=axis, weights=weights)
 
+def interp(x, xp, fp):
+    return np.interp(x, xp, fp)
+
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1512,6 +1516,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     _check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_ediff1d_edge_cases(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -2012,6 +2017,445 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         #test with axis argument
         test_1D_weights_axis(data, axis=1, weights=w)
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
+    def test_interp_basic(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-10)
+
+        x = np.linspace(-5, 5, 25)
+        xp = np.arange(-4, 8)
+        fp = xp + 1.5
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        self.rnd.shuffle(x)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        self.rnd.shuffle(fp)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        x[:5] = np.nan
+        x[-5:] = np.inf
+        self.rnd.shuffle(x)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        fp[:5] = np.nan
+        fp[-5:] = -np.inf
+        self.rnd.shuffle(fp)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.arange(-4, 8)
+        xp = x + 1
+        fp = x + 2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = (2.2, 3.3, -5.0)
+        xp = (2, 3, 4)
+        fp = (5, 6, 7)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = ((2.2, 3.3, -5.0), (1.2, 1.3, 4.0))
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1.4, np.nan, np.inf, -np.inf, 0.0, -9.1])
+        x = x.reshape(3, 2, order='F')
+        xp = np.linspace(-4, 4, 10)
+        fp = np.arange(-5, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        for x in range(-2, 4):
+            xp = [0, 1, 2]
+            fp = (3, 4, 5)
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([])
+        xp = [0, 1, 2]
+        fp = (3, 4, 5)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(0, 25, 60).reshape(3, 4, 5)
+        xp = np.arange(20)
+        fp = xp - 10
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.nan
+        xp = np.arange(5)
+        fp = np.full(5, np.nan)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.nan
+        xp = [3]
+        fp = [4]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.arange(-4, 8)
+        xp = x
+        fp = x
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [True, False]
+        xp = np.arange(-4, 8)
+        fp = xp
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = [-np.inf, -1.0, 0.0, 1.0, np.inf]
+        xp = np.arange(-4, 8)
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(-10, 10, 10)
+        xp = np.array([-np.inf, -1.0, 0.0, 1.0, np.inf])
+        fp = xp * 2.2
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = self.rnd.randn(100)
+        xp = np.linspace(-3, 3, 100)
+        fp = np.full(100, fill_value=3.142)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        for factor in 1, -1:
+            x = np.array([5, 6, 7]) * factor
+            xp = [1, 2]
+            fp = [3, 4]
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = 1
+        xp = [1]
+        fp = [True]
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.linspace(0, 1, 5)
+        y = np.linspace(0, 1, 5)
+        x0 = np.linspace(0, 1, 50)
+        out = cfunc(x0, x, y)
+        np.testing.assert_almost_equal(out, x0)
+
+        x = np.array([1, 2, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, 3.01, 4])
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        xp = [1]
+        fp = [np.inf]
+        _check(params={'x': 1, 'xp': xp, 'fp': fp})
+
+        x = np.array([1, 2, 2.5, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, np.nan, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1, 1.5, 2, 2.5, 3, 4, 4.5, 5, 5.5])
+        xp = np.array([1, 2, 3, 4, 5])
+        fp = np.array([np.nan, 2, np.nan, 4, np.nan])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1, 2, 2.5, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, np.inf, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([3.10034867, 3.0999066, 3.10001529])
+        xp = np.linspace(0, 10, 1 + 20000)
+        fp = np.sin(xp / 2.0)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        x = self.rnd.uniform(0, 2 * np.pi, (100,))
+        xp = np.linspace(0, 2 * np.pi, 1000)
+        fp = np.cos(xp)
+        exact = np.cos(x)
+        got = cfunc(x, xp, fp)
+        np.testing.assert_allclose(exact, got, atol=1e-5)
+
+        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0, 7])
+        xp = np.array([1, 2, 3, 4, 5, 6])
+        fp = np.array([1, 2, np.nan, 4, 3, np.inf])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        # very dense calibration
+        x = self.rnd.randn(10)
+        xp = np.linspace(-10, 10, 1000)
+        fp = np.ones_like(xp)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        # very sparse calibration
+        x = self.rnd.randn(1000)
+        xp = np.linspace(-10, 10, 10)
+        fp = np.ones_like(xp)
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+    @staticmethod
+    def _set_some_values_to_nan(a):
+        p = a.size // 4  # set approx 1/4 elements to NaN
+        np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
+    def test_interp_stress_tests(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        ndata = 20000
+
+        def arrays():
+            # much_finer_grid
+            yield np.linspace(2.0, 7.0, 1 + ndata * 5)
+            # finer_grid
+            yield np.linspace(2.0, 7.0, 1 + ndata)
+            # similar_grid
+            yield np.linspace(2.1, 6.8, 1 + ndata // 2)
+            # coarser_grid
+            yield np.linspace(2.1, 7.5, 1 + ndata // 2)
+            # much_coarser_grid
+            yield np.linspace(1.1, 9.5, 1 + ndata // 5)
+            # finer_stretched_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) * 1.09
+            # similar_stretched_grid
+            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 1.09
+            # finer_compressed_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) * 0.91
+            # similar_compressed_grid
+            yield np.linspace(3.1, 8.3, 1 + ndata // 2) * 0.91
+            # warped_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata // 2) + 0.3 * np.sin(
+                np.arange(1 + ndata / 2) * np.pi / (1 + ndata / 2))
+            # very_low_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=0.5 / ndata)
+            # low_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=2.0 / ndata)
+            # med_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=5.0 / ndata)
+            # high_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=20.0 / ndata)
+            # very_high_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=50.0 / ndata)
+            # extreme_noise_grid
+            yield np.linspace(3.1, 5.3, 1 + ndata) + self.rnd.normal(
+                size=1 + ndata, scale=200.0 / ndata)
+            # random_fine_grid
+            yield self.rnd.rand(1 + ndata) * 9.0 + 0.6
+            # random_grid
+            yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
+
+        xp = np.linspace(0, 10, 1 + ndata)
+        fp = np.sin(xp / 2.0)
+
+        # using abs_tol as otherwise fails on 32bit builds
+        for x in arrays():
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+            self.rnd.shuffle(x)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+            self.rnd.shuffle(fp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+            self._set_some_values_to_nan(x)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+            self._set_some_values_to_nan(fp)
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got, abs_tol=1e-14)
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_raise_if_xp_not_monotonic_increasing(self):
+        # this is *different* to NumPy; see:
+        # https://github.com/numpy/numpy/issues/10448
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(x, xp, fp):
+            msg = 'xp must be monotonically increasing'
+            with self.assertRaises(ValueError) as e:
+                cfunc(x, xp, fp)
+
+            self.assertIn(msg, str(e.exception))
+
+        x = np.arange(6)
+        xp = np.array([1, 2, 3, 3, 3, 5])  # repeating values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = 10 - np.arange(6)  # distinct but not increasing values
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+        x = np.arange(6)
+        xp = np.ones(6)  # constant value
+        fp = np.arange(6)
+        _check(x, xp, fp)
+
+    @unittest.skipUnless(np_version >= (1, 12), "complex handling per Numpy 1.12+")
+    def test_interp_complex_edge_case(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-12)
+
+        for x in range(-2, 4):
+            xp = np.arange(3) + 0.01
+            fp = np.arange(3) + 1j
+            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # note: in versions of NumPy prior to 1.12, this test causes
+        # Numpy to raise: TypeError: Cannot cast array data from
+        # dtype('complex128')  to dtype('float64') according to the
+        # rule 'safe'
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_exceptions(self):
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        x = np.array([1, 2, 3])
+        xp = np.array([])
+        fp = np.array([])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "array of sample points is empty"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.array([1, 2, 3])
+        fp = np.array([1, 2])
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(x, xp, fp)
+
+        msg = "fp and xp are not of the same size."
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.arange(6).reshape(3, 2)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "xp must be 1D"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1
+        xp = np.arange(6)
+        fp = np.arange(6).reshape(3, 2)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        msg = "fp must be 1D"
+        self.assertIn(msg, str(e.exception))
+
+        x = 1 + 1j
+        xp = np.arange(6)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        complex_dtype_msg = (
+            "Cannot cast array data from complex dtype "
+            "to float64 dtype"
+        )
+        self.assertIn(complex_dtype_msg, str(e.exception))
+
+        x = 1
+        xp = (np.arange(6) + 1j).astype(np.complex64)
+        fp = np.arange(6)
+
+        with self.assertTypingError() as e:
+            cfunc(x, xp, fp)
+
+        self.assertIn(complex_dtype_msg, str(e.exception))
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_non_finite_calibration(self):
+        # examples from
+        # https://github.com/numpy/numpy/issues/12951
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        xp = np.array([0, 1, 9, 10])
+        fp = np.array([-np.inf, 0.1, 0.9, np.inf])
+        x = np.array([0.2, 9.5])
+        params = {'x': x, 'xp': xp, 'fp': fp}
+        _check(params)
+
+        xp = np.array([-np.inf, 1, 9, np.inf])
+        fp = np.array([0, 0.1, 0.9, 1])
+        x = np.array([0.2, 9.5])
+        params = {'x': x, 'xp': xp, 'fp': fp}
+        _check(params)
+
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_supplemental_tests(self):
+        # inspired by class TestInterp
+        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        _check = partial(self._check_output, pyfunc, cfunc)
+
+        for size in range(1, 10):
+            xp = np.arange(size, dtype=np.double)
+            yp = np.ones(size, dtype=np.double)
+            incpts = np.array([-1, 0, size - 1, size], dtype=np.double)
+            decpts = incpts[::-1]
+
+            incres = cfunc(incpts, xp, yp)
+            decres = cfunc(decpts, xp, yp)
+            inctgt = np.array([1, 1, 1, 1], dtype=float)
+            dectgt = inctgt[::-1]
+            np.testing.assert_almost_equal(incres, inctgt)
+            np.testing.assert_almost_equal(decres, dectgt)
+
+        x = np.linspace(0, 1, 5)
+        y = np.linspace(0, 1, 5)
+        x0 = 0
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+        x0 = 0.3
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+        x0 = np.float32(0.3)
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+        x0 = np.float64(0.3)
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+        x0 = np.nan
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+
+        x = np.linspace(0, 1, 5)
+        y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
+        x0 = 0.3
+        y0 = x0 + (1 + x0) * 1.0j
+        np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
+
+        x = np.linspace(0, 1, 5)
+        y = np.linspace(0, 1, 5)
+        x0 = np.array(0.3)
+        np.testing.assert_almost_equal(cfunc(x0, x, y), x0)
+
+        xp = np.arange(0, 10, 0.0001)
+        fp = np.sin(xp)
+        np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
 
     def test_asarray(self):
 

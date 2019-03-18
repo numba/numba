@@ -86,6 +86,13 @@ class Signature(object):
             return self
         sig = signature(self.return_type, *self.args[1:],
                         recvr=self.args[0])
+
+        # Adjust the python signature
+        params = list(self.pysig.parameters.values())[1:]
+        sig.pysig = utils.pySignature(
+            parameters=params,
+            return_annotation=self.pysig.return_annotation,
+        )
         return sig
 
     def as_function(self):
@@ -134,7 +141,25 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - default_handler(index, param, default) is called for omitted arguments
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
-    ba = pysig.bind(*args, **kws)
+
+    # deal with kwonly args
+    params = pysig.parameters
+    kwonly = []
+    for name, p in params.items():
+        if p.kind == p.KEYWORD_ONLY:
+            kwonly.append(name)
+
+    if kwonly:
+        bind_args = args[:-len(kwonly)]
+    else:
+        bind_args = args
+    bind_kws = kws.copy()
+    if kwonly:
+        for idx, n in enumerate(kwonly):
+            bind_kws[n] = args[len(kwonly) + idx]
+
+    # now bind
+    ba = pysig.bind(*bind_args, **bind_kws)
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -568,7 +593,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
         """
-        cache_key = context, typ, attr
+        cache_key = context, typ, attr, tuple(sig_args), tuple(sig_kws.items())
         try:
             disp = cls._impl_cache[cache_key]
         except KeyError:

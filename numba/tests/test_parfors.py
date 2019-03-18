@@ -1378,6 +1378,18 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, np.random.ranf(128))
 
+    @skip_unsupported
+    def test_array_compare_scalar(self):
+        """ issue3671: X != 0 becomes an arrayexpr with operator.ne.
+            That is turned into a parfor by devectorizing.  Make sure
+            the return type of the devectorized operator.ne
+            on integer types works properly.
+        """
+        def test_impl():
+            X = np.zeros(10, dtype=np.int_)
+            return X != 0
+
+        self.check(test_impl)
 
 class TestPrangeBase(TestParforsBase):
 
@@ -2026,6 +2038,68 @@ class TestPrange(TestPrangeBase):
                         "simultaneously by multiple workers and may result "
                         "in non-deterministic or unintended results.")
         self.assertIn(expected_msg, str(warning_obj.message))
+
+    @skip_unsupported
+    def test_nested_parfor_push_call_vars(self):
+        """ issue 3686: if a prange has something inside it that causes
+            a nested parfor to be generated and both the inner and outer
+            parfor use the same call variable defined outside the parfors
+            then ensure that when that call variable is pushed into the
+            parfor that the call variable isn't duplicated with the same
+            name resulting in a redundant type lock.
+        """
+        def test_impl():
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
+            for i in range(2):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
+
+            return B
+        self.prange_tester(test_impl)
+
+    @skip_unsupported
+    def test_multiple_call_getattr_object(self):
+        def test_impl(n):
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.0)
+                B += f(n)
+
+            return B
+        self.prange_tester(test_impl, 1.0)
+
+    @skip_unsupported
+    def test_mutable_list_param(self):
+        """ issue3699: test that mutable variable to call in loop
+            is not hoisted.  The call in test_impl forces a manual
+            check here rather than using prange_tester.
+        """
+        @njit
+        def list_check(X):
+            """ If the variable X is hoisted in the test_impl prange
+                then subsequent list_check calls would return increasing
+                values.
+            """
+            ret = X[-1]
+            a = X[-1] + 1
+            X.append(a)
+            return ret
+        def test_impl(n):
+            for i in prange(n):
+                X = [100]
+                a = list_check(X)
+            return a
+        python_res = test_impl(10)
+        njit_res = njit(test_impl)(10)
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = pa_func(10)
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
 
 
 @skip_parfors_unsupported

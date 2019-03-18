@@ -157,6 +157,8 @@ declmethod(adapt_ndarray_from_python);
 declmethod(adapt_ndarray_to_python);
 declmethod(adapt_buffer_from_python);
 declmethod(meminfo_new_from_pyobject);
+declmethod(meminfo_as_pyobject);
+declmethod(meminfo_from_pyobject);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);

@@ -165,6 +165,11 @@ def array_sum_const_multi(arr, axis):
     e = np.sum(arr, axis=-1)
     return a, b, c, d, e
 
+def array_sum_const_axis_neg_one(a, axis):
+    # use .sum with -1 axis, this is for use with 1D arrays where the above
+    # "const_multi" variant would raise errors
+    return a.sum(axis=-1)
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
 
@@ -413,6 +418,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.arange(16, dtype=np.int32)[::2]
         check(arr, np.uint64)
 
+        # check read only attr does not get copied
+        arr = np.arange(16, dtype=np.int32)
+        arr.flags.writeable = False
+        check(arr, np.int32)
+
         # Invalid conversion
         dt = np.dtype([('x', np.int8)])
         with self.assertTypingError() as raises:
@@ -638,6 +648,71 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for x in (0, 1, True, False, 2.5, 0j):
             check_scal(x)
 
+    def test_np_where_3_broadcast_x_y_scalar(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(got, expected)
+
+        def a_variations():
+            a = np.linspace(-2, 4, 20)
+            self.random.shuffle(a)
+            yield a
+            yield a.reshape(2, 5, 2)
+            yield a.reshape(4, 5, order='F')
+            yield a.reshape(2, 5, 2)[::-1]
+
+        for a in a_variations():
+            params = (a > 0, 0, 1)
+            check_ok(params)
+
+            params = (a < 0, np.nan, 1 + 4j)
+            check_ok(params)
+
+            params = (a > 1, True, False)
+            check_ok(params)
+
+    def test_np_where_3_broadcast_x_or_y_scalar(self):
+        pyfunc = np_where_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(args):
+            condition, x, y = args
+
+            expected = pyfunc(condition, x, y)
+            got = cfunc(condition, x, y)
+            self.assertPreciseEqual(got, expected)
+
+            # swap x and y
+            expected = pyfunc(condition, y, x)
+            got = cfunc(condition, y, x)
+            self.assertPreciseEqual(got, expected)
+
+        def array_permutations():
+            x = np.arange(9).reshape(3, 3)
+            yield x
+            yield x * 1.1
+            yield np.asfortranarray(x)
+            yield x[::-1]
+            yield np.linspace(-10, 10, 60).reshape(3, 4, 5) * 1j
+
+        def scalar_permutations():
+            yield 0
+            yield 4.3
+            yield np.nan
+            yield True
+            yield 8 + 4j
+
+        for x in array_permutations():
+            for y in scalar_permutations():
+                x_mean = np.mean(x)
+                condition = x > x_mean
+                params = (condition, x, y)
+                check_ok(params)
+
     def test_item(self):
         pyfunc = array_item
         cfunc = jit(nopython=True)(pyfunc)
@@ -711,6 +786,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
         # OK
         self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
+
+    def test_sum_1d_kws(self):
+        # check 1d reduces to scalar
+        pyfunc = array_sum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a, axis=0), cfunc(a, axis=0))
+        pyfunc = array_sum_const_axis_neg_one
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a, axis=-1), cfunc(a, axis=-1))
 
     def test_sum_const(self):
         pyfunc = array_sum_const_multi
