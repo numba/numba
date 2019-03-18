@@ -136,14 +136,12 @@ def np_trapz_dx(y, dx):
 
 def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
-
+  
 def array_average(a, axis=None, weights=None):
     return np.average(a, axis=axis, weights=weights)
 
 def interp(x, xp, fp):
     return np.interp(x, xp, fp)
-
-
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -1944,8 +1942,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn('y cannot be a scalar', str(e.exception))
 
     def test_average(self):
-        #array of random floats
-        N = 5
+
+        #array of random numbers
+        N = 100
         a = np.random.ranf(N)*100
         w = np.random.ranf(N)*100
         w0 = np.zeros(N)
@@ -1964,7 +1963,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         d2 = 25
         a_3d = np.random.rand(d0,d1,d2)*100
         w_3d = np.random.rand(d0,d1,d2)*100
-
 
         pyfunc = array_average
         cfunc = jit(nopython=True)(pyfunc)
