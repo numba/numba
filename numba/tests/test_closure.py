@@ -1,15 +1,12 @@
 from __future__ import print_function
 
-import sys
-
 # import numpy in two ways, both uses needed
 import numpy as np
 import numpy
 
 import numba.unittest_support as unittest
 from numba import njit, jit, testing, utils
-from numba.errors import (NotDefinedError, TypingError, LoweringError,
-                          UnsupportedError)
+from numba.errors import (TypingError, LoweringError, UnsupportedError)
 from .support import TestCase, tag
 from numba.six import exec_
 
@@ -230,7 +227,7 @@ class TestInlinedClosure(TestCase):
         def outer3(x):
             """ Test recursive inner """
             def inner(x):
-                if x + y < 2:
+                if x < 2:
                     return 10
                 else:
                     inner(x - 1)
@@ -449,6 +446,96 @@ class TestInlinedClosure(TestCase):
             cfunc(var)
         msg = "Invalid use of getiter with parameters (none)"
         self.assertIn(msg, str(raises.exception))
+
+
+class TestObjmodeFallback(TestCase):
+    # These are all based on tests from real life issues where, predominantly,
+    # the object mode fallback compilation path would fail as a result of the IR
+    # being mutated by closure inlining in npm. Tests are named after issues,
+    # all of which failed to compile as of 0.44.
+
+    decorators = [jit, jit(forceobj=True)]
+
+    def test_issue2955(self):
+
+        def numbaFailure(scores, cooc):
+            rows, cols = scores.shape
+            for i in range(rows):
+                coxv = scores[i]
+                groups = sorted(set(coxv), reverse=True)
+                [set(np.argwhere(coxv == x).flatten()) for x in groups]
+
+        x = np.random.random((10, 10))
+        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(np.int)
+        for d in self.decorators:
+            d(numbaFailure)(x, y)
+
+    def test_issue3239(self):
+
+        def fit(X, y):
+            if type(X) is not np.ndarray:
+                X = np.array(X)
+
+            if type(y) is not np.ndarray:
+                y = np.array(y)
+
+            m, _ = X.shape
+            X = np.hstack((
+                np.array([[1] for _ in range(m)]),
+                X
+            ))
+
+            res = np.dot(np.dot(X, X.T), y)
+            intercept = res[0]
+            coefs = res[1:]
+            return intercept, coefs
+
+        for d in self.decorators:
+            d(fit)(np.arange(10).reshape(1, 10), np.arange(10).reshape(1, 10))
+
+    def test_issue3289(self):
+        b = [(5, 124), (52, 5)]
+
+        def a():
+            [b[index] for index in [0, 1]]
+            for x in range(5):
+                pass
+        for d in self.decorators:
+            d(a)()
+
+    def test_issue3413(self):
+
+        def foo(data):
+            # commenting out this line prevents the crash:
+            t = max([len(m) for m in data['y']])
+
+            mask = data['x'] == 0
+            if any(mask):
+                z = 15
+            return t, z
+
+        data = {'x': np.arange(5), 'y': [[1], [2, 3]]}
+        for d in self.decorators:
+            d(foo)(data)
+
+    def test_issue3659(self):
+
+        def main():
+            a = np.array(((1, 2), (3, 4)))
+            return np.array([x for x in a])
+        for d in self.decorators:
+            d(main)()
+
+    def test_issue3803(self):
+
+        def center(X):
+            np.array([np.float_(x) for x in X.T])
+            np.array([np.float_(1) for _ in X.T])
+            return X
+
+        X = np.zeros((10,))
+        for d in self.decorators:
+            d(center)(X)
 
 
 if __name__ == '__main__':
