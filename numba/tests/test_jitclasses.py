@@ -20,6 +20,7 @@ from numba.errors import LoweringError
 if sys.version_info >= (3,):
     from .jitclass_usecases import TestClass1, TestClass2
 
+
 def _get_meminfo(box):
     ptr = _box.box_get_meminfoptr(box)
     mi = MemInfo(ptr)
@@ -865,7 +866,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         set26(t, 2)
         self.assertEqual(t[2:2:1], 2)
         self.assertEqual(t[6:6:1], 3)
-
 
 
 if __name__ == '__main__':
