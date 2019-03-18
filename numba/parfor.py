@@ -1344,7 +1344,8 @@ class PreParforPass(object):
                         if isinstance(typ, types.npytypes.Array):
                             # Convert A.dtype to four statements.
                             # 1) Get numpy global.
-                            # 2) Create var for known type of array, e.g., numpy.float64
+                            # 2) Create var for known type of array as string
+                            #    constant. e.g. 'float64'
                             # 3) Get dtype function from numpy module.
                             # 4) Create var for numpy.dtype(var from #2).
 
@@ -1357,14 +1358,17 @@ class PreParforPass(object):
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
 
-                            # Create var for type infered type of the array, e.g., numpy.float64.
-                            typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-                            self.typemap[typ_var.name] = types.functions.NumberClass(dtype)
+                            # Create var for type infered type of the array
+                            # e.g., 'float64'
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
                                 dtype_str = 'bool_'
-                            np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-                            typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+                            typ_var = ir.Var(
+                                scope, mk_unique_var("$np_typ_var"), loc)
+                            self.typemap[typ_var.name] = types.StringLiteral(
+                                dtype_str)
+                            typ_var_assign = ir.Assign(
+                                ir.Const(dtype_str, loc), typ_var, loc)
 
                             # Get the dtype function from the numpy module.
                             dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
