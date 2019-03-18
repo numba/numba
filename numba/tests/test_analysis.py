@@ -1,8 +1,9 @@
 # Tests numba.analysis functions
 from __future__ import print_function, absolute_import, division
 
+import numpy as np
 from numba.compiler import compile_isolated, run_frontend
-from numba import types, rewrites, ir
+from numba import types, rewrites, ir, jit, ir_utils
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -33,6 +34,14 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
     """
     _DEBUG = False
 
+    # find *all* branches
+    def find_branches(self, the_ir):
+        branches = []
+        for blk in the_ir.blocks.values():
+            tmp = [_ for _ in blk.find_insts(cls=ir.Branch)]
+            branches.extend(tmp)
+        return branches
+
     def assert_prune(self, func, args_tys, prune, *args):
         # This checks that the expected pruned branches have indeed been pruned.
         # func is a python function to assess
@@ -59,15 +68,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             print("after prune")
             func_ir.dump()
 
-        # find *all* branches
-        def find_branches(the_ir):
-            branches = []
-            for blk in the_ir.blocks.values():
-                tmp = [_ for _ in blk.find_insts(cls=ir.Branch)]
-                branches.extend(tmp)
-            return branches
-
-        before_branches = find_branches(before)
+        before_branches = self.find_branches(before)
         self.assertEqual(len(before_branches), len(prune))
 
         # what is expected to be pruned
@@ -317,3 +318,60 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                           1000)
         self.assert_prune(impl, (types.IntegerLiteral(0),), [None, None], 0)
         self.assert_prune(impl, (types.NoneType('none'),), [True, False], None)
+
+    def test_cond_rewrite_is_correct(self):
+        # this checks that when a condition is replaced, it is replace by a
+        # true/false bit that correctly represents the evaluated condition
+        def fn(x):
+            if x is None:
+                return 10
+            return 12
+
+        def check(func, arg_tys, bit_val):
+            func_ir = compile_to_ir(func)
+
+            # check there is 1 branch
+            before_branches = self.find_branches(func_ir)
+            self.assertEqual(len(before_branches), 1)
+
+            # check the condition in the branch is a binop
+            condition_var = before_branches[0].cond
+            condition_defn = ir_utils.get_definition(func_ir, condition_var)
+            self.assertEqual(condition_defn.op, 'binop')
+
+            # do the prune, this should kill the dead branch and rewrite the
+            #'condition to a true/false const bit
+            if self._DEBUG:
+                print("=" * 80)
+                print("before prune")
+                func_ir.dump()
+            dead_branch_prune(func_ir, arg_tys)
+            if self._DEBUG:
+                print("=" * 80)
+                print("after prune")
+                func_ir.dump()
+
+            # after mutation, the condition should be a const value `bit_val`
+            new_condition_defn = ir_utils.get_definition(func_ir, condition_var)
+            self.assertTrue(isinstance(new_condition_defn, ir.Const))
+            self.assertEqual(new_condition_defn.value, bit_val)
+
+        check(fn, (types.NoneType('none'),), 1)
+        check(fn, (types.IntegerLiteral(10),), 0)
+
+    def test_obj_mode_fallback(self):
+        # see issue #3879, this checks that object mode fall back doesn't suffer
+        # from the IR mutation
+
+        @jit
+        def bug(a,b):
+            if a.ndim == 1:
+                if b is None:
+                    return 10
+                return 12
+            return []
+
+        self.assertEqual(bug(np.arange(10), 4), 12)
+        self.assertEqual(bug(np.arange(10), None), 10)
+        self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
+        self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
