@@ -5,16 +5,6 @@
 Supported NumPy features
 ========================
 
-.. note::
-   The vast majority of NumPy 1.16 behaviour is supported, however
-   ``datetime`` and ``timedelta`` use involving ``NaT`` matches the behaviour
-   present in earlier release. The ufunc suite has not been extending to
-   accommodate the two new time computation related additions present in NumPy
-   1.16. In addition the functions ``ediff1d`` and ``interp`` have known minor
-   issues in replicating outputs exactly when ``NaN``'s occur in certain input
-   patterns.
-
-
 One objective of Numba is having a seamless integration with `NumPy`_.
 NumPy arrays provide an efficient storage method for homogeneous sets of
 data.  NumPy dtypes provide type information useful when compiling, and
