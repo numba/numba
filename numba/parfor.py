@@ -1358,7 +1358,7 @@ class PreParforPass(object):
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
 
-                            # Create var for type infered type of the array
+                            # Create var for the inferred type of the array
                             # e.g., 'float64'
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
