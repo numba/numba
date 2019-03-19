@@ -1,3 +1,127 @@
+Version 0.43.0
+--------------
+
+In this release, the major new features are:
+
+- Initial support for statically typed dictionaries
+- Improvements to `hash()` to match Python 3 behavior
+- Support for the heapq module
+- Ability to pass C structs to Numba
+- More NumPy functions: asarray, trapz, roll, ptp, extract
+
+
+NOTE:
+
+The vast majority of NumPy 1.16 behaviour is supported, however
+``datetime`` and ``timedelta`` use involving ``NaT`` matches the behaviour
+present in earlier release. The ufunc suite has not been extending to
+accommodate the two new time computation related additions present in NumPy
+1.16. In addition the functions ``ediff1d`` and ``interp`` have known minor
+issues in replicating outputs exactly when ``NaN``'s occur in certain input
+patterns.
+
+General Enhancements:
+
+* PR #3563: Support for np.roll
+* PR #3572: Support for np.ptp
+* PR #3592: Add dead branch prune before type inference.
+* PR #3598: Implement np.asarray()
+* PR #3604: Support for np.interp
+* PR #3607: Some simplication to lowering
+* PR #3612: Exact match flag in dispatcher
+* PR #3627: Support for np.trapz
+* PR #3630: np.where with broadcasting
+* PR #3633: Support for np.extract
+* PR #3657: np.max, np.min, np.nanmax, np.nanmin - support for complex dtypes
+* PR #3661: Access C Struct as Numpy Structured Array
+* PR #3678: Support for str.split and str.join
+* PR #3684: Support C array in C struct
+* PR #3696: Add intrinsic to help debug refcount
+* PR #3703: Implementations of type hashing.
+* PR #3715: Port CPython3.7 dictionary for numba internal use
+* PR #3716: Support inplace concat of strings
+* PR #3718: Add location to ConstantInferenceError exceptions.
+* PR #3720: improve error msg about invalid signature
+* PR #3731: Support for heapq
+* PR #3754: Updates for llvmlite 0.28
+* PR #3760: Overloadable operator.setitem
+* PR #3775: Support overloading operator.delitem
+* PR #3777: Implement compiler support for dictionary
+* PR #3791: Implement interpreter-side interface for numba dict
+* PR #3799: Support refcount'ed types in numba dict
+
+CUDA Enhancements/Fixes:
+
+* PR #3713: Fix the NvvmSupportError message when CC too low
+* PR #3722: Fix #3705: slicing error with negative strides
+* PR #3755: Make cuda.to_device accept readonly host array
+* PR #3773: Adapt library search to accommodate multiple locations
+
+Documentation Updates:
+
+* PR #3651: fix link to berryconda in docs
+* PR #3668: Add Azure Pipelines build badge
+* PR #3749: DOC: Clarify when prange is different from range
+* PR #3771: fix a few typos
+* PR #3785: Clarify use of range as function only.
+* PR #3829: Add docs for typed-dict
+
+Fixes:
+
+* PR #3614: Resolve #3586
+* PR #3618: Skip gdb tests on ARM.
+* PR #3643: Remove support_literals usage
+* PR #3645: Enforce and fix that AbstractTemplate.generic must be returning a Signature
+* PR #3648: Fail on @overload signature mismatch.
+* PR #3660: Added Ignore message to test numba.tests.test_lists.TestLists.test_mul_error
+* PR #3662: Replace six with numba.six
+* PR #3663: Removes coverage computation from travisci builds
+* PR #3672: Avoid leaking memory when iterating over uniform tuple
+* PR #3676: Fixes constant string lowering inside tuples
+* PR #3677: Ensure all referenced compiled functions are linked properly
+* PR #3692: Fix test failure due to overly strict test on floating point values.
+* PR #3693: Intercept failed import to help users.
+* PR #3694: Fix memory leak in enumerate iterator
+* PR #3695: Convert return of None from intrinsic implementation to dummy value
+* PR #3697: Fix for issue #3687
+* PR #3701: Fix array.T analysis (fixes #3700)
+* PR #3704: Fixes for overload_method
+* PR #3706: Don't push call vars recursively into nested parfors. Resolves #3686.
+* PR #3710: Set as non-hoistable if a mutable variable is passed to a function in a loop. Resolves #3699.
+* PR #3712: parallel=True to use better builtin mechanism to resolve call types. Resolves issue #3671
+* PR #3725: Fix invalid removal of dead empty list
+* PR #3740: add uintp as a valid type to the tuple operator.getitem
+* PR #3758: Fix target definition update in inlining
+* PR #3782: Raise typing error on yield optional.
+* PR #3792: Fix non-module object used as the module of a function.
+* PR #3800: Bugfix for np.interp
+* PR #3808: Bump macro to include VS2014 to fix py3.5 build
+* PR #3809: Add debug guard to debug only C function.
+* PR #3816: Fix array.sum(axis) 1d input return type.
+* PR #3821: Replace PySys_WriteStdout with PySys_FormatStdout to ensure no truncation.
+* PR #3830: Getitem should not return optional type
+* PR #3832: Handle single string as path in find_file()
+
+Contributors:
+
+* Ehsan Totoni
+* Gryllos Prokopis
+* Jonathan J. Helmus
+* Kayla Ngan
+* lalitparate
+* luk-f-a
+* Matyt
+* Max Bolingbroke
+* Michael Seifert
+* Rob Ennis
+* Siu Kwan Lam
+* Stan Seibert
+* Stuart Archibald
+* Todd A. Anderson
+* Tao He
+* Valentin Haenel
+
+
 Version 0.42.1
 --------------
 

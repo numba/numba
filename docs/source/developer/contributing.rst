@@ -226,13 +226,13 @@ Every commit to the master branch is automatically tested on all of the
 platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
 AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
 also use `Travis CI <https://travis-ci.org/numba/numba>`_ and 
-`AppVeyor <https://ci.appveyor.com/project/seibert/numba-j46mi>`_ to provide 
-public continuous integration information for as many combinations as can be
-supported by the service.  Travis CI automatically tests all pull requests on OS
-X and Linux, as well as a sampling of different Python and NumPy versions.  If
-you see problems on platforms you are unfamiliar with, feel free to ask for
-help in your pull request.  The Numba core developers can help diagnose
-cross-platform compatibility issues.
+`Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
+integration information for as many combinations as can be supported by the
+service.  Travis CI automatically tests all pull requests on OS X and Linux, as
+well as a sampling of different Python and NumPy versions, Azure does the same
+but also includes Windows.  If you see problems on platforms you are unfamiliar
+with, feel free to ask for help in your pull request.  The Numba core developers
+can help diagnose cross-platform compatibility issues.
 
 
 Documentation

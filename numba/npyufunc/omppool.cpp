@@ -2,11 +2,17 @@
 Threading layer on top of OpenMP.
 */
 
+#include "../_pymodule.h"
+#ifdef _POSIX_C_SOURCE
+#undef _POSIX_C_SOURCE
+#endif
+#ifdef _XOPEN_SOURCE
+#undef _XOPEN_SOURCE
+#endif
 #include <omp.h>
 #include <string.h>
 #include <stdio.h>
 #include "workqueue.h"
-#include "../_pymodule.h"
 #include "gufunc_scheduler.h"
 
 #ifdef _MSC_VER
