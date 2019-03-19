@@ -282,6 +282,7 @@ class Expr(Inst):
         assert not isinstance(fn, str)
         assert isinstance(lhs, Var)
         assert isinstance(rhs, Var)
+        assert isinstance(loc, Loc)
         op = 'binop'
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
@@ -292,6 +293,7 @@ class Expr(Inst):
         assert not isinstance(immutable_fn, str)
         assert isinstance(lhs, Var)
         assert isinstance(rhs, Var)
+        assert isinstance(loc, Loc)
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
@@ -299,36 +301,41 @@ class Expr(Inst):
 
     @classmethod
     def unary(cls, fn, value, loc):
-        assert isinstance(fn, Var)
-        assert isinstance(value, Var)
+        assert isinstance(value, (str, Var)) or callable(fn)
+        assert isinstance(loc, Loc)
         op = 'unary'
         fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
     def call(cls, func, args, kws, loc, vararg=None):
-        assert isinstance(func, Var)
+        assert isinstance(func, (Var, Intrinsic))
+        assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
                    vararg=vararg)
 
     @classmethod
     def build_tuple(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_tuple'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_list(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_list'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_set(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_set'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_map(cls, items, size, loc):
+        assert isinstance(loc, Loc)
         op = 'build_map'
         return cls(op=op, loc=loc, items=items, size=size)
 
@@ -341,18 +348,21 @@ class Expr(Inst):
     @classmethod
     def pair_second(cls, value, loc):
         assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'pair_second'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def getiter(cls, value, loc):
         assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def iternext(cls, value, loc):
         assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'iternext'
         return cls(op=op, loc=loc, value=value)
 
@@ -360,6 +370,7 @@ class Expr(Inst):
     def exhaust_iter(cls, value, count, loc):
         assert isinstance(value, Var)
         assert isinstance(count, int)
+        assert isinstance(loc, Loc)
         op = 'exhaust_iter'
         return cls(op=op, loc=loc, value=value, count=count)
 
@@ -367,6 +378,7 @@ class Expr(Inst):
     def getattr(cls, value, attr, loc):
         assert isinstance(value, Var)
         assert isinstance(attr, str)
+        assert isinstance(loc, Loc)
         op = 'getattr'
         return cls(op=op, loc=loc, value=value, attr=attr)
 
@@ -374,6 +386,7 @@ class Expr(Inst):
     def getitem(cls, value, index, loc):
         assert isinstance(value, Var)
         assert isinstance(index, Var)
+        assert isinstance(loc, Loc)
         op = 'getitem'
         return cls(op=op, loc=loc, value=value, index=index)
 
@@ -381,6 +394,7 @@ class Expr(Inst):
     def static_getitem(cls, value, index, index_var, loc):
         assert isinstance(value, Var)
         assert index_var is None or isinstance(index_var, Var)
+        assert isinstance(loc, Loc)
         op = 'static_getitem'
         return cls(op=op, loc=loc, value=value, index=index,
                    index_var=index_var)
@@ -391,6 +405,7 @@ class Expr(Inst):
         A node for implicit casting at the return statement
         """
         assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
@@ -399,6 +414,7 @@ class Expr(Inst):
         """
         A node for making a function object.
         """
+        assert isinstance(loc, Loc)
         op = 'make_function'
         return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
 
@@ -543,7 +559,7 @@ class Raise(Terminator):
     is_exit = True
 
     def __init__(self, exception, loc):
-        assert isinstance(exception, Var)
+        assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
         self.loc = loc
