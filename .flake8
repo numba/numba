@@ -29,7 +29,6 @@ exclude =
     numba/smartarray.py
     numba/transforms.py
     numba/tracing.py
-    numba/config.py
     numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
