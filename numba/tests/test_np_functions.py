@@ -1513,25 +1513,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_edge_cases(self):
+        # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
+        # https://github.com/numpy/numpy/issues/13103, as this is not resolved
+        # Numba replicates behaviours for <= 1.15 and conversion in 1.16.0 for
+        # finite inputs.
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
         def _check_raises_type_error(params, arg):
-            with self.assertRaises(TypeError) as raises:
-                _check(params)
+            with self.assertRaises(TypingError) as raises:
+                cfunc(**params)
             msg = 'dtype of %s must be compatible with input ary' % arg
             self.assertIn(msg, str(raises.exception))
+
+            with self.assertRaises(ValueError) as raises:
+                pyfunc(**params)
+            excstr = str(raises.exception)
+            self.assertIn("cannot convert", excstr)
+            self.assertIn("to array with dtype", excstr)
+            self.assertIn("as required for input ary", excstr)
 
         def input_variations():
             yield ((1, 2, 3), (4, 5, 6))
             yield [4, 5, 6]
             yield np.array([])
             yield ()
-            yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
-            parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
-            a = parts + 1j * parts[::-1]
-            yield a.reshape(3, 3)
+            if np_version < (1, 16):
+                yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
+                parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+                a = parts + 1j * parts[::-1]
+                yield a.reshape(3, 3)
 
         for i in input_variations():
             params = {'ary': i, 'to_end': i, 'to_begin': i}
