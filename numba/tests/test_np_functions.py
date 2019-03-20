@@ -2209,7 +2209,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
-        ndata = 20000
+        ndata = 2000
         xp = np.linspace(0, 10, 1 + ndata)
 
         real = np.sin(xp / 2.0)

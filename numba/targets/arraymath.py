@@ -1543,6 +1543,11 @@ LIKELY_IN_CACHE_SIZE = 8
 
 @register_jitable
 def binary_search_with_guess(key, arr, length, guess):
+    # NOTE: Do not refactor... see note in np_interp function impl below
+    # this is a facsimile of binary_search_with_guess prior to 1.15:
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L447
     imin = 0
     imax = length
 
@@ -1606,8 +1611,11 @@ def binary_search_with_guess(key, arr, length, guess):
 
 @register_jitable
 def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp_complex prior to 1.16:
     # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L683
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1698,8 +1706,11 @@ def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
 
 @register_jitable
 def np_interp_impl_complex_fp_inner_116(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp_complex post 1.16:
     # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1793,8 +1804,11 @@ def np_interp_impl_complex_fp_inner_116(x, xp, fp, dtype):
 
 @register_jitable
 def np_interp_impl_inner(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp prior to 1.16:
     # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1874,8 +1888,11 @@ def np_interp_impl_inner(x, xp, fp, dtype):
 
 @register_jitable
 def np_interp_impl_inner_116(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp post 1.16:
     # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1960,6 +1977,22 @@ if numpy_version >= (1, 10):
     # replicate behaviour change of 1.10+
     @overload(np.interp)
     def np_interp(x, xp, fp):
+        # NOTE: there is considerable duplication present in the functions:
+        # np_interp_impl_complex_fp_inner_116
+        # np_interp_impl_complex_fp_inner
+        # np_interp_impl_inner_116
+        # np_interp_impl_inner
+        #
+        # This is because:
+        # 1. Replicating basic interp is relatively simple, however matching the
+        #    behaviour of NumPy for edge cases is really quite hard, after a
+        #    couple of attempts trying to avoid translation of the C source it
+        #    was deemed unavoidable.
+        # 2. Due to 1. it is much easier to keep track of changes if the Numba
+        #    source reflects the NumPy C source, so the duplication is kept.
+        # 3. There are significant changes that happened in the NumPy 1.16
+        #    release series, hence functions with `np116` appended, they behave
+        #    slightly differently!
 
         if hasattr(xp, 'ndim') and xp.ndim > 1:
             raise TypingError('xp must be 1D')
