@@ -7,7 +7,7 @@ from collections import namedtuple, defaultdict
 
 from numba import ir
 from numba.controlflow import CFGraph
-from numba import types
+from numba import types, consts
 
 #
 # Analysis related to variable lifetime
@@ -293,6 +293,7 @@ def dead_branch_prune(func_ir, called_args):
         # replace the branch with a direct jump
         jmp = ir.Jump(keep, loc=branch.loc)
         blk.body[-1] = jmp
+        return 1 if keep == branch.truebr else 0
 
     def prune_by_type(branch, condition, blk, *conds):
         # this prunes a given branch and fixes up the IR
@@ -306,9 +307,9 @@ def dead_branch_prune(func_ir, called_args):
                 kill = branch.falsebr if take_truebr else branch.truebr
                 print("Pruning %s" % kill, branch, lhs_cond, rhs_cond,
                       condition.fn)
-            do_prune(take_truebr, blk)
-            return True
-        return False
+            taken = do_prune(take_truebr, blk)
+            return True, taken
+        return False, None
 
     def prune_by_value(branch, condition, blk, *conds):
         lhs_cond, rhs_cond = conds
@@ -316,8 +317,8 @@ def dead_branch_prune(func_ir, called_args):
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
             print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
-        do_prune(take_truebr, blk)
-        return True
+        taken = do_prune(take_truebr, blk)
+        return True, taken
 
     class Unknown(object):
         pass
@@ -382,9 +383,10 @@ def dead_branch_prune(func_ir, called_args):
             # lhs/rhs are consts
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
-                if(prune(branch, condition, blk, *const_conds)):
+                prune_stat, taken = prune(branch, condition, blk, *const_conds)
+                if(prune_stat):
                     # add the condition to the list of nullified conditions
-                    nullified_conditions.append(condition)
+                    nullified_conditions.append((condition, taken))
 
     # 'ERE BE DRAGONS...
     # It is the evaluation of the condition expression that often trips up type
@@ -395,17 +397,33 @@ def dead_branch_prune(func_ir, called_args):
     # information to run DCE safely. Upshot of all this is the condition gets
     # rewritten below into a benign const that typing will be happy with and DCE
     # can remove it and its reference post typing when it is safe to do so
-    # (if desired).
-    for _, condition, blk in branch_info:
-        if condition in nullified_conditions:
+    # (if desired). It is required that the const is assigned a value that
+    # indicates the branch taken as its mutated value would be read in the case
+    # of object mode fall back in place of the condition itself. For
+    # completeness the func_ir._definitions and ._consts are also updated to
+    # make the IR state self consistent.
+
+    deadcond = [x[0] for x in nullified_conditions]
+    for _, cond, blk in branch_info:
+        if cond in deadcond:
             for x in blk.body:
-                if isinstance(x, ir.Assign) and x.value is condition:
-                    x.value = ir.Const(0, loc=x.loc)
+                if isinstance(x, ir.Assign) and x.value is cond:
+                    # rewrite the condition as a true/false bit
+                    branch_bit = nullified_conditions[deadcond.index(cond)][1]
+                    x.value = ir.Const(branch_bit, loc=x.loc)
+                    # update the specific definition to the new const
+                    defns = func_ir._definitions[x.target.name]
+                    repl_idx = defns.index(cond)
+                    defns[repl_idx] = x.value
 
     # Remove dead blocks, this is safe as it relies on the CFG only.
     cfg = compute_cfg_from_blocks(func_ir.blocks)
     for dead in cfg.dead_nodes():
         del func_ir.blocks[dead]
+
+    # if conditions were nullified then consts were rewritten, update
+    if nullified_conditions:
+        func_ir._consts = consts.ConstantInference(func_ir)
 
     if DEBUG > 1:
         print("after".center(80, '-'))
