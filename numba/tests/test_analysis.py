@@ -375,3 +375,4 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         self.assertEqual(bug(np.arange(10), None), 10)
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
+        self.assertFalse(bug.nopython_signatures)
