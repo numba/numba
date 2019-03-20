@@ -1355,23 +1355,18 @@ def _prepare_array_impl(arr):
 def _dtype_of_compound(inobj):
     obj = inobj
     while True:
-        try:
-            if isinstance(obj, (types.Number, types.Boolean)):
-                return as_dtype(obj)
-            l = getattr(obj, '__len__', None)
-            if l is not None and l() == 0: # empty tuple or similar
-                return np.float64
-            dt = getattr(obj, 'dtype', None)
-            if dt is None:
-                raise TypeError("type has no dtype attr")
+        if isinstance(obj, (types.Number, types.Boolean)):
+            return as_dtype(obj)
+        l = getattr(obj, '__len__', None)
+        if l is not None and l() == 0: # empty tuple or similar
+            return np.float64
+        dt = getattr(obj, 'dtype', None)
+        if dt is None:
+            raise TypeError("type has no dtype attr")
+        if isinstance(obj, types.Sequence):
+            obj = obj.dtype
+        else:
             return as_dtype(dt)
-        except (TypeError, NotImplementedError) as e:
-            # has dtype, but is not something understandable
-            if 'cannot be represented' in str(e) or \
-            'data type not understood' in str(e):
-                obj = obj.dtype
-            else:
-                raise TypeError("Cannot infer nested dtype")
 
 
 if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
