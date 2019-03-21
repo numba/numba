@@ -29,6 +29,9 @@ def angle1(x):
 def angle2(x, deg):
     return np.angle(x, deg)
 
+def delete(a, obj, axis=None):
+    return np.delete(a, obj, axis)
+
 def diff1(a):
     return np.diff(a)
 
@@ -295,6 +298,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_delete(self):
+
+        def arrays():
+            # array, obj, axis
+            # 
+            # 1d array, scalar, None
+            yield np.arange(10), 3, None
+            yield np.arange(10), -3, None # Negative obj
+            # 1d array, list, None
+            yield np.arange(10), [3, 5, 6], None
+            yield np.arange(10), [2, 3, 4, 5], None
+            # 3d array, scalar, None
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, None
+            # 3d array, list, None
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8], None
+            #
+            # yield np.arange(5 * 2).reshape(5, 2), 2, 0
+
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, obj, axis in arrays():
+            expected = pyfunc(a, obj, axis)
+            got = cfunc(a, obj, axis)
+            # print(expected)
+            # print(got)
+            self.assertPreciseEqual(expected, got)
 
     def diff_arrays(self):
         """

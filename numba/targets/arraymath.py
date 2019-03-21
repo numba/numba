@@ -2344,6 +2344,47 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.delete)
+def np_delete(a, obj, axis=None):
+    # Implementation based on numpy
+    # https://github.com/numpy/numpy/blob/v1.15.1/numpy/lib/function_base.py#L4065-L4267 
+
+    if not isinstance(a, types.Array):
+        raise ValueError("'arr' must be an array")
+
+    if isinstance(obj, (types.Array, types.Sequence)):
+        def np_delete_impl(a, obj, axis=None):
+            if (axis is None):
+                arr = np.ravel(a)
+
+            N = arr.size
+
+            keep = np.ones(N, dtype=np.bool_)
+            obj = np.array(obj)
+            keep[obj] = False
+            return arr[keep]
+
+    else: # scalar value
+        def np_delete_impl(a, obj, axis=None):
+            if (axis is None):
+                arr = np.ravel(a)
+
+            N = arr.size
+            pos = obj.item()
+
+            if (pos < -N or pos >= N):
+                msg = 'Index is out of bounds'
+                raise ValueError(msg)
+                # NumPy raises IndexError: index 'i' is out of
+                # bounds for axis 'x' with size 'n'
+
+            if (pos < 0):
+                pos += N
+
+            return np.concatenate((arr[:pos], arr[pos+1:]))
+
+    return np_delete_impl
+
 @overload(np.diff)
 def np_diff_impl(a, n=1):
     if not isinstance(a, types.Array) or a.ndim == 0:
