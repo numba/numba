@@ -289,11 +289,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
-* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10;
-  complex dtype handling per NumPy 1.12+; ``xp`` must be monotonically
-  increasing. There are some known mismatches in inf/nan handling in comparison
-  to NumPy, particularly in the complex domain, these will be addressed in a
-  future release).
+* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`

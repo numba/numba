@@ -1363,6 +1363,16 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
 
     @skip_unsupported
+    def test_preparfor_datetime64(self):
+        # test array.dtype transformation for datetime64
+        def test_impl(A):
+            return A.dtype
+
+        A = np.empty(1, np.dtype('datetime64[ns]'))
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
+        self.assertEqual(cpfunc.entry_point(A), test_impl(A))
+
+    @skip_unsupported
     def test_no_hoisting_with_member_function_call(self):
         def test_impl(X):
             n = X.shape[0]
