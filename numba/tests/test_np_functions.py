@@ -323,8 +323,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, obj, axis in arrays():
             expected = pyfunc(a, obj, axis)
             got = cfunc(a, obj, axis)
-            # print(expected)
-            # print(got)
             self.assertPreciseEqual(expected, got)
 
     def diff_arrays(self):
