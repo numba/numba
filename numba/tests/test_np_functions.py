@@ -1512,21 +1512,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     _check(params)
 
     @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_ediff1d_edge_cases(self):
+        # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
+        # https://github.com/numpy/numpy/issues/13103, as this is not resolved
+        # Numba replicates behaviours for <= 1.15 and conversion in 1.16.0 for
+        # finite inputs.
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
+
+        def _check_raises_type_error(params, arg):
+            with self.assertRaises(TypingError) as raises:
+                cfunc(**params)
+            msg = 'dtype of %s must be compatible with input ary' % arg
+            self.assertIn(msg, str(raises.exception))
+
+            with self.assertRaises(ValueError) as raises:
+                pyfunc(**params)
+            excstr = str(raises.exception)
+            self.assertIn("cannot convert", excstr)
+            self.assertIn("to array with dtype", excstr)
+            self.assertIn("as required for input ary", excstr)
 
         def input_variations():
             yield ((1, 2, 3), (4, 5, 6))
             yield [4, 5, 6]
             yield np.array([])
             yield ()
-            yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
-            parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
-            a = parts + 1j * parts[::-1]
-            yield a.reshape(3, 3)
+            if np_version < (1, 16):
+                yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
+                parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+                a = parts + 1j * parts[::-1]
+                yield a.reshape(3, 3)
 
         for i in input_variations():
             params = {'ary': i, 'to_end': i, 'to_begin': i}
@@ -1536,17 +1553,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'ary': [1], 'to_end': (False,), 'to_begin': (True, False)}
         _check(params)
 
-        # example of unsafe type casting (np.nan to np.int32)
+        ## example of unsafe type casting (np.nan to np.int32)
+        ## fixed here: https://github.com/numpy/numpy/pull/12713 for np 1.16
         to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
-        _check(params)
+        if np_version < (1, 16):
+            _check(params)
+        else:
+            # np 1.16 raises, cannot cast float64 array to intp array
+            _check_raises_type_error(params, 'to_begin')
 
         # scalar inputs
         params = {'ary': 3.142}
         _check(params)
 
         params = {'ary': 3, 'to_begin': 3.142}
-        _check(params)
+        if np_version < (1, 16):
+            _check(params)
+        else:
+            _check_raises_type_error(params, 'to_begin')
+            # now use 2 floats
+            params = {'ary': 3., 'to_begin': 3.142}
+            _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
         _check(params)
@@ -1941,7 +1969,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn('y cannot be a scalar', str(e.exception))
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -1955,6 +1982,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params={'x': x, 'xp': xp, 'fp': fp})
         self.rnd.shuffle(fp)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # alg changed in 1.16 and other things were found not-quite-right
+        # in inf/nan handling, skip for now
         x[:5] = np.nan
         x[-5:] = np.inf
         self.rnd.shuffle(x)
@@ -2061,10 +2091,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [np.inf]
         _check(params={'x': 1, 'xp': xp, 'fp': fp})
 
+        # alg changed in 1.16 and other things were found not-quite-right
+        # in inf/nan handling, skip for now
         x = np.array([1, 2, 2.5, 3, 4])
         xp = np.array([1, 2, 3, 4])
         fp = np.array([1, 2, np.nan, 4])
         _check({'x': x, 'xp': xp, 'fp': fp})
+
 
         x = np.array([1, 1.5, 2, 2.5, 3, 4, 4.5, 5, 5.5])
         xp = np.array([1, 2, 3, 4, 5])
@@ -2074,6 +2107,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = np.array([1, 2, 2.5, 3, 4])
         xp = np.array([1, 2, 3, 4])
         fp = np.array([1, 2, np.inf, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
+
+        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0,
+                        7])
+        xp = np.array([1, 2, 3, 4, 5, 6])
+        fp = np.array([1, 2, np.nan, 4, 3, np.inf])
         _check({'x': x, 'xp': xp, 'fp': fp})
 
         x = np.array([3.10034867, 3.0999066, 3.10001529])
@@ -2087,11 +2126,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         exact = np.cos(x)
         got = cfunc(x, xp, fp)
         np.testing.assert_allclose(exact, got, atol=1e-5)
-
-        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0, 7])
-        xp = np.array([1, 2, 3, 4, 5, 6])
-        fp = np.array([1, 2, np.nan, 4, 3, np.inf])
-        _check({'x': x, 'xp': xp, 'fp': fp})
 
         # very dense calibration
         x = self.rnd.randn(10)
@@ -2157,7 +2191,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
 
     @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_interp_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
