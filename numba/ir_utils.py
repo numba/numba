@@ -491,6 +491,21 @@ def remove_args(blocks):
     return
 
 
+def dead_code_elimination(func_ir, typemap=None, alias_map=None,
+                          arg_aliases=None):
+    """ Performs dead code elimination and leaves the IR in a valid state on
+    exit (ir.Dels are present in correct locations).
+    """
+    do_post_proc = False
+    while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
+                       alias_map, arg_aliases)):
+        do_post_proc = True
+
+    if do_post_proc:
+        post_proc = numba.postproc.PostProcessor(func_ir)
+        post_proc.run()
+
+
 def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
@@ -516,6 +531,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap)
+
     return removed
 
 
