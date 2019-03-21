@@ -1691,7 +1691,6 @@ class TestLoopTypesComplexNoPython(_LoopTypesTester):
 TestLoopTypesComplexNoPython.autogenerate()
 
 
-@unittest.skipIf(numpy_version >= (1, 16), "Known issue on NumPy 1.16+")
 class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]

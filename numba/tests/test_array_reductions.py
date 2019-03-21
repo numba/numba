@@ -595,12 +595,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.arange(10).astype(dtype='m8[s]')
         self._do_check_nptimedelta(pyfunc, arr)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_min_npdatetime(self):
         self.check_npdatetime(array_min)
         self.check_nptimedelta(array_min)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_max_npdatetime(self):
         self.check_npdatetime(array_max)
         self.check_nptimedelta(array_max)
@@ -613,19 +611,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_npdatetime(array_argmax)
         self.check_nptimedelta(array_argmax)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_median_npdatetime(self):
         self.check_nptimedelta(array_median_global)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_sum_npdatetime(self):
         self.check_nptimedelta(array_sum)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_cumsum_npdatetime(self):
         self.check_nptimedelta(array_cumsum)
 
-    @unittest.skipIf(np_version >= (1, 16), "Known issue on NumPy 1.16+")
     def test_mean_npdatetime(self):
         self.check_nptimedelta(array_mean)
 
