@@ -1982,17 +1982,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params={'x': x, 'xp': xp, 'fp': fp})
         self.rnd.shuffle(fp)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
-        if np_version < (1, 16):
-            # alg changed in 1.16 and other things were found not-quite-right
-            # in inf/nan handling, skip for now
-            x[:5] = np.nan
-            x[-5:] = np.inf
-            self.rnd.shuffle(x)
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
-            fp[:5] = np.nan
-            fp[-5:] = -np.inf
-            self.rnd.shuffle(fp)
-            _check(params={'x': x, 'xp': xp, 'fp': fp})
+
+        # alg changed in 1.16 and other things were found not-quite-right
+        # in inf/nan handling, skip for now
+        x[:5] = np.nan
+        x[-5:] = np.inf
+        self.rnd.shuffle(x)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
+        fp[:5] = np.nan
+        fp[-5:] = -np.inf
+        self.rnd.shuffle(fp)
+        _check(params={'x': x, 'xp': xp, 'fp': fp})
 
         x = np.arange(-4, 8)
         xp = x + 1
@@ -2091,30 +2091,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [np.inf]
         _check(params={'x': 1, 'xp': xp, 'fp': fp})
 
-        if np_version < (1, 16):
-            # alg changed in 1.16 and other things were found not-quite-right
-            # in inf/nan handling, skip for now
-            x = np.array([1, 2, 2.5, 3, 4])
-            xp = np.array([1, 2, 3, 4])
-            fp = np.array([1, 2, np.nan, 4])
-            _check({'x': x, 'xp': xp, 'fp': fp})
+        # alg changed in 1.16 and other things were found not-quite-right
+        # in inf/nan handling, skip for now
+        x = np.array([1, 2, 2.5, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, np.nan, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
 
 
-            x = np.array([1, 1.5, 2, 2.5, 3, 4, 4.5, 5, 5.5])
-            xp = np.array([1, 2, 3, 4, 5])
-            fp = np.array([np.nan, 2, np.nan, 4, np.nan])
-            _check({'x': x, 'xp': xp, 'fp': fp})
+        x = np.array([1, 1.5, 2, 2.5, 3, 4, 4.5, 5, 5.5])
+        xp = np.array([1, 2, 3, 4, 5])
+        fp = np.array([np.nan, 2, np.nan, 4, np.nan])
+        _check({'x': x, 'xp': xp, 'fp': fp})
 
-            x = np.array([1, 2, 2.5, 3, 4])
-            xp = np.array([1, 2, 3, 4])
-            fp = np.array([1, 2, np.inf, 4])
-            _check({'x': x, 'xp': xp, 'fp': fp})
+        x = np.array([1, 2, 2.5, 3, 4])
+        xp = np.array([1, 2, 3, 4])
+        fp = np.array([1, 2, np.inf, 4])
+        _check({'x': x, 'xp': xp, 'fp': fp})
 
-            x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0,
-                          7])
-            xp = np.array([1, 2, 3, 4, 5, 6])
-            fp = np.array([1, 2, np.nan, 4, 3, np.inf])
-            _check({'x': x, 'xp': xp, 'fp': fp})
+        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0,
+                        7])
+        xp = np.array([1, 2, 3, 4, 5, 6])
+        fp = np.array([1, 2, np.nan, 4, 3, np.inf])
+        _check({'x': x, 'xp': xp, 'fp': fp})
 
         x = np.array([3.10034867, 3.0999066, 3.10001529])
         xp = np.linspace(0, 10, 1 + 20000)
