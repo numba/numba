@@ -1409,7 +1409,8 @@ def choice(a, size=None, replace=True):
             else:
                 # Note we have to construct the array to compute out.size
                 # (`size` can be an arbitrary int or tuple of ints)
-                if size > n:
+                out = np.empty(size, dtype)
+                if out.size > n:
                     raise ValueError("Cannot take a larger sample than "
                                      "population when 'replace=False'")
 
@@ -1417,7 +1418,7 @@ def choice(a, size=None, replace=True):
                 # np.random.choice inside numba to match the output
                 # of np.random.choice outside numba when np.random.seed
                 # is set to the same value
-                out = np.random.permutation(a)[:size]
+                out = np.random.permutation(a)[:out.size]
                 return out
 
     return choice_impl
