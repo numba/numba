@@ -343,6 +343,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in array_variations(np.arange(64) + 10.5):
             check_even(a)
 
+    @staticmethod
+    def _array_variations(a):
+        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
+        yield a
+        a = a[::-1].copy()
+        yield a
+        np.random.shuffle(a)
+        yield a
+        a[a % 4 >= 1] = 3.5
+        yield a
+        a[a % 4 >= 2] = np.nan
+        yield a
+        a[:] = np.nan
+        yield a
+
     @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
