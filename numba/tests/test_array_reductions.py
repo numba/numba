@@ -359,104 +359,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
-    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def check(a, q):
-            expected = pyfunc(a, q)
-            got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=1e-12)
-
-        def check_err(a, q):
-            with self.assertRaises(ValueError) as raises:
-                cfunc(a, q)
-            self.assertEqual(
-                "Percentiles must be in the range [0,100]",
-                str(raises.exception)
-            )
-
-        def perform_checks(a, q):
-            check(a, q)
-            a = a.reshape((3, 3, 7))
-            check(a, q)
-            check(a.astype(np.int32), q)
-
-        for a in array_variations(np.arange(63) - 10.5):
-            for q in percentile_variations(np.array([0, 50, 100, 66.6])):
-                perform_checks(a, q)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        a = np.arange(5)
-        check_err(a, -5)  # q less than 0
-        check_err(a, (1, 10, 105))  # q contains value greater than 100
-        check_err(a, (1, 10, np.nan))  # q contains nan
-
-        # typing error if input is complex, as would require different
-        # comparison operator
-        with self.assertTypingError() as raises:
-            a = np.arange(5) * 1j
-            q = 0.5
-            cfunc(a, q)
-
-        self.assertIn("Not supported for complex dtype", str(raises.exception))
-
-    @staticmethod
-    def _array_variations(a):
-        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
-        yield a
-        a = a[::-1].copy()
-        yield a
-        np.random.shuffle(a)
-        yield a
-        a[a % 4 >= 1] = 3.5
-        yield a
-        a[a % 4 >= 2] = np.nan
-        yield a
-        a[:] = np.nan
-        yield a
-        # yield [1]  FIXME: these tests need redoing
-
-    @staticmethod
-    def _percentile_variations(q):
-        yield q
-        yield q[::-1].astype(np.int32).tolist()
-        yield q[-1]
-        yield int(q[-1])
-        yield tuple(q)
-        yield False
-        yield [1]
-        yield np.array(5)
-
-    def check_percentile_edge_cases(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-
-        def check(a, q, abs_tol=None):
-            expected = pyfunc(a, q)
-            got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
-
-        def _array_combinations(elements):
-            for i in range(1, 10):
-                for comb in combinations_with_replacement(elements, i):
-                    yield np.array(comb)
-
-        # high number of combinations, many including non-finite values
-        q = (0, 10, 20, 100)
-        element_pool = (1, -1, np.nan, np.inf, -np.inf)
-        for a in _array_combinations(element_pool):
-            check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
-
-        # zero dimension arrays
-        a = [1]
-        q = np.array(0.1)
-        check(a, q)
-
-        a = np.array(5)
-        q = [True]
-        check(a, q)
-
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -586,8 +488,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
-        #self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
-        #self.check_percentile_exceptions(pyfunc)
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
+        self.check_percentile_exceptions(pyfunc)
 
         cfunc = jit(nopython=True)(pyfunc)
         a = np.arange(8) * 0.5
