@@ -1843,20 +1843,11 @@ def np_unique(a):
 def np_repeat(a, repeats):
     def np_repeat_impl(a, repeats):
         aravel = a.ravel()
-        shape = aravel.shape
-        n = shape[0]
-        return_size = n * repeats
-        to_return = np.empty(return_size)
+        n = aravel.shape[0]
+        to_return = np.empty(n * repeats)
         for i in range(n):
-            count = 1
-            ind = i * repeats
-            to_return[ind] = aravel[i]
-            while count < repeats:
-                ind_in = ind + count
-                to_return[ind_in] = aravel[i]
-                count += 1
+            to_return[i * repeats : (i + 1) * repeats] = aravel[i]
         return to_return
-
     return np_repeat_impl
 
 
