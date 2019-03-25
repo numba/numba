@@ -590,15 +590,6 @@ class Contains(AbstractTemplate):
         if isinstance(seq, (types.Sequence)):
             return signature(types.boolean, seq, val)
 
-@infer_global(operator.truth)
-class TupleBool(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        (val,) = args
-        if isinstance(val, (types.BaseTuple)):
-            return signature(types.boolean, val)
-
-
 @infer
 class StaticGetItemTuple(AbstractTemplate):
     key = "static_getitem"

@@ -10,6 +10,8 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
+from numba.extending import overload_method
+
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
                        impl_ret_borrowed, impl_ret_untracked)
@@ -1352,3 +1354,27 @@ def constant_complex(context, builder, ty, pyval):
 def constant_integer(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
+
+#-------------------------------------------------------------------------------
+# direct overloads
+
+@overload_method(types.Boolean, '__bool__')
+def overload_boolean_dunder_bool(val):
+    def impl(val):
+        return val
+    return impl
+
+@overload_method(types.Number, '__bool__')
+def overload_number_dunder_bool(val):
+    def impl(val):
+        if val == 0:
+            return False
+        else:
+            return True
+    return impl
+
+@overload_method(types.NoneType, '__bool__')
+def overload_none_dunder_bool(val):
+    def impl(val):
+        return False
+    return impl

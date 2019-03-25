@@ -15,7 +15,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils, extending, pndindex
+from numba import types, cgutils, typing, utils, extending, pndindex, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
@@ -4753,3 +4753,11 @@ def as_strided(x, shape=None, strides=None):
         return x
 
     return as_strided_impl
+
+
+@overload_method(types.Array, '__bool__')
+def array_dunder_bool(val):
+    # this is the message NumPy emits at runtime if truth(array) is called:
+    msg = ("The truth value of an array with more than one element is "
+           "ambiguous. Use a.any() or a.all()")
+    raise errors.TypingError(msg)

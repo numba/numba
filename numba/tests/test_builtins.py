@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import itertools
 import functools
+import operator
 import sys
 
 import numpy as np
@@ -208,6 +209,9 @@ def pow_op_usecase(x, y):
 
 def pow_usecase(x, y):
     return pow(x, y)
+
+def truth_usecase(x):
+    return operator.truth(x)
 
 
 class TestBuiltins(TestCase):
@@ -1013,6 +1017,35 @@ class TestBuiltins(TestCase):
         for fn in sample_functions(op=max):
             self._check_min_max(fn)
 
+    def test_truth(self):
+
+        args = []
+        args.extend([None])
+        tys = [bool, np.bool_, np.int8, np.int32, np.int64, float, np.float32,
+               np.float64, complex, np.complex64, np.complex128]
+        args.extend([ty(v) for ty, v in itertools.product(tys, (0, 3))])
+        args.extend(['', 'a'])
+        args.extend([tuple(), (10,), (1, 2, 3)])
+        args.extend([list([10]), list([1, 2, 3])])
+
+        pyfunc = truth_usecase
+        cfunc = njit(pyfunc)
+        jfunc = jit(forceobj=True)(pyfunc)
+        for x in args:
+            expected = pyfunc(x)
+            self.assertPreciseEqual(cfunc(x), expected)
+            self.assertPreciseEqual(jfunc(x), expected)
+
+    def test_truth_nparray(self):
+
+        expected = ("The truth value of an array with more than one element is "
+                    "ambiguous. Use a.any() or a.all()")
+        pyfunc = truth_usecase
+        cfunc = njit(pyfunc)
+        for fn in [pyfunc, cfunc]:
+            with self.assertRaises((ValueError, errors.TypingError)) as e:
+                fn(np.zeros(10))
+            self.assertIn(expected, str(e.exception))
 
 if __name__ == '__main__':
     unittest.main()

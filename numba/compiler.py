@@ -773,11 +773,11 @@ class BasePipeline(object):
         The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
             if self.status.can_fallback:
                 pm.add_stage(self.stage_preserve_ir,
                              "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
 

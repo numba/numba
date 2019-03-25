@@ -495,3 +495,17 @@ def iterable_min(iterable):
 @overload(max)
 def iterable_max(iterable):
     return min_max_impl(iterable, greater_than)
+
+
+@overload(operator.truth)
+def overload_truth(val):
+    impl = None
+    dunderbools = (types.NoneType, types.Number, types.Boolean, types.Array)
+    lencalls = (types.Container, types.BaseTuple, types.UnicodeType)
+    if isinstance(val, dunderbools):
+        def impl(val):
+            return val.__bool__()
+    elif isinstance(val, lencalls):
+        def impl(val):
+            return len(val) > 0
+    return impl
