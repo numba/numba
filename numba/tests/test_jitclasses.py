@@ -8,13 +8,17 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof, errors
+from numba import njit, typeof, types, errors
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.errors import LoweringError
+
+# there are some python 3 specific syntax tests
+if sys.version_info >= (3,):
+    from .jitclass_usecases import TestClass1, TestClass2
 
 
 def _get_meminfo(box):
@@ -226,7 +230,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                     cur = cur.next
                 cur.next = other
 
-
         node_type.define(LinkedNode.class_type.instance_type)
 
         first = LinkedNode(123, None)
@@ -293,7 +296,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_is(self):
         Vector = self._make_Vector2()
         vec_a = Vector(1, 2)
-        vec_b = Vector(1, 2)
 
         @njit
         def do_is(a, b):
@@ -529,7 +531,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def check_private_method(self, factor):
                 return self.__private_method(factor)
 
-
         value = 123
         inst = MyClass(value)
         # test attributes
@@ -619,6 +620,80 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.a, x * y)
         self.assertEqual(tc.b, z)
 
+    def test_default_args(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32)]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self, x, y, z=1):
+                self.x = x
+                self.y = y
+                self.z = z
+
+        tc = TestClass(1, 2, 3)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 3)
+
+        tc = TestClass(1, 2)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 1)
+
+        tc = TestClass(y=2, z=5, x=1)
+        self.assertEqual(tc.x, 1)
+        self.assertEqual(tc.y, 2)
+        self.assertEqual(tc.z, 5)
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('a', int32)]
+
+        TestClass = jitclass(spec)(TestClass1)
+
+        tc = TestClass(2, 3)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 3)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+        tc = TestClass(y=4, x=2, a=42, z=100)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 100)
+        self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2, a=42)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 42)
+
+        tc = TestClass(y=4, x=2)
+        self.assertEqual(tc.x, 2)
+        self.assertEqual(tc.y, 4)
+        self.assertEqual(tc.z, 1)
+        self.assertEqual(tc.a, 5)
+
+    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    def test_default_args_starargs_and_keyonly(self):
+        spec = [('x', int32),
+                ('y', int32),
+                ('z', int32),
+                ('args', types.UniTuple(int32, 2)),
+                ('a', int32)]
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            jitclass(spec)(TestClass2)
+
+        msg = "VAR_POSITIONAL argument type unsupported"
+        self.assertIn(msg, str(raises.exception))
+
     def test_generator_method(self):
         spec = []
 
@@ -638,6 +713,159 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         for niter in range(10):
             for expect, got in zip(expected_gen(niter), TestClass().gen(niter)):
                 self.assertPreciseEqual(expect, got)
+
+    def test_getitem(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        @njit
+        def create_and_set_indices():
+            t = TestClass()
+            t[1] = 1
+            t[2] = 2
+            t[3] = 3
+            return t
+
+        @njit
+        def get_index(t, n):
+            return t[n]
+
+        t = create_and_set_indices()
+        self.assertEqual(get_index(t, 1), 1)
+        self.assertEqual(get_index(t, 2), 2)
+        self.assertEqual(get_index(t, 3), 3)
+
+    def test_getitem_unbox(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key] = data
+
+            def __getitem__(self, key):
+                return self.data[key]
+
+        t = TestClass()
+        t[1] = 10
+
+        @njit
+        def set2return1(t):
+            t[2] = 20
+            return t[1]
+
+        t_1 = set2return1(t)
+        self.assertEqual(t_1, 10)
+        self.assertEqual(t[2], 20)
+
+    def test_getitem_complex_key(self):
+        spec = [('data', int32[:, :])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros((10, 10), dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[int(key.real), int(key.imag)] = data
+
+            def __getitem__(self, key):
+                return self.data[int(key.real), int(key.imag)]
+
+        t = TestClass()
+
+        t[complex(1, 1)] = 3
+
+        @njit
+        def get_key(t, real, imag):
+            return t[complex(real, imag)]
+
+        @njit
+        def set_key(t, real, imag, data):
+            t[complex(real, imag)] = data
+
+        self.assertEqual(get_key(t, 1, 1), 3)
+        set_key(t, 2, 2, 4)
+        self.assertEqual(t[complex(2, 2)], 4)
+
+    def test_getitem_tuple_key(self):
+        spec = [('data', int32[:, :])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros((10, 10), dtype=np.int32)
+
+            def __setitem__(self, key, data):
+                self.data[key[0], key[1]] = data
+
+            def __getitem__(self, key):
+                return self.data[key[0], key[1]]
+
+        t = TestClass()
+        t[1, 1] = 11
+
+        @njit
+        def get11(t):
+            return t[1, 1]
+
+        @njit
+        def set22(t, data):
+            t[2, 2] = data
+
+        self.assertEqual(get11(t), 11)
+        set22(t, 22)
+        self.assertEqual(t[2, 2], 22)
+
+    def test_getitem_slice_key(self):
+        spec = [('data', int32[:])]
+
+        @jitclass(spec)
+        class TestClass(object):
+            def __init__(self):
+                self.data = np.zeros(10, dtype=np.int32)
+
+            def __setitem__(self, slc, data):
+                self.data[slc.start] = data
+                self.data[slc.stop] = data + slc.step
+
+            def __getitem__(self, slc):
+                return self.data[slc.start]
+
+        t = TestClass()
+        # set t.data[1] = 1 and t.data[5] = 2
+        t[1:5:1] = 1
+
+        self.assertEqual(t[1:1:1], 1)
+        self.assertEqual(t[5:5:5], 2)
+
+        @njit
+        def get5(t):
+            return t[5:6:1]
+
+        self.assertEqual(get5(t), 2)
+
+        # sets t.data[2] = data, and t.data[6] = data + 1
+        @njit
+        def set26(t, data):
+            t[2:6:1] = data
+
+        set26(t, 2)
+        self.assertEqual(t[2:2:1], 2)
+        self.assertEqual(t[6:6:1], 3)
 
 
 if __name__ == '__main__':

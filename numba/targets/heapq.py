@@ -3,7 +3,6 @@
 from __future__ import print_function, absolute_import, division
 
 import heapq as hq
-import numpy as np
 
 from numba import types
 from numba.errors import TypingError
@@ -209,7 +208,7 @@ def nsmallest(n, iterable):
         if n == 0:
             return [iterable[0] for _ in range(0)]
         elif n == 1:
-            out = np.min(np.asarray(iterable))
+            out = min(iterable)
             return [out]
 
         size = len(iterable)
@@ -243,7 +242,7 @@ def nlargest(n, iterable):
         if n == 0:
             return [iterable[0] for _ in range(0)]
         elif n == 1:
-            out = np.max(np.asarray(iterable))
+            out = max(iterable)
             return [out]
 
         size = len(iterable)

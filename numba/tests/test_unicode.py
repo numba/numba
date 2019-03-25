@@ -104,6 +104,44 @@ def join_empty_usecase(x):
     return x.join(l)
 
 
+def iter_usecase(x):
+    l = []
+    for i in x:
+        l.append(i)
+    return l
+
+
+def literal_iter_usecase():
+    l = []
+    for i in '大处着眼，小处着手。':
+        l.append(i)
+    return l
+
+
+def enumerated_iter_usecase(x):
+    buf = ""
+    scan = 0
+    for i, s in enumerate(x):
+        buf += s
+        scan += 1
+    return buf, scan
+
+
+def iter_stopiteration_usecase(x):
+    n = len(x)
+    i = iter(x)
+    for _ in range(n + 1):
+        next(i)
+
+
+def literal_iter_stopiteration_usecase():
+    s = '大处着眼，小处着手。'
+    i = iter(s)
+    n = len(s)
+    for _ in range(n + 1):
+        next(i)
+
+
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
@@ -333,7 +371,7 @@ class TestUnicode(BaseTest):
         # Handle empty separator exception
         for func in [pyfunc, cfunc]:
             with self.assertRaises(ValueError) as raises:
-                    func('a', '')
+                func('a', '')
             self.assertIn('empty separator', str(raises.exception))
 
     def test_split_exception_noninteger_maxsplit(self):
@@ -343,7 +381,7 @@ class TestUnicode(BaseTest):
         # Handle non-integer maxsplit exception
         for sep in [' ', None]:
             with self.assertRaises(TypingError) as raises:
-                    cfunc('a', sep, 2.4)
+                cfunc('a', sep, 2.4)
             self.assertIn('float64', str(raises.exception),
                           'non-integer maxsplit with sep = %s' % sep)
 
@@ -397,7 +435,7 @@ class TestUnicode(BaseTest):
         pyfunc = split_whitespace_usecase
         cfunc = njit(pyfunc)
 
-        #list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+        # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
         all_whitespace = ''.join(map(chr, [
             0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020,
             0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
@@ -441,12 +479,13 @@ class TestUnicode(BaseTest):
 
         # Handle empty separator exception
         with self.assertRaises(TypingError) as raises:
-            cfunc('', [1,2,3])
+            cfunc('', [1, 2, 3])
         # This error message is obscure, but indicates the error was trapped in typing of str.join()
         # Feel free to change this as we update error messages.
         exc_message = str(raises.exception)
         self.assertIn("Invalid use of BoundFunction", exc_message)
-        self.assertIn("(reflected list(int", exc_message)  # could be int32 or int64
+        # could be int32 or int64
+        self.assertIn("(reflected list(int", exc_message)
 
     def test_join(self):
         pyfunc = join_usecase
@@ -662,6 +701,44 @@ class TestUnicodeInTuple(BaseTest):
             return ('aa', 1) < ('aa', 2)
 
         self.assertEqual(f.py_func(), f())
+
+
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeIteration(BaseTest):
+
+    def test_unicode_iter(self):
+        pyfunc = iter_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_unicode_literal_iter(self):
+        pyfunc = literal_iter_usecase
+        cfunc = njit(pyfunc)
+        self.assertPreciseEqual(pyfunc(), cfunc())
+
+    def test_unicode_enumerate_iter(self):
+        pyfunc = enumerated_iter_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_unicode_stopiteration_iter(self):
+        self.disable_leak_check()
+        pyfunc = iter_stopiteration_usecase
+        cfunc = njit(pyfunc)
+        for f in (pyfunc, cfunc):
+            for a in UNICODE_EXAMPLES:
+                with self.assertRaises(StopIteration):
+                    f(a)
+
+    def test_unicode_literal_stopiteration_iter(self):
+        pyfunc = literal_iter_stopiteration_usecase
+        cfunc = njit(pyfunc)
+        for f in (pyfunc, cfunc):
+            with self.assertRaises(StopIteration):
+                f()
 
 
 if __name__ == '__main__':

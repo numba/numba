@@ -435,7 +435,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 from numba.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
@@ -447,6 +447,7 @@ def impl_index_value(context, builder, sig, args):
     index_value.value = value
     return index_value._getvalue()
 
+
 @overload(min)
 def indval_min(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -457,6 +458,7 @@ def indval_min(indval1, indval2):
             return indval1
         return min_impl
 
+
 @overload(max)
 def indval_max(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -466,3 +468,30 @@ def indval_max(indval1, indval2):
                 return indval2
             return indval1
         return max_impl
+
+
+greater_than = register_jitable(lambda a, b: a > b)
+less_than = register_jitable(lambda a, b: a < b)
+
+
+@register_jitable
+def min_max_impl(iterable, op):
+    if isinstance(iterable, types.IterableType):
+        def impl(iterable):
+            it = iter(iterable)
+            return_val = next(it)
+            for val in it:
+                if op(val, return_val):
+                    return_val = val
+            return return_val
+        return impl
+
+
+@overload(min)
+def iterable_min(iterable):
+    return min_max_impl(iterable, less_than)
+
+
+@overload(max)
+def iterable_max(iterable):
+    return min_max_impl(iterable, greater_than)
