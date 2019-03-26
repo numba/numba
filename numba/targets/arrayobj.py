@@ -1841,6 +1841,11 @@ def np_unique(a):
 
 @overload(np.repeat)
 def np_repeat(a, repeats):
+    if not isinstance(a, types.Array):
+        return
+    if not isinstance(repeats, types.Integer):
+        return
+
     def np_repeat_impl(a, repeats):
         aravel = a.ravel()
         n = aravel.shape[0]
