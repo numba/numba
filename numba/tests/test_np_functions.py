@@ -2507,7 +2507,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     check_pass_through(cfunc, True, params)
 
-
     def test_repeat(self):
         pyfunc = np_repeat
         cfunc = jit(nopython=True)(pyfunc)
@@ -2515,30 +2514,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(a, repeats):
             np.testing.assert_equal(pyfunc(a, repeats), cfunc(a, repeats))
 
-        single_one = np.ones(1)
-        check(single_one, repeats=0)
-        check(single_one, repeats=1)
-        check(single_one, repeats=2)
+        target_inputs = [
+            np.ones(1),
+            np.arange(1000),
+            np.array([[0, 1], [2, 3]]),
+            np.array([]),
+            np.array([[], []]),
+            1,
+            1.0,
+            True,
+            1j,
+            [0, 1, 2],
+            (0, 1, 2),
+        ]
+        for i in target_inputs:
+            check(i, repeats=0)
+            check(i, repeats=1)
+            check(i, repeats=2)
 
-        multidimensional = np.array([[0, 1], [2, 3]])
-        check(multidimensional, repeats=0)
-        check(multidimensional, repeats=1)
-        check(multidimensional, repeats=2)
-
-        empty_array = np.array([])
-        check(empty_array, repeats=0)
-        check(empty_array, repeats=1)
-        check(empty_array, repeats=2)
-
-        multidimensional_empty_array = np.array([[], []])
-        check(multidimensional_empty_array, repeats=0)
-        check(multidimensional_empty_array, repeats=1)
-        check(multidimensional_empty_array, repeats=2)
+    def test_repeat_exception(self):
+        pyfunc = np_repeat
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
 
         with self.assertRaises(ValueError):
-            cfunc(single_one, -1)
+            cfunc(np.ones(1), -1)
 
-        cfunc(single_one, "a")
+        with self.assertRaises(TypingError):
+            cfunc(np.ones(1), "a")
+            cfunc(np.ones(1), "1")
 
 
 class TestNPMachineParameters(TestCase):
