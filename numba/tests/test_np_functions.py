@@ -2515,10 +2515,30 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(a, repeats):
             np.testing.assert_equal(pyfunc(a, repeats), cfunc(a, repeats))
 
-        check(np.array([3]), repeats=4)
-        check(np.array(np.zeros(5)), repeats=3)
-        check(np.array([[1, 2], [3, 4]]), repeats=3)
-        check(np.array([]), repeats=2)
+        single_one = np.ones(1)
+        check(single_one, repeats=0)
+        check(single_one, repeats=1)
+        check(single_one, repeats=2)
+
+        multidimensional = np.array([[0, 1], [2, 3]])
+        check(multidimensional, repeats=0)
+        check(multidimensional, repeats=1)
+        check(multidimensional, repeats=2)
+
+        empty_array = np.array([])
+        check(empty_array, repeats=0)
+        check(empty_array, repeats=1)
+        check(empty_array, repeats=2)
+
+        multidimensional_empty_array = np.array([[], []])
+        check(multidimensional_empty_array, repeats=0)
+        check(multidimensional_empty_array, repeats=1)
+        check(multidimensional_empty_array, repeats=2)
+
+        with self.assertRaises(ValueError):
+            cfunc(single_one, -1)
+
+        cfunc(single_one, "a")
 
 
 class TestNPMachineParameters(TestCase):
