@@ -2514,12 +2514,30 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(a, repeats):
             self.assertPreciseEqual(pyfunc(a, repeats), cfunc(a, repeats))
 
-        target_inputs = [
+        target_numpy_values = [
             np.ones(1),
             np.arange(1000),
             np.array([[0, 1], [2, 3]]),
             np.array([]),
             np.array([[], []]),
+        ]
+
+        target_numpy_types = [
+            np.uint32,
+            np.int32,
+            np.uint64,
+            np.int64,
+            np.float32,
+            np.float64,
+            np.complex64,
+            np.complex128,
+        ]
+
+        target_numpy_inputs = [np.array(a,dtype=t) for a,t in
+                               itertools.product(target_numpy_values,
+                                                 target_numpy_types)]
+
+        target_non_numpy_inputs = [
             1,
             1.0,
             True,
@@ -2527,7 +2545,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             [0, 1, 2],
             (0, 1, 2),
         ]
-        for i in target_inputs:
+
+        for i in itertools.chain(target_numpy_inputs, target_non_numpy_inputs):
             check(i, repeats=0)
             check(i, repeats=1)
             check(i, repeats=2)
