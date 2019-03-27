@@ -1856,10 +1856,15 @@ def np_repeat(a, repeats):
         asa = np.asarray(a)
         aravel = asa.ravel()
         n = aravel.shape[0]
-        to_return = np.empty(n * repeats, dtype=aravel.dtype)
-        for i in range(n):
-            to_return[i * repeats : (i + 1) * repeats] = aravel[i]
-        return to_return
+        if repeats == 0:
+            return np.empty(0, dtype=asa.dtype)
+        elif repeats == 1:
+            return np.copy(aravel)
+        else:
+            to_return = np.empty(n * repeats, dtype=asa.dtype)
+            for i in range(n):
+                to_return[i * repeats : (i + 1) * repeats] = aravel[i]
+            return to_return
     return np_repeat_impl
 
 
