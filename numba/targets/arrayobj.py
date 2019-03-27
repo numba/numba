@@ -1853,6 +1853,8 @@ def np_repeat(a, repeats):
         return
 
     def np_repeat_impl(a, repeats):
+        if repeats < 0:
+            raise ValueError("negative dimensions are not allowed")
         asa = np.asarray(a)
         aravel = asa.ravel()
         n = aravel.shape[0]

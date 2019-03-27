@@ -2539,8 +2539,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.disable_leak_check()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as e:
             cfunc(np.ones(1), -1)
+        self.assertIn("negative dimensions are not allowed",
+                      str(e.exception))
 
         with self.assertRaises(TypingError):
             cfunc(np.ones(1), "a")
