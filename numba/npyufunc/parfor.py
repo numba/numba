@@ -676,6 +676,15 @@ def legalize_names_with_typemap(names, typemap):
             typemap[y] = typemap[x]
     return outdict
 
+def fix_numpy_module(blocks):
+    npmod = sys.modules['numpy']
+    for label, block in blocks.items():
+        for inst in block.body:
+            if isinstance(inst, ir.Assign):
+                rhs = inst.value
+                if isinstance(rhs, ir.Global) and rhs.name == 'numpy':
+                    rhs.value = npmod
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -1059,6 +1068,7 @@ def _create_gufunc_for_parfor_body(
         print("typemap", typemap)
 
     old_alias = flags.noalias
+    flags.pa_outlined_kernel = True
     if not has_aliases:
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
@@ -1073,6 +1083,7 @@ def _create_gufunc_for_parfor_body(
         locals)
 
     flags.noalias = old_alias
+    flags.pa_outlined_kernel = False
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:

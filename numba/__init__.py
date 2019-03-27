@@ -33,6 +33,9 @@ from .numpy_support import carray, farray, from_dtype
 # Re-export jitclass
 from .jitclass import jitclass
 
+# Re-export compiler hints
+from .ir_utils import noalias
+
 # Initialize withcontexts
 import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode

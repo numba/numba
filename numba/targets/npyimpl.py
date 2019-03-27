@@ -594,3 +594,41 @@ def numpy_dtype(desc):
         return imp
     else:
         raise TypeError('unknown dtype descriptor: {}'.format(desc))
+
+@overload(np.may_share_memory)
+def numpy_may_share_memory(a,b):
+    if not isinstance(a, types.Array):
+        return
+    if not isinstance(b, types.Array):
+        return
+    def imp(a,b):
+        def get_bounds(x):
+            lower = 0
+            upper = 0
+            max_axis_offset = 0
+            strides = x.strides
+            shape = x.shape
+            ndim = x.ndim
+            for i in range(ndim):
+                if shape[i] == 0:
+                    return (0, 0)
+                max_axis_offset = strides[i] * (shape[i] -1)
+                if max_axis_offset > 0:
+                    upper += max_axis_offset
+                else:
+                    lower += max_axis_offset
+            upper += x.itemsize
+            return (lower, upper)
+
+        def get_extents(x):
+            lower, upper = get_bounds(x)
+            out_start = x.ctypes.data + lower
+            out_end = x.ctypes.data + upper
+            return (out_start, out_end)
+
+        starta, enda = get_extents(a)
+        startb, endb = get_extents(b)
+        if starta < endb and startb < enda and starta < enda and startb < endb:
+            return True
+        return False
+    return imp
