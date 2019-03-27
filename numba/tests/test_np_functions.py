@@ -2531,6 +2531,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(i, repeats=0)
             check(i, repeats=1)
             check(i, repeats=2)
+            check(i, repeats=3)
+            check(i, repeats=100)
 
     def test_repeat_exception(self):
         pyfunc = np_repeat
