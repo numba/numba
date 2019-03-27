@@ -1842,7 +1842,8 @@ def np_unique(a):
 @overload(np.repeat)
 def np_repeat(a, repeats):
     if not isinstance(a, (types.Array,
-                          types.Sequence,
+                          types.List,
+                          types.BaseTuple,
                           types.Number,
                           types.Boolean,
                           )
