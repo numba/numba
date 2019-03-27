@@ -52,6 +52,7 @@ class Flags(utils.ConfigOptions):
         'error_model': 'python',
         'fastmath': False,
         'noalias': False,
+        'pa_outlined_kernel': False,
     }
 
 

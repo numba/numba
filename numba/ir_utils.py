@@ -22,6 +22,10 @@ from numba.analysis import (compute_live_map, compute_use_defs,
 from numba.errors import TypingError, UnsupportedError
 import copy
 
+# User-provided compiler hint that the argument x does not alias any of the other arguments.
+def noalias(x):
+    pass
+
 _unique_var_count = 0
 
 
@@ -1149,6 +1153,11 @@ def simplify_CFG(blocks):
     for label in marked_for_del:
         del blocks[label]
     merge_adjacent_blocks(blocks)
+
+    # Blocks present in blocks but not in topo order are not reachable, i.e., dead.
+    # So, remove them here.
+    for label in set(blocks.keys()).difference(find_topo_order(blocks)):
+        del blocks[label]
     return rename_labels(blocks)
 
 
@@ -1631,7 +1640,7 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
 
 def dump_blocks(blocks):
     for label, block in blocks.items():
-        print(label, ":")
+        print("label", label, ":")
         for stmt in block.body:
             print("    ", stmt)
 
