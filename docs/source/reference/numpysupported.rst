@@ -299,6 +299,7 @@ The following top-level functions are supported:
 * :func:`numpy.partition` (only the 2 first arguments)
 * :func:`numpy.ptp` (only the first argument)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
@@ -315,7 +316,6 @@ The following top-level functions are supported:
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.unique` (only the first argument)
-* :func:`numpy.repeat`
 * :func:`numpy.vander`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
