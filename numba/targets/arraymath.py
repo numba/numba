@@ -1118,6 +1118,8 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
         # this could be supported, but would require a lexicographic
         # comparison
 
+    dtype = np.promote_types(dt, np.float64)
+
     if isinstance(a, (types.Number, types.Boolean)):
         a_transform = make_array_from_scalar
     else:
@@ -1131,14 +1133,14 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
         q_transform = make_array
 
     def np_percentile_q_scalar_impl(a, q):
-        a = a_transform(a)
+        a = a_transform(a).astype(dtype)
         q = q_transform(q)
         check_q(q)
         q = q * factor
         return _collect_percentiles(a, q, skip_nan)[0]
 
     def np_percentile_impl(a, q):
-        a = a_transform(a)
+        a = a_transform(a).astype(dtype)
         q = q_transform(q)
         check_q(q)
         q = q * factor
