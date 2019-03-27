@@ -1849,25 +1849,62 @@ def np_repeat(a, repeats):
                           )
                       ):
         return
-    if not isinstance(repeats, types.Integer):
+    if not isinstance(repeats, (types.Integer,
+                                types.Array,
+                                )
+                      ):
+        return
+    # check that, in case repeats is an array, it is an integer array
+    if (isinstance(repeats, types.Array) and
+            not isinstance(repeats.dtype, types.Integer)):
         return
 
-    def np_repeat_impl(a, repeats):
-        if repeats < 0:
-            raise ValueError("negative dimensions are not allowed")
+    # Implementation for repeats being a scalar is a module global function
+    # (see below) because it might be called from the implementation below.
+
+    def np_repeat_impl_repeats_array_like(a, repeats):
+        # implementation if repeats is an array like
+        repeats_array = np.asarray(repeats, dtype=np.int64)
+        # if it is a singleton array, invoke the scalar implementation
+        if repeats_array.shape[0] == 1:
+            return np_repeat_impl_repeats_scaler(a, repeats_array[0])
+        if np.any(repeats_array < 0):
+            raise ValueError('count < 0')
         asa = np.asarray(a)
         aravel = asa.ravel()
         n = aravel.shape[0]
-        if repeats == 0:
-            return np.empty(0, dtype=asa.dtype)
-        elif repeats == 1:
-            return np.copy(aravel)
-        else:
-            to_return = np.empty(n * repeats, dtype=asa.dtype)
-            for i in range(n):
-                to_return[i * repeats : (i + 1) * repeats] = aravel[i]
-            return to_return
-    return np_repeat_impl
+        if aravel.shape != repeats_array.shape:
+            raise ValueError(
+                "operands could not be broadcast together")
+        to_return = np.empty(np.sum(repeats_array), dtype=asa.dtype)
+        pos = 0
+        for i in range(n):
+            to_return[pos : pos + repeats_array[i]] = aravel[i]
+            pos += repeats_array[i]
+        return to_return
+
+    if isinstance(repeats, types.Integer):
+        return np_repeat_impl_repeats_scaler
+    elif isinstance(repeats, types.Array):
+        return np_repeat_impl_repeats_array_like
+
+
+@register_jitable
+def np_repeat_impl_repeats_scaler(a, repeats):
+    if repeats < 0:
+        raise ValueError("negative dimensions are not allowed")
+    asa = np.asarray(a)
+    aravel = asa.ravel()
+    n = aravel.shape[0]
+    if repeats == 0:
+        return np.empty(0, dtype=asa.dtype)
+    elif repeats == 1:
+        return np.copy(aravel)
+    else:
+        to_return = np.empty(n * repeats, dtype=asa.dtype)
+        for i in range(n):
+            to_return[i * repeats : (i + 1) * repeats] = aravel[i]
+        return to_return
 
 
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
