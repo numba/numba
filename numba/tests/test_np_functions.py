@@ -2533,9 +2533,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.complex128,
         ]
 
-        target_numpy_inputs = [np.array(a,dtype=t) for a,t in
+        target_numpy_inputs = (np.array(a,dtype=t) for a,t in
                                itertools.product(target_numpy_values,
-                                                 target_numpy_types)]
+                                                 target_numpy_types))
 
         target_non_numpy_inputs = [
             1,
