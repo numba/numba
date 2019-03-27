@@ -2512,7 +2512,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(a, repeats):
-            np.testing.assert_equal(pyfunc(a, repeats), cfunc(a, repeats))
+            self.assertPreciseEqual(pyfunc(a, repeats), cfunc(a, repeats))
 
         target_inputs = [
             np.ones(1),
