@@ -2514,6 +2514,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(a, repeats):
             self.assertPreciseEqual(pyfunc(a, repeats), cfunc(a, repeats))
 
+        # test array argumens
         target_numpy_values = [
             np.ones(1),
             np.arange(1000),
@@ -2545,13 +2546,30 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             [0, 1, 2],
             (0, 1, 2),
         ]
-
         for i in itertools.chain(target_numpy_inputs, target_non_numpy_inputs):
             check(i, repeats=0)
             check(i, repeats=1)
             check(i, repeats=2)
             check(i, repeats=3)
             check(i, repeats=100)
+
+        # check broadcasting when repeats is an array
+        one = np.arange(1)
+        check(one, repeats=np.array([0]))
+        check(one, repeats=np.array([1]))
+
+        two = np.arange(2)
+        check(two, repeats=np.array([0, 0]))
+        check(two, repeats=np.array([0, 1]))
+        check(two, repeats=np.array([1, 0]))
+        check(two, repeats=np.array([1, 1]))
+        check(two, repeats=np.array([1, 2]))
+
+        check(two, repeats=np.array([2, 2]))
+        check(two, repeats=np.array([2, 2], dtype=np.int32))
+
+        check(np.arange(10), repeats=np.arange(10))
+
 
     def test_repeat_exception(self):
         pyfunc = np_repeat
