@@ -2586,8 +2586,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # nested list
         with self.assertRaises(TypeError) as e:
             cfunc([[0, 1], [2, 3], 1.0], 1)
-        self.assertIn("cannot reflect element of reflected container: "
-                      "reflected list(reflected list(int64))",
+        self.assertIn("cannot reflect element of reflected container",
                       str(e.exception))
 
         # negative repeat argument
