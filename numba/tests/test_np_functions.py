@@ -2557,33 +2557,69 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         one = np.arange(1)
         check(one, repeats=np.array([0]))
         check(one, repeats=np.array([1]))
+        check(one, repeats=np.array([2]))
 
         two = np.arange(2)
         check(two, repeats=np.array([0, 0]))
         check(two, repeats=np.array([0, 1]))
         check(two, repeats=np.array([1, 0]))
         check(two, repeats=np.array([1, 1]))
-        check(two, repeats=np.array([1, 2]))
 
+        check(two, repeats=np.array([1, 2]))
+        check(two, repeats=np.array([2, 1]))
         check(two, repeats=np.array([2, 2]))
         check(two, repeats=np.array([2, 2], dtype=np.int32))
 
         check(np.arange(10), repeats=np.arange(10))
-
 
     def test_repeat_exception(self):
         pyfunc = np_repeat
         cfunc = jit(nopython=True)(pyfunc)
         self.disable_leak_check()
 
+        # heterogeneous list
+        with self.assertRaises(TypeError) as e:
+            cfunc([0, 1.0], 1)
+        self.assertIn("can't unbox heterogeneous list: int64 != float64",
+                      str(e.exception))
+
+        # nested list
+        with self.assertRaises(TypeError) as e:
+            cfunc([[0, 1], [2, 3], 1.0], 1)
+        self.assertIn("cannot reflect element of reflected container: "
+                      "reflected list(reflected list(int64))",
+                      str(e.exception))
+
+        # negative repeat argument
         with self.assertRaises(ValueError) as e:
             cfunc(np.ones(1), -1)
         self.assertIn("negative dimensions are not allowed",
                       str(e.exception))
 
+        # negative repeat argument as array
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.ones(2), np.array([1, -1]))
+        self.assertIn("count < 0",
+                      str(e.exception))
+
+        # broadcasting error, repeats too large
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.ones(2), np.array([1, 1, 1]))
+        self.assertIn("operands could not be broadcast together",
+                      str(e.exception))
+
+        # broadcasting error, repeats too small
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.ones(5), np.array([1, 1, 1, 1]))
+        self.assertIn("operands could not be broadcast together",
+                      str(e.exception))
+
         with self.assertRaises(TypingError):
+            cfunc(np.ones(1), True)
+            cfunc(np.ones(1), 1.0)
             cfunc(np.ones(1), "a")
             cfunc(np.ones(1), "1")
+            cfunc(np.ones(2), [1, 1])
 
 
 class TestNPMachineParameters(TestCase):
