@@ -9,9 +9,10 @@ import pprint
 import re
 import sys
 import warnings
-from numba import config, errors
 import operator
+from types import FunctionType
 
+from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
@@ -301,7 +302,7 @@ class Expr(Inst):
 
     @classmethod
     def unary(cls, fn, value, loc):
-        assert isinstance(value, (str, Var)) or callable(fn)
+        assert isinstance(value, (str, Var, FunctionType))
         assert isinstance(loc, Loc)
         op = 'unary'
         fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
@@ -519,7 +520,7 @@ class SetAttr(Stmt):
 class DelAttr(Stmt):
     def __init__(self, target, attr, loc):
         assert isinstance(target, Var)
-        assert isinstance(attr, Var)
+        assert isinstance(attr, str)
         assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
