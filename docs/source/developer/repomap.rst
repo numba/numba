@@ -79,15 +79,7 @@ These are the core components of the compiler
 - ``numba/bytecode.py`` - Bytecode parsing and function identity (??)
 - ``numba/serialize.py`` - Support for pickling compiled functions
 - ``numba/capsulethunk.h`` - Used by typeconv
-- ``numba/typeconv`` - Implementation of type casting and type signature matching
-- ``numba/typeconv/test.cpp`` - 
-- ``numba/typeconv/typeconv.hpp`` - 
-- ``numba/typeconv/typeconv.py`` - 
-- ``numba/typeconv/__init__.py`` - 
-- ``numba/typeconv/rules.py`` - 
-- ``numba/typeconv/typeconv.cpp`` - 
-- ``numba/typeconv/castgraph.py`` - 
-- ``numba/typeconv/_typeconv.cpp`` - 
+- ``numba/typeconv/`` - Implementation of type casting and type signature matching in both C++ and Python
 - ``numba/rewrites`` - Rewrite passes used by compiler
 - ``numba/rewrites/__init__.py`` - Loads all rewrite passes so they are put into the registry
 - ``numba/rewrites/registry.py`` - Registry object for collecting rewrit passes
@@ -97,91 +89,71 @@ These are the core components of the compiler
 - ``numba/rewrites/static_getitem.py`` - Rewrite getitem and setitem with constant arguments to allow type inference
 - ``numba/rewrites/static_binop.py`` - Rewrite binary operations (specifically ``**``) with constant arguments so faster code can be generated
 - ``numba/types/`` - definition of the Numba type hierarchy, used everywhere in compiler to select implementations
-- ``numba/_typeof.h`` -
+- ``numba/_typeof.{h,c}`` - C implementation of type fingerprinting, used by dispatcher
 - ``numba/jitclass`` - Implementation of JIT compilation of Python classes
-- ``numba/funcdesc.py``
-- ``numba/postproc.py``
-- ``numba/transforms.py``
-- ``numba/tracing.py``
-- ``numba/_helperlib.c``
-- ``numba/ccallback.py``
-- ``numba/config.py``
-- ``numba/ctypes_support.py``
-- ``numba/withcontexts.py``
-- ``numba/analysis.py``
-- ``numba/inline_closurecall.py``
-- ``numba/_helpermod.c``
-- ``numba/_arraystruct.h``
-- ``numba/pylowering.py`` - Lowering of code in object mode
-- ``numba/_dispatcher.c``
-- ``numba/lowering.py``
-- ``numba/typeinfer.py``
-- ``numba/_npymath_exports.c``
-- ``numba/_dynfuncmod.c`` - 
-- ``numba/mathnames.h`` - 
-- ``numba/sigutils.py`` - 
-- ``numba/numpy_support.py`` - 
-- ``numba/__init__.py`` - 
-- ``numba/_numba_common.h`` - 
-- ``numba/ir.py`` - 
-- ``numba/itanium_mangler.py`` - 
-- ``numba/unittest_support.py`` - 
-- ``numba/_math_c99.h`` - 
-- ``numba/_dynfunc.c`` - 
-- ``numba/array_analysis.py`` - 
-- ``numba/consts.py`` - 
-- ``numba/generators.py`` - 
-- ``numba/annotations`` - 
-- ``numba/annotations/type_annotations.py`` - 
-- ``numba/annotations/__init__.py`` - 
-- ``numba/annotations/template.html`` - 
-- ``numba/_pymodule.h`` - 
-- ``numba/cffi_support.py`` - 
-- ``numba/interpreter.py`` - 
-- ``numba/caching.py`` - 
-- ``numba/utils.py`` - 
-- ``numba/findlib.py`` - 
-- ``numba/debuginfo.py`` - 
-- ``numba/unsafe`` - 
-- ``numba/unsafe/refcount.py`` - 
-- ``numba/unsafe/tuple.py`` - 
-- ``numba/unsafe/__init__.py`` - 
-- ``numba/unsafe/ndarray.py`` - 
-- ``numba/unsafe/bytes.py`` - 
-- ``numba/mviewbuf.c`` - 
-- ``numba/pretty_annotate.py`` - 
-- ``numba/_typeof.c`` - 
-- ``numba/scripts`` - 
-- ``numba/scripts/generate_lower_listing.py`` - 
-- ``numba/scripts/__init__.py`` - 
-- ``numba/errors.py`` - 
-- ``numba/dummyarray.py`` - 
-- ``numba/servicelib`` - 
-- ``numba/servicelib/service.py`` - 
-- ``numba/servicelib/threadlocal.py`` - 
-- ``numba/servicelib/__init__.py`` - 
-- ``numba/_runtests.py`` - 
-- ``numba/dataflow.py`` - 
-- ``numba/callwrapper.py`` - 
-- ``numba/_dispatcher.h`` - 
-- ``numba/dictobject.py`` - 
-- ``numba/datamodel`` - 
-- ``numba/datamodel/models.py`` - 
-- ``numba/datamodel/registry.py`` - 
-- ``numba/datamodel/__init__.py`` - 
-- ``numba/datamodel/packer.py`` - 
-- ``numba/datamodel/testing.py`` - 
-- ``numba/datamodel/manager.py`` - 
-- ``numba/_dispatcherimpl.cpp`` - 
-- ``numba/_math_c99.c`` - 
-- ``numba/special.py`` - 
-- ``numba/controlflow.py`` - 
-- ``numba/macro.py`` - 
-- ``numba/runtests.py`` - 
-- ``numba/pythonapi.py`` - 
-- ``numba/extending.py`` - 
-- ``numba/npdatetime.py`` - 
-- ``numba/compiler_lock.py`` - 
+- ``numba/funcdesc.py`` - Classes for describing function metadata (used in compiler)
+- ``numba/postproc.py`` - Postprocessor for Numba IR that computes variable lifetime, inserts del operations, and handles generators 
+- ``numba/transforms.py`` - Numba IR transformations
+- ``numba/tracing.py`` - Decorator for tracing Python calls and emitting log messages
+- ``numba/_arraystruct.h`` - Struct for holding NumPy array attributes.  Used in helperlib and nrt.
+- ``numba/_helperlib.c`` - C functions required by Numba compiled code at runtime.  Linked into ahead-of-time compiled modules
+- ``numba/_helpermod.c`` - Python extension module with pointers to functions from ``_helperlib.c`` and ``_npymath_exports.c``
+- ``numba/_npymath_exports.c`` - Export function pointer table to NumPy C math functions
+- ``numba/_dynfuncmod.c`` - Python extension module exporting _dynfunc.c functionality
+- ``numba/_dynfunc.c`` - C level Environment and Closure objects (keep in sync with numba/target/base.py)
+- ``numba/mathnames.h`` - Macros for defining names of math functions
+- ``numba/_pymodule.h`` - C macros for Python 2/3 portable naming of C API functions
+- ``numba/_math_c99.{h,c}`` - C99 math compatibility (needed Python 2.7 on Windows, compiled with VS2008)
+- ``numba/mviewbuf.c`` - Handles Python memorviews
+- ``numba/_dispatcher.{h,c}`` - C interface to C++ dispatcher implementatioon
+- ``numba/_dispatcherimpl.cpp`` - C++ dispatcher implementation (for speed on common data types)
+- ``numba/ccallback.py`` - ``@cfunc`` decorator for compiling functions to a fixed C singature.  Used to make callbacks.
+- ``numba/config.py`` - Numba global config options and environment variable handling
+- ``numba/ctypes_support.py`` - Import this instead of ``ctypes`` to workaround portability issue with Python 2.7
+- ``numba/withcontexts.py`` - General scaffolding for implementing context managers in nopython mode, and the objectmode context manager
+- ``numba/analysis.py`` - Utility functions to analyze Numba IR (variable lifetime, prune branches, etc)
+- ``numba/inline_closurecall.py`` - Inline body of closure functions to call site.
+- ``numba/lowering.py`` - General implementation of lowering Numba IR to LLVM
+- ``numba/pylowering.py`` - Lowering of Numba IR in object mode
+- ``numba/typeinfer.py`` - Type inference algorithm
+- ``numba/sigutils.py`` - Helper functions for parsing and normalizing Numba type signatures
+- ``numba/numpy_support.py`` - Helper functions for working with NumPy and dtypes
+- ``numba/_numba_common.h`` - Portable C macro for marking symbols that can be shared between object files, but not outside the library.
+- ``numba/ir.py`` - Numba IR data structure objects
+- ``numba/itanium_mangler.py`` - Python implementation of Itanium C++ name mangling
+- ``numba/unittest_support.py`` - Import instead of unittest to handle portability issues (no longer needed?)
+- ``numba/array_analysis.py`` - Array analysis passes used in ParallelAccelerator
+- ``numba/consts.py`` - Constant inference (used to make constant values available during codegen when possible)
+- ``numba/generators.py`` - Support for lowering Python generators
+- ``numba/annotations`` - Gathering and printing type annotations of Numba IR
+- ``numba/cffi_support.py`` - Alias of numba.typing.cffi_utils for backward compatibility (still needed?)
+- ``numba/interpreter.py`` - Translate Python interpreter bytecode to Numba IR
+- ``numba/caching.py`` - Disk cache for compiled functions
+- ``numba/utils.py`` - Python 2 backports of Python 3 functionality (also imports local copy of ``six``)
+- ``numba/findlib.py`` - Helper function for locating shared libraries on all platforms
+- ``numba/debuginfo.py`` - Helper functions to construct LLVM IR debug info
+- ``numba/unsafe`` - ``@intrinsic`` helper functions that can be used to implement direct memory/pointer manipulation from nopython mode functions
+- ``numba/unsafe/refcount.py`` - Read reference count of object
+- ``numba/unsafe/tuple.py`` - Replace a value in a tuple slot
+- ``numba/unsafe/ndarray.py`` - NumPy array helpers
+- ``numba/unsafe/bytes.py`` - Copying and dereferencing data from void pointers
+- ``numba/pretty_annotate.py`` - Code highlighting of Numba functions and types (both ANSI terminal and HTML)
+- ``numba/scripts/generate_lower_listing.py`` - Dump all registered lowering implementations for reference documentation
+- ``numba/errors.py`` - Numba exception and warning classes 
+- ``numba/dummyarray.py`` - ???
+- ``numba/dataflow.py`` - Dataflow analysis for Python bytecode (used in analysis.py)
+- ``numba/callwrapper.py`` - Handles argument unboxing and releasing the GIL when moving from Python to nopython mode
+- ``numba/datamodel`` - LLVM IR representations of data types in different contexts
+- ``numba/datamodel/models.py`` - Models for most standard types
+- ``numba/datamodel/registry.py`` - Decorator to register new data models
+- ``numba/datamodel/packer.py`` - Pack typed values into a data structure
+- ``numba/datamodel/testing.py`` - Data model tests (this should move??)
+- ``numba/datamodel/manager.py`` - Map types to data models
+- ``numba/controlflow.py`` - Control flow analysis of Numba IR and Python bytecode
+- ``numba/macro.py`` - Alias to ``numba.rewrites.macros``
+- ``numba/pythonapi.py`` - LLVM IR code generation to interface with CPython API
+- ``numba/extending.py`` - Public decorators for extending Numba (``overload``, ``intrinsic``, etc)
+- ``numba/npdatetime.py`` - Helper functions for implementing NumPy datetime64 support
 
 Misc Support
 ''''''''''''
@@ -193,34 +165,35 @@ Misc Support
 - ``numba/six.py`` - Vendored subset of ``six`` package for Python 2 + 3 compatibility
 - ``numba/io_support.py`` - Workaround for various names of StringIO in different Python versions (should this be in six?)
 - ``numba/appdirs.py`` - Vendored package for determining application config directories on every platform
+- ``numba/compiler_lock.py`` - Global compiler lock because our usage of LLVM is not thread-safe
+- ``numba/special.py`` - Python stub implementations of special Numba functions (prange, gdb*)
+- ``numba/servicelib`` - Should be removed?
 
 
 Core Python Data Structures
 '''''''''''''''''''''''''''
-- ``numba/_hashtable.h``
-- ``numba/_hashtable.c``
-- ``numba/_dictobject.h``
-- ``numba/_dictobject.c``
-- ``numba/unicode.py``
-- ``numba/typed``
-- ``numba/typed/__init__.py``
-- ``numba/typed/typeddict.py``
+- ``numba/_hashtable.{h,c}`` - Adaptation of Python 3.7 hash table implementation
+- ``numba/_dictobject.{h,c}`` - C level implementation of typed dictionary 
+- ``numba/dictobject.py`` - Nopython mode wrapper for typed dictionary
+- ``numba/unicode.py`` - Unicode strings (Python 3.5 and later)
+- ``numba/typed`` - Python interfaces to statically typed containers
+- ``numba/typed/typeddict.py`` - Python interface to typed dictionary
 
 
-Algorithms
-''''''''''
-- ``numba/_random.c``
-- ``numba/_lapack.c``
+Math
+''''
+- ``numba/_random.c`` - Reimplementation of NumPy / CPython random number generator
+- ``numba/_lapack.c`` - Wrappers for calling BLAS functions
 
 
 ParallelAccelerator
 '''''''''''''''''''
 
-Code transformation passes that 
+Code transformation passes that extract parallelizable code from function and convert to multithreaded gufunc calls.
 
-- ``numba/parfor.py``
-- ``numba/stencil.py``
-- ``numba/stencilparfor.py``
+- ``numba/parfor.py`` - General ParallelAccelerator
+- ``numba/stencil.py`` - Stencil function decorator (implemented without ParallelAccelerator)
+- ``numba/stencilparfor.py`` - ParallelAccelerator implementation of stencil
 
 
 Deprecated Functionality
@@ -231,9 +204,8 @@ Deprecated Functionality
 Debugging Support
 '''''''''''''''''
 
-- ``numba/targets/gdb_hook.py`` - 
-- ``numba/targets/cmdlang.gdb`` - 
-
+- ``numba/targets/gdb_hook.py`` - Hooks to jump into GDB from nopython mode
+- ``numba/targets/cmdlang.gdb`` - Commands to setup GDB for setting explicit breakpoints from Python
 
 
 Type Signatures (CPU)
@@ -353,6 +325,8 @@ CPU unit tests (GPU target unit tests listed in later sections
 - ``runtests.py`` - Convenience script that launches test runner and turns on full compiler tracebacks
 - ``run_coverage.py`` - Runs test suite with coverage tracking enabled
 - ``.coveragerc`` - Coverage.py configuration
+- ``numba/runtests.py`` - Entry point to unittest runner
+- ``numba/_runtests.py`` - Implementation of custom test runner
 - ``numba/tests/test_*`` - Test cases
 - ``numba/tests/*_usecases.py`` - Python functions compiled by some unit tests
 - ``numba/tests/support.py`` - Helper functions for testin and special TestCase implementation
