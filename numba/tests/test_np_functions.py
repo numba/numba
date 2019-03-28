@@ -2580,7 +2580,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # heterogeneous list
         with self.assertRaises(TypeError) as e:
             cfunc([0, 1.0], 1)
-        self.assertIn("can't unbox heterogeneous list: int64 != float64",
+        self.assertIn("can't unbox heterogeneous list:",
                       str(e.exception))
 
         # nested list
