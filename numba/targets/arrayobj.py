@@ -1869,7 +1869,7 @@ def np_repeat(a, repeats):
         if repeats_array.shape[0] == 1:
             return np_repeat_impl_repeats_scaler(a, repeats_array[0])
         if np.any(repeats_array < 0):
-            raise ValueError('count < 0')
+            raise ValueError("negative dimensions are not allowed")
         asa = np.asarray(a)
         aravel = asa.ravel()
         n = aravel.shape[0]

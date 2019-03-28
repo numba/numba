@@ -2599,7 +2599,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # negative repeat argument as array
         with self.assertRaises(ValueError) as e:
             cfunc(np.ones(2), np.array([1, -1]))
-        self.assertIn("count < 0",
+        self.assertIn("negative dimensions are not allowed",
                       str(e.exception))
 
         # broadcasting error, repeats too large
@@ -2613,6 +2613,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.ones(5), np.array([1, 1, 1, 1]))
         self.assertIn("operands could not be broadcast together",
                       str(e.exception))
+
         for rep in [True, 1.0, "a", "1", [1, 1],]:
             with self.assertRaises(TypingError):
                 cfunc(np.ones(1), rep)
