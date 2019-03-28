@@ -2572,18 +2572,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.disable_leak_check()
 
-        # heterogeneous list
-        with self.assertRaises(TypeError) as e:
-            cfunc([0, 1.0], 1)
-        self.assertIn("can't unbox heterogeneous list",
-                      str(e.exception))
-
-        # nested list
-        with self.assertRaises(TypeError) as e:
-            cfunc([[0, 1], [2, 3], 1.0], 1)
-        self.assertIn("cannot reflect element of reflected container",
-                      str(e.exception))
-
         # negative repeat argument
         with self.assertRaises(ValueError) as e:
             cfunc(np.ones(1), -1)
