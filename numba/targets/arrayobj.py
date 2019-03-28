@@ -1841,24 +1841,6 @@ def np_unique(a):
 
 @overload(np.repeat)
 def np_repeat(a, repeats):
-    if not isinstance(a, (types.Array,
-                          types.List,
-                          types.BaseTuple,
-                          types.Number,
-                          types.Boolean,
-                          )
-                      ):
-        return
-    if not isinstance(repeats, (types.Integer,
-                                types.Array,
-                                )
-                      ):
-        return
-    # check that, in case repeats is an array, it is an integer array
-    if (isinstance(repeats, types.Array) and
-            not isinstance(repeats.dtype, types.Integer)):
-        return
-
     # Implementation for repeats being a scalar is a module global function
     # (see below) because it might be called from the implementation below.
 
@@ -1883,10 +1865,22 @@ def np_repeat(a, repeats):
             pos += repeats_array[i]
         return to_return
 
+    # type checking
+    if not isinstance(a, (types.Array,
+                          types.List,
+                          types.BaseTuple,
+                          types.Number,
+                          types.Boolean,
+                          )
+                      ):
+        return
     if isinstance(repeats, types.Integer):
         return np_repeat_impl_repeats_scaler
-    elif isinstance(repeats, types.Array):
+    elif (isinstance(repeats, (types.Array, types.List)) and
+            isinstance(repeats.dtype, types.Integer)):
         return np_repeat_impl_repeats_array_like
+    else:
+        return
 
 
 @register_jitable

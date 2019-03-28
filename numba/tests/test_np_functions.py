@@ -2553,23 +2553,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(i, repeats=3)
             check(i, repeats=100)
 
-        # check broadcasting when repeats is an array
+        # check broadcasting when repeats is an array/list
         one = np.arange(1)
-        check(one, repeats=np.array([0]))
-        check(one, repeats=np.array([1]))
-        check(one, repeats=np.array([2]))
+        for i in ([0], [1], [2]):
+            check(one, repeats=i)
+            check(one, repeats=np.array(i))
 
         two = np.arange(2)
-        check(two, repeats=np.array([0, 0]))
-        check(two, repeats=np.array([0, 1]))
-        check(two, repeats=np.array([1, 0]))
-        check(two, repeats=np.array([1, 1]))
+        for i in ([0, 0], [0, 1], [1, 0], [0, 1], [1, 2], [2, 1], [2, 2]):
+            check(two, repeats=i)
+            check(two, repeats=np.array(i))
 
-        check(two, repeats=np.array([1, 2]))
-        check(two, repeats=np.array([2, 1]))
-        check(two, repeats=np.array([2, 2]))
         check(two, repeats=np.array([2, 2], dtype=np.int32))
-
         check(np.arange(10), repeats=np.arange(10))
 
     def test_repeat_exception(self):
@@ -2613,7 +2608,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("operands could not be broadcast together",
                       str(e.exception))
 
-        for rep in [True, 1.0, "a", "1", [1, 1],]:
+        for rep in [True, 1.0, "a", "1"]:
             with self.assertRaises(TypingError):
                 cfunc(np.ones(1), rep)
 
