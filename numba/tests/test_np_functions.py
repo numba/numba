@@ -2613,13 +2613,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.ones(5), np.array([1, 1, 1, 1]))
         self.assertIn("operands could not be broadcast together",
                       str(e.exception))
-
-        with self.assertRaises(TypingError):
-            cfunc(np.ones(1), True)
-            cfunc(np.ones(1), 1.0)
-            cfunc(np.ones(1), "a")
-            cfunc(np.ones(1), "1")
-            cfunc(np.ones(2), [1, 1])
+        for rep in [True, 1.0, "a", "1", [1, 1],]:
+            with self.assertRaises(TypingError):
+                cfunc(np.ones(1), rep)
 
 
 class TestNPMachineParameters(TestCase):
