@@ -532,10 +532,10 @@ class DelAttr(Stmt):
 
 class StoreMap(Stmt):
     def __init__(self, dct, key, value, loc):
-        assert instance(dct, Var)
-        assert instance(key, Var)
-        assert instance(value, Var)
-        assert instance(loc, Loc)
+        assert isinstance(dct, Var)
+        assert isinstance(key, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.dct = dct
         self.key = key
         self.value = value
