@@ -380,6 +380,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check(a, q, abs_tol=1e-12):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
+            print(got, a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
         a = self.random.randn(27).reshape(3, 3, 3)
@@ -539,7 +540,25 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a[2] = np.nan
         np.testing.assert_equal(cfunc(a, 30), 7.6)
 
-    @unittest.skipUnless(np_version >= (1, 10), "quantile needs Numpy 1.10+")
+    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
+    def test_quantile_debug_0(self):
+        pyfunc = array_quantile_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.array(5)
+        q = np.array(1)
+        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
+
+    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
+    def test_quantile_debug_1(self):
+        pyfunc = array_quantile_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = 5
+        q = 0.5
+        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
+
+    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
     def test_quantile_basic(self):
         pyfunc = array_quantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
@@ -561,8 +580,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         np.testing.assert_equal(cfunc(a, 0.30), np.nan)
 
-    @unittest.skipUnless(np_version >= (1, 11),
-                         "nanquantile needs Numpy 1.11+")
+    @unittest.skipUnless(np_version >= (1, 15),
+                         "nanquantile needs Numpy 1.15+")
     def test_nanquantile_basic(self):
         pyfunc = array_nanquantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)

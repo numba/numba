@@ -1118,8 +1118,6 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
         # this could be supported, but would require a lexicographic
         # comparison
 
-    dtype = np.promote_types(dt, np.float64)
-
     if isinstance(a, (types.Number, types.Boolean)):
         a_transform = make_array_from_scalar
     else:
@@ -1133,14 +1131,14 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
         q_transform = make_array
 
     def np_percentile_q_scalar_impl(a, q):
-        a = a_transform(a).astype(dtype)
+        a = a_transform(a)
         q = q_transform(q)
         check_q(q)
         q = q * factor
         return _collect_percentiles(a, q, skip_nan)[0]
 
     def np_percentile_impl(a, q):
-        a = a_transform(a).astype(dtype)
+        a = a_transform(a)
         q = q_transform(q)
         check_q(q)
         q = q * factor
@@ -1173,22 +1171,16 @@ if numpy_version >= (1, 11):
             a, q, skip_nan=True, factor=1.0, check_q=check_percentiles
         )
 
-if numpy_version >= (1, 10):
+if numpy_version >= (1, 15):
     @overload(np.quantile)
-    # Note: np.quantile behaviour in the case of an array containing one or
-    # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
-    # length equal to q, hence version guard.
     def np_quantile(a, q):
         return _percentile_quantile_inner(
             a, q, skip_nan=False, factor=100.0, check_q=check_quantiles
         )
 
-if numpy_version >= (1, 11):
+if numpy_version >= (1, 15):
     @overload(np.nanquantile)
     def np_nanquantile(a, q):
-        # Note: np.nanquantile return type in the case of an all-NaN slice
-        # was changed in 1.11 to be an array of np.NaN of length equal to q,
-        # hence version guard.
         return _percentile_quantile_inner(
             a, q, skip_nan=True, factor=100.0, check_q=check_quantiles
         )
