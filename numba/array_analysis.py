@@ -379,7 +379,7 @@ class ShapeEquivSet(EquivSet):
         ndims = [len(names) for names in obj_names]
         ndim = ndims[0]
         if not all(ndim == x for x in ndims):
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("is_equiv: Dimension mismatch for {}".format(objs))
             return False
         for i in range(ndim):
@@ -868,7 +868,7 @@ class ArrayAnalysis(object):
 
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 2:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
 
@@ -921,7 +921,7 @@ class ArrayAnalysis(object):
                     new_body.append(instr)
             block.body = new_body
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             self.dump()
 
         dprint_func_ir(self.func_ir, "after array analysis", blocks)
