@@ -33,6 +33,7 @@ from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 from numba.extending import register_jitable
 import numbers
+from numba.six import exec_
 
 
 from numba.ir_utils import (
@@ -1439,6 +1440,8 @@ class ParforPass(object):
 
         if not self.flags.pa_outlined_kernel:
             if generate_aliasing_variants(self.func_ir, self.typemap, self.calltypes, self.array_analysis, self.typingctx):
+                self.func_ir._definitions = build_definitions(self.func_ir.blocks)
+                self.array_analysis.equiv_sets = dict()
                 self.array_analysis.run(self.func_ir.blocks)
 
         # run stencil translation to parfor
@@ -1494,7 +1497,7 @@ class ParforPass(object):
         # simplify again
         simplify(self.func_ir, self.typemap, self.calltypes)
         dprint_func_ir(self.func_ir, "after optimization")
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 2:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
         # run post processor again to generate Del nodes
@@ -2127,7 +2130,7 @@ class ParforPass(object):
             types.none, self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             parfor.dump()
         return parfor
 
@@ -2220,7 +2223,7 @@ class ParforPass(object):
         if end_label:
             true_block.body.append(ir.Jump(end_label, loc))
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             parfor.dump()
         return parfor
 
@@ -2311,7 +2314,7 @@ class ParforPass(object):
             types.none, self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("generated parfor for numpy map:")
             parfor.dump()
         return parfor
@@ -3046,7 +3049,7 @@ def visit_parfor_pattern_vars(parfor, callback, cbdata):
                                                             callback, cbdata)
 
 def visit_vars_parfor(parfor, callback, cbdata):
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 2:
         print("visiting parfor vars for:", parfor)
         print("cbdata: ", sorted(cbdata.items()))
     for l in parfor.loop_nests:
@@ -3174,20 +3177,18 @@ def find_args_written_to(block, arg_aliases):
     """
     Scan all the blocks to find arrays written to.
     """
-    print("array_analysis:", array_analysis, type(array_analysis))
     for stmt in block.body:
-        if isinstance(stmt, ir.Assign):
-            if isinstance(stmt.value, ir.Expr):
-                print("assign val:", stmt.value, type(stmt.value), stmt.value.op, stmt.value._kws)
         if isinstance(stmt, ir.StaticSetItem) or isinstance(stmt, ir.SetItem):
             if stmt.target.name in arg_aliases:
-                print("Found argument alias written to for array", stmt.target.name)
+                if config.DEBUG_ARRAY_OPT >= 1:
+                    print("Found argument alias written to for array", stmt.target.name)
                 return True
     return False
 
-def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offset):
+def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offset, toprint=""):
     xtyp = type(x)
-    print("duplicate_stmt:", x, xtyp, type(xtyp))
+    if config.DEBUG_ARRAY_OPT >= 2:
+        print("duplicate_stmt:", toprint, x, xtyp, type(xtyp))
     if isinstance(x, ir.Var):
         new_lhs_name = "duplicate_" + x.name
         assert(new_lhs_name not in typemap)
@@ -3200,8 +3201,7 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
                          duplicate_stmt(x.target, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
                          x.loc)
     elif isinstance(x, ir.Expr):
-        print("duplicate_stmt expr:", type(x._kws), x._kws)
-        to_return = ir.Expr(x.op, x.loc, **{key:duplicate_stmt(value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset) for (key,value) in x._kws.items()})
+        to_return = ir.Expr(x.op, x.loc, **{key:duplicate_stmt(value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset, toprint=key) for (key,value) in x._kws.items()})
     elif isinstance(x, str):
         to_return = copy.copy(x)
     elif isinstance(x, numbers.Number):
@@ -3227,6 +3227,18 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
                    duplicate_stmt(x.index_var, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
                    duplicate_stmt(x.value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
                    x.loc)
+    elif isinstance(x, ir.SetItem):
+        to_return = ir.SetItem(
+                   duplicate_stmt(x.target, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   duplicate_stmt(x.index, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   duplicate_stmt(x.value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   x.loc)
+    elif isinstance(x, ir.SetAttr):
+        to_return = ir.SetAttr(
+                   duplicate_stmt(x.target, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   duplicate_stmt(x.attr, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   duplicate_stmt(x.value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                   x.loc)
     elif isinstance(x, slice):
         to_return = slice(
                    duplicate_stmt(x.start, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
@@ -3238,9 +3250,16 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
         to_return = ir.Jump(x.target + label_offset, x.loc)
     elif isinstance(x, ir.Branch):
         to_return = ir.Branch(duplicate_stmt(x.cond, typemap, calltypes, dup_typemap, dup_calltypes, label_offset), x.truebr + label_offset, x.falsebr + label_offset, x.loc)
+    elif x == ir.UNDEFINED:
+        to_return = ir.UNDEFINED
+    elif isinstance(x, ir.StaticRaise):
+        to_return = ir.StaticRaise(duplicate_stmt(x.exc_class, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                         duplicate_stmt(x.exc_args, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
+                         x.loc)
+    elif isinstance(x, type):
+        to_return = copy.copy(x)
     else:
         class_name = x.__class__.__name__
-        print("class_name:", class_name)
         if class_name == 'builtin_function_or_method':
             to_return = x
         else:
@@ -3249,29 +3268,278 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
 
     try:
         if x in calltypes:
-            print("Duplicating calltype for", to_return, calltypes[x])
             dup_calltypes[to_return] = calltypes[x]
     except:
         pass
 
     return to_return
 
-def any_alias(*args):
-    for i in range(len(args)-1):
-        for j in range(i + 1, len(args)):
-            if np.may_share_memory(args[i], args[j]):
-                return True
-    return False
+def any_alias2(arg0, arg1):
+    pass
 
-@overload(any_alias)
-def any_alias_impl(*args):
-    def imp(*args):
-        for i in range(len(args)-1):
-            for j in range(i + 1, len(args)):
-                if np.may_share_memory(args[i], args[j]):
-                    return True
+@overload(any_alias2)
+def any_alias_impl2(arg0, arg1):
+    def imp(arg0, arg1):
+        return np.may_share_memory(arg0, arg1)
+    return imp
+
+"""
+   The following functions are optimized with the assumption that output arrays are likely to go at the end of
+   the argument list and that these are the most likely to alias.
+"""
+def any_alias3(arg0, arg1, arg2):
+    pass
+
+@overload(any_alias3)
+def any_alias_impl3(arg0, arg1, arg2):
+    def imp(arg0, arg1, arg2):
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
         return False
     return imp
+
+def any_alias4(arg0, arg1, arg2, arg3):
+    pass
+
+@overload(any_alias4)
+def any_alias_impl4(arg0, arg1, arg2, arg3):
+    def imp(arg0, arg1, arg2, arg3):
+        if np.may_share_memory(arg3, arg2):
+            return True
+        if np.may_share_memory(arg3, arg1):
+            return True
+        if np.may_share_memory(arg3, arg0):
+            return True
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
+        return False
+    return imp
+
+def any_alias5(arg0, arg1, arg2, arg3, arg4):
+    pass
+
+@overload(any_alias5)
+def any_alias_impl5(arg0, arg1, arg2, arg3, arg4):
+    def imp(arg0, arg1, arg2, arg3, arg4):
+        if np.may_share_memory(arg4, arg3):
+            return True
+        if np.may_share_memory(arg4, arg2):
+            return True
+        if np.may_share_memory(arg4, arg1):
+            return True
+        if np.may_share_memory(arg4, arg0):
+            return True
+        if np.may_share_memory(arg3, arg2):
+            return True
+        if np.may_share_memory(arg3, arg1):
+            return True
+        if np.may_share_memory(arg3, arg0):
+            return True
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
+        return False
+    return imp
+
+def any_alias6(arg0, arg1, arg2, arg3, arg4, arg5):
+    pass
+
+@overload(any_alias6)
+def any_alias_impl6(arg0, arg1, arg2, arg3, arg4, arg5):
+    def imp(arg0, arg1, arg2, arg3, arg4, arg5):
+        if np.may_share_memory(arg5, arg4):
+            return True
+        if np.may_share_memory(arg5, arg3):
+            return True
+        if np.may_share_memory(arg5, arg2):
+            return True
+        if np.may_share_memory(arg5, arg1):
+            return True
+        if np.may_share_memory(arg5, arg0):
+            return True
+        if np.may_share_memory(arg4, arg3):
+            return True
+        if np.may_share_memory(arg4, arg2):
+            return True
+        if np.may_share_memory(arg4, arg1):
+            return True
+        if np.may_share_memory(arg4, arg0):
+            return True
+        if np.may_share_memory(arg3, arg2):
+            return True
+        if np.may_share_memory(arg3, arg1):
+            return True
+        if np.may_share_memory(arg3, arg0):
+            return True
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
+        return False
+    return imp
+
+def any_alias7(arg0, arg1, arg2, arg3, arg4, arg5, arg6):
+    pass
+
+@overload(any_alias7)
+def any_alias_impl7(arg0, arg1, arg2, arg3, arg4, arg5, arg6):
+    def imp(arg0, arg1, arg2, arg3, arg4, arg5, arg6):
+        if np.may_share_memory(arg6, arg5):
+            return True
+        if np.may_share_memory(arg6, arg4):
+            return True
+        if np.may_share_memory(arg6, arg3):
+            return True
+        if np.may_share_memory(arg6, arg2):
+            return True
+        if np.may_share_memory(arg6, arg1):
+            return True
+        if np.may_share_memory(arg6, arg0):
+            return True
+        if np.may_share_memory(arg5, arg4):
+            return True
+        if np.may_share_memory(arg5, arg3):
+            return True
+        if np.may_share_memory(arg5, arg2):
+            return True
+        if np.may_share_memory(arg5, arg1):
+            return True
+        if np.may_share_memory(arg5, arg0):
+            return True
+        if np.may_share_memory(arg4, arg3):
+            return True
+        if np.may_share_memory(arg4, arg2):
+            return True
+        if np.may_share_memory(arg4, arg1):
+            return True
+        if np.may_share_memory(arg4, arg0):
+            return True
+        if np.may_share_memory(arg3, arg2):
+            return True
+        if np.may_share_memory(arg3, arg1):
+            return True
+        if np.may_share_memory(arg3, arg0):
+            return True
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
+        return False
+    return imp
+
+def any_alias8(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7):
+    pass
+
+@overload(any_alias8)
+def any_alias_impl8(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7):
+    def imp(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7):
+        if np.may_share_memory(arg7, arg6):
+            return True
+        if np.may_share_memory(arg7, arg5):
+            return True
+        if np.may_share_memory(arg7, arg4):
+            return True
+        if np.may_share_memory(arg7, arg3):
+            return True
+        if np.may_share_memory(arg7, arg2):
+            return True
+        if np.may_share_memory(arg7, arg1):
+            return True
+        if np.may_share_memory(arg7, arg0):
+            return True
+        if np.may_share_memory(arg6, arg5):
+            return True
+        if np.may_share_memory(arg6, arg4):
+            return True
+        if np.may_share_memory(arg6, arg3):
+            return True
+        if np.may_share_memory(arg6, arg2):
+            return True
+        if np.may_share_memory(arg6, arg1):
+            return True
+        if np.may_share_memory(arg6, arg0):
+            return True
+        if np.may_share_memory(arg5, arg4):
+            return True
+        if np.may_share_memory(arg5, arg3):
+            return True
+        if np.may_share_memory(arg5, arg2):
+            return True
+        if np.may_share_memory(arg5, arg1):
+            return True
+        if np.may_share_memory(arg5, arg0):
+            return True
+        if np.may_share_memory(arg4, arg3):
+            return True
+        if np.may_share_memory(arg4, arg2):
+            return True
+        if np.may_share_memory(arg4, arg1):
+            return True
+        if np.may_share_memory(arg4, arg0):
+            return True
+        if np.may_share_memory(arg3, arg2):
+            return True
+        if np.may_share_memory(arg3, arg1):
+            return True
+        if np.may_share_memory(arg3, arg0):
+            return True
+        if np.may_share_memory(arg2, arg1):
+            return True
+        if np.may_share_memory(arg2, arg0):
+            return True
+        if np.may_share_memory(arg1, arg0):
+            return True
+        return False
+    return imp
+
+def gen_additional_any_alias(num_args):
+    """ Above we create some versions of the shortest aliasing checks for
+        speed but here we have a mechanism to create larger alias check functions.
+    """
+    arg_list = ", ".join(["arg" + str(j) for j in range(num_args)])
+    strcode = ""
+    fname = "any_alias" + str(num_args)
+    # Put the "do-nothing" function to overload in the exec string.
+    strcode += "def " + fname + "(" + arg_list + "):\n"
+    strcode += "    pass\n"
+    aaname = "any_alias_impl" + str(num_args)
+    strcode += "def " + aaname + "(" + arg_list + "):\n"
+    strcode += "    def imp(" + arg_list + "):\n"
+    for j in range(num_args - 1, 0, -1):
+        for k in range(j - 1, -1, -1):
+            strcode += "        if np.may_share_memory(arg" + str(j) + ", arg" + str(k) + "):\n"
+            strcode += "            return True\n"
+    strcode += "        return False\n"
+    strcode += "    return imp\n"
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("gen_additional_any_alias code")
+        print(strcode)
+    globls = {"np": np}
+    locls = {}
+    # Execute the string and bring the function in it into existence.
+    exec_(strcode, globls, locls)
+    # Get the two functions that we just created out of locls.
+    feval  = locls[fname]
+    aaeval = locls[aaname]
+    # Overload the "do-nothing" function in feval with the implementation in aaeval.
+    overload(feval)(aaeval)
+    return feval
+
 
 def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args):
     """ To duplicate the code, we created a new starting block where we
@@ -3300,6 +3568,7 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
     # Create the new start block.
     new_blocks[start_block] = ir.Block(min_block.scope, min_block.loc)
 
+    # Create variable to hold the conditional of whether any arrays alias.
     has_alias_var = ir.Var(min_block.scope, mk_unique_var("$duplicate_first_block_array_has_alias"), min_block.loc)
     typemap[has_alias_var.name] = types.boolean
 
@@ -3315,7 +3584,15 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
     vtup = tuple(vtypes)
 
     any_alias_func_var = ir.Var(min_block.scope, mk_unique_var("any_alias_func"), min_block.loc)
-    any_alias_def = ir.Global('any_alias', any_alias, loc=min_block.loc)
+    alias_func_name = "any_alias" + str(len(array_vars))
+    try:
+        # This will work if the number of array variables is <= 8 as in the any_aliasN functions above.
+        any_alias = eval(alias_func_name)
+    except NameError:
+        # Dynamically generate an any_alias function with the right number of array arguments.
+        any_alias = gen_additional_any_alias(len(array_vars))
+
+    any_alias_def = ir.Global(alias_func_name, any_alias, loc=min_block.loc)
     any_alias_assign = ir.Assign(any_alias_def, any_alias_func_var, min_block.loc)
     new_blocks[start_block].body.append(any_alias_assign)
 
@@ -3331,15 +3608,16 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
 
     # Create the predecessor and successor blocks for where aliasing is detected.
     new_blocks[start_alias_block] = ir.Block(min_block.scope, min_block.loc)
-    str1 = "alias section"
-    str1consttyp = types.StringLiteral(str1)
-    str1_var = ir.Var(min_block.scope, mk_unique_var("str1_const"), min_block.loc)
-    str1_assign = ir.Assign(value=ir.Const(value=str1, loc=min_block.loc), target=str1_var, loc=min_block.loc)
-    typemap[str1_var.name] = str1consttyp
-    new_blocks[start_alias_block].body.append(str1_assign)
-    str1_print = ir.Print(args=[str1_var], vararg=None, loc=min_block.loc)
-    calltypes[str1_print] = signature(types.none, typemap[str1_var.name])
-    new_blocks[start_alias_block].body.append(str1_print)
+    if config.DEBUG_ARRAY_OPT >= 2:
+        str1 = "alias section"
+        str1consttyp = types.StringLiteral(str1)
+        str1_var = ir.Var(min_block.scope, mk_unique_var("str1_const"), min_block.loc)
+        str1_assign = ir.Assign(value=ir.Const(value=str1, loc=min_block.loc), target=str1_var, loc=min_block.loc)
+        typemap[str1_var.name] = str1consttyp
+        new_blocks[start_alias_block].body.append(str1_assign)
+        str1_print = ir.Print(args=[str1_var], vararg=None, loc=min_block.loc)
+        calltypes[str1_print] = signature(types.none, typemap[str1_var.name])
+        new_blocks[start_alias_block].body.append(str1_print)
 
     new_blocks[start_alias_block].body.append(ir.Jump(min_block_label + alias_offset, min_block.loc))
     new_blocks[end_alias_block] = ir.Block(min_block.scope, min_block.loc)
@@ -3347,15 +3625,16 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
 
     # Create the predecessor and successor blocks for where no aliasing is detected.
     new_blocks[start_noalias_block] = ir.Block(min_block.scope, min_block.loc)
-    str2 = "noalias section"
-    str2consttyp = types.StringLiteral(str2)
-    str2_var = ir.Var(min_block.scope, mk_unique_var("str2_const"), min_block.loc)
-    str2_assign = ir.Assign(value=ir.Const(value=str2, loc=min_block.loc), target=str2_var, loc=min_block.loc)
-    typemap[str2_var.name] = str2consttyp
-    new_blocks[start_noalias_block].body.append(str2_assign)
-    str2_print = ir.Print(args=[str2_var], vararg=None, loc=min_block.loc)
-    calltypes[str2_print] = signature(types.none, typemap[str2_var.name])
-    new_blocks[start_noalias_block].body.append(str2_print)
+    if config.DEBUG_ARRAY_OPT >= 2:
+        str2 = "noalias section"
+        str2consttyp = types.StringLiteral(str2)
+        str2_var = ir.Var(min_block.scope, mk_unique_var("str2_const"), min_block.loc)
+        str2_assign = ir.Assign(value=ir.Const(value=str2, loc=min_block.loc), target=str2_var, loc=min_block.loc)
+        typemap[str2_var.name] = str2consttyp
+        new_blocks[start_noalias_block].body.append(str2_assign)
+        str2_print = ir.Print(args=[str2_var], vararg=None, loc=min_block.loc)
+        calltypes[str2_print] = signature(types.none, typemap[str2_var.name])
+        new_blocks[start_noalias_block].body.append(str2_print)
 
     new_blocks[start_noalias_block].body.append(ir.Jump(min_block_label + noalias_offset, min_block.loc))
     new_blocks[end_noalias_block] = ir.Block(min_block.scope, min_block.loc)
@@ -3388,7 +3667,6 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
         new_blocks[k + alias_offset] = new_orig_block
         new_blocks[k + noalias_offset] = block_copy
 
-    print("dup_typemap:", dup_typemap)
     typemap.update(dup_typemap)
     calltypes.update(dup_calltypes)
 
@@ -3399,11 +3677,12 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
     If an array argument is written to then it may alias any of the other array arguments.
     If so, check for aliasing dynamically and create two variants, one for aliasing and one without.
     """
-    print("generate_aliasing_variants")
     blocks = func_ir.blocks
     alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
-    print("alias_map:", alias_map)
-    print("arg_aliases:", arg_aliases)
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("generate_aliasing_variants")
+        print("alias_map:", alias_map)
+        print("arg_aliases:", arg_aliases)
 
     array_args = {}
     for arg_index, an in enumerate(func_ir.arg_names):
@@ -3417,7 +3696,8 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
         args_written_to = find_args_written_to(block, arg_aliases)
         if args_written_to:
             break
-    print("args_written_to:", args_written_to)
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("args_written_to:", args_written_to)
 
     if args_written_to:
         """ If we found some input array or some alias thereof written into by this function
@@ -3676,7 +3956,7 @@ def has_cross_iter_dep(parfor):
 
 
 def dprint(*s):
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(*s)
 
 def get_parfor_pattern_vars(parfor):
@@ -3959,7 +4239,7 @@ def get_copies_parfor(parfor, typemap):
     last_label = max(parfor.loop_body.keys())
     gens = out_copies_parfor[last_label] & in_gen_copies[0]
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("copy propagate parfor gens:", gens, "kill_set", kill_set)
     return gens, kill_set
 
