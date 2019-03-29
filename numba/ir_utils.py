@@ -2008,7 +2008,14 @@ class InlineInlinables(object):
         # do not handle closure inlining here, another pass deals with that.
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
-        val = getattr(to_inline, 'value', False)
+        try:
+            val = getattr(to_inline, 'value', False)
+        except KeyError:
+            try:
+                val = getattr(to_inline, 'func', False)
+            except  KeyError:
+                raise GuardException
+
         if val:
             topt = getattr(val, 'targetoptions', False)
             if topt and topt.get('inlinable', False):
@@ -2101,7 +2108,15 @@ class InlineOverloads(object):
         if not hasattr(func_ty, 'get_call_type'):
             return False
 
+        # TODO: there's a problem here at present, kwargs are just read in order
+        # and tacked onto the args, which relies on their order at the call site
+        # being the same as the order in the signature
         arg_typs = tuple([self.typemap[x.name] for x in expr.args])
+
+        for x in expr.kws:
+            name = x[1].name
+            arg_typs += (self.typemap[name],)
+
         sig = func_ty.get_call_type(self.tyctx, arg_typs, {})
 
         templates = getattr(func_ty, 'templates', None)
