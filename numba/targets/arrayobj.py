@@ -1906,6 +1906,14 @@ def np_repeat_impl_repeats_scaler(a, repeats):
         return to_return
 
 
+@extending.overload_method(types.Array, 'repeat')
+def array_repeat(a, repeats):
+    def array_repeat_impl(a, repeat):
+        return np.repeat(a, repeat)
+
+    return array_repeat_impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
