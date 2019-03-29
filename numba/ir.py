@@ -10,7 +10,7 @@ import re
 import sys
 import warnings
 import operator
-from types import FunctionType
+from types import FunctionType, BuiltinFunctionType
 
 from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
@@ -280,7 +280,7 @@ class Expr(Inst):
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
-        assert not isinstance(fn, str)
+        assert isinstance(fn, BuiltinFunctionType)
         assert isinstance(lhs, Var)
         assert isinstance(rhs, Var)
         assert isinstance(loc, Loc)
@@ -290,8 +290,8 @@ class Expr(Inst):
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
-        assert not isinstance(fn, str)
-        assert not isinstance(immutable_fn, str)
+        assert isinstance(fn, BuiltinFunctionType)
+        assert isinstance(immutable_fn, BuiltinFunctionType)
         assert isinstance(lhs, Var)
         assert isinstance(rhs, Var)
         assert isinstance(loc, Loc)
