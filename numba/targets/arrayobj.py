@@ -15,7 +15,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import types, cgutils, typing, utils, extending, pndindex
+from numba import types, cgutils, typing, utils, extending, pndindex, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
@@ -1866,21 +1866,26 @@ def np_repeat(a, repeats):
         return to_return
 
     # type checking
-    if not isinstance(a, (types.Array,
-                          types.List,
-                          types.BaseTuple,
-                          types.Number,
-                          types.Boolean,
-                          )
-                      ):
-        return
-    if isinstance(repeats, types.Integer):
-        return np_repeat_impl_repeats_scaler
-    elif (isinstance(repeats, (types.Array, types.List)) and
-            isinstance(repeats.dtype, types.Integer)):
-        return np_repeat_impl_repeats_array_like
-    else:
-        return
+    if isinstance(a, (types.Array,
+                      types.List,
+                      types.BaseTuple,
+                      types.Number,
+                      types.Boolean,
+                      )
+                  ):
+        if isinstance(repeats, types.Integer):
+            return np_repeat_impl_repeats_scaler
+        elif isinstance(repeats, types.Float):
+            raise errors.TypingError(
+                "The repeats argument must be an integer type, not float")
+        elif isinstance(repeats, (types.Array, types.List)):
+            if isinstance(repeats.dtype, types.Integer):
+                return np_repeat_impl_repeats_array_like
+            elif isinstance(repeats.dtype, types.Float):
+                raise errors.TypingError(
+                    "The repeats array must be an integer type, not float")
+
+    return
 
 
 @register_jitable

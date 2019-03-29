@@ -2578,6 +2578,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("negative dimensions are not allowed",
                       str(e.exception))
 
+        # float repeat argument has custom error message
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.ones(1), 1.0)
+        self.assertIn(
+            "The repeats argument must be an integer type, not float",
+            str(e.exception))
+
         # negative repeat argument as array
         with self.assertRaises(ValueError) as e:
             cfunc(np.ones(2), np.array([1, -1]))
@@ -2596,7 +2603,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("operands could not be broadcast together",
                       str(e.exception))
 
-        for rep in [True, 1.0, "a", "1"]:
+        # float repeat argument has custom error message
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.ones(2), [1.0, 1.0])
+        self.assertIn(
+            "The repeats array must be an integer type, not float",
+            str(e.exception))
+
+        for rep in [True, "a", "1"]:
             with self.assertRaises(TypingError):
                 cfunc(np.ones(1), rep)
 
