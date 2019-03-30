@@ -1091,23 +1091,33 @@ def check_quantiles(q):
 
 @register_jitable
 def _collect_percentiles(a, q, skip_nan):
-    temp_arry = a.flatten()
+    temp_arry = a.copy()
     nan_mask = np.isnan(temp_arry)
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
         temp_arry = temp_arry[~nan_mask]
-        if len(temp_arry) == 1:
-            out = np.full(len(q), fill_value=temp_arry[0], dtype=np.float64)
-        else:
-            out = _collect_percentiles_inner(temp_arry, q)
+        out = _collect_percentiles_inner(temp_arry, q)
     else:
         out = np.full(len(q), np.nan)
 
     return out
 
-make_array_from_scalar = register_jitable(lambda a: np.asarray([a]))
-make_array = register_jitable(lambda a: np.asarray(a))
-make_array_from_one_d = register_jitable(lambda a: a.reshape(1))
+@register_jitable
+def _collect_percentiles(a, q, check_q, factor, skip_nan):
+    q = np.asarray(q).flatten()
+    check_q(q)
+    q = q * factor
+
+    temp_arry = np.asarray(a).flatten()
+    nan_mask = np.isnan(temp_arry)
+
+    if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
+        temp_arry = temp_arry[~nan_mask]
+        out = _collect_percentiles_inner(temp_arry, q)
+    else:
+        out = np.full(len(q), np.nan)
+
+    return out
 
 def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
     """
@@ -1118,34 +1128,14 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
     dt = determine_dtype(a)
     if np.issubdtype(dt, np.complexfloating):
         raise TypingError('Not supported for complex dtype')
-        # this could be supported, but would require a lexicographic
-        # comparison
-
-    if isinstance(a, (types.Number, types.Boolean)):
-        a_transform = make_array_from_scalar
-    else:
-        a_transform = make_array
-
-    if isinstance(q, (types.Number, types.Boolean)):
-        q_transform = make_array_from_scalar
-    elif isinstance(q, types.Array) and q.ndim == 0:
-        q_transform = make_array_from_one_d
-    else:
-        q_transform = make_array
+        # this could be supported, but would require a
+        # lexicographic comparison
 
     def np_percentile_q_scalar_impl(a, q):
-        a = a_transform(a)
-        q = q_transform(q)
-        check_q(q)
-        q = q * factor
-        return _collect_percentiles(a, q, skip_nan)[0]
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)[0]
 
     def np_percentile_impl(a, q):
-        a = a_transform(a)
-        q = q_transform(q)
-        check_q(q)
-        q = q * factor
-        return _collect_percentiles(a, q, skip_nan)
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)
 
     if isinstance(q, (types.Number, types.Boolean)):
         return np_percentile_q_scalar_impl
