@@ -1096,7 +1096,10 @@ def _collect_percentiles(a, q, skip_nan):
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
         temp_arry = temp_arry[~nan_mask]
-        out = _collect_percentiles_inner(temp_arry, q)
+        if len(temp_arry) == 1:
+            out = np.full(len(q), fill_value=temp_arry[0], dtype=np.float64)
+        else:
+            out = _collect_percentiles_inner(temp_arry, q)
     else:
         out = np.full(len(q), np.nan)
 
