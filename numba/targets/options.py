@@ -72,6 +72,9 @@ class TargetOptions(object):
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
 
+        if kws.pop('noalias', False):
+            flags.set('noalias')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:
