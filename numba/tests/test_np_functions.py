@@ -10,7 +10,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
-from numba import jit, typeof, types
+from numba import jit, njit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin
@@ -139,6 +139,14 @@ def np_trapz_x_dx(y, x, dx):
 
 def interp(x, xp, fp):
     return np.interp(x, xp, fp)
+
+
+def np_repeat(a, repeats):
+    return np.repeat(a, repeats)
+
+
+def array_repeat(a, repeats):
+    return np.asarray(a).repeat(repeats)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -2502,6 +2510,132 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_repeat(self):
+        # np.repeat(a, repeats)
+        np_pyfunc = np_repeat
+        np_nbfunc = njit(np_pyfunc)
+
+        # a.repeat(repeats)
+        array_pyfunc = array_repeat
+        array_nbfunc = njit(array_pyfunc)
+
+        for pyfunc, nbfunc in ((np_pyfunc, np_nbfunc),
+                               (array_pyfunc, array_nbfunc)):
+
+            def check(a, repeats):
+                self.assertPreciseEqual(pyfunc(a, repeats), nbfunc(a, repeats))
+
+            # test array argumens
+            target_numpy_values = [
+                np.ones(1),
+                np.arange(1000),
+                np.array([[0, 1], [2, 3]]),
+                np.array([]),
+                np.array([[], []]),
+            ]
+
+            target_numpy_types = [
+                np.uint32,
+                np.int32,
+                np.uint64,
+                np.int64,
+                np.float32,
+                np.float64,
+                np.complex64,
+                np.complex128,
+            ]
+
+            target_numpy_inputs = (np.array(a,dtype=t) for a,t in
+                                   itertools.product(target_numpy_values,
+                                                     target_numpy_types))
+
+            target_non_numpy_inputs = [
+                1,
+                1.0,
+                True,
+                1j,
+                [0, 1, 2],
+                (0, 1, 2),
+            ]
+            for i in itertools.chain(target_numpy_inputs, target_non_numpy_inputs):
+                check(i, repeats=0)
+                check(i, repeats=1)
+                check(i, repeats=2)
+                check(i, repeats=3)
+                check(i, repeats=100)
+
+            # check broadcasting when repeats is an array/list
+            one = np.arange(1)
+            for i in ([0], [1], [2]):
+                check(one, repeats=i)
+                check(one, repeats=np.array(i))
+
+            two = np.arange(2)
+            for i in ([0, 0], [0, 1], [1, 0], [0, 1], [1, 2], [2, 1], [2, 2]):
+                check(two, repeats=i)
+                check(two, repeats=np.array(i))
+
+            check(two, repeats=np.array([2, 2], dtype=np.int32))
+            check(np.arange(10), repeats=np.arange(10))
+
+    def test_repeat_exception(self):
+        # np.repeat(a, repeats)
+        np_pyfunc = np_repeat
+        np_nbfunc = njit(np_pyfunc)
+
+        # a.repeat(repeats)
+        array_pyfunc = array_repeat
+        array_nbfunc = njit(array_pyfunc)
+
+        self.disable_leak_check()
+
+        for pyfunc, nbfunc in ((np_pyfunc, np_nbfunc),
+                               (array_pyfunc, array_nbfunc)):
+
+            # negative repeat argument
+            with self.assertRaises(ValueError) as e:
+                nbfunc(np.ones(1), -1)
+            self.assertIn("negative dimensions are not allowed",
+                          str(e.exception))
+
+            # float repeat argument has custom error message
+            with self.assertRaises(TypingError) as e:
+                nbfunc(np.ones(1), 1.0)
+            self.assertIn(
+                "The repeats argument must be an integer "
+                "or an array-like of integer dtype",
+                str(e.exception))
+
+            # negative repeat argument as array
+            with self.assertRaises(ValueError) as e:
+                nbfunc(np.ones(2), np.array([1, -1]))
+            self.assertIn("negative dimensions are not allowed",
+                          str(e.exception))
+
+            # broadcasting error, repeats too large
+            with self.assertRaises(ValueError) as e:
+                nbfunc(np.ones(2), np.array([1, 1, 1]))
+            self.assertIn("operands could not be broadcast together",
+                          str(e.exception))
+
+            # broadcasting error, repeats too small
+            with self.assertRaises(ValueError) as e:
+                nbfunc(np.ones(5), np.array([1, 1, 1, 1]))
+            self.assertIn("operands could not be broadcast together",
+                          str(e.exception))
+
+            # float repeat argument has custom error message
+            with self.assertRaises(TypingError) as e:
+                nbfunc(np.ones(2), [1.0, 1.0])
+            self.assertIn(
+                "The repeats argument must be an integer "
+                "or an array-like of integer dtype",
+                str(e.exception))
+
+            for rep in [True, "a", "1"]:
+                with self.assertRaises(TypingError):
+                    nbfunc(np.ones(1), rep)
 
 
 class TestNPMachineParameters(TestCase):
