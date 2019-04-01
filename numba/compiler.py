@@ -51,8 +51,8 @@ class Flags(utils.ConfigOptions):
         'no_rewrites': False,
         'error_model': 'python',
         'fastmath': False,
-        'noalias': False,
         'pa_outlined_kernel': False,
+        'noalias': False,
     }
 
 
