@@ -1425,7 +1425,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 if hasattr(callee_def.value, key):
                     value = getattr(callee_def.value, key)
                     break
-            if not value:
+            if not value or not isinstance(value, str):
                 raise GuardException
             attrs.append(value)
             def_val = callee_def.value
