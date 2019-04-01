@@ -734,13 +734,15 @@ class EnterWith(Stmt):
 
 
 class Arg(AbstractRHS):
-    def __init__(self, name, index, loc):
+    def __init__(self, name, index, loc, noalias=False):
         assert isinstance(name, str)
         assert isinstance(index, int)
         assert isinstance(loc, Loc)
+        assert isinstance(noalias, bool)
         self.name = name
         self.index = index
         self.loc = loc
+        self.noalias = noalias
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
