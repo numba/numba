@@ -213,7 +213,7 @@ class FastMathOptions(object):
                 raise ValueError("Unrecognized fastmath flags: %s" % invalid)
             self.flags = {v for v, enable in value.items() if enable}
         else:
-            raise ValueError("Expect fastmath option to be either a bool, dict or set")
+            raise ValueError("Expected fastmath option(s) to be either a bool, dict or set")
 
     def __bool__(self):
         return bool(self.flags)
