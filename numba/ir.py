@@ -820,12 +820,8 @@ class Var(AbstractRHS):
     """
 
     def __init__(self, scope, name, loc):
-        if scope is None:
-            # XXX: THIS SHOULD GO AWAY
-            import warnings
-            # warnings.warn("Var(scope=None, ...)")
-        else:
-            assert isinstance(scope, Scope)
+        # NOTE: Use of scope=None should be removed.
+        assert scope is None or isinstance(scope, Scope)
         assert isinstance(name, str)
         assert isinstance(loc, Loc)
         self.scope = scope
