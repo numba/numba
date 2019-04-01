@@ -22,10 +22,6 @@ from numba.analysis import (compute_live_map, compute_use_defs,
 from numba.errors import TypingError, UnsupportedError
 import copy
 
-# User-provided compiler hint that the argument x does not alias any of the other arguments.
-def noalias(x):
-    pass
-
 _unique_var_count = 0
 
 
