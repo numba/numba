@@ -57,6 +57,28 @@ class TestFastMath(unittest.TestCase):
             fastllvm
         )
 
+    def test_jit_subset_errors(self):
+        with self.assertRaises(ValueError) as raises:
+            njit(fastmath={'spqr'})(lambda x: x + 1)(1)
+        self.assertIn(
+            "Unrecognized fastmath flags:",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            njit(fastmath={'spqr': False})(lambda x: x + 1)(1)
+        self.assertIn(
+            'Unrecognized fastmath flags:',
+            str(raises.exception),
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            njit(fastmath=1337)(lambda x: x + 1)(1)
+        self.assertIn(
+            'Expected fastmath option(s) to be',
+            str(raises.exception),
+        )
+
     def test_vectorize(self):
         def foo(x):
             return x + math.sin(x)

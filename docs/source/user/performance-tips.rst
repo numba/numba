@@ -100,6 +100,19 @@ Numba is through the use of the ``fastmath`` keyword argument::
 | ``do_sum_fast`` |      17.8 ms    |
 +-----------------+-----------------+
 
+In some cases you may wish to opt-in to only a subset of possible fast-math
+optimizations. This can be done by supplying a set of `LLVM fast-math flags
+<https://llvm.org/docs/LangRef.html#fast-math-flags>`_ to ``fastmath``.::
+
+    def add_assoc(x, y):
+        return (x - y) + y
+
+    print(njit(fastmath=False)(add_assoc)(0, np.inf)) # nan
+    print(njit(fastmath=True) (add_assoc)(0, np.inf)) # 0.0
+    print(njit(fastmath={'reassoc', 'nsz'})(add_assoc)(0, np.inf)) # 0.0
+    print(njit(fastmath={'reassoc'})       (add_assoc)(0, np.inf)) # nan
+    print(njit(fastmath={'nsz'})           (add_assoc)(0, np.inf)) # nan
+
 
 Parallel=True
 -------------
@@ -171,19 +184,6 @@ Execution times are as follows, ``fastmath`` again improves performance.
 +-------------------------+-----------------+
 | ``do_sum_parallel_fast``|      5.37 ms    |
 +-------------------------+-----------------+
-
-In some cases you may wish to opt-in to only a subset of possible fast-math
-optimizations. This can be done by supplying a set of `LLVM fast-math flags
-<https://llvm.org/docs/LangRef.html#fast-math-flags>`_ to ``fastmath``.::
-
-    def add_assoc(x, y):
-        return (x - y) + y
-
-    print(nb.njit(fastmath=False)(add_assoc)(0, np.inf)) # nan
-    print(nb.njit(fastmath=True) (add_assoc)(0, np.inf)) # 0.0
-    print(nb.njit(fastmath={'reassoc', 'nsz'})(add_assoc)(0, np.inf)) # 0.0
-    print(nb.njit(fastmath={'reassoc'})       (add_assoc)(0, np.inf)) # nan
-    print(nb.njit(fastmath={'nsz'})           (add_assoc)(0, np.inf)) # nan
 
 .. _intel-svml:
 
