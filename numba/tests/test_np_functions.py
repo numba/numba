@@ -13,6 +13,7 @@ from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, njit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
+from numba.config import IS_WIN32, IS_32BITS
 from .support import TestCase, CompilationCache, MemoryLeakMixin
 from .matmul_usecase import needs_blas
 
@@ -1585,7 +1586,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
-        _check(params)
+        if IS_WIN32 and not IS_32BITS and np_version >= (1, 16):
+            # XFAIL on 64-bits windows + numpy 1.16. See #3898
+            with self.assertRaises(TypingError) as raises:
+                _check(params)
+            expected_msg = "dtype of to_begin must be compatible with input ary"
+            self.assertIn(expected_msg, str(raises.exception))
+        else:
+            _check(params)
 
         # the following would fail on one of the BITS32 builds (difference in
         # overflow handling):
