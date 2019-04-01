@@ -793,7 +793,7 @@ def _fix_nested_array(func_ir):
             arr = numba.unsafe.ndarray.empty_inferred(...).
         If it is arr = b[...], find array definition of b recursively.
         """
-        arr_def = func_ir.get_definition(arr)
+        arr_def = get_definition(func_ir, arr)
         _make_debug_print("find_array_def")(arr, arr_def)
         if isinstance(arr_def, ir.Expr):
             if guard(_find_unsafe_empty_inferred, func_ir, arr_def):
