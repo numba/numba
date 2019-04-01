@@ -14,7 +14,8 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
-from .. import typing, types, cgutils, utils
+from .. import typing, types, cgutils, utils, errors
+from ..extending import intrinsic, overload_method
 
 
 def _int_arith_flags(rettype):
@@ -1352,3 +1353,42 @@ def constant_complex(context, builder, ty, pyval):
 def constant_integer(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
+
+
+#-------------------------------------------------------------------------------
+# Reinterpretation of scalars with alternate types, the `view` method.
+
+@intrinsic
+def viewer(tyctx, val, viewty):
+    bits = val.bitwidth
+    if isinstance(viewty.dtype, types.Integer):
+        bitcastty = ir.IntType(bits)
+    elif isinstance(viewty.dtype, types.Float):
+        bitcastty = ir.FloatType() if bits == 32 else ir.DoubleType()
+    else:
+        raise (".view() argument must be an integer or float type")
+
+    def codegen(cgctx, builder, typ, args):
+        flt = args[0]
+        print(flt)
+        return builder.bitcast(flt, bitcastty)
+    retty = viewty.dtype
+    sig = retty(val, viewty)
+    return sig, codegen
+
+
+def scalar_view(scalar, viewty):
+    if (isinstance(scalar, (types.Float, types.Integer))
+            and isinstance(viewty, types.abstract.DTypeSpec)):
+        if scalar.bitwidth != viewty.dtype.bitwidth:
+            raise errors.TypingError(
+                "Changing the dtype of a 0d array is only supported if the "
+                "itemsize is unchanged")
+
+        def impl(scalar, viewty):
+            return viewer(scalar, viewty)
+        return impl
+
+
+float_view = overload_method(types.Float, 'view')(scalar_view)
+int_view = overload_method(types.Integer, 'view')(scalar_view)
