@@ -644,10 +644,11 @@ class EnterWith(Stmt):
 
 
 class Arg(object):
-    def __init__(self, name, index, loc):
+    def __init__(self, name, index, loc, noalias=False):
         self.name = name
         self.index = index
         self.loc = loc
+        self.noalias = noalias
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
