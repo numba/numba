@@ -1879,9 +1879,9 @@ def np_repeat(a, repeats):
             if isinstance(repeats.dtype, types.Integer):
                 return np_repeat_impl_repeats_array_like
 
-    raise errors.TypingError(
-        "The repeats argument must be an integer "
-        "or an array-like of integer dtype")
+        raise errors.TypingError(
+            "The repeats argument must be an integer "
+            "or an array-like of integer dtype")
 
 
 @register_jitable
