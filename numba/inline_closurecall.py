@@ -9,7 +9,6 @@ from numba.ir_utils import (
     add_offset_to_labels,
     replace_vars,
     remove_dels,
-    remove_dead,
     rename_labels,
     find_topo_order,
     merge_adjacent_blocks,
@@ -22,7 +21,8 @@ from numba.ir_utils import (
     get_np_ufunc_typ,
     get_ir_of_code,
     simplify_CFG,
-    canonicalize_array_math
+    canonicalize_array_math,
+    dead_code_elimination,
     )
 
 from numba.analysis import (
@@ -104,12 +104,11 @@ class InlineClosureCallPass(object):
 
         if modified:
             remove_dels(self.func_ir.blocks)
-            # repeat dead code elimintation until nothing can be further
-            # removed
-            while (remove_dead(self.func_ir.blocks, self.func_ir.arg_names,
-                                                                self.func_ir)):
-                pass
+            # run dead code elimination
+            dead_code_elimination(self.func_ir)
+            # do label renaming
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
+
         debug_print("END")
 
     def _inline_reduction(self, work_list, block, i, expr, call_name):

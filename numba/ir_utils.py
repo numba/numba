@@ -472,6 +472,21 @@ def remove_args(blocks):
     return
 
 
+def dead_code_elimination(func_ir, typemap=None, alias_map=None,
+                          arg_aliases=None):
+    """ Performs dead code elimination and leaves the IR in a valid state on
+    exit (ir.Dels are present in correct locations).
+    """
+    do_post_proc = False
+    while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
+                       alias_map, arg_aliases)):
+        do_post_proc = True
+
+    if do_post_proc:
+        post_proc = numba.postproc.PostProcessor(func_ir)
+        post_proc.run()
+
+
 def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
@@ -497,6 +512,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap)
+
     return removed
 
 
@@ -525,6 +541,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         lives_n_aliases = lives | alias_lives | arg_aliases
+
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
@@ -532,6 +549,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             if stmt is None:
                 removed = True
                 continue
+
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -544,6 +562,12 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
+
+        if isinstance(stmt, ir.Del):
+            if stmt.value not in lives:
+                removed = True
+                continue
+
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
             if name not in lives_n_aliases:
