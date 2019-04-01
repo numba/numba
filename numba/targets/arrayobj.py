@@ -1875,17 +1875,13 @@ def np_repeat(a, repeats):
                   ):
         if isinstance(repeats, types.Integer):
             return np_repeat_impl_repeats_scaler
-        elif isinstance(repeats, types.Float):
-            raise errors.TypingError(
-                "The repeats argument must be an integer type, not float")
         elif isinstance(repeats, (types.Array, types.List)):
             if isinstance(repeats.dtype, types.Integer):
                 return np_repeat_impl_repeats_array_like
-            elif isinstance(repeats.dtype, types.Float):
-                raise errors.TypingError(
-                    "The repeats array must be an integer type, not float")
 
-    return
+    raise errors.TypingError(
+        "The repeats argument must be an integer "
+        "or an array-like of integer dtype")
 
 
 @register_jitable

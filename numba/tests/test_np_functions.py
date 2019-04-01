@@ -2603,7 +2603,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as e:
                 nbfunc(np.ones(1), 1.0)
             self.assertIn(
-                "The repeats argument must be an integer type, not float",
+                "The repeats argument must be an integer "
+                "or an array-like of integer dtype",
                 str(e.exception))
 
             # negative repeat argument as array
@@ -2628,7 +2629,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as e:
                 nbfunc(np.ones(2), [1.0, 1.0])
             self.assertIn(
-                "The repeats array must be an integer type, not float",
+                "The repeats argument must be an integer "
+                "or an array-like of integer dtype",
                 str(e.exception))
 
             for rep in [True, "a", "1"]:
