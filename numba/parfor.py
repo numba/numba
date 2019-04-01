@@ -1439,10 +1439,11 @@ class ParforPass(object):
         self.array_analysis.run(self.func_ir.blocks)
 
         if not self.flags.pa_outlined_kernel:
-            if generate_aliasing_variants(self.func_ir, self.typemap, self.calltypes, self.array_analysis, self.typingctx):
+            if generate_aliasing_variants(self.func_ir, self.typemap, self.calltypes, self.array_analysis, self.typingctx, self.flags):
                 self.func_ir._definitions = build_definitions(self.func_ir.blocks)
                 self.array_analysis.equiv_sets = dict()
                 self.array_analysis.run(self.func_ir.blocks)
+                print("equiv_sets:", self.array_analysis.equiv_sets)
 
         # run stencil translation to parfor
         if self.options.stencil:
@@ -1480,11 +1481,11 @@ class ParforPass(object):
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
-                                                            up_direction=False)
+                            self.flags, up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
             # push non-parfors up
-            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
+            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap, self.flags)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
@@ -1548,11 +1549,13 @@ class ParforPass(object):
                     if self._is_C_order(lhs.name):
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
+#                            print("calling numpy_to_parfor")
                             instr = self._numpy_to_parfor(equiv_set, lhs, expr)
                             if isinstance(instr, tuple):
                                 pre_stmts, instr = instr
                                 new_body.extend(pre_stmts)
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+#                            print("calling arrayexpr_to_parfor")
                             instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
                     avail_vars.append(lhs.name)
@@ -2450,7 +2453,7 @@ class ParforPass(object):
 
     def fuse_recursive_parfor(self, parfor, equiv_set):
         blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap)
+        maximize_fusion(self.func_ir, blocks, self.typemap, self.flags)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
         arr_analysis.run(blocks, equiv_set)
@@ -3195,7 +3198,8 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
         dup_typemap[new_lhs_name] = typemap[x.name]
         to_return = ir.Var(x.scope, new_lhs_name, x.loc)
     elif isinstance(x, ir.Arg):
-        to_return = copy.copy(x)
+        # Set the noalias flag to say the argument doesn't alias anything.
+        to_return = ir.Arg(x.name, x.index, x.loc, True)
     elif isinstance(x, ir.Assign):
         to_return = ir.Assign(duplicate_stmt(x.value, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
                          duplicate_stmt(x.target, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
@@ -3219,7 +3223,7 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
     elif isinstance(x, tuple):
         to_return = tuple(duplicate_stmt(y, typemap, calltypes, dup_typemap, dup_calltypes, label_offset) for y in x)
     elif isinstance(type(x), numba.types.abstract._TypeMetaclass):
-        to_return = x
+        to_return = copy.copy(x)
     elif isinstance(x, ir.StaticSetItem):
         to_return = ir.StaticSetItem(
                    duplicate_stmt(x.target, typemap, calltypes, dup_typemap, dup_calltypes, label_offset),
@@ -3258,10 +3262,14 @@ def duplicate_stmt(x, typemap, calltypes, dup_typemap, dup_calltypes, label_offs
                          x.loc)
     elif isinstance(x, type):
         to_return = copy.copy(x)
+    elif isinstance(x, numpy.ufunc):
+        to_return = copy.deepcopy(x)
+    elif isinstance(x, numba.npyufunc.dufunc.DUFunc):
+        to_return = x
     else:
         class_name = x.__class__.__name__
         if class_name == 'builtin_function_or_method':
-            to_return = x
+            to_return = copy.copy(x)
         else:
             print("Unhandled type:", type(x))
             assert(0)
@@ -3672,13 +3680,13 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
 
     return new_blocks
 
-def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typingctx):
+def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typingctx, flags):
     """
     If an array argument is written to then it may alias any of the other array arguments.
     If so, check for aliasing dynamically and create two variants, one for aliasing and one without.
     """
     blocks = func_ir.blocks
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, {} if flags.noalias else None)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("generate_aliasing_variants")
         print("alias_map:", alias_map)
@@ -3712,13 +3720,13 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
     else:
         return False
 
-def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
+def maximize_fusion(func_ir, blocks, typemap, flags, up_direction=True):
     """
     Reorder statements to maximize parfor fusion. Push all parfors up or down
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, {} if flags.noalias else None)
     for block in blocks.values():
         order_changed = True
         while order_changed:
