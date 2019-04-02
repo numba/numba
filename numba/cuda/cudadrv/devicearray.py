@@ -331,6 +331,13 @@ class DeviceNDArrayBase(object):
             gpu_data=self.gpu_data,
             )
 
+    @property
+    def nbytes(self):
+        if hasattr(self, 'alloc_size'):
+            return self.alloc_size
+        else:
+            return 0
+
 
 class DeviceRecord(DeviceNDArrayBase):
     '''
