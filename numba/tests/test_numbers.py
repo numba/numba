@@ -2,6 +2,7 @@
 from __future__ import print_function, absolute_import, division
 
 from numba import njit
+from numba.errors import TypingError
 from .support import TestCase
 
 import numpy as np
@@ -41,12 +42,14 @@ class TestViewIntFloat(TestCase):
                 else:
                     self.assertTrue(np.isnan(view(input_, type_)))
 
-
-#            try:
-#                foo(10, np.int32)
-#            except:
-#                print("Exception")
-#            try:
-#                foo(10.0, np.float32)
-#            except:
-#            print("Exception")
+    def test_exceptions(self):
+        with self.assertRaises(TypingError) as e:
+            view(np.int32(1), np.int64)
+        self.assertIn("Changing the dtype of a 0d array is only supported "
+                      "if the itemsize is unchanged",
+                      str(e.exception))
+        with self.assertRaises(TypingError) as e:
+            view(np.int64(1), np.int32)
+        self.assertIn("Changing the dtype of a 0d array is only supported "
+                      "if the itemsize is unchanged",
+                      str(e.exception))
