@@ -1370,7 +1370,6 @@ def viewer(tyctx, val, viewty):
 
     def codegen(cgctx, builder, typ, args):
         flt = args[0]
-        print(flt)
         return builder.bitcast(flt, bitcastty)
     retty = viewty.dtype
     sig = retty(val, viewty)
