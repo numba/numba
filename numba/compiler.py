@@ -402,9 +402,6 @@ class BasePipeline(object):
     def stage_process_ir(self):
         ir_processing_stage(self.func_ir)
 
-    def stage_preserve_ir(self):
-        self.func_ir_original = copy.deepcopy(self.func_ir)
-
     def frontend_looplift(self):
         """
         Loop lifting analysis and transformation
@@ -457,7 +454,6 @@ class BasePipeline(object):
         """
         Front-end: Analyze bytecode, generate Numba IR, infer types
         """
-        self.func_ir = self.func_ir_original or self.func_ir
         if self.flags.enable_looplift:
             assert not self.lifted
             cres = self.frontend_looplift()
@@ -780,9 +776,6 @@ class BasePipeline(object):
         The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
-            if self.status.can_fallback:
-                pm.add_stage(self.stage_preserve_ir,
-                             "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
