@@ -104,7 +104,6 @@ exclude =
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
     numba/targets/iterators.py
-    numba/targets/arrayobj.py
     numba/targets/codegen.py
     numba/targets/polynomial.py
     numba/targets/mergesort.py
