@@ -15,13 +15,13 @@ Talks on Numba
 Talks on Applications of Numba
 ------------------------------
 
-* FOSDEM 2019 - Extending Numba - Joris Geessels  (`Video, Slides & Examples <https://fosdem.org/2019/schedule/event/python_extending_numba/>`__)
-* PyData Berlin 2018 - Extending Pandas using Apache Arrow and Numba - Uwe L. Korn (`Video <https://www.youtube.com/watch?v=tvmX8YAFK80>`__, `Blog <https://uwekorn.com/2018/08/03/use-numba-to-work-with-apache-arrow-in-pure-python.html>`__)
-* SciPy 2018 - UMAP: Uniform Manifold Approximation and Projection for Dimensional Reduction - Leland McInnes (`Video <https://www.youtube.com/watch?v=nq6iPZVUxZU>`__, `Github <https://github.com/lmcinnes/umap>`__)
 * GPU Technology Conference 2016 - Accelerating a Spectral Algorithm for Plasma Physics with Python/Numba on GPU - Manuel Kirchen & Rémi Lehe (`Slides <http://on-demand.gputechconf.com/gtc/2016/presentation/s6353-manuel-kirchen-spectral-algorithm-plasma-physics.pdf>`__)
 * `DIANA-HEP Meeting, 23 April 2018 <https://indico.cern.ch/event/709711/>`_ - Use of Numba in XENONnT - Chris Tunnell
 * `DIANA-HEP Meeting, 23 April 2018 <https://indico.cern.ch/event/709711/>`_ - Extending Numba for HEP data types - Jim Pivarski
 * STAC Summit, Nov 1 2017 - Scaling High-Performance Python with Minimal Effort - Ehsan Totoni (`Video <https://stacresearch.com/STAC-Summit-1-Nov-2017-Intel-Totoni>`__, `Slides <https://stacresearch.com/system/files/resource/files/STAC-Summit-1-Nov-2017-Intel-Totoni.pdf>`__)
+* SciPy 2018 - UMAP: Uniform Manifold Approximation and Projection for Dimensional Reduction - Leland McInnes (`Video <https://www.youtube.com/watch?v=nq6iPZVUxZU>`__, `Github <https://github.com/lmcinnes/umap>`__)
+* PyData Berlin 2018 - Extending Pandas using Apache Arrow and Numba - Uwe L. Korn (`Video <https://www.youtube.com/watch?v=tvmX8YAFK80>`__, `Blog <https://uwekorn.com/2018/08/03/use-numba-to-work-with-apache-arrow-in-pure-python.html>`__)
+* FOSDEM 2019 - Extending Numba - Joris Geessels  (`Video, Slides & Examples <https://fosdem.org/2019/schedule/event/python_extending_numba/>`__)
 
 Tutorials
 ---------
