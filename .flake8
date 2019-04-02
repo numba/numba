@@ -231,7 +231,6 @@ exclude =
     numba/tests/test_debug.py
     numba/tests/test_interproc.py
     numba/tests/test_typeconv.py
-    numba/tests/test_np_functions.py
     numba/tests/test_tracing.py
     numba/tests/usecases.py
     numba/tests/test_vectorization_type_inference.py

@@ -3,13 +3,12 @@ from __future__ import print_function, absolute_import, division
 
 import itertools
 import math
-import sys
 from functools import partial
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, utils
+from numba.compiler import Flags
 from numba import jit, njit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
@@ -24,119 +23,158 @@ no_pyobj_flags.set("nrt")
 def sinc(x):
     return np.sinc(x)
 
+
 def angle1(x):
     return np.angle(x)
+
 
 def angle2(x, deg):
     return np.angle(x, deg)
 
+
 def diff1(a):
     return np.diff(a)
+
 
 def diff2(a, n):
     return np.diff(a, n)
 
+
 def bincount1(a):
     return np.bincount(a)
+
 
 def bincount2(a, w):
     return np.bincount(a, weights=w)
 
+
 def searchsorted(a, v):
     return np.searchsorted(a, v)
+
 
 def searchsorted_left(a, v):
     return np.searchsorted(a, v, side='left')
 
+
 def searchsorted_right(a, v):
     return np.searchsorted(a, v, side='right')
+
 
 def digitize(*args):
     return np.digitize(*args)
 
+
 def histogram(*args):
     return np.histogram(*args)
+
 
 def machar(*args):
     return np.MachAr()
 
+
 def iinfo(*args):
     return np.iinfo(*args)
+
 
 def finfo(*args):
     return np.finfo(*args)
 
+
 def finfo_machar(*args):
     return np.finfo(*args).machar
+
 
 def correlate(a, v):
     return np.correlate(a, v)
 
+
 def convolve(a, v):
     return np.convolve(a, v)
+
 
 def tri_n(N):
     return np.tri(N)
 
+
 def tri_n_m(N, M=None):
     return np.tri(N, M)
+
 
 def tri_n_k(N, k=0):
     return np.tri(N, k)
 
+
 def tri_n_m_k(N, M=None, k=0):
     return np.tri(N, M, k)
+
 
 def tril_m(m):
     return np.tril(m)
 
+
 def tril_m_k(m, k=0):
     return np.tril(m, k)
+
 
 def triu_m(m):
     return np.triu(m)
 
+
 def triu_m_k(m, k=0):
     return np.triu(m, k)
+
 
 def vander(x, N=None, increasing=False):
     return np.vander(x, N, increasing)
 
+
 def partition(a, kth):
     return np.partition(a, kth)
+
 
 def cov(m, y=None, rowvar=True, bias=False, ddof=None):
     return np.cov(m, y, rowvar, bias, ddof)
 
+
 def corrcoef(x, y=None, rowvar=True):
     return np.corrcoef(x, y, rowvar)
+
 
 def ediff1d(ary, to_end=None, to_begin=None):
     return np.ediff1d(ary, to_end, to_begin)
 
+
 def roll(a, shift):
     return np.roll(a, shift)
+
 
 def asarray(a):
     return np.asarray(a)
 
+
 def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
+
 
 def extract(condition, arr):
     return np.extract(condition, arr)
 
+
 def np_trapz(y):
     return np.trapz(y)
+
 
 def np_trapz_x(y, x):
     return np.trapz(y, x)
 
+
 def np_trapz_dx(y, dx):
     return np.trapz(y, dx=dx)
 
+
 def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
+
 
 def interp(x, xp, fp):
     return np.interp(x, xp, fp)
@@ -205,8 +243,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(got, expected,
                                         prec=prec,
                                         msg=msg,
-                                        ignore_sign_on_zero=
-                                        ignore_sign_on_zero,
+                                        ignore_sign_on_zero=ignore_sign_on_zero,
                                         abs_tol=abs_tol, **kwargs)
 
     def test_sinc(self):
@@ -239,8 +276,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def check(x_types, x_values, **kwargs):
             self.run_unary(pyfunc, x_types, x_values,
-                                ignore_sign_on_zero=isoz, abs_tol=tol,
-                                **kwargs)
+                           ignore_sign_on_zero=isoz, abs_tol=tol,
+                           **kwargs)
 
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5, 5e-21, -5e-21]
@@ -253,10 +290,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x_types, x_values)
 
         # complex domain scalar context
-        x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 0+1j, 0-1j, 0.5+0.0j,
-                    -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j,
+        x_values = [1. + 0j,
+                    -1 + 0j,
+                    0.0 + 0.0j,
+                    -0.0 + 0.0j,
+                    0 + 1j,
+                    0 - 1j,
+                    0.5 + 0.0j,
+                    -0.5 + 0.0j,
+                    0.5 + 0.5j,
+                    -0.5 - 0.5j,
+                    5 + 5j,
+                    -5 - 5j,
                     # the following are to test sin(x)/x for small x
-                    5e-21+0j, -5e-21+0j, 5e-21j, +(0-5e-21j)
+                    5e-21 + 0j,
+                    -5e-21 + 0j,
+                    5e-21j,
+                    +(0 - 5e-21j)
                     ]
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2)
         check(x_types, x_values, ulps=2)
@@ -295,8 +345,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x_types, x_values)
 
         # complex domain scalar context
-        x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 1j, -1j, 0.5+0.0j,
-                    -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j]
+        x_values = [1. + 0j,
+                    -1 + 0j,
+                    0.0 + 0.0j,
+                    -0.0 + 0.0j,
+                    1j,
+                    -1j,
+                    0.5 + 0.0j,
+                    -0.5 + 0.0j,
+                    0.5 + 0.5j,
+                    -0.5 - 0.5j,
+                    5 + 5j,
+                    -5 - 5j]
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2 + 1)
         check(x_types, x_values)
 
@@ -1235,17 +1295,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for ddof in np.arange(4), 4j:
             with self.assertTypingError() as raises:
-               cfunc(m, ddof=ddof)
+                cfunc(m, ddof=ddof)
             self.assertIn('ddof must be a real numerical scalar type', str(raises.exception))
 
         for ddof in np.nan, np.inf:
             with self.assertRaises(ValueError) as raises:
-               cfunc(m, ddof=ddof)
+                cfunc(m, ddof=ddof)
             self.assertIn('Cannot convert non-finite ddof to integer', str(raises.exception))
 
         for ddof in 1.1, -0.7:
             with self.assertRaises(ValueError) as raises:
-               cfunc(m, ddof=ddof)
+                cfunc(m, ddof=ddof)
             self.assertIn('ddof must be integral value', str(raises.exception))
 
     def corr_corrcoef_basic(self, pyfunc, first_arg_name):
@@ -2114,7 +2174,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.array([1, 2, np.nan, 4])
         _check({'x': x, 'xp': xp, 'fp': fp})
 
-
         x = np.array([1, 1.5, 2, 2.5, 3, 4, 4.5, 5, 5.5])
         xp = np.array([1, 2, 3, 4, 5])
         fp = np.array([np.nan, 2, np.nan, 4, np.nan])
@@ -2125,8 +2184,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.array([1, 2, np.inf, 4])
         _check({'x': x, 'xp': xp, 'fp': fp})
 
-        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0,
-                        7])
+        x = np.array([1, 1.5, np.nan, 2.5, -np.inf, 4, 4.5, 5, np.inf, 0, 7])
         xp = np.array([1, 2, 3, 4, 5, 6])
         fp = np.array([1, 2, np.nan, 4, 3, np.inf])
         _check({'x': x, 'xp': xp, 'fp': fp})
@@ -2401,7 +2459,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
+        _ = partial(self._check_output, pyfunc, cfunc)
 
         for size in range(1, 10):
             xp = np.arange(size, dtype=np.double)
@@ -2444,7 +2502,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _check = partial(self._check_output, pyfunc, cfunc)
+        _ = partial(self._check_output, pyfunc, cfunc)
 
         x = np.linspace(0, 1, 5)
         y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
@@ -2655,7 +2713,7 @@ def foo():
     return np.%s(ty)
 '''
 
-    bits = ('bits',) if np_version >= (1, 12)  else ()
+    bits = ('bits',) if np_version >= (1, 12) else ()
 
     def check(self, func, attrs, *args):
         pyfunc = func
@@ -2687,8 +2745,8 @@ def foo():
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]
         attrs = self.bits + ('eps', 'epsneg', 'iexp', 'machep', 'max',
-                'maxexp', 'negep', 'nexp', 'nmant', 'precision',
-                'resolution', 'tiny',)
+                             'maxexp', 'negep', 'nexp', 'nmant', 'precision',
+                             'resolution', 'tiny',)
         for ty in types:
             self.check(finfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.finfo, ty)
