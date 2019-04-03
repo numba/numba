@@ -488,7 +488,6 @@ class StencilPass(object):
                     # indices can be inferred as constant in simple expressions
                     # like -c where c is constant
                     # handled here since this is a common stencil index pattern
-                    stencil_ir._definitions = ir_utils.build_definitions(stencil_blocks)
                     index_list = [_get_const_index_expr(
                         stencil_ir, self.func_ir, v) for v in index_list]
                     if index_offsets:

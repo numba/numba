@@ -142,9 +142,7 @@ class TestInlining(TestCase):
                 if (isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var)
                         and guard(find_const, func_ir, stmt.value) == 2):
                     # replace expr with a dummy call
-                    func_ir._definitions[stmt.target.name].remove(stmt.value)
                     stmt.value = ir.Expr.call(ir.Var(block.scope, "myvar", loc=stmt.loc), (), (), stmt.loc)
-                    func_ir._definitions[stmt.target.name].append(stmt.value)
                     #func = g.py_func#
                     inline_closure_call(func_ir, {}, block, i, lambda: 2)
                     break

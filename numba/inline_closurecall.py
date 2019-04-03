@@ -176,7 +176,7 @@ class InlineClosureCallPass(object):
         sf = StencilFunc(kernel_ir, 'constant', options)
         sf.kws = expr.kws # hack to keep variables live
         sf_global = ir.Global('stencil', sf, expr.loc)
-        self.func_ir._definitions[lhs.name] = [sf_global]
+        self.func_ir.temp_definitions[lhs.name] = [sf_global]
         instr.value = sf_global
         return True
 
@@ -356,7 +356,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if (instr.target.name in func_ir._definitions
             and call_expr in func_ir._definitions[instr.target.name]):
         # NOTE: target can have multiple definitions due to control flow
-        func_ir._definitions[instr.target.name].remove(call_expr)
+        func_ir.temp_definitions[instr.target.name].remove(call_expr)
 
     # 7. insert all new blocks, and add back definitions
     for label in topo_order:
@@ -764,7 +764,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False)
     # stmt can be either array call or SetItem, we only replace array call
     if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
         stmt.value = array_var
-        func_ir._definitions[stmt.target.name] = [stmt.value]
+        func_ir.temp_definitions[stmt.target.name] = [stmt.value]
 
     return True
 
@@ -900,7 +900,7 @@ def _fix_nested_array(func_ir):
                 block.body.remove(stmt)
 
 def _new_definition(func_ir, var, value, loc):
-    func_ir._definitions[var.name] = [value]
+    func_ir.temp_definitions[var.name] = [value]
     return ir.Assign(value=value, target=var, loc=loc)
 
 @rewrites.register_rewrite('after-inference')

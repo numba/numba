@@ -933,7 +933,7 @@ class ArrayAnalysis(object):
 
     def _define(self, equiv_set, var, typ, value):
         self.typemap[var.name] = typ
-        self.func_ir._definitions[var.name] = [value]
+        self.func_ir.temp_definitions[var.name] = [value]
         equiv_set.define(var, self.func_ir, typ)
 
     def _analyze_inst(self, label, scope, equiv_set, inst):

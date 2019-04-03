@@ -340,7 +340,6 @@ def get_optimized_numba_ir(test_func, args, **kws):
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
             tp.typingctx, options, flags, diagnostics=diagnostics)
         parfor_pass.run()
-        test_ir._definitions = build_definitions(test_ir.blocks)
 
     return test_ir, tp
 

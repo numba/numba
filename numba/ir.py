@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
+from collections import defaultdict, ChainMap, Mapping
 import copy
 import itertools
 import os
@@ -1099,9 +1099,14 @@ class FunctionIR(object):
         self.arg_count = arg_count
         self.arg_names = arg_names
 
-        self._definitions = definitions
+        self.temp_definitions = {}
 
         self._reset_analysis_variables()
+
+    @property
+    def _definitions(self):
+        from numba.ir_utils import build_definitions
+        return ReadOnlyMapping(build_definitions(self.blocks))
 
     def _reset_analysis_variables(self):
         from . import consts
@@ -1166,12 +1171,18 @@ class FunctionIR(object):
             name = name.name
         return self._consts.infer_constant(name)
 
-    def get_definition(self, value, lhs_only=False):
+    def get_definition(self, value, lhs_only=False, use_temp=True):
         """
         Get the definition site for the given variable name or instance.
         A Expr instance is returned by default, but if lhs_only is set
         to True, the left-hand-side variable is returned instead.
         """
+
+        if use_temp:
+            defmap = ChainMap(self.temp_definitions, self._definitions)
+        else:
+            defmap = self._definitions
+
         lhs = value
         while True:
             if isinstance(value, Var):
@@ -1182,7 +1193,7 @@ class FunctionIR(object):
                 name = value
             else:
                 return lhs if lhs_only else value
-            defs = self._definitions[name]
+            defs = defmap[name]
             if len(defs) == 0:
                 raise KeyError("no definition for %r"
                                % (name,))
@@ -1226,3 +1237,17 @@ class UndefinedType(object):
         return "Undefined"
 
 UNDEFINED = UndefinedType()
+
+
+class ReadOnlyMapping(Mapping):
+    def __init__(self, initdict):
+        self._data = initdict
+
+    def __getitem__(self, k):
+        return self._data[k]
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)

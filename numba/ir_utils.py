@@ -651,9 +651,6 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
     if arg_aliases is None:
         arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
 
-    # update definitions since they are not guaranteed to be up-to-date
-    # FIXME keep definitions up-to-date to avoid the need for rebuilding
-    func_ir._definitions = build_definitions(func_ir.blocks)
     np_alias_funcs = ['ravel', 'transpose', 'reshape']
 
     for bl in blocks.values():
@@ -1020,7 +1017,7 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
         order = find_topo_order(blocks)
     else:
         order = list(blocks.keys())
-    
+
     for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
@@ -1186,7 +1183,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                     g_np_assign = ir.Assign(g_np, g_np_var, loc)
                     rhs.value = g_np_var
                     new_body.append(g_np_assign)
-                    func_ir._definitions[g_np_var.name] = [g_np]
+                    func_ir.temp_definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
                     func_typ = get_np_ufunc_typ(func)
