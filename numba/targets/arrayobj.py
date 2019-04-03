@@ -3217,7 +3217,7 @@ def make_array_nditer(context, builder, sig, args):
 
 @lower_builtin('iternext', types.NumpyNdIterType)
 @iternext_impl(RefType.BORROWED)
-def iternext_numpy_ndindex_borrowed(context, builder, sig, args, result):
+def iternext_numpy_nditer2(context, builder, sig, args, result):
     [nditerty] = sig.args
     [nditer] = args
 
