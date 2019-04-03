@@ -2436,7 +2436,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _ = partial(self._check_output, pyfunc, cfunc)
 
         for size in range(1, 10):
             xp = np.arange(size, dtype=np.double)
@@ -2479,7 +2478,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
-        _ = partial(self._check_output, pyfunc, cfunc)
 
         x = np.linspace(0, 1, 5)
         y = np.linspace(0, 1, 5) + (1 + np.linspace(0, 1, 5)) * 1.0j
