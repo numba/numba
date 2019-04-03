@@ -532,6 +532,30 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
+    def test_lift_listcomp_block0(self):
+
+        def foo(X):
+            [y for y in (1,)]
+            for x in (1,):
+                pass
+            return X
+
+        # this is not nice, if you have 2+? liftable loops with one of them
+        # being list comp and in block 0 and force objmode compilation is set,
+        # in py27 this leads to a BUILD_LIST that is a lifting candidate with an
+        # entry of block 0, this is a problem as the loop lift prelude would be
+        # written to block -1 and havoc ensues. Therefore block 0 loop lifts
+        # are banned under this set of circumstances.
+
+        # check all compile and execute
+        from numba import jit
+        f = jit()(foo)
+        f(1)
+        self.assertEqual(f.overloads[f.signatures[0]].lifted, ())
+
+        f = jit(forceobj=True)(foo)
+        f(1)
+        self.assertEqual(len(f.overloads[f.signatures[0]].lifted), 1)
 
 if __name__ == '__main__':
     unittest.main()

@@ -491,7 +491,11 @@ class TestObjmodeFallback(TestCase):
             return intercept, coefs
 
         for d in self.decorators:
-            d(fit)(np.arange(10).reshape(1, 10), np.arange(10).reshape(1, 10))
+            res = d(fit)(np.arange(10).reshape(1, 10),
+                         np.arange(10).reshape(1, 10))
+            exp = fit(np.arange(10).reshape(1, 10),
+                      np.arange(10).reshape(1, 10))
+            np.testing.assert_equal(res, exp)
 
     def test_issue3289(self):
         b = [(5, 124), (52, 5)]
@@ -516,7 +520,8 @@ class TestObjmodeFallback(TestCase):
 
         data = {'x': np.arange(5), 'y': [[1], [2, 3]]}
         for d in self.decorators:
-            d(foo)(data)
+            res = d(foo)(data)
+            np.testing.assert_allclose(res, foo(data))
 
     def test_issue3659(self):
 
@@ -524,7 +529,8 @@ class TestObjmodeFallback(TestCase):
             a = np.array(((1, 2), (3, 4)))
             return np.array([x for x in a])
         for d in self.decorators:
-            d(main)()
+            res = d(main)()
+            np.testing.assert_allclose(res, main())
 
     def test_issue3803(self):
 
@@ -535,7 +541,8 @@ class TestObjmodeFallback(TestCase):
 
         X = np.zeros((10,))
         for d in self.decorators:
-            d(center)(X)
+            res = d(center)(X)
+            np.testing.assert_allclose(res, center(X))
 
 
 if __name__ == '__main__':

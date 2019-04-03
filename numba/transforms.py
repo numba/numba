@@ -86,6 +86,11 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     loops = _extract_loop_lifting_candidates(cfg, blocks)
     loopinfos = []
     for loop in loops:
+        # this is to prevent a bad rewrite where a prelude for a lifted
+        # loop would get written into block -1 if a loop entry were in block 0
+        if 0 in loop.entries:
+            continue
+
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
