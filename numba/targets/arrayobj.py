@@ -1999,7 +1999,6 @@ def array_nbytes(context, builder, typ, value):
     """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-    _ = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
     res = builder.mul(array.nitems, array.itemsize)
     return impl_ret_untracked(context, builder, typ, res)
 
@@ -2837,7 +2836,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
     assert kind in ('flat', 'ndenumerate')
 
     array_type = flatiterty.array_type
-    _ = array_type.dtype
 
     if array_type.layout == 'C':
         class CContiguousFlatIter(cgutils.create_struct_proxy(flatiterty)):
@@ -2871,8 +2869,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
             # where the strides are unknown at compile-time.
 
             def iternext_specific(self, context, builder, arrty, arr, result):
-                _ = context.get_constant(types.intp, 0)
-
                 ndim = arrty.ndim
                 nitems = arr.nitems
 
@@ -2951,7 +2947,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 ndim = arrty.ndim
-                _ = arr.data
                 shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
                 strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
                 indices = self.indices
@@ -3102,7 +3097,6 @@ def iternext_numpy_getitem_any(context, builder, sig, args):
     arrcls = context.make_array(arrty)
     arr = arrcls(context, builder, value=flatiter.array)
 
-    _ = flatiter.setitem(context, builder, arrty, arr, index, value)
     return context.get_dummy_value()
 
 
@@ -3306,8 +3300,6 @@ def _parse_shape(context, builder, ty, val):
     else:
         assert isinstance(ty, types.BaseTuple)
         ndim = ty.count
-        _ = context.cast(builder, val, ty,
-                         types.UniTuple(types.intp, ndim))
         shapes = cgutils.unpack_tuple(builder, val, count=ndim)
 
     zero = context.get_constant_generic(builder, types.intp, 0)
@@ -3585,8 +3577,6 @@ def numpy_diag_kwarg(context, builder, sig, args):
         def diag_impl(arr, k=0):
             #Will return arr.diagonal(v, k) when axis args are supported
             rows, cols = arr.shape
-            _ = rows
-            _ = cols
             if k < 0:
                 rows = rows + k
             if k > 0:
@@ -3963,7 +3953,6 @@ def np_cfarray(context, builder, sig, args):
     ptr, shape = args[:2]
 
     aryty = sig.return_type
-    _ = aryty.dtype
     assert aryty.layout in 'CF'
 
     out_ary = make_array(aryty)(context, builder)
@@ -4068,7 +4057,6 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
     """
     Check the nested sequence matches the given *shapes*.
     """
-    _ = context.get_value_type(types.intp)
 
     def _fail():
         context.call_conv.return_user_exc(builder, ValueError,
@@ -4409,8 +4397,6 @@ def _do_concatenate(context, builder, axis,
 def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
     ndim = retty.ndim
 
-    _ = cgutils.intp_t(0)
-
     arrs = [make_array(aty)(context, builder, value=a)
             for aty, a in zip(arrtys, arrs)]
 
@@ -4462,7 +4448,6 @@ def _np_stack(context, builder, arrtys, arrs, retty, axis):
 
     zero = cgutils.intp_t(0)
     one = cgutils.intp_t(1)
-    _ = cgutils.intp_t(ndim)
     ll_narrays = cgutils.intp_t(len(arrs))
 
     arrs = [make_array(aty)(context, builder, value=a)
