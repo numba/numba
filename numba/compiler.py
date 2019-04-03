@@ -237,11 +237,11 @@ class _PipelineManager(object):
     def run(self, status):
         assert self._finalized, "PM must be finalized before run()"
         for pipeline_name in self.pipeline_order:
-            event(pipeline_name)
+            event("Pipeline: %s" % pipeline_name)
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
             for stage, stage_name in self.pipeline_stages[pipeline_name]:
                 try:
-                    event(stage_name)
+                    event("-- %s" % stage_name)
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
@@ -286,7 +286,6 @@ class BasePipeline(object):
         self.bc = None
         self.func_id = None
         self.func_ir = None
-        self.func_ir_original = None  # used for fallback
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
