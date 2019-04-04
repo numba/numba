@@ -748,7 +748,7 @@ class BasePipeline(object):
                                  fndesc=None,)
 
     def stage_ir_legalization(self):
-        raise_on_unsupported_feature(self.func_ir)
+        raise_on_unsupported_feature(self.func_ir, self.typemap)
 
     def stage_cleanup(self):
         """

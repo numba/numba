@@ -1809,7 +1809,7 @@ def find_global_value(func_ir, var):
     raise GuardException
 
 
-def raise_on_unsupported_feature(func_ir):
+def raise_on_unsupported_feature(func_ir, typemap):
     """
     Helper function to walk IR and raise if it finds op codes
     that are unsupported. Could be extended to cover IR sequences
@@ -1870,6 +1870,8 @@ def raise_on_unsupported_feature(func_ir):
             if isinstance(stmt.value, ir.Expr):
                 if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
                     var = stmt.value.value.name
+                    if isinstance(typemap[var], types.Array):
+                        continue
                     df = func_ir.get_definition(var)
                     cn = guard(find_callname, func_ir, df)
                     if cn and cn[1] == 'numpy':
