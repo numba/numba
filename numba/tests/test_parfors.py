@@ -2680,6 +2680,22 @@ class TestParforsMisc(TestParforsBase):
         for line in stdout.getvalue().splitlines():
             self.assertEqual('a[3]: 2.0', line)
 
+    @skip_unsupported
+    def test_parfor_ufunc_typing(self):
+        def test_impl(A):
+            return np.isinf(A)
+
+        A = np.array([np.inf, 0.0])
+        cfunc = njit(parallel=True)(test_impl)
+        # save global state
+        old_seq_flag = numba.parfor.sequential_parfor_lowering
+        try:
+            numba.parfor.sequential_parfor_lowering = True
+            np.testing.assert_array_equal(test_impl(A), cfunc(A))
+        finally:
+            # recover global state
+            numba.parfor.sequential_parfor_lowering = old_seq_flag
+
 
 @skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
