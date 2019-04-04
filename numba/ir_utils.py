@@ -1866,6 +1866,19 @@ def raise_on_unsupported_feature(func_ir):
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
+            # this checks that np.<type> was called if view is called
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
+                    var = stmt.value.value.name
+                    df = func_ir.get_definition(var)
+                    cn = guard(find_callname, func_ir, df)
+                    if cn:
+                        ty = eval('{}.{}'.format(cn[1], cn[0]))
+                        if (numpy.issubdtype(ty, numpy.integer) or
+                                numpy.issubdtype(ty, numpy.floating)):
+                            continue
+                    raise TypingError(
+                        "'view' can only be called on numpy dtypes")
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
