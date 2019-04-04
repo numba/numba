@@ -203,16 +203,13 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(d(-5), -5.0)
         ty = types.NPDatetime('Y')
         self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
-        if numpy_version < (1,16):  # FIXME: workaround for known NumPy 1.16 issue
-            self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
+        self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
         ty = types.NPTimedelta('s')
         self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
-        if numpy_version < (1,16):  # FIXME: workaround for known NumPy 1.16 issue
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
         ty = types.NPTimedelta('')
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
-        if numpy_version < (1,16):  # FIXME: workaround for known NumPy 1.16 issue
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
 
 class TestNumbers(TestCase):

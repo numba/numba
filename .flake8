@@ -29,7 +29,6 @@ exclude =
     numba/smartarray.py
     numba/transforms.py
     numba/tracing.py
-    numba/config.py
     numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
@@ -63,7 +62,6 @@ exclude =
     numba/runtests.py
     numba/pythonapi.py
     numba/extending.py
-    numba/npdatetime.py
     numba/decorators.py
     numba/typeconv/typeconv.py
     numba/typeconv/rules.py
@@ -88,7 +86,6 @@ exclude =
     numba/targets/cmathimpl.py
     numba/targets/tupleobj.py
     numba/targets/mathimpl.py
-    numba/targets/ufunc_db.py
     numba/targets/registry.py
     numba/targets/imputils.py
     numba/targets/builtins.py

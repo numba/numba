@@ -15,6 +15,7 @@ Talks on Numba
 Talks on Applications of Numba
 ------------------------------
 
+* FOSDEM 2019 - Extending Numba - Joris Geessels  (`Video, Slides & Examples <https://fosdem.org/2019/schedule/event/python_extending_numba/>`__)
 * PyData Berlin 2018 - Extending Pandas using Apache Arrow and Numba - Uwe L. Korn (`Video <https://www.youtube.com/watch?v=tvmX8YAFK80>`__, `Blog <https://uwekorn.com/2018/08/03/use-numba-to-work-with-apache-arrow-in-pure-python.html>`__)
 * SciPy 2018 - UMAP: Uniform Manifold Approximation and Projection for Dimensional Reduction - Leland McInnes (`Video <https://www.youtube.com/watch?v=nq6iPZVUxZU>`__, `Github <https://github.com/lmcinnes/umap>`__)
 * GPU Technology Conference 2016 - Accelerating a Spectral Algorithm for Plasma Physics with Python/Numba on GPU - Manuel Kirchen & Rémi Lehe (`Slides <http://on-demand.gputechconf.com/gtc/2016/presentation/s6353-manuel-kirchen-spectral-algorithm-plasma-physics.pdf>`__)
