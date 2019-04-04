@@ -3097,6 +3097,7 @@ def iternext_numpy_getitem_any(context, builder, sig, args):
     arrcls = context.make_array(arrty)
     arr = arrcls(context, builder, value=flatiter.array)
 
+    flatiter.setitem(context, builder, arrty, arr, index, value)
     return context.get_dummy_value()
 
 
