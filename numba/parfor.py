@@ -1443,7 +1443,6 @@ class ParforPass(object):
                 self.func_ir._definitions = build_definitions(self.func_ir.blocks)
                 self.array_analysis.equiv_sets = dict()
                 self.array_analysis.run(self.func_ir.blocks)
-                print("equiv_sets:", self.array_analysis.equiv_sets)
 
         # run stencil translation to parfor
         if self.options.stencil:
@@ -1467,12 +1466,15 @@ class ParforPass(object):
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
         simplify_parfor_body_CFG(self.func_ir.blocks)
+        dprint_func_ir(self.func_ir, "after simplify_parfor_body_CFG")
         # simplify before fusion
         simplify(self.func_ir, self.typemap, self.calltypes)
+        dprint_func_ir(self.func_ir, "after first simplify")
         # need two rounds of copy propagation to enable fusion of long sequences
         # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
         # apply_copies_parfor depends on set order for creating dummy assigns)
         simplify(self.func_ir, self.typemap, self.calltypes)
+        dprint_func_ir(self.func_ir, "after second simplify")
 
         if self.options.fusion:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
@@ -3686,7 +3688,7 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
     If so, check for aliasing dynamically and create two variants, one for aliasing and one without.
     """
     blocks = func_ir.blocks
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, {} if flags.noalias else None)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.noalias)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("generate_aliasing_variants")
         print("alias_map:", alias_map)
@@ -3726,7 +3728,7 @@ def maximize_fusion(func_ir, blocks, typemap, flags, up_direction=True):
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, {} if flags.noalias else None)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.noalias)
     for block in blocks.values():
         order_changed = True
         while order_changed:
