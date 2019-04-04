@@ -1108,6 +1108,10 @@ class FunctionIR(object):
         from numba.ir_utils import build_definitions
         return ReadOnlyMapping(build_definitions(self.blocks))
 
+    @property
+    def combined_definitions(self):
+        return ChainMap(self.temp_definitions, self._definitions)
+
     def _reset_analysis_variables(self):
         from . import consts
 
@@ -1179,7 +1183,7 @@ class FunctionIR(object):
         """
 
         if use_temp:
-            defmap = ChainMap(self.temp_definitions, self._definitions)
+            defmap = self.combined_definitions
         else:
             defmap = self._definitions
 

@@ -411,10 +411,6 @@ def dead_branch_prune(func_ir, called_args):
                     # rewrite the condition as a true/false bit
                     branch_bit = nullified_conditions[deadcond.index(cond)][1]
                     x.value = ir.Const(branch_bit, loc=x.loc)
-                    # update the specific definition to the new const
-                    defns = func_ir._definitions[x.target.name]
-                    repl_idx = defns.index(cond)
-                    defns[repl_idx] = x.value
 
     # Remove dead blocks, this is safe as it relies on the CFG only.
     cfg = compute_cfg_from_blocks(func_ir.blocks)
