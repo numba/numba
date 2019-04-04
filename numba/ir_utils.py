@@ -1878,7 +1878,10 @@ def raise_on_unsupported_feature(func_ir):
                                 numpy.issubdtype(ty, numpy.floating)):
                             continue
                     raise TypingError(
-                        "'view' can only be called on numpy dtypes")
+                        "'view' can only be called on NumPy dtypes, "
+                        "try wrapping the variable with 'np.<dtype>()'",
+                        loc=stmt.loc
+                    )
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
