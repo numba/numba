@@ -1872,8 +1872,8 @@ def raise_on_unsupported_feature(func_ir):
                     var = stmt.value.value.name
                     df = func_ir.get_definition(var)
                     cn = guard(find_callname, func_ir, df)
-                    if cn:
-                        ty = eval('{}.{}'.format(cn[1], cn[0]))
+                    if cn and cn[1] == 'numpy':
+                        ty = getattr(numpy, cn[0])
                         if (numpy.issubdtype(ty, numpy.integer) or
                                 numpy.issubdtype(ty, numpy.floating)):
                             continue
