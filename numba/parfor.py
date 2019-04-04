@@ -3687,6 +3687,9 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
     If an array argument is written to then it may alias any of the other array arguments.
     If so, check for aliasing dynamically and create two variants, one for aliasing and one without.
     """
+    if flags.noalias:
+        return False
+
     blocks = func_ir.blocks
     alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.noalias)
     if config.DEBUG_ARRAY_OPT >= 1:
