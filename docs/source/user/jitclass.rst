@@ -78,8 +78,8 @@ Short methods can be inlined (at the discretion of LLVM inliner).
 Attributes access are simply reading from a C structure.
 Using jitclasses from the intpreter has the same overhead of calling any
 Numba compiled function from the interpreter.  Arguments and return values
-must be unboxed or boxed between python objects and native representation.
-Values encapsulated by a jitclass does not get boxed into python object when
+must be unboxed or boxed between Python objects and native representation.
+Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
 
