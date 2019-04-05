@@ -16,6 +16,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
 from . import optional
 from .. import typing, types, cgutils, utils, errors
 from ..extending import intrinsic, overload_method
+from ..unsafe.numbers import viewer
 
 
 def _int_arith_flags(rettype):
@@ -1356,27 +1357,10 @@ def constant_integer(context, builder, ty, pyval):
 
 
 #-------------------------------------------------------------------------------
-# Reinterpretation of scalars with alternate types, the `view` method.
-
-@intrinsic
-def viewer(tyctx, val, viewty):
-    bits = val.bitwidth
-    if isinstance(viewty.dtype, types.Integer):
-        bitcastty = ir.IntType(bits)
-    elif isinstance(viewty.dtype, types.Float):
-        bitcastty = ir.FloatType() if bits == 32 else ir.DoubleType()
-    else:
-        assert 0, "unreachable"
-
-    def codegen(cgctx, builder, typ, args):
-        flt = args[0]
-        return builder.bitcast(flt, bitcastty)
-    retty = viewty.dtype
-    sig = retty(val, viewty)
-    return sig, codegen
-
+# View
 
 def scalar_view(scalar, viewty):
+    """ Typing for the np scalar 'view' method. """
     if (isinstance(scalar, (types.Float, types.Integer))
             and isinstance(viewty, types.abstract.DTypeSpec)):
         if scalar.bitwidth != viewty.dtype.bitwidth:
