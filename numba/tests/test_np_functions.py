@@ -342,12 +342,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-        # with self.assertRaises(IndexError) as raises:
-        #     cfunc([1, 2], 3)
-        # self.assertIn(
-        #     'delete():',
-        #     str(raises.exception),
-        # )
+        with self.assertRaises(IndexError) as raises:
+            cfunc([1, 2], 3)
+        self.assertIn(
+            'delete(): pos must be less than the len(arr)',
+            str(raises.exception),
+        )
 
     def diff_arrays(self):
         """
