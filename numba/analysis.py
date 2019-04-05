@@ -400,7 +400,7 @@ def dead_branch_prune(func_ir, called_args):
     # (if desired). It is required that the const is assigned a value that
     # indicates the branch taken as its mutated value would be read in the case
     # of object mode fall back in place of the condition itself. For
-    # completeness the func_ir._definitions and ._consts are also updated to
+    # completeness the ._consts are also updated to
     # make the IR state self consistent.
 
     deadcond = [x[0] for x in nullified_conditions]

@@ -450,6 +450,7 @@ def _add_definitions(func_ir, block):
     assigns = block.find_insts(ir.Assign)
     for stmt in assigns:
         definitions[stmt.target.name].append(stmt.value)
+        # XXX: DEAD CODE?
 
 def _find_arraycall(func_ir, block):
     """Look for statement like "x = numpy.array(y)" or "x[..] = y"
