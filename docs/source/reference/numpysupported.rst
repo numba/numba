@@ -56,9 +56,9 @@ The following scalar types and features are not supported:
 The operations supported on scalar Numpy numbers are almost the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use a type's
 constructor to convert from a different type or width. In addition you can use
-the ``view(np.<dtype>)`` to bitcast all ``int`` and ``float`` types within the
-same width. However, you must define the scalar using a Numpy constructor
-within a jitted function. So for example, the following will work:
+the ``view(np.<dtype>)`` method to bitcast all ``int`` and ``float`` types
+within the same width. However, you must define the scalar using a Numpy
+constructor within a jitted function. So for example, the following will work:
 
 .. code:: pycon
 
