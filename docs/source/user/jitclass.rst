@@ -53,7 +53,7 @@ Here's an example of a jitclass::
 
 In the above example, a ``spec`` is provided as a list of 2-tuples.  The tuples
 contain the name of the field and the Numba type of the field.  Alternatively,
-user can use a dictionary (an ``OrderedDict`` preferrably for stable field
+user can use a dictionary (an ``OrderedDict`` preferably for stable field
 ordering), which maps field names to types.
 
 The definition of the class requires at least a ``__init__`` method for
