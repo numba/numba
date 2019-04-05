@@ -7,7 +7,7 @@ JIT functions
 
 .. _jit-decorator:
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, noalias=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -94,6 +94,12 @@ JIT functions
    Further, if :ref:`Intel SVML <intel-svml>` is installed faster but less
    accurate versions of some math intrinsics are used (answers to within
    ``4 ULP``).
+
+   If true, *noalias* asserts that none of the mutable objects (e.g., Numpy
+   arrays) passed to this function will ever have overlapping memory regions.
+   In some cases, this assertion can reduce Numba compilation time as the
+   compiler need not consider potential object aliasing issues.  This assertion
+   may also enable additional compilation optimizations that can reduce runtime.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the

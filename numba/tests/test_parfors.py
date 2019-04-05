@@ -2488,7 +2488,7 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.ones(10), np.zeros(10), 8)
         args = (numba.float64[:], numba.float64[:], numba.int64)
-        self.assertEqual(countParfors(test_impl, args), 2)
+        self.assertEqual(countParfors(test_impl, args), 4)
 
     @skip_unsupported
     def test_parfor_slice17(self):
