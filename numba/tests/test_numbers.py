@@ -25,6 +25,13 @@ class TestViewIntFloat(TestCase):
                 else:
                     self.assertTrue(np.isnan(view(value)))
 
+    def test_8_bits(self):
+        dtypes = (np.uint8, np.int8)
+        #        Value  Initial Type   Expected answers using dtypes
+        inputs = ((1,   np.uint8,    (1, 1)),
+                  (-1,  np.int8,     (255, -1)))
+        self.do_testing(inputs, dtypes)
+
     def test_32_bits(self):
         dtypes = (np.uint32, np.int32, np.float32)
         #        Value  Initial Type   Expected answers using dtypes
