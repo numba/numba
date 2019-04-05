@@ -1366,7 +1366,7 @@ def viewer(tyctx, val, viewty):
     elif isinstance(viewty.dtype, types.Float):
         bitcastty = ir.FloatType() if bits == 32 else ir.DoubleType()
     else:
-        raise TypingError(".view() argument must be an integer or float type")
+        assert 0, "unreachable"
 
     def codegen(cgctx, builder, typ, args):
         flt = args[0]
