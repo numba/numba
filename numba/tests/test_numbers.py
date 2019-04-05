@@ -44,6 +44,17 @@ class TestViewIntFloat(TestCase):
                   )
         self.do_testing(inputs, dtypes)
 
+    def test_python_scalar_exception(self):
+        @njit
+        def call_view_on_scalar():
+            a = 1
+            a.view(np.float64)
+        with self.assertRaises(TypingError) as e:
+            call_view_on_scalar()
+        self.assertIn("'view' can only be called on NumPy dtypes, "
+                      "try wrapping the variable with 'np.<dtype>()'",
+                      str(e.exception))
+
     def test_exceptions(self):
         with self.assertRaises(TypingError) as e:
             view = njit(gen_view(np.int32, np.int64))
