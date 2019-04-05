@@ -474,6 +474,25 @@ described in more detail in the following paragraphs.
     ``numpy.sum(arr)``).  This sub-pass converts all such operations to the
     latter form for cleaner subsequent analysis.
 
+#. Insertion of dynamic alias check.
+    If a mutable object such as a Numpy array is passed to a function and
+    that array is modified by the function then the Numba compiler may not
+    parallelize or fuse operations relating to that array due to the potential
+    for that array to have overlapping memory (i.e., ``alias``) with some other
+    argument to the function.  Given that the common case is that arguments do
+    not alias, if the Numba compiler detects that some argument is modified,
+    the compiler duplicates the code of the function and inserts an aliasing
+    check.  The aliasing check determines if any arguments to the function
+    do indeed alias as runtime.  If so, the original code of the function is
+    used wherein the compiler assumes that argument aliasing is possible.
+    If no aliasing is detected, a duplicate version of the function's code
+    is executed wherein the compiler assumes that argument aliasing is
+    not present.  Given that the entire code of the function is duplicated,
+    this sub-pass has the potential to double compilation time.  If it is known
+    a priori that argument will never alias, the ``noalias`` flag may be
+    passed to the :func:`~numba.jit` decorator.  This flag causes the Numba
+    compiler to assume that arguments never alias and skips this sub-pass.
+
 #. Array analysis
     A critical requirement for later parfor fusion is that parfors have
     identical iteration spaces and these iteration spaces typically correspond
