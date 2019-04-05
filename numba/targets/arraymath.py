@@ -2345,43 +2345,46 @@ def np_imag(a):
 # Misc functions
 
 @overload(np.delete)
-def np_delete(a, obj, axis=None):
+def np_delete(arr, obj):
     # Implementation based on numpy
-    # https://github.com/numpy/numpy/blob/v1.15.1/numpy/lib/function_base.py#L4065-L4267 
+    # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267
 
-    if not isinstance(a, types.Array):
-        raise ValueError("'arr' must be an array")
+    if not isinstance(arr, (types.Array, types.Sequence)):
+        raise TypingError("delete(): arr must be either an Array or a Sequence")
+
+    def np_delete_impl(arr, obj):
+        arr = np.ravel(np.asarray(arr))
+
+        N = arr.size
+
+        keep = np.ones(N, dtype=np.bool_)
+        obj = np.array(obj)
+        keep[obj] = False
+        return arr[keep]
+
+    def np_delete_scalar_impl(arr, obj):
+        arr = np.ravel(np.asarray(arr))
+
+        N = arr.size
+        pos = obj
+
+        if (pos < -N or pos >= N):
+            raise IndexError('delete(): pos must be less than the len(arr)')
+            # NumPy raises IndexError: index 'i' is out of
+            # bounds for axis 'x' with size 'n'
+
+        if (pos < 0):
+            pos += N
+
+        return np.concatenate((arr[:pos], arr[pos+1:]))
 
     if isinstance(obj, (types.Array, types.Sequence)):
-        def np_delete_impl(a, obj, axis=None):
-            if (axis is None):
-                arr = np.ravel(a)
-
-            N = arr.size
-
-            keep = np.ones(N, dtype=np.bool_)
-            obj = np.array(obj)
-            keep[obj] = False
-            return arr[keep]
-
+        return np_delete_impl
     else: # scalar value
-        def np_delete_impl(a, obj, axis=None):
-            if (axis is None):
-                arr = np.ravel(a)
+        if not isinstance(obj, types.Integer):
+            raise TypingError('delete(): obj should be of type Integer')
 
-            N = arr.size
-            pos = obj.item()
-
-            if (pos < -N or pos >= N):
-                msg = 'Index is out of bounds'
-                raise ValueError(msg)
-                # NumPy raises IndexError: index 'i' is out of
-                # bounds for axis 'x' with size 'n'
-
-            if (pos < 0):
-                pos += N
-
-            return np.concatenate((arr[:pos], arr[pos+1:]))
+        return np_delete_scalar_impl
 
     return np_delete_impl
 

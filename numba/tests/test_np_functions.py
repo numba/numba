@@ -29,8 +29,8 @@ def angle1(x):
 def angle2(x, deg):
     return np.angle(x, deg)
 
-def delete(a, obj, axis=None):
-    return np.delete(a, obj, axis)
+def delete(a, obj):
+    return np.delete(a, obj)
 
 def diff1(a):
     return np.diff(a)
@@ -302,28 +302,52 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_delete(self):
 
         def arrays():
-            # array, obj, axis
+            # array, obj
             # 
-            # 1d array, scalar, None
-            yield np.arange(10), 3, None
-            yield np.arange(10), -3, None # Negative obj
-            # 1d array, list, None
-            yield np.arange(10), [3, 5, 6], None
-            yield np.arange(10), [2, 3, 4, 5], None
-            # 3d array, scalar, None
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2, None
-            # 3d array, list, None
-            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8], None
-            #
-            # yield np.arange(5 * 2).reshape(5, 2), 2, 0
+            # an array-like type
+            yield [1, 2, 3, 4, 5], 3
+            yield [1, 2, 3, 4, 5], [2, 3]
+            # 1d array, scalar
+            yield np.arange(10), 3
+            yield np.arange(10), -3 # Negative obj
+            # 1d array, list
+            yield np.arange(10), [3, 5, 6]
+            yield np.arange(10), [2, 3, 4, 5]
+            # 3d array, scalar
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2
+            # 3d array, list
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
+            # slices
+            # yield [1, 2, 3, 4], slice(1, 3, 1)
 
         pyfunc = delete
         cfunc = jit(nopython=True)(pyfunc)
 
-        for a, obj, axis in arrays():
-            expected = pyfunc(a, obj, axis)
-            got = cfunc(a, obj, axis)
+        for arr, obj in arrays():
+            expected = pyfunc(arr, obj)
+            got = cfunc(arr, obj)
             self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3.14)
+        self.assertIn(
+            'delete(): obj should be of type Integer',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 3)
+        self.assertIn(
+            'delete(): arr must be either an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        # with self.assertRaises(IndexError) as raises:
+        #     cfunc([1, 2], 3)
+        # self.assertIn(
+        #     'delete():',
+        #     str(raises.exception),
+        # )
 
     def diff_arrays(self):
         """
