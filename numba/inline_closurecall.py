@@ -371,7 +371,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if work_list != None:
         for block in new_blocks:
             work_list.append(block)
-    return callee_blocks
+    return callee_blocks, var_dict
 
 def _make_debug_print(prefix):
     def debug_print(*args):
