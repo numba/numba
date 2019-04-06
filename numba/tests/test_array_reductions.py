@@ -452,8 +452,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def check_percentile_edge_cases(self, pyfunc, q_upper_bound=100):
         cfunc = jit(nopython=True)(pyfunc)
 
-        def check(a, q, abs_tol):
+        def check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        def convert_to_float_and_check(a, q, abs_tol=1e-14):
+            expected = pyfunc(a, q).astype(np.float64)
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
@@ -466,7 +471,28 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = (0, 0.1 * q_upper_bound, 0.2 * q_upper_bound, q_upper_bound)
         element_pool = (1, -1, np.nan, np.inf, -np.inf)
         for a in _array_combinations(element_pool):
-            check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
+            check(a, q)
+
+        if q_upper_bound == 1:
+            _check = convert_to_float_and_check
+        else:
+            _check = check
+
+        a = np.array(5)
+        q = np.array(1)
+        _check(a, q)
+
+        a = True
+        q = False
+        _check(a, q)
+
+        a = np.array([False, True, True])
+        q = a
+        _check(a, q)
+
+        a = 5
+        q = q_upper_bound / 2
+        _check(a, q)
 
     def check_percentile_exceptions(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -527,22 +553,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(8) * 0.5
-        a[1] = np.nan
-        q = 0
-        np.testing.assert_equal(cfunc(a, q), np.nan)
-
-        a = np.arange(24, dtype=float)
-        a[2] = np.nan
-        np.testing.assert_equal(cfunc(a, 30), np.nan)
-
-        a = np.arange(24, dtype=float).reshape(2, 3, 4)
-        a[1, 2, 3] = np.nan
-        a[1, 1, 2] = np.nan
-
-        np.testing.assert_equal(cfunc(a, 30), np.nan)
-
     @unittest.skipUnless(np_version >= (1, 11),
                          "nanpercentile needs Numpy 1.11+")
     def test_nanpercentile_basic(self):
@@ -551,74 +561,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(8) * 0.5
-        a[1] = np.nan
-        q = 0
-        np.testing.assert_equal(cfunc(a, q), 0.0)
-
-        a = np.arange(24, dtype=float)
-        a[2] = np.nan
-        np.testing.assert_equal(cfunc(a, 30), 7.6)
-
-    @unittest.skipUnless(np_version >= (1, 11), 'because')
-    def test_percentile_debug_0(self):
-        pyfunc = array_percentile_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        a = np.array(5)
-        q = np.array(1)
-        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
-
-    @unittest.skipUnless(np_version >= (1, 11), 'because')
-    def test_quantile_debug_1(self):
-        pyfunc = array_nanpercentile_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        a = np.array(5)
-        q = np.array(1)
-        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
-
-    @unittest.skipUnless(np_version >= (1, 15), 'because')
-    def test_percentile_debug_2(self):
-        pyfunc = array_quantile_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        a = np.array(5)
-        q = np.array(1)
-        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
-
-    @unittest.skipUnless(np_version >= (1, 15), 'because')
-    def test_quantile_debug_3(self):
-        pyfunc = array_nanquantile_global
-        cfunc = jit(nopython=True)(pyfunc)
-
-        a = np.array(5)
-        q = np.array(1)
-        np.testing.assert_equal(cfunc(a, q), pyfunc(a, q))
-
     @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
     def test_quantile_basic(self):
         pyfunc = array_quantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
-
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(8) * 0.5
-        a[1] = np.nan
-        q = 0
-        np.testing.assert_equal(cfunc(a, q), np.nan)
-
-        a = np.arange(24, dtype=float)
-        a[2] = np.nan
-        np.testing.assert_equal(cfunc(a, 0.30), np.nan)
-
-        a = np.arange(24, dtype=float).reshape(2, 3, 4)
-        a[1, 2, 3] = np.nan
-        a[1, 1, 2] = np.nan
-
-        np.testing.assert_equal(cfunc(a, 0.30), np.nan)
 
     @unittest.skipUnless(np_version >= (1, 15),
                          "nanquantile needs Numpy 1.15+")
@@ -627,16 +575,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
-
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(8) * 0.5
-        a[1] = np.nan
-        q = 0
-        np.testing.assert_equal(cfunc(a, q), 0.0)
-
-        a = np.arange(24, dtype=float)
-        a[2] = np.nan
-        np.testing.assert_equal(cfunc(a, 0.3), 7.6)
 
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
