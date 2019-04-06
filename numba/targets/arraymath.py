@@ -1104,11 +1104,11 @@ def _collect_percentiles(a, q, skip_nan):
 
 @register_jitable
 def _collect_percentiles(a, q, check_q, factor, skip_nan):
-    q = np.asarray(q).flatten()
+    q = np.asarray(q, dtype=np.float64).flatten()
     check_q(q)
     q = q * factor
 
-    temp_arry = np.asarray(a).flatten()
+    temp_arry = np.asarray(a, dtype=np.float64).flatten()
     nan_mask = np.isnan(temp_arry)
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
