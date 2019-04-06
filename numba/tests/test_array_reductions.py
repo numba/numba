@@ -404,24 +404,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.linspace(0, q_upper_bound, 5)
         check(a, q)
 
-        # fails here, but not in isolation?
-        # a = np.array(5)
-        # q = np.array(1)
-        # check(a, q)
-
-        a = True
-        q = False
-        check(a, q)
-
-        # fails
-        # a = np.array([False, True, True])
-        # q = a
-        # check(a, q)
-
-        a = 5
-        q = q_upper_bound / 2
-        check(a, q)
-
         # tests inspired by
         # https://github.com/numpy/numpy/blob/345b2f6e/numpy/lib/tests/test_function_base.py
         x = np.arange(8) * 0.5
@@ -474,6 +456,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in _array_combinations(element_pool):
             check(a, q)
 
+        # edge cases - numpy exhibits behavioural differences across
+        # platforms, see: https://github.com/numpy/numpy/issues/13272
         if q_upper_bound == 1:
             _check = convert_to_float_and_check
         else:
