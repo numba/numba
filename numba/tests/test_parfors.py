@@ -80,11 +80,15 @@ class TestParforsBase(TestCase):
     def _compile_this(self, func, sig, flags):
         return compile_isolated(func, sig, flags=flags)
 
-    def compile_parallel(self, func, sig):
-        return self._compile_this(func, sig, flags=self.pflags)
+    def compile_parallel(self, func, sig, **kwargs):
+        use_flags = self.pflags.copy()
+        use_flags.set('noalias', value=kwargs.get('parallel_noalias_flag', False))
+        return self._compile_this(func, sig, flags=use_flags)
 
-    def compile_parallel_fastmath(self, func, sig):
-        return self._compile_this(func, sig, flags=self.fast_pflags)
+    def compile_parallel_fastmath(self, func, sig, **kwargs):
+        use_flags = self.fast_pflags.copy()
+        use_flags.set('noalias', value=kwargs.get('parallel_noalias_flag', False))
+        return self._compile_this(func, sig, flags=use_flags)
 
     def compile_njit(self, func, sig):
         return self._compile_this(func, sig, flags=self.cflags)
@@ -93,7 +97,7 @@ class TestParforsBase(TestCase):
         sig = tuple([numba.typeof(x) for x in args])
 
         # compile the prange injected function
-        cpfunc = self.compile_parallel(pyfunc, sig)
+        cpfunc = self.compile_parallel(pyfunc, sig, **kwargs)
 
         # compile a standard njit of the original function
         cfunc = self.compile_njit(pyfunc, sig)
@@ -295,6 +299,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     test_ir = compiler.run_frontend(test_func)
+    flags = compiler.Flags()
+    flags.set('noalias', value=kws.pop('parallel_noalias_flag', False))
     if kws:
         options = cpu.ParallelOptions(kws)
     else:
@@ -335,7 +341,6 @@ def get_optimized_numba_ir(test_func, args, **kws):
         numba.rewrites.rewrite_registry.apply(
             'after-inference', tp, tp.func_ir)
 
-        flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(
             tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
             tp.typingctx, options, flags, diagnostics=diagnostics)
@@ -468,7 +473,8 @@ class TestParfors(TestParforsBase):
         self.simple_args = [np.arange(3.), np.arange(4.), m, m.T]
 
     def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        cfunc, cpfunc = self.compile_all(pyfunc, *args, **kwargs)
+        kwargs.pop('parallel_noalias_flag', None)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
@@ -2316,7 +2322,8 @@ class TestParforsVectorizer(TestPrangeBase):
 class TestParforsSlice(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        cfunc, cpfunc = self.compile_all(pyfunc, *args, **kwargs)
+        kwargs.pop('parallel_noalias_flag', None)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
@@ -2491,6 +2498,18 @@ class TestParforsSlice(TestParforsBase):
         self.assertEqual(countParfors(test_impl, args), 4)
 
     @skip_unsupported
+    def test_parfor_slice16_noalias(self):
+        def test_impl(a, b, n):
+            assert(a.shape == b.shape)
+            a[1:n] = 10
+            b[0:(n-1)] = 10
+            return a * b
+
+        self.check(test_impl, np.ones(10), np.zeros(10), 8, parallel_noalias_flag=True)
+        args = (numba.float64[:], numba.float64[:], numba.int64)
+        self.assertEqual(countParfors(test_impl, args, parallel_noalias_flag=True), 2)
+
+    @skip_unsupported
     def test_parfor_slice17(self):
         def test_impl(m, A):
             B = np.zeros(m)
@@ -2524,7 +2543,8 @@ class TestParforsSlice(TestParforsBase):
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        cfunc, cpfunc = self.compile_all(pyfunc, *args, **kwargs)
+        kwargs.pop('parallel_noalias_flag', None)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
@@ -2566,7 +2586,8 @@ class TestParforsOptions(TestParforsBase):
 class TestParforsBitMask(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        cfunc, cpfunc = self.compile_all(pyfunc, *args, **kwargs)
+        kwargs.pop('parallel_noalias_flag', None)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_unsupported
@@ -2701,7 +2722,8 @@ class TestParforsMisc(TestParforsBase):
 class TestParforsDiagnostics(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
-        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        cfunc, cpfunc = self.compile_all(pyfunc, *args, **kwargs)
+        kwargs.pop('parallel_noalias_flag', None)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     def assert_fusion_equivalence(self, got, expected):
