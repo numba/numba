@@ -745,6 +745,33 @@ def unicode_concat(a, b):
         return concat_impl
 
 
+@overload(operator.mul)
+def unicode_repeat(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
+        def repeat_impl(a, b):
+            new_length = a._length * b
+            new_kind = a._kind
+            result = _empty_string(new_kind, new_length)
+            len_a = len(a)
+            for j in range(b):
+                for i in range(len_a):
+                    _set_code_point(result, len_a*j + i, _get_code_point(a, i))
+            return result
+        return repeat_impl
+
+    elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
+        def repeat_impl(a, b):
+            new_length = b._length * a
+            new_kind = b._kind
+            result = _empty_string(new_kind, new_length)
+            len_b = len(b)
+            for j in range(a):
+                for i in range(len_b):
+                    _set_code_point(result, len_b*j + i, _get_code_point(b, i))
+            return result
+        return repeat_impl
+
+
 @lower_builtin('getiter', types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args

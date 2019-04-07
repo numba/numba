@@ -39,6 +39,8 @@ def getitem_usecase(x, i):
 def concat_usecase(x, y):
     return x + y
 
+def repeat_usecase(x, y):
+    return x * y
 
 def inplace_concat_usecase(x, y):
     x += y
@@ -361,6 +363,16 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
+
+    def test_repeat(self, flags=no_pyobj_flags):
+        pyfunc = repeat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            for b in (1, 2, 3):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b))
+                self.assertEqual(pyfunc(b, a),
+                                 cfunc(b, a))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
