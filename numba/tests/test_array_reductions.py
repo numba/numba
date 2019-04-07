@@ -486,7 +486,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(a, q)
             self.assertEqual(
-                "Percentiles must be in the range [0,100]",
+                "Percentiles must be in the range [0, 100]",
                 str(raises.exception)
             )
 
