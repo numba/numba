@@ -50,7 +50,7 @@ class Flags(utils.ConfigOptions):
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
-        'fastmath': False,
+        'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
     }
 
@@ -905,7 +905,7 @@ def _make_subtarget(targetctx, flags):
     if flags.auto_parallel:
         subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
-        subtargetoptions['enable_fastmath'] = True
+        subtargetoptions['fastmath'] = flags.fastmath
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 

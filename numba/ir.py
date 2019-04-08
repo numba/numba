@@ -186,7 +186,7 @@ class VarMap(object):
 
 class AbstractRHS(object):
     """Abstract base class for anything that can be the RHS of an assignment.
-    This class **do not** define any methods.
+    This class **does not** define any methods.
     """
 
 
