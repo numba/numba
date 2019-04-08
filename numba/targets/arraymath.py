@@ -2354,7 +2354,6 @@ def np_delete(arr, obj):
 
     def np_delete_impl(arr, obj):
         arr = np.ravel(np.asarray(arr))
-
         N = arr.size
 
         keep = np.ones(N, dtype=np.bool_)
@@ -2364,7 +2363,6 @@ def np_delete(arr, obj):
 
     def np_delete_scalar_impl(arr, obj):
         arr = np.ravel(np.asarray(arr))
-
         N = arr.size
         pos = obj
 
@@ -2378,15 +2376,22 @@ def np_delete(arr, obj):
 
         return np.concatenate((arr[:pos], arr[pos+1:]))
 
-    if isinstance(obj, (types.Array, types.Sequence)):
+    def np_delete_slice_impl(arr, obj):
+        arr = np.ravel(np.asarray(arr))
+        N = arr.size
+
+        keep = np.ones(N, dtype=np.bool_)
+        keep[obj] = False
+        return arr[keep]
+
+    if isinstance(obj, (types.SliceType)):
+        return np_delete_slice_impl
+    elif isinstance(obj, (types.Array, types.Sequence)):
         return np_delete_impl
     else: # scalar value
         if not isinstance(obj, types.Integer):
             raise TypingError('obj should be of type Integer')
-
         return np_delete_scalar_impl
-
-    return np_delete_impl
 
 @overload(np.diff)
 def np_diff_impl(a, n=1):

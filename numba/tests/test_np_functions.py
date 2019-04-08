@@ -29,8 +29,8 @@ def angle1(x):
 def angle2(x, deg):
     return np.angle(x, deg)
 
-def delete(a, obj):
-    return np.delete(a, obj)
+def delete(arr, obj):
+    return np.delete(arr, obj)
 
 def diff1(a):
     return np.diff(a)
@@ -318,7 +318,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # 3d array, list
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
             # slices
-            # yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield np.arange(10), slice(10)
 
         pyfunc = delete
         cfunc = jit(nopython=True)(pyfunc)
