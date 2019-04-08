@@ -1264,15 +1264,14 @@ class TestDictForbiddenTypes(TestCase):
 
 
 class TestDictInferred(TestCase):
-    @skip_py2
     def test_simple_literal(self):
         @njit
         def foo():
             d = Dict()
-            d['123'] = 321
+            d[123] = 321
             return d
 
-        k, v = '123', 321
+        k, v = 123, 321
         d = foo()
         self.assertEqual(dict(d), {k: v})
         self.assertEqual(typeof(d).key_type, typeof(k))
@@ -1285,7 +1284,7 @@ class TestDictInferred(TestCase):
             d[k] = v
             return d
 
-        k, v = '123', 321
+        k, v = 123, 321
         d = foo(k, v)
         self.assertEqual(dict(d), {k: v})
         self.assertEqual(typeof(d).key_type, typeof(k))
@@ -1299,7 +1298,7 @@ class TestDictInferred(TestCase):
             d[k] = w
             return d
 
-        k, v, w = '123', 32.1, 321
+        k, v, w = 123, 32.1, 321
         d = foo(k, v, w)
         self.assertEqual(dict(d), {k: w})
         self.assertEqual(typeof(d).key_type, typeof(k))
@@ -1313,7 +1312,7 @@ class TestDictInferred(TestCase):
             d[k] = w
             return d
 
-        k, v, w = '123', 321, 32.1
+        k, v, w = 123, 321, 32.1
         with self.assertRaises(TypingError) as raises:
             foo(k, v, w)
         self.assertIn(
@@ -1325,33 +1324,33 @@ class TestDictInferred(TestCase):
         @njit
         def foo(k, v):
             d = Dict()
-            if len(k):
+            if k:
                 d[k] = v
             else:
-                d['what'] = v + 1
+                d[0xdead] = v + 1
 
             return d
 
-        k, v = '123', 321
+        k, v = 123, 321
         d = foo(k, v)
         self.assertEqual(dict(d), {k: v})
-        k, v = '', 0
+        k, v = 0, 0
         d = foo(k, v)
-        self.assertEqual(dict(d), {'what': v + 1})
+        self.assertEqual(dict(d), {0xdead: v + 1})
 
     def test_ifelse_empty_one_branch(self):
         @njit
         def foo(k, v):
             d = Dict()
-            if len(k):
+            if k:
                 d[k] = v
 
             return d
 
-        k, v = '123', 321
+        k, v = 123, 321
         d = foo(k, v)
         self.assertEqual(dict(d), {k: v})
-        k, v = '', 0
+        k, v = 0, 0
         d = foo(k, v)
         self.assertEqual(dict(d), {})
         self.assertEqual(typeof(d).key_type, typeof(k))
@@ -1366,7 +1365,7 @@ class TestDictInferred(TestCase):
             return d
 
         vs = list(range(4))
-        ks = list(map('k{}'.format, vs))
+        ks = list(map(lambda x : x + 100, vs))
         d = foo(ks, vs)
         self.assertEqual(dict(d), dict(zip(ks, vs)))
 
