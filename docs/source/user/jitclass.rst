@@ -1,8 +1,8 @@
 .. _jitclass:
 
-=======================================
-Compiling python classes with @jitclass
-=======================================
+===========================================
+Compiling Python classes with ``@jitclass``
+===========================================
 
 .. note::
 
@@ -13,7 +13,7 @@ Compiling python classes with @jitclass
 Numba supports code generation for classes via the :func:`numba.jitclass`
 decorator.  A class can be marked for optimization using this decorator along
 with a specification of the types of each field.  We call the resulting class
-object a jitclass.  All methods of a jitclass are compiled into nopython
+object a *jitclass*.  All methods of a jitclass are compiled into nopython
 functions.  The data of a jitclass instance is allocated on the heap as a
 C-compatible structure so that any compiled functions can have direct access
 to the underlying data, bypassing the interpreter.
@@ -52,8 +52,8 @@ Here's an example of a jitclass::
 (see full example at `examples/jitclass.py` from the source tree)
 
 In the above example, a ``spec`` is provided as a list of 2-tuples.  The tuples
-contain the name of the field and the numba type of the field.  Alternatively,
-user can use a dictionary (an ``OrderedDict`` preferrably for stable field
+contain the name of the field and the Numba type of the field.  Alternatively,
+user can use a dictionary (an ``OrderedDict`` preferably for stable field
 ordering), which maps field names to types.
 
 The definition of the class requires at least a ``__init__`` method for
@@ -65,7 +65,7 @@ automatically compiled.
 Support operations
 ==================
 
-The following operations of jitclasses work in both the interpreter and numba
+The following operations of jitclasses work in both the interpreter and Numba
 compiled functions:
 
 * calling the jitclass class object to construct a new instance
@@ -73,13 +73,13 @@ compiled functions:
 * read/write access to attributes and properties (e.g. ``mybag.value``);
 * calling methods (e.g. ``mybag.increment(3)``);
 
-Using jitclasses in numba compiled function is more efficient.
+Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
 Attributes access are simply reading from a C structure.
 Using jitclasses from the intpreter has the same overhead of calling any
-numba compiled function from the interpreter.  Arguments and return values
-must be unboxed or boxed between python objects and native representation.
-Values encapsulated by a jitclass does not get boxed into python object when
+Numba compiled function from the interpreter.  Arguments and return values
+must be unboxed or boxed between Python objects and native representation.
+Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
 
@@ -88,7 +88,7 @@ Limitations
 ===========
 
 * A jitclass class object is treated as a function (the constructor) inside
-  a numba compiled function.
+  a Numba compiled function.
 * ``isinstance()`` only works in the interpreter.
 * Manipulating jitclass instances in the interpreter is not optimized, yet.
 * Support for jitclasses are available on CPU only.
