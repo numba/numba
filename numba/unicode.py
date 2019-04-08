@@ -2,6 +2,7 @@ import operator
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
+from math import floor, log
 
 from numba.extending import (
     models,
@@ -745,31 +746,40 @@ def unicode_concat(a, b):
         return concat_impl
 
 
+@njit
+def _repeat_impl(str_arg, mult_arg):
+        if str_arg == '' or mult_arg < 1:
+            return ''
+        elif mult_arg == 1:
+            return str_arg
+        else:
+            new_length = str_arg._length * mult_arg
+            new_kind = str_arg._kind
+            result = _empty_string(new_kind, new_length)
+            # make initial copy into result
+            len_a = len(str_arg)
+            _strncpy(result, 0, str_arg, 0, len_a)
+            # loop through powers of 2 for efficient copying
+            floor_log = floor(log(mult_arg) / log(2))
+            for j in range(floor_log):
+                _strncpy(result, 2**j * len_a, result, 0, 2**j * len_a)
+            # complete the rest of the copies
+            rest = mult_arg - 2 ** floor_log
+            _strncpy(result, 2**floor_log * len_a,
+                     result, (2**floor_log - rest) * len_a, rest * len_a)
+            return result
+
+
 @overload(operator.mul)
 def unicode_repeat(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
-        def repeat_impl(a, b):
-            new_length = a._length * b
-            new_kind = a._kind
-            result = _empty_string(new_kind, new_length)
-            len_a = len(a)
-            for j in range(b):
-                for i in range(len_a):
-                    _set_code_point(result, len_a*j + i, _get_code_point(a, i))
-            return result
-        return repeat_impl
-
+        def wrap(a, b):
+            return _repeat_impl(a, b)
+        return wrap
     elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
-        def repeat_impl(a, b):
-            new_length = b._length * a
-            new_kind = b._kind
-            result = _empty_string(new_kind, new_length)
-            len_b = len(b)
-            for j in range(a):
-                for i in range(len_b):
-                    _set_code_point(result, len_b*j + i, _get_code_point(b, i))
-            return result
-        return repeat_impl
+        def wrap(a, b):
+            return _repeat_impl(b, a)
+        return wrap
 
 
 @lower_builtin('getiter', types.UnicodeType)
