@@ -156,14 +156,9 @@ instead:
     def breakfast(a, x):
         ham.set_to_x(a, x)
 
-Tips and Tricks
-===============
 
-This section provides additional tips and tricks that you can use while
-implementing functionality with ``overload``.
-
-Provide multiple implementations and dispatch based on types
-------------------------------------------------------------
+Providing multiple implementations and dispatching based on types
+=================================================================
 
 As you saw above, the overload ``set_to_x`` function doesn't accept floating
 point arguments. Let's extended the specification of the function as follows:
@@ -238,7 +233,7 @@ overhead. This can easily be observed during profiling:
     237 ns ± 4.59 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)
 
 Writing Tests
--------------
+=============
 
 The following is a sufficient piece of test code for the overloaded
 ``set_to_x`` implementation. As you can see, only a small part of the test-code
