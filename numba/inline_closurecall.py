@@ -240,6 +240,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     make_function node. `typingctx`, `typemap` and `calltypes` are typing
     data structures of the caller, available if we are in a typed pass.
     `arg_typs` includes the types of the arguments at the callsite.
+
+    Returns IR blocks of the callee and the variable renaming dictionary used
+    for them to facilitate further processing of new blocks.
     """
     scope = block.scope
     instr = block.body[i]

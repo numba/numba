@@ -164,7 +164,6 @@ class TestInlining(TestCase):
         def test_impl():
             return g(1)
 
-        inline_out = None
         func_ir = compiler.run_frontend(test_impl)
         blocks = list(func_ir.blocks.values())
         for block in blocks:
@@ -176,12 +175,11 @@ class TestInlining(TestCase):
                     if (isinstance(func_def, (ir.Global, ir.FreeVar))
                             and isinstance(func_def.value, CPUDispatcher)):
                         py_func = func_def.value.py_func
-                        inline_out = inline_closure_call(
+                        _, var_map = inline_closure_call(
                             func_ir, py_func.__globals__, block, i, py_func)
                         break
 
-        self.assertTrue(isinstance(inline_out, tuple)
-            and isinstance(inline_out[1], dict) and 'b' in inline_out[1])
+        self.assertTrue('b' in var_map)
 
 if __name__ == '__main__':
     unittest.main()
