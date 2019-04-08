@@ -8,6 +8,7 @@ from llvmlite import ir
 
 @intrinsic
 def viewer(tyctx, val, viewty):
+    """ Bitcast a scalar 'val' to the given type 'viewty'. """
     bits = val.bitwidth
     if isinstance(viewty.dtype, types.Integer):
         bitcastty = ir.IntType(bits)
