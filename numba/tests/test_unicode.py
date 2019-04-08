@@ -367,12 +367,18 @@ class TestUnicode(BaseTest):
     def test_repeat(self, flags=no_pyobj_flags):
         pyfunc = repeat_usecase
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES:
-            for b in (1, 2, 3):
+        for a in UNICODE_EXAMPLES + ['']:
+            for b in (-1, 0, 1, 2, 3, 4, 5, 7, 8, 15, 70):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b))
                 self.assertEqual(pyfunc(b, a),
                                  cfunc(b, a))
+
+    def test_repeat_exception_float(self):
+        self.disable_leak_check()
+        cfunc = njit(repeat_usecase)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hi', 2.5)
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
