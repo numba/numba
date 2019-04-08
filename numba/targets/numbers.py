@@ -1373,5 +1373,5 @@ def scalar_view(scalar, viewty):
         return impl
 
 
-float_view = overload_method(types.Float, 'view')(scalar_view)
-int_view = overload_method(types.Integer, 'view')(scalar_view)
+overload_method(types.Float, 'view')(scalar_view)
+overload_method(types.Integer, 'view')(scalar_view)
