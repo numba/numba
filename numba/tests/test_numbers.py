@@ -5,7 +5,7 @@ import sys
 
 import numpy as np
 
-from numba import njit
+from numba import njit, types
 from numba.errors import TypingError
 from .support import TestCase, unittest
 
@@ -66,23 +66,14 @@ class TestViewIntFloat(TestCase):
         self.do_testing(inputs, dtypes)
 
     def test_python_scalar_exception(self):
+        intty = getattr(np, 'int{}'.format(types.intp.bitwidth))
         @njit
-        def view32():
+        def myview():
             a = 1
-            a.view(np.float32)
+            a.view(intty)
 
-        @njit
-        def view64():
-            a = 1
-            a.view(np.float64)
-
-        def call_view_on_scalar():
-            if _32bit_only:
-                view32()
-            else:
-                view64()
         with self.assertRaises(TypingError) as e:
-            call_view_on_scalar()
+            myview()
         self.assertIn("'view' can only be called on NumPy dtypes, "
                       "try wrapping the variable 'a' with 'np.<dtype>()'",
                       str(e.exception))
