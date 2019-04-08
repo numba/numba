@@ -26,9 +26,17 @@ class TestViewIntFloat(TestCase):
             for target_type, result in zip(dtypes, expected):
                 view = njit(gen_view(initial_type, target_type))
                 if not np.isnan(result):
+                    # check against predefined value
                     self.assertEqual(view(value), target_type(result))
+                    # check against numpy
+                    self.assertEqual(view(value),
+                                     initial_type(value).view(target_type))
                 else:
+                    # check that our implementation results in nan
                     self.assertTrue(np.isnan(view(value)))
+                    # check that numpy results in nan
+                    self.assertTrue(np.isnan(
+                        initial_type(value).view(target_type)))
 
     def test_8_bits(self):
         dtypes = (np.uint8, np.int8)
