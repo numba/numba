@@ -379,6 +379,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(repeat_usecase)
         with self.assertRaises(TypingError) as raises:
             cfunc('hi', 2.5)
+        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
