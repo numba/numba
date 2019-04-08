@@ -754,14 +754,6 @@ class TypeRefAttribute(AttributeTemplate):
         """
         ty = classty.instance_type
 
-        if isinstance(ty, types.Number):
-            # FIXME
-            def typer(val):
-                # Scalar constructor, e.g. int32(42)
-                return ty
-
-            return types.Function(make_callable_template(key=ty, typer=typer))
-
         if isinstance(ty, type) and issubclass(ty, types.Type):
             # Redirect the typing to a:
             #   @type_callable(ty)
