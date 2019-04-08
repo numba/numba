@@ -1,4 +1,4 @@
-# (Some) Tests for numbers.py
+# (Some) Tests for targets/numbers.py
 from __future__ import print_function, absolute_import, division
 
 import sys
