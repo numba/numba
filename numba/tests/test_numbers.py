@@ -1,15 +1,11 @@
 # (Some) Tests for targets/numbers.py
 from __future__ import print_function, absolute_import, division
 
-import sys
-
 import numpy as np
 
 from numba import njit, types
 from numba.errors import TypingError
-from .support import TestCase, unittest
-
-_32bit_only = not (sys.maxsize > 2 ** 32)
+from .support import TestCase
 
 
 def gen_view(a,b):
@@ -53,7 +49,6 @@ class TestViewIntFloat(TestCase):
                   (1.0, np.float32,   (1065353216, 1065353216, 1.0)))
         self.do_testing(inputs, dtypes)
 
-    @unittest.skipIf(_32bit_only, "64 bit test only")
     def test_64_bits(self):
         dtypes = (np.uint64, np.int64, np.float64)
         #        Value  Initial Type   Expected answers using dtypes
@@ -90,7 +85,6 @@ class TestViewIntFloat(TestCase):
         for pair in ((np.int32, np.int8), (np.int8, np.int32)):
             self.do_testing_exceptions(pair)
 
-    @unittest.skipIf(_32bit_only, "64 bit test only")
     def test_exceptions64(self):
         for pair in ((np.int32, np.int64), (np.int64, np.int32)):
             self.do_testing_exceptions(pair)
