@@ -2570,7 +2570,7 @@ def _arrayexpr_tree_to_ir(
 #                     out_ir.append(func_var_def)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
-                    typing.Context(), [el_typ] * len(arg_vars), {})
+                    typingctx, tuple(typemap[a.name] for a in arg_vars), {})
                 calltypes[ir_expr] = call_typ
                 el_typ = call_typ.return_type
                 #signature(el_typ, el_typ)
