@@ -13,7 +13,7 @@ import numpy as np
 
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
-from numba import dictobject
+from numba import dictobject, typeof
 from numba.typed import Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
@@ -1261,3 +1261,147 @@ class TestDictForbiddenTypes(TestCase):
     def test_disallow_set(self):
         self.assert_disallow_key(types.Set(types.intp))
         self.assert_disallow_value(types.Set(types.intp))
+
+
+class TestDictInferred(TestCase):
+    @skip_py2
+    def test_simple_literal(self):
+        @njit
+        def foo():
+            d = Dict()
+            d['123'] = 321
+            return d
+
+        k, v = '123', 321
+        d = foo()
+        self.assertEqual(dict(d), {k: v})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_simple_args(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            d[k] = v
+            return d
+
+        k, v = '123', 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_simple_upcast(self):
+        @njit
+        def foo(k, v, w):
+            d = Dict()
+            d[k] = v
+            d[k] = w
+            return d
+
+        k, v, w = '123', 32.1, 321
+        d = foo(k, v, w)
+        self.assertEqual(dict(d), {k: w})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_conflicting_value_type(self):
+        @njit
+        def foo(k, v, w):
+            d = Dict()
+            d[k] = v
+            d[k] = w
+            return d
+
+        k, v, w = '123', 321, 32.1
+        with self.assertRaises(TypingError) as raises:
+            foo(k, v, w)
+        self.assertIn(
+            'cannot safely cast float64 to {}'.format(typeof(v)),
+            str(raises.exception),
+        )
+
+    def test_ifelse_filled_both_branches(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            if len(k):
+                d[k] = v
+            else:
+                d['what'] = v + 1
+
+            return d
+
+        k, v = '123', 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        k, v = '', 0
+        d = foo(k, v)
+        self.assertEqual(dict(d), {'what': v + 1})
+
+    def test_ifelse_empty_one_branch(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            if len(k):
+                d[k] = v
+
+            return d
+
+        k, v = '123', 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        k, v = '', 0
+        d = foo(k, v)
+        self.assertEqual(dict(d), {})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_loop(self):
+        @njit
+        def foo(ks, vs):
+            d = Dict()
+            for k, v in zip(ks, vs):
+                d[k] = v
+            return d
+
+        vs = list(range(4))
+        ks = list(map('k{}'.format, vs))
+        d = foo(ks, vs)
+        self.assertEqual(dict(d), dict(zip(ks, vs)))
+
+    def test_unused(self):
+        @njit
+        def foo():
+            d = Dict()
+            return d
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "imprecise type",
+            str(raises.exception)
+        )
+
+    def test_define_after_use(self):
+        @njit
+        def foo(define):
+            d = Dict()
+            ct = len(d)
+            for k, v in d.items():
+                ct += v
+
+            if define:
+                # This will set the type
+                d[1] = 2
+            return ct, d, len(d)
+
+        ct, d, n = foo(True)
+        self.assertEqual(ct, 0)
+        self.assertEqual(n, 1)
+        self.assertEqual(dict(d), {1: 2})
+
+        ct, d, n = foo(False)
+        self.assertEqual(ct, 0)
+        self.assertEqual(dict(d), {})
+        self.assertEqual(n, 0)

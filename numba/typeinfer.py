@@ -203,7 +203,8 @@ class ArgConstraint(object):
             ty = src.getone()
             if isinstance(ty, types.Omitted):
                 ty = typeinfer.context.resolve_value_type(ty.value)
-            assert ty.is_precise()
+            if not ty.is_precise():
+                raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
@@ -578,6 +579,13 @@ class SetItemConstraint(object):
             valty = typevars[self.value.name].getone()
 
             _logger.debug("setitem targetty=%s", targetty)
+
+            if not targetty.is_precise() and isinstance(targetty, types.DictType):
+                typeinfer.add_type(
+                    self.target.name,
+                    targetty.refine(idxty, valty),
+                    loc=self.loc,
+                )
 
             sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
             if sig is None:
