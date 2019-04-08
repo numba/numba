@@ -4,7 +4,7 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 from collections import MutableMapping
 
 from numba.types import DictType, TypeRef
-from numba import njit, dictobject, types, cgutils
+from numba import njit, dictobject, types, cgutils, errors
 from numba.extending import (
     overload_method,
     box,
@@ -154,7 +154,7 @@ class Dict(MutableMapping):
 
 # XXX: should we have a better way to classmethod
 @overload_method(TypeRef, 'empty')
-def typeddict_empty(cls,  key_type, value_type):
+def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:
         return
 
@@ -220,3 +220,48 @@ def unbox_dicttype(typ, val, c):
 
     return NativeValue(dctobj)
 
+
+
+######### ad-hoc typing
+
+from numba.typing.templates import AbstractTemplate, Registry, signature
+
+registry = Registry()
+infer_global = registry.register_global
+
+
+@infer_global(Dict)
+class DictCtor(AbstractTemplate):
+
+    def generic(self, args, kws):
+        if args or kws:
+            raise errors.TypingError("Dict() does not take any arguments")
+
+        return signature(types.DictType(types.undefined, types.undefined))
+
+
+######### ad-hoc lowering
+
+from numba.targets.imputils import lower_builtin
+from numba import typing
+
+
+@lower_builtin(types.TypeRef)
+def impl_dict_lowering(context, builder, sig, args):
+    dict_ty = sig.return_type
+    if not isinstance(dict_ty, types.DictType):
+        msg = "expecting a DictType but got {}".format(dict_ty)
+        raise errors.LoweringError(msg)
+    if not dict_ty.is_precise():
+        msg = "expecting a precise DictType but got {}".format(dict_ty)
+        raise errors.LoweringError(msg)
+
+    def make_dict(key_ty, val_ty):
+        return Dict.empty(key_ty, val_ty)
+
+    key_type = types.TypeRef(dict_ty.key_type)
+    value_type = types.TypeRef(dict_ty.value_type)
+    sig = typing.signature(dict_ty, key_type, value_type)
+    args = [context.get_dummy_value()] * 2
+
+    return context.compile_internal(builder, make_dict, sig, args)
