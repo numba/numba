@@ -12,7 +12,7 @@ that can be used in :term:`nopython mode` functions. A common used case of this
 is to implement Numpy functions so that they can be called in jitted code. In
 this section will discuss what contributing such a function to Numba might
 entail. This should help you get started when attempting to contribute new
-overloaded functions to Numba
+overloaded functions to Numba.
 
 Annotated Template
 ==================
@@ -92,7 +92,7 @@ Inspired by the template above, your implementation might look something like:
     from numba.extending import overload
 
 
-    # Import the module, where you wich to overload something
+    # Import the module, where you wish to overload something
     import ham
 
 
@@ -120,7 +120,7 @@ Inspired by the template above, your implementation might look something like:
     def breakfast(a, x):
         ham.set_to_x(a, x)
 
-And when you go to profile it, you find yourself pleasently surprised:
+And when you go to profile it, you find yourself pleasantly surprised:
 
 .. code:: pycon
 
@@ -134,7 +134,7 @@ And when you go to profile it, you find yourself pleasently surprised:
     17.6 µs ± 327 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)
 
 But of course, your implementation doesn't generalize to your colleagues
-use-case, who would like to use `set_to_x` with a floating point number
+use-case, who would like to use ``set_to_x`` with a floating point number
 instead:
 
 .. code:: pycon
@@ -165,13 +165,13 @@ implementing functionality with ``overload``.
 Provide multiple implementations and dispatch based on types
 ------------------------------------------------------------
 
-As you saw above, the overloaed ``set_to_x`` function doesn't accept floating
+As you saw above, the overload ``set_to_x`` function doesn't accept floating
 point arguments. Let's extended the specification of the function as follows:
 
 * The numerical type of the array ``arr`` must match the numerical type of the
   scalar ``x`` argument
 * Only integer and floating-point types are to be supported
-* For the floating-point type, no `nan` values are allowed in ``arr`` and if
+* For the floating-point type, no ``nan`` values are allowed in ``arr`` and if
   such a value is encountered, an appropriate ``ValueError`` should be raised.
 * If a tuple is used instead of an array, a custom error message with a hint
   for the user should be issued.
@@ -317,10 +317,10 @@ There are a few more test-cases that should be implemented:
 * Tests for ``int32`` and ``float32`` types
 * Exclude 64 bit tests on 32 bit machines
 
-Implementing Numpy ``overload``s
---------------------------------
+Implementing ``overload`` for Numpy functions
+=============================================
 
-When contributing Numpy ``overloads`` to Numba, there are a few additional
+When contributing Numpy ``overload`` s to Numba, there are a few additional
 things to watch out for.
 
 * The  Numba implementation should match the Numpy implementation as closely as
@@ -330,14 +330,14 @@ things to watch out for.
 * If you are implementing a new function, you should always update the
   `documentation
   <http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
-  The sources can be found in `docs/source/reference/numpysupported.rst`. Be
+  The sources can be found in `docs/source/reference/numpysupported.rst``. Be
   sure to mention any limitations that your implementation has.
 
 * When writing tests for exceptions, for example, when adding tests to
-  `numba/tests/test_np_functions.py` you may encounter the following error
+  ``numba/tests/test_np_functions.py`` you may encounter the following error
   message:
 
-  .. code::
+  .. code:: pycon
 
         ======================================================================
         FAIL: test_foo (numba.tests.test_np_functions.TestNPFunctions)
@@ -353,11 +353,11 @@ things to watch out for.
 
   This is caused because some exceptions leak references. Ideally, you will
   place all exception testing in a separate test method and then add a call to 
-  `self.disable_leak_check()` to disable the leak-check.
+  ``self.disable_leak_check()`` to disable the leak-check.
 
 * For many of the functions that are available in Numpy, there are
   corresponding methods defined on the numpy array type. For example, the
-  function `repeat` is available in two flavours.
+  function ``repeat`` is available in two flavours.
 
   .. code:: python
 
@@ -369,7 +369,7 @@ things to watch out for.
         a.repeat(10)
 
   Once you have written the function implementation, you can easily use
-  `overload_method` and reuse it, for example for the `repeat` function/method.
+  ``overload_method`` and reuse it, for example for the ``repeat`` function/method.
   Just be sure to check that Numpy doesn't diverge in the implementations of
   it's function/method.
 
@@ -388,7 +388,7 @@ things to watch out for.
   This will make those functions available from within your jitted functions.
 
 * You can look at the Numba source code for inspiration, much of the overloaded
-  Numpy functions and methods are in `numba/targets/arrayobj.py`. Good
+  Numpy functions and methods are in ``numba/targets/arrayobj.py``. Good
   implementations to look at are:
 
-  * `np.repeat`
+  * ``np.repeat``
