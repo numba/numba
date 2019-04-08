@@ -1183,7 +1183,7 @@ class ArrayAnalysis(object):
             if (isinstance(size_rel, int) or (isinstance(size_rel, tuple) and
                 equiv_set.is_equiv(size_rel[0], dsize.name))):
                 rel = size_rel if isinstance(size_rel, int) else size_rel[1]
-                size_val = ir.Const(rel, size_typ)
+                size_val = ir.Const(rel, loc=loc)
                 size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
                 self._define(equiv_set, size_var, size_typ, size_val)
 

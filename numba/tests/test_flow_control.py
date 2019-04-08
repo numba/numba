@@ -3,9 +3,9 @@ from __future__ import print_function
 import itertools
 
 import numba.unittest_support as unittest
-from numba.controlflow import CFGraph, Loop
+from numba.controlflow import CFGraph
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import types, errors
 from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
@@ -24,11 +24,13 @@ def for_loop_usecase1(x, y):
         result += i
     return result
 
+
 def for_loop_usecase2(x, y):
     result = 0
     for i, j in enumerate(range(x, y, -1)):
         result += i * j
     return result
+
 
 def for_loop_usecase3(x, y):
     result = 0
@@ -37,12 +39,14 @@ def for_loop_usecase3(x, y):
         result += i
     return result
 
+
 def for_loop_usecase4(x, y):
     result = 0
     for i in range(10):
         for j in range(10):
             result += 1
     return result
+
 
 def for_loop_usecase5(x, y):
     result = 0
@@ -52,6 +56,7 @@ def for_loop_usecase5(x, y):
             break
     return result
 
+
 def for_loop_usecase6(x, y):
     result = 0
     for i in range(x):
@@ -59,6 +64,7 @@ def for_loop_usecase6(x, y):
             continue
         result += 1
     return result
+
 
 def for_loop_usecase7(x, y):
     for i in range(x):
@@ -69,11 +75,13 @@ def for_loop_usecase7(x, y):
             pass
     return 0
 
+
 def for_loop_usecase8(x, y):
     result = 0
     for i in range(x, y, y - x + 1):
         result += 1
     return result
+
 
 def for_loop_usecase9(x, y):
     z = 0
@@ -87,6 +95,7 @@ def for_loop_usecase9(x, y):
             z += y
 
     return z
+
 
 def for_loop_usecase10(x, y):
     for i in range(x):
@@ -106,11 +115,13 @@ def while_loop_usecase1(x, y):
         i += 1
     return result
 
+
 def while_loop_usecase2(x, y):
     result = 0
     while result != x:
         result += 1
     return result
+
 
 def while_loop_usecase3(x, y):
     result = 0
@@ -123,6 +134,7 @@ def while_loop_usecase3(x, y):
             j += 1
     return result
 
+
 def while_loop_usecase4(x, y):
     result = 0
     while True:
@@ -130,6 +142,7 @@ def while_loop_usecase4(x, y):
         if result > x:
             break
     return result
+
 
 def while_loop_usecase5(x, y):
     result = 0
@@ -140,6 +153,7 @@ def while_loop_usecase5(x, y):
         result += 1
     return result
 
+
 def ifelse_usecase1(x, y):
     if x > 0:
         pass
@@ -149,6 +163,7 @@ def ifelse_usecase1(x, y):
         pass
     return True
 
+
 def ifelse_usecase2(x, y):
     if x > y:
         return 1
@@ -156,6 +171,7 @@ def ifelse_usecase2(x, y):
         return 2
     else:
         return 3
+
 
 def ifelse_usecase3(x, y):
     if x > 0:
@@ -169,6 +185,7 @@ def ifelse_usecase3(x, y):
         return 1
     else:
         return 0
+
 
 def ifelse_usecase4(x, y):
     if x == y:
@@ -193,6 +210,14 @@ def double_infinite_loop(x, y):
             break
 
     return i, L
+
+
+def try_except_usecase():
+    try:
+        pass
+    except Exception:
+        pass
+
 
 class TestFlowControl(TestCase):
 
@@ -370,6 +395,14 @@ class TestFlowControl(TestCase):
     def test_double_infinite_loop_npm(self):
         self.test_double_infinite_loop(flags=no_pyobj_flags)
 
+    def test_try_except_raises(self):
+        pyfunc = try_except_usecase
+        for f in [no_pyobj_flags, enable_pyobj_flags]:
+            with self.assertRaises(errors.UnsupportedError) as e:
+                compile_isolated(pyfunc, (), flags=f)
+            msg = "Use of unsupported opcode (SETUP_EXCEPT) found"
+            self.assertIn(msg, str(e.exception))
+
 
 class TestCFGraph(TestCase):
     """
@@ -454,25 +487,24 @@ class TestCFGraph(TestCase):
                 if z:
                     return ...
         """
-        g = self.from_adj_list(
-            {0: [7],
-             7: [10, 60],
-             10: [13],
-             13: [20],
-             20: [56, 23],
-             23: [32, 44],
-             32: [20],
-             44: [20],
-             56: [57],
-             57: [7],
-             60: [61],
-             61: [68],
-             68: [87, 71],
-             71: [80, 68],
-             80: [],
-             87: [88],
-             88: []}
-            )
+        g = self.from_adj_list({0: [7],
+                                7: [10, 60],
+                                10: [13],
+                                13: [20],
+                                20: [56, 23],
+                                23: [32, 44],
+                                32: [20],
+                                44: [20],
+                                56: [57],
+                                57: [7],
+                                60: [61],
+                                61: [68],
+                                68: [87, 71],
+                                71: [80, 68],
+                                80: [],
+                                87: [88],
+                                88: []}
+                               )
         g.set_entry_point(0)
         g.process()
         return g
@@ -670,46 +702,46 @@ class TestCFGraph(TestCase):
         g = self.multiple_exits()
         doms = g.dominators()
         self.check_dominators(doms,
-            {0: [0],
-             7: [0, 7],
-             10: [0, 7, 10],
-             19: [0, 7, 10, 19],
-             23: [0, 7, 10, 23],
-             29: [0, 7, 10, 23, 29],
-             36: [0, 7, 36],
-             37: [0, 7, 37],
-             })
+                              {0: [0],
+                               7: [0, 7],
+                               10: [0, 7, 10],
+                               19: [0, 7, 10, 19],
+                               23: [0, 7, 10, 23],
+                               29: [0, 7, 10, 23, 29],
+                               36: [0, 7, 36],
+                               37: [0, 7, 37],
+                               })
         g = self.multiple_loops()
         doms = g.dominators()
         self.check_dominators(doms,
-            {0: [0],
-             7: [0, 7],
-             10: [0, 10, 7],
-             13: [0, 10, 13, 7],
-             20: [0, 10, 20, 13, 7],
-             23: [0, 20, 23, 7, 10, 13],
-             32: [32, 0, 20, 23, 7, 10, 13],
-             44: [0, 20, 23, 7, 10, 44, 13],
-             56: [0, 20, 7, 56, 10, 13],
-             57: [0, 20, 7, 56, 57, 10, 13],
-             60: [0, 60, 7],
-             61: [0, 60, 61, 7],
-             68: [0, 68, 60, 61, 7],
-             71: [0, 68, 71, 7, 60, 61],
-             80: [80, 0, 68, 71, 7, 60, 61],
-             87: [0, 68, 87, 7, 60, 61],
-             88: [0, 68, 87, 88, 7, 60, 61]
-             })
+                              {0: [0],
+                               7: [0, 7],
+                               10: [0, 10, 7],
+                               13: [0, 10, 13, 7],
+                               20: [0, 10, 20, 13, 7],
+                               23: [0, 20, 23, 7, 10, 13],
+                               32: [32, 0, 20, 23, 7, 10, 13],
+                               44: [0, 20, 23, 7, 10, 44, 13],
+                               56: [0, 20, 7, 56, 10, 13],
+                               57: [0, 20, 7, 56, 57, 10, 13],
+                               60: [0, 60, 7],
+                               61: [0, 60, 61, 7],
+                               68: [0, 68, 60, 61, 7],
+                               71: [0, 68, 71, 7, 60, 61],
+                               80: [80, 0, 68, 71, 7, 60, 61],
+                               87: [0, 68, 87, 7, 60, 61],
+                               88: [0, 68, 87, 88, 7, 60, 61]
+                               })
         g = self.infinite_loop1()
         doms = g.dominators()
         self.check_dominators(doms,
-            {0: [0],
-             6: [0, 6],
-             10: [0, 10],
-             13: [0, 10, 13],
-             19: [0, 10, 19, 13],
-             26: [0, 10, 13, 26],
-             })
+                              {0: [0],
+                               6: [0, 6],
+                               10: [0, 10],
+                               13: [0, 10, 13],
+                               19: [0, 10, 19, 13],
+                               26: [0, 10, 13, 26],
+                               })
 
     def test_post_dominators_loopless(self):
         def eq_(d, l):
@@ -733,36 +765,36 @@ class TestCFGraph(TestCase):
         g = self.multiple_exits()
         doms = g.post_dominators()
         self.check_dominators(doms,
-            {0: [0, 7],
-             7: [7],
-             10: [10],
-             19: [19],
-             23: [23],
-             29: [29, 37],
-             36: [36, 37],
-             37: [37],
-            })
+                              {0: [0, 7],
+                               7: [7],
+                               10: [10],
+                               19: [19],
+                               23: [23],
+                               29: [29, 37],
+                               36: [36, 37],
+                               37: [37],
+                               })
         g = self.multiple_loops()
         doms = g.post_dominators()
         self.check_dominators(doms,
-            {0: [0, 60, 68, 61, 7],
-             7: [60, 68, 61, 7],
-             10: [68, 7, 10, 13, 20, 56, 57, 60, 61],
-             13: [68, 7, 13, 20, 56, 57, 60, 61],
-             20: [20, 68, 7, 56, 57, 60, 61],
-             23: [68, 7, 20, 23, 56, 57, 60, 61],
-             32: [32, 68, 7, 20, 56, 57, 60, 61],
-             44: [68, 7, 44, 20, 56, 57, 60, 61],
-             56: [68, 7, 56, 57, 60, 61],
-             57: [57, 60, 68, 61, 7],
-             60: [60, 68, 61],
-             61: [68, 61],
-             68: [68],
-             71: [71],
-             80: [80],
-             87: [88, 87],
-             88: [88]
-             })
+                              {0: [0, 60, 68, 61, 7],
+                               7: [60, 68, 61, 7],
+                               10: [68, 7, 10, 13, 20, 56, 57, 60, 61],
+                               13: [68, 7, 13, 20, 56, 57, 60, 61],
+                               20: [20, 68, 7, 56, 57, 60, 61],
+                               23: [68, 7, 20, 23, 56, 57, 60, 61],
+                               32: [32, 68, 7, 20, 56, 57, 60, 61],
+                               44: [68, 7, 44, 20, 56, 57, 60, 61],
+                               56: [68, 7, 56, 57, 60, 61],
+                               57: [57, 60, 68, 61, 7],
+                               60: [60, 68, 61],
+                               61: [68, 61],
+                               68: [68],
+                               71: [71],
+                               80: [80],
+                               87: [88, 87],
+                               88: [88]
+                               })
 
     def test_post_dominators_infinite_loops(self):
         # Post-dominators with infinite loops need special care
@@ -770,21 +802,21 @@ class TestCFGraph(TestCase):
         g = self.infinite_loop1()
         doms = g.post_dominators()
         self.check_dominators(doms,
-            {0: [0],
-             6: [6],
-             10: [10, 13],
-             13: [13],
-             19: [19],
-             26: [26],
-             })
+                              {0: [0],
+                               6: [6],
+                               10: [10, 13],
+                               13: [13],
+                               19: [19],
+                               26: [26],
+                               })
         g = self.infinite_loop2()
         doms = g.post_dominators()
         self.check_dominators(doms,
-            {0: [0, 3],
-             3: [3],
-             9: [9],
-             16: [16],
-             })
+                              {0: [0, 3],
+                               3: [3],
+                               9: [9],
+                               16: [16],
+                               })
 
     def test_backbone_loopless(self):
         for g in [self.loopless1(), self.loopless1_dead_nodes()]:

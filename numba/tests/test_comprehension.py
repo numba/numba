@@ -503,5 +503,22 @@ class TestArrayComprehension(unittest.TestCase):
             return a
         self.check(f, 5, assert_allocate_list=True)
 
+    def test_reuse_of_array_var(self):
+        """ Test issue 3742 """
+        # redefinition of z breaks array comp as there's multiple defn
+        def foo(n):
+            # doesn't matter where this is in the code, it's just to ensure a
+            # `make_function` opcode exists
+            [i for i in range(1)]
+            z = np.empty(n)
+            for i in range(n):
+                z = np.zeros(n)
+                z[i] = i # write is required to trip the bug
+
+            return z
+
+        self.check(foo, 10, assert_allocate_list=True)
+
+
 if __name__ == '__main__':
     unittest.main()

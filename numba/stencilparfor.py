@@ -338,8 +338,14 @@ class StencilPass(object):
 
         # simplify CFG of parfor body (exit block could be simplified often)
         # add dummy return to enable CFG
-        stencil_blocks[parfor_body_exit_label].body.append(ir.Return(0,
-                                            ir.Loc("stencilparfor_dummy", -1)))
+        dummy_loc = ir.Loc("stencilparfor_dummy", -1)
+        ret_const_var = ir.Var(scope, mk_unique_var("$cval_const"), dummy_loc)
+        cval_const_assign = ir.Assign(ir.Const(0, loc=dummy_loc), ret_const_var, dummy_loc)
+        stencil_blocks[parfor_body_exit_label].body.append(cval_const_assign)
+
+        stencil_blocks[parfor_body_exit_label].body.append(
+            ir.Return(ret_const_var, dummy_loc),
+        )
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
         stencil_blocks[max(stencil_blocks.keys())].body.pop()
 

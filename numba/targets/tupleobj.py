@@ -17,7 +17,14 @@ from ..extending import overload_method
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
-    res = context.make_tuple(builder, sig.return_type, args)
+    # the arguments need casting (lower_cast) from the types in the ctor args
+    # to those in the ctor return type, this is to handle cases such as a
+    # literal present in the args, but a type present in the return type.
+    newargs = []
+    for i, arg in enumerate(args):
+        casted = context.cast(builder, arg, sig.args[i], sig.return_type[i])
+        newargs.append(casted)
+    res = context.make_tuple(builder, sig.return_type, tuple(newargs))
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 

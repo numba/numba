@@ -169,6 +169,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
@@ -299,6 +300,7 @@ The following top-level functions are supported:
 * :func:`numpy.partition` (only the 2 first arguments)
 * :func:`numpy.ptp` (only the first argument)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
