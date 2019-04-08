@@ -3,7 +3,6 @@ Tests gdb bindings
 """
 from __future__ import print_function
 import os
-import platform
 import subprocess
 import sys
 import threading
@@ -25,10 +24,6 @@ _unix_like = (_platform.startswith('linux')
 
 unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
 not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
-
-_arch_name = platform.machine()
-_is_arm = _arch_name in {'aarch64', 'armv7l'}
-not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
 
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
@@ -76,7 +71,6 @@ def impl_gdb_split_init_and_break_w_parallel(a):
         print(a, b, c, d)
 
 
-@not_arm
 @unix_only
 class TestGdbBindImpls(TestCase):
     """
@@ -138,7 +132,6 @@ class TestGdbBindImpls(TestCase):
             _dbg_jit(impl_gdb_split_init_and_break_w_parallel)(10)
 
 
-@not_arm
 @unix_only
 @needs_gdb
 class TestGdbBinding(TestCase):
@@ -218,7 +211,6 @@ class TestGdbBinding(TestCase):
 TestGdbBinding.generate()
 
 
-@not_arm
 @unix_only
 @needs_gdb
 class TestGdbMisc(TestCase):
