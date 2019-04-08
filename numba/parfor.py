@@ -3566,7 +3566,12 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
     # branch back to first body label to simulate loop
-    branch = ir.Branch(0, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
+    scope = blocks[last_label].scope
+
+    branchcond = ir.Var(scope, mk_unique_var("$branchcond"), ir.Loc("parfors_dummy", -1))
+    typemap[branchcond.name] = types.boolean
+
+    branch = ir.Branch(branchcond, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(branch)
 
     # add dummy jump in init_block for CFG to work
@@ -3618,7 +3623,11 @@ def simplify_parfor_body_CFG(blocks):
                 # add dummy return to enable CFG creation
                 # can't use dummy_return_in_loop_body since body changes
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
-                last_block.body.append(ir.Return(0, ir.Loc("parfors_dummy", -1)))
+                scope = last_block.scope
+                loc = ir.Loc("parfors_dummy", -1)
+                const = ir.Var(scope, mk_unique_var("$const"), loc)
+                last_block.body.append(ir.Assign(ir.Const(0, loc), const, loc))
+                last_block.body.append(ir.Return(const, loc))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 last_block.body.pop()
@@ -3930,8 +3939,10 @@ def dummy_return_in_loop_body(loop_body):
     """
     # max is last block since we add it manually for prange
     last_label = max(loop_body.keys())
+    scope = loop_body[last_label].scope
+    const = ir.Var(scope, mk_unique_var("$const"), ir.Loc("parfors_dummy", -1))
     loop_body[last_label].body.append(
-        ir.Return(0, ir.Loc("parfors_dummy", -1)))
+        ir.Return(const, ir.Loc("parfors_dummy", -1)))
     yield
     # remove dummy return
     loop_body[last_label].body.pop()
