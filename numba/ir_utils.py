@@ -1880,11 +1880,12 @@ def raise_on_unsupported_feature(func_ir, typemap):
                         if (numpy.issubdtype(ty, numpy.integer) or
                                 numpy.issubdtype(ty, numpy.floating)):
                             continue
+
+                    vardescr = '' if var.startswith('$') else "'{}' ".format(var)
                     raise TypingError(
                         "'view' can only be called on NumPy dtypes, "
-                        "try wrapping the variable with 'np.<dtype>()'",
-                        loc=stmt.loc
-                    )
+                        "try wrapping the variable {}with 'np.<dtype>()'".
+                        format(vardescr), loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

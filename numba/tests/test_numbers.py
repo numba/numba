@@ -75,7 +75,7 @@ class TestViewIntFloat(TestCase):
         with self.assertRaises(TypingError) as e:
             call_view_on_scalar()
         self.assertIn("'view' can only be called on NumPy dtypes, "
-                      "try wrapping the variable with 'np.<dtype>()'",
+                      "try wrapping the variable 'a' with 'np.<dtype>()'",
                       str(e.exception))
 
     def do_testing_exceptions(self, pair):
