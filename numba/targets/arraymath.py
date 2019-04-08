@@ -2344,6 +2344,9 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+np_delete_handler_isslice = register_jitable(lambda x : x)
+np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
+
 @overload(np.delete)
 def np_delete(arr, obj):
     # Implementation based on numpy
@@ -2357,7 +2360,7 @@ def np_delete(arr, obj):
         N = arr.size
 
         keep = np.ones(N, dtype=np.bool_)
-        obj = np.array(obj)
+        obj = handler(obj)
         keep[obj] = False
         return arr[keep]
 
@@ -2367,7 +2370,7 @@ def np_delete(arr, obj):
         pos = obj
 
         if (pos < -N or pos >= N):
-            raise IndexError('pos must be less than the len(arr)')
+            raise IndexError('obj must be less than the len(arr)')
             # NumPy raises IndexError: index 'i' is out of
             # bounds for axis 'x' with size 'n'
 
@@ -2376,17 +2379,14 @@ def np_delete(arr, obj):
 
         return np.concatenate((arr[:pos], arr[pos+1:]))
 
-    def np_delete_slice_impl(arr, obj):
-        arr = np.ravel(np.asarray(arr))
-        N = arr.size
+    if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
+        if isinstance(obj, (types.SliceType)):
+            handler = np_delete_handler_isslice
+        else:
+            if not isinstance(obj.dtype, types.Integer):
+                raise TypingError('obj should be of type Integer')
+            handler = np_delete_handler_isarray
 
-        keep = np.ones(N, dtype=np.bool_)
-        keep[obj] = False
-        return arr[keep]
-
-    if isinstance(obj, (types.SliceType)):
-        return np_delete_slice_impl
-    elif isinstance(obj, (types.Array, types.Sequence)):
         return np_delete_impl
     else: # scalar value
         if not isinstance(obj, types.Integer):

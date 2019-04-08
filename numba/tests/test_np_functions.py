@@ -342,6 +342,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
 
         with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(10), [3.5, 5.6, 6.2])
+        self.assertIn(
+            'obj should be of type Integer',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
             cfunc(2, 3)
         self.assertIn(
             'arr must be either an Array or a Sequence',
@@ -351,7 +358,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(IndexError) as raises:
             cfunc([1, 2], 3)
         self.assertIn(
-            'pos must be less than the len(arr)',
+            'obj must be less than the len(arr)',
             str(raises.exception),
         )
 
