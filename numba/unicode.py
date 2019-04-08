@@ -760,14 +760,17 @@ def _repeat_impl(str_arg, mult_arg):
             len_a = len(str_arg)
             _strncpy(result, 0, str_arg, 0, len_a)
             # loop through powers of 2 for efficient copying
-            floor_log = floor(log(mult_arg) / log(2))
-            for j in range(floor_log):
-                _strncpy(result, 2**j * len_a, result, 0, 2**j * len_a)
-            # complete the rest of the copies
-            rest = mult_arg - 2 ** floor_log
-            _strncpy(result, 2**floor_log * len_a,
-                     result, (2**floor_log - rest) * len_a, rest * len_a)
-            return result
+            copy_size = len_a
+            while 2 * copy_size <= new_length:
+                _strncpy(result, copy_size, result, 0, copy_size)
+                copy_size *= 2
+
+            if not 2 * copy_size == new_length:
+                # if copy_size not an exact multiple it then needs
+                # to complete the rest of the copies
+                rest = new_length - copy_size
+                _strncpy(result, copy_size, result, copy_size - rest, rest)
+                return result
 
 
 @overload(operator.mul)
