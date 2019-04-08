@@ -239,7 +239,8 @@ The following is a sufficient piece of test code for the overloaded
 ``set_to_x`` implementation. As you can see, only a small part of the test-code
 is about testing if the function works correctly. Most of the test code in this
 example checks that all error cases are handled and that all raised exceptions
-are of the correct type and have the correct error message.
+are of the correct type and have the correct error message. When implementing
+tests cases for Numba, you should always use ``numba.tests.support.TestCase``.
 
 .. code:: python
 
