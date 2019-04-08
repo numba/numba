@@ -85,6 +85,36 @@ Whereas the following will not work:
     ...     print(i.view(np.uint64))
     ...
     >>> bitcast(np.int64(-1))
+    ---------------------------------------------------------------------------
+    TypingError                               Traceback (most recent call last)
+    <ipython-input-4-3d53d43666e0> in <module>
+    ----> 1 bitcast(np.int64(-1))
+
+    ~/git/numba/numba/dispatcher.py in _compile_for_args(self, *args, **kws)
+        348                 e.patch_message(msg)
+        349
+    --> 350             error_rewrite(e, 'typing')
+        351         except errors.UnsupportedError as e:
+        352             # Something unsupported is present in the user code, add help info
+
+    ~/git/numba/numba/dispatcher.py in error_rewrite(e, issue_type)
+        315                 raise e
+        316             else:
+    --> 317                 reraise(type(e), e, None)
+        318
+        319         argtypes = []
+
+    ~/git/numba/numba/six.py in reraise(tp, value, tb)
+        656             value = tp()
+        657         if value.__traceback__ is not tb:
+    --> 658             raise value.with_traceback(tb)
+        659         raise value
+        660TypingError: Failed in nopython mode pipeline (step: ensure IR is legal prior to lowering)
+        'view' can only be called on NumPy dtypes, try wrapping the variable with 'np.<dtype>()'
+
+    File "<ipython-input-3-fc40aaab84c4>", line 3:
+    def bitcast(i):
+        print(i.view(np.uint64))
 
 Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings.
