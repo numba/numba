@@ -1866,6 +1866,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
+
             # this checks that np.<type> was called if view is called
             if isinstance(stmt.value, ir.Expr):
                 if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
