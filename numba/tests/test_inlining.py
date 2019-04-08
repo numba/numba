@@ -158,7 +158,7 @@ class TestInlining(TestCase):
         # and it contains the original variable name used in locals
         @numba.njit(locals={'b': numba.float64})
         def g(a):
-            b = a+1
+            b = a + 1
             return b
 
         def test_impl():
