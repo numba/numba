@@ -2350,7 +2350,7 @@ def np_delete(arr, obj):
     # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267
 
     if not isinstance(arr, (types.Array, types.Sequence)):
-        raise TypingError("delete(): arr must be either an Array or a Sequence")
+        raise TypingError("arr must be either an Array or a Sequence")
 
     def np_delete_impl(arr, obj):
         arr = np.ravel(np.asarray(arr))
@@ -2369,7 +2369,7 @@ def np_delete(arr, obj):
         pos = obj
 
         if (pos < -N or pos >= N):
-            raise IndexError('delete(): pos must be less than the len(arr)')
+            raise IndexError('pos must be less than the len(arr)')
             # NumPy raises IndexError: index 'i' is out of
             # bounds for axis 'x' with size 'n'
 
@@ -2382,7 +2382,7 @@ def np_delete(arr, obj):
         return np_delete_impl
     else: # scalar value
         if not isinstance(obj, types.Integer):
-            raise TypingError('delete(): obj should be of type Integer')
+            raise TypingError('obj should be of type Integer')
 
         return np_delete_scalar_impl
 

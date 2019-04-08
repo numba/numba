@@ -328,24 +328,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, obj)
             self.assertPreciseEqual(expected, got)
 
+    def test_delete_exceptions(self):
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
         with self.assertRaises(TypingError) as raises:
             cfunc([1, 2], 3.14)
         self.assertIn(
-            'delete(): obj should be of type Integer',
+            'obj should be of type Integer',
             str(raises.exception)
         )
 
         with self.assertRaises(TypingError) as raises:
             cfunc(2, 3)
         self.assertIn(
-            'delete(): arr must be either an Array or a Sequence',
+            'arr must be either an Array or a Sequence',
             str(raises.exception)
         )
 
         with self.assertRaises(IndexError) as raises:
             cfunc([1, 2], 3)
         self.assertIn(
-            'delete(): pos must be less than the len(arr)',
+            'pos must be less than the len(arr)',
             str(raises.exception),
         )
 
