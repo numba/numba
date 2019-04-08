@@ -19,6 +19,7 @@ def gen_view(a,b):
 
 
 class TestViewIntFloat(TestCase):
+    """ This tests the 'view' method on NumPy scalars. """
 
     def do_testing(self, inputs, dtypes):
         for value, initial_type, expected in inputs:
