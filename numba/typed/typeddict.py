@@ -4,12 +4,15 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 from collections import MutableMapping
 
 from numba.types import DictType, TypeRef
+from numba.targets.imputils import numba_typeref_ctor
 from numba import njit, dictobject, types, cgutils, errors
 from numba.extending import (
     overload_method,
+    overload,
     box,
     unbox,
-    NativeValue
+    NativeValue,
+    type_callable
 )
 
 
@@ -221,47 +224,46 @@ def unbox_dicttype(typ, val, c):
     return NativeValue(dctobj)
 
 
-
-######### ad-hoc typing
-
-from numba.typing.templates import AbstractTemplate, Registry, signature
-
-registry = Registry()
-infer_global = registry.register_global
+#
+# The following contains logic for the type-inferred constructor
+#
 
 
-@infer_global(Dict)
-class DictCtor(AbstractTemplate):
-
-    def generic(self, args, kws):
-        if args or kws:
-            raise errors.TypingError("Dict() does not take any arguments")
-
-        return signature(types.DictType(types.undefined, types.undefined))
-
-
-######### ad-hoc lowering
-
-from numba.targets.imputils import lower_builtin
-from numba import typing
+@type_callable(DictType)
+def typeddict_call(context):
+    """
+    Defines typing logic for ``Dict()``.
+    Produces Dict[undefined, undefined]
+    """
+    def typer():
+        return types.DictType(types.undefined, types.undefined)
+    return typer
 
 
-@lower_builtin(types.TypeRef)
-def impl_dict_lowering(context, builder, sig, args):
-    dict_ty = sig.return_type
+@overload(numba_typeref_ctor)
+def impl_numba_typeref_ctor(cls):
+    """
+    Defines ``Dict()``, the typed-inferred version of the dictionary ctor.
+
+    Parameters
+    ----------
+    cls : TypeRef
+        Expecting a TypeRef of a precise DictType.
+    """
+    dict_ty = cls.instance_type
     if not isinstance(dict_ty, types.DictType):
         msg = "expecting a DictType but got {}".format(dict_ty)
-        raise errors.LoweringError(msg)
+        return  # reject
+    # Ensure the dictionary is precisely typed.
     if not dict_ty.is_precise():
         msg = "expecting a precise DictType but got {}".format(dict_ty)
         raise errors.LoweringError(msg)
 
-    def make_dict(key_ty, val_ty):
-        return Dict.empty(key_ty, val_ty)
-
     key_type = types.TypeRef(dict_ty.key_type)
     value_type = types.TypeRef(dict_ty.value_type)
-    sig = typing.signature(dict_ty, key_type, value_type)
-    args = [context.get_dummy_value()] * 2
 
-    return context.compile_internal(builder, make_dict, sig, args)
+    def impl(cls):
+        # Simply call the empty with the key/value types from *cls*
+        return Dict.empty(key_type, value_type)
+
+    return impl

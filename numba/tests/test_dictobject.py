@@ -19,7 +19,6 @@ from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
-
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 
