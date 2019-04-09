@@ -162,19 +162,19 @@ def init_gdb_codegen(cgctx, builder, signature, args,
         msg = "Internal error: `snprintf` buffer would have overflowed."
         cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
-    # fork, check pids etc
-    child_pid = builder.call(fork, tuple())
-    fork_failed = builder.icmp_signed('==', child_pid, int32_t(-1))
-    with builder.if_then(fork_failed, likely=False):
-        msg = "Internal error: `fork` failed."
-        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
-
     # call pipe to set up fds
     pipefds_ptr = builder.gep(pipefds, [zero_i32t], inbounds=True)
     stat = builder.call(pipe, (pipefds_ptr,))
     pipe_failed = builder.icmp_signed('==', stat, int32_t(-1))
     with builder.if_then(pipe_failed, likely=False):
         msg = "Internal error: `pipe` failed."
+        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
+    # fork, check pids etc
+    child_pid = builder.call(fork, tuple())
+    fork_failed = builder.icmp_signed('==', child_pid, int32_t(-1))
+    with builder.if_then(fork_failed, likely=False):
+        msg = "Internal error: `fork` failed."
         cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
     # pointers to the read and write end FDs
@@ -226,6 +226,9 @@ def init_gdb_codegen(cgctx, builder, signature, args,
             # issue a call to read() from the read-end of the pipe, this will
             # block
             builder.call(read, (builder.load(read_end), read_buffer, intp_t(1)))
+            # read is done, close read end (gdb closed write end as signal to
+            # unblock), nothing can be done with regards to the return status
+            builder.call(close, (builder.load(read_end),))
             # if breaking is desired, break now
             if do_break is True:
                 builder.call(breakpoint, tuple())
