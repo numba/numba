@@ -2,7 +2,6 @@ import operator
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
-from math import floor, log
 
 from numba.extending import (
     models,
@@ -14,6 +13,7 @@ from numba.extending import (
     overload,
     overload_method,
     intrinsic,
+    register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
@@ -746,31 +746,31 @@ def unicode_concat(a, b):
         return concat_impl
 
 
-@njit
+@register_jitable
 def _repeat_impl(str_arg, mult_arg):
-        if str_arg == '' or mult_arg < 1:
-            return ''
-        elif mult_arg == 1:
-            return str_arg
-        else:
-            new_length = str_arg._length * mult_arg
-            new_kind = str_arg._kind
-            result = _empty_string(new_kind, new_length)
-            # make initial copy into result
-            len_a = len(str_arg)
-            _strncpy(result, 0, str_arg, 0, len_a)
-            # loop through powers of 2 for efficient copying
-            copy_size = len_a
-            while 2 * copy_size <= new_length:
-                _strncpy(result, copy_size, result, 0, copy_size)
-                copy_size *= 2
+    if str_arg == '' or mult_arg < 1:
+        return ''
+    elif mult_arg == 1:
+        return str_arg
+    else:
+        new_length = str_arg._length * mult_arg
+        new_kind = str_arg._kind
+        result = _empty_string(new_kind, new_length)
+        # make initial copy into result
+        len_a = len(str_arg)
+        _strncpy(result, 0, str_arg, 0, len_a)
+        # loop through powers of 2 for efficient copying
+        copy_size = len_a
+        while 2 * copy_size <= new_length:
+            _strncpy(result, copy_size, result, 0, copy_size)
+            copy_size *= 2
 
-            if not 2 * copy_size == new_length:
-                # if copy_size not an exact multiple it then needs
-                # to complete the rest of the copies
-                rest = new_length - copy_size
-                _strncpy(result, copy_size, result, copy_size - rest, rest)
-                return result
+        if not 2 * copy_size == new_length:
+            # if copy_size not an exact multiple it then needs
+            # to complete the rest of the copies
+            rest = new_length - copy_size
+            _strncpy(result, copy_size, result, copy_size - rest, rest)
+            return result
 
 
 @overload(operator.mul)
