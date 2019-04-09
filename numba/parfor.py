@@ -3631,7 +3631,11 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
 
     new_blocks[start_alias_block].body.append(ir.Jump(min_block_label + alias_offset, min_block.loc))
     new_blocks[end_alias_block] = ir.Block(min_block.scope, min_block.loc)
-    new_blocks[end_alias_block].body.append(ir.Return(None, min_block.loc))
+
+    ret_var = ir.Var(min_block.scope, mk_unique_var("ret_value"), min_block.loc)
+    ret_var_assign = ir.Assign(value=ir.Const(value=None, loc=min_block.loc), target=ret_var, loc=min_block.loc)
+    new_blocks[end_alias_block].body.append(ret_var_assign)
+    new_blocks[end_alias_block].body.append(ir.Return(ret_var, min_block.loc))
 
     # Create the predecessor and successor blocks for where no aliasing is detected.
     new_blocks[start_noalias_block] = ir.Block(min_block.scope, min_block.loc)
@@ -3648,7 +3652,11 @@ def duplicate_code(blocks, typemap, calltypes, arg_names, typingctx, array_args)
 
     new_blocks[start_noalias_block].body.append(ir.Jump(min_block_label + noalias_offset, min_block.loc))
     new_blocks[end_noalias_block] = ir.Block(min_block.scope, min_block.loc)
-    new_blocks[end_noalias_block].body.append(ir.Return(None, min_block.loc))
+
+    ret_var = ir.Var(min_block.scope, mk_unique_var("ret_value"), min_block.loc)
+    ret_var_assign = ir.Assign(value=ir.Const(value=None, loc=min_block.loc), target=ret_var, loc=min_block.loc)
+    new_blocks[end_noalias_block].body.append(ret_var_assign)
+    new_blocks[end_noalias_block].body.append(ir.Return(ret_var, min_block.loc))
 
     dup_typemap = {}
     dup_calltypes = {}
