@@ -702,6 +702,41 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
                             _get_code_point(src, src_offset + i))
 
 
+@intrinsic
+def _get_str_slice_view(typingctx, src_t, start_t, length_t):
+    """Create a slice of a unicode string using a view of its data to avoid
+    extra allocation.
+    """
+    assert src_t == types.unicode_type
+
+    def codegen(context, builder, sig, args):
+        src, start, length = args
+        in_str = cgutils.create_struct_proxy(
+            types.unicode_type)(context, builder, value=src)
+        view_str = cgutils.create_struct_proxy(
+            types.unicode_type)(context, builder)
+        view_str.meminfo = in_str.meminfo
+        view_str.kind = in_str.kind
+        view_str.length = length
+        # hash value -1 to indicate "need to compute hash"
+        view_str.hash = context.get_constant(_Py_hash_t, -1)
+        # get a pointer to start of slice data
+        byte_width = context.compile_internal(
+            builder, _kind_to_byte_width.py_func, types.intp(types.int32),
+            [in_str.kind])
+        offset = builder.mul(start, byte_width)
+        view_str.data = builder.gep(in_str.data, [offset])
+        # Set parent pyobject to NULL
+        view_str.parent = cgutils.get_null_value(view_str.parent.type)
+        # incref original string
+        if context.enable_nrt:
+            context.nrt.incref(builder, sig.args[0], src)
+        return view_str._getvalue()
+
+    sig = types.unicode_type(types.unicode_type, types.intp, types.intp)
+    return sig, codegen
+
+
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
@@ -716,16 +751,16 @@ def unicode_getitem(s, idx):
             def getitem_slice(s, idx):
                 slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
-                ret = _empty_string(s._kind, span)
 
                 if slice_idx.step == 1:
-                    _strncpy(ret, 0, s, slice_idx.start, span)
+                    return _get_str_slice_view(s, slice_idx.start, span)
                 else:
+                    ret = _empty_string(s._kind, span)
                     cur = slice_idx.start
                     for i in range(span):
                         _set_code_point(ret, i, _get_code_point(s, cur))
                         cur += slice_idx.step
-                return ret
+                    return ret
             return getitem_slice
 
 
