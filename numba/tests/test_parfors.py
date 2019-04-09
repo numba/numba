@@ -74,7 +74,7 @@ class TestParforsBase(TestCase):
         self.fast_pflags = Flags()
         self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
         self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath')
+        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
@@ -1361,6 +1361,16 @@ class TestParfors(TestParforsBase):
         n = 211
         A = np.arange(n)
         self.check(test_impl, A)
+
+    @skip_unsupported
+    def test_preparfor_datetime64(self):
+        # test array.dtype transformation for datetime64
+        def test_impl(A):
+            return A.dtype
+
+        A = np.empty(1, np.dtype('datetime64[ns]'))
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
+        self.assertEqual(cpfunc.entry_point(A), test_impl(A))
 
     @skip_unsupported
     def test_no_hoisting_with_member_function_call(self):
@@ -2669,6 +2679,22 @@ class TestParforsMisc(TestParforsBase):
             cres.entry_point()
         for line in stdout.getvalue().splitlines():
             self.assertEqual('a[3]: 2.0', line)
+
+    @skip_unsupported
+    def test_parfor_ufunc_typing(self):
+        def test_impl(A):
+            return np.isinf(A)
+
+        A = np.array([np.inf, 0.0])
+        cfunc = njit(parallel=True)(test_impl)
+        # save global state
+        old_seq_flag = numba.parfor.sequential_parfor_lowering
+        try:
+            numba.parfor.sequential_parfor_lowering = True
+            np.testing.assert_array_equal(test_impl(A), cfunc(A))
+        finally:
+            # recover global state
+            numba.parfor.sequential_parfor_lowering = old_seq_flag
 
 
 @skip_unsupported

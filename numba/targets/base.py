@@ -215,7 +215,7 @@ class BaseContext(object):
     allow_dynamic_globals = False
 
     # Fast math flags
-    enable_fastmath = False
+    fastmath = False
 
     # python exceution environment
     environment = None

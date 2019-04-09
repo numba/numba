@@ -1,3 +1,21 @@
+Version 0.43.1
+--------------
+
+This is a bugfix release that provides minor changes to fix: a bug in branch
+pruning, bugs in `np.interp` functionality, and also fully accommodate the
+NumPy 1.16 release series.
+
+* PR #3826: NumPy 1.16 support
+* PR #3850: Refactor np.interp
+* PR #3883: Rewrite pruned conditionals as their evaluated constants.
+
+Contributors:
+
+* Rob Ennis
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+
+
 Version 0.43.0
 --------------
 

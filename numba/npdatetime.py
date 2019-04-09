@@ -19,10 +19,10 @@ DATETIME_UNITS = {
     's': 7,   # Seconds
     'ms': 8,  # Milliseconds
     'us': 9,  # Microseconds
-    'ns': 10, # Nanoseconds
-    'ps': 11, # Picoseconds
-    'fs': 12, # Femtoseconds
-    'as': 13, # Attoseconds
+    'ns': 10,  # Nanoseconds
+    'ps': 11,  # Picoseconds
+    'fs': 12,  # Femtoseconds
+    'as': 13,  # Attoseconds
     '': 14,   # "generic", i.e. unit-less
 }
 
@@ -81,6 +81,7 @@ _factors = {
     12: (13, 1000),
 }
 
+
 def _get_conversion_multiplier(big_unit_code, small_unit_code):
     """
     Return an integer multiplier allowing to convert from *big_unit_code*
@@ -106,6 +107,7 @@ def _get_conversion_multiplier(big_unit_code, small_unit_code):
     else:
         return None
 
+
 def get_timedelta_conversion_factor(src_unit, dest_unit):
     """
     Return an integer multiplier allowing to convert from timedeltas
@@ -113,6 +115,7 @@ def get_timedelta_conversion_factor(src_unit, dest_unit):
     """
     return _get_conversion_multiplier(DATETIME_UNITS[src_unit],
                                       DATETIME_UNITS[dest_unit])
+
 
 def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
     """
@@ -139,11 +142,11 @@ def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
     # the factor averaged over the 400 year leap year cycle."""
     if dt_unit_code == 0:
         if td_unit_code >= 4:
-            dt_factor = 97  + 400 * 365
+            dt_factor = 97 + 400 * 365
             td_factor = 400
             dt_unit_code = 4
         elif td_unit_code == 2:
-            dt_factor = 97  + 400 * 365
+            dt_factor = 97 + 400 * 365
             td_factor = 400 * 7
             dt_unit_code = 2
     elif dt_unit_code == 1:
@@ -184,6 +187,7 @@ def combine_datetime_timedelta_units(datetime_unit, timedelta_unit):
         return datetime_unit
     else:
         return timedelta_unit
+
 
 def get_best_unit(unit_a, unit_b):
     """
