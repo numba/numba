@@ -10,6 +10,7 @@ from numba.npyufunc import dufunc
 
 import pdb
 import copy
+import sys
 
 class CSATypingContext(typing.BaseContext):
     def load_additional_registries(self):
@@ -51,6 +52,7 @@ class CSATargetDesc(TargetDescriptor):
 def compile_csa(func_ir, return_type, args, inflags):
     if config.DEBUG_CSA:
         print("compile_csa", func_ir, return_type, args)
+        sys.stdout.flush()
 
     cput = registry.dispatcher_registry['cpu'].targetdescr 
     typingctx = cput.typing_context
@@ -85,11 +87,15 @@ def compile_csa(func_ir, return_type, args, inflags):
                                flags,
                                locals={})
     library = cres.library
+    if config.DEBUG_CSA:
+        print("library", library, type(library))
+        sys.stdout.flush()
     library.finalize()
 
     if config.DEBUG_CSA:
         print("compile_csa cres", cres, type(cres))
         print("LLVM")
+        sys.stdout.flush()
 
         llvm_str = cres.library.get_llvm_str()
         llvm_out = "compile_csa" + ".ll"
@@ -191,6 +197,7 @@ def compile_csa_kernel(func_ir, args, flags, link, fastmath=False):
         print("lib", lib, type(lib))
         print("kernel", kernel, type(kernel))
         print("wrapfnty", wrapfnty, type(wrapfnty))
+        sys.stdout.flush()
     csakern = CSAKernel(llvm_module=lib._final_module,
                         library=wrapper_library,
                         wrapper_module=wrapper_library._final_module,
@@ -228,6 +235,9 @@ class AutoJitCSAKernel(object):
         if kernel is None:
             if 'link' not in self.targetoptions:
                 self.targetoptions['link'] = ()
+            if config.DEBUG_CSA:
+                print("Before compile_csa_kernel.")
+                sys.stdout.flush()
             kernel = compile_csa_kernel(self.func_ir, argtypes, self.flags,
                                     **self.targetoptions)
             self.definitions[argtypes] = kernel

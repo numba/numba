@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 import sys
+import os
 
 import llvmlite.llvmpy.core as lc
 import llvmlite as ll
@@ -16,6 +17,7 @@ from numba.runtime import rtsys
 from . import fastmathpass
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL, Constant, ICMP_EQ)
 from llvmlite import ir
+from llvmlite import binding
 from ctypes import *
 
 
@@ -49,6 +51,23 @@ class CSAContext(BaseContext):
             print("CSAContext::init")
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCSACodegen("numba.csa.exec")
+
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        #with open(dir_path + "/libcsac.bc", 'rb') as f:
+        #    bccode = f.read()
+        #    self._csamod = binding.parse_bitcode(bccode)
+
+        #with open(dir_path + "/libcsamath.bc", 'rb') as f:
+        #    bccode = f.read()
+        #    self._csamath = binding.parse_bitcode(bccode)
+
+        with open(dir_path + "/libcsamath_fixed.bc", 'rb') as f:
+            bccode = f.read()
+            self._csamath = binding.parse_bitcode(bccode)
+
+        self.sqrt32extern = "sp_sqrt_RN"
+        self.sqrt64extern = "dp_sqrt_RN"
 
         # Map external C functions.
         #externals.c_math_functions.install(self)
@@ -152,6 +171,9 @@ class CSAContext(BaseContext):
             intrinsics.fix_divmod(mod)
 
         library.add_linking_library(rtsys.library)
+        print("CSA post-lowering adding csa library.", library, type(library))
+        library._final_module.link_in(self._csamod)
+        library._final_module.link_in(self._csamath)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):
@@ -216,11 +238,22 @@ class CSAContext(BaseContext):
             print("fname", fname, type(fname))
             print("argtypes", argtypes, type(argtypes))
             print("csa_asm_name", csa_asm_name, type(csa_asm_name))
+            print("codelib", codelib, type(codelib))
+            sys.stdout.flush()
 
         codelib.get_asm_str(csa_asm_name)
+        if config.DEBUG_CSA:
+            print("After get_asm_str")
+            sys.stdout.flush()
         library = self.codegen().create_library('')
+        if config.DEBUG_CSA:
+            print("After create_library")
+            sys.stdout.flush()
         #library.add_linking_library(codelib)
         wrapper, wrapfnty, wrapper_library = self.generate_kernel_wrapper(library, fname, argtypes, csa_asm_name)
+        if config.DEBUG_CSA:
+            print("After generate_kernel_wrapper")
+            sys.stdout.flush()
         return library, wrapper, wrapfnty, wrapper_library
 
     def generate_kernel_wrapper(self, library, fname, argtypes, csa_asm_name):
@@ -229,7 +262,13 @@ class CSAContext(BaseContext):
         The function being wrapped have the name ``fname`` and argument types
         ``argtypes``.  The wrapper function is returned.
         """
+        if config.DEBUG_CSA:
+            print("Before finalize in generate_kernel_wrapper")
+            sys.stdout.flush()
         library.finalize()
+        if config.DEBUG_CSA:
+            print("After finalize in generate_kernel_wrapper")
+            sys.stdout.flush()
         cput = registry.dispatcher_registry['cpu'].targetdescr 
         context = cput.target_context
 
@@ -260,6 +299,7 @@ class CSAContext(BaseContext):
             print("prefixed", prefixed)
             print("wrapfn", wrapfn)
             print("builder", builder)
+            sys.stdout.flush()
 
         ll.binding.load_library_permanently("/home/taanders/numba/numba_csa2/numba/numba/targets/libgeneric.so")
 

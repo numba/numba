@@ -17,6 +17,7 @@ from numba.runtime import rtsys
 from numba.compiler_lock import require_global_compiler_lock
 
 import pdb
+import sys
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -1075,6 +1076,7 @@ class CSACodeLibrary(CodeLibrary):
         if config.DEBUG_CSA:
             print("CSACodeLibrary::get_asm_str", filename)
             print(self._final_module)
+            sys.stdout.flush()
         return str(self._codegen._tm.emit_assembly_file(self._final_module, filename))
 
 #class AOTCSACodegen(BaseCSACodegen):
