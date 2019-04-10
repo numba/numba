@@ -9,6 +9,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.itanium_mangler import mangle_type
 from numba.utils import IS_PY3
+from numba.numpy_support import version as numpy_version
 from .support import tag
 
 
@@ -316,9 +317,12 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         self.assertEqual(ty.offset('mango'), Ref.mango.offset)
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
-        # Is aligned
-        dtype = ty.dtype
-        self.assertTrue(dtype.isalignedstruct)
+        # Is aligned?
+        # NumPy version < 1.16 misalign complex-128 types to 16bytes,
+        # so don't check the dtype there.
+        if numpy_version >= (1, 16):
+            dtype = ty.dtype
+            self.assertTrue(dtype.isalignedstruct)
 
 
 class TestRecordDtype(unittest.TestCase):
