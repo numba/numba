@@ -9,6 +9,7 @@
 #include <pyctype.c>
 
 int64_t str2int(char* str, int64_t len, int64_t base);
+PyObject* _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base);
 
 MOD_INIT(string_conversion_ext) {
     PyObject *m;
@@ -21,7 +22,7 @@ MOD_INIT(string_conversion_ext) {
 
 int64_t str2int(char* str, int64_t len, int64_t base)
 {
-    return PyLong_AsLong(_PyLong_FromBytes(str, len, base));
+    return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
 }
 
 /* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L125 */
@@ -186,7 +187,7 @@ long_from_binary_base(const char **str, int base, PyLongObject **res)
  * If unsuccessful, NULL will be returned.
  */
 PyObject *
-PyLong_FromString(const char *str, char **pend, int base)
+PyLong_FromString_ext(const char *str, char **pend, int base)
 {
     int sign = 1, error_if_nonzero = 0;
     const char *start, *orig_str = str;
@@ -551,12 +552,12 @@ digit beyond the first.
  * Reports an invalid literal as a bytes object.
  */
 PyObject *
-_PyLong_FromBytes(const char *s, Py_ssize_t len, int base)
+_PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base)
 {
     PyObject *result, *strobj;
     char *end = NULL;
 
-    result = PyLong_FromString(s, &end, base);
+    result = PyLong_FromString_ext(s, &end, base);
     if (end == NULL || (result != NULL && end == s + len))
         return result;
     Py_XDECREF(result);
