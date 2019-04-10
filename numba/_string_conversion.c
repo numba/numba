@@ -1,4 +1,4 @@
-#include <Python.h>
+#include "_pymodule.h"
 #include <stdlib.h> 
 #include <float.h>
 #include <ctype.h>
@@ -10,17 +10,13 @@
 
 int64_t str2int(char* str, int64_t len, int64_t base);
 
-PyMODINIT_FUNC PyInit_string_conversion_ext(void) {
+MOD_INIT(string_conversion_ext) {
     PyObject *m;
-    static struct PyModuleDef moduledef = {
-            PyModuleDef_HEAD_INIT, "int_from_string_ext", "No docs", -1, NULL, };
-    m = PyModule_Create(&moduledef);
-    if (m == NULL)
-        return NULL;
-
-    PyObject_SetAttrString(m, "str2int",
-                            PyLong_FromVoidPtr((void*)(&str2int)));
-    return m;
+	MOD_DEF(m, "int_from_string_ext", "No docs", NULL)
+	if (m == NULL)
+		return MOD_ERROR_VAL;
+	PyModule_AddObject(m, "str2int", PyLong_FromVoidPtr(&str2int));
+	return MOD_SUCCESS_VAL(m);
 }
 
 int64_t str2int(char* str, int64_t len, int64_t base)
