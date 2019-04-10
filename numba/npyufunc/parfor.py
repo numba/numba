@@ -1122,9 +1122,9 @@ def _create_gufunc_for_parfor_body(
         if config.DEBUG_CSA:
             print("eachdim", eachdim)
         if targetctx.auto_parallel.csa:
-            for indent in range(eachdim + 1):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_start_spmd(" + str(eachdim) + ", 4)\n"
+#            for indent in range(eachdim + 1):
+#                gufunc_txt += "    "
+#            gufunc_txt += "numba.npyufunc.parfor.par_start_spmd(" + str(eachdim) + ", 4)\n"
             for indent in range(eachdim + 1):
                 gufunc_txt += "    "
             gufunc_txt += "numba.npyufunc.parfor.par_start_region(" + str(eachdim) + ")\n"
@@ -1177,9 +1177,9 @@ def _create_gufunc_for_parfor_body(
             for indent in range(eachdim + 1):
                 gufunc_txt += "    "
             gufunc_txt += "numba.npyufunc.parfor.par_end_region(" + str(eachdim) + ")\n"
-            for indent in range(eachdim + 1):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_end_spmd(" + str(eachdim) + ")\n"
+#            for indent in range(eachdim + 1):
+#                gufunc_txt += "    "
+#            gufunc_txt += "numba.npyufunc.parfor.par_end_spmd(" + str(eachdim) + ")\n"
             
     # Add assignments of reduction variables (for returning the value)
     redargstartdim = {}
@@ -1282,7 +1282,7 @@ def _create_gufunc_for_parfor_body(
                             elif callname[0] == 'par_start_spmd':
                                 pss_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
                                 pnum_threads = gufunc_ir._definitions[rhs.args[1].name][0].value
-                                pspmd_dict[pss_loc] = parallel_spmd_start(loc, pnum_threads)
+                                pspmd_dict[pss_loc] = parallel_spmd_start(pnum_threads, loc)
                                 new_block.append(pspmd_dict[pss_loc])
                                 continue
                             elif callname[0] == 'par_end_spmd':
