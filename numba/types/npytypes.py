@@ -84,7 +84,7 @@ class Record(Type):
             # align
             misaligned = offset % align
             if misaligned:
-                offset += size - misaligned
+                offset += align - misaligned
             fields.append((k, {'type': ty, 'offset': offset}))
             offset += size
         # Adjust sizeof structure

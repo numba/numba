@@ -293,6 +293,33 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         dtype = ty.dtype
         self.assertTrue(dtype.isalignedstruct)
 
+    def test_complex_struct(self):
+        class Complex(ctypes.Structure):
+            _fields_ = [
+                ('real', ctypes.c_double),
+                ('imag', ctypes.c_double),
+            ]
+
+        class Ref(ctypes.Structure):
+            _fields_ = [
+                ('apple', ctypes.c_int32),
+                ('mango', Complex),
+            ]
+
+        ty = types.Record.make_c_struct([
+            ('apple', types.intc),
+            ('mango', types.complex128),
+        ])
+        # Correct offsets
+        self.assertEqual(len(ty), 2)
+        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
+        self.assertEqual(ty.offset('mango'), Ref.mango.offset)
+        # Correct size
+        self.assertEqual(ty.size, ctypes.sizeof(Ref))
+        # Is aligned
+        dtype = ty.dtype
+        self.assertTrue(dtype.isalignedstruct)
+
 
 class TestRecordDtype(unittest.TestCase):
 
