@@ -28,6 +28,7 @@ int64_t str2int(char* str, int64_t len, int64_t base)
     return PyLong_AsLong(_PyLong_FromBytes(str, len, base));
 }
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L125 */
 static PyLongObject *
 long_normalize(PyLongObject *v)
 {
@@ -59,6 +60,7 @@ long_normalize(PyLongObject *v)
 
 static PyLongObject small_ints[NSMALLNEGINTS + NSMALLPOSINTS];
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L48 */
 static PyObject *
 get_small_int(sdigit ival)
 {
@@ -75,6 +77,7 @@ get_small_int(sdigit ival)
     return v;
 }
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L69 */
 static PyLongObject *
 maybe_small_long(PyLongObject *v)
 {
@@ -88,6 +91,7 @@ maybe_small_long(PyLongObject *v)
     return v;
 }
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L2184 */
 static int
 long_from_binary_base(const char **str, int base, PyLongObject **res)
 {
@@ -176,6 +180,7 @@ long_from_binary_base(const char **str, int base, PyLongObject **res)
 }
 
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L2279 */
 /* Parses an int from a bytestring. Leading and trailing whitespace will be
  * ignored.
  *
@@ -543,6 +548,7 @@ digit beyond the first.
     return NULL;
 }
 
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L2640 */
 /* Since PyLong_FromString doesn't have a length parameter,
  * check here for possible NULs in the string.
  *

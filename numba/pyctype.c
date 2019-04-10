@@ -1,3 +1,4 @@
+/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Python/pyctype.c */
 #include "Python.h"
 
 /* Our own locale-independent ctype.h-like macros */

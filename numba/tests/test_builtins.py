@@ -554,8 +554,7 @@ class TestBuiltins(TestCase):
 
     @tag('important')
     def test_int_npm(self):
-        with self.assertTypingError():
-            self.test_int(flags=no_pyobj_flags)
+        self.test_int(flags=no_pyobj_flags)
 
     def test_iter_next(self, flags=enable_pyobj_flags):
         pyfunc = iter_next_usecase
