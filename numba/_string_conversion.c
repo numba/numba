@@ -1,29 +1,8 @@
 #include "_pymodule.h"
-#include <stdlib.h> 
-#include <float.h>
-#include <ctype.h>
-#include <stddef.h>
-
 #include "longintrepr.h"
 
-#include <pyctype.c>
-
-int64_t str2int(char* str, int64_t len, int64_t base);
-PyObject* _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base);
-
-MOD_INIT(string_conversion_ext) {
-    PyObject *m;
-	MOD_DEF(m, "int_from_string_ext", "No docs", NULL)
-	if (m == NULL)
-		return MOD_ERROR_VAL;
-	PyModule_AddObject(m, "str2int", PyLong_FromVoidPtr(&str2int));
-	return MOD_SUCCESS_VAL(m);
-}
-
-int64_t str2int(char* str, int64_t len, int64_t base)
-{
-    return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
-}
+#include "pymacro.h"
+#include "pyctype.c"
 
 /* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L125 */
 static PyLongObject *
@@ -352,6 +331,7 @@ digit beyond the first.
         static double log_base_BASE[37] = {0.0e0,};
         static int convwidth_base[37] = {0,};
         static twodigits convmultmax_base[37] = {0,};
+        double fsize_z;
 
         if (log_base_BASE[base] == 0.0) {
             twodigits convmax = base;
@@ -403,7 +383,7 @@ digit beyond the first.
          * need to initialize z->ob_digit -- no slot is read up before
          * being stored into.
          */
-        double fsize_z = (double)digits * log_base_BASE[base] + 1.0;
+        fsize_z = (double)digits * log_base_BASE[base] + 1.0;
         if (fsize_z > (double)MAX_LONG_DIGITS) {
             /* The same exception as in _PyLong_New(). */
             PyErr_SetString(PyExc_OverflowError,
@@ -569,4 +549,18 @@ _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base)
         Py_DECREF(strobj);
     }
     return NULL;
+}
+
+long str2int(char* str, long len, int base)
+{
+    return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
+}
+
+MOD_INIT(string_conversion_ext) {
+    PyObject *m;
+    MOD_DEF(m, "int_from_string_ext", "No docs", NULL)
+        if (m == NULL)
+            return MOD_ERROR_VAL;
+    PyModule_AddObject(m, "str2int", PyLong_FromVoidPtr(&str2int));
+    return MOD_SUCCESS_VAL(m);
 }
