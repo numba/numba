@@ -721,9 +721,11 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
         # hash value -1 to indicate "need to compute hash"
         view_str.hash = context.get_constant(_Py_hash_t, -1)
         # get a pointer to start of slice data
-        byte_width = context.compile_internal(
-            builder, _kind_to_byte_width.py_func, types.intp(types.int32),
-            [in_str.kind])
+        bw_typ = context.typing_context.resolve_value_type(_kind_to_byte_width)
+        bw_sig = bw_typ.get_call_type(
+            context.typing_context, (types.int32,), {})
+        bw_impl = context.get_function(bw_typ, bw_sig)
+        byte_width = bw_impl(builder, (in_str.kind,))
         offset = builder.mul(start, byte_width)
         view_str.data = builder.gep(in_str.data, [offset])
         # Set parent pyobject to NULL
