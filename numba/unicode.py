@@ -31,6 +31,9 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 
+import llvmlite.binding as ll
+import string_conversion_ext
+
 # DATA MODEL
 
 
@@ -812,11 +815,9 @@ def iternext_unicode(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
-import llvmlite.binding as ll
-import string_conversion_ext
 ll.add_symbol('str2int', string_conversion_ext.str2int)
-
 _str2int = types.ExternalFunction("str2int", types.int64(types.voidptr, types.int64, types.int64))
+
 
 @overload(int)
 def int_overload(str, base=10):
