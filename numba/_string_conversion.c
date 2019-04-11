@@ -551,7 +551,7 @@ _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base)
     return NULL;
 }
 
-long str2int(char* str, long len, int base)
+signed long long str2int(char* str, int len, int base)
 {
     return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
 }
