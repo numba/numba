@@ -1403,3 +1403,61 @@ class TestDictInferred(TestCase):
         self.assertEqual(ct, 0)
         self.assertEqual(dict(d), {})
         self.assertEqual(n, 0)
+
+
+class TestNonCompiledInfer(TestCase):
+    def test_check_untyped_dict_ops(self):
+        # Check operation on untyped dictionary
+        d = Dict()
+        self.assertTrue(d._not_typed)
+        self.assertEqual(len(d), 0)
+        self.assertEqual(str(d), str({}))
+        self.assertEqual(list(iter(d)), [])
+        # Test __getitem__
+        with self.assertRaises(KeyError) as raises:
+            d[1]
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test __delitem__
+        with self.assertRaises(KeyError) as raises:
+            del d[1]
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test .pop
+        with self.assertRaises(KeyError):
+            d.pop(1)
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test .pop
+        self.assertIs(d.pop(1, None), None)
+        # Test .get
+        self.assertIs(d.get(1), None)
+        # Test .popitem
+        with self.assertRaises(KeyError) as raises:
+            d.popitem()
+        self.assertEqual(str(raises.exception),
+                         str(KeyError('dictionary is empty')))
+        # Test setdefault(k)
+        with self.assertRaises(TypeError) as raises:
+            d.setdefault(1)
+        self.assertEqual(
+            str(raises.exception),
+            str(TypeError('invalid operation on untyped dictionary')),
+        )
+        # Test __contains__
+        self.assertFalse(1 in d)
+        # It's untyped
+        self.assertTrue(d._not_typed)
+
+    def test_getitem(self):
+        # Test __getitem__
+        d = Dict()
+        d[1] = 2
+        # It's typed now
+        self.assertFalse(d._not_typed)
+        self.assertEqual(d[1], 2)
+
+    def test_setdefault(self):
+        # Test setdefault(k, d)
+        d = Dict()
+        d.setdefault(1, 2)
+        # It's typed now
+        self.assertFalse(d._not_typed)
+        self.assertEqual(d[1], 2)

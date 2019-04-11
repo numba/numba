@@ -5,7 +5,7 @@ from collections import MutableMapping
 
 from numba.types import DictType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
-from numba import njit, dictobject, types, cgutils, errors
+from numba import njit, dictobject, types, cgutils, errors, typeof
 from numba.extending import (
     overload_method,
     overload,
@@ -90,14 +90,20 @@ class Dict(MutableMapping):
 
     def __init__(self, **kwargs):
         """
+        For user, the constructor does not take any parameters.
+        The keyword arguments are for internally use.
+
         Parameters
         ----------
         dcttype : numba.types.DictType; keyword-only
-            The dictionary type
+            Used internally for the dictionary type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
         """
-        self._dict_type, self._opaque = self._parse_arg(**kwargs)
+        if kwargs:
+            self._dict_type, self._opaque = self._parse_arg(**kwargs)
+        else:
+            self._dict_type = None
 
     def _parse_arg(self, dcttype, meminfo=None):
         if not isinstance(dcttype, DictType):
@@ -111,25 +117,53 @@ class Dict(MutableMapping):
 
     @property
     def _numba_type_(self):
+        if self._dict_type is None:
+            raise TypeError("invalid operation on untyped dictionary")
         return self._dict_type
 
+    @property
+    def _not_typed(self):
+        """Returns True if the dictionary is not untyped.
+ht        """
+        return self._dict_type is None
+
+    def _initial_dict(self, key, value):
+        dcttype = types.DictType(typeof(key), typeof(value))
+        self._dict_type, self._opaque = self._parse_arg(dcttype)
+
     def __getitem__(self, key):
-        return _getitem(self, key)
+        if self._not_typed:
+            raise KeyError(key)
+        else:
+            return _getitem(self, key)
 
     def __setitem__(self, key, value):
+        if self._not_typed:
+            self._initial_dict(key, value)
         return _setitem(self, key, value)
 
     def __delitem__(self, key):
+        if self._not_typed:
+            raise KeyError(key)
         _delitem(self, key)
 
     def __iter__(self):
-        return iter(_iter(self))
+        if self._not_typed:
+            return iter(())
+        else:
+            return iter(_iter(self))
 
     def __len__(self):
-        return _length(self)
+        if self._not_typed:
+            return 0
+        else:
+            return _length(self)
 
     def __contains__(self, key):
-        return _contains(self, key)
+        if len(self) == 0:
+            return False
+        else:
+            return _contains(self, key)
 
     def __str__(self):
         buf = []
@@ -143,12 +177,19 @@ class Dict(MutableMapping):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
     def get(self, key, default=None):
+        if self._not_typed:
+            return default
         return _get(self, key, default)
 
     def setdefault(self, key, default=None):
+        if self._not_typed:
+            if default is not None:
+                self._initial_dict(key, default)
         return _setdefault(self, key, default)
 
     def popitem(self):
+        if len(self) == 0:
+            raise KeyError('dictionary is empty')
         return _popitem(self)
 
     def copy(self):
