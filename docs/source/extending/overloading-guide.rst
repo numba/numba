@@ -20,31 +20,8 @@ Annotated Template
 Here is an annotated template that outlines how the specific parts ought to
 looks like. This should give you an idea as to the structure required.
 
-.. code:: python
+.. literalinclude:: template.py
 
-    # Declare that function `eggs` is going to be overloaded (have a
-    # substitutable numba implementation)
-    @overload(eggs)
-
-    # Define the overload function with formal arguments
-    # these arguments must be matched in the inner function implementation
-    def jit_eggs(arg0, arg1, arg2, ...):
-
-         # This scope is for typing, access is available to the *type* of all
-         # arguments. This information can be used to change  the behaviour of the
-         # implementing function and check that the types are  actually supported
-         # by the implementation.
-
-        print(arg0) # this will show the Numba type of arg0
-
-        # This is the definition of the function that implements the `eggs` work. It
-        # does whatever algorithm is needed to implement eggs.
-        def eggs_impl(arg0, arg1, arg2, ...): # match arguments to jit_eggs above
-            # < Implementation goes here >
-            return # whatever needs to be returned by the algorithm
-
-        # return the implementation
-        return eggs_impl
 
 Concrete Example
 ================
