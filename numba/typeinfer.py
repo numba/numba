@@ -14,7 +14,6 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
-import logging
 import operator
 import contextlib
 import itertools
@@ -26,9 +25,6 @@ from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
-
-
-_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -142,7 +138,6 @@ class ConstraintNetwork(object):
         errors = []
         for constraint in self.constraints:
             loc = constraint.loc
-            _logger.debug("propagate: %r (%s)", constraint, loc)
             with typeinfer.warnings.catch_warnings(filename=loc.filename,
                                                    lineno=loc.line):
                 try:
@@ -577,8 +572,6 @@ class SetItemConstraint(object):
             targetty = typevars[self.target.name].getone()
             idxty = typevars[self.index.name].getone()
             valty = typevars[self.value.name].getone()
-
-            _logger.debug("setitem targetty=%s", targetty)
 
             if not targetty.is_precise() and isinstance(targetty, types.DictType):
                 typeinfer.add_type(
