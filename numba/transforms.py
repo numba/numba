@@ -43,8 +43,15 @@ def _extract_loop_lifting_candidates(cfg, blocks):
                         return False
         return True
 
-    return [loop for loop in find_top_level_loops(cfg)
-            if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop)]
+    # the check for cfg.entry_point in the loop.entries is to prevent a bad
+    # rewrite where a prelude for a lifted loop would get written into block -1
+    # if a loop entry were in block 0
+    candidates = []
+    for loop in find_top_level_loops(cfg):
+        if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
+            cfg.entry_point not in loop.entries):
+            candidates.append(loop)
+    return candidates
 
 
 def find_region_inout_vars(blocks, livemap, callfrom, returnto, body_block_ids):
@@ -86,10 +93,6 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     loops = _extract_loop_lifting_candidates(cfg, blocks)
     loopinfos = []
     for loop in loops:
-        # this is to prevent a bad rewrite where a prelude for a lifted
-        # loop would get written into block -1 if a loop entry were in block 0
-        if 0 in loop.entries:
-            continue
 
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
