@@ -1809,7 +1809,7 @@ def find_global_value(func_ir, var):
     raise GuardException
 
 
-def raise_on_unsupported_feature(func_ir):
+def raise_on_unsupported_feature(func_ir, typemap):
     """
     Helper function to walk IR and raise if it finds op codes
     that are unsupported. Could be extended to cover IR sequences
@@ -1866,6 +1866,26 @@ def raise_on_unsupported_feature(func_ir):
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
+
+            # this checks that np.<type> was called if view is called
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
+                    var = stmt.value.value.name
+                    if isinstance(typemap[var], types.Array):
+                        continue
+                    df = func_ir.get_definition(var)
+                    cn = guard(find_callname, func_ir, df)
+                    if cn and cn[1] == 'numpy':
+                        ty = getattr(numpy, cn[0])
+                        if (numpy.issubdtype(ty, numpy.integer) or
+                                numpy.issubdtype(ty, numpy.floating)):
+                            continue
+
+                    vardescr = '' if var.startswith('$') else "'{}' ".format(var)
+                    raise TypingError(
+                        "'view' can only be called on NumPy dtypes, "
+                        "try wrapping the variable {}with 'np.<dtype>()'".
+                        format(vardescr), loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

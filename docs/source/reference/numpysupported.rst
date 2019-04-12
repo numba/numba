@@ -53,9 +53,47 @@ The following scalar types and features are not supported:
 * **Half-precision and extended-precision** real and complex numbers
 * **Nested structured scalars** the fields of structured scalars may not contain other structured scalars
 
-The operations supported on scalar Numpy numbers are the same as on the
-equivalent built-in types such as ``int`` or ``float``.  You can use
-a type's constructor to convert from a different type or width.
+The operations supported on NumPy scalars are almost the same as on the
+equivalent built-in types such as ``int`` or ``float``.  You can use a type's
+constructor to convert from a different type or width. In addition you can use
+the ``view(np.<dtype>)`` method to bitcast all ``int`` and ``float`` types
+within the same width. However, you must define the scalar using a NumPy
+constructor within a jitted function. For example, the following will work:
+
+.. code:: pycon
+
+    >>> import numpy as np
+    >>> from numba import njit
+    >>> @njit
+    ... def bitcast():
+    ...     i = np.int64(-1)
+    ...     print(i.view(np.uint64))
+    ...
+    >>> bitcast()
+    18446744073709551615
+
+
+Whereas the following will not work:
+
+
+.. code:: pycon
+
+    >>> import numpy as np
+    >>> from numba import njit
+    >>> @njit
+    ... def bitcast(i):
+    ...     print(i.view(np.uint64))
+    ...
+    >>> bitcast(np.int64(-1))
+    ---------------------------------------------------------------------------
+    TypingError                               Traceback (most recent call last)
+        ...
+    TypingError: Failed in nopython mode pipeline (step: ensure IR is legal prior to lowering)
+    'view' can only be called on NumPy dtypes, try wrapping the variable with 'np.<dtype>()'
+
+    File "<ipython-input-3-fc40aaab84c4>", line 3:
+    def bitcast(i):
+        print(i.view(np.uint64))
 
 Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings.
