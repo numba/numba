@@ -4,13 +4,13 @@ from numba import unittest_support as unittest
 from numba.tests import support
 from numba.errors import TypingError
 
-import ham
-import spam # noqa - has side-effect, overload ham.set_to_x
+import mymodule
+import myjitmodule2 # noqa - has side-effect, overload mymodule.set_to_x
 
 
 @njit
 def wrap_set_to_x(arr, x):
-    ham.set_to_x(arr, x)
+    mymodule.set_to_x(arr, x)
 
 
 class TestSpam(support.TestCase):

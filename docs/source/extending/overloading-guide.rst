@@ -9,7 +9,7 @@ Guide to using ``@overload``
 As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to provide a Numba specific implementation
 that can be used in :term:`nopython mode` functions. A common used case of this
-is to implement Numpy functions so that they can be called in jitted code. In
+is to implement NumPy functions so that they can be called in jitted code. In
 this section will discuss what contributing such a function to Numba might
 entail. This should help you get started when attempting to contribute new
 overloaded functions to Numba.
@@ -31,7 +31,7 @@ a function  called ``set_to_x``:
 
 .. literalinclude:: mymodule.py
 
-Usually, you use this function to set all elements of a Numpy array to a
+Usually, you use this function to set all elements of a NumPy array to a
 specific value. Now, you do some profiling and you realize, that our function
 might be a bit slow.
 
@@ -162,15 +162,15 @@ There are a few more test-cases that should be implemented:
 * Single value array
 * Multidimensional arrays
 * Tests for ``int32`` and ``float32`` types
-* Exclude 64 bit tests on 32 bit machines
 
 Implementing ``overload`` for Numpy functions
 =============================================
 
-When contributing Numpy ``overload`` s to Numba, there are a few additional
-things to watch out for.
+Numba has strong support for NumPy because it provides jitable
+re-implementations of NumPy functions. In such cases ``overload`` is a very
+convenient option, however there are a few additional things to watch out for.
 
-* The  Numba implementation should match the Numpy implementation as closely as
+* The  Numba implementation should match the NumPy implementation as closely as
   feasible with respect to accepted types, arguments, raised exceptions and
   runtime (Big-O / Landau order).
 
@@ -178,7 +178,8 @@ things to watch out for.
   `documentation
   <http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
   The sources can be found in `docs/source/reference/numpysupported.rst``. Be
-  sure to mention any limitations that your implementation has.
+  sure to mention any limitations that your implementation has, e.g. no support
+  for the ``axis`` keyword.
 
 * When writing tests for exceptions, for example, when adding tests to
   ``numba/tests/test_np_functions.py`` you may encounter the following error
@@ -199,15 +200,14 @@ things to watch out for.
         AssertionError: 36 != 35
 
   This is caused because some exceptions leak references. Ideally, you will
-  place all exception testing in a separate test method and then add a call to 
+  place all exception testing in a separate test method and then add a call to
   ``self.disable_leak_check()`` to disable the leak-check.
 
-* For many of the functions that are available in Numpy, there are
-  corresponding methods defined on the numpy array type. For example, the
+* For many of the functions that are available in NumPy, there are
+  corresponding methods defined on the NumPy array type. For example, the
   function ``repeat`` is available in two flavours.
 
   .. code:: python
-
 
         import numpy as np
         a = np.arange(10)
@@ -218,7 +218,7 @@ things to watch out for.
 
   Once you have written the function implementation, you can easily use
   ``overload_method`` and reuse it, for example for the ``repeat`` function/method.
-  Just be sure to check that Numpy doesn't diverge in the implementations of
+  Just be sure to check that NumPy doesn't diverge in the implementations of
   it's function/method.
 
   .. code:: python
@@ -226,6 +226,7 @@ things to watch out for.
         @extending.overload_method(types.Array, 'repeat')
         def array_repeat(a, repeats):
             def array_repeat_impl(a, repeat):
+                # np.repeat has already been overloaded
                 return np.repeat(a, repeat)
 
             return array_repeat_impl
@@ -236,7 +237,7 @@ things to watch out for.
   This will make those functions available from within your jitted functions.
 
 * You can look at the Numba source code for inspiration, much of the overloaded
-  Numpy functions and methods are in ``numba/targets/arrayobj.py``. Good
+  NumPy functions and methods are in ``numba/targets/arrayobj.py``. Good
   implementations to look at are:
 
   * ``np.repeat``
