@@ -57,7 +57,6 @@ exclude =
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
-    numba/controlflow.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
@@ -303,7 +302,6 @@ exclude =
     numba/tests/test_dataflow.py
     numba/tests/test_tuples.py
     numba/tests/test_svml.py
-    numba/tests/test_flow_control.py
     numba/tests/test_array_iterators.py
     numba/tests/test_buffer_protocol.py
     numba/tests/test_casting.py
