@@ -163,6 +163,13 @@ There are a few more test-cases that should be implemented:
 * Multidimensional arrays
 * Tests for ``int32`` and ``float32`` types
 
+You can download the example code from above including tests here:
+
+* :download:`mymodule.py </extending/mymodule.py>`
+* :download:`myjitmodule.py </extending/myjitmodule.py>`
+* :download:`myjitmodule2.py </extending/myjitmodule2.py>`
+* :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
+
 Implementing ``overload`` for Numpy functions
 =============================================
 
