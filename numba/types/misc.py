@@ -477,17 +477,11 @@ class ContextManager(Callable, Phantom):
 class UnicodeType(IterableType):
 
     def __init__(self, name):
-        # this is updated on first call to `.iterator_type`.
-        self._iterator_type = None
         super(UnicodeType, self).__init__(name)
 
     @property
     def iterator_type(self):
-        # lazily grab the iterator_type, self needs to init before the
-        # iterator_type is instantiated else variety of pickle failures
-        if self._iterator_type is None:
-            self._iterator_type = UnicodeIteratorType(self)
-        return self._iterator_type
+        return UnicodeIteratorType(self)
 
 
 class UnicodeIteratorType(SimpleIteratorType):
