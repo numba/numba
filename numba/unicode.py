@@ -13,6 +13,7 @@ from numba.extending import (
     overload,
     overload_method,
     intrinsic,
+    register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
@@ -743,6 +744,45 @@ def unicode_concat(a, b):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
         return concat_impl
+
+
+@register_jitable
+def _repeat_impl(str_arg, mult_arg):
+    if str_arg == '' or mult_arg < 1:
+        return ''
+    elif mult_arg == 1:
+        return str_arg
+    else:
+        new_length = str_arg._length * mult_arg
+        new_kind = str_arg._kind
+        result = _empty_string(new_kind, new_length)
+        # make initial copy into result
+        len_a = len(str_arg)
+        _strncpy(result, 0, str_arg, 0, len_a)
+        # loop through powers of 2 for efficient copying
+        copy_size = len_a
+        while 2 * copy_size <= new_length:
+            _strncpy(result, copy_size, result, 0, copy_size)
+            copy_size *= 2
+
+        if not 2 * copy_size == new_length:
+            # if copy_size not an exact multiple it then needs
+            # to complete the rest of the copies
+            rest = new_length - copy_size
+            _strncpy(result, copy_size, result, copy_size - rest, rest)
+            return result
+
+
+@overload(operator.mul)
+def unicode_repeat(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
+        def wrap(a, b):
+            return _repeat_impl(a, b)
+        return wrap
+    elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
+        def wrap(a, b):
+            return _repeat_impl(b, a)
+        return wrap
 
 
 @lower_builtin('getiter', types.UnicodeType)
