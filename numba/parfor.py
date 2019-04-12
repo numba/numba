@@ -1322,7 +1322,7 @@ class PreParforPass(object):
                             if check is not None:
                                 g[check.name] = check.func
                             # inline the parallel implementation
-                            new_blocks = inline_closure_call(self.func_ir, g,
+                            new_blocks, _ = inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
                                             self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
