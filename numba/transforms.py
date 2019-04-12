@@ -49,7 +49,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
     candidates = []
     for loop in find_top_level_loops(cfg):
         if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
-            cfg.entry_point not in loop.entries):
+            cfg.entry_point() not in loop.entries):
             candidates.append(loop)
     return candidates
 
