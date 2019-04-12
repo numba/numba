@@ -11,6 +11,7 @@ from numba.compiler import compile_isolated, Flags
 from numba import jit, typeof, errors, types, utils, config, njit
 from .support import TestCase, tag
 
+_py34_or_later = sys.version_info[:2] >= (3, 4)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -541,6 +542,8 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_hex(flags=no_pyobj_flags)
 
+    @unittest.skipUnless(_py34_or_later,
+                        'available only for unicode, it requires Python>=3.4')
     def test_int(self, flags=enable_pyobj_flags):
         pyfunc = int_usecase
 
