@@ -9,10 +9,10 @@ Guide to using ``@overload``
 As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to provide a Numba specific implementation
 that can be used in :term:`nopython mode` functions. A common used case of this
-is to implement NumPy functions so that they can be called in jitted code. In
-this section will discuss what contributing such a function to Numba might
-entail. This should help you get started when attempting to contribute new
-overloaded functions to Numba.
+is to re-implement NumPy functions so that they can be called in ``jit``
+decorated code. In this section will discuss what contributing such a function
+to Numba might entail. This should help you get started when attempting to
+contribute new overloaded functions to Numba.
 
 Annotated Template
 ==================
@@ -46,9 +46,9 @@ might be a bit slow.
     In [4]: %timeit set_to_x(a, 1)
     5.88 ms ± 43.2 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
-And since you use this function, very often in your jitted functions, for
-example in ``myalgorithm``, you choose to use to ``overload`` in an attempt to
-accelerate things.
+And since you use this function, very often in your ``jit`` decorated
+functions, for example in ``myalgorithm``, you choose to use to ``overload`` in
+an attempt to accelerate things.
 
 .. code:: python
 
@@ -166,7 +166,7 @@ There are a few more test-cases that should be implemented:
 Implementing ``overload`` for Numpy functions
 =============================================
 
-Numba has strong support for NumPy because it provides jitable
+Numba has strong support for NumPy because it provides ``jit`` compatible
 re-implementations of NumPy functions. In such cases ``overload`` is a very
 convenient option, however there are a few additional things to watch out for.
 
@@ -234,7 +234,8 @@ convenient option, however there are a few additional things to watch out for.
 * If you need to create ancillary functions, for example to re-use a small
   utility function or to split your implementation across functions for the
   sake of readability, you can make use of the ``register_jitable`` decorator.
-  This will make those functions available from within your jitted functions.
+  This will make those functions available from within your ``jit`` decorated
+  functions.
 
 * You can look at the Numba source code for inspiration, much of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Good
