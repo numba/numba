@@ -763,50 +763,16 @@ class LiftedCode(_DispatcherBase):
 
             self._pre_compile(args, return_type, flags)
 
-            # This code is pessimistic and costly, but it is a not often trodden
-            # path and it will go away once IR is made immutable. The problem is
-            # that the rewrite passes can mutate the IR into a state that makes
-            # it possible for invalid tokens to be transmitted to lowering which
-            # then trickle through into LLVM IR and causes RuntimeErrors as LLVM
-            # cannot compile it. As a result the following approach is taken:
-            # 1. Create some new flags that copy the original ones but switch
-            #    off rewrites.
-            # 2. Compile with 1. to get a compile result
-            # 3. Try and compile another compile result but this time with the
-            #    original flags (and IR being rewritten).
-            # 4. If 3 was successful, use the result, else use 2.
-            # create flags with no rewrites
-            norw_flags = deepcopy(flags)
-            norw_flags.no_rewrites = True
-
-            def compile_local(the_ir, the_flags):
-                return compiler.compile_ir(typingctx=self.typingctx,
-                                        targetctx=self.targetctx,
-                                        func_ir=the_ir,
-                                        args=args, return_type=return_type,
-                                        flags=the_flags, locals=self.locals,
-                                        lifted=(),
-                                        lifted_from=self.lifted_from)
-
-            # compile with rewrites off, IR shouldn't be mutated irreparably
-            norw_cres = compile_local(self.func_ir.copy(), norw_flags)
-
-            # try and compile with rewrites on if no_rewrites was not set in the
-            # original flags, IR might get broken but we've got a CompileResult
-            # that's usable from above.
-            rw_cres = None
-            if flags.no_rewrites is False:
-                try:
-                    rw_cres = compile_local(self.func_ir.copy(), flags)
-                except Exception:
-                    pass
-
-            # if the rewrite variant of compilation worked, use it, else use
-            # the norewrites backup
-            if rw_cres is not None:
-                cres = rw_cres
-            else:
-                cres = norw_cres
+            # Clone IR to avoid (some of the) mutation in the rewrite pass
+            cloned_func_ir = self.func_ir.copy()
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                       targetctx=self.targetctx,
+                                       func_ir=cloned_func_ir,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from,
+                                       is_lifted_loop=True,)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
