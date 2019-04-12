@@ -26,14 +26,10 @@ looks like. This should give you an idea as to the structure required.
 Concrete Example
 ================
 
-Let's assume that you have a module called ``ham.py`` which implements a single
+Let's assume that you have a module called ``mymodule.py`` which implements a single
 a function  called ``set_to_x``:
 
-.. code:: python
-
-    def set_to_x(arr, x):
-        for i in len(arr):
-            arr[i] = x
+.. literalinclude:: mymodule.py
 
 Usually, you use this function to set all elements of a Numpy array to a
 specific value. Now, you do some profiling and you realize, that our function
@@ -43,7 +39,7 @@ might be a bit slow.
 
     In [1]: import numpy as np
 
-    In [2]: from ham import set_to_x
+    In [2]: from mymodule import set_to_x
 
     In [3]: a = np.arange(100000)
 
@@ -51,51 +47,22 @@ might be a bit slow.
     5.88 ms ± 43.2 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
 And since you use this function, very often in your jitted functions, for
-example in ``breakfast``, you choose to use to ``overload`` in an attempt to
+example in ``myalgorithm``, you choose to use to ``overload`` in an attempt to
 accelerate things.
 
 .. code:: python
 
     @njit
-    def breakfast(a, x):
+    def myalgorithm(a, x):
+        # algorithm code
         ham.set_to_x(a, x)
+        # algorithm code
 
 Inspired by the template above, your implementation might look something like:
 
-.. code:: python
-
-    # Numba imports
-    from numba import njit, types
-    from numba.extending import overload
+.. literalinclude:: myjitmodule.py
 
 
-    # Import the module, where you wish to overload something
-    import ham
-
-
-    # decorate with overload
-    @overload(ham.set_to_x)
-    def set_to_x_jit(arr, x):
-        # This is the *typing scope*. `arr` and `x` are not the array and the
-        # scalar itself but their types. So, you can implement type-checking
-        # logic here. In this case, we check that `arr` is a Numpy array and that
-        # `x` is an integer
-
-        if not isinstance(arr, types.Array):
-            return
-        if not isinstance(x, types.Integer):
-            return
-
-        # This is the *optimized* implementation
-        def set_to_x_impl(arr, x):
-            arr[:] = x
-
-        # Return this implementation itself
-        return set_to_x_impl
-
-    @njit
-    def breakfast(a, x):
-        ham.set_to_x(a, x)
 
 And when you go to profile it, you find yourself pleasantly surprised:
 
@@ -103,11 +70,11 @@ And when you go to profile it, you find yourself pleasantly surprised:
 
     In [1]: import numpy as np
 
-    In [2]: import spam
+    In [2]: import myjitmodule
 
     In [3]: a = np.arange(100000)
 
-    In [4]: %timeit spam.breakfast(a, 1)
+    In [4]: %timeit myjitmodule.myalgorithm(a, 1)
     17.6 µs ± 327 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)
 
 But of course, your implementation doesn't generalize to your colleagues
@@ -116,7 +83,7 @@ instead:
 
 .. code:: pycon
 
-    In [4]: spam.breakfast(a, 1.0)
+    In [4]: myjitmodule.myalgorithm(a, 1.0)
     TypingError: Failed in nopython mode pipeline (step: nopython frontend)
     Invalid use of Function(<function set_to_x at 0x11aea71e0>) with argument(s) of type(s): (array(int64, 1d, C), float64)
     * parameterized
@@ -126,22 +93,26 @@ instead:
         All templates rejected without literals.
     This error is usually caused by passing an argument of a type that is unsupported by the named function.
     [1] During: resolving callee type: Function(<function set_to_x at 0x11aea71e0>)
-    [2] During: typing of call at /Users/vhaenel/git/numba/spam.py (25)
+    [2] During: typing of call at /Users/vhaenel/git/numba/docs/source/extending/myjitmodule.py (25)
 
 
-    File "spam.py", line 25:
-    def breakfast(a, x):
-        ham.set_to_x(a, x)
+    File myjitmodule.py", line 25:
+    def myalgorithm(a, x):
+        # algorithm code
+        mymodule.set_to_x(a, x)
+        # algorithm code
 
 
 Providing multiple implementations and dispatching based on types
 =================================================================
 
-As you saw above, the overload ``set_to_x`` function doesn't accept floating
-point arguments. Let's extended the specification of the function as follows:
+As you saw above, the overload implementation for  ``set_to_x`` function
+doesn't accept floating point arguments. Let's extended the specification of
+the function as follows:
 
 * The numerical type of the array ``arr`` must match the numerical type of the
-  scalar ``x`` argument
+  scalar ``x`` argument, i.e. if ``arr`` is of type ``int64``, then ``x`` must
+  be of this type too.
 * Only integer and floating-point types are to be supported
 * For the floating-point type, no ``nan`` values are allowed in ``arr`` and if
   such a value is encountered, an appropriate ``ValueError`` should be raised.
@@ -150,50 +121,13 @@ point arguments. Let's extended the specification of the function as follows:
 
 The resulting implementation could look as follows:
 
-.. code:: python
-
-
-    @overload(ham.set_to_x)
-    def set_to_x_jit_v2(arr, x):
-
-        # implementation for integers
-        def set_to_x_impl_int(arr, x):
-            arr[:] = x
-
-        # implementation for floating-point
-        def set_to_x_impl_float(arr, x):
-            if np.any(np.isnan(arr)):
-                raise ValueError("no element of arr must be nan")
-            arr[:] = x
-
-        # check that it is an array
-        if isinstance(arr, types.Array):
-            # validate that arr and x have the same type
-            if arr.dtype == x:
-                if isinstance(x, types.Integer):
-                    # dispatch for integers
-                    return set_to_x_impl_int
-                elif isinstance(x, types.Float):
-                    # dispatch for float
-                    return set_to_x_impl_float
-                else:
-                    # must be some other type
-                    raise TypingError(
-                        "only integer and floating-point types allowed")
-            else:
-                # type mismatch
-                raise TypingError("the types of the input do not match")
-        elif isinstance(arr, types.BaseTuple):
-            # custom error for tuple as input
-            raise TypingError("tuple isn't allowed as input, use numpy arrays")
-
-        # fall through, None returned as no suitable implementation was found
+.. literalinclude:: myjitmodule2.py
 
 As you can see, the typing checking code has been increased significantly to
 match the new requirements. Also, multiple implementations---one for integers
 and one for floating-point---are provided. We check inside the typing scope
 which implementation should be used and also raise any custom error messages
-required. Importantly, the check for `nan` values is only present in the
+required. Importantly, the check for ``nan`` values is only present in the
 floating point implementation as this additional check creates a runtime
 overhead. This can easily be observed during profiling:
 
@@ -201,12 +135,12 @@ overhead. This can easily be observed during profiling:
 
     In [1]: a = np.arange(100, dtype=np.float64)
 
-    In [2]: %timeit breakfast(a, 1.0)
+    In [2]: %timeit myalgorithm(a, 1.0)
     473 ns ± 11.9 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)
 
     In [3]: a = np.arange(100)
 
-    In [4]: a = np.arange(100)
+    In [4]: %timeit myalgorithm(a, 1)
     237 ns ± 4.59 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)
 
 Writing Tests
@@ -219,67 +153,7 @@ example checks that all error cases are handled and that all raised exceptions
 are of the correct type and have the correct error message. When implementing
 tests cases for Numba, you should always use ``numba.tests.support.TestCase``.
 
-.. code:: python
-
-    import numpy as np
-    from numba import njit
-    from numba import unittest_support as unittest
-    from numba.tests import support
-    from numba.errors import TypingError
-
-    import ham
-    import spam # noqa - has side-effect, overload ham.set_to_x
-
-
-    @njit
-    def wrap_set_to_x(arr, x):
-        ham.set_to_x(arr, x)
-
-
-    class TestSpam(support.TestCase):
-
-        def test_int(self):
-            a = np.arange(10)
-            wrap_set_to_x(a, 1)
-            self.assertPreciseEqual(np.ones(10, dtype=np.int64), a)
-
-        def test_float(self):
-            a = np.arange(10, dtype=np.float64)
-            wrap_set_to_x(a, 1.0)
-            self.assertPreciseEqual(np.ones(10), a)
-
-        def test_float_exception_on_nan(self):
-            a = np.arange(10, dtype=np.float64)
-            a[0] = np.nan
-            with self.assertRaises(ValueError) as e:
-                wrap_set_to_x(a, 1.0)
-            self.assertIn("no element of arr must be nan",
-                        str(e.exception))
-
-        def test_type_mismatch(self):
-            a = np.arange(10)
-            with self.assertRaises(TypingError) as e:
-                wrap_set_to_x(a, 1.0)
-            self.assertIn("the types of the input do not match",
-                        str(e.exception))
-
-        def test_exception_on_unsupported_dtype(self):
-            a = np.arange(10, dtype=np.complex128)
-            with self.assertRaises(TypingError) as e:
-                wrap_set_to_x(a, np.complex128(1.0))
-            self.assertIn("only integer and floating-point types allowed",
-                        str(e.exception))
-
-        def test_exception_on_tuple(self):
-            a = (1, 2, 3)
-            with self.assertRaises(TypingError) as e:
-                wrap_set_to_x(a, 1)
-            self.assertIn("tuple isn't allowed as input, use numpy arrays",
-                        str(e.exception))
-
-
-    if __name__ == '__main__':
-        unittest.main()
+.. literalinclude:: test_myjitmodule2.py
 
 While is is a pretty descent test, it wouldn't be accepted into the Numba.
 There are a few more test-cases that should be implemented:
@@ -333,6 +207,7 @@ things to watch out for.
   function ``repeat`` is available in two flavours.
 
   .. code:: python
+
 
         import numpy as np
         a = np.arange(10)

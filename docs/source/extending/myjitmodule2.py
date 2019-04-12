@@ -3,25 +3,10 @@ from numba import njit, types
 from numba.extending import overload
 from numba.errors import TypingError
 
-
-import ham
-
-
-@overload(ham.set_to_x)
-def set_to_x_jit(arr, x):
-
-    if not isinstance(arr, types.Array):
-        return
-    if not isinstance(x, types.Integer):
-        return
-
-    def set_to_x_impl(arr, x):
-        arr[:] = x
-
-    return set_to_x_impl
+import mymodule
 
 
-@overload(ham.set_to_x)
+@overload(mymodule.set_to_x)
 def set_to_x_jit_v2(arr, x):
 
     # implementation for integers
@@ -57,7 +42,8 @@ def set_to_x_jit_v2(arr, x):
 
     # fall through, None returned as no suitable implementation was found
 
-
 @njit
-def breakfast(a, x):
-    ham.set_to_x(a, x)
+def myalgorithm(a, x):
+    # algorithm code
+    mymodule.set_to_x(a, x)
+    # algorithm code
