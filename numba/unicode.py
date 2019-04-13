@@ -519,8 +519,9 @@ def unicode_split(a, sep=None, maxsplit=-1):
             idx = 0
 
             if sep_len == 1 and maxsplit == -1:
+                sep_code_point = _get_code_point(sep, 0)
                 for idx in range(a_len):
-                    if _get_code_point(a, idx) == _get_code_point(sep, 0):
+                    if _get_code_point(a, idx) == sep_code_point:
                         parts.append(a[last:idx])
                         last = idx + 1
             else:
