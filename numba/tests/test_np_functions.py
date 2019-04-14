@@ -344,7 +344,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.arange(10), [3.5, 5.6, 6.2])
         self.assertIn(
-            'obj should be of type Integer',
+            'obj should be of Integer dtype',
             str(raises.exception)
         )
 
