@@ -305,7 +305,7 @@ packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
-install_requires = ['llvmlite>=0.28.0dev0', 'numpy']
+install_requires = ['llvmlite>=0.29.0dev0', 'numpy']
 if sys.version_info < (3, 4):
     install_requires.extend(['enum34', 'singledispatch'])
 if sys.version_info < (3, 3):

@@ -472,6 +472,21 @@ def remove_args(blocks):
     return
 
 
+def dead_code_elimination(func_ir, typemap=None, alias_map=None,
+                          arg_aliases=None):
+    """ Performs dead code elimination and leaves the IR in a valid state on
+    exit (ir.Dels are present in correct locations).
+    """
+    do_post_proc = False
+    while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
+                       alias_map, arg_aliases)):
+        do_post_proc = True
+
+    if do_post_proc:
+        post_proc = numba.postproc.PostProcessor(func_ir)
+        post_proc.run()
+
+
 def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
@@ -497,6 +512,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap)
+
     return removed
 
 
@@ -525,6 +541,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         for v in init_alias_lives:
             alias_lives |= alias_map[v]
         lives_n_aliases = lives | alias_lives | arg_aliases
+
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
@@ -532,6 +549,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             if stmt is None:
                 removed = True
                 continue
+
         # ignore assignments that their lhs is not live or lhs==rhs
         if isinstance(stmt, ir.Assign):
             lhs = stmt.target
@@ -544,6 +562,12 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
+
+        if isinstance(stmt, ir.Del):
+            if stmt.value not in lives:
+                removed = True
+                continue
+
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
             if name not in lives_n_aliases:
@@ -1401,7 +1425,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 if hasattr(callee_def.value, key):
                     value = getattr(callee_def.value, key)
                     break
-            if not value:
+            if not value or not isinstance(value, str):
                 raise GuardException
             attrs.append(value)
             def_val = callee_def.value
@@ -1785,7 +1809,7 @@ def find_global_value(func_ir, var):
     raise GuardException
 
 
-def raise_on_unsupported_feature(func_ir):
+def raise_on_unsupported_feature(func_ir, typemap):
     """
     Helper function to walk IR and raise if it finds op codes
     that are unsupported. Could be extended to cover IR sequences
@@ -1842,6 +1866,26 @@ def raise_on_unsupported_feature(func_ir):
                     found = getattr(val, '_name', "") == "gdb_internal"
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
+
+            # this checks that np.<type> was called if view is called
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
+                    var = stmt.value.value.name
+                    if isinstance(typemap[var], types.Array):
+                        continue
+                    df = func_ir.get_definition(var)
+                    cn = guard(find_callname, func_ir, df)
+                    if cn and cn[1] == 'numpy':
+                        ty = getattr(numpy, cn[0])
+                        if (numpy.issubdtype(ty, numpy.integer) or
+                                numpy.issubdtype(ty, numpy.floating)):
+                            continue
+
+                    vardescr = '' if var.startswith('$') else "'{}' ".format(var)
+                    raise TypingError(
+                        "'view' can only be called on NumPy dtypes, "
+                        "try wrapping the variable {}with 'np.<dtype>()'".
+                        format(vardescr), loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

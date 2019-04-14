@@ -5,16 +5,6 @@
 Supported NumPy features
 ========================
 
-.. note::
-   The vast majority of NumPy 1.16 behaviour is supported, however
-   ``datetime`` and ``timedelta`` use involving ``NaT`` matches the behaviour
-   present in earlier release. The ufunc suite has not been extending to
-   accommodate the two new time computation related additions present in NumPy
-   1.16. In addition the functions ``ediff1d`` and ``interp`` have known minor
-   issues in replicating outputs exactly when ``NaN``'s occur in certain input
-   patterns.
-
-
 One objective of Numba is having a seamless integration with `NumPy`_.
 NumPy arrays provide an efficient storage method for homogeneous sets of
 data.  NumPy dtypes provide type information useful when compiling, and
@@ -63,9 +53,47 @@ The following scalar types and features are not supported:
 * **Half-precision and extended-precision** real and complex numbers
 * **Nested structured scalars** the fields of structured scalars may not contain other structured scalars
 
-The operations supported on scalar Numpy numbers are the same as on the
-equivalent built-in types such as ``int`` or ``float``.  You can use
-a type's constructor to convert from a different type or width.
+The operations supported on NumPy scalars are almost the same as on the
+equivalent built-in types such as ``int`` or ``float``.  You can use a type's
+constructor to convert from a different type or width. In addition you can use
+the ``view(np.<dtype>)`` method to bitcast all ``int`` and ``float`` types
+within the same width. However, you must define the scalar using a NumPy
+constructor within a jitted function. For example, the following will work:
+
+.. code:: pycon
+
+    >>> import numpy as np
+    >>> from numba import njit
+    >>> @njit
+    ... def bitcast():
+    ...     i = np.int64(-1)
+    ...     print(i.view(np.uint64))
+    ...
+    >>> bitcast()
+    18446744073709551615
+
+
+Whereas the following will not work:
+
+
+.. code:: pycon
+
+    >>> import numpy as np
+    >>> from numba import njit
+    >>> @njit
+    ... def bitcast(i):
+    ...     print(i.view(np.uint64))
+    ...
+    >>> bitcast(np.int64(-1))
+    ---------------------------------------------------------------------------
+    TypingError                               Traceback (most recent call last)
+        ...
+    TypingError: Failed in nopython mode pipeline (step: ensure IR is legal prior to lowering)
+    'view' can only be called on NumPy dtypes, try wrapping the variable with 'np.<dtype>()'
+
+    File "<ipython-input-3-fc40aaab84c4>", line 3:
+    def bitcast(i):
+        print(i.view(np.uint64))
 
 Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings.
@@ -179,6 +207,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
@@ -300,9 +329,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
-* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10;
-  complex dtype handling per NumPy 1.12+; ``xp`` must be monotonically
-  increasing)
+* :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
@@ -312,6 +339,7 @@ The following top-level functions are supported:
 * :func:`numpy.partition` (only the 2 first arguments)
 * :func:`numpy.ptp` (only the first argument)
 * :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)

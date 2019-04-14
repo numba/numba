@@ -29,7 +29,6 @@ exclude =
     numba/smartarray.py
     numba/transforms.py
     numba/tracing.py
-    numba/config.py
     numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
@@ -58,12 +57,10 @@ exclude =
     numba/dummyarray.py
     numba/dataflow.py
     numba/special.py
-    numba/controlflow.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
     numba/extending.py
-    numba/npdatetime.py
     numba/decorators.py
     numba/typeconv/typeconv.py
     numba/typeconv/rules.py
@@ -88,7 +85,6 @@ exclude =
     numba/targets/cmathimpl.py
     numba/targets/tupleobj.py
     numba/targets/mathimpl.py
-    numba/targets/ufunc_db.py
     numba/targets/registry.py
     numba/targets/imputils.py
     numba/targets/builtins.py
@@ -108,7 +104,6 @@ exclude =
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
     numba/targets/iterators.py
-    numba/targets/arrayobj.py
     numba/targets/codegen.py
     numba/targets/polynomial.py
     numba/targets/mergesort.py
@@ -236,7 +231,6 @@ exclude =
     numba/tests/test_debug.py
     numba/tests/test_interproc.py
     numba/tests/test_typeconv.py
-    numba/tests/test_np_functions.py
     numba/tests/test_tracing.py
     numba/tests/usecases.py
     numba/tests/test_vectorization_type_inference.py
@@ -306,7 +300,6 @@ exclude =
     numba/tests/test_dataflow.py
     numba/tests/test_tuples.py
     numba/tests/test_svml.py
-    numba/tests/test_flow_control.py
     numba/tests/test_array_iterators.py
     numba/tests/test_buffer_protocol.py
     numba/tests/test_casting.py

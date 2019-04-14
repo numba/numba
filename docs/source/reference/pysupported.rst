@@ -166,6 +166,7 @@ The following functions, attributes and methods are currently supported:
 
 * ``len()``
 * ``+`` (concatenation of strings)
+* ``*`` (repetition of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``

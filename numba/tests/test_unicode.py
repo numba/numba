@@ -40,6 +40,10 @@ def concat_usecase(x, y):
     return x + y
 
 
+def repeat_usecase(x, y):
+    return x * y
+
+
 def inplace_concat_usecase(x, y):
     x += y
     return x
@@ -361,6 +365,23 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
+
+    def test_repeat(self, flags=no_pyobj_flags):
+        pyfunc = repeat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + ['']:
+            for b in (-1, 0, 1, 2, 3, 4, 5, 7, 8, 15, 70):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b))
+                self.assertEqual(pyfunc(b, a),
+                                 cfunc(b, a))
+
+    def test_repeat_exception_float(self):
+        self.disable_leak_check()
+        cfunc = njit(repeat_usecase)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hi', 2.5)
+        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
