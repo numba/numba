@@ -2384,7 +2384,7 @@ def np_delete(arr, obj):
             handler = np_delete_handler_isslice
         else:
             if not isinstance(obj.dtype, types.Integer):
-                raise TypingError('obj should be of type Integer')
+                raise TypingError('obj should be of Integer dtype')
             handler = np_delete_handler_isarray
 
         return np_delete_impl
