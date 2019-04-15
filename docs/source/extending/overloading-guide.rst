@@ -181,12 +181,28 @@ convenient option, however there are a few additional things to watch out for.
   feasible with respect to accepted types, arguments, raised exceptions and
   runtime (Big-O / Landau order).
 
+* When implementing supported argument types, bear in mind that---thanks to
+  duck typing---NumPy does tend to accept a multitude of argument types beyond
+  NumPy arrays such as scalar, list, tuple, set, iterator, generator etc.. So
+  you will need to account for that during type inference and subsequently as
+  part of the tests.
+
+* A NumPy function may return a scalar, array or a data structure
+  which matches one of its inputs - so you need to watch out for type
+  unification problems and dispatch to appropriate implementations.
+
 * If you are implementing a new function, you should always update the
   `documentation
   <http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
   The sources can be found in `docs/source/reference/numpysupported.rst``. Be
   sure to mention any limitations that your implementation has, e.g. no support
   for the ``axis`` keyword.
+
+* When writing tests for the functionality itself, it's useful to include
+  handling of non-finite values; arrays with different shapes and layouts;
+  complex inputs; scalar inputs; inputs with types for which support is not
+  documented (e.g. a function which the NumPy docs say requires a float or int
+  input might also 'work' if given a bool or complex input).
 
 * When writing tests for exceptions, for example, when adding tests to
   ``numba/tests/test_np_functions.py`` you may encounter the following error
@@ -244,6 +260,14 @@ convenient option, however there are a few additional things to watch out for.
   sake of readability, you can make use of the ``register_jitable`` decorator.
   This will make those functions available from within your ``jit`` decorated
   functions.
+
+* The Numba continuous integration (CI) setup  tests a wide variety of NumPy
+  versions---you'll sometimes be alerted to a change in behaviour back in some
+  previous NumPy version. If you can find supporting evidence in the NumPy
+  change log / repo, then you'll need to decide whether to branch logic and
+  attempt to replicate the logic across versions, or use a version gate (with
+  associated wording in the docs) to advertise that Numba replicates NumPy from
+  v1.11 onwards, for example.
 
 * You can look at the Numba source code for inspiration, much of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Good
