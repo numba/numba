@@ -21,10 +21,10 @@ Build and Packaging
 - ``MANIFEST.in`` - Distutils packaging instructions
 - ``requirements.txt`` - Pip package requirements, not used by conda
 - ``versioneer.py`` - Handles automatic setting of version in installed package from git tags
-- ``.flake8`` - Preferences for code formatting.  Files should be fixed and removed from exception list as time allows.
+- ``.flake8`` - Preferences for code formatting.  Files should be fixed and removed from the exception list as time allows.
 - ``buildscripts/condarecipe.local`` - Conda build recipe
-- ``buildscripts/remove_unwanted_files.py`` - Helper script to clean up files.  Used by build recipes.
-- ``buildscripts/condarecipe_clone_icc_rt`` - Recipe to build a standalone icc_rt package.  Not used anymore?
+- ``buildscripts/remove_unwanted_files.py`` - Helper script to remove files that will not compile under Python 2. Used by build recipes.
+- ``buildscripts/condarecipe_clone_icc_rt`` - Recipe to build a standalone icc_rt package.
 
 
 Continuous Integration
@@ -44,7 +44,7 @@ Documentation / Examples
 - ``LICENSE`` - License for Numba
 - ``LICENSES.third-party`` - License for third party code vendored into Numba
 - ``README.rst`` - README for repo, also uploaded to PyPI
-- ``CONTRIBUTING.md`` - Documentation on how to contribute to project (out of date, should remove in favor of docs)
+- ``CONTRIBUTING.md`` - Documentation on how to contribute to project (out of date, should be updated to point to Sphinx docs)
 - ``AUTHORS`` - List of Github users who have contributed PRs (out of date)
 - ``CHANGE_LOG`` - History of Numba releases, also directly embedded into Sphinx documentation
 - ``docs/`` - Documentation source
@@ -58,7 +58,7 @@ Documentation / Examples
 - ``examples/notebooks/`` - Example notebooks (re/move to numba-examples repo?)
 - ``benchmarks/`` - Benchmark scripts (re/move to numba-examples repo?)
 - ``tutorials/`` - Tutorial notebooks (definitely out of date, should remove and direct to external tutorials)
-- ``numba/scripts/generate_lower_listing.py`` - Dump all registered lowering implementations for reference documentation
+- ``numba/scripts/generate_lower_listing.py`` - Dump all registered implementations decorated with ``@lower*`` for reference documentation.  Currently misses implementations from the higher level extension API.
 
 
 
@@ -141,7 +141,7 @@ Compiled Extensions
 
 Numba uses a small amount of compiled C/C++ code for core functionality, like
 dispatching and type matching where performance matters, and it is more
-convient to encapsulate direct interaction with CPython APIs.
+convenient to encapsulate direct interaction with CPython APIs.
 
 - ``numba/_arraystruct.h`` - Struct for holding NumPy array attributes.  Used in helperlib and nrt.
 - ``numba/_helperlib.c`` - C functions required by Numba compiled code at runtime.  Linked into ahead-of-time compiled modules
@@ -162,7 +162,7 @@ Misc Support
 ''''''''''''
 
 - ``numba/_version.py`` - Updated by versioneer
-- ``numba/runtime`` - Global singleton that manages memory allocated on the heap by Numba-compiled functions
+- ``numba/runtime`` - Language runtime.  Currently manages reference-counted memory allocated on the heap by Numba-compiled functions
 - ``numba/ir_utils.py`` - Utility functions for working with Numba IR data structures 
 - ``numba/cgutils.py`` - Utility functions for generating common code patterns in LLVM IR
 - ``numba/six.py`` - Vendored subset of ``six`` package for Python 2 + 3 compatibility
@@ -171,7 +171,8 @@ Misc Support
 - ``numba/appdirs.py`` - Vendored package for determining application config directories on every platform
 - ``numba/compiler_lock.py`` - Global compiler lock because our usage of LLVM is not thread-safe
 - ``numba/special.py`` - Python stub implementations of special Numba functions (prange, gdb*)
-- ``numba/servicelib`` - Should be removed?
+- ``numba/servicelib/threadlocal.py`` - Thread-local stack used by GPU targets 
+- ``numba/servicelib/service.py`` - Should be removed? 
 - ``numba/itanium_mangler.py`` - Python implementation of Itanium C++ name mangling
 - ``numba/findlib.py`` - Helper function for locating shared libraries on all platforms
 - ``numba/debuginfo.py`` - Helper functions to construct LLVM IR debug info
@@ -350,10 +351,10 @@ CPU unit tests (GPU target unit tests listed in later sections
 - ``numba/_runtests.py`` - Implementation of custom test runner command line interface
 - ``numba/tests/test_*`` - Test cases
 - ``numba/tests/*_usecases.py`` - Python functions compiled by some unit tests
-- ``numba/tests/support.py`` - Helper functions for testin and special TestCase implementation
+- ``numba/tests/support.py`` - Helper functions for testing and special TestCase implementation
 - ``numba/tests/dummy_module.py`` - Module used in ``test_dispatcher.py``
 - ``numba/tests/npyufunc`` - ufunc / gufunc compiler tests
-- ``numba/unittest_support.py`` - Import instead of unittest to handle portability issues (no longer needed?)
+- ``numba/unittest_support.py`` - Import instead of unittest to handle portability issues
 - ``numba/testing`` - Support code for testing
 - ``numba/testing/ddt.py`` - decorators for test cases
 - ``numba/testing/loader.py`` - Find tests on disk 
@@ -417,7 +418,7 @@ Note that the CUDA target does reuse some parts of the CPU target.
 ROCm GPU Target
 '''''''''''''''
 
-Note that the ROCm target does reuse some parts of the CPU target, but
+Note that the ROCm target does reuse some parts of the CPU target, and
 duplicates some code from CUDA target.  A future refactoring could pull out
 the common subset of CUDA and ROCm.  An older version of this target was based
 on the HSA API, so "hsa" appears in many places.
@@ -433,7 +434,7 @@ on the HSA API, so "hsa" appears in many places.
 - ``numba/roc/hsadecl.py`` - Type signatures for ROCm device API in Python
 - ``numba/roc/hsaimpl.py`` - Implementations of ROCm device API
 - ``numba/roc/dispatch.py`` - ufunc/gufunc dispatcher
-- ``numba/roc/README.md`` - Notes on testing target (delete?)
+- ``numba/roc/README.md`` - Notes on testing target (should be deleted)
 - ``numba/roc/api.py`` - Host API for ROCm actions
 - ``numba/roc/gcn_occupancy.py`` - Heuristic to compute occupancy of kernels
 - ``numba/roc/stubs.py`` - Host stubs for device functions
