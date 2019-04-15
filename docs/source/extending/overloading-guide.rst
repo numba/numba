@@ -208,7 +208,8 @@ convenient option, however there are a few additional things to watch out for.
 
   This is caused because some exceptions leak references. Ideally, you will
   place all exception testing in a separate test method and then add a call to
-  ``self.disable_leak_check()`` to disable the leak-check.
+  ``self.disable_leak_check()`` to disable the leak-check. (Remember to inherit
+  from ``numba.tests.support.TestCase`` to make that available).
 
 * For many of the functions that are available in NumPy, there are
   corresponding methods defined on the NumPy array type. For example, the
