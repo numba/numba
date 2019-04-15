@@ -170,7 +170,7 @@ You can download the example code from above including tests here:
 * :download:`myjitmodule2.py </extending/myjitmodule2.py>`
 * :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
 
-Implementing ``overload`` for Numpy functions
+Implementing ``overload`` for NumPy functions
 =============================================
 
 Numba has strong support for NumPy because it provides ``jit`` compatible
