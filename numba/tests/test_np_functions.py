@@ -31,8 +31,10 @@ def angle1(x):
 def angle2(x, deg):
     return np.angle(x, deg)
 
+
 def delete(arr, obj):
     return np.delete(arr, obj)
+
 
 def diff1(a):
     return np.diff(a)
@@ -348,7 +350,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def arrays():
             # array, obj
-            # 
+            #
             # an array-like type
             yield [1, 2, 3, 4, 5], 3
             yield [1, 2, 3, 4, 5], [2, 3]
