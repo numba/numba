@@ -830,7 +830,15 @@ def impl_setitem(d, key, value):
             raise ValueError('key comparison failed')
         else:
             raise RuntimeError('dict.__setitem__ failed unexpectedly')
-    return impl
+
+    if d.is_precise():
+        return impl
+    else:
+        # Handle the imprecise case.
+        d = types.DictType(key, value)
+        keyty, valty = d.key_type, d.value_type
+        sig = typing.signature(types.void, d, keyty, valty)
+        return sig, impl
 
 
 @overload_method(types.DictType, 'get')
