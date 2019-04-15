@@ -981,7 +981,7 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # original flags, IR might get broken but we've got a CompileResult
         # that's usable from above.
         rw_cres = None
-        if flags.no_rewrites is False:
+        if not flags.no_rewrites:
             try:
                 rw_cres = compile_local(func_ir.copy(), flags)
             except Exception:
