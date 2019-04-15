@@ -27,12 +27,12 @@ Concrete Example
 ================
 
 Let's assume that you have a module called ``mymodule.py`` which implements a single
-a function  called ``set_to_x``:
+a function called ``set_to_x``:
 
 .. literalinclude:: mymodule.py
 
 Usually, you use this function to set all elements of a NumPy array to a
-specific value. Now, you do some profiling and you realize, that our function
+specific value. Now, you do some profiling and you realize that our function
 might be a bit slow.
 
 .. code:: pycon
@@ -77,7 +77,7 @@ And when you go to profile it, you find yourself pleasantly surprised:
     In [4]: %timeit myjitmodule.myalgorithm(a, 1)
     17.6 µs ± 327 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)
 
-But of course, your implementation doesn't generalize to your colleagues
+But of course, your implementation doesn't generalize to your colleague's
 use-case, who would like to use ``set_to_x`` with a floating point number
 instead:
 
@@ -106,14 +106,14 @@ instead:
 Providing multiple implementations and dispatching based on types
 =================================================================
 
-As you saw above, the overload implementation for  ``set_to_x`` function
-doesn't accept floating point arguments. Let's extended the specification of
+As you saw above, the overload implementation for ``set_to_x`` function
+doesn't accept floating-point arguments. Let's extended the specification of
 the function as follows:
 
 * The numerical type of the array ``arr`` must match the numerical type of the
   scalar ``x`` argument, i.e. if ``arr`` is of type ``int64``, then ``x`` must
   be of this type too.
-* Only integer and floating-point types are to be supported
+* Only integer and floating-point types are to be supported.
 * For the floating-point type, no ``nan`` values are allowed in ``arr`` and if
   such a value is encountered, an appropriate ``ValueError`` should be raised.
 * If a tuple is used instead of an array, a custom error message with a hint
@@ -155,7 +155,7 @@ tests cases for Numba, you should always use ``numba.tests.support.TestCase``.
 
 .. literalinclude:: test_myjitmodule2.py
 
-While is is a pretty descent test, it wouldn't be accepted into the Numba.
+While it is a pretty decent test, it wouldn't be accepted into Numba.
 There are a few more test-cases that should be implemented:
 
 * Empty array
@@ -177,7 +177,7 @@ Numba has strong support for NumPy because it provides ``jit`` compatible
 re-implementations of NumPy functions. In such cases ``overload`` is a very
 convenient option, however there are a few additional things to watch out for.
 
-* The  Numba implementation should match the NumPy implementation as closely as
+* The Numba implementation should match the NumPy implementation as closely as
   feasible with respect to accepted types, arguments, raised exceptions and
   runtime (Big-O / Landau order).
 
@@ -226,7 +226,7 @@ convenient option, however there are a few additional things to watch out for.
   Once you have written the function implementation, you can easily use
   ``overload_method`` and reuse it, for example for the ``repeat`` function/method.
   Just be sure to check that NumPy doesn't diverge in the implementations of
-  it's function/method.
+  its function/method.
 
   .. code:: python
 
