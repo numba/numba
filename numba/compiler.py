@@ -965,8 +965,7 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # 4. If 3 was successful, use the result, else use 2.
 
         # create flags with no rewrites
-        from copy import deepcopy
-        norw_flags = deepcopy(flags)
+        norw_flags = copy.deepcopy(flags)
         norw_flags.no_rewrites = True
 
         def compile_local(the_ir, the_flags):
