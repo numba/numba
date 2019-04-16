@@ -36,6 +36,10 @@ def getitem_usecase(x, i):
     return x[i]
 
 
+def zfill_usecase(x, y):
+    return x.zfill(y)
+
+
 def concat_usecase(x, y):
     return x + y
 
@@ -154,6 +158,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
 UNICODE_EXAMPLES = [
     'ascii',
     '12345',
+    '-12345',
     '1234567890',
     '¡Y tú quién te crees?',
     '🐍⚡',
@@ -357,6 +362,16 @@ class TestUnicode(BaseTest):
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
+    
+    def test_zfill(self):
+        pyfunc = zfill_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            for width in range(0, 20):
+                self.assertEqual(pyfunc(s, width), cfunc(s, width))
+
+    
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase
         cfunc = njit(pyfunc)

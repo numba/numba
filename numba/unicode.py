@@ -622,6 +622,29 @@ def unicode_join(sep, parts):
         return join_str_impl
 
 
+@overload_method(types.UnicodeType, 'zfill')
+def unicode_zfill(str_to_fill, width_to_fill):
+    def zfill_impl(fstr, fwidth):
+
+        fstr_len = len(fstr)
+
+        if fwidth <= fstr_len or fstr_len == 0:
+            return fstr;
+
+        extra_zero = fwidth - fstr_len
+        first_char = fstr[0:1]
+        fill_line = '0' * extra_zero
+        
+        if first_char == '+' or first_char == '-':
+            newstr = first_char + fill_line + fstr[1:]
+        else:  
+            newstr = fill_line + fstr
+
+        return newstr
+
+    return zfill_impl
+
+
 # String creation
 
 @njit
