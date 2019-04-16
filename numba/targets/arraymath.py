@@ -2782,6 +2782,9 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+np_delete_handler_isslice = register_jitable(lambda x : x)
+np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
+
 @overload(np.delete)
 def np_delete(arr, obj):
     # Implementation based on numpy
@@ -2816,11 +2819,11 @@ def np_delete(arr, obj):
 
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
-            handler = register_jitable(lambda x : x)
+            handler = np_delete_handler_isslice 
         else:
             if not isinstance(obj.dtype, types.Integer):
                 raise TypingError('obj should be of Integer dtype')
-            handler = register_jitable(lambda x : np.asarray(x))
+            handler = np_delete_handler_isarray 
 
         return np_delete_impl
     else: # scalar value
