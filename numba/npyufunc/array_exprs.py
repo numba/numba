@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import operator
 
-from .. import compiler, ir, types, rewrites, six, utils
+from .. import compiler, ir, types, rewrites, six, utils, errors
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -381,6 +381,14 @@ def _lower_array_expr(lowerer, expr):
     for argty in outer_sig.args:
         if isinstance(argty, types.Array):
             inner_sig_args.append(argty.dtype)
+        elif isinstance(argty, types.Optional):
+            msg = ("The use of an Optional type in an array expression has "
+                   "been detected, this is not supported as NumPy ufunc's have "
+                   "no means of handling the concept 'value or None'.\n\n"
+                   "This error occurred whilst trying to compile an array "
+                   "expression over: {}\nwith signature:\n{}")
+            msg = msg.format(expr.expr[0], outer_sig)
+            raise errors.UnsupportedError(msg, expr.loc)
         else:
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)

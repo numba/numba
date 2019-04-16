@@ -4,7 +4,7 @@ import gc
 
 import numpy as np
 
-from numba import njit, vectorize
+from numba import njit, vectorize, errors, types
 from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir, utils
 from numba.compiler import Pipeline, _PipelineManager, Flags
@@ -467,6 +467,26 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         res = buf.getvalue()
         self.assertIn("#   u.1 = ", res)
         self.assertIn("#   u.2 = ", res)
+
+    def test_optional_rejected(self):
+        """
+        Optional types cannot be used in ufuncs (issue #3972)
+        """
+        def f(x, y):
+            return x + y
+
+        msg = ("The use of an Optional type in an array expression has been "
+               "detected")
+
+        # test optional scalar and optional array
+        sigs = [(types.float64[:], types.optional(types.float64)),
+                (types.float64[:], types.optional(types.float64[:])),]
+
+        for s in sigs:
+            with self.assertRaises(errors.UnsupportedError) as e:
+                njit(s)(f)
+
+            self.assertIn(msg, str(e.exception))
 
 
 class TestSemantics(MemoryLeakMixin, unittest.TestCase):
