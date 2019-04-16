@@ -551,14 +551,14 @@ _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base)
     return NULL;
 }
 
-signed long long str2int(char* str, int len, int base)
+long str2int(char* str, Py_ssize_t len, Py_ssize_t base)
 {
     return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
 }
 
 MOD_INIT(string_conversion_ext) {
     PyObject *m;
-    MOD_DEF(m, "int_from_string_ext", "No docs", NULL)
+    MOD_DEF(m, "string_conversion_ext", "No docs", NULL)
         if (m == NULL)
             return MOD_ERROR_VAL;
     PyModule_AddObject(m, "str2int", PyLong_FromVoidPtr(&str2int));

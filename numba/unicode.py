@@ -816,7 +816,7 @@ def iternext_unicode(context, builder, sig, args, result):
 
 
 ll.add_symbol('str2int', string_conversion_ext.str2int)
-_str2int = types.ExternalFunction("str2int", types.int64(types.voidptr, types.int64, types.int64))
+_str2int = types.ExternalFunction("str2int", types.long_(types.voidptr, types.intc, types.intc))
 
 
 @overload(int)
