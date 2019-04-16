@@ -502,15 +502,26 @@ def iterable_max(iterable):
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
     which should be overloaded by type implementator.
+
+    For example:
+
+        d = Dict()
+
+    `d` will be typed as `TypeRef[DictType]()`.  Thus, it will call into this
+    implementation.  We will need to redirect the lowering to a function
+    named ``numba_typeref_ctor``.
     """
     cls = sig.return_type
 
     def call_ctor(cls, *args):
         return numba_typeref_ctor(cls, *args)
 
+    # Pack arguments into a tuple for `*args`
     ctor_args = types.Tuple.from_types(sig.args)
+    # Make signature T(T, *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
-    args = (context.get_dummy_value(),
+
+    args = (context.get_dummy_value(),   # Type object has no runtime repr.
             context.make_tuple(builder, sig.args[1], args))
 
     return context.compile_internal(builder, call_ctor, sig, args)

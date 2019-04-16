@@ -284,12 +284,14 @@ def typeddict_call(context):
 @overload(numba_typeref_ctor)
 def impl_numba_typeref_ctor(cls):
     """
-    Defines ``Dict()``, the typed-inferred version of the dictionary ctor.
+    Defines ``Dict()``, the type-inferred version of the dictionary ctor.
 
     Parameters
     ----------
     cls : TypeRef
         Expecting a TypeRef of a precise DictType.
+
+    See also: `redirect_type_ctor` in numba/target/bulitins.py
     """
     dict_ty = cls.instance_type
     if not isinstance(dict_ty, types.DictType):
