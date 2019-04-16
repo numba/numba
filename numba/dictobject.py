@@ -832,11 +832,14 @@ def impl_setitem(d, key, value):
             raise RuntimeError('dict.__setitem__ failed unexpectedly')
 
     if d.is_precise():
+        # Handle the precise case.
         return impl
     else:
         # Handle the imprecise case.
-        d = types.DictType(key, value)
+        d = d.refine(key, value)
+        # Re-bind the key type and value type to match the arguments.
         keyty, valty = d.key_type, d.value_type
+        # Create the signature that we wanted this impl to have.
         sig = typing.signature(types.void, d, keyty, valty)
         return sig, impl
 

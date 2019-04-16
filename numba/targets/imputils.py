@@ -462,4 +462,4 @@ def numba_typeref_ctor(*args, **kwargs):
     """A stub for use internally by numba during when a call is emitted
     on a TypeRef.
     """
-
+    raise NotImplementedError("The function is not to be executed.")

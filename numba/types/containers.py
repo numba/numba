@@ -470,10 +470,10 @@ class DictType(IterableType):
         super(DictType, self).__init__(name)
 
     def is_precise(self):
-        return not any([
+        return not any((
             isinstance(self.key_type, Undefined),
             isinstance(self.value_type, Undefined),
-        ])
+        ))
 
     @property
     def iterator_type(self):
@@ -481,7 +481,11 @@ class DictType(IterableType):
 
     @classmethod
     def refine(cls, keyty, valty):
-        return cls(keyty, valty)
+        """Refine to a precise dictionary type
+        """
+        res = cls(keyty, valty)
+        res.is_precise()
+        return res
 
     def unify(self, typingctx, other):
         """

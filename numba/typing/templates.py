@@ -421,44 +421,50 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        sig = None
-        cache_key = self.context, tuple(args), tuple(kws.items())
-        try:
-            sig, disp = self._impl_cache[cache_key]
-        except KeyError:
-            # Get the overload implementation for the given types
-            pyfunc = self._overload_func(*args, **kws)
-
-            if pyfunc is None:
-                # No implementation => fail typing
-                # self._impl_cache[cache_key] = None
-                return
-            if isinstance(pyfunc, tuple):
-                sig, pyfunc = pyfunc
-                cache_key = None
-            # check that the typing and impl sigs match up
-            if self._strict:
-                self._validate_sigs(self._overload_func, pyfunc)
-            from numba import jit
-            jitdecor = jit(nopython=True, **self._jit_options)
-            disp = jitdecor(pyfunc)
-            if cache_key is not None:
-                self._impl_cache[cache_key] = sig, disp
-        else:
-            if disp is None:
-                return
-
+        disp, args = self._load_impl(args, kws)
+        if disp is None:
+            return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        if sig is None:
-            sig = disp_type.get_call_type(self.context, args, kws)
-            # Store the compiled overload for use in the lowering phase
-            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
-        else:
-            sig = disp_type.get_call_type(self.context, sig.args, {})
-            # Store the compiled overload for use in the lowering phase
-            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        sig = disp_type.get_call_type(self.context, args, kws)
+        # Store the compiled overload for use in the lowering phase
+        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
+
+    def _load_impl(self, args, kws):
+        """Load implementation given the argument types
+        """
+        cache_key = self.context, tuple(args), tuple(kws.items())
+        try:
+            impl, args = self._impl_cache[cache_key]
+        except KeyError:
+            impl, args = self._build_impl(cache_key, args, kws)
+        return impl, args
+
+    def _build_impl(self, cache_key, args, kws):
+        """Build the implementation
+        """
+        from numba import jit
+
+        # Get the overload implementation for the given types
+        pyfunc = self._overload_func(*args, **kws)
+        if pyfunc is None:
+            # No implementation => fail typing
+            self._impl_cache[cache_key] = None, None
+            return None, None
+        if isinstance(pyfunc, tuple):
+            sig, pyfunc = pyfunc
+            args = sig.args
+            cache_key = None            # don't cache
+        # check that the typing and impl sigs match up
+        if self._strict:
+            self._validate_sigs(self._overload_func, pyfunc)
+        # Make dispatcher
+        jitdecor = jit(nopython=True, **self._jit_options)
+        disp = jitdecor(pyfunc)
+        if cache_key is not None:
+            self._impl_cache[cache_key] = disp, args
+        return disp, args
 
     def get_impl_key(self, sig):
         """

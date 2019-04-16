@@ -491,9 +491,11 @@ class CallConstraint(object):
         """Add this expression to the refinemap base on the type of target_type
         """
         target_type = typevars[self.target].getone()
+        # Array
         if (isinstance(target_type, types.Array)
                 and isinstance(sig.return_type.dtype, types.Undefined)):
             typeinfer.refine_map[self.target] = self
+        # DictType
         if isinstance(target_type, types.DictType) and not target_type.is_precise():
             typeinfer.refine_map[self.target] = self
 
@@ -561,7 +563,9 @@ class GetAttrConstraint(object):
 
 
 class SetItemRefinement(object):
-
+    """A mixin class to provide the common refinement logic in setitem
+    and static setitem.
+    """
     def _refine_target_type(self, typeinfer, targetty, idxty, valty, sig):
         """Refine the target-type given the known index type and value type.
         """
@@ -631,7 +635,6 @@ class StaticSetItemConstraint(SetItemRefinement):
             if sig is None:
                 raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
                                   (targetty, self.index, valty), loc=self.loc)
-
             self.signature = sig
             self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
