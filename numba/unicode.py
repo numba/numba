@@ -629,15 +629,15 @@ def unicode_zfill(str_to_fill, width_to_fill):
         fstr_len = len(fstr)
 
         if fwidth <= fstr_len or fstr_len == 0:
-            return fstr;
+            return fstr
 
         extra_zero = fwidth - fstr_len
         first_char = fstr[0:1]
         fill_line = '0' * extra_zero
-        
+
         if first_char == '+' or first_char == '-':
             newstr = first_char + fill_line + fstr[1:]
-        else:  
+        else:
             newstr = fill_line + fstr
 
         return newstr
