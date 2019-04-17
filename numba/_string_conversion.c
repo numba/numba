@@ -551,9 +551,48 @@ _PyLong_FromBytes_ext(const char *s, Py_ssize_t len, int base)
     return NULL;
 }
 
+/* from https://github.com/python/cpython/blob/31e8d69bfe7cf5d4ffe0967cb225d2a8a229cc97/Objects/floatobject.c */
+static PyObject *
+float_from_string_inner(const char *s, Py_ssize_t len, void *obj)
+{
+    double x;
+    const char *end;
+    const char *last = s + len;
+    /* strip space */
+    while (s < last && Py_ISSPACE(*s)) {
+        s++;
+    }
+
+    while (s < last - 1 && Py_ISSPACE(last[-1])) {
+        last--;
+    }
+
+    /* We don't care about overflow or underflow.  If the platform
+     * supports them, infinities and signed zeroes (on underflow) are
+     * fine. */
+    x = PyOS_string_to_double(s, (char **)&end, NULL);
+    if (end != last) {
+        PyErr_Format(PyExc_ValueError,
+            "could not convert string to float: "
+            "%R", obj);
+        return NULL;
+    }
+    else if (x == -1.0 && PyErr_Occurred()) {
+        return NULL;
+    }
+    else {
+        return PyFloat_FromDouble(x);
+    }
+}
+
 long str2int(char* str, Py_ssize_t len, Py_ssize_t base)
 {
     return PyLong_AsLong(_PyLong_FromBytes_ext(str, len, base));
+}
+
+double str2float(char* str, Py_ssize_t len)
+{
+    return PyFloat_AsDouble(float_from_string_inner(str, len, str));
 }
 
 MOD_INIT(string_conversion_ext) {
@@ -562,5 +601,6 @@ MOD_INIT(string_conversion_ext) {
         if (m == NULL)
             return MOD_ERROR_VAL;
     PyModule_AddObject(m, "str2int", PyLong_FromVoidPtr(&str2int));
+    PyModule_AddObject(m, "str2float", PyLong_FromVoidPtr(&str2float));
     return MOD_SUCCESS_VAL(m);
 }

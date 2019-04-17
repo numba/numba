@@ -477,8 +477,7 @@ class TestBuiltins(TestCase):
 
     @tag('important')
     def test_float_npm(self):
-        with self.assertTypingError():
-            self.test_float(flags=no_pyobj_flags)
+        self.test_float(flags=no_pyobj_flags)
 
     def test_format(self, flags=enable_pyobj_flags):
         pyfunc = format_usecase

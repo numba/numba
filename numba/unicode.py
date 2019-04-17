@@ -817,9 +817,16 @@ def iternext_unicode(context, builder, sig, args, result):
 
 ll.add_symbol('str2int', string_conversion_ext.str2int)
 _str2int = types.ExternalFunction("str2int", types.long_(types.voidptr, types.intc, types.intc))
+ll.add_symbol('str2float', string_conversion_ext.str2float)
+_str2float = types.ExternalFunction("str2float", types.double(types.voidptr, types.intc))
 
 
 @overload(int)
 def int_overload(str, base=10):
     if isinstance(str, types.UnicodeType):
         return lambda str, base=10: _str2int(str._data, str._length, base)
+
+@overload(float)
+def float_overload(str):
+    if isinstance(str, types.UnicodeType):
+        return lambda str: _str2float(str._data, str._length)
