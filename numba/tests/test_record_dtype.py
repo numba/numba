@@ -319,10 +319,18 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
         # NumPy version < 1.16 misalign complex-128 types to 16bytes,
-        # so don't check the dtype there.
         if numpy_version >= (1, 16):
             dtype = ty.dtype
             self.assertTrue(dtype.isalignedstruct)
+        else:
+            with self.assertRaises(ValueError) as raises:
+                dtype = ty.dtype
+            self.assertIn(
+                ("NumPy is using a different alignment (16) "
+                 "than Numba/LLVM (8) for complex128. "
+                 "This is likely a numpy bug."),
+                str(raises.exception),
+            )
 
 
 class TestRecordDtype(unittest.TestCase):
