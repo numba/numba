@@ -826,6 +826,7 @@ def int_overload(str, base=10):
     if isinstance(str, types.UnicodeType):
         return lambda str, base=10: _str2int(str._data, str._length, base)
 
+
 @overload(float)
 def float_overload(str):
     if isinstance(str, types.UnicodeType):

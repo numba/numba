@@ -457,6 +457,8 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_filter(flags=no_pyobj_flags)
 
+    @unittest.skipUnless(_py34_or_later,
+                        'available only for unicode, it requires Python>=3.4')
     def test_float(self, flags=enable_pyobj_flags):
         pyfunc = float_usecase
 
