@@ -124,7 +124,7 @@ class Dict(MutableMapping):
     @property
     def _typed(self):
         """Returns True if the dictionary is not untyped.
-ht        """
+        """
         return self._dict_type is not None
 
     def _initialise_dict(self, key, value):
