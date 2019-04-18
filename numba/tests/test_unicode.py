@@ -376,7 +376,11 @@ class TestUnicode(BaseTest):
             '',
             '¡Y tú crs?',
             '🐍⚡',
+            '+🐍⚡',
+            '-🐍⚡',
             '大眼，小手。',
+            '+大眼，小手。',
+            '-大眼，小手。',
         ]
 
         with self.assertRaises(TypingError) as raises:
