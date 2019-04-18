@@ -9,6 +9,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.itanium_mangler import mangle_type
 from numba.utils import IS_PY3
+from numba.config import IS_WIN32
 from numba.numpy_support import version as numpy_version
 from .support import tag
 
@@ -318,8 +319,9 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
-        # NumPy version < 1.16 misalign complex-128 types to 16bytes,
-        if numpy_version >= (1, 16):
+        # NumPy version < 1.16 misalign complex-128 types to 16bytes.
+        # (it seems to align on windows?!)
+        if numpy_version >= (1, 16) or IS_WIN32:
             dtype = ty.dtype
             self.assertTrue(dtype.isalignedstruct)
         else:
