@@ -1319,6 +1319,22 @@ class TestDictInferred(TestCase):
             str(raises.exception),
         )
 
+    def test_conflicting_key_type(self):
+        @njit
+        def foo(k, h, v):
+            d = Dict()
+            d[k] = v
+            d[h] = v
+            return d
+
+        k, h, v = 123, 123.1, 321
+        with self.assertRaises(TypingError) as raises:
+            foo(k, h, v)
+        self.assertIn(
+            'cannot safely cast float64 to {}'.format(typeof(v)),
+            str(raises.exception),
+        )
+
     def test_ifelse_filled_both_branches(self):
         @njit
         def foo(k, v):
@@ -1404,12 +1420,34 @@ class TestDictInferred(TestCase):
         self.assertEqual(dict(d), {})
         self.assertEqual(n, 0)
 
+    def test_dict_of_dict(self):
+        @njit
+        def foo(k1, k2, v):
+            d = Dict()
+            z1 = Dict()
+            z1[k1 + 1] = v + k1
+            z2 = Dict()
+            z2[k2 + 2] = v + k2
+            d[k1] = z1
+            d[k2] = z2
+            return d
+
+        k1, k2, v = 100, 200, 321
+        d = foo(k1, k2, v)
+        self.assertEqual(
+            dict(d),
+            {
+                k1: {k1 + 1: k1 + v},
+                k2: {k2 + 2: k2 + v},
+            },
+        )
+
 
 class TestNonCompiledInfer(TestCase):
     def test_check_untyped_dict_ops(self):
         # Check operation on untyped dictionary
         d = Dict()
-        self.assertTrue(d._not_typed)
+        self.assertFalse(d._typed)
         self.assertEqual(len(d), 0)
         self.assertEqual(str(d), str({}))
         self.assertEqual(list(iter(d)), [])
@@ -1444,14 +1482,14 @@ class TestNonCompiledInfer(TestCase):
         # Test __contains__
         self.assertFalse(1 in d)
         # It's untyped
-        self.assertTrue(d._not_typed)
+        self.assertFalse(d._typed)
 
     def test_getitem(self):
         # Test __getitem__
         d = Dict()
         d[1] = 2
         # It's typed now
-        self.assertFalse(d._not_typed)
+        self.assertTrue(d._typed)
         self.assertEqual(d[1], 2)
 
     def test_setdefault(self):
@@ -1459,5 +1497,5 @@ class TestNonCompiledInfer(TestCase):
         d = Dict()
         d.setdefault(1, 2)
         # It's typed now
-        self.assertFalse(d._not_typed)
+        self.assertTrue(d._typed)
         self.assertEqual(d[1], 2)

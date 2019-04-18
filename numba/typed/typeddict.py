@@ -122,39 +122,39 @@ class Dict(MutableMapping):
         return self._dict_type
 
     @property
-    def _not_typed(self):
+    def _typed(self):
         """Returns True if the dictionary is not untyped.
 ht        """
-        return self._dict_type is None
+        return self._dict_type is not None
 
-    def _initial_dict(self, key, value):
+    def _initialise_dict(self, key, value):
         dcttype = types.DictType(typeof(key), typeof(value))
         self._dict_type, self._opaque = self._parse_arg(dcttype)
 
     def __getitem__(self, key):
-        if self._not_typed:
+        if not self._typed:
             raise KeyError(key)
         else:
             return _getitem(self, key)
 
     def __setitem__(self, key, value):
-        if self._not_typed:
-            self._initial_dict(key, value)
+        if not self._typed:
+            self._initialise_dict(key, value)
         return _setitem(self, key, value)
 
     def __delitem__(self, key):
-        if self._not_typed:
+        if not self._typed:
             raise KeyError(key)
         _delitem(self, key)
 
     def __iter__(self):
-        if self._not_typed:
+        if not self._typed:
             return iter(())
         else:
             return iter(_iter(self))
 
     def __len__(self):
-        if self._not_typed:
+        if not self._typed:
             return 0
         else:
             return _length(self)
@@ -177,14 +177,14 @@ ht        """
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
     def get(self, key, default=None):
-        if self._not_typed:
+        if not self._typed:
             return default
         return _get(self, key, default)
 
     def setdefault(self, key, default=None):
-        if self._not_typed:
+        if not self._typed:
             if default is not None:
-                self._initial_dict(key, default)
+                self._initialise_dict(key, default)
         return _setdefault(self, key, default)
 
     def popitem(self):

@@ -518,7 +518,7 @@ def redirect_type_ctor(context, builder, sig, args):
 
     # Pack arguments into a tuple for `*args`
     ctor_args = types.Tuple.from_types(sig.args)
-    # Make signature T(T, *args) where T is cls
+    # Make signature T(TypeRef[T], *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
 
     args = (context.get_dummy_value(),   # Type object has no runtime repr.
