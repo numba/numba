@@ -18,54 +18,8 @@ long_normalize(PyLongObject *v)
     return v;
 }
 
-#ifndef NSMALLPOSINTS
-#define NSMALLPOSINTS           257
-#endif
-#ifndef NSMALLNEGINTS
-#define NSMALLNEGINTS           5
-#endif
-
-/* convert a PyLong of size 1, 0 or -1 to an sdigit */
-#define MEDIUM_VALUE(x) (assert(-1 <= Py_SIZE(x) && Py_SIZE(x) <= 1),   \
-         Py_SIZE(x) < 0 ? -(sdigit)(x)->ob_digit[0] :   \
-             (Py_SIZE(x) == 0 ? (sdigit)0 :                             \
-              (sdigit)(x)->ob_digit[0]))
-
 #define MAX_LONG_DIGITS \
     ((PY_SSIZE_T_MAX - offsetof(PyLongObject, ob_digit))/sizeof(digit))
-
-static PyLongObject small_ints[NSMALLNEGINTS + NSMALLPOSINTS];
-
-/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L48 */
-static PyObject *
-get_small_int(sdigit ival)
-{
-    PyObject *v;
-    assert(-NSMALLNEGINTS <= ival && ival < NSMALLPOSINTS);
-    v = (PyObject *)&small_ints[ival + NSMALLNEGINTS];
-    Py_INCREF(v);
-#ifdef COUNT_ALLOCS
-    if (ival >= 0)
-        _Py_quick_int_allocs++;
-    else
-        _Py_quick_neg_int_allocs++;
-#endif
-    return v;
-}
-
-/* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L69 */
-static PyLongObject *
-maybe_small_long(PyLongObject *v)
-{
-    if (v && Py_ABS(Py_SIZE(v)) <= 1) {
-        sdigit ival = MEDIUM_VALUE(v);
-        if (-NSMALLNEGINTS <= ival && ival < NSMALLPOSINTS) {
-            Py_DECREF(v);
-            return (PyLongObject *)get_small_int(ival);
-        }
-    }
-    return v;
-}
 
 /* from https://github.com/python/cpython/blob/2fb2bc81c3f40d73945c6102569495140e1182c7/Objects/longobject.c#L2184 */
 static int
@@ -498,8 +452,6 @@ digit beyond the first.
         goto onError;
     }
     long_normalize(z);
-        
-    //!!!z = maybe_small_long(z);
     if (z == NULL) {
         return NULL;
     }
