@@ -421,7 +421,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        disp, args = self._load_impl(args, kws)
+        disp, args = self._get_impl(args, kws)
         if disp is None:
             return
         # Compile and type it for the given types
@@ -431,8 +431,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
-    def _load_impl(self, args, kws):
-        """Load implementation given the argument types
+    def _get_impl(self, args, kws):
+        """Get implementation given the argument types.
+
+        Returning a Dispatcher object.  The Dispatcher object is cached
+        internally in `self._impl_cache`.
         """
         cache_key = self.context, tuple(args), tuple(kws.items())
         try:
@@ -442,7 +445,29 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return impl, args
 
     def _build_impl(self, cache_key, args, kws):
-        """Build the implementation
+        """Build and cache the implementation.
+
+        Given the postitional (`args`) and keyword arguments (`kws`), obtains
+        the `overload` implementation and wrap it in a Dispatcher object.
+        The expected argument types are returned for use by type-inference.
+        The expected argument types are only different from the given argument
+        types if there is a imprecise type in the given argument types.
+
+        Parameters
+        ----------
+        cache_key : hashable
+            The key used for caching the implementation.
+        args : Tuple[Type]
+            Types of positional argument.
+        kws : Dict[Type]
+            Types of keyword argument.
+
+        Returns
+        -------
+        disp, args :
+            On success, returns `(Dispatcher, Tuple[Type])`.
+            On failure, returns `(None, None)`.
+
         """
         from numba import jit
 
@@ -452,7 +477,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
             return None, None
-        if isinstance(pyfunc, tuple):
+        elif isinstance(pyfunc, tuple):
             sig, pyfunc = pyfunc
             args = sig.args
             cache_key = None            # don't cache
