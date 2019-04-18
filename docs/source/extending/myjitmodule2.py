@@ -22,6 +22,9 @@ def set_to_x_jit_v2(arr, x):
     # check that it is an array
     if isinstance(arr, types.Array):
         # validate that arr and x have the same type
+        # (The arr argument is an array and the type of the values is stored as
+        # the 'dtype' attribute. The x argument on the other hand is a scalar
+        # and thus x is already the type here so those things can be compared.)
         if arr.dtype == x:
             if isinstance(x, types.Integer):
                 # dispatch for integers
