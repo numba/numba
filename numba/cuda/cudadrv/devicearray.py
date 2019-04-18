@@ -333,10 +333,10 @@ class DeviceNDArrayBase(object):
 
     @property
     def nbytes(self):
-        if hasattr(self, 'alloc_size'):
-            return self.alloc_size
-        else:
-            return 0
+        # Note: not using `alloc_size`.  `alloc_size` reports memory
+        # consumption of the allocation, not the size of the array
+        # https://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.nbytes.html
+        return self.dtype.itemsize * self.size
 
 
 class DeviceRecord(DeviceNDArrayBase):
