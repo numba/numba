@@ -22,8 +22,8 @@ def set_to_x_jit_v2(arr, x):
     # check that it is an array
     if isinstance(arr, types.Array):
         # validate that arr and x have the same type
-        # (The arr argument is an array and the type of the values is stored as
-        # the 'dtype' attribute. The x argument on the other hand is a scalar
+        # (The arr argument is an array *type* and the type of the values is stored as
+        # the 'dtype' attribute. The x argument on the other hand is a scalar *type*
         # and thus x is already the type here so those things can be compared.)
         if arr.dtype == x:
             if isinstance(x, types.Integer):
@@ -35,13 +35,13 @@ def set_to_x_jit_v2(arr, x):
             else:
                 # must be some other type
                 raise TypingError(
-                    "only integer and floating-point types allowed")
+                    "only integer and floating-point types are allowed")
         else:
             # type mismatch
-            raise TypingError("the types of the input do not match")
+            raise TypingError("the types of the inputs do not match")
     elif isinstance(arr, types.BaseTuple):
         # custom error for tuple as input
-        raise TypingError("tuple isn't allowed as input, use numpy arrays")
+        raise TypingError("tuple isn't allowed as input, use NumPy ndarray")
 
     # fall through, None returned as no suitable implementation was found
 
@@ -49,4 +49,4 @@ def set_to_x_jit_v2(arr, x):
 def myalgorithm(a, x):
     # algorithm code
     mymodule.set_to_x(a, x)
-    # algorithm code
+    # more algorithm code

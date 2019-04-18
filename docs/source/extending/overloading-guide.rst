@@ -2,13 +2,13 @@
 .. _overloading-guide:
 
 ============================
-Guide to using ``@overload``
+A guide to using ``@overload``
 ============================
 
 
 As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
-can use the ``@overload`` decorator to provide a Numba specific implementation
-that can be used in :term:`nopython mode` functions. A common used case of this
+can use the ``@overload`` decorator to create a Numba implementation of a function
+that can be used in :term:`nopython mode` functions. A common use case
 is to re-implement NumPy functions so that they can be called in ``jit``
 decorated code. In this section will discuss what contributing such a function
 to Numba might entail. This should help you get started when attempting to
@@ -46,7 +46,7 @@ might be a bit slow.
     In [4]: %timeit set_to_x(a, 1)
     5.88 ms ± 43.2 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
-And since you use this function, very often in your ``jit`` decorated
+Since this function is used very often in your ``jit`` decorated
 functions, for example in ``myalgorithm``, you choose to use to ``overload`` in
 an attempt to accelerate things.
 
@@ -64,7 +64,7 @@ Inspired by the template above, your implementation might look something like:
 
 
 
-And when you go to profile it, you find yourself pleasantly surprised:
+When the function is timed, you find yourself pleasantly surprised:
 
 .. code:: pycon
 
@@ -113,10 +113,10 @@ the function as follows:
 * The numerical type of the array ``arr`` must match the numerical type of the
   scalar ``x`` argument, i.e. if ``arr`` is of type ``int64``, then ``x`` must
   be of this type too.
-* Only integer and floating-point types are to be supported.
-* For the floating-point type, no ``nan`` values are allowed in ``arr`` and if
-  such a value is encountered, an appropriate ``ValueError`` should be raised.
-* If a tuple is used instead of an array, a custom error message with a hint
+* Only integer and floating-point types are to be supported for argument ``x``.
+* No ``nan`` values are allowed in ``arr`` when it is of floating-point type and if
+  such a value is encountered an appropriate ``ValueError`` should be raised.
+* If a tuple is used instead of an array as a value for ``arr``, a custom error message with a hint
   for the user should be issued.
 
 The resulting implementation could look as follows:
@@ -170,12 +170,12 @@ You can download the example code from above including tests here:
 * :download:`myjitmodule2.py </extending/myjitmodule2.py>`
 * :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
 
-Implementing ``overload`` for NumPy functions
+Implementing ``@overload``s for NumPy functions
 =============================================
 
-Numba has strong support for NumPy because it provides ``jit`` compatible
+Numba supports NumPy through the provision of ``jit`` compatible
 re-implementations of NumPy functions. In such cases ``overload`` is a very
-convenient option, however there are a few additional things to watch out for.
+convenient option for writing such implementations, however there are a few additional things to watch out for.
 
 * The Numba implementation should match the NumPy implementation as closely as
   feasible with respect to accepted types, arguments, raised exceptions and
@@ -206,8 +206,8 @@ convenient option, however there are a few additional things to watch out for.
   documented (e.g. a function which the NumPy docs say requires a float or int
   input might also 'work' if given a bool or complex input).
 
-* When writing tests for exceptions, for example, when adding tests to
-  ``numba/tests/test_np_functions.py`` you may encounter the following error
+* When writing tests for exceptions, for example if adding tests to
+  ``numba/tests/test_np_functions.py``, you may encounter the following error
   message:
 
   .. code:: pycon
@@ -224,8 +224,8 @@ convenient option, however there are a few additional things to watch out for.
             self.assertEqual(total_alloc, total_free)
         AssertionError: 36 != 35
 
-  This is caused because some exceptions leak references. Ideally, you will
-  place all exception testing in a separate test method and then add a call to
+  This occurs because raising exceptions from jitted code leads to reference leaks. Ideally, you will
+  place all exception testing in a separate test method and then add a call in each test to
   ``self.disable_leak_check()`` to disable the leak-check. (Remember to inherit
   from ``numba.tests.support.TestCase`` to make that available).
 
@@ -269,9 +269,9 @@ convenient option, however there are a few additional things to watch out for.
   change log / repo, then you'll need to decide whether to branch logic and
   attempt to replicate the logic across versions, or use a version gate (with
   associated wording in the docs) to advertise that Numba replicates NumPy from
-  v1.11 onwards, for example.
+some particular version onwards.
 
-* You can look at the Numba source code for inspiration, much of the overloaded
+* You can look at the Numba source code for inspiration, many of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Good
   implementations to look at are:
 

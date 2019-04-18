@@ -1,5 +1,5 @@
 # Declare that function `myfunc` is going to be overloaded (have a
-# substitutable numba implementation)
+# substitutable Numba implementation)
 @overload(myfunc)
 # Define the overload function with formal arguments
 # these arguments must be matched in the inner function implementation
