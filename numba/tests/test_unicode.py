@@ -378,7 +378,7 @@ class TestUnicode(BaseTest):
             '🐍⚡',
             '大眼，小手。',
         ]
-        cfunc('', 3)
+
         with self.assertRaises(TypingError) as raises:
             cfunc(ZFILL_INPUTS[0], 1.1)
         self.assertIn('<width> must be an Integer', str(raises.exception))
