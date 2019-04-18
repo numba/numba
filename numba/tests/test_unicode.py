@@ -158,7 +158,6 @@ class BaseTest(MemoryLeakMixin, TestCase):
 UNICODE_EXAMPLES = [
     'ascii',
     '12345',
-    '-12345',
     '1234567890',
     '¡Y tú quién te crees?',
     '🐍⚡',
@@ -366,9 +365,28 @@ class TestUnicode(BaseTest):
         pyfunc = zfill_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_EXAMPLES:
-            for width in range(0, 20):
-                self.assertEqual(pyfunc(s, width), cfunc(s, width))
+        ZFILL_INPUTS = [
+            'ascii',
+            '+ascii',
+            '-ascii',
+            '-asc ii-',
+            '12345',
+            '-12345',
+            '+12345',
+            '',
+            '¡Y tú crs?',
+            '🐍⚡',
+            '大眼，小手。',
+        ]
+        cfunc('', 3)
+        with self.assertRaises(TypingError) as raises:
+            cfunc(ZFILL_INPUTS[0], 1.1)
+        self.assertIn('<width> must be an Integer', str(raises.exception))
+
+        for s in ZFILL_INPUTS:
+            for width in range(-3, 20):
+                self.assertEqual(pyfunc(s, width),
+                                 cfunc(s, width))
 
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase

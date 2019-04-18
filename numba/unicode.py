@@ -31,6 +31,7 @@ from numba.targets import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
+from numba.errors import TypingError
 
 # DATA MODEL
 
@@ -623,22 +624,27 @@ def unicode_join(sep, parts):
 
 
 @overload_method(types.UnicodeType, 'zfill')
-def unicode_zfill(str_to_fill, width_to_fill):
-    def zfill_impl(fstr, fwidth):
+def unicode_zfill(string, width):
+    if not isinstance(width, types.Integer):
+        raise TypingError("<width> must be an Integer")
 
-        fstr_len = len(fstr)
+    def zfill_impl(string, width):
 
-        if fwidth <= fstr_len or fstr_len == 0:
-            return fstr
+        str_len = len(string)
 
-        extra_zero = fwidth - fstr_len
-        first_char = fstr[0:1]
+        if width <= str_len:
+            return string
+
+        if str_len != 0:
+            first_char = string[0]
+
+        extra_zero = width - str_len
         fill_line = '0' * extra_zero
 
-        if first_char == '+' or first_char == '-':
-            newstr = first_char + fill_line + fstr[1:]
+        if first_char in ['+', '-']:
+            newstr = first_char + fill_line + string[1:]
         else:
-            newstr = fill_line + fstr
+            newstr = fill_line + string
 
         return newstr
 
