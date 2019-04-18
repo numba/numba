@@ -459,7 +459,7 @@ def force_error_model(context, model_name='numpy'):
 
 
 def numba_typeref_ctor(*args, **kwargs):
-    """A stub for use internally by numba during when a call is emitted
+    """A stub for use internally by Numba when a call is emitted
     on a TypeRef.
     """
-    raise NotImplementedError("The function is not to be executed.")
+    raise NotImplementedError("This function should not be executed.")

@@ -489,9 +489,9 @@ class DictType(IterableType):
 
     def unify(self, typingctx, other):
         """
-        Unify this with the *other* Array.
+        Unify this with the *other* dictionary.
         """
-        # If other is array and the ndim matches
+        # If other is dict
         if isinstance(other, DictType):
             if not other.is_precise():
                 return self

@@ -488,7 +488,7 @@ class CallConstraint(object):
         self._add_refine_map(typeinfer, typevars, sig)
 
     def _add_refine_map(self, typeinfer, typevars, sig):
-        """Add this expression to the refinemap base on the type of target_type
+        """Add this expression to the refine_map base on the type of target_type
         """
         target_type = typevars[self.target].getone()
         # Array
@@ -510,7 +510,7 @@ class CallConstraint(object):
                 newtype = aryty.copy(dtype=updated_type.dtype)
                 typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
         else:
-            m = 'no refinement implemented for function {} updating to {}'
+            m = 'no type refinement implemented for function {} updating to {}'
             raise TypingError(m.format(self.func, updated_type))
 
     def get_call_signature(self):
@@ -576,7 +576,7 @@ class SetItemRefinement(object):
         if isinstance(targetty, types.DictType) and not targetty.is_precise():
             refined = targetty.refine(idxty, valty)
             typeinfer.add_type(
-                self.target.name,refined,
+                self.target.name, refined,
                 loc=self.loc,
             )
 

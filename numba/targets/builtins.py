@@ -508,7 +508,7 @@ def redirect_type_ctor(context, builder, sig, args):
         d = Dict()
 
     `d` will be typed as `TypeRef[DictType]()`.  Thus, it will call into this
-    implementation.  We will need to redirect the lowering to a function
+    implementation.  We need to redirect the lowering to a function
     named ``numba_typeref_ctor``.
     """
     cls = sig.return_type

@@ -90,8 +90,8 @@ class Dict(MutableMapping):
 
     def __init__(self, **kwargs):
         """
-        For user, the constructor does not take any parameters.
-        The keyword arguments are for internally use.
+        For users, the constructor does not take any parameters.
+        The keyword arguments are for internal use only.
 
         Parameters
         ----------
@@ -266,7 +266,7 @@ def unbox_dicttype(typ, val, c):
 
 
 #
-# The following contains logic for the type-inferred constructor
+# The following contains the logic for the type-inferred constructor
 #
 
 
@@ -306,7 +306,7 @@ def impl_numba_typeref_ctor(cls):
     value_type = types.TypeRef(dict_ty.value_type)
 
     def impl(cls):
-        # Simply call the empty with the key/value types from *cls*
+        # Simply call .empty() with the key/value types from *cls*
         return Dict.empty(key_type, value_type)
 
     return impl

@@ -755,7 +755,7 @@ class TypeRefAttribute(AttributeTemplate):
         Note:
 
         This is needed because of the limitation of the current type-system
-        implementation.  Specially, the lack of a higher-order type
+        implementation.  Specifically, the lack of a higher-order type
         (i.e. passing the ``DictType`` vs ``DictType(key_type, value_type)``)
         """
         ty = classty.instance_type

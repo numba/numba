@@ -76,7 +76,7 @@ def overload(func, jit_options={}, strict=True):
     is enforced by the **strict** keyword argument, it is recommended that this
     is set to True (default).
 
-    To handle implementation that accepts imprecise types, an overload
+    To handle a function that accepts imprecise types, an overload
     definition can return 2-tuple of ``(signature, impl_function)``, where
     the ``signature`` is a ``typing.Signature`` specifying the precise
     signature to be used; and ``impl_function`` is the same implementation
