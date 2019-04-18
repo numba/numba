@@ -5,7 +5,7 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
-from types import MethodType
+from types import MethodType, FunctionType
 
 from .. import types, utils
 from ..errors import TypingError, InternalError
@@ -472,15 +472,27 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         from numba import jit
 
         # Get the overload implementation for the given types
-        pyfunc = self._overload_func(*args, **kws)
-        if pyfunc is None:
+        ovf_result = self._overload_func(*args, **kws)
+        if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
             return None, None
-        elif isinstance(pyfunc, tuple):
-            sig, pyfunc = pyfunc
+        elif isinstance(ovf_result, tuple):
+            # The implementation returned a signature that the type-inferencer
+            # should be using.
+            sig, pyfunc = ovf_result
             args = sig.args
             cache_key = None            # don't cache
+        else:
+            # Regular case
+            pyfunc = ovf_result
+
+        # Check type of pyfunc
+        if not isinstance(pyfunc, FunctionType):
+            msg = ("Implementator function returned by `@overload` "
+                   "has an unexpected type.  Got {}")
+            raise AssertionError(msg.format(pyfunc))
+
         # check that the typing and impl sigs match up
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
