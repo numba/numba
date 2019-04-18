@@ -820,8 +820,7 @@ class pyStencilGenerator:
                     idx.append(
                         ast.BinOp(
                             left=ast.Name(
-                                id=self._id_pat %
-                                self.ids[x],
+                                id=self._id_pat % self.ids[x],
                                 ctx=ast.Load()),
                             op=ast.Add(),
                             right=useval,
@@ -880,8 +879,7 @@ class pyStencilGenerator:
                 useval = self._const_assigns.get(
                     node.slice.value, node.slice.value)
                 idx = ast.BinOp(left=ast.Name(
-                                id=self._id_pat %
-                                self.ids[0],
+                                id=self._id_pat % self.ids[0],
                                 ctx=ast.Load()),
                                 op=ast.Add(),
                                 right=useval,
@@ -938,8 +936,7 @@ class pyStencilGenerator:
                     value = self.get_val_from_num(val)
                     tmp = ast.BinOp(
                             left=ast.Name(
-                                id=self._id_pat %
-                                self.ids[x],
+                                id=self._id_pat % self.ids[x],
                                 ctx=ast.Load()),
                             op=ast.Add(),
                             right=useval,
@@ -957,8 +954,7 @@ class pyStencilGenerator:
             def computeIndex(i, node):
                 useval = self._const_assigns.get(node.value, node.value)
                 idx = ast.BinOp(left=ast.Name(
-                                id=self._id_pat %
-                                self.ids[i],
+                                id=self._id_pat % self.ids[i],
                                 ctx=ast.Load()),
                                 op=ast.Add(),
                                 right=useval,
@@ -1393,11 +1389,8 @@ class pyStencilGenerator:
         # If astor is installed the decompilation of the AST is also printed
         DEBUG = False
         if DEBUG:
-            try:
-                print("ORIGINAL")
-                print(ast.dump(tree))
-            except ImportError:
-                pass
+            print("ORIGINAL")
+            print(ast.dump(tree))
 
         def pipeline(tree):
             """ the pipeline of manipulations """
