@@ -157,7 +157,7 @@ class Record(Type):
     def alignof(self, key):
         """Get the specified alignment of the field.
 
-        Since field aligment is optional, This may return None.
+        Since field alignment is optional, this may return None.
         """
         return self.fields[key].alignment
 

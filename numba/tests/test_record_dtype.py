@@ -330,7 +330,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
             self.assertIn(
                 ("NumPy is using a different alignment (16) "
                  "than Numba/LLVM (8) for complex128. "
-                 "This is likely a numpy bug."),
+                 "This is likely a NumPy bug."),
                 str(raises.exception),
             )
 
