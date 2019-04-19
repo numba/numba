@@ -52,5 +52,22 @@ class TestCompiledDict(TestCase):
         self.assertEqual(d, {1: 2})
 
 
+    def test_use_curlybraces_with_init1(self):
+        @njit
+        def foo():
+            return {1: 2}
+
+        d = foo()
+        self.assertEqual(d, {1: 2})
+
+    def test_use_curlybraces_with_initmany(self):
+        @njit
+        def foo():
+            return {1: 2.2, 3: 4.4, 5: 6.6}
+
+        d = foo()
+        self.assertEqual(d, {1: 2.2, 3: 4.4, 5: 6.6})
+
+
 if __name__ == '__main__':
     unittest.main()

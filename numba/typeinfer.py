@@ -266,21 +266,19 @@ class BuildMapConstraint(object):
     def __call__(self, typeinfer):
         with new_error_context("typing of dict at {0}", self.loc):
             typevars = typeinfer.typevars
-            print('self.items', self.items)
-            tsets = [typevars[i.name].get() for i in self.items]
+            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
+                     for k, v in self.items]
             if not tsets:
                 typeinfer.add_type(self.target,
                                    types.DictType(types.undefined,
                                                   types.undefined),
                                    loc=self.loc)
             else:
-                for typs in itertools.product(*tsets):
-                    print(typs)
-                    unified = typeinfer.context.unify_types(*typs)
-                    if unified is not None:
-                        typeinfer.add_type(self.target,
-                                           self.container_type(unified),
-                                           loc=self.loc)
+                head = tsets[0]
+                key_type, value_type = head
+                typeinfer.add_type(self.target,
+                                   types.DictType(key_type, value_type),
+                                   loc=self.loc)
 
 
 class ExhaustIterConstraint(object):

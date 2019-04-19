@@ -1066,8 +1066,20 @@ class Lower(BaseLower):
 
         elif expr.op == "build_map":
             items = expr.items
-            assert not items
-            return self.context.build_map(self.builder, resty, [])
+            keys, values = [], []
+            key_types, value_types = [], []
+            for k, v in items:
+                key = self.loadvar(k.name)
+                keytype = self.typeof(k.name)
+                val = self.loadvar(v.name)
+                valtype = self.typeof(v.name)
+                keys.append(key)
+                values.append(val)
+                key_types.append(keytype)
+                value_types.append(valtype)
+            return self.context.build_map(self.builder, resty,
+                                          list(zip(key_types, value_types)),
+                                          list(zip(keys, values)))
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)

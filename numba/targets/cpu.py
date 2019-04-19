@@ -127,10 +127,10 @@ class CPUContext(BaseContext):
         """
         return setobj.build_set(self, builder, set_type, items)
 
-    def build_map(self, builder, dict_type, items):
+    def build_map(self, builder, dict_type, item_types, items):
         from numba import dictobject
 
-        return dictobject.build_map(self, builder, dict_type, items)
+        return dictobject.build_map(self, builder, dict_type, item_types, items)
 
 
     def post_lowering(self, mod, library):
