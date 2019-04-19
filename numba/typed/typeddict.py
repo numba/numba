@@ -123,7 +123,7 @@ class Dict(MutableMapping):
 
     @property
     def _typed(self):
-        """Returns True if the dictionary is not untyped.
+        """Returns True if the dictionary is typed.
         """
         return self._dict_type is not None
 

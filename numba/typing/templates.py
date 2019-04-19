@@ -447,11 +447,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     def _build_impl(self, cache_key, args, kws):
         """Build and cache the implementation.
 
-        Given the postitional (`args`) and keyword arguments (`kws`), obtains
+        Given the positional (`args`) and keyword arguments (`kws`), obtains
         the `overload` implementation and wrap it in a Dispatcher object.
         The expected argument types are returned for use by type-inference.
         The expected argument types are only different from the given argument
-        types if there is a imprecise type in the given argument types.
+        types if there is an imprecise type in the given argument types.
 
         Parameters
         ----------
