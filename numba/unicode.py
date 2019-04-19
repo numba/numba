@@ -635,16 +635,13 @@ def unicode_zfill(string, width):
         if width <= str_len:
             return string
 
-        if str_len != 0:
-            first_char = string[0]
-
-        extra_zero = width - str_len
-        fill_line = '0' * extra_zero
+        first_char = string[0] if str_len else ''
+        padding = '0' * (width - str_len)
 
         if first_char in ['+', '-']:
-            newstr = first_char + fill_line + string[1:]
+            newstr = first_char + padding + string[1:]
         else:
-            newstr = fill_line + string
+            newstr = padding + string
 
         return newstr
 
