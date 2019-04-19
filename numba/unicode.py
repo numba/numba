@@ -42,6 +42,7 @@ class UnicodeModel(models.StructModel):
             ('data', types.voidptr),
             ('length', types.intp),
             ('kind', types.int32),
+            ('is_ascii', types.uint32),
             ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
@@ -53,6 +54,7 @@ class UnicodeModel(models.StructModel):
 make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
+make_attribute_wrapper(types.UnicodeType, 'is_ascii', '_is_ascii')
 make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
 
 
@@ -71,7 +73,7 @@ def compile_time_get_string_data(obj):
     the string data into the LLVM module.
     """
     from ctypes import (
-        CFUNCTYPE, c_void_p, c_int, c_ssize_t, c_ubyte, py_object,
+        CFUNCTYPE, c_void_p, c_int, c_uint, c_ssize_t, c_ubyte, py_object,
         POINTER, byref,
     )
 
@@ -81,15 +83,17 @@ def compile_time_get_string_data(obj):
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
+    is_ascii = c_uint()
     hashv = c_ssize_t()
-    data = fn(obj, byref(length), byref(kind), byref(hashv))
+    data = fn(obj, byref(length), byref(kind), byref(is_ascii), byref(hashv))
     if data is None:
         raise ValueError("cannot extract unicode data from the given string")
     length = length.value
     kind = kind.value
+    is_ascii = is_ascii.value
     nbytes = (length + 1) * _kind_to_byte_width(kind)
     out = (c_ubyte * nbytes).from_address(data)
-    return bytes(out), length, kind, hashv.value
+    return bytes(out), length, kind, is_ascii, hashv.value
 
 
 def make_string_from_constant(context, builder, typ, literal_string):
@@ -97,7 +101,7 @@ def make_string_from_constant(context, builder, typ, literal_string):
     Get string data by `compile_time_get_string_data()` and return a
     unicode_type LLVM value
     """
-    databytes, length, kind, hashv = \
+    databytes, length, kind, is_ascii, hashv = \
         compile_time_get_string_data(literal_string)
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
@@ -105,6 +109,7 @@ def make_string_from_constant(context, builder, typ, literal_string):
     uni_str.data = gv
     uni_str.length = uni_str.length.type(length)
     uni_str.kind = uni_str.kind.type(kind)
+    uni_str.is_ascii = uni_str.is_ascii.type(is_ascii)
     uni_str.hash = uni_str.hash.type(hashv)
     return uni_str._getvalue()
 
@@ -131,11 +136,13 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
-    ok, data, length, kind, hashv = c.pyapi.string_as_string_size_and_kind(obj)
+    ok, data, length, kind, is_ascii, hashv = \
+        c.pyapi.string_as_string_size_and_kind(obj)
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
     uni_str.kind = kind
+    uni_str.is_ascii = is_ascii
     uni_str.hash = hashv
     uni_str.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
         data,  # the borrowed data pointer
@@ -212,6 +219,9 @@ def _malloc_string(typingctx, kind, char_bytes, length):
                                              Constant(length_val.type, 1)))
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
+        # assume worst case that the string is not ASCII.
+        # caller can update this flag if ASCII status is known
+        uni_str.is_ascii = context.get_constant(types.uint32, 0)
         uni_str.length = length_val
         # empty string has hash value -1 to indicate "need to compute hash"
         uni_str.hash = context.get_constant(_Py_hash_t, -1)
@@ -314,6 +324,13 @@ def _pick_kind(kind1, kind2):
         return kind1
     else:
         raise AssertionError("Unexpected unicode representation in _pick_kind")
+
+
+@njit
+def _pick_ascii(is_ascii1, is_ascii2):
+    if is_ascii1 == 1 and is_ascii2 == 1:
+        return types.uint32(1)
+    return types.uint32(0)
 
 
 @njit
@@ -588,11 +605,14 @@ def join_list(sep, parts):
     sep_len = len(sep)
     length = (parts_len - 1) * sep_len
     kind = sep._kind
+    is_ascii = sep._is_ascii
     for p in parts:
         length += len(p)
         kind = _pick_kind(kind, p._kind)
+        is_ascii = _pick_ascii(is_ascii, p._is_ascii)
 
     result = _empty_string(kind, length)
+    result._is_ascii = is_ascii
 
     # populate string
     part = parts[0]
@@ -726,6 +746,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
             types.unicode_type)(context, builder)
         view_str.meminfo = in_str.meminfo
         view_str.kind = in_str.kind
+        view_str.is_ascii = in_str.is_ascii
         view_str.length = length
         # hash value -1 to indicate "need to compute hash"
         view_str.hash = context.get_constant(_Py_hash_t, -1)
@@ -755,6 +776,7 @@ def unicode_getitem(s, idx):
             def getitem_char(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 ret = _empty_string(s._kind, 1)
+                ret._is_ascii = s._is_ascii
                 _set_code_point(ret, 0, _get_code_point(s, idx))
                 return ret
             return getitem_char
@@ -767,6 +789,7 @@ def unicode_getitem(s, idx):
                     return _get_str_slice_view(s, slice_idx.start, span)
                 else:
                     ret = _empty_string(s._kind, span)
+                    ret._is_ascii = s._is_ascii
                     cur = slice_idx.start
                     for i in range(span):
                         _set_code_point(ret, i, _get_code_point(s, cur))
@@ -782,7 +805,9 @@ def unicode_concat(a, b):
         def concat_impl(a, b):
             new_length = a._length + b._length
             new_kind = _pick_kind(a._kind, b._kind)
+            new_ascii = _pick_ascii(a._is_ascii, b._is_ascii)
             result = _empty_string(new_kind, new_length)
+            result._is_ascii = new_ascii
             for i in range(len(a)):
                 _set_code_point(result, i, _get_code_point(a, i))
             for j in range(len(b)):
@@ -801,6 +826,7 @@ def _repeat_impl(str_arg, mult_arg):
         new_length = str_arg._length * mult_arg
         new_kind = str_arg._kind
         result = _empty_string(new_kind, new_length)
+        result._is_ascii = str_arg._is_ascii
         # make initial copy into result
         len_a = len(str_arg)
         _strncpy(result, 0, str_arg, 0, len_a)

@@ -1141,6 +1141,7 @@ class PythonAPI(object):
         if PYVERSION >= (3, 3):
             p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
             p_kind = cgutils.alloca_once(self.builder, Type.int())
+            p_ascii = cgutils.alloca_once(self.builder, Type.int())
             p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
             fnty = Type.function(self.cstring, [self.pyobj,
                                                 self.py_ssize_t.as_pointer(),
@@ -1149,12 +1150,14 @@ class PythonAPI(object):
             fname = "numba_extract_unicode"
             fn = self._get_function(fnty, name=fname)
 
-            buffer = self.builder.call(fn, [strobj, p_length, p_kind, p_hash])
+            buffer = self.builder.call(
+                fn, [strobj, p_length, p_kind, p_ascii, p_hash])
             ok = self.builder.icmp_unsigned('!=',
                                             ir.Constant(buffer.type, None),
                                             buffer)
             return (ok, buffer, self.builder.load(p_length),
-                    self.builder.load(p_kind), self.builder.load(p_hash))
+                    self.builder.load(p_kind), self.builder.load(p_ascii),
+                    self.builder.load(p_hash))
         else:
             assert False, 'not supported on Python < 3.3'
 
