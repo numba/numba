@@ -138,8 +138,8 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(arr[::2].strides, arr_strided.strides)
         self.assertEqual(arr[::2].dtype.itemsize, arr_strided.dtype.itemsize)
         self.assertEqual(arr[::2].alloc_size, arr_strided.alloc_size)
-        self.assertEqual(arr[::2].nbytes, arr_strided.size *
-                arr_strided.dtype.itemsize)
+        self.assertEqual(arr[::2].nbytes,
+                         arr_strided.size * arr_strided.dtype.itemsize)
 
         # __setitem__ interface propogates into external array
 
