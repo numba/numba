@@ -26,6 +26,7 @@ class DictTestCase(TestCase):
 # XXX: requires this import sideeffect
 import numba.typed
 
+
 class TestCompiledDict(TestCase):
     """Testing `dict()` and `{}` usage that are redirected to
     `numba.typed.Dict`.

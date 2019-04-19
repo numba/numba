@@ -1064,6 +1064,11 @@ class Lower(BaseLower):
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_set(self.builder, resty, castvals)
 
+        elif expr.op == "build_map":
+            items = expr.items
+            assert not items
+            return self.context.build_map(self.builder, resty, [])
+
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)

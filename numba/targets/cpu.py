@@ -127,6 +127,12 @@ class CPUContext(BaseContext):
         """
         return setobj.build_set(self, builder, set_type, items)
 
+    def build_map(self, builder, dict_type, items):
+        from numba import dictobject
+
+        return dictobject.build_map(self, builder, dict_type, items)
+
+
     def post_lowering(self, mod, library):
         if self.fastmath:
             fastmathpass.rewrite_module(mod, self.fastmath)
