@@ -1,7 +1,9 @@
 from __future__ import print_function
 
+from numba import njit
 import numba.unittest_support as unittest
 from .support import TestCase, force_pyobj_flags
+
 
 
 def build_map():
@@ -20,6 +22,33 @@ class DictTestCase(TestCase):
 
     def test_build_map_from_local_vars(self, flags=force_pyobj_flags):
         self.run_nullary_func(build_map_from_local_vars, flags=flags)
+
+# XXX: requires this import sideeffect
+import numba.typed
+
+class TestCompiledDict(TestCase):
+    """Testing `dict()` and `{}` usage that are redirected to
+    `numba.typed.Dict`.
+    """
+    def test_use_dict(self):
+        @njit
+        def foo():
+            d = dict()
+            d[1] = 2
+            return d
+
+        d = foo()
+        self.assertEqual(d, {1: 2})
+
+    def test_use_curlybraces(self):
+        @njit
+        def foo():
+            d = {}
+            d[1] = 2
+            return d
+
+        d = foo()
+        self.assertEqual(d, {1: 2})
 
 
 if __name__ == '__main__':

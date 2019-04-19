@@ -360,7 +360,6 @@ exclude =
     numba/typing/setdecl.py
     numba/typing/npydecl.py
     numba/typing/arraydecl.py
-    numba/typing/context.py
     numba/typing/collections.py
     numba/typing/ctypes_utils.py
     numba/typing/enumdecl.py

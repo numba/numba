@@ -307,8 +307,6 @@ class BaseContext(object):
 
     def resolve_setitem(self, target, index, value):
         assert isinstance(index, types.Type), index
-        args = target, index, value
-        kws = {}
         fnty = self.resolve_value_type(operator.setitem)
         sig = fnty.get_call_type(self, (target, index, value), {})
         return sig
@@ -382,8 +380,9 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from . import builtins, arraydecl, npdatetime
-        from . import ctypes_utils, bufproto
+        from . import builtins, arraydecl, npdatetime  # noqa: F401
+        from . import ctypes_utils, bufproto           # noqa: F401
+
         self.install_registry(templates.builtin_registry)
 
     def load_additional_registries(self):
@@ -663,8 +662,17 @@ class BaseContext(object):
 class Context(BaseContext):
 
     def load_additional_registries(self):
-        from . import (cffi_utils, cmathdecl, enumdecl, listdecl, mathdecl,
-                       npydecl, randomdecl, setdecl)
+        from . import (
+            cffi_utils,
+            cmathdecl,
+            enumdecl,
+            listdecl,
+            mathdecl,
+            npydecl,
+            randomdecl,
+            setdecl,
+            dictdecl,
+        )
         self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)
@@ -673,3 +681,4 @@ class Context(BaseContext):
         self.install_registry(npydecl.registry)
         self.install_registry(randomdecl.registry)
         self.install_registry(setdecl.registry)
+        self.install_registry(dictdecl.registry)

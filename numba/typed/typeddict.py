@@ -12,7 +12,8 @@ from numba.extending import (
     box,
     unbox,
     NativeValue,
-    type_callable
+    type_callable,
+    lower_builtin,
 )
 
 
@@ -310,3 +311,14 @@ def impl_numba_typeref_ctor(cls):
         return Dict.empty(key_type, value_type)
 
     return impl
+
+
+@lower_builtin(dict)
+def _(context, builder, sig, args):
+    dicttype = sig.return_type
+    kt, vt = dicttype.key_type, dicttype.value_type
+
+    def call_ctor():
+        return Dict.empty(kt, vt)
+
+    return context.compile_internal(builder, call_ctor, sig, args)
