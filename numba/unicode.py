@@ -79,7 +79,7 @@ def compile_time_get_string_data(obj):
 
     extract_unicode_fn = c_helpers['extract_unicode']
     proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int),
-                      POINTER(c_ssize_t))
+                      POINTER(c_uint), POINTER(c_ssize_t))
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
@@ -202,13 +202,13 @@ def deref_uint32(typingctx, data, offset):
 
 
 @intrinsic
-def _malloc_string(typingctx, kind, char_bytes, length):
+def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
     """make empty string with data buffer of size alloc_bytes.
 
     Must set length and kind values for string after it is returned
     """
     def details(context, builder, signature, args):
-        [kind_val, char_bytes_val, length_val] = args
+        [kind_val, char_bytes_val, length_val, is_ascii_val] = args
 
         # fill the struct
         uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
@@ -219,9 +219,7 @@ def _malloc_string(typingctx, kind, char_bytes, length):
                                              Constant(length_val.type, 1)))
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
-        # assume worst case that the string is not ASCII.
-        # caller can update this flag if ASCII status is known
-        uni_str.is_ascii = context.get_constant(types.uint32, 0)
+        uni_str.is_ascii = is_ascii_val
         uni_str.length = length_val
         # empty string has hash value -1 to indicate "need to compute hash"
         uni_str.hash = context.get_constant(_Py_hash_t, -1)
@@ -230,14 +228,14 @@ def _malloc_string(typingctx, kind, char_bytes, length):
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
         return uni_str._getvalue()
 
-    sig = types.unicode_type(types.int32, types.intp, types.intp)
+    sig = types.unicode_type(types.int32, types.intp, types.intp, types.uint32)
     return sig, details
 
 
 @njit
-def _empty_string(kind, length):
+def _empty_string(kind, length, is_ascii=0):
     char_width = _kind_to_byte_width(kind)
-    s = _malloc_string(kind, char_width, length)
+    s = _malloc_string(kind, char_width, length, is_ascii)
     _set_code_point(s, length, np.uint32(0))    # Write NULL character
     return s
 
@@ -611,8 +609,7 @@ def join_list(sep, parts):
         kind = _pick_kind(kind, p._kind)
         is_ascii = _pick_ascii(is_ascii, p._is_ascii)
 
-    result = _empty_string(kind, length)
-    result._is_ascii = is_ascii
+    result = _empty_string(kind, length, is_ascii)
 
     # populate string
     part = parts[0]
@@ -775,8 +772,7 @@ def unicode_getitem(s, idx):
         if isinstance(idx, types.Integer):
             def getitem_char(s, idx):
                 idx = normalize_str_idx(idx, len(s))
-                ret = _empty_string(s._kind, 1)
-                ret._is_ascii = s._is_ascii
+                ret = _empty_string(s._kind, 1, s._is_ascii)
                 _set_code_point(ret, 0, _get_code_point(s, idx))
                 return ret
             return getitem_char
@@ -788,8 +784,7 @@ def unicode_getitem(s, idx):
                 if slice_idx.step == 1:
                     return _get_str_slice_view(s, slice_idx.start, span)
                 else:
-                    ret = _empty_string(s._kind, span)
-                    ret._is_ascii = s._is_ascii
+                    ret = _empty_string(s._kind, span, s._is_ascii)
                     cur = slice_idx.start
                     for i in range(span):
                         _set_code_point(ret, i, _get_code_point(s, cur))
@@ -806,8 +801,7 @@ def unicode_concat(a, b):
             new_length = a._length + b._length
             new_kind = _pick_kind(a._kind, b._kind)
             new_ascii = _pick_ascii(a._is_ascii, b._is_ascii)
-            result = _empty_string(new_kind, new_length)
-            result._is_ascii = new_ascii
+            result = _empty_string(new_kind, new_length, new_ascii)
             for i in range(len(a)):
                 _set_code_point(result, i, _get_code_point(a, i))
             for j in range(len(b)):
@@ -825,8 +819,7 @@ def _repeat_impl(str_arg, mult_arg):
     else:
         new_length = str_arg._length * mult_arg
         new_kind = str_arg._kind
-        result = _empty_string(new_kind, new_length)
-        result._is_ascii = str_arg._is_ascii
+        result = _empty_string(new_kind, new_length, str_arg._is_ascii)
         # make initial copy into result
         len_a = len(str_arg)
         _strncpy(result, 0, str_arg, 0, len_a)

@@ -1146,6 +1146,7 @@ class PythonAPI(object):
             fnty = Type.function(self.cstring, [self.pyobj,
                                                 self.py_ssize_t.as_pointer(),
                                                 Type.int().as_pointer(),
+                                                Type.int().as_pointer(),
                                                 self.py_hash_t.as_pointer()])
             fname = "numba_extract_unicode"
             fn = self._get_function(fnty, name=fname)
