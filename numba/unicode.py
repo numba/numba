@@ -594,6 +594,27 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return split_whitespace_impl
 
 
+@overload_method(types.UnicodeType, 'ljust')
+def unicode_ljust(string, width, fillchar=' '):
+    if not isinstance(width, types.Integer):
+        raise TypingError('<width> must be an Integer')
+
+    def ljust_impl(string, width, fillchar=' '):
+        str_len = len(string)
+        fillchar_len = len(fillchar)
+
+        if fillchar_len != 1:
+            raise ValueError('The <fill> character must be exactly one character long')
+
+        if width <= str_len:
+            return string
+
+        newstr = string + (fillchar * (width - str_len))
+
+        return newstr
+    return ljust_impl
+
+
 @njit
 def join_list(sep, parts):
     parts_len = len(parts)
