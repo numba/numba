@@ -771,7 +771,7 @@ class TestUnicodeInTuple(BaseTest):
                     (s1 * 2)._is_ascii,
                     (s3 * 2)._is_ascii)
 
-        self.assertEqual(f(), (1, 1, 0, 0))
+        self.assertEqual(f(), (1, 0, 0, 1, 0))
 
 
 @unittest.skipUnless(_py34_or_later,
