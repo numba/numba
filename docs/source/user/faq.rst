@@ -274,6 +274,10 @@ Miscellaneous
 
 How do I reference/cite/acknowledge Numba in other work?
 --------------------------------------------------------
-For academic use, the best option is to cite our ACM Proceedings:
-`Numba: a LLVM-based Python JIT compiler.
-<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_
+For academic use, the best option is to cite our ACM Proceedings: `Numba: a
+LLVM-based Python JIT compiler.
+<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_ You can also find
+`the sources on github <https://github.com/numba/Numba-SC15-Paper>`_, including
+`a pre-print pdf
+<https://github.com/numba/Numba-SC15-Paper/raw/master/numba_sc15.pdf>`_, in case
+you don't have access to the ACM site but would like to read the paper.
