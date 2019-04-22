@@ -198,7 +198,8 @@ class ArgConstraint(object):
             ty = src.getone()
             if isinstance(ty, types.Omitted):
                 ty = typeinfer.context.resolve_value_type(ty.value)
-            assert ty.is_precise()
+            if not ty.is_precise():
+                raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
@@ -485,10 +486,18 @@ class CallConstraint(object):
                     sig = sig.replace(return_type=targetty)
 
         self.signature = sig
+        self._add_refine_map(typeinfer, typevars, sig)
 
+    def _add_refine_map(self, typeinfer, typevars, sig):
+        """Add this expression to the refine_map base on the type of target_type
+        """
         target_type = typevars[self.target].getone()
+        # Array
         if (isinstance(target_type, types.Array)
                 and isinstance(sig.return_type.dtype, types.Undefined)):
+            typeinfer.refine_map[self.target] = self
+        # DictType
+        if isinstance(target_type, types.DictType) and not target_type.is_precise():
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
@@ -501,6 +510,9 @@ class CallConstraint(object):
                 assert updated_type.is_precise()
                 newtype = aryty.copy(dtype=updated_type.dtype)
                 typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
+        else:
+            m = 'no type refinement implemented for function {} updating to {}'
+            raise TypingError(m.format(self.func, updated_type))
 
     def get_call_signature(self):
         return self.signature
@@ -551,7 +563,26 @@ class GetAttrConstraint(object):
             value=self.value, attr=self.attr)
 
 
-class SetItemConstraint(object):
+class SetItemRefinement(object):
+    """A mixin class to provide the common refinement logic in setitem
+    and static setitem.
+    """
+    def _refine_target_type(self, typeinfer, targetty, idxty, valty, sig):
+        """Refine the target-type given the known index type and value type.
+        """
+        # For array setitem, refine imprecise array dtype
+        if _is_array_not_precise(targetty):
+            typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
+        # For Dict setitem
+        if isinstance(targetty, types.DictType) and not targetty.is_precise():
+            refined = targetty.refine(idxty, valty)
+            typeinfer.add_type(
+                self.target.name, refined,
+                loc=self.loc,
+            )
+
+
+class SetItemConstraint(SetItemRefinement):
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -573,18 +604,14 @@ class SetItemConstraint(object):
                 raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
                                   (targetty, idxty, valty), loc=self.loc)
 
-            # For array setitem, refine imprecise array dtype
-            if _is_array_not_precise(targetty):
-                assert sig.args[0].is_precise()
-                typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
-
             self.signature = sig
+            self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
     def get_call_signature(self):
         return self.signature
 
 
-class StaticSetItemConstraint(object):
+class StaticSetItemConstraint(SetItemRefinement):
     def __init__(self, target, index, index_var, value, loc):
         self.target = target
         self.index = index
@@ -610,6 +637,7 @@ class StaticSetItemConstraint(object):
                 raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
                                   (targetty, self.index, valty), loc=self.loc)
             self.signature = sig
+            self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
     def get_call_signature(self):
         return self.signature

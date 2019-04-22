@@ -13,7 +13,8 @@ import llvmlite.llvmpy.core as lc
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant, iternext_impl,
                        call_getiter, call_iternext,
-                       impl_ret_borrowed, impl_ret_untracked)
+                       impl_ret_borrowed, impl_ret_untracked,
+                       numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
 
 
@@ -495,3 +496,32 @@ def iterable_min(iterable):
 @overload(max)
 def iterable_max(iterable):
     return min_max_impl(iterable, greater_than)
+
+
+@lower_builtin(types.TypeRef)
+def redirect_type_ctor(context, builder, sig, args):
+    """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
+    which should be overloaded by type implementator.
+
+    For example:
+
+        d = Dict()
+
+    `d` will be typed as `TypeRef[DictType]()`.  Thus, it will call into this
+    implementation.  We need to redirect the lowering to a function
+    named ``numba_typeref_ctor``.
+    """
+    cls = sig.return_type
+
+    def call_ctor(cls, *args):
+        return numba_typeref_ctor(cls, *args)
+
+    # Pack arguments into a tuple for `*args`
+    ctor_args = types.Tuple.from_types(sig.args)
+    # Make signature T(TypeRef[T], *args) where T is cls
+    sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
+
+    args = (context.get_dummy_value(),   # Type object has no runtime repr.
+            context.make_tuple(builder, sig.args[1], args))
+
+    return context.compile_internal(builder, call_ctor, sig, args)

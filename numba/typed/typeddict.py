@@ -4,12 +4,15 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 from collections import MutableMapping
 
 from numba.types import DictType, TypeRef
-from numba import njit, dictobject, types, cgutils
+from numba.targets.imputils import numba_typeref_ctor
+from numba import njit, dictobject, types, cgutils, errors, typeof
 from numba.extending import (
     overload_method,
+    overload,
     box,
     unbox,
-    NativeValue
+    NativeValue,
+    type_callable
 )
 
 
@@ -87,14 +90,20 @@ class Dict(MutableMapping):
 
     def __init__(self, **kwargs):
         """
+        For users, the constructor does not take any parameters.
+        The keyword arguments are for internal use only.
+
         Parameters
         ----------
         dcttype : numba.types.DictType; keyword-only
-            The dictionary type
+            Used internally for the dictionary type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
         """
-        self._dict_type, self._opaque = self._parse_arg(**kwargs)
+        if kwargs:
+            self._dict_type, self._opaque = self._parse_arg(**kwargs)
+        else:
+            self._dict_type = None
 
     def _parse_arg(self, dcttype, meminfo=None):
         if not isinstance(dcttype, DictType):
@@ -108,25 +117,53 @@ class Dict(MutableMapping):
 
     @property
     def _numba_type_(self):
+        if self._dict_type is None:
+            raise TypeError("invalid operation on untyped dictionary")
         return self._dict_type
 
+    @property
+    def _typed(self):
+        """Returns True if the dictionary is typed.
+        """
+        return self._dict_type is not None
+
+    def _initialise_dict(self, key, value):
+        dcttype = types.DictType(typeof(key), typeof(value))
+        self._dict_type, self._opaque = self._parse_arg(dcttype)
+
     def __getitem__(self, key):
-        return _getitem(self, key)
+        if not self._typed:
+            raise KeyError(key)
+        else:
+            return _getitem(self, key)
 
     def __setitem__(self, key, value):
+        if not self._typed:
+            self._initialise_dict(key, value)
         return _setitem(self, key, value)
 
     def __delitem__(self, key):
+        if not self._typed:
+            raise KeyError(key)
         _delitem(self, key)
 
     def __iter__(self):
-        return iter(_iter(self))
+        if not self._typed:
+            return iter(())
+        else:
+            return iter(_iter(self))
 
     def __len__(self):
-        return _length(self)
+        if not self._typed:
+            return 0
+        else:
+            return _length(self)
 
     def __contains__(self, key):
-        return _contains(self, key)
+        if len(self) == 0:
+            return False
+        else:
+            return _contains(self, key)
 
     def __str__(self):
         buf = []
@@ -140,12 +177,19 @@ class Dict(MutableMapping):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
     def get(self, key, default=None):
+        if not self._typed:
+            return default
         return _get(self, key, default)
 
     def setdefault(self, key, default=None):
+        if not self._typed:
+            if default is not None:
+                self._initialise_dict(key, default)
         return _setdefault(self, key, default)
 
     def popitem(self):
+        if len(self) == 0:
+            raise KeyError('dictionary is empty')
         return _popitem(self)
 
     def copy(self):
@@ -154,7 +198,7 @@ class Dict(MutableMapping):
 
 # XXX: should we have a better way to classmethod
 @overload_method(TypeRef, 'empty')
-def typeddict_empty(cls,  key_type, value_type):
+def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:
         return
 
@@ -219,3 +263,50 @@ def unbox_dicttype(typ, val, c):
     c.pyapi.decref(miptr)
 
     return NativeValue(dctobj)
+
+
+#
+# The following contains the logic for the type-inferred constructor
+#
+
+
+@type_callable(DictType)
+def typeddict_call(context):
+    """
+    Defines typing logic for ``Dict()``.
+    Produces Dict[undefined, undefined]
+    """
+    def typer():
+        return types.DictType(types.undefined, types.undefined)
+    return typer
+
+
+@overload(numba_typeref_ctor)
+def impl_numba_typeref_ctor(cls):
+    """
+    Defines ``Dict()``, the type-inferred version of the dictionary ctor.
+
+    Parameters
+    ----------
+    cls : TypeRef
+        Expecting a TypeRef of a precise DictType.
+
+    See also: `redirect_type_ctor` in numba/target/bulitins.py
+    """
+    dict_ty = cls.instance_type
+    if not isinstance(dict_ty, types.DictType):
+        msg = "expecting a DictType but got {}".format(dict_ty)
+        return  # reject
+    # Ensure the dictionary is precisely typed.
+    if not dict_ty.is_precise():
+        msg = "expecting a precise DictType but got {}".format(dict_ty)
+        raise errors.LoweringError(msg)
+
+    key_type = types.TypeRef(dict_ty.key_type)
+    value_type = types.TypeRef(dict_ty.value_type)
+
+    def impl(cls):
+        # Simply call .empty() with the key/value types from *cls*
+        return Dict.empty(key_type, value_type)
+
+    return impl

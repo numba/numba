@@ -751,17 +751,27 @@ class TypeRefAttribute(AttributeTemplate):
     def resolve___call__(self, classty):
         """
         Resolve a number class's constructor (e.g. calling int(...))
+
+        Note:
+
+        This is needed because of the limitation of the current type-system
+        implementation.  Specifically, the lack of a higher-order type
+        (i.e. passing the ``DictType`` vs ``DictType(key_type, value_type)``)
         """
         ty = classty.instance_type
 
-        if not isinstance(ty, types.Number):
-            raise errors.TypingError("invalid use of non-number types")
+        if isinstance(ty, type) and issubclass(ty, types.Type):
+            # Redirect the typing to a:
+            #   @type_callable(ty)
+            #   def typeddict_call(context):
+            #        ...
+            # For example, see numba/typed/typeddict.py
+            #   @type_callable(DictType)
+            #   def typeddict_call(context):
+            def redirect(*args, **kwargs):
+                return self.context.resolve_function_type(ty, args, kwargs)
+            return types.Function(make_callable_template(key=ty, typer=redirect))
 
-        def typer(val):
-            # Scalar constructor, e.g. int32(42)
-            return ty
-
-        return types.Function(make_callable_template(key=ty, typer=typer))
 
 #------------------------------------------------------------------------------
 

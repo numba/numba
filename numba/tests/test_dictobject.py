@@ -13,12 +13,11 @@ import numpy as np
 
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
-from numba import dictobject
+from numba import dictobject, typeof
 from numba.typed import Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
-
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
@@ -1261,3 +1260,242 @@ class TestDictForbiddenTypes(TestCase):
     def test_disallow_set(self):
         self.assert_disallow_key(types.Set(types.intp))
         self.assert_disallow_value(types.Set(types.intp))
+
+
+class TestDictInferred(TestCase):
+    def test_simple_literal(self):
+        @njit
+        def foo():
+            d = Dict()
+            d[123] = 321
+            return d
+
+        k, v = 123, 321
+        d = foo()
+        self.assertEqual(dict(d), {k: v})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_simple_args(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            d[k] = v
+            return d
+
+        k, v = 123, 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_simple_upcast(self):
+        @njit
+        def foo(k, v, w):
+            d = Dict()
+            d[k] = v
+            d[k] = w
+            return d
+
+        k, v, w = 123, 32.1, 321
+        d = foo(k, v, w)
+        self.assertEqual(dict(d), {k: w})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_conflicting_value_type(self):
+        @njit
+        def foo(k, v, w):
+            d = Dict()
+            d[k] = v
+            d[k] = w
+            return d
+
+        k, v, w = 123, 321, 32.1
+        with self.assertRaises(TypingError) as raises:
+            foo(k, v, w)
+        self.assertIn(
+            'cannot safely cast float64 to {}'.format(typeof(v)),
+            str(raises.exception),
+        )
+
+    def test_conflicting_key_type(self):
+        @njit
+        def foo(k, h, v):
+            d = Dict()
+            d[k] = v
+            d[h] = v
+            return d
+
+        k, h, v = 123, 123.1, 321
+        with self.assertRaises(TypingError) as raises:
+            foo(k, h, v)
+        self.assertIn(
+            'cannot safely cast float64 to {}'.format(typeof(v)),
+            str(raises.exception),
+        )
+
+    def test_ifelse_filled_both_branches(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            if k:
+                d[k] = v
+            else:
+                d[0xdead] = v + 1
+
+            return d
+
+        k, v = 123, 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        k, v = 0, 0
+        d = foo(k, v)
+        self.assertEqual(dict(d), {0xdead: v + 1})
+
+    def test_ifelse_empty_one_branch(self):
+        @njit
+        def foo(k, v):
+            d = Dict()
+            if k:
+                d[k] = v
+
+            return d
+
+        k, v = 123, 321
+        d = foo(k, v)
+        self.assertEqual(dict(d), {k: v})
+        k, v = 0, 0
+        d = foo(k, v)
+        self.assertEqual(dict(d), {})
+        self.assertEqual(typeof(d).key_type, typeof(k))
+        self.assertEqual(typeof(d).value_type, typeof(v))
+
+    def test_loop(self):
+        @njit
+        def foo(ks, vs):
+            d = Dict()
+            for k, v in zip(ks, vs):
+                d[k] = v
+            return d
+
+        vs = list(range(4))
+        ks = list(map(lambda x : x + 100, vs))
+        d = foo(ks, vs)
+        self.assertEqual(dict(d), dict(zip(ks, vs)))
+
+    def test_unused(self):
+        @njit
+        def foo():
+            d = Dict()
+            return d
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "imprecise type",
+            str(raises.exception)
+        )
+
+    def test_define_after_use(self):
+        @njit
+        def foo(define):
+            d = Dict()
+            ct = len(d)
+            for k, v in d.items():
+                ct += v
+
+            if define:
+                # This will set the type
+                d[1] = 2
+            return ct, d, len(d)
+
+        ct, d, n = foo(True)
+        self.assertEqual(ct, 0)
+        self.assertEqual(n, 1)
+        self.assertEqual(dict(d), {1: 2})
+
+        ct, d, n = foo(False)
+        self.assertEqual(ct, 0)
+        self.assertEqual(dict(d), {})
+        self.assertEqual(n, 0)
+
+    def test_dict_of_dict(self):
+        @njit
+        def foo(k1, k2, v):
+            d = Dict()
+            z1 = Dict()
+            z1[k1 + 1] = v + k1
+            z2 = Dict()
+            z2[k2 + 2] = v + k2
+            d[k1] = z1
+            d[k2] = z2
+            return d
+
+        k1, k2, v = 100, 200, 321
+        d = foo(k1, k2, v)
+        self.assertEqual(
+            dict(d),
+            {
+                k1: {k1 + 1: k1 + v},
+                k2: {k2 + 2: k2 + v},
+            },
+        )
+
+
+class TestNonCompiledInfer(TestCase):
+    def test_check_untyped_dict_ops(self):
+        # Check operation on untyped dictionary
+        d = Dict()
+        self.assertFalse(d._typed)
+        self.assertEqual(len(d), 0)
+        self.assertEqual(str(d), str({}))
+        self.assertEqual(list(iter(d)), [])
+        # Test __getitem__
+        with self.assertRaises(KeyError) as raises:
+            d[1]
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test __delitem__
+        with self.assertRaises(KeyError) as raises:
+            del d[1]
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test .pop
+        with self.assertRaises(KeyError):
+            d.pop(1)
+        self.assertEqual(str(raises.exception), str(KeyError(1)))
+        # Test .pop
+        self.assertIs(d.pop(1, None), None)
+        # Test .get
+        self.assertIs(d.get(1), None)
+        # Test .popitem
+        with self.assertRaises(KeyError) as raises:
+            d.popitem()
+        self.assertEqual(str(raises.exception),
+                         str(KeyError('dictionary is empty')))
+        # Test setdefault(k)
+        with self.assertRaises(TypeError) as raises:
+            d.setdefault(1)
+        self.assertEqual(
+            str(raises.exception),
+            str(TypeError('invalid operation on untyped dictionary')),
+        )
+        # Test __contains__
+        self.assertFalse(1 in d)
+        # It's untyped
+        self.assertFalse(d._typed)
+
+    def test_getitem(self):
+        # Test __getitem__
+        d = Dict()
+        d[1] = 2
+        # It's typed now
+        self.assertTrue(d._typed)
+        self.assertEqual(d[1], 2)
+
+    def test_setdefault(self):
+        # Test setdefault(k, d)
+        d = Dict()
+        d.setdefault(1, 2)
+        # It's typed now
+        self.assertTrue(d._typed)
+        self.assertEqual(d[1], 2)

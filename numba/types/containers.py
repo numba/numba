@@ -456,6 +456,8 @@ class DictType(IterableType):
     def __init__(self, keyty, valty):
         assert not isinstance(keyty, TypeRef)
         assert not isinstance(valty, TypeRef)
+        keyty = unliteral(keyty)
+        valty = unliteral(valty)
         _sentry_forbidden_types(keyty, valty)
         self.key_type = keyty
         self.value_type = valty
@@ -467,9 +469,32 @@ class DictType(IterableType):
         )
         super(DictType, self).__init__(name)
 
+    def is_precise(self):
+        return not any((
+            isinstance(self.key_type, Undefined),
+            isinstance(self.value_type, Undefined),
+        ))
+
     @property
     def iterator_type(self):
         return DictKeysIterableType(self).iterator_type
+
+    @classmethod
+    def refine(cls, keyty, valty):
+        """Refine to a precise dictionary type
+        """
+        res = cls(keyty, valty)
+        res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* dictionary.
+        """
+        # If other is dict
+        if isinstance(other, DictType):
+            if not other.is_precise():
+                return self
 
 
 class DictItemsIterableType(SimpleIterableType):
