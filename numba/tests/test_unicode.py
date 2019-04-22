@@ -603,12 +603,6 @@ class TestUnicode(BaseTest):
         pyfunc = ljust_usecase_fillchar
         cfunc = njit(pyfunc)
 
-        # disallowed fillchar cases
-        for fillchar in ['', '+0', 'quién', '处着' ]:
-            with self.assertRaises(ValueError) as raises:
-                cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The <fill> character must be exactly one', str(raises.exception))
-
         # allowed fillchar cases
         for fillchar in [' ', '+', 'ú', '处' ]:
             with self.assertRaises(TypingError) as raises:
@@ -620,6 +614,18 @@ class TestUnicode(BaseTest):
                     self.assertEqual(pyfunc(s, width, fillchar),
                                      cfunc(s, width, fillchar),
                                      "'%s'.ljust(%d, '%s')?" % (s, width, fillchar))
+
+    def test_ljust_fillchar_exception(self):
+        self.disable_leak_check()
+
+        pyfunc = ljust_usecase_fillchar
+        cfunc = njit(pyfunc)
+
+        # disallowed fillchar cases
+        for fillchar in ['', '+0', 'quién', '处着' ]:
+            with self.assertRaises(ValueError) as raises:
+                cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+            self.assertIn('The <fill> character must be exactly one', str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
