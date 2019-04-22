@@ -345,7 +345,8 @@ class StaticGetItemConstraint(object):
 
                 if sig is not None:
                     itemty = sig.return_type
-                    assert itemty.is_precise()
+                    # if the itemty is not precise, let it through, unification
+                    # will catch it and produce a better error message
                     typeinfer.add_type(self.target, itemty, loc=self.loc)
                 elif self.fallback is not None:
                     self.fallback(typeinfer)
