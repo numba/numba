@@ -6,7 +6,6 @@ import numba.unittest_support as unittest
 from .support import TestCase, force_pyobj_flags
 
 
-
 def build_map():
     return {0: 1, 2: 3}
 
@@ -23,9 +22,6 @@ class DictTestCase(TestCase):
 
     def test_build_map_from_local_vars(self, flags=force_pyobj_flags):
         self.run_nullary_func(build_map_from_local_vars, flags=flags)
-
-# XXX: requires this import sideeffect
-import numba.typed
 
 
 class TestCompiledDict(TestCase):
