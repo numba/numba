@@ -644,7 +644,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         chunk_size = 500
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
-
+        t = time.time()
         for tests in splitted_tests:
             pool = multiprocessing.Pool(self.nprocs)
             try:
@@ -664,9 +664,15 @@ class ParallelTestRunner(runner.TextTestRunner):
             finally:
                 # Always join the pool (this is necessary for coverage.py)
                 pool.join()
+        parallel_time = time.time() - t
         if not result.shouldStop:
+            t = time.time()
             stests = SerialSuite(self._stests)
             stests.run(result)
+            serial_time = time.time() - t
+            print()
+            print("Total time parallel tests: '{}'".format(parallel_time))
+            print("Total time serial tests: '{}'".format(serial_time))
             return result
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
@@ -693,6 +699,8 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test)
+        print("Number of parallel test functions: '{}'".format(len(self._ptests)))
+        print("Total serial test functions: '{}'".format(len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
