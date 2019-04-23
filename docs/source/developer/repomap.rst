@@ -101,7 +101,7 @@ These define aspects of the public Numba interface.
 - ``numba/extending.py`` - Public decorators for extending Numba
   (``overload``, ``intrinsic``, etc)
 - ``numba/ccallback.py`` - ``@cfunc`` decorator for compiling
-  functions to a fixed C singature.  Used to make callbacks.
+  functions to a fixed C signature.  Used to make callbacks.
 - ``numba/npyufunc/decorators.py`` - ufunc/gufunc compilation
   decorators
 - ``numba/config.py`` - Numba global config options and environment
@@ -148,17 +148,18 @@ Compiler Pipeline
   rewrite passes
 - ``numba/rewrites/ir_print.py`` - Write print() calls into special
   print nodes in the IR
-- ``numba/rewrites/static_raise.py`` - Convert exceptions with static
+- ``numba/rewrites/static_raise.py`` - Converts exceptions with static
   arguments into special form that can be lowered
 - ``numba/rewrites/macros.py`` - Generic support for macro expansion
   in the Numba IR
-- ``numba/rewrites/static_getitem.py`` - Rewrite getitem and setitem
+- ``numba/rewrites/static_getitem.py`` - Rewrites getitem and setitem
   with constant arguments to allow type inference
-- ``numba/rewrites/static_binop.py`` - Rewrite binary operations
+- ``numba/rewrites/static_binop.py`` - Rewrites binary operations
   (specifically ``**``) with constant arguments so faster code can be
   generated
-- ``numba/inline_closurecall.py`` - Inline body of closure functions
-  to call site.
+- ``numba/inline_closurecall.py`` - Inlines body of closure functions
+  to call site.  Support for array comprehensions, reduction inlining, 
+  and stencil inlining.
 - ``numba/macro.py`` - Alias to ``numba.rewrites.macros``
 - ``numba/postproc.py`` - Postprocessor for Numba IR that computes
   variable lifetime, inserts del operations, and handles generators
@@ -203,7 +204,7 @@ matters, and it is more convenient to encapsulate direct interaction
 with CPython APIs.
 
 - ``numba/_arraystruct.h`` - Struct for holding NumPy array
-  attributes.  Used in helperlib and nrt.
+  attributes.  Used in helperlib and the Numba Runtime.
 - ``numba/_helperlib.c`` - C functions required by Numba compiled code
   at runtime.  Linked into ahead-of-time compiled modules
 - ``numba/_helpermod.c`` - Python extension module with pointers to
@@ -219,7 +220,7 @@ with CPython APIs.
   API functions
 - ``numba/_math_c99.{h,c}`` - C99 math compatibility (needed Python
   2.7 on Windows, compiled with VS2008)
-- ``numba/mviewbuf.c`` - Handles Python memorviews
+- ``numba/mviewbuf.c`` - Handles Python memoryviews
 - ``numba/_typeof.{h,c}`` - C implementation of type fingerprinting,
   used by dispatcher
 - ``numba/_numba_common.h`` - Portable C macro for marking symbols
@@ -247,7 +248,7 @@ Misc Support
   (also imports local copy of ``six``)
 - ``numba/appdirs.py`` - Vendored package for determining application
   config directories on every platform
-- ``numba/compiler_lock.py`` - Global compiler lock because our usage
+- ``numba/compiler_lock.py`` - Global compiler lock because Numba's usage
   of LLVM is not thread-safe
 - ``numba/special.py`` - Python stub implementations of special Numba
   functions (prange, gdb*)
@@ -268,7 +269,8 @@ Misc Support
 - ``numba/unsafe/ndarray.py`` - NumPy array helpers
 - ``numba/unsafe/bytes.py`` - Copying and dereferencing data from void
   pointers
-- ``numba/dummyarray.py`` - ???
+- ``numba/dummyarray.py`` - Used by GPU backends to hold array information
+  on the host, but not the data.
 - ``numba/callwrapper.py`` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
 - ``numba/ctypes_support.py`` - Import this instead of ``ctypes`` to
@@ -276,11 +278,11 @@ Misc Support
 - ``numba/cffi_support.py`` - Alias of numba.typing.cffi_utils for
   backward compatibility (still needed?)
 - ``numba/numpy_support.py`` - Helper functions for working with NumPy
-  and dtypes
+  and translating Numba types to and from NumPy dtypes.
 - ``numba/tracing.py`` - Decorator for tracing Python calls and
   emitting log messages
 - ``numba/funcdesc.py`` - Classes for describing function metadata
-  (used in compiler)
+  (used in the compiler)
 - ``numba/sigutils.py`` - Helper functions for parsing and normalizing
   Numba type signatures
 - ``numba/serialize.py`` - Support for pickling compiled functions
@@ -292,7 +294,7 @@ Misc Support
 Core Python Data Types
 ''''''''''''''''''''''
 
-- ``numba/_hashtable.{h,c}`` - Adaptation of Python 3.7 hash table
+- ``numba/_hashtable.{h,c}`` - Adaptation of the Python 3.7 hash table
   implementation
 - ``numba/_dictobject.{h,c}`` - C level implementation of typed
   dictionary
@@ -310,14 +312,14 @@ Math
 
 - ``numba/_random.c`` - Reimplementation of NumPy / CPython random
   number generator
-- ``numba/_lapack.c`` - Wrappers for calling BLAS functions
+- ``numba/_lapack.c`` - Wrappers for calling BLAS and LAPACK functions
 
 
 ParallelAccelerator
 '''''''''''''''''''
 
 Code transformation passes that extract parallelizable code from
-function and convert to multithreaded gufunc calls.
+a function and convert it to multithreaded gufunc calls.
 
 - ``numba/parfor.py`` - General ParallelAccelerator
 - ``numba/stencil.py`` - Stencil function decorator (implemented
