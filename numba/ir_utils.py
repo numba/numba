@@ -711,8 +711,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     if expr.op == 'cast' or expr.op in ['getitem', 'static_getitem']:
                         _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                     # array attributes like A.T
-                    elif expr.op == 'getattr' and (expr.attr in ['T', 'ctypes', 'flat'] or
-                                                   expr.value.name in arg_aliases):
+                    elif expr.op == 'getattr' and expr.attr in ['T', 'ctypes', 'flat']:
                         _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                     # calls that can create aliases such as B = A.ravel()
                     elif expr.op == 'call':
