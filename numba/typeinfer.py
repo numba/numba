@@ -1159,6 +1159,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_setattr(inst)
         elif isinstance(inst, ir.Print):
             self.typeof_print(inst)
+        elif isinstance(inst, ir.StoreMap):
+            self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -1173,6 +1175,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_setitem(self, inst):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_storemap(self, inst):
+        constraint = SetItemConstraint(target=inst.dct, index=inst.key,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))

@@ -355,6 +355,11 @@ class Lower(BaseLower):
             assert signature is not None
             return self.lower_setitem(inst.target, inst.index, inst.value, signature)
 
+        elif isinstance(inst, ir.StoreMap):
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            return self.lower_setitem(inst.dct, inst.key, inst.value, signature)
+
         elif isinstance(inst, ir.DelItem):
             target = self.loadvar(inst.target.name)
             index = self.loadvar(inst.index.name)
