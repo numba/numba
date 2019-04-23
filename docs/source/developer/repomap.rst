@@ -149,7 +149,7 @@ Compiler Pipeline
 - ``numba/rewrites/ir_print.py`` - Write print() calls into special
   print nodes in the IR
 - ``numba/rewrites/static_raise.py`` - Converts exceptions with static
-  arguments into special form that can be lowered
+  arguments into a special form that can be lowered
 - ``numba/rewrites/macros.py`` - Generic support for macro expansion
   in the Numba IR
 - ``numba/rewrites/static_getitem.py`` - Rewrites getitem and setitem
@@ -313,13 +313,14 @@ Math
 - ``numba/_random.c`` - Reimplementation of NumPy / CPython random
   number generator
 - ``numba/_lapack.c`` - Wrappers for calling BLAS and LAPACK functions
+  (requires SciPy)
 
 
 ParallelAccelerator
 '''''''''''''''''''
 
 Code transformation passes that extract parallelizable code from
-a function and convert it to multithreaded gufunc calls.
+a function and convert it into multithreaded gufunc calls.
 
 - ``numba/parfor.py`` - General ParallelAccelerator
 - ``numba/stencil.py`` - Stencil function decorator (implemented
