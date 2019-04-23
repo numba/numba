@@ -174,7 +174,7 @@ def _check_struct_alignment(rec, fields):
                 msg = (
                     'NumPy is using a different alignment ({}) '
                     'than Numba/LLVM ({}) for {}. '
-                    'This is likely a numpy bug.'
+                    'This is likely a NumPy bug.'
                 )
                 raise ValueError(msg.format(npy_align, llvm_align, dt))
 
