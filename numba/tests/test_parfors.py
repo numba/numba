@@ -2086,6 +2086,29 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, 1.0)
 
     @skip_unsupported
+    def test_argument_alias_recarray_field(self):
+        # Test for issue4007.
+        def test_impl(n):
+            for i in range(len(n)):
+                n.x[i] = 7.0
+            return n
+        X1 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X2 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X3 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        v1 = X1.view(np.recarray)
+        v2 = X2.view(np.recarray)
+        v3 = X3.view(np.recarray)
+
+        # Numpy doesn't seem to support almost equal on recarray.
+        # So, we convert to list and use assertEqual instead.
+        python_res = list(test_impl(v1))
+        njit_res = list(njit(test_impl)(v2))
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = list(pa_func(v3))
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
+    @skip_unsupported
     def test_mutable_list_param(self):
         """ issue3699: test that mutable variable to call in loop
             is not hoisted.  The call in test_impl forces a manual
