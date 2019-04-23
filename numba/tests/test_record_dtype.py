@@ -17,11 +17,14 @@ from .support import tag
 def get_a(ary, i):
     return ary[i].a
 
+
 def get_b(ary, i):
     return ary[i].b
 
+
 def get_c(ary, i):
     return ary[i].c
+
 
 def make_getitem(item):
     # This also exercises constant lookup from a closure variable
@@ -29,25 +32,32 @@ def make_getitem(item):
         return ary[i][item]
     return get_xx
 
+
 # Issue #1664: constant index lookup should fall back to regular getitem
 def get_zero_a(ary, _unused):
     return ary[0].a
+
 
 getitem_a = make_getitem('a')
 getitem_b = make_getitem('b')
 getitem_c = make_getitem('c')
 
+
 def get_a_subarray(ary, i):
     return ary.a[i]
+
 
 def get_b_subarray(ary, i):
     return ary.b[i]
 
+
 def get_c_subarray(ary, i):
     return ary.c[i]
 
+
 def get_a_zero(ary, _unused):
     return ary.a[0]
+
 
 def make_getitem_subarray(item):
     # This also exercises constant lookup from a closure variable
@@ -55,15 +65,19 @@ def make_getitem_subarray(item):
         return ary[item][i]
     return get_xx_subarray
 
+
 getitem_a_subarray = make_getitem_subarray('a')
 getitem_b_subarray = make_getitem_subarray('b')
 getitem_c_subarray = make_getitem_subarray('c')
 
+
 def get_two_arrays_a(ary1, ary2, i):
     return ary1[i].a + ary2[i].a
 
+
 def get_two_arrays_b(ary1, ary2, i):
     return ary1[i].b + ary2[i].b
+
 
 def get_two_arrays_c(ary1, ary2, i):
     return ary1[i].c + ary2[i].c
@@ -76,38 +90,48 @@ def get_two_arrays_distinct(ary1, ary2, i):
 def set_a(ary, i, v):
     ary[i].a = v
 
+
 def set_b(ary, i, v):
     ary[i].b = v
 
+
 def set_c(ary, i, v):
     ary[i].c = v
+
 
 def make_setitem(item):
     def set_xx(ary, i, v):
         ary[i][item] = v
     return set_xx
 
+
 setitem_a = make_setitem('a')
 setitem_b = make_setitem('b')
 setitem_c = make_setitem('c')
 
+
 def set_a_subarray(ary, i, v):
     ary.a[i] = v
+
 
 def set_b_subarray(ary, i, v):
     ary.b[i] = v
 
+
 def set_c_subarray(ary, i, v):
     ary.c[i] = v
+
 
 def make_setitem_subarray(item):
     def set_xx_subarray(ary, i, v):
         ary[item][i] = v
     return set_xx_subarray
 
+
 setitem_a_subarray = make_setitem('a')
 setitem_b_subarray = make_setitem('b')
 setitem_c_subarray = make_setitem('c')
+
 
 def set_record(ary, i, j):
     ary[i] = ary[j]
@@ -178,6 +202,7 @@ def record_write_array(ary):
     ary.h[0] = 3.0
     ary.h[1] = 4.0
 
+
 def record_write_2d_array(ary):
     ary.i = 3
     ary.j[0, 0] = 5.0
@@ -191,14 +216,18 @@ def record_write_2d_array(ary):
 def record_read_array0(ary):
     return ary.h[0]
 
+
 def record_read_array1(ary):
     return ary.h[1]
+
 
 def record_read_2d_array00(ary):
     return ary.j[0,0]
 
+
 def record_read_2d_array10(ary):
     return ary.j[1,0]
+
 
 def record_read_2d_array01(ary):
     return ary.j[0,1]
@@ -206,6 +235,7 @@ def record_read_2d_array01(ary):
 
 def record_read_first_arr(ary):
     return ary.k[2, 2]
+
 
 def record_read_second_arr(ary):
     return ary.l[2, 2]
@@ -432,7 +462,7 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc, (rec[:], rec[:], types.intp))
         for i in range(self.refsample1d.size):
             self.assertEqual(pyfunc(self.refsample1d, self.refsample1d3, i),
-                              cfunc(self.nbsample1d, self.nbsample1d3, i))
+                             cfunc(self.nbsample1d, self.nbsample1d3, i))
 
     def test_two_distinct_arrays(self):
         '''
@@ -529,7 +559,7 @@ class TestRecordDtype(unittest.TestCase):
         nbval = self.nbsample1d.copy()[0]
         attrs = 'abc'
         valtypes = types.float64, types.int16, types.complex64
-        values = 1.23, 12345, 123+456j
+        values = 1.23, 12345, 123 + 456j
         old_refcnt = sys.getrefcount(nbval)
 
         for attr, valtyp, val in zip(attrs, valtypes, values):
@@ -553,7 +583,7 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(*args)
             try:
                 self.assertEqual(expected, got)
-            except AssertionError as e:
+            except AssertionError:
                 # On ARM, a LLVM misoptimization can produce buggy code,
                 # see https://llvm.org/bugs/show_bug.cgi?id=24669
                 import llvmlite.binding as ll
@@ -574,7 +604,6 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_record_args_reverse(self):
         self._test_record_args(True)
-
 
     def test_two_records(self):
         '''
@@ -597,7 +626,6 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(nbval1, nbval2)
             self.assertEqual(expected, got)
 
-
     def test_two_distinct_records(self):
         '''
         Testing the use of two scalar records of differing type
@@ -613,7 +641,6 @@ class TestRecordDtype(unittest.TestCase):
         got = cfunc(nbval1, nbval2)
         self.assertEqual(expected, got)
 
-
     def test_record_write_array(self):
         '''
         Testing writing to a 1D array within a structured type
@@ -628,7 +655,6 @@ class TestRecordDtype(unittest.TestCase):
         expected[0].h[0] = 3.0
         expected[0].h[1] = 4.0
         np.testing.assert_equal(expected, nbval)
-
 
     @tag('important')
     def test_record_write_2d_array(self):
@@ -646,7 +672,6 @@ class TestRecordDtype(unittest.TestCase):
                                       np.float32).reshape(3, 2)
         np.testing.assert_equal(expected, nbval)
 
-
     def test_record_read_array(self):
         '''
         Test reading from a 1D array within a structured type
@@ -662,7 +687,6 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(record_read_array1, (nbrecord,))
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
-
 
     @tag('important')
     def test_record_read_2d_array(self):
@@ -684,7 +708,6 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(record_read_2d_array10, (nbrecord,))
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[1, 0])
-
 
     @tag('important')
     def test_record_return(self):
@@ -824,6 +847,7 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.nbsample1d2 = np.zeros(3, dtype=recordtype2)
         self.nbsample1d3 = np.zeros(3, dtype=recordtype)
 
+
 class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):
     '''
     Same as TestRecordDtypeWithStructArrays, stressing the Dispatcher's type
@@ -900,8 +924,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
         for i in range(self.refsample1d.size):
             chars = "{0}".format(hex(i+10))
-            expected = pyfunc(self.refsample1d, i, chars)
-            got = cfunc(self.nbsample1d, i, chars)
+            pyfunc(self.refsample1d, i, chars)
+            cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
 
     def test_py_argument_char_seq_near_overflow(self):
