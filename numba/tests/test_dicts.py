@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 from numba import njit
+from numba.errors import TypingError
 import numba.unittest_support as unittest
 from .support import TestCase, force_pyobj_flags
 
@@ -32,6 +33,7 @@ class TestCompiledDict(TestCase):
     `numba.typed.Dict`.
     """
     def test_use_dict(self):
+        # Test dict()
         @njit
         def foo():
             d = dict()
@@ -41,7 +43,23 @@ class TestCompiledDict(TestCase):
         d = foo()
         self.assertEqual(d, {1: 2})
 
+    def test_unsupported_dict_usage(self):
+        # Test dict(dict())
+        from numba.typing.dictdecl import _message_dict_support
+
+        @njit
+        def foo():
+            d = dict()
+            d[1] = 2
+            return dict(d)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn(_message_dict_support, str(raises.exception))
+
     def test_use_curlybraces(self):
+        # Test {} with empty args
         @njit
         def foo():
             d = {}
@@ -53,6 +71,7 @@ class TestCompiledDict(TestCase):
 
 
     def test_use_curlybraces_with_init1(self):
+        # Test {} with 1 item
         @njit
         def foo():
             return {1: 2}
@@ -61,12 +80,30 @@ class TestCompiledDict(TestCase):
         self.assertEqual(d, {1: 2})
 
     def test_use_curlybraces_with_initmany(self):
+        # Test {} with many items
         @njit
         def foo():
             return {1: 2.2, 3: 4.4, 5: 6.6}
 
         d = foo()
         self.assertEqual(d, {1: 2.2, 3: 4.4, 5: 6.6})
+
+    def test_curlybraces_init_with_coercion(self):
+        # Type coercion at dict init is tested
+        @njit
+        def foo():
+            return {1: 2.2, 3: 4, 5: 6}
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_use_curlybraces_with_manyvar(self):
+        # Test using variable in {}
+        @njit
+        def foo(x, y):
+            return {x: 1, y: x + y}
+
+        x, y = 10, 20
+        self.assertEqual(foo(x, y), foo.py_func(x, y))
 
 
 if __name__ == '__main__':
