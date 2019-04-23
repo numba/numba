@@ -52,6 +52,11 @@ class FakeCUDAArray(object):
     def alloc_size(self):
         return self._ary.nbytes
 
+    @property
+    def nbytes(self):
+        # return nbytes -- FakeCUDAArray is a wrapper around NumPy
+        return self._ary.nbytes
+
     def __getattr__(self, attrname):
         try:
             attr = getattr(self._ary, attrname)

@@ -7,7 +7,8 @@ from .support import TestCase, override_config, captured_stdout
 import numba
 from numba import unittest_support as unittest
 from numba import jit, njit, types, ir, compiler
-from numba.ir_utils import guard, find_callname, find_const
+from numba.ir_utils import guard, find_callname, find_const, get_definition
+from numba.targets.registry import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call
 from .test_parfors import skip_unsupported
 
@@ -151,6 +152,34 @@ class TestInlining(TestCase):
 
         self.assertEqual(len(func_ir._definitions['b']), 2)
 
+    @skip_unsupported
+    def test_inline_var_dict_ret(self):
+        # make sure inline_closure_call returns the variable replacement dict
+        # and it contains the original variable name used in locals
+        @numba.njit(locals={'b': numba.float64})
+        def g(a):
+            b = a + 1
+            return b
+
+        def test_impl():
+            return g(1)
+
+        func_ir = compiler.run_frontend(test_impl)
+        blocks = list(func_ir.blocks.values())
+        for block in blocks:
+            for i, stmt in enumerate(block.body):
+                if (isinstance(stmt, ir.Assign)
+                        and isinstance(stmt.value, ir.Expr)
+                        and stmt.value.op == 'call'):
+                    func_def = guard(get_definition, func_ir, stmt.value.func)
+                    if (isinstance(func_def, (ir.Global, ir.FreeVar))
+                            and isinstance(func_def.value, CPUDispatcher)):
+                        py_func = func_def.value.py_func
+                        _, var_map = inline_closure_call(
+                            func_ir, py_func.__globals__, block, i, py_func)
+                        break
+
+        self.assertTrue('b' in var_map)
 
 if __name__ == '__main__':
     unittest.main()

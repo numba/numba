@@ -306,7 +306,9 @@ def get_optimized_numba_ir(test_func, args, **kws):
         typingctx.refresh()
         targetctx.refresh()
 
-        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
+        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir,
+                                                               options,
+                                                               typed=True)
         inline_pass.run()
 
         numba.rewrites.rewrite_registry.apply(

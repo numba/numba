@@ -45,11 +45,12 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, parallel_options, swapped={}):
+    def __init__(self, func_ir, parallel_options, swapped={}, typed=False):
         self.func_ir = func_ir
         self.parallel_options = parallel_options
         self.swapped = swapped
         self._processed_stencils = []
+        self.typed = typed
 
     def run(self):
         """Run inline closure call pass.
@@ -97,7 +98,8 @@ class InlineClosureCallPass(object):
             for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
                 if guard(_inline_arraycall, self.func_ir, cfg, visited, loops[k],
-                         self.swapped, self.parallel_options.comprehension):
+                         self.swapped, self.parallel_options.comprehension,
+                         self.typed):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -240,6 +242,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     make_function node. `typingctx`, `typemap` and `calltypes` are typing
     data structures of the caller, available if we are in a typed pass.
     `arg_typs` includes the types of the arguments at the callsite.
+
+    Returns IR blocks of the callee and the variable renaming dictionary used
+    for them to facilitate further processing of new blocks.
     """
     scope = block.scope
     instr = block.body[i]
@@ -371,7 +376,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if work_list != None:
         for block in new_blocks:
             work_list.append(block)
-    return callee_blocks
+    return callee_blocks, var_dict
 
 def _make_debug_print(prefix):
     def debug_print(*args):
@@ -531,7 +536,8 @@ def _find_iter_range(func_ir, range_iter_var, swapped):
     else:
         raise GuardException
 
-def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False):
+def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
+                      typed=False):
     """Look for array(list) call in the exit block of a given loop, and turn list operations into
     array operations in the loop if the following conditions are met:
       1. The exit block contains an array call on the list;
@@ -676,10 +682,16 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False)
             range_func_def.value = internal_prange
 
     else:
-        len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
-        stmts.append(_new_definition(func_ir, len_func_var,
-                     ir.Global('range_iter_len', range_iter_len, loc=loc), loc))
-        size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
+        # this doesn't work in objmode as it's effectively untyped
+        if typed:
+            len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
+            stmts.append(_new_definition(func_ir, len_func_var,
+                        ir.Global('range_iter_len', range_iter_len, loc=loc),
+                        loc))
+            size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
+        else:
+            raise GuardException
+
 
     stmts.append(_new_definition(func_ir, size_var, size_val, loc))
 
@@ -701,11 +713,16 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False)
                          ir.Global('empty', np.empty, loc=loc), loc))
         array_kws = [('dtype', dtype_var)]
     else:
-        # otherwise we'll call unsafe_empty_inferred
-        stmts.append(_new_definition(func_ir, empty_func,
-                         ir.Global('unsafe_empty_inferred',
-                             unsafe_empty_inferred, loc=loc), loc))
-        array_kws = []
+        # this doesn't work in objmode as it's effectively untyped
+        if typed:
+            # otherwise we'll call unsafe_empty_inferred
+            stmts.append(_new_definition(func_ir, empty_func,
+                            ir.Global('unsafe_empty_inferred',
+                                unsafe_empty_inferred, loc=loc), loc))
+            array_kws = []
+        else:
+            raise GuardException
+
     # array_var = empty_func(size_tuple_var)
     stmts.append(_new_definition(func_ir, array_var,
                  ir.Expr.call(empty_func, (size_tuple_var,), list(array_kws), loc=loc), loc))

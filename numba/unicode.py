@@ -13,6 +13,7 @@ from numba.extending import (
     overload,
     overload_method,
     intrinsic,
+    register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
@@ -517,16 +518,24 @@ def unicode_split(a, sep=None, maxsplit=-1):
             parts = []
             last = 0
             idx = 0
-            split_count = 0
 
-            while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
-                if _cmp_region(a, idx, sep, 0, sep_len) == 0:
-                    parts.append(a[last:idx])
-                    idx += sep_len
-                    last = idx
-                    split_count += 1
-                else:
-                    idx += 1
+            if sep_len == 1 and maxsplit == -1:
+                sep_code_point = _get_code_point(sep, 0)
+                for idx in range(a_len):
+                    if _get_code_point(a, idx) == sep_code_point:
+                        parts.append(a[last:idx])
+                        last = idx + 1
+            else:
+                split_count = 0
+
+                while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
+                    if _cmp_region(a, idx, sep, 0, sep_len) == 0:
+                        parts.append(a[last:idx])
+                        idx += sep_len
+                        last = idx
+                        split_count += 1
+                    else:
+                        idx += 1
 
             if last <= a_len:
                 parts.append(a[last:])
@@ -702,6 +711,43 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
                             _get_code_point(src, src_offset + i))
 
 
+@intrinsic
+def _get_str_slice_view(typingctx, src_t, start_t, length_t):
+    """Create a slice of a unicode string using a view of its data to avoid
+    extra allocation.
+    """
+    assert src_t == types.unicode_type
+
+    def codegen(context, builder, sig, args):
+        src, start, length = args
+        in_str = cgutils.create_struct_proxy(
+            types.unicode_type)(context, builder, value=src)
+        view_str = cgutils.create_struct_proxy(
+            types.unicode_type)(context, builder)
+        view_str.meminfo = in_str.meminfo
+        view_str.kind = in_str.kind
+        view_str.length = length
+        # hash value -1 to indicate "need to compute hash"
+        view_str.hash = context.get_constant(_Py_hash_t, -1)
+        # get a pointer to start of slice data
+        bw_typ = context.typing_context.resolve_value_type(_kind_to_byte_width)
+        bw_sig = bw_typ.get_call_type(
+            context.typing_context, (types.int32,), {})
+        bw_impl = context.get_function(bw_typ, bw_sig)
+        byte_width = bw_impl(builder, (in_str.kind,))
+        offset = builder.mul(start, byte_width)
+        view_str.data = builder.gep(in_str.data, [offset])
+        # Set parent pyobject to NULL
+        view_str.parent = cgutils.get_null_value(view_str.parent.type)
+        # incref original string
+        if context.enable_nrt:
+            context.nrt.incref(builder, sig.args[0], src)
+        return view_str._getvalue()
+
+    sig = types.unicode_type(types.unicode_type, types.intp, types.intp)
+    return sig, codegen
+
+
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
@@ -716,16 +762,16 @@ def unicode_getitem(s, idx):
             def getitem_slice(s, idx):
                 slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
-                ret = _empty_string(s._kind, span)
 
                 if slice_idx.step == 1:
-                    _strncpy(ret, 0, s, slice_idx.start, span)
+                    return _get_str_slice_view(s, slice_idx.start, span)
                 else:
+                    ret = _empty_string(s._kind, span)
                     cur = slice_idx.start
                     for i in range(span):
                         _set_code_point(ret, i, _get_code_point(s, cur))
                         cur += slice_idx.step
-                return ret
+                    return ret
             return getitem_slice
 
 
@@ -743,6 +789,45 @@ def unicode_concat(a, b):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
         return concat_impl
+
+
+@register_jitable
+def _repeat_impl(str_arg, mult_arg):
+    if str_arg == '' or mult_arg < 1:
+        return ''
+    elif mult_arg == 1:
+        return str_arg
+    else:
+        new_length = str_arg._length * mult_arg
+        new_kind = str_arg._kind
+        result = _empty_string(new_kind, new_length)
+        # make initial copy into result
+        len_a = len(str_arg)
+        _strncpy(result, 0, str_arg, 0, len_a)
+        # loop through powers of 2 for efficient copying
+        copy_size = len_a
+        while 2 * copy_size <= new_length:
+            _strncpy(result, copy_size, result, 0, copy_size)
+            copy_size *= 2
+
+        if not 2 * copy_size == new_length:
+            # if copy_size not an exact multiple it then needs
+            # to complete the rest of the copies
+            rest = new_length - copy_size
+            _strncpy(result, copy_size, result, copy_size - rest, rest)
+            return result
+
+
+@overload(operator.mul)
+def unicode_repeat(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
+        def wrap(a, b):
+            return _repeat_impl(a, b)
+        return wrap
+    elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
+        def wrap(a, b):
+            return _repeat_impl(b, a)
+        return wrap
 
 
 @lower_builtin('getiter', types.UnicodeType)

@@ -104,7 +104,6 @@ exclude =
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
     numba/targets/iterators.py
-    numba/targets/arrayobj.py
     numba/targets/codegen.py
     numba/targets/polynomial.py
     numba/targets/mergesort.py
@@ -232,7 +231,6 @@ exclude =
     numba/tests/test_debug.py
     numba/tests/test_interproc.py
     numba/tests/test_typeconv.py
-    numba/tests/test_np_functions.py
     numba/tests/test_tracing.py
     numba/tests/usecases.py
     numba/tests/test_vectorization_type_inference.py
@@ -323,7 +321,6 @@ exclude =
     numba/tests/test_hashing.py
     numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_closure.py
     numba/tests/test_dispatcher.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
