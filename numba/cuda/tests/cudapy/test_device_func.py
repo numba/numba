@@ -109,6 +109,7 @@ class TestDeviceFunc(SerialMixin, unittest.TestCase):
         add_kernel[1, ary.size](ary)
         np.testing.assert_equal(expect, ary)
 
+    @skip_on_cudasim('not supported in cudasim')
     def test_inspect_ptx(self):
         @cuda.jit(device=True)
         def foo(x, y):
