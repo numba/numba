@@ -1,15 +1,15 @@
 
 .. _overloading-guide:
 
-============================
+==============================
 A guide to using ``@overload``
-============================
+==============================
 
 
 As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to create a Numba implementation of a function
 that can be used in :term:`nopython mode` functions. A common use case
-is to re-implement NumPy functions so that they can be called in ``jit``
+is to re-implement NumPy functions so that they can be called in ``@jit``
 decorated code. In this section will discuss what contributing such a function
 to Numba might entail. This should help you get started when attempting to
 contribute new overloaded functions to Numba.
@@ -170,12 +170,14 @@ You can download the example code from above including tests here:
 * :download:`myjitmodule2.py </extending/myjitmodule2.py>`
 * :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
 
-Implementing ``@overload``s for NumPy functions
-=============================================
 
-Numba supports NumPy through the provision of ``jit`` compatible
-re-implementations of NumPy functions. In such cases ``overload`` is a very
-convenient option for writing such implementations, however there are a few additional things to watch out for.
+Implementing ``@overload``s for NumPy functions
+===============================================
+
+Numba supports NumPy through the provision of ``@jit`` compatible
+re-implementations of NumPy functions. In such cases ``@overload`` is a very
+convenient option for writing such implementations, however there are a few
+additional things to watch out for.
 
 * The Numba implementation should match the NumPy implementation as closely as
   feasible with respect to accepted types, arguments, raised exceptions and
@@ -243,7 +245,7 @@ convenient option for writing such implementations, however there are a few addi
         a.repeat(10)
 
   Once you have written the function implementation, you can easily use
-  ``overload_method`` and reuse it. Just be sure to check that NumPy doesn't
+  ``@overload_method`` and reuse it. Just be sure to check that NumPy doesn't
   diverge in the implementations of its function/method.
 
   For example for the ``repeat`` function/method:
@@ -260,9 +262,9 @@ convenient option for writing such implementations, however there are a few addi
 
 * If you need to create ancillary functions, for example to re-use a small
   utility function or to split your implementation across functions for the
-  sake of readability, you can make use of the ``register_jitable`` decorator.
-  This will make those functions available from within your ``jit`` and
-  ``overload`` decorated functions.
+  sake of readability, you can make use of the ``@register_jitable`` decorator.
+  This will make those functions available from within your ``@jit`` and
+  ``@overload`` decorated functions.
 
 * The Numba continuous integration (CI) setup  tests a wide variety of NumPy
   versions---you'll sometimes be alerted to a change in behaviour back in some
@@ -270,7 +272,7 @@ convenient option for writing such implementations, however there are a few addi
   change log / repo, then you'll need to decide whether to branch logic and
   attempt to replicate the logic across versions, or use a version gate (with
   associated wording in the docs) to advertise that Numba replicates NumPy from
-some particular version onwards.
+  some particular version onwards.
 
 * You can look at the Numba source code for inspiration, many of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Below, you
