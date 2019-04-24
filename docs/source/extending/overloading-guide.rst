@@ -243,9 +243,10 @@ convenient option for writing such implementations, however there are a few addi
         a.repeat(10)
 
   Once you have written the function implementation, you can easily use
-  ``overload_method`` and reuse it, for example for the ``repeat`` function/method.
-  Just be sure to check that NumPy doesn't diverge in the implementations of
-  its function/method.
+  ``overload_method`` and reuse it. Just be sure to check that NumPy doesn't
+  diverge in the implementations of its function/method.
+
+  For example for the ``repeat`` function/method:
 
   .. code:: python
 
@@ -260,8 +261,8 @@ convenient option for writing such implementations, however there are a few addi
 * If you need to create ancillary functions, for example to re-use a small
   utility function or to split your implementation across functions for the
   sake of readability, you can make use of the ``register_jitable`` decorator.
-  This will make those functions available from within your ``jit`` decorated
-  functions.
+  This will make those functions available from within your ``jit`` and
+  ``overload`` decorated functions.
 
 * The Numba continuous integration (CI) setup  tests a wide variety of NumPy
   versions---you'll sometimes be alerted to a change in behaviour back in some
