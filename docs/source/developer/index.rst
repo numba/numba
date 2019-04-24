@@ -8,6 +8,7 @@ Developer Manual
    :maxdepth: 2
 
    contributing.rst
+   repomap.rst
    architecture.rst
    dispatching.rst
    generators.rst
