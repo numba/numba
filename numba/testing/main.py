@@ -17,7 +17,7 @@ from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
-from numba import config
+from numba import config, six
 
 try:
     from multiprocessing import TimeoutError
@@ -639,14 +639,21 @@ class ParallelTestRunner(runner.TextTestRunner):
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
 
-        # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 500
-        splitted_tests = [self._ptests[i:i + chunk_size]
-                          for i in range(0, len(self._ptests), chunk_size)]
+        if six.PY2:
+            # Split the tests and recycle the worker process to tame memory usage.
+            chunk_size = 500
+            splitted_tests = [self._ptests[i:i + chunk_size]
+                              for i in range(0, len(self._ptests), chunk_size)]
+            target = splitted_tests
+        elif six.PY3:
+            target = [self._ptests]
         t = time.time()
-        for tests in [self._ptests]:
-            pool = multiprocessing.get_context('spawn').Pool(self.nprocs,
-                                                             maxtasksperchild=100)
+        for tests in target:
+            if six.PY2:
+                pool = multiprocessing.Pool(self.nprocs)
+            elif six.PY3:
+                pool = multiprocessing.get_context('spawn').Pool(self.nprocs,
+                                                                 maxtasksperchild=100)
             try:
                 self._run_parallel_tests(result, pool, child_runner, tests)
             except:
