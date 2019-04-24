@@ -357,10 +357,14 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         else:
             with self.assertRaises(ValueError) as raises:
                 dtype = ty.dtype
+            # get numpy alignment
+            npalign = np.dtype(np.complex128).alignment
+            # llvm should align to wordsize
+            llalign = np.dtype(np.intp).alignment
             self.assertIn(
-                ("NumPy is using a different alignment (16) "
-                 "than Numba/LLVM (8) for complex128. "
-                 "This is likely a NumPy bug."),
+                ("NumPy is using a different alignment ({}) "
+                 "than Numba/LLVM ({}) for complex128. "
+                 "This is likely a NumPy bug.").format(npalign, llalign),
                 str(raises.exception),
             )
 
