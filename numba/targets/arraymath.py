@@ -2793,43 +2793,44 @@ def np_delete(arr, obj):
     if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
 
-    def np_delete_impl(arr, obj):
-        arr = np.ravel(np.asarray(arr))
-        N = arr.size
-
-        keep = np.ones(N, dtype=np.bool_)
-        obj = handler(obj)
-        keep[obj] = False
-        return arr[keep]
-
-    def np_delete_scalar_impl(arr, obj):
-        arr = np.ravel(np.asarray(arr))
-        N = arr.size
-        pos = obj
-
-        if (pos < -N or pos >= N):
-            raise IndexError('obj must be less than the len(arr)')
-            # NumPy raises IndexError: index 'i' is out of
-            # bounds for axis 'x' with size 'n'
-
-        if (pos < 0):
-            pos += N
-
-        return np.concatenate((arr[:pos], arr[pos+1:]))
-
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
             handler = np_delete_handler_isslice 
         else:
             if not isinstance(obj.dtype, types.Integer):
                 raise TypingError('obj should be of Integer dtype')
-            handler = np_delete_handler_isarray 
+            handler = np_delete_handler_isarray
 
+        def np_delete_impl(arr, obj):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+
+            keep = np.ones(N, dtype=np.bool_)
+            obj = handler(obj)
+            keep[obj] = False
+            return arr[keep]
         return np_delete_impl
+
     else: # scalar value
         if not isinstance(obj, types.Integer):
             raise TypingError('obj should be of Integer dtype')
+
+        def np_delete_scalar_impl(arr, obj):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            pos = obj
+
+            if (pos < -N or pos >= N):
+                raise IndexError('obj must be less than the len(arr)')
+                # NumPy raises IndexError: index 'i' is out of
+                # bounds for axis 'x' with size 'n'
+
+            if (pos < 0):
+                pos += N
+
+            return np.concatenate((arr[:pos], arr[pos+1:]))
         return np_delete_scalar_impl
+
 
 @overload(np.diff)
 def np_diff_impl(a, n=1):
