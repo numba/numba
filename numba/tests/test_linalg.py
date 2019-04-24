@@ -2053,11 +2053,14 @@ class TestLinalgCond(TestLinalgBase):
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
         # singular systems to trip divide-by-zero
-        x = np.array([[1, 0], [0, 0]], dtype=np.float64)
-        check(x)
-        check(x, p=2)
-        x = np.array([[0, 0], [0, 0]], dtype=np.float64)
-        check(x, p=-2)
+        # only for np > 1.14, before this norm was computed via inversion which
+        # will fail with numpy.linalg.linalg.LinAlgError: Singular matrix
+        if numpy_version > (1, 14):
+            x = np.array([[1, 0], [0, 0]], dtype=np.float64)
+            check(x)
+            check(x, p=2)
+            x = np.array([[0, 0], [0, 0]], dtype=np.float64)
+            check(x, p=-2)
 
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from
