@@ -171,8 +171,8 @@ You can download the example code from above including tests here:
 * :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
 
 
-Implementing ``@overload``s for NumPy functions
-===============================================
+Implementing ``@overload`` for NumPy functions
+==============================================
 
 Numba supports NumPy through the provision of ``@jit`` compatible
 re-implementations of NumPy functions. In such cases ``@overload`` is a very
