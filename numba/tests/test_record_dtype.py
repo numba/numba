@@ -927,7 +927,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         cfunc = cres.entry_point
 
         for i in range(self.refsample1d.size):
-            chars = "{0}".format(hex(i+10))
+            chars = "{0}".format(hex(i + 10))
             pyfunc(self.refsample1d, i, chars)
             cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
