@@ -273,7 +273,8 @@ convenient option for writing such implementations, however there are a few addi
 some particular version onwards.
 
 * You can look at the Numba source code for inspiration, many of the overloaded
-  NumPy functions and methods are in ``numba/targets/arrayobj.py``. Good
-  implementations to look at are:
+  NumPy functions and methods are in ``numba/targets/arrayobj.py``. Below, you
+  will find a list of implementations to look at, that are well impemented in
+  terms of accepted types and test coverage.
 
   * ``np.repeat``
