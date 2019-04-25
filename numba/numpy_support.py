@@ -154,12 +154,23 @@ def as_struct_dtype(rec):
     """Convert Numba Record type to NumPy structured dtype
     """
     assert isinstance(rec, types.Record)
-    names = [k for k, _ in rec.members]
+    names = []
+    formats = []
+    offsets = []
+    titles = []
+    for k, t in rec.members:
+        if not rec.is_title(k):
+            names.append(k)
+            formats.append(as_dtype(t))
+            offsets.append(rec.offset(k))
+            titles.append(rec.fields[k].title)
+
     fields = {
         'names': names,
-        'formats': [as_dtype(t) for _, t in rec.members],
-        'offsets': [rec.offset(k) for k in names],
+        'formats': formats,
+        'offsets': offsets,
         'itemsize': rec.size,
+        'titles': titles,
     }
     _check_struct_alignment(rec, fields)
     return np.dtype(fields, align=rec.aligned)
@@ -434,12 +445,15 @@ def from_struct_dtype(dtype):
 
     fields = []
     for name, info in dtype.fields.items():
-        # *info* may have 3 element if it has a "title", which can be ignored
+        # *info* may have 3 element
         [elemdtype, offset] = info[:2]
+        title = info[2] if len(info) == 3 else None
+
         ty = from_dtype(elemdtype)
         infos = {
             'type': ty,
             'offset': offset,
+            'title': title,
         }
         fields.append((name, infos))
 
