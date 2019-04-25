@@ -664,6 +664,13 @@ def is_pure(rhs, lives, call_table):
         return False
     return True
 
+def is_const_call(module_name, func_name):
+    # Returns True if there is no state in the given module changed by the given function.
+    if module_name == 'numpy':
+        if func_name in ['empty']:
+            return True
+    return False
+
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
