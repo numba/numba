@@ -591,7 +591,7 @@ class TestUnicode(BaseTest):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(UNICODE_EXAMPLES[0], 1.1)
-        self.assertIn('<width> must be an Integer', str(raises.exception))
+        self.assertIn('The width must be an Integer', str(raises.exception))
 
         for s in UNICODE_EXAMPLES:
             for width in range(-3, 20):
@@ -604,10 +604,10 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         # allowed fillchar cases
-        for fillchar in [' ', '+', 'ú', '处' ]:
+        for fillchar in [' ', '+', 'ú', '处']:
             with self.assertRaises(TypingError) as raises:
                 cfunc(UNICODE_EXAMPLES[0], 1.1, fillchar)
-            self.assertIn('<width> must be an Integer', str(raises.exception))
+            self.assertIn('The width must be an Integer', str(raises.exception))
 
             for s in UNICODE_EXAMPLES:
                 for width in range(-3, 20):
@@ -622,10 +622,16 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         # disallowed fillchar cases
-        for fillchar in ['', '+0', 'quién', '处着' ]:
+        for fillchar in ['', '+0', 'quién', '处着']:
             with self.assertRaises(ValueError) as raises:
                 cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The <fill> character must be exactly one', str(raises.exception))
+            self.assertIn('The fill character must be exactly one', str(raises.exception))
+
+        # disallowed fillchar cases with diffrent types
+        for fillchar in [1, 1.1]:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+            self.assertIn('The fillchar must be an UnicodeType', str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
