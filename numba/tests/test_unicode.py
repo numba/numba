@@ -36,6 +36,10 @@ def getitem_usecase(x, i):
     return x[i]
 
 
+def zfill_usecase(x, y):
+    return x.zfill(y)
+
+
 def concat_usecase(x, y):
     return x + y
 
@@ -356,6 +360,37 @@ class TestUnicode(BaseTest):
                         self.assertEqual(pyfunc(s, sl),
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_zfill(self):
+        pyfunc = zfill_usecase
+        cfunc = njit(pyfunc)
+
+        ZFILL_INPUTS = [
+            'ascii',
+            '+ascii',
+            '-ascii',
+            '-asc ii-',
+            '12345',
+            '-12345',
+            '+12345',
+            '',
+            '¡Y tú crs?',
+            '🐍⚡',
+            '+🐍⚡',
+            '-🐍⚡',
+            '大眼，小手。',
+            '+大眼，小手。',
+            '-大眼，小手。',
+        ]
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(ZFILL_INPUTS[0], 1.1)
+        self.assertIn('<width> must be an Integer', str(raises.exception))
+
+        for s in ZFILL_INPUTS:
+            for width in range(-3, 20):
+                self.assertEqual(pyfunc(s, width),
+                                 cfunc(s, width))
 
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase
