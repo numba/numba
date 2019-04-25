@@ -101,6 +101,17 @@ class TestCompiledDict(TestCase):
         x, y = 10, 20
         self.assertEqual(foo(x, y), foo.py_func(x, y))
 
+    def test_mixed_curlybraces_and_dict(self):
+        # Test mixed use of {} and dict()
+        @njit
+        def foo():
+            k = dict()
+            k[1] = {1: 3}
+            k[2] = {4: 2}
+            return k
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 if __name__ == '__main__':
     unittest.main()
