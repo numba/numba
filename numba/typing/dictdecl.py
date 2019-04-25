@@ -1,5 +1,5 @@
 """
-This implement typing template for `dict()`.
+This implements the typing template for `dict()`.
 """
 from __future__ import absolute_import, print_function
 
@@ -17,8 +17,8 @@ infer_getattr = registry.register_attr
 
 
 _message_dict_support = """
-Unsupported usage of `dict()` with arguments. \
-The only implemented usage is `dict()`.
+Unsupported use of `dict()` with positional or keyword argument(s). \
+The only supported use is `dict()`.
 """.strip()
 
 
