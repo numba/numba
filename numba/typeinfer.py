@@ -147,13 +147,13 @@ class ConstraintNetwork(object):
                 try:
                     constraint(typeinfer)
                 except TypingError as e:
-                    _logger.exception("captured error")
+                    _logger.debug("captured error", exc_info=e)
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
                     errors.append(e)
                 except Exception as e:
-                    _logger.exception("captured error")
+                    _logger.debug("captured error", exc_info=e)
                     msg = ("Internal error at {con}.\n"
                            "{err}\nEnable logging for details.")
                     e = TypingError(
