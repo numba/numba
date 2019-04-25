@@ -122,10 +122,14 @@ def get_sys_info():
             ("Python Implementation",
              platform.python_implementation()))
         print(fmt % ("Python Version", platform.python_version()))
-        print(
-            fmt %
-            ("Python Locale ", ' '.join(
-                [x for x in locale.getdefaultlocale() if x is not None])))
+        lcl = []
+        try:
+            for x in locale.getdefaultlocale():
+                if x is not None:
+                    lcl.append(x)
+        except BaseException as e:
+            lcl.append(str(e))
+        print(fmt % ("Python Locale ", ' '.join(lcl)))
 
         print("")
         print("__LLVM information__")

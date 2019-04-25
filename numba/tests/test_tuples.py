@@ -95,6 +95,13 @@ def identity(tup):
 def index_method_usecase(tup, value):
     return tup.index(value)
 
+def tuple_unpack_static_getitem_err():
+    # see issue3895, `c` is imprecise
+    a, b, c, d = [], [], [], 0.0
+    a.append(1)
+    b.append(1)
+    return
+
 
 class TestTupleReturn(TestCase):
 
@@ -205,6 +212,12 @@ class TestOperations(TestCase):
             cr.entry_point((), 0)
         self.assertEqual("tuple index out of range", str(raises.exception))
 
+        # test uintp indexing (because, e.g., parfor generates unsigned prange)
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 3), types.uintp])
+        for i in range(len(tup)):
+            self.assertPreciseEqual(cr.entry_point(tup, types.uintp(i)), tup[i])
+
         # With a compile-time static index (the code generation path is different)
         pyfunc = tuple_index_static
         for typ in (types.UniTuple(types.int64, 4),
@@ -216,6 +229,14 @@ class TestOperations(TestCase):
         typ = types.UniTuple(types.int64, 1)
         with self.assertTypingError():
             cr = compile_isolated(pyfunc, (typ,))
+
+        # test unpack, staticgetitem with imprecise type (issue #3895)
+        pyfunc = tuple_unpack_static_getitem_err
+        with self.assertTypingError() as raises:
+            cr = compile_isolated(pyfunc, ())
+        msg = ("Cannot infer the type of variable 'c', have imprecise type: "
+               "list(undefined).")
+        self.assertIn(msg, str(raises.exception))
 
 
     def test_in(self):
@@ -355,6 +376,10 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         for i in range(len(p)):
             self.assertPreciseEqual(cfunc(p, i), pyfunc(p, i))
 
+        # test uintp indexing (because, e.g., parfor generates unsigned prange)
+        for i in range(len(p)):
+            self.assertPreciseEqual(cfunc(p, types.uintp(i)), pyfunc(p, i))
+
     def test_bool(self):
         def check(p):
             pyfunc = bool_usecase
@@ -464,6 +489,17 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         self.assertEqual(r, Rect(width=123, height=1321))
         r = call(123, 0)
         self.assertEqual(r, Rect(width=123, height=-321))
+
+    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+    def test_string_literal_in_ctor(self):
+        # Test for issue #3813
+
+        @jit(nopython=True)
+        def foo():
+            return Rect(10, 'somestring')
+
+        r = foo()
+        self.assertEqual(r, Rect(width=10, height='somestring'))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):

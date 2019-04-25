@@ -4,6 +4,7 @@ import numba.unittest_support as unittest
 from .support import TestCase
 
 import sys
+import operator
 
 # deliberately imported twice for different use cases
 import numpy as np
@@ -248,9 +249,9 @@ class TestArrayComprehension(unittest.TestCase):
     def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
         and compare results."""
-        run_parallel = kwargs['run_parallel'] if 'run_parallel' in kwargs else False
-        assert_allocate_list = kwargs['assert_allocate_list'] if 'assert_allocate_list' in kwargs else False
-        assert_dtype = kwargs['assert_dtype'] if 'assert_dtype' in kwargs else None
+        run_parallel = kwargs.get('run_parallel', False)
+        assert_allocate_list = kwargs.get('assert_allocate_list', False)
+        assert_dtype = kwargs.get('assert_dtype', False)
         cfunc = jit(nopython=True,parallel=run_parallel)(pyfunc)
         pyres = pyfunc(*args)
         cres = cfunc(*args)
@@ -371,7 +372,10 @@ class TestArrayComprehension(unittest.TestCase):
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Cannot resolve setitem', str(raises.exception))
+        self.assertIn(
+            'Invalid use of Function({})'.format(operator.setitem),
+            str(raises.exception),
+        )
 
     @tag('important')
     def test_no_array_comp(self):
@@ -458,8 +462,14 @@ class TestArrayComprehension(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(array_comp)
             cfunc(10, 2.3j)
-        self.assertIn("setitem: array({}, 1d, C)[0] = complex128".format(types.intp),
-                      str(raises.exception))
+        self.assertIn(
+            "Invalid use of Function({})".format(operator.setitem),
+            str(raises.exception),
+        )
+        self.assertIn(
+            "(array({}, 1d, C), Literal[int](0), complex128)".format(types.intp),
+            str(raises.exception),
+        )
 
     def test_array_comp_shuffle_sideeffect(self):
         nelem = 100
@@ -482,6 +492,32 @@ class TestArrayComprehension(unittest.TestCase):
         # element is tiny enough.
         self.assertNotEqual(got, expect)
         self.assertRegexpMatches(got, r'\[(\s*\d+)+\]')
+
+    def test_empty_list_not_removed(self):
+        # see issue #3724
+        def f(x):
+            t = []
+            myList = np.array([1])
+            a = np.random.choice(myList, 1)
+            t.append(x + a)
+            return a
+        self.check(f, 5, assert_allocate_list=True)
+
+    def test_reuse_of_array_var(self):
+        """ Test issue 3742 """
+        # redefinition of z breaks array comp as there's multiple defn
+        def foo(n):
+            # doesn't matter where this is in the code, it's just to ensure a
+            # `make_function` opcode exists
+            [i for i in range(1)]
+            z = np.empty(n)
+            for i in range(n):
+                z = np.zeros(n)
+                z[i] = i # write is required to trip the bug
+
+            return z
+
+        self.check(foo, 10, assert_allocate_list=True)
 
 
 if __name__ == '__main__':

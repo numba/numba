@@ -7,7 +7,7 @@ import types
 import numpy as np
 
 from numba.cuda.testing import unittest, skip_on_cudasim, SerialMixin
-from numba import cuda, jit
+from numba import cuda, jit, int32
 from numba.errors import TypingError
 
 
@@ -108,6 +108,40 @@ class TestDeviceFunc(SerialMixin, unittest.TestCase):
         expect = ary + 1
         add_kernel[1, ary.size](ary)
         np.testing.assert_equal(expect, ary)
+
+    @skip_on_cudasim('not supported in cudasim')
+    def test_inspect_ptx(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
+
+        args = (int32, int32)
+        cres = foo.compile(args)
+
+        fname = cres.fndesc.mangled_name
+        # Verify that the function name has "foo" in it as in the python name
+        self.assertIn('foo', fname)
+
+        ptx = foo.inspect_ptx(args)
+        # Check that the compiled function name is in the PTX.
+        self.assertIn(fname, ptx.decode('ascii'))
+
+    @skip_on_cudasim('not supported in cudasim')
+    def test_inspect_llvm(self):
+        @cuda.jit(device=True)
+        def foo(x, y):
+            return x + y
+
+        args = (int32, int32)
+        cres = foo.compile(args)
+
+        fname = cres.fndesc.mangled_name
+        # Verify that the function name has "foo" in it as in the python name
+        self.assertIn('foo', fname)
+
+        llvm = foo.inspect_llvm(args)
+        # Check that the compiled function name is in the LLVM.
+        self.assertIn(fname, llvm)
 
 
 if __name__ == '__main__':

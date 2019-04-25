@@ -4,6 +4,7 @@ from .abstract import *
 from .common import *
 from .misc import Undefined, unliteral
 from ..typeconv import Conversion
+from ..errors import TypingError
 
 
 class Pair(Type):
@@ -439,3 +440,103 @@ class SetEntry(Type):
     @property
     def key(self):
         return self.set_type
+
+
+def _sentry_forbidden_types(key, value):
+    # Forbids List and Set for now
+    if isinstance(key, (Set, List)):
+        raise TypingError('{} as key is forbidded'.format(key))
+    if isinstance(value, (Set, List)):
+        raise TypingError('{} as value is forbidded'.format(value))
+
+
+class DictType(IterableType):
+    """Dictionary type
+    """
+    def __init__(self, keyty, valty):
+        assert not isinstance(keyty, TypeRef)
+        assert not isinstance(valty, TypeRef)
+        keyty = unliteral(keyty)
+        valty = unliteral(valty)
+        _sentry_forbidden_types(keyty, valty)
+        self.key_type = keyty
+        self.value_type = valty
+        self.keyvalue_type = Tuple([keyty, valty])
+        name = '{}[{},{}]'.format(
+            self.__class__.__name__,
+            keyty,
+            valty,
+        )
+        super(DictType, self).__init__(name)
+
+    def is_precise(self):
+        return not any((
+            isinstance(self.key_type, Undefined),
+            isinstance(self.value_type, Undefined),
+        ))
+
+    @property
+    def iterator_type(self):
+        return DictKeysIterableType(self).iterator_type
+
+    @classmethod
+    def refine(cls, keyty, valty):
+        """Refine to a precise dictionary type
+        """
+        res = cls(keyty, valty)
+        res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* dictionary.
+        """
+        # If other is dict
+        if isinstance(other, DictType):
+            if not other.is_precise():
+                return self
+
+
+class DictItemsIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.keyvalue_type
+        name = "items[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictItemsIterableType, self).__init__(name, iterator_type)
+
+
+class DictKeysIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.key_type
+        name = "keys[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictKeysIterableType, self).__init__(name, iterator_type)
+
+
+class DictValuesIterableType(SimpleIterableType):
+    """Dictionary iteratable type for .items()
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, DictType)
+        self.parent = parent
+        self.yield_type = self.parent.value_type
+        name = "values[{}]".format(self.parent.name)
+        iterator_type = DictIteratorType(self)
+        super(DictValuesIterableType, self).__init__(name, iterator_type)
+
+
+class DictIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.yield_type
+        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        super(DictIteratorType, self).__init__(name, yield_type)

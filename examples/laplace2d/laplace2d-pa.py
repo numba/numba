@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from numba import jit, prange, stencil
+from numba import jit, stencil
 
 @stencil
 def jacobi_kernel(A):

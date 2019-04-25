@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 import sys
+import copy
 import warnings
 import traceback
 from .tracing import event
@@ -17,6 +18,7 @@ from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature
 from numba.compiler_lock import global_compiler_lock
+from numba.analysis import dead_branch_prune
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -49,7 +51,7 @@ class Flags(utils.ConfigOptions):
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
-        'fastmath': False,
+        'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
     }
 
@@ -235,11 +237,11 @@ class _PipelineManager(object):
     def run(self, status):
         assert self._finalized, "PM must be finalized before run()"
         for pipeline_name in self.pipeline_order:
-            event(pipeline_name)
+            event("Pipeline: %s" % pipeline_name)
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
             for stage, stage_name in self.pipeline_stages[pipeline_name]:
                 try:
-                    event(stage_name)
+                    event("-- %s" % stage_name)
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
@@ -284,7 +286,6 @@ class BasePipeline(object):
         self.bc = None
         self.func_id = None
         self.func_ir = None
-        self.func_ir_original = None  # used for fallback
         self.lifted = None
         self.lifted_from = None
         self.typemap = None
@@ -400,9 +401,6 @@ class BasePipeline(object):
     def stage_process_ir(self):
         ir_processing_stage(self.func_ir)
 
-    def stage_preserve_ir(self):
-        self.func_ir_original = self.func_ir.copy()
-
     def frontend_looplift(self):
         """
         Loop lifting analysis and transformation
@@ -455,7 +453,6 @@ class BasePipeline(object):
         """
         Front-end: Analyze bytecode, generate Numba IR, infer types
         """
-        self.func_ir = self.func_ir_original or self.func_ir
         if self.flags.enable_looplift:
             assert not self.lifted
             cres = self.frontend_looplift()
@@ -466,6 +463,23 @@ class BasePipeline(object):
         self.typemap = defaultdict(lambda: types.pyobject)
         self.calltypes = defaultdict(lambda: types.pyobject)
         self.return_type = types.pyobject
+
+    def stage_dead_branch_prune(self):
+        """
+        This prunes dead branches, a dead branch is one which is derivable as
+        not taken at compile time purely based on const/literal evaluation.
+        """
+        assert self.func_ir
+        msg = ('Internal error in pre-inference dead branch pruning '
+               'pass encountered during compilation of '
+               'function "%s"' % (self.func_id.func_name,))
+        with self.fallback_context(msg):
+            dead_branch_prune(self.func_ir, self.args)
+
+        if config.DEBUG or config.DUMP_IR:
+            print('branch_pruned_ir'.center(80, '-'))
+            print(self.func_ir.dump())
+            print('end branch_pruned_ir'.center(80, '-'))
 
     def stage_nopython_frontend(self):
         """
@@ -575,9 +589,15 @@ class BasePipeline(object):
         """
         # Ensure we have an IR and type information.
         assert self.func_ir
+
+        # if the return type is a pyobject, there's no type info available and
+        # no ability to resolve certain typed function calls in the array
+        # inlining code, use this variable to indicate
+        typed_pass = not isinstance(self.return_type, types.misc.PyObject)
         inline_pass = InlineClosureCallPass(self.func_ir,
                                             self.flags.auto_parallel,
-                                            self.parfor_diagnostics.replaced_fns)
+                                            self.parfor_diagnostics.replaced_fns,
+                                            typed_pass)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(self.func_ir)
@@ -730,7 +750,7 @@ class BasePipeline(object):
                                  fndesc=None,)
 
     def stage_ir_legalization(self):
-        raise_on_unsupported_feature(self.func_ir)
+        raise_on_unsupported_feature(self.func_ir, self.typemap)
 
     def stage_cleanup(self):
         """
@@ -755,10 +775,8 @@ class BasePipeline(object):
         The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
-            if self.status.can_fallback:
-                pm.add_stage(self.stage_preserve_ir,
-                             "preserve IR for fallback")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
 
@@ -886,7 +904,7 @@ def _make_subtarget(targetctx, flags):
     if flags.auto_parallel:
         subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
-        subtargetoptions['enable_fastmath'] = True
+        subtargetoptions['fastmath'] = flags.fastmath
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
@@ -923,18 +941,65 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, library=None,
-               pipeline_class=Pipeline):
+               locals, lifted=(), lifted_from=None, is_lifted_loop=False,
+               library=None, pipeline_class=Pipeline):
     """
     Compile a function with the given IR.
 
     For internal use only.
     """
 
-    pipeline = pipeline_class(typingctx, targetctx, library,
-                              args, return_type, flags, locals)
-    return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
-                               lifted_from=lifted_from)
+    # This is a special branch that should only run on IR from a lifted loop
+    if is_lifted_loop:
+        # This code is pessimistic and costly, but it is a not often trodden
+        # path and it will go away once IR is made immutable. The problem is
+        # that the rewrite passes can mutate the IR into a state that makes
+        # it possible for invalid tokens to be transmitted to lowering which
+        # then trickle through into LLVM IR and causes RuntimeErrors as LLVM
+        # cannot compile it. As a result the following approach is taken:
+        # 1. Create some new flags that copy the original ones but switch
+        #    off rewrites.
+        # 2. Compile with 1. to get a compile result
+        # 3. Try and compile another compile result but this time with the
+        #    original flags (and IR being rewritten).
+        # 4. If 3 was successful, use the result, else use 2.
+
+        # create flags with no rewrites
+        norw_flags = copy.deepcopy(flags)
+        norw_flags.no_rewrites = True
+
+        def compile_local(the_ir, the_flags):
+            pipeline = pipeline_class(typingctx, targetctx, library,
+                                      args, return_type, the_flags, locals)
+            return pipeline.compile_ir(func_ir=the_ir, lifted=lifted,
+                                       lifted_from=lifted_from)
+
+        # compile with rewrites off, IR shouldn't be mutated irreparably
+        norw_cres = compile_local(func_ir.copy(), norw_flags)
+
+        # try and compile with rewrites on if no_rewrites was not set in the
+        # original flags, IR might get broken but we've got a CompileResult
+        # that's usable from above.
+        rw_cres = None
+        if not flags.no_rewrites:
+            try:
+                rw_cres = compile_local(func_ir.copy(), flags)
+            except Exception:
+                pass
+
+        # if the rewrite variant of compilation worked, use it, else use
+        # the norewrites backup
+        if rw_cres is not None:
+            cres = rw_cres
+        else:
+            cres = norw_cres
+        return cres
+
+    else:
+        pipeline = pipeline_class(typingctx, targetctx, library,
+                                  args, return_type, flags, locals)
+        return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
+                                lifted_from=lifted_from)
 
 
 def compile_internal(typingctx, targetctx, library,

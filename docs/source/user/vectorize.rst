@@ -8,7 +8,7 @@ The ``@vectorize`` decorator
 ============================
 
 Numba's vectorize allows Python functions taking scalar input arguments to
-be used as NumPy `ufuncs`_.  Creating a traditional NumPy ufunc is not
+be used as NumPy `ufuncs`_.  Creating a traditional NumPy ufunc is
 not the most straightforward process and involves writing some C code.
 Numba makes this easy.  Using the :func:`~numba.vectorize` decorator, Numba
 can compile a pure Python function into a ufunc that operates over NumPy
@@ -126,7 +126,7 @@ compute intensity algorithms. It has the least amount of overhead.
 The "parallel" target works well for medium data sizes (approx. less than 1MB).
 Threading adds a small delay.
 The "cuda" target works well for big data sizes (approx. greater than 1MB) and
-high compute intensity algorithms.  Transfering memory to and from the GPU adds
+high compute intensity algorithms.  Transferring memory to and from the GPU adds
 significant overhead.
 
 

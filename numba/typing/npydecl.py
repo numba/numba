@@ -404,9 +404,6 @@ def _numpy_redirect(fname):
     cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
-    # special case literal support for 'sum'
-    if fname in ['sum', 'argsort']:
-        cls.support_literals = True
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
@@ -1150,11 +1147,16 @@ class Where(AbstractTemplate):
                         as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
-                if (cond.ndim == x.ndim == y.ndim):
-                    if x.layout == y.layout == cond.layout:
-                        retty = types.Array(retdty, x.ndim, x.layout)
-                    else:
-                        retty = types.Array(retdty, x.ndim, 'C')
+                if isinstance(x, types.Array) and isinstance(y, types.Array):
+                    if (cond.ndim == x.ndim == y.ndim):
+                        if x.layout == y.layout == cond.layout:
+                            retty = types.Array(retdty, x.ndim, x.layout)
+                        else:
+                            retty = types.Array(retdty, x.ndim, 'C')
+                        return signature(retty, *args)
+                else:
+                    # x and y both scalar
+                    retty = types.Array(retdty, cond.ndim, cond.layout)
                     return signature(retty, *args)
             else:
                 # scalar where()

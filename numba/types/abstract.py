@@ -261,12 +261,6 @@ class Callable(Type):
         Returns a tuple of (list of signatures, parameterized)
         """
 
-    def get_call_type_with_literals(self, context, args, kws, literals):
-        """Simliar to .get_call_type() but with extra argument for literals.
-        Default implementation ignores literals and forwards to .get_call_type().
-        """
-        return self.get_call_type(context, args, kws)
-
 
 class DTypeSpec(Type):
     """
@@ -428,4 +422,15 @@ class Literal(Type):
             self._literal_type_cache = res
 
         return self._literal_type_cache
+
+
+
+class TypeRef(Dummy):
+    """Reference to a type.
+
+    Used when a type is passed as a value.
+    """
+    def __init__(self, instance_type):
+        self.instance_type = instance_type
+        super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 

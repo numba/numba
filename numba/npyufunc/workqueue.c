@@ -8,6 +8,13 @@ They wait and spin on a task queue for jobs.
 This module is not thread-safe.  Adding task to queue is not protected from
 race condition.
 */
+#include "../_pymodule.h"
+#ifdef _POSIX_C_SOURCE
+#undef _POSIX_C_SOURCE
+#endif
+#ifdef _XOPEN_SOURCE
+#undef _XOPEN_SOURCE
+#endif
 
 #ifdef _MSC_VER
 /* Windows */
@@ -27,7 +34,6 @@ race condition.
 #include <stddef.h>
 #include <stdio.h>
 #include "workqueue.h"
-#include "../_pymodule.h"
 #include "gufunc_scheduler.h"
 
 #define _DEBUG 0

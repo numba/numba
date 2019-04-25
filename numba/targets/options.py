@@ -66,8 +66,8 @@ class TargetOptions(object):
         if 'parallel' in kws:
             flags.set('auto_parallel', kws.pop('parallel'))
 
-        if kws.pop('fastmath', False):
-            flags.set('fastmath')
+        if 'fastmath' in kws:
+            flags.set('fastmath', kws.pop('fastmath'))
 
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))

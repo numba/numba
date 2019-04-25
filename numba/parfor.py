@@ -41,7 +41,6 @@ from numba.ir_utils import (
     get_np_ufunc_typ,
     mk_range_block,
     mk_loop_header,
-    find_op_typ,
     get_name_var_table,
     replace_vars,
     replace_vars_inner,
@@ -1323,7 +1322,7 @@ class PreParforPass(object):
                             if check is not None:
                                 g[check.name] = check.func
                             # inline the parallel implementation
-                            new_blocks = inline_closure_call(self.func_ir, g,
+                            new_blocks, _ = inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
                                             self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
@@ -1345,7 +1344,8 @@ class PreParforPass(object):
                         if isinstance(typ, types.npytypes.Array):
                             # Convert A.dtype to four statements.
                             # 1) Get numpy global.
-                            # 2) Create var for known type of array, e.g., numpy.float64
+                            # 2) Create var for known type of array as string
+                            #    constant. e.g. 'float64'
                             # 3) Get dtype function from numpy module.
                             # 4) Create var for numpy.dtype(var from #2).
 
@@ -1358,14 +1358,17 @@ class PreParforPass(object):
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
 
-                            # Create var for type infered type of the array, e.g., numpy.float64.
-                            typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-                            self.typemap[typ_var.name] = types.functions.NumberClass(dtype)
+                            # Create var for the inferred type of the array
+                            # e.g., 'float64'
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
                                 dtype_str = 'bool_'
-                            np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-                            typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
+                            typ_var = ir.Var(
+                                scope, mk_unique_var("$np_typ_var"), loc)
+                            self.typemap[typ_var.name] = types.StringLiteral(
+                                dtype_str)
+                            typ_var_assign = ir.Assign(
+                                ir.Const(dtype_str, loc), typ_var, loc)
 
                             # Get the dtype function from the numpy module.
                             dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
@@ -2537,13 +2540,13 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = find_op_typ(op, [el_typ1, el_typ2])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
                         arg_vars[0], arg_vars[1], out_ir, typemap)
             else:
-                func_typ = find_op_typ(op, [el_typ1])
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
             calltypes[ir_expr] = func_typ
             el_typ = func_typ.return_type
@@ -2567,7 +2570,7 @@ def _arrayexpr_tree_to_ir(
 #                     out_ir.append(func_var_def)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(
-                    typing.Context(), [el_typ] * len(arg_vars), {})
+                    typingctx, tuple(typemap[a.name] for a in arg_vars), {})
                 calltypes[ir_expr] = call_typ
                 el_typ = call_typ.return_type
                 #signature(el_typ, el_typ)
@@ -3563,7 +3566,12 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
     # branch back to first body label to simulate loop
-    branch = ir.Branch(0, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
+    scope = blocks[last_label].scope
+
+    branchcond = ir.Var(scope, mk_unique_var("$branchcond"), ir.Loc("parfors_dummy", -1))
+    typemap[branchcond.name] = types.boolean
+
+    branch = ir.Branch(branchcond, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(branch)
 
     # add dummy jump in init_block for CFG to work
@@ -3615,7 +3623,11 @@ def simplify_parfor_body_CFG(blocks):
                 # add dummy return to enable CFG creation
                 # can't use dummy_return_in_loop_body since body changes
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
-                last_block.body.append(ir.Return(0, ir.Loc("parfors_dummy", -1)))
+                scope = last_block.scope
+                loc = ir.Loc("parfors_dummy", -1)
+                const = ir.Var(scope, mk_unique_var("$const"), loc)
+                last_block.body.append(ir.Assign(ir.Const(0, loc), const, loc))
+                last_block.body.append(ir.Return(const, loc))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 last_block.body.pop()
@@ -3729,7 +3741,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
 ir_utils.apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 
-def push_call_vars(blocks, saved_globals, saved_getattrs):
+def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
     """push call variables to right before their call site.
     assuming one global/getattr is created for each call site and control flow
     doesn't change it.
@@ -3753,11 +3765,11 @@ def push_call_vars(blocks, saved_globals, saved_getattrs):
                             saved_getattrs[lhs.name] = stmt
                             block_defs.add(lhs.name)
 
-            if isinstance(stmt, Parfor):
+            if not nested and isinstance(stmt, Parfor):
                 for s in stmt.init_block.body:
                     process_assign(s)
                 pblocks = stmt.loop_body.copy()
-                push_call_vars(pblocks, saved_globals, saved_getattrs)
+                push_call_vars(pblocks, saved_globals, saved_getattrs, nested=True)
                 new_body.append(stmt)
                 continue
             else:
@@ -3927,8 +3939,10 @@ def dummy_return_in_loop_body(loop_body):
     """
     # max is last block since we add it manually for prange
     last_label = max(loop_body.keys())
+    scope = loop_body[last_label].scope
+    const = ir.Var(scope, mk_unique_var("$const"), ir.Loc("parfors_dummy", -1))
     loop_body[last_label].body.append(
-        ir.Return(0, ir.Loc("parfors_dummy", -1)))
+        ir.Return(const, ir.Loc("parfors_dummy", -1)))
     yield
     # remove dummy return
     loop_body[last_label].body.pop()

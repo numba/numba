@@ -4,13 +4,18 @@ import os
 import re
 
 
-def get_lib_dir():
+def get_lib_dirs():
     """
     Anaconda specific
     """
-    dirname = 'DLLs' if sys.platform == 'win32' else 'lib'
-    libdir = os.path.join(sys.prefix, dirname)
-    return libdir
+    if sys.platform == 'win32':
+        # on windows, historically `DLLs` has been used for CUDA libraries,
+        # since approximately CUDA 9.2, `Library\bin` has been used.
+        dirnames = ['DLLs', os.path.join('Library', 'bin')]
+    else:
+        dirnames = ['lib', ]
+    libdirs = [os.path.join(sys.prefix, x) for x in dirnames]
+    return libdirs
 
 
 DLLNAMEMAP = {
@@ -31,8 +36,16 @@ def find_lib(libname, libdir=None, platform=None):
 
 
 def find_file(pat, libdir=None):
-    libdir = libdir or get_lib_dir()
-    entries = os.listdir(libdir)
-    candidates = [os.path.join(libdir, ent)
-                  for ent in entries if pat.match(ent)]
-    return [c for c in candidates if os.path.isfile(c)]
+    if libdir is None:
+        libdirs = get_lib_dirs()
+    elif isinstance(libdir, str):
+        libdirs = [libdir,]
+    else:
+        libdirs = list(libdir)
+    files = []
+    for ldir in libdirs:
+        entries = os.listdir(ldir)
+        candidates = [os.path.join(ldir, ent)
+                      for ent in entries if pat.match(ent)]
+        files.extend([c for c in candidates if os.path.isfile(c)])
+    return files

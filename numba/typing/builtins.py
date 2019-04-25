@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 import operator
 
-from numba import types, prange
+from numba import types, prange, errors
 from numba.parfor import internal_prange
 
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, IS_PY3
@@ -549,10 +549,8 @@ class GetItemCPointer(AbstractTemplate):
             return signature(ptr.dtype, ptr, normalize_1d_index(idx))
 
 
-@infer
+@infer_global(operator.setitem)
 class SetItemCPointer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ptr, idx, val = args
@@ -610,9 +608,10 @@ class StaticGetItemTuple(AbstractTemplate):
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
-            return tup.types[idx]
+            ret = tup.types[idx]
         elif isinstance(idx, slice):
-            return types.BaseTuple.from_types(tup.types[idx])
+            ret = types.BaseTuple.from_types(tup.types[idx])
+        return signature(ret, *args)
 
 
 # Generic implementation for "not in"
@@ -745,15 +744,33 @@ class NumberClassAttribute(AttributeTemplate):
         return types.Function(make_callable_template(key=ty, typer=typer))
 
 
-def register_number_classes(register_global):
-    nb_types = set(types.number_domain)
-    nb_types.add(types.bool_)
+@infer_getattr
+class TypeRefAttribute(AttributeTemplate):
+    key = types.TypeRef
 
-    for ty in nb_types:
-        register_global(ty, types.NumberClass(ty))
+    def resolve___call__(self, classty):
+        """
+        Resolve a number class's constructor (e.g. calling int(...))
 
+        Note:
 
-register_number_classes(infer_global)
+        This is needed because of the limitation of the current type-system
+        implementation.  Specifically, the lack of a higher-order type
+        (i.e. passing the ``DictType`` vs ``DictType(key_type, value_type)``)
+        """
+        ty = classty.instance_type
+
+        if isinstance(ty, type) and issubclass(ty, types.Type):
+            # Redirect the typing to a:
+            #   @type_callable(ty)
+            #   def typeddict_call(context):
+            #        ...
+            # For example, see numba/typed/typeddict.py
+            #   @type_callable(DictType)
+            #   def typeddict_call(context):
+            def redirect(*args, **kwargs):
+                return self.context.resolve_function_type(ty, args, kwargs)
+            return types.Function(make_callable_template(key=ty, typer=redirect))
 
 
 #------------------------------------------------------------------------------
@@ -818,16 +835,6 @@ class Round(ConcreteTemplate):
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]
-
-
-@infer_global(hash)
-class Hash(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        arg, = args
-        if isinstance(arg, types.Hashable):
-            return signature(types.intp, *args)
 
 
 #------------------------------------------------------------------------------

@@ -3,11 +3,20 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 */
 
 #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
+/* tbb.h redefines these */
+#include "../_pymodule.h"
+#ifdef _POSIX_C_SOURCE
+#undef _POSIX_C_SOURCE
+#endif
+#ifdef _XOPEN_SOURCE
+#undef _XOPEN_SOURCE
+#endif
+
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
 #include "workqueue.h"
-#include "../_pymodule.h"
+
 #include "gufunc_scheduler.h"
 
 #if TBB_INTERFACE_VERSION >= 9106
@@ -150,6 +159,7 @@ static void reset_after_fork(void)
         tsi->initialize(tsi_count);
 }
 
+#if PY_MAJOR_VERSION >= 3
 static void unload_tbb(void)
 {
     if(tsi)
@@ -168,6 +178,7 @@ static void unload_tbb(void)
         tsi = NULL;
     }
 }
+#endif
 
 static void launch_threads(int count)
 {

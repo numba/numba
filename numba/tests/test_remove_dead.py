@@ -56,7 +56,7 @@ class TestRemoveDead(unittest.TestCase):
         fast_pflags = Flags()
         fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
         fast_pflags.set('nrt')
-        fast_pflags.set('fastmath')
+        fast_pflags.set('fastmath', cpu.FastMathOptions(True))
         return compile_isolated(func, arg_types, flags=fast_pflags).entry_point
 
     def test1(self):

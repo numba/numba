@@ -11,7 +11,7 @@ features supported in :term:`nopython mode`.
 .. warning::
     Numba behavior differs from Python semantics in some situations.  We
     strongly advise reviewing :ref:`pysemantics` to become familiar with these
-    differences. 
+    differences.
 
 
 .. _pysupported-language:
@@ -166,20 +166,28 @@ The following functions, attributes and methods are currently supported:
 
 * ``len()``
 * ``+`` (concatenation of strings)
+* ``*`` (repetition of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
+* ``.split()``
+* ``.join()``
+* ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
 likely never be supported.
 
 .. warning::
-    The performance of the substring search operations (``in``,
-    ``.contains()`` and ``find()``) is poor in version 0.41 and will be improved in
-    version 0.42.
+    The performance of some operations is known to be slower than the CPython
+    implementation. These include substring search (``in``, ``.contains()``
+    and ``find()``) and string creation (like ``.split()``).  Improving the
+    string performance is an ongoing task, but the speed of CPython is
+    unlikely to be surpassed for basic string operation in isolation.
+    Numba is most successfuly used for larger algorithms that happen to
+    involve strings, where basic string operations are not the bottleneck.
 
 
 tuple
@@ -301,11 +309,77 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
+dict
+----
+
+.. warning::
+  ``numba.typed.Dict`` is an experimental feature.  The API may change
+  in the future releases.
+
+Numba does not directly support the Python ``dict`` because it is an untyped
+container that can have any Python types as members. To generate efficient
+machine code, Numba needs the keys and the values of the dictionary to have
+fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
+``numba.typed.Dict``, for which the user must explicitly declare the key-type
+and the value-type using the ``Dict.empty()`` constructor method.
+This typed dictionary has the same API as the Python ``dict``,  it implements
+the ``collections.MutableMapping`` interface and is usable in both interpreted
+Python code and JIT-compiled Numba functions.
+Because the typed dictionary stores keys and values in Numba's native,
+unboxed data layout, passing a Numba dictionary into nopython mode has very low
+overhead. However, this means that using a typed dictionary from the Python
+interpreter is slower than a regular dictionary because Numba has to box and
+unbox key and value objects when getting or setting items.
+
+An important difference of the typed dictionary in comparison to Python's
+``dict`` is that **implicit casting** occurs when a key or value is stored.
+As a result the *setitem* operation may fail should the type-casting fail.
+
+.. note::
+  A ``numba.typed.Dict`` cannot yet be constructed with ``Dict()``, the
+  ``Dict.empty(key_type, value_type)`` class method must be used to construct a
+  typed dictionary instead.
+
+It should be noted that the Numba typed dictionary is implemented using the same
+algorithm as the CPython 3.7 dictionary. As a consequence, the typed dictionary
+is ordered and has the same collision resolution as the CPython implementation.
+
+Further to the above in relation to type specification, there are limitations
+placed on the types that can be used as keys and/or values in the typed
+dictionary, most notably the Numba ``Set`` and ``List`` types are currently
+unsupported. Acceptable key/value types include but are not limited to: unicode
+strings, arrays, scalars, tuples. It is expected that these limitations will
+be relaxed as Numba continues to improve.
+
+Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
+code and using the dictionary in jit code:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_typed_dict_from_cpython.begin
+   :end-before: magictoken.ex_typed_dict_from_cpython.end
+   :dedent: 4
+   :linenos:
+
+Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
+using the dictionary in interpreted code:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_typed_dict_njit.begin
+   :end-before: magictoken.ex_typed_dict_njit.end
+   :dedent: 4
+   :linenos:
+
+
 None
 ----
 
 The None value is supported for identity testing (when using an
 :class:`~numba.optional` type).
+
 
 bytes, bytearray, memoryview
 ----------------------------
@@ -338,6 +412,7 @@ The following built-in functions are supported:
 * :func:`divmod`
 * :func:`enumerate`
 * :class:`float`
+* :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
 * :func:`len`
@@ -346,12 +421,33 @@ The following built-in functions are supported:
 * :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
-  a range object is returned instead of an array of values.
+  a range object is returned instead of an array of values. The only permitted
+  use of range is as a callable function (cannot pass range as an argument to a
+  jitted function or return a range from a jitted function).
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
+
+.. _pysupported-hashing:
+
+Hashing
+-------
+
+The :func:`hash` built-in is supported and produces hash values for all
+supported hashable types with the following Python version specific behavior:
+
+Under Python 3, hash values computed by Numba will exactly match those computed
+in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
+``siphash24`` (default).
+
+Under Python 2, hash values computed by Numba will follow the behavior
+described for Python 3 with the :attr:`sys.hash_info.algorithm` emulated as
+``siphash24``. No attempt is made to replicate Python 2 hashing behavior.
+
+The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
+precisely the manner described in the CPython documentation.
 
 
 Standard library modules
@@ -561,6 +657,22 @@ startup with entropy drawn from the operating system.
 .. seealso::
    Numba also supports most additional distributions from the :ref:`Numpy
    random module <numpy-random>`.
+
+``heapq``
+------------
+
+The following functions from the :mod:`heapq` module are supported:
+
+* :func:`heapq.heapify`
+* :func:`heapq.heappop`
+* :func:`heapq.heappush`
+* :func:`heapq.heappushpop`
+* :func:`heapq.heapreplace`
+* :func:`heapq.nlargest` : first two arguments only
+* :func:`heapq.nsmallest` : first two arguments only
+
+Note: the heap must be seeded with at least one value to allow its type to be
+inferred; heap items are assumed to be homogeneous in type.
 
 
 Third-party modules

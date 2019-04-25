@@ -215,7 +215,7 @@ class BaseContext(object):
     allow_dynamic_globals = False
 
     # Fast math flags
-    enable_fastmath = False
+    fastmath = False
 
     # python exceution environment
     environment = None
@@ -262,7 +262,7 @@ class BaseContext(object):
         # Populate built-in registry
         from . import (arraymath, enumimpl, iterators, linalg, numbers,
                        optional, polynomial, rangeobj, slicing, smartarray,
-                       tupleobj, gdb_hook)
+                       tupleobj, gdb_hook, hashing, heapq)
         try:
             from . import npdatetime
         except NotImplementedError:
@@ -560,7 +560,9 @@ class BaseContext(object):
     def get_generator_impl(self, genty):
         """
         """
-        return self._generators[genty][1]
+        res = self._generators[genty][1]
+        self.add_linking_libs(getattr(res, 'libs', ()))
+        return res
 
     def get_bound_function(self, builder, obj, ty):
         assert self.get_value_type(ty) == obj.type
@@ -704,8 +706,10 @@ class BaseContext(object):
         assert ty is not None
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
-        cmpfunc = self.get_function(key, cmpsig)
+        fnty = self.typing_context.resolve_value_type(key)
+        cmpsig = fnty.get_call_type(self.typing_context, argtypes, {})
+        cmpfunc = self.get_function(fnty, cmpsig)
+        self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
         return cmpfunc(builder, (cav, cbv))
 
     def make_optional_none(self, builder, valtype):
@@ -815,15 +819,14 @@ class BaseContext(object):
                                             locals=locals)
 
             # Allow inlining the function inside callers.
-            codegen.add_linking_library(cres.library)
+            self.active_code_library.add_linking_library(cres.library)
             return cres
 
     def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
                            caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
-        Return a placeholder object that's callable from another Numba
-        function.
+        Return an instance of CompileResult.
 
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
@@ -841,22 +844,20 @@ class BaseContext(object):
             cres = self._compile_subroutine_no_cache(builder, impl, sig,
                                                      locals=locals,
                                                      flags=flags)
-            lib = cres.library
-            ty = types.NumbaFunction(cres.fndesc, sig)
-            self.cached_internal_func[cache_key] = ty, lib
+            self.cached_internal_func[cache_key] = cres
 
-        ty, lib = self.cached_internal_func[cache_key]
+        cres = self.cached_internal_func[cache_key]
         # Allow inlining the function inside callers.
-        self.active_code_library.add_linking_library(lib)
-        return ty
+        self.active_code_library.add_linking_library(cres.library)
+        return cres
 
     def compile_internal(self, builder, impl, sig, args, locals={}):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
-        ty = self.compile_subroutine(builder, impl, sig, locals)
-        return self.call_internal(builder, ty.fndesc, sig, args)
+        cres = self.compile_subroutine(builder, impl, sig, locals)
+        return self.call_internal(builder, cres.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
         """
@@ -1107,6 +1108,13 @@ class BaseContext(object):
         finally:
             self._codelib_stack.pop()
 
+    def add_linking_libs(self, libs):
+        """Add iterable of linking librarys to the *active_code_library*.
+        """
+        colib = self.active_code_library
+        for lib in libs:
+            colib.add_linking_library(lib)
+
 
 class _wrap_impl(object):
     """
@@ -1121,7 +1129,9 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args, loc=None):
-        return self._imp(self._context, builder, self._sig, args, loc=loc)
+        res = self._imp(self._context, builder, self._sig, args, loc=loc)
+        self._context.add_linking_libs(getattr(self, 'libs', ()))
+        return res
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

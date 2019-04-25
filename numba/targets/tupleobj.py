@@ -8,7 +8,8 @@ import operator
 
 from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
                        lower_constant,
-                       iternext_impl, impl_ret_borrowed, impl_ret_untracked)
+                       iternext_impl, impl_ret_borrowed, impl_ret_untracked,
+                       RefType)
 from .. import typing, types, cgutils
 from ..extending import overload_method
 
@@ -16,7 +17,14 @@ from ..extending import overload_method
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
-    res = context.make_tuple(builder, sig.return_type, args)
+    # the arguments need casting (lower_cast) from the types in the ctor args
+    # to those in the ctor return type, this is to handle cases such as a
+    # literal present in the args, but a type present in the return type.
+    newargs = []
+    for i, arg in enumerate(args):
+        casted = context.cast(builder, arg, sig.args[i], sig.return_type[i])
+        newargs.append(casted)
+    res = context.make_tuple(builder, sig.return_type, tuple(newargs))
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -88,30 +96,7 @@ def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.ge, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(hash, types.BaseTuple)
-def hash_tuple(context, builder, sig, args):
-    tupty, = sig.args
-    tup, = args
-    lty = context.get_value_type(sig.return_type)
-
-    h = ir.Constant(lty, 0x345678)
-    mult = ir.Constant(lty, 1000003)
-    n = ir.Constant(lty, len(tupty))
-
-    for i, ty in enumerate(tupty.types):
-        # h = h * mult
-        h = builder.mul(h, mult)
-        val = builder.extract_value(tup, i)
-        hash_impl = context.get_function(hash,
-                                         typing.signature(sig.return_type, ty))
-        h_val = hash_impl(builder, (val,))
-        # h = h ^ hash(val)
-        h = builder.xor(h, h_val)
-        # Perturb: mult = mult + len(tup)
-        mult = builder.add(mult, n)
-
-    return h
-
+# for hashing see hashing.py
 
 @lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
@@ -131,7 +116,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.dtype, v)
               for v in pyval]
-    return ir.ArrayType(consts[0].type, len(consts))(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_array(builder, consts),
+    )
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
@@ -141,7 +128,9 @@ def unituple_constant(context, builder, ty, pyval):
     """
     consts = [context.get_constant_generic(builder, ty.types[i], v)
               for i, v in enumerate(pyval)]
-    return ir.Constant.literal_struct(consts)
+    return impl_ret_borrowed(
+        context, builder, ty, cgutils.pack_struct(builder, consts),
+    )
 
 
 #------------------------------------------------------------------------------
@@ -167,7 +156,7 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @lower_builtin('iternext', types.UniTupleIter)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
@@ -188,13 +177,19 @@ def iternext_unituple(context, builder, sig, args, result):
                                        types.intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
+        # As a iternext_impl function, this will incref the yieled value.
+        # We need to release the new reference from getitem_unituple.
+        if context.enable_nrt:
+            context.nrt.decref(builder, tupiterty.container.dtype, getitem_out)
         result.yield_(getitem_out)
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
 
 
 @lower_builtin(operator.getitem, types.UniTuple, types.intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.uintp)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.uintp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args

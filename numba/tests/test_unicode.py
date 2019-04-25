@@ -11,8 +11,12 @@ from itertools import permutations
 from numba import njit
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.errors import TypingError
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
+
+
+isascii = lambda s: all(ord(c) < 128 for c in s)
 
 
 def literal_usecase():
@@ -35,8 +39,21 @@ def getitem_usecase(x, i):
     return x[i]
 
 
+def zfill_usecase(x, y):
+    return x.zfill(y)
+
+
 def concat_usecase(x, y):
     return x + y
+
+
+def repeat_usecase(x, y):
+    return x * y
+
+
+def inplace_concat_usecase(x, y):
+    x += y
+    return x
 
 
 def in_usecase(x, y):
@@ -69,6 +86,71 @@ def startswith_usecase(x, y):
 
 def endswith_usecase(x, y):
     return x.endswith(y)
+
+
+def split_usecase(x, y):
+    return x.split(y)
+
+
+def split_with_maxsplit_usecase(x, y, maxsplit):
+    return x.split(y, maxsplit)
+
+
+def split_with_maxsplit_kwarg_usecase(x, y, maxsplit):
+    return x.split(y, maxsplit=maxsplit)
+
+
+def split_whitespace_usecase(x):
+    return x.split()
+
+
+def join_usecase(x, y):
+    return x.join(y)
+
+
+def join_empty_usecase(x):
+    # hack to make empty typed list
+    l = ['']
+    l.pop()
+    return x.join(l)
+
+
+def iter_usecase(x):
+    l = []
+    for i in x:
+        l.append(i)
+    return l
+
+
+def literal_iter_usecase():
+    l = []
+    for i in '大处着眼，小处着手。':
+        l.append(i)
+    return l
+
+
+def enumerated_iter_usecase(x):
+    buf = ""
+    scan = 0
+    for i, s in enumerate(x):
+        buf += s
+        scan += 1
+    return buf, scan
+
+
+def iter_stopiteration_usecase(x):
+    n = len(x)
+    i = iter(x)
+    for _ in range(n + 1):
+        next(i)
+
+
+def literal_iter_stopiteration_usecase():
+    s = '大处着眼，小处着手。'
+    i = iter(s)
+    n = len(s)
+    for _ in range(n + 1):
+        next(i)
 
 
 class BaseTest(MemoryLeakMixin, TestCase):
@@ -135,7 +217,7 @@ class TestUnicode(BaseTest):
                 pyfunc(a, a),
                 cfunc(a, a),
                 '%s: "%s", "%s"' % (usecase.__name__, a, a),
-                )
+            )
 
         # Check comparison to adjacent
         for a, b in permutations(UNICODE_ORDERING_EXAMPLES, r=2):
@@ -143,13 +225,13 @@ class TestUnicode(BaseTest):
                 pyfunc(a, b),
                 cfunc(a, b),
                 '%s: "%s", "%s"' % (usecase.__name__, a, b),
-                )
+            )
             # and reversed
             self.assertEqual(
                 pyfunc(b, a),
                 cfunc(b, a),
                 '%s: "%s", "%s"' % (usecase.__name__, b, a),
-                )
+            )
 
     def test_lt(self, flags=no_pyobj_flags):
         self._check_ordering_op(lt_usecase)
@@ -282,8 +364,221 @@ class TestUnicode(BaseTest):
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
+    def test_zfill(self):
+        pyfunc = zfill_usecase
+        cfunc = njit(pyfunc)
+
+        ZFILL_INPUTS = [
+            'ascii',
+            '+ascii',
+            '-ascii',
+            '-asc ii-',
+            '12345',
+            '-12345',
+            '+12345',
+            '',
+            '¡Y tú crs?',
+            '🐍⚡',
+            '+🐍⚡',
+            '-🐍⚡',
+            '大眼，小手。',
+            '+大眼，小手。',
+            '-大眼，小手。',
+        ]
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(ZFILL_INPUTS[0], 1.1)
+        self.assertIn('<width> must be an Integer', str(raises.exception))
+
+        for s in ZFILL_INPUTS:
+            for width in range(-3, 20):
+                self.assertEqual(pyfunc(s, width),
+                                 cfunc(s, width))
+
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            for b in UNICODE_EXAMPLES[::-1]:
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b),
+                                 "'%s' + '%s'?" % (a, b))
+
+    def test_repeat(self, flags=no_pyobj_flags):
+        pyfunc = repeat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + ['']:
+            for b in (-1, 0, 1, 2, 3, 4, 5, 7, 8, 15, 70):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b))
+                self.assertEqual(pyfunc(b, a),
+                                 cfunc(b, a))
+
+    def test_repeat_exception_float(self):
+        self.disable_leak_check()
+        cfunc = njit(repeat_usecase)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hi', 2.5)
+        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
+
+    def test_split_exception_empty_sep(self):
+        self.disable_leak_check()
+
+        pyfunc = split_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        for func in [pyfunc, cfunc]:
+            with self.assertRaises(ValueError) as raises:
+                func('a', '')
+            self.assertIn('empty separator', str(raises.exception))
+
+    def test_split_exception_noninteger_maxsplit(self):
+        pyfunc = split_with_maxsplit_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle non-integer maxsplit exception
+        for sep in [' ', None]:
+            with self.assertRaises(TypingError) as raises:
+                cfunc('a', sep, 2.4)
+            self.assertIn('float64', str(raises.exception),
+                          'non-integer maxsplit with sep = %s' % sep)
+
+    def test_split(self):
+        pyfunc = split_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            (' a ', None),
+            ('', '⚡'),
+            ('abcabc', '⚡'),
+            ('🐍⚡', '⚡'),
+            ('🐍⚡🐍', '⚡'),
+            ('abababa', 'a'),
+            ('abababa', 'b'),
+            ('abababa', 'c'),
+            ('abababa', 'ab'),
+            ('abababa', 'aba'),
+        ]
+
+        for test_str, splitter in CASES:
+            self.assertEqual(pyfunc(test_str, splitter),
+                             cfunc(test_str, splitter),
+                             "'%s'.split('%s')?" % (test_str, splitter))
+
+    def test_split_with_maxsplit(self):
+        CASES = [
+            (' a ', None, 1),
+            ('', '⚡', 1),
+            ('abcabc', '⚡', 1),
+            ('🐍⚡', '⚡', 1),
+            ('🐍⚡🐍', '⚡', 1),
+            ('abababa', 'a', 2),
+            ('abababa', 'b', 1),
+            ('abababa', 'c', 2),
+            ('abababa', 'ab', 1),
+            ('abababa', 'aba', 5),
+        ]
+
+        for pyfunc, fmt_str in [(split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
+                                (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
+
+            cfunc = njit(pyfunc)
+            for test_str, splitter, maxsplit in CASES:
+                self.assertEqual(pyfunc(test_str, splitter, maxsplit),
+                                 cfunc(test_str, splitter, maxsplit),
+                                 fmt_str % (test_str, splitter, maxsplit))
+
+    def test_split_whitespace(self):
+        # explicit sep=None cases covered in test_split and test_split_with_maxsplit
+        pyfunc = split_whitespace_usecase
+        cfunc = njit(pyfunc)
+
+        # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+        all_whitespace = ''.join(map(chr, [
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020,
+            0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+            0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+        ]))
+
+        CASES = [
+            '',
+            'abcabc',
+            '🐍 ⚡',
+            '🐍 ⚡ 🐍',
+            '🐍   ⚡ 🐍  ',
+            '  🐍   ⚡ 🐍',
+            ' 🐍' + all_whitespace + '⚡ 🐍  ',
+        ]
+        for test_str in CASES:
+            self.assertEqual(pyfunc(test_str),
+                             cfunc(test_str),
+                             "'%s'.split()?" % (test_str,))
+
+    def test_join_empty(self):
+        # Can't pass empty list to nopython mode, so we have to make a
+        # separate test case
+        pyfunc = join_empty_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            '',
+            '🐍🐍🐍',
+        ]
+
+        for sep in CASES:
+            self.assertEqual(pyfunc(sep),
+                             cfunc(sep),
+                             "'%s'.join([])?" % (sep,))
+
+    def test_join_non_string_exception(self):
+        # Verify that join of list of integers raises typing exception
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        with self.assertRaises(TypingError) as raises:
+            cfunc('', [1, 2, 3])
+        # This error message is obscure, but indicates the error was trapped in typing of str.join()
+        # Feel free to change this as we update error messages.
+        exc_message = str(raises.exception)
+        self.assertIn("Invalid use of BoundFunction", exc_message)
+        # could be int32 or int64
+        self.assertIn("(reflected list(int", exc_message)
+
+    def test_join(self):
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', ['', '', '']),
+            ('a', ['', '', '']),
+            ('', ['a', 'bbbb', 'c']),
+            ('🐍🐍🐍', ['⚡⚡'] * 5),
+        ]
+
+        for sep, parts in CASES:
+            self.assertEqual(pyfunc(sep, parts),
+                             cfunc(sep, parts),
+                             "'%s'.join('%s')?" % (sep, parts))
+
+    def test_join_interleave_str(self):
+        # can pass a string as the parts iterable
+        pyfunc = join_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('abc', '123'),
+            ('🐍🐍🐍', '⚡⚡'),
+        ]
+
+        for sep, parts in CASES:
+            self.assertEqual(pyfunc(sep, parts),
+                             cfunc(sep, parts),
+                             "'%s'.join('%s')?" % (sep, parts))
+
+    def test_inplace_concat(self, flags=no_pyobj_flags):
+        pyfunc = inplace_concat_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
             for b in UNICODE_EXAMPLES[::-1]:
@@ -349,7 +644,7 @@ class TestUnicode(BaseTest):
             for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
                 args = [cmpop, x, y]
                 self.assertEqual(pyfunc(*args), cfunc(*args),
-                                msg='failed on {}'.format(args))
+                                 msg='failed on {}'.format(args))
 
     def test_literal_concat(self):
         def pyfunc(x):
@@ -433,6 +728,123 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeInTuple(BaseTest):
+
+    def test_const_unicode_in_tuple(self):
+        # Issue 3673
+        @njit
+        def f():
+            return ('aa',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('cc',) < ('bb',)
+
+        self.assertEqual(f.py_func(), f())
+
+    def test_const_unicode_in_hetero_tuple(self):
+        @njit
+        def f():
+            return ('aa', 1) < ('bb', 1)
+
+        self.assertEqual(f.py_func(), f())
+
+        @njit
+        def f():
+            return ('aa', 1) < ('aa', 2)
+
+        self.assertEqual(f.py_func(), f())
+
+    def test_ascii_flag_unbox(self):
+        @njit
+        def f(s):
+            return s._is_ascii
+
+        for s in UNICODE_EXAMPLES:
+            self.assertEqual(f(s), isascii(s))
+
+    def test_ascii_flag_join(self):
+        @njit
+        def f():
+            s1 = 'abc'
+            s2 = '123'
+            s3 = '🐍⚡'
+            s4 = '大处着眼，小处着手。'
+            return (",".join([s1, s2])._is_ascii,
+                    "🐍⚡".join([s1, s2])._is_ascii,
+                    ",".join([s1, s3])._is_ascii,
+                    ",".join([s3, s4])._is_ascii)
+
+        self.assertEqual(f(), (1, 0, 0, 0))
+
+    def test_ascii_flag_getitem(self):
+        @njit
+        def f():
+            s1 = 'abc123'
+            s2 = '🐍⚡🐍⚡🐍⚡'
+            return (s1[0]._is_ascii, s1[2:]._is_ascii, s2[0]._is_ascii,
+                    s2[2:]._is_ascii)
+
+        self.assertEqual(f(), (1, 1, 0, 0))
+
+    def test_ascii_flag_add_mul(self):
+        @njit
+        def f():
+            s1 = 'abc'
+            s2 = '123'
+            s3 = '🐍⚡'
+            s4 = '大处着眼，小处着手。'
+            return ((s1 + s2)._is_ascii,
+                    (s1 + s3)._is_ascii,
+                    (s3 + s4)._is_ascii,
+                    (s1 * 2)._is_ascii,
+                    (s3 * 2)._is_ascii)
+
+        self.assertEqual(f(), (1, 0, 0, 1, 0))
+
+
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeIteration(BaseTest):
+
+    def test_unicode_iter(self):
+        pyfunc = iter_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_unicode_literal_iter(self):
+        pyfunc = literal_iter_usecase
+        cfunc = njit(pyfunc)
+        self.assertPreciseEqual(pyfunc(), cfunc())
+
+    def test_unicode_enumerate_iter(self):
+        pyfunc = enumerated_iter_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_unicode_stopiteration_iter(self):
+        self.disable_leak_check()
+        pyfunc = iter_stopiteration_usecase
+        cfunc = njit(pyfunc)
+        for f in (pyfunc, cfunc):
+            for a in UNICODE_EXAMPLES:
+                with self.assertRaises(StopIteration):
+                    f(a)
+
+    def test_unicode_literal_stopiteration_iter(self):
+        pyfunc = literal_iter_stopiteration_usecase
+        cfunc = njit(pyfunc)
+        for f in (pyfunc, cfunc):
+            with self.assertRaises(StopIteration):
+                f()
 
 
 if __name__ == '__main__':
