@@ -1,5 +1,5 @@
 """
-This file implement the lowering for `dict()`
+This file implements the lowering for `dict()`
 """
 from numba.targets.imputils import lower_builtin
 

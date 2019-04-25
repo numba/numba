@@ -316,8 +316,13 @@ dict
   in the future releases.
 
 .. note::
-  ``dict()`` was not supported in previous versions.  Currently, calling
+  ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
   ``dict()`` translates to calling ``numba.typed.Dict()``.
+
+Numba only supports the use of ``dict()`` without any arguments.  Such use is
+semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
+an instance of ``numba.typed.Dict`` where the key-value types will be later
+inferred by usage.
 
 Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
