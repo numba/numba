@@ -274,8 +274,7 @@ class BuildMapConstraint(object):
                                                   types.undefined),
                                    loc=self.loc)
             else:
-                head = tsets[0]
-                key_type, value_type = head
+                key_type, value_type = tsets[0]
                 typeinfer.add_type(self.target,
                                    types.DictType(key_type, value_type),
                                    loc=self.loc)
