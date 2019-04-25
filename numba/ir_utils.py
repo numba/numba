@@ -1891,6 +1891,15 @@ def raise_on_unsupported_feature(func_ir, typemap):
                         "try wrapping the variable {}with 'np.<dtype>()'".
                         format(vardescr), loc=stmt.loc)
 
+            # checks for globals that are also reflected
+            if isinstance(stmt.value, ir.Global):
+                ty = typemap[stmt.target.name]
+                if getattr(ty, 'reflected', False):
+                    msg = ("Writing to a %s defined in globals is not "
+                           "supported as globals are considered compile-time "
+                           "constants.")
+                    raise TypingError(msg % ty, loc=stmt.loc)
+
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
         msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "
