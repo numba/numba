@@ -173,9 +173,13 @@ class Record(Type):
         return self.fields[key].alignment
 
     def has_titles(self):
+        """Returns True the record uses titles.
+        """
         return any(fd.title is not None for fd in self.fields.values())
 
     def is_title(self, key):
+        """Returns True if the field named *key* is a title.
+        """
         return self.fields[key].title == key
 
     @property

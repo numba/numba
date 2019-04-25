@@ -158,6 +158,7 @@ def as_struct_dtype(rec):
     formats = []
     offsets = []
     titles = []
+    # Fill the fields if they are not a title.
     for k, t in rec.members:
         if not rec.is_title(k):
             names.append(k)
