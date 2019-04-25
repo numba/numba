@@ -112,6 +112,35 @@ class TestCompiledDict(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_dict_use_with_none_value(self):
+        # Test that NoneType cannot be used as value for Dict
+        @njit
+        def foo():
+            k = {1: None}
+            return k
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "Dict.value_type cannot be of type none",
+            str(raises.exception),
+        )
+
+
+    def test_dict_use_with_optional_value(self):
+        # Test that Optinoal cannot be used as value for Dict
+        @njit
+        def foo(choice):
+            k = {1: 2.5 if choice else None}
+            return k
+
+        with self.assertRaises(TypingError) as raises:
+            foo(True)
+        self.assertIn(
+            "Dict.value_type cannot be of type ?float64",
+            str(raises.exception),
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
