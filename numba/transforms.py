@@ -308,6 +308,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             # Lifted with-block uses object mode
             myflags.enable_pyobject = True
             myflags.force_pyobject = True
+            myflags.no_cpython_wrapper = False
             cls = ObjModeLiftedWith
         else:
             cls = LiftedWith
