@@ -706,7 +706,7 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test)
-        print("Total parallel test functions: '{}'".format(len(self._ptests)))
+        print("Number of parallel test functions: '{}'".format(len(self._ptests)))
         print("Total serial test functions: '{}'".format(len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
