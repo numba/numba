@@ -83,8 +83,8 @@ def ex_inferred_dict_njit():
     def foo():
         d = dict()
         k = {1: np.arange(1), 2: np.arange(2)}
-        # The following tells the compiler what the key type and the value type are
-        # for `d`.
+        # The following tells the compiler what the key type and the value
+        # type are for `d`.
         d[3] = np.arange(3)
         d[5] = np.arange(5)
         return d, k

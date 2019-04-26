@@ -328,9 +328,9 @@ Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
 machine code, Numba needs the keys and the values of the dictionary to have
 fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
-``numba.typed.Dict``, for which the type-inference mechanism must be able to infer the
-key-value types by use, or the user must explicitly declare the key-value
-type using the ``Dict.empty()`` constructor method.
+``numba.typed.Dict``, for which the type-inference mechanism must be able to
+infer the key-value types by use, or the user must explicitly declare the
+key-value type using the ``Dict.empty()`` constructor method.
 This typed dictionary has the same API as the Python ``dict``,  it implements
 the ``collections.MutableMapping`` interface and is usable in both interpreted
 Python code and JIT-compiled Numba functions.

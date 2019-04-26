@@ -128,7 +128,7 @@ class TestCompiledDict(TestCase):
 
 
     def test_dict_use_with_optional_value(self):
-        # Test that Optinoal cannot be used as value for Dict
+        # Test that Optional cannot be used as value for Dict
         @njit
         def foo(choice):
             k = {1: 2.5 if choice else None}
