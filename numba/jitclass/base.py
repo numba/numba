@@ -14,15 +14,9 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils, utils, errors
-from numba.config import PYVERSION
-from numba.six import exec_
+from numba.six import exec_, Sequence
 from . import _box
 
-
-if PYVERSION >= (3, 3):
-    from collections.abc import Sequence
-else:
-    from collections import Sequence
 
 ##############################################################################
 # Data model

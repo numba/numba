@@ -14,12 +14,7 @@ from . import templates
 from .typeof import typeof, Purpose
 
 from numba import utils
-from numba.config import PYVERSION
-
-if PYVERSION >= (3, 3):
-    from collections.abc import Sequence
-else:
-    from collections import Sequence
+from numba.six import Sequence
 
 
 class Rating(object):
