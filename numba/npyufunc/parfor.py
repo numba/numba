@@ -27,6 +27,7 @@ from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
+import types as pytypes
 
 import warnings
 from ..errors import ParallelSafetyWarning
@@ -516,7 +517,7 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, mo
         if isinstance(rhs, ir.Global):
             # Remember assignments of the form "a = Global(...)"
             # Is this a module?
-            if isinstance(rhs.value, __builtins__.__class__):
+            if isinstance(rhs.value, pytypes.ModuleType):
                 module_assigns[a_def] = rhs.value.__name__
         if isinstance(rhs, ir.Expr) and rhs.op == 'getattr' and rhs.value.name in def_once:
             # Remember assignments of the form "a = b.c"
