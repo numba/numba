@@ -2727,7 +2727,7 @@ class TestParforsDiagnostics(TestParforsBase):
 
     def assert_diagnostics(self, diagnostics, parfors_count=None,
                            fusion_info=None, nested_fusion_info=None,
-                           replaced_fns=None):
+                           replaced_fns=None, hoisted_allocations=None):
         if parfors_count is not None:
             self.assertEqual(parfors_count, diagnostics.count_parfors())
         if fusion_info is not None:
@@ -2744,9 +2744,15 @@ class TestParforsDiagnostics(TestParforsBase):
                 else:
                     msg = "Replacement for %s was not found. Had %s" % (x, repl)
                     raise AssertionError(msg)
+
+        if hoisted_allocations is not None:
+            hoisted_allocs = diagnostics.hoisted_allocations()
+            self.assertEqual(hoisted_allocations, len(hoisted_allocs))
+
         # just make sure that the dump() function doesn't have an issue!
         with captured_stdout():
-            diagnostics.dump(4)
+            for x in range(1, 5):
+                diagnostics.dump(x)
 
     def test_array_expr(self):
         def test_impl():
@@ -2828,6 +2834,23 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
+
+    def test_allocation_hoisting(self):
+        def test_impl():
+            n = 10
+            m = 5
+            acc = 0
+            for i in prange(n):
+                temp = np.zeros((m,)) # the np.empty call should get hoisted
+                for j in range(m):
+                    temp[j] = i
+                acc += temp[-1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, hoisted_allocations=1)
 
 
 if __name__ == "__main__":
