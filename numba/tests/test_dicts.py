@@ -158,12 +158,12 @@ class TestCompiledDict(TestCase):
     def test_dict_use_with_none_key(self):
         # Test that NoneType cannot be used as a key for Dict
         @njit
-        def foo(choice):
+        def foo():
             k = {None: 1}
             return k
 
         with self.assertRaises(TypingError) as raises:
-            foo(True)
+            foo()
         self.assertIn(
             "Dict.key_type cannot be of type none",
             str(raises.exception),
