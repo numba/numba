@@ -141,6 +141,33 @@ class TestCompiledDict(TestCase):
             str(raises.exception),
         )
 
+    def test_dict_use_with_optional_key(self):
+        # Test that Optional cannot be used as a key for Dict
+        @njit
+        def foo(choice):
+            k = {2.5 if choice else None: 1}
+            return k
+
+        with self.assertRaises(TypingError) as raises:
+            foo(True)
+        self.assertIn(
+            "Dict.key_type cannot be of type ?float64",
+            str(raises.exception),
+        )
+
+    def test_dict_use_with_none_key(self):
+        # Test that NoneType cannot be used as a key for Dict
+        @njit
+        def foo(choice):
+            k = {None: 1}
+            return k
+
+        with self.assertRaises(TypingError) as raises:
+            foo(True)
+        self.assertIn(
+            "Dict.key_type cannot be of type none",
+            str(raises.exception),
+        )
 
 if __name__ == '__main__':
     unittest.main()

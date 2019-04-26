@@ -458,6 +458,9 @@ class DictType(IterableType):
         assert not isinstance(valty, TypeRef)
         keyty = unliteral(keyty)
         valty = unliteral(valty)
+        if isinstance(keyty, (Optional, NoneType)):
+            fmt = 'Dict.key_type cannot be of type {}'
+            raise TypingError(fmt.format(keyty))
         if isinstance(valty, (Optional, NoneType)):
             fmt = 'Dict.value_type cannot be of type {}'
             raise TypingError(fmt.format(valty))
