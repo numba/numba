@@ -188,6 +188,10 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_select(condlist, choicelist, default=0):
+    return np.select(condlist, choicelist, default=0)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2677,6 +2681,76 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for rep in [True, "a", "1"]:
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
+
+    def test_select(self):
+        x = np.arange(10)
+        condlist = (x < 3, x > 5)
+        choicelist = (x, x ** 2)
+
+
+        np_pyfunc = np_select
+        np_nbfunc = njit(np_select)
+
+
+        def check(condlist, choicelist):
+            self.assertPreciseEqual(np_pyfunc(condlist, choicelist),
+                                    np_nbfunc(condlist, choicelist))
+
+        for condlist,  choicelist, default in [
+            # ((x < 3, x > 5), (x, x ** 2),0),
+
+            ([x < 3, x > 5], [x, x ** 2],0),
+            #
+            # ([np.array([1, 2, 3]),
+            #   np.array([4, 5, 6]),
+            #   np.array([7, 8, 9])],
+            #  [np.array([False, False, False]),
+            #   np.array([False, True, False]),
+            #   np.array([False, False, True]),15]
+            #  ),
+            #
+            # ([np.array(True), np.array([False, True, False])],
+            #  [np.array(1), np.arange(12).reshape(4, 3)], 0),
+            #
+            # ([True], [0], [0]),
+            #
+            # (np.array([1, 2, 3, np.nan, 5, 7]),
+            #  np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))),
+            #
+            # ([np.array([False])] * 100, [np.array([1])] * 100, 0)
+        ]:
+            self.assertPreciseEqual(np_pyfunc(condlist, choicelist),
+                                    np_nbfunc(condlist, choicelist))
+
+
+
+    def test_select_exception(self):
+
+
+
+        def test_deprecated_empty(self):
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("always")
+                assert_equal(select([], [], 3j), 3j)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("always")
+                assert_warns(DeprecationWarning, select, [], [])
+                warnings.simplefilter("error")
+                assert_raises(DeprecationWarning, select, [], [])
+
+        def test_non_bool_deprecation(self):
+            choices = self.choices
+            conditions = self.conditions[:]
+            with warnings.catch_warnings():
+                warnings.filterwarnings("always")
+                conditions[0] = conditions[0].astype(np.int_)
+                assert_warns(DeprecationWarning, select, conditions, choices)
+                conditions[0] = conditions[0].astype(np.uint8)
+                assert_warns(DeprecationWarning, select, conditions, choices)
+                warnings.filterwarnings("error")
+                assert_raises(DeprecationWarning, select, conditions, choices)
+
 
 
 class TestNPMachineParameters(TestCase):
