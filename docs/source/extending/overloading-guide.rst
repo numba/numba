@@ -7,33 +7,40 @@ A guide to using ``@overload``
 
 
 As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
-can use the ``@overload`` decorator to create a Numba implementation of a function
-that can be used in :term:`nopython mode` functions. A common use case
+can use the ``@overload`` decorator to create a Numba implementation of a
+function that can be used in :term:`nopython mode` functions. A common use case
 is to re-implement NumPy functions so that they can be called in ``@jit``
-decorated code. In this section will discuss what contributing such a function
-to Numba might entail. This should help you get started when attempting to
-contribute new overloaded functions to Numba.
-
-Annotated Template
-==================
-
-Here is an annotated template that outlines how the specific parts ought to
-looks like. This should give you an idea as to the structure required.
-
-.. literalinclude:: template.py
+decorated code. In this section will discuss how and when to use ``@overload``
+and   what contributing such a function to Numba might entail. This should help
+you get started when attempting to contribute new overloaded functions to
+Numba.
 
 
 Concrete Example
 ================
 
 Let's assume that you have a module called ``mymodule.py`` which implements a single
-a function called ``set_to_x``:
+a function called ``set_to_x`` which sets all elements of a NumPy array to a
+specific value.
 
 .. literalinclude:: mymodule.py
 
-Usually, you use this function to set all elements of a NumPy array to a
-specific value. Now, you do some profiling and you realize that our function
-might be a bit slow.
+Both you and your colleague are using this function as part of your algorithms:
+
+.. code:: python
+
+    @jit
+    def myalgorithm(h, j, k, l):
+        # algorithm code
+        mymodule.set_to_x(a, x)
+        # more algorithm code
+
+However, both of make use of this function in slightly different contexts. You
+usually work with integer arrays and your colleague works with floats. Because
+of duck typing the code works equally well for both types.
+
+Next, you do some profiling and you realize that our function might be a bit
+slow:
 
 .. code:: pycon
 
@@ -46,25 +53,23 @@ might be a bit slow.
     In [4]: %timeit set_to_x(a, 1)
     5.88 ms ± 43.2 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
-Since this function is used very often in your ``jit`` decorated
-functions, for example in ``myalgorithm``, you choose to use to ``overload`` in
-an attempt to accelerate things.
 
-.. code:: python
+Since this function is used very often in your ``@jit`` decorated functions, for
+example in ``myalgorithm``, you could choose to use to ``@overload`` to
+accelerate your algorithm.
 
-    @njit
-    def myalgorithm(a, x):
-        # algorithm code
-        ham.set_to_x(a, x)
-        # algorithm code
+Interlude: here is an annotated template that outlines how the specific parts
+ought to looks like when using ``@overload``. This should give you an idea as
+to the structure required.
+
+.. literalinclude:: template.py
 
 Inspired by the template above, your implementation might look something like:
 
 .. literalinclude:: myjitmodule.py
 
-
-
-When the function is timed, you find yourself pleasantly surprised:
+When the function is timed, you find yourself pleasantly surprised by the gains
+that Numba can achieve.
 
 .. code:: pycon
 
@@ -77,9 +82,9 @@ When the function is timed, you find yourself pleasantly surprised:
     In [4]: %timeit myjitmodule.myalgorithm(a, 1)
     17.6 µs ± 327 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)
 
-But of course, your implementation doesn't generalize to your colleague's
-use-case, who would like to use ``set_to_x`` with a floating point number
-instead:
+But of course, this implementation doesn't generalize to your colleague's
+use-case, who would like to use ``set_to_x`` with a floating point number. The
+following error arises:
 
 .. code:: pycon
 
@@ -93,7 +98,7 @@ instead:
         All templates rejected without literals.
     This error is usually caused by passing an argument of a type that is unsupported by the named function.
     [1] During: resolving callee type: Function(<function set_to_x at 0x11aea71e0>)
-    [2] During: typing of call at /Users/vhaenel/git/numba/docs/source/extending/myjitmodule.py (25)
+    [2] During: typing of call at /Users/mr-numba/git/numba/docs/source/extending/myjitmodule.py (25)
 
 
     File myjitmodule.py", line 25:
@@ -116,8 +121,8 @@ the function as follows:
 * Only integer and floating-point types are to be supported for argument ``x``.
 * No ``nan`` values are allowed in ``arr`` when it is of floating-point type and if
   such a value is encountered an appropriate ``ValueError`` should be raised.
-* If a tuple is used instead of an array as a value for ``arr``, a custom error message with a hint
-  for the user should be issued.
+* If a tuple is used instead of an array as a value for ``arr``, a custom error
+  message with a hint for the user should be issued.
 
 The resulting implementation could look as follows:
 
@@ -212,7 +217,7 @@ additional things to watch out for.
   ``numba/tests/test_np_functions.py``, you may encounter the following error
   message:
 
-  .. code:: pycon
+  .. code::
 
         ======================================================================
         FAIL: test_foo (numba.tests.test_np_functions.TestNPFunctions)
@@ -276,7 +281,7 @@ additional things to watch out for.
 
 * You can look at the Numba source code for inspiration, many of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Below, you
-  will find a list of implementations to look at, that are well impemented in
+  will find a list of implementations to look at, that are well implemented in
   terms of accepted types and test coverage.
 
   * ``np.repeat``
