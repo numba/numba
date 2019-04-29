@@ -627,11 +627,11 @@ class TestUnicode(BaseTest):
                 cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
             self.assertIn('The fill character must be exactly one', str(raises.exception))
 
-        # disallowed fillchar cases with diffrent types
+        # forbid fillchar cases with different types
         for fillchar in [1, 1.1]:
             with self.assertRaises(TypingError) as raises:
                 cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The fillchar must be an UnicodeType', str(raises.exception))
+            self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
