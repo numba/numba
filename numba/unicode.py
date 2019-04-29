@@ -599,7 +599,7 @@ def unicode_ljust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
     if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
-        raise TypingError('The fillchar must be an UnicodeType')
+        raise TypingError('The fillchar must be a UnicodeType')
 
     def ljust_impl(string, width, fillchar=' '):
         str_len = len(string)
