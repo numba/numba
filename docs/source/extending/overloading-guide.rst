@@ -10,10 +10,10 @@ As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to create a Numba implementation of a
 function that can be used in :term:`nopython mode` functions. A common use case
 is to re-implement NumPy functions so that they can be called in ``@jit``
-decorated code. In this section will discuss how and when to use ``@overload``
-and   what contributing such a function to Numba might entail. This should help
-you get started when attempting to contribute new overloaded functions to
-Numba.
+decorated code. In this section will discuss how and when to use the
+``@overload`` decorator and what contributing such a function to Numba might
+entail. This should help you get started when needing to use the ``@overload``
+decorator or when attempting to contribute new functions to Numba itself.
 
 
 Concrete Example
@@ -39,27 +39,11 @@ However, both of make use of this function in slightly different contexts. You
 usually work with integer arrays and your colleague works with floats. Because
 of duck typing the code works equally well for both types.
 
-Next, you do some profiling and you realize that our function might be a bit
-slow:
-
-.. code:: pycon
-
-    In [1]: import numpy as np
-
-    In [2]: from mymodule import set_to_x
-
-    In [3]: a = np.arange(100000)
-
-    In [4]: %timeit set_to_x(a, 1)
-    5.88 ms ± 43.2 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-
-Since this function is used very often in your ``@jit`` decorated functions, for
-example in ``myalgorithm``, you could choose to use to ``@overload`` to
-accelerate your algorithm.
-
-Interlude: here is an annotated template that outlines how the specific parts
-ought to looks like when using ``@overload``. This should give you an idea as
+Profiling reveals that this function is used very often in your ``@jit``
+decorated functions, for example in ``myalgorithm`` and  you choose to use to
+``@overload`` to accelerate your algorithm. You consult the documentation and
+discover the following annotated template that outlines how the specific parts
+ought to looks like when using ``@overload``. This gives you an idea as
 to the structure required.
 
 .. literalinclude:: template.py
@@ -68,23 +52,9 @@ Inspired by the template above, your implementation might look something like:
 
 .. literalinclude:: myjitmodule.py
 
-When the function is timed, you find yourself pleasantly surprised by the gains
-that Numba can achieve.
-
-.. code:: pycon
-
-    In [1]: import numpy as np
-
-    In [2]: import myjitmodule
-
-    In [3]: a = np.arange(100000)
-
-    In [4]: %timeit myjitmodule.myalgorithm(a, 1)
-    17.6 µs ± 327 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)
-
-But of course, this implementation doesn't generalize to your colleague's
-use-case, who would like to use ``set_to_x`` with a floating point number. The
-following error arises:
+While this is fine for your use-cases, this implementation doesn't generalize
+to your colleague's use-case, who would like to use ``set_to_x`` with a
+floating point number. The following error arises:
 
 .. code:: pycon
 
@@ -102,7 +72,7 @@ following error arises:
 
 
     File myjitmodule.py", line 25:
-    def myalgorithm(a, x):
+    def myalgorithm(h, j, k, l):
         # algorithm code
         mymodule.set_to_x(a, x)
         # algorithm code
@@ -112,7 +82,7 @@ Providing multiple implementations and dispatching based on types
 =================================================================
 
 As you saw above, the overload implementation for ``set_to_x`` function
-doesn't accept floating-point arguments. Let's extended the specification of
+doesn't accept floating-point arguments. Let's formalise the specification of
 the function as follows:
 
 * The numerical type of the array ``arr`` must match the numerical type of the
@@ -124,29 +94,17 @@ the function as follows:
 * If a tuple is used instead of an array as a value for ``arr``, a custom error
   message with a hint for the user should be issued.
 
-The resulting implementation could look as follows:
+The resulting implementation could look like the following:
 
 .. literalinclude:: myjitmodule2.py
 
 As you can see, the typing checking code has been increased significantly to
-match the new requirements. Also, multiple implementations---one for integers
-and one for floating-point---are provided. We check inside the typing scope
-which implementation should be used and also raise any custom error messages
-required. Importantly, the check for ``nan`` values is only present in the
-floating point implementation as this additional check creates a runtime
-overhead. This can easily be observed during profiling:
-
-.. code:: pycon
-
-    In [1]: a = np.arange(100, dtype=np.float64)
-
-    In [2]: %timeit myalgorithm(a, 1.0)
-    473 ns ± 11.9 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)
-
-    In [3]: a = np.arange(100)
-
-    In [4]: %timeit myalgorithm(a, 1)
-    237 ns ± 4.59 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)
+match the formalised requirements. Also, multiple implementations---one for
+integers and one for floating-point---are provided. We check inside the typing
+scope which implementation should be used and also raise any custom error
+messages required. Importantly, the check for ``nan`` values is only present in
+the floating point implementation as this additional check creates a runtime
+overhead.
 
 Writing Tests
 =============
