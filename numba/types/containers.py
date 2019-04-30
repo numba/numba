@@ -363,8 +363,7 @@ class List(MutableSequence):
         """
         Overrides the default __getitem__ from Type.
         """
-        return self.dtype(dtype=self.dtype.dtype, ndim=self.dtype.ndim,
-                          layout=self.dtype.layout)
+        return self.dtype
 
 
 class ListIter(BaseContainerIterator):
