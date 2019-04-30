@@ -19,6 +19,10 @@ from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support, typeof
+from numba.extending import overload
+from numba import generated_jit
+from numba import int64
+
 from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .enum_usecases import *
@@ -575,6 +579,44 @@ class TestDType(TestCase):
             return a.type(0)
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
+
+class TestContainers(TestCase):
+    def test_list_type(self):
+        @generated_jit(nopython=True)
+        def test_foo(arg):
+            self.assertTrue(isinstance(arg, types.List))
+            return lambda arg:arg
+
+        a_list = [1, 2]
+        test_foo(a_list)
+
+    def test_list_content_type_int(self):
+        @generated_jit(nopython=True)
+        def test_foo(arg):
+            self.assertTrue(isinstance(arg[0], types.Integer))
+            return lambda arg: arg
+
+        a_list = [1, 2]
+        test_foo(a_list)
+
+    def test_list_content_type_arr(self):
+        @generated_jit(nopython=True)
+        def test_foo(arg):
+            self.assertTrue(isinstance(arg[0], types.Array))
+            return lambda arg: arg
+
+        a_list = [np.zeros(2, 'int64')]
+        test_foo(a_list)
+
+    def test_list_content_dtype(self):
+        @generated_jit(nopython=True)
+        def test_foo(arg):
+            self.assertTrue(isinstance(arg[0].dtype, types.Integer))
+            return lambda arg: arg
+
+        a_list = [np.zeros(2, 'int64')]
+        test_foo(a_list)
+
 
 if __name__ == '__main__':
     unittest.main()
