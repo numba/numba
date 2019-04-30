@@ -192,10 +192,11 @@ class TestGdbBinding(TestCase):
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
-            self.assertIn('GNU gdb', o)
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            if not 'skipped' in e: # e.g. 32bit ARM will skip parfors
+                self.assertIn('GNU gdb', o)
+                self.assertIn('OK', e)
+                self.assertTrue('FAIL' not in e)
+                self.assertTrue('ERROR' not in e)
         if 'quick' in name:
             setattr(cls, methname, test_template)
         else:
