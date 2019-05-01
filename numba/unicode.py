@@ -375,6 +375,16 @@ def _find(substr, s):
     return -1
 
 
+@njit(_nrt=False)
+def _count(substr, s):
+    # Naive, slow string matching for now
+    count = 0
+    for i in range(len(s) - len(substr) + 1):
+        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
+            count += 1
+    return count
+
+
 @njit
 def _is_whitespace(code_point):
     # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
@@ -488,6 +498,14 @@ def unicode_contains(a, b):
             # note parameter swap: contains(a, b) == b in a
             return _find(substr=b, s=a) > -1
         return contains_impl
+
+
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(a, b):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+        def count_impl(a, b):
+            return _count(substr=b, s=a)
+        return count_impl
 
 
 @overload_method(types.UnicodeType, 'find')

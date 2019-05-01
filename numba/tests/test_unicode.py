@@ -80,6 +80,10 @@ def find_usecase(x, y):
     return x.find(y)
 
 
+def count_usecase(x, y):
+    return x.count(y)
+
+
 def startswith_usecase(x, y):
     return x.startswith(y)
 
@@ -288,6 +292,16 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
+
+    def test_count(self, flags=no_pyobj_flags):
+        pyfunc = count_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
+            for substr in [x for x in extras]:
+                self.assertEqual(pyfunc(a, substr),
+                                 cfunc(a, substr),
+                                 "'%s'.count('%s')?" % (a, substr))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
@@ -728,6 +742,17 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+    def test_literal_count(self):
+        def pyfunc(x):
+            return 'abc'.count(x), x.count('a')
+
+        cfunc = njit(pyfunc)
+        for a in ['ab', 'abc', 'abcd', '', 'c', 'abc' * 50]:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
+
 
 
 @unittest.skipUnless(_py34_or_later,
