@@ -138,23 +138,21 @@ class ConstraintNetwork(object):
         errors = []
         for constraint in self.constraints:
             loc = constraint.loc
-            with typeinfer.warnings.catch_warnings(filename=loc.filename,
-                                                   lineno=loc.line):
-                try:
-                    constraint(typeinfer)
-                except TypingError as e:
-                    e = TypingError(str(e),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
-                except Exception:
-                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                    e = TypingError(msg.format(con=constraint,
-                                               err=traceback.format_exc(),
-                                               sep='--%<' + '-' * 76),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
+            try:
+                constraint(typeinfer)
+            except TypingError as e:
+                e = TypingError(str(e),
+                                loc=constraint.loc,
+                                highlighting=False)
+                errors.append(e)
+            except Exception:
+                msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
+                e = TypingError(msg.format(con=constraint,
+                                            err=traceback.format_exc(),
+                                            sep='--%<' + '-' * 76),
+                                loc=constraint.loc,
+                                highlighting=False)
+                errors.append(e)
         return errors
 
 
@@ -767,7 +765,7 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, func_ir, warnings):
+    def __init__(self, context, func_ir):
         self.context = context
         # sort based on label, ensure iteration order!
         self.blocks = OrderedDict()
@@ -780,7 +778,6 @@ class TypeInferer(object):
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()
-        self.warnings = warnings
 
         # { index: mangled name }
         self.arg_names = {}
@@ -802,7 +799,7 @@ class TypeInferer(object):
         self._skip_recursion = False
 
     def copy(self, skip_recursion=False):
-        clone = TypeInferer(self.context, self.func_ir, self.warnings)
+        clone = TypeInferer(self.context, self.func_ir)
         clone.arg_names = self.arg_names.copy()
         clone._skip_recursion = skip_recursion
 

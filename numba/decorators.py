@@ -8,7 +8,7 @@ import sys
 import warnings
 
 from . import config, sigutils
-from .errors import DeprecationError
+from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
 
@@ -22,8 +22,9 @@ def autojit(*args, **kws):
 
     Use jit instead.  Calls to jit internally.
     """
-    warnings.warn("autojit is deprecated, use jit instead which now performs "
-                  "the same functionality", DeprecationWarning)
+    msg = ("autojit is deprecated, use jit instead which provides "
+           "the same functionality")
+    warnings.warn(NumbaDeprecationWarning(msg))
     return jit(*args, **kws)
 
 

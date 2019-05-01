@@ -14,7 +14,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
 from ..numpy_support import version as numpy_version
-from ..errors import TypingError, PerformanceWarning
+from ..errors import TypingError, NumbaPerformanceWarning
 from numba import pndindex
 
 registry = Registry()
@@ -963,7 +963,7 @@ class MatMulTyperMixin(object):
 
         if not all(x.layout in 'CF' for x in (a, b)):
             warnings.warn("%s is faster on contiguous arrays, called on %s"
-                          % (self.func_name, (a, b)), PerformanceWarning)
+                          % (self.func_name, (a, b)), NumbaPerformanceWarning)
         if not all(x.dtype == a.dtype for x in all_args):
             raise TypingError("%s arguments must all have "
                               "the same dtype" % (self.func_name,))
@@ -1003,7 +1003,7 @@ class VDot(CallableTemplate):
                 raise TypingError("np.vdot() only supported on 1-D arrays")
             if not all(x.layout in 'CF' for x in (a, b)):
                 warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), PerformanceWarning)
+                              % ((a, b),), NumbaPerformanceWarning)
             if not all(x.dtype == a.dtype for x in (a, b)):
                 raise TypingError("np.vdot() arguments must all have "
                                   "the same dtype")

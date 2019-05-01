@@ -332,17 +332,6 @@ class _EnvReloader(object):
             if name.isupper():
                 globals()[name] = value
 
-        # delay this until now, let the globals for the module be updated
-        # prior to loading numba.errors as it needs to use the config
-        if WARNINGS == 0:
-            from numba.errors import NumbaWarning
-            warnings.simplefilter('ignore', NumbaWarning)
-        if not _os_supports_avx():
-            from numba.errors import PerformanceWarning
-            warnings.warn("your operating system doesn't support "
-                          "AVX, this may degrade performance on "
-                          "some numerical code", PerformanceWarning)
-
 
 _env_reloader = _EnvReloader()
 

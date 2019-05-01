@@ -24,16 +24,36 @@ class NumbaWarning(Warning):
     """
     Base category for all Numba compiler warnings.
     """
+    def __init__(self, msg, loc=None, highlighting=True, ):
+        self.msg = msg
+        self.loc = loc
+        if highlighting:
+            highlight = termcolor().errmsg
+        else:
+            def highlight(x):
+                return x
+        if loc:
+            super(NumbaWarning, self).__init__(
+                highlight("%s\n%s\n" % (msg, loc.strformat())))
+        else:
+            super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
 
-class PerformanceWarning(NumbaWarning):
+
+class NumbaPerformanceWarning(NumbaWarning):
     """
     Warning category for when an operation might not be
     as fast as expected.
     """
 
 
-class ParallelSafetyWarning(RuntimeWarning):
+class NumbaDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a deprecated feature
+    """
+
+
+class NumbaParallelSafetyWarning(NumbaWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.

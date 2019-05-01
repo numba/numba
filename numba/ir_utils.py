@@ -9,6 +9,7 @@ import numpy
 import types as pytypes
 import collections
 import operator
+import warnings
 
 from llvmlite import ir as lir
 
@@ -19,7 +20,7 @@ from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
-from numba.errors import TypingError, UnsupportedError
+from numba.errors import TypingError, UnsupportedError, NumbaDeprecationWarning
 import copy
 
 _unique_var_count = 0
@@ -1902,3 +1903,20 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
+def raise_on_deprecated(func_ir, typemap):
+    # first pass, just walk the type map
+    for name, ty in typemap.items():
+        # the Type Metaclass has a reflected member
+        if ty.reflected:
+            # if its an arg, report function call
+            if name.startswith('arg.'):
+                loc = func_ir.loc
+                arg = name.split('.')[1]
+                fname = func_ir.func_id.func_qualname
+                tyname = 'list' if isinstance(ty, types.List) else 'set'
+                msg = ("\nEncountered the use of a type that is scheduled for "
+                        "deprecation: type 'reflected %s' found for argument "
+                        "'%s' of function '%s'.\n\nFor more information see: URL"
+                        % (tyname, arg, fname))
+                warnings.warn(NumbaDeprecationWarning(msg, loc=loc))
