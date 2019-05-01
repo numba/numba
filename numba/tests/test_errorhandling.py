@@ -8,6 +8,8 @@ from numba import unittest_support as unittest
 from numba import errors, utils
 import numpy as np
 
+# used in TestMiscErrorHandling::test_handling_of_write_to_global
+_global_list = [1, 2, 3, 4]
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
 
@@ -105,6 +107,18 @@ class TestMiscErrorHandling(unittest.TestCase):
 
         expected = 'File "unknown location", line 0:'
         self.assertIn(expected, str(raises.exception))
+
+    def test_handling_of_write_to_global(self):
+        @njit
+        def foo():
+            _global_list[0] = 10
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        expected = ["Writing to a", "defined in globals is not supported"]
+        for ex in expected:
+            self.assertIn(ex, str(raises.exception))
 
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):
