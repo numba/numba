@@ -1195,3 +1195,27 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         else:
             # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+
+
+def build_map(context, builder, dict_type, item_types, items):
+    from numba.typed import Dict
+
+    sig = typing.signature(dict_type)
+    kt, vt = dict_type.key_type, dict_type.value_type
+
+    def make_dict():
+        return Dict.empty(kt, vt)
+
+    d = context.compile_internal(builder, make_dict, sig, ())
+
+    if items:
+        for (kt, vt), (k, v) in zip(item_types, items):
+            sig = typing.signature(types.void, dict_type, kt, vt)
+            args = d, k, v
+
+            def put(d, k, v):
+                d[k] = v
+
+            context.compile_internal(builder, put, sig, args)
+
+    return d

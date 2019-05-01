@@ -11,7 +11,7 @@ from numba.extending import (
     box,
     unbox,
     NativeValue,
-    type_callable
+    type_callable,
 )
 
 

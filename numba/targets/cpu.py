@@ -11,7 +11,9 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
+from numba.targets import (
+    callconv, codegen, externals, intrinsics, listobj, setobj, dictimpl,
+)
 from .options import TargetOptions
 from numba.runtime import rtsys
 from numba.compiler_lock import global_compiler_lock
@@ -126,6 +128,12 @@ class CPUContext(BaseContext):
         Build a set from the Numba *set_type* and its initial *items*.
         """
         return setobj.build_set(self, builder, set_type, items)
+
+    def build_map(self, builder, dict_type, item_types, items):
+        from numba import dictobject
+
+        return dictobject.build_map(self, builder, dict_type, item_types, items)
+
 
     def post_lowering(self, mod, library):
         if self.fastmath:
