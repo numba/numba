@@ -121,20 +121,20 @@ class TestFromDtype(TestCase):
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)])
         check(dtype,
-              fields={'a': (types.int16, 0, None),
-                      'b': (types.int32, 2, None)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 2, None, None)},
               size=6, aligned=False)
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)], align=True)
         check(dtype,
-              fields={'a': (types.int16, 0, None),
-                      'b': (types.int32, 4, None)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 4, None, None)},
               size=8, aligned=True)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
         check(dtype,
-              fields={'m': (types.int32, 0, None),
-                      'n': (types.CharSeq(5), 4, None)},
+              fields={'m': (types.int32, 0, None, None),
+                      'n': (types.CharSeq(5), 4, None, None)},
               size=9, aligned=False)
 
     @tag('important')
