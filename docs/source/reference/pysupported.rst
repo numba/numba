@@ -172,6 +172,7 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
+* ``.ljust()``
 * ``.split()``
 * ``.join()``
 * ``.zfill()``
@@ -316,12 +317,22 @@ dict
   ``numba.typed.Dict`` is an experimental feature.  The API may change
   in the future releases.
 
-Numba does not directly support the Python ``dict`` because it is an untyped
+.. note::
+  ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
+  ``dict()`` translates to calling ``numba.typed.Dict()``.
+
+Numba only supports the use of ``dict()`` without any arguments.  Such use is
+semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
+an instance of ``numba.typed.Dict`` where the key-value types will be later
+inferred by usage.
+
+Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
 machine code, Numba needs the keys and the values of the dictionary to have
 fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
-``numba.typed.Dict``, for which the user must explicitly declare the key-type
-and the value-type using the ``Dict.empty()`` constructor method.
+``numba.typed.Dict``, for which the type-inference mechanism must be able to
+infer the key-value types by use, or the user must explicitly declare the
+key-value type using the ``Dict.empty()`` constructor method.
 This typed dictionary has the same API as the Python ``dict``,  it implements
 the ``collections.MutableMapping`` interface and is usable in both interpreted
 Python code and JIT-compiled Numba functions.
@@ -335,11 +346,6 @@ An important difference of the typed dictionary in comparison to Python's
 ``dict`` is that **implicit casting** occurs when a key or value is stored.
 As a result the *setitem* operation may fail should the type-casting fail.
 
-.. note::
-  A ``numba.typed.Dict`` cannot yet be constructed with ``Dict()``, the
-  ``Dict.empty(key_type, value_type)`` class method must be used to construct a
-  typed dictionary instead.
-
 It should be noted that the Numba typed dictionary is implemented using the same
 algorithm as the CPython 3.7 dictionary. As a consequence, the typed dictionary
 is ordered and has the same collision resolution as the CPython implementation.
@@ -350,6 +356,17 @@ dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
 strings, arrays, scalars, tuples. It is expected that these limitations will
 be relaxed as Numba continues to improve.
+
+Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
+instances and letting the compiler infer the key-value types:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_inferred_dict_njit.begin
+   :end-before: magictoken.ex_inferred_dict_njit.end
+   :dedent: 4
+   :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:

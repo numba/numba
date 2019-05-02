@@ -37,6 +37,9 @@ from .jitclass import jitclass
 import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode
 
+# Initialize typed containers
+import numba.typed
+
 # Keep this for backward compatibility.
 test = runtests.main
 

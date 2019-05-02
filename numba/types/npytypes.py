@@ -44,7 +44,10 @@ class UnicodeCharSeq(Type):
         return self.count
 
 
-_RecordField = collections.namedtuple('_RecordField', 'type,offset,alignment')
+_RecordField = collections.namedtuple(
+    '_RecordField',
+    'type,offset,alignment,title',
+)
 
 
 class Record(Type):
@@ -103,10 +106,11 @@ class Record(Type):
         descbuf = []
         fmt = "{}[type={};offset={}{}]"
         for k, infos in fields:
+            extra = ""
             if infos.alignment is not None:
-                extra = ';alignment={}'.format(infos.alignment)
-            else:
-                extra = ''
+                extra += ';alignment={}'.format(infos.alignment)
+            elif infos.title is not None:
+                extra += ';title={}'.format(infos.title)
             descbuf.append(fmt.format(k, infos.type, infos.offset, extra))
 
         desc = ','.join(descbuf)
@@ -117,7 +121,13 @@ class Record(Type):
     def _normalize_fields(cls, fields):
         """
         fields:
-            [name: str, { type: Type, offset: int, [ alignment: int ] }]
+            [name: str,
+             value: {
+                 type: Type,
+                 offset: int,
+                 [ alignment: int ],
+                 [ title : str],
+             }]
         """
         res = []
         for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
@@ -125,6 +135,7 @@ class Record(Type):
                 type=infos['type'],
                 offset=infos['offset'],
                 alignment=infos.get('alignment'),
+                title=infos.get('title'),
             )
             res.append((name, fd))
         return res
@@ -160,6 +171,16 @@ class Record(Type):
         Since field alignment is optional, this may return None.
         """
         return self.fields[key].alignment
+
+    def has_titles(self):
+        """Returns True the record uses titles.
+        """
+        return any(fd.title is not None for fd in self.fields.values())
+
+    def is_title(self, key):
+        """Returns True if the field named *key* is a title.
+        """
+        return self.fields[key].title == key
 
     @property
     def members(self):
