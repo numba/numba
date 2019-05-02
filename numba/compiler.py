@@ -318,7 +318,11 @@ class BasePipeline(object):
                     e = e.with_traceback(None)
                 # this emits a warning containing the error message body in the
                 # case of fallback from npm to objmode
-                warnings.warn_explicit('%s: %s' % (msg, e),
+                loop_lift = '' if self.flags.enable_looplift else 'OUT'
+                msg_rewrite = ("\nCompilation is falling back to object mode "
+                               "WITH%s looplifting enabled because %s"
+                               % (loop_lift, msg))
+                warnings.warn_explicit('%s due to: %s' % (msg_rewrite, e),
                                        errors.NumbaWarning,
                                        self.func_id.filename,
                                        self.func_id.firstlineno)
@@ -706,6 +710,17 @@ class BasePipeline(object):
         # Warn, deprecated behaviour, code compiled in objmode without
         # force_pyobject indicates fallback from nopython mode
         if not self.flags.force_pyobject:
+            # first warn about object mode and yes/no to lifted loops
+            if len(self.lifted) > 0:
+                warn_msg = ('Function "%s" was compiled in object mode without'
+                            ' forceobj=True, but has lifted loops.' %
+                            (self.func_id.func_name,))
+            else:
+                warn_msg = ('Function "%s" was compiled in object mode without'
+                            ' forceobj=True.' % (self.func_id.func_name,))
+            warnings.warn(errors.NumbaWarning(warn_msg,
+                                              self.func_ir.loc))
+
             msg = ("\nFallback from the nopython compilation path to the "
                    "object mode compilation path has been detected, this is "
                    "scheduled for deprecation.\n\nSee this URL")
@@ -1064,7 +1079,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp)
+    warnings = errors.WarningsFixer(errors.NumbaWarning)
+    infer = typeinfer.TypeInferer(typingctx, interp, warnings)
     with typingctx.callstack.register(infer, interp.func_id, args):
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
@@ -1081,6 +1097,9 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
         infer.build_constraint()
         infer.propagate()
         typemap, restype, calltypes = infer.unify()
+
+    # Output all Numba warnings
+    warnings.flush()
 
     return typemap, restype, calltypes
 

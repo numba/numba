@@ -22,7 +22,7 @@ def autojit(*args, **kws):
 
     Use jit instead.  Calls to jit internally.
     """
-    msg = ("autojit is deprecated, use jit instead which provides "
+    msg = ("autojit is deprecated, use jit instead, which provides "
            "the same functionality")
     warnings.warn(NumbaDeprecationWarning(msg))
     return jit(*args, **kws)

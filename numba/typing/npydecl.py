@@ -962,8 +962,9 @@ class MatMulTyperMixin(object):
             all_args = (a, b)
 
         if not all(x.layout in 'CF' for x in (a, b)):
-            warnings.warn("%s is faster on contiguous arrays, called on %s"
-                          % (self.func_name, (a, b)), NumbaPerformanceWarning)
+            msg = ("%s is faster on contiguous arrays, called on %s" %
+                   (self.func_name, (a, b)))
+            warnings.warn(NumbaPerformanceWarning(msg))
         if not all(x.dtype == a.dtype for x in all_args):
             raise TypingError("%s arguments must all have "
                               "the same dtype" % (self.func_name,))

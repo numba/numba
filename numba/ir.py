@@ -109,7 +109,7 @@ class Loc(object):
             # 1 but list index counts from 0
             tmplines = [''] + lines
 
-            if tmplines and use_line and 'def ' not in tmplines[use_line]:
+            if lines and use_line and 'def ' not in tmplines[use_line]:
                 # look forward 10 lines, unlikely anyone managed to stretch
                 # a jit call declaration over >10 lines?!
                 min_line = max(0, use_line)

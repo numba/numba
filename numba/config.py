@@ -125,11 +125,6 @@ class _EnvReloader(object):
         def optional_str(x):
             return str(x) if x is not None else None
 
-        # Print warnings to screen about function compilation
-        #   0 = Numba warnings suppressed (default)
-        #   1 = All Numba warnings shown
-        WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
-
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
