@@ -39,7 +39,6 @@ class NumbaWarning(Warning):
             super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
 
-
 class NumbaPerformanceWarning(NumbaWarning):
     """
     Warning category for when an operation might not be
