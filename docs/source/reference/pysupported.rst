@@ -174,6 +174,7 @@ The following functions, attributes and methods are currently supported:
 * ``.find()``
 * ``.split()``
 * ``.join()``
+* ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will

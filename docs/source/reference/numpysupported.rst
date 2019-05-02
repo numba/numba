@@ -310,6 +310,7 @@ The following top-level functions are supported:
   SciPy >= 0.16; extreme value handling per NumPy 1.11+)
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
+* :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`

@@ -104,6 +104,8 @@ class DeviceFunctionTemplate(object):
 
         Each signature is compiled once by caching the compiled function inside
         this object.
+
+        Returns the `CompileResult`.
         """
         if args not in self._compileinfos:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
@@ -122,7 +124,46 @@ class DeviceFunctionTemplate(object):
         else:
             cres = self._compileinfos[args]
 
-        return cres.signature
+        return cres
+
+    def inspect_llvm(self, args):
+        """Returns the LLVM-IR text compiled for *args*.
+
+        Parameters
+        ----------
+        args: tuple[Type]
+            Argument types.
+
+        Returns
+        -------
+        llvmir : str
+        """
+        cres = self._compileinfos[args]
+        mod = cres.library._final_module
+        return str(mod)
+
+    def inspect_ptx(self, args, nvvm_options={}):
+        """Returns the PTX compiled for *args* for the currently active GPU
+
+        Parameters
+        ----------
+        args: tuple[Type]
+            Argument types.
+        nvvm_options : dict; optional
+            See `CompilationUnit.compile` in `numba/cuda/cudadrv/nvvm.py`.
+
+        Returns
+        -------
+        ptx : bytes
+        """
+        llvmir = self.inspect_llvm(args)
+        # Make PTX
+        cuctx = get_context()
+        device = cuctx.device
+        cc = device.compute_capability
+        arch = nvvm.get_arch_option(*cc)
+        ptx = nvvm.llvm_to_ptx(llvmir, opt=3, arch=arch, **nvvm_options)
+        return ptx
 
 
 def compile_device_template(pyfunc, debug=False, inline=False):
@@ -138,7 +179,7 @@ def compile_device_template(pyfunc, debug=False, inline=False):
 
         def generic(self, args, kws):
             assert not kws
-            return dft.compile(args)
+            return dft.compile(args).signature
 
     typingctx = CUDATargetDesc.typingctx
     typingctx.insert_user_function(dft, device_function_template)

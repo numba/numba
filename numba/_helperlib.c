@@ -1092,11 +1092,13 @@ numba_unpickle(const char *data, int n)
 
 NUMBA_EXPORT_FUNC(void *)
 numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
-                      Py_ssize_t *hash) {
+                      unsigned int *ascii, Py_ssize_t *hash) {
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 3)
     if (!PyUnicode_READY(obj)) {
         *length = PyUnicode_GET_LENGTH(obj);
         *kind = PyUnicode_KIND(obj);
+        /* could also use PyUnicode_IS_ASCII but it is not publicly advertised in https://docs.python.org/3/c-api/unicode.html */
+        *ascii = (unsigned int)(PyUnicode_MAX_CHAR_VALUE(obj) == (0x7f));
         /* this is here as a crude check for safe casting of all unicode string
          * structs to a PyASCIIObject */
         if (MEMBER_SIZE(PyCompactUnicodeObject, _base) == sizeof(PyASCIIObject)             &&

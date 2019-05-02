@@ -32,6 +32,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def delete(arr, obj):
+    return np.delete(arr, obj)
+
+
 def diff1(a):
     return np.diff(a)
 
@@ -341,6 +345,69 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_delete(self):
+
+        def arrays():
+            # array, obj
+            #
+            # an array-like type
+            yield [1, 2, 3, 4, 5], 3
+            yield [1, 2, 3, 4, 5], [2, 3]
+            # 1d array, scalar
+            yield np.arange(10), 3
+            yield np.arange(10), -3 # Negative obj
+            # 1d array, list
+            yield np.arange(10), [3, 5, 6]
+            yield np.arange(10), [2, 3, 4, 5]
+            # 3d array, scalar
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2
+            # 3d array, list
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
+            # slices
+            yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield np.arange(10), slice(10)
+
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj in arrays():
+            expected = pyfunc(arr, obj)
+            got = cfunc(arr, obj)
+            self.assertPreciseEqual(expected, got)
+
+    def test_delete_exceptions(self):
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3.14)
+        self.assertIn(
+            'obj should be of Integer dtype',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(10), [3.5, 5.6, 6.2])
+        self.assertIn(
+            'obj should be of Integer dtype',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 3)
+        self.assertIn(
+            'arr must be either an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc([1, 2], 3)
+        self.assertIn(
+            'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
 
     def diff_arrays(self):
         """

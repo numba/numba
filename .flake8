@@ -40,7 +40,6 @@ exclude =
     numba/parfor.py
     numba/numba_entry.py
     numba/stencilparfor.py
-    numba/numpy_support.py
     numba/ir.py
     numba/itanium_mangler.py
     numba/unittest_support.py
@@ -250,7 +249,6 @@ exclude =
     numba/tests/cffi_usecases.py
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
-    numba/tests/test_numpy_support.py
     numba/tests/compile_with_pycc.py
     numba/tests/test_ir.py
     numba/tests/test_deprecations.py
@@ -336,7 +334,6 @@ exclude =
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
-    numba/tests/test_record_dtype.py
     numba/tests/test_types.py
     numba/tests/test_random.py
     numba/tests/test_nan.py
