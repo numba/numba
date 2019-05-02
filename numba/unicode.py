@@ -594,6 +594,32 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return split_whitespace_impl
 
 
+@overload_method(types.UnicodeType, 'center')
+def unicode_center(string, width, fillchar=' '):
+    if not isinstance(width, types.Integer):
+        raise TypingError('The width must be an Integer')
+    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+        raise TypingError('The fillchar must be a UnicodeType')
+
+    def center_impl(string, width, fillchar=' '):
+        str_len = len(string)
+        fillchar_len = len(fillchar)
+
+        if fillchar_len != 1:
+            raise ValueError('The fill character must be exactly one character long')
+
+        if width <= str_len:
+            return string
+
+        allmargin = width - str_len
+        lmarging = (allmargin // 2) + (allmargin & width & 1)
+        rmargin = allmargin - lmarging
+        newstr = (fillchar * lmarging) + string + (fillchar * rmargin)
+
+        return newstr
+    return center_impl
+
+
 @overload_method(types.UnicodeType, 'ljust')
 def unicode_ljust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
@@ -615,6 +641,29 @@ def unicode_ljust(string, width, fillchar=' '):
 
         return newstr
     return ljust_impl
+
+
+@overload_method(types.UnicodeType, 'rjust')
+def unicode_rjust(string, width, fillchar=' '):
+    if not isinstance(width, types.Integer):
+        raise TypingError('The width must be an Integer')
+    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+        raise TypingError('The fillchar must be a UnicodeType')
+
+    def rjust_impl(string, width, fillchar=' '):
+        str_len = len(string)
+        fillchar_len = len(fillchar)
+
+        if fillchar_len != 1:
+            raise ValueError('The fill character must be exactly one character long')
+
+        if width <= str_len:
+            return string
+
+        newstr = (fillchar * (width - str_len)) + string
+
+        return newstr
+    return rjust_impl
 
 
 @njit

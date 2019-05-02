@@ -172,7 +172,9 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
+* ``.center()``
 * ``.ljust()``
+* ``.rjust()``
 * ``.split()``
 * ``.join()``
 * ``.zfill()``
