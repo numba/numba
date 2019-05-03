@@ -612,11 +612,15 @@ def unicode_center(string, width, fillchar=' '):
             return string
 
         allmargin = width - str_len
-        lmarging = (allmargin // 2) + (allmargin & width & 1)
-        rmargin = allmargin - lmarging
-        newstr = (fillchar * lmarging) + string + (fillchar * rmargin)
+        lmargin = (allmargin // 2) + (allmargin & width & 1)
+        rmargin = allmargin - lmargin
 
-        return newstr
+        l_string = fillchar * lmargin
+        if lmargin == rmargin:
+            return l_string + string + l_string
+        else:
+            return l_string + string + (fillchar * rmargin)
+
     return center_impl
 
 
