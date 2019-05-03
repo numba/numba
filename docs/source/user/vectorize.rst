@@ -165,7 +165,7 @@ There are two things there:
   returns a *n*-element one-dimension array;
 
 * the list of supported concrete *signatures* as per ``@vectorize``; here,
-  in the above example we demonstrate ``int64`` arrays.
+  as in the above example, we demonstrate ``int64`` arrays.
 
 .. note::
    1D array type can also receive scalar arguments (those with shape ``()``).
