@@ -91,6 +91,8 @@ def endswith_usecase(x, y):
 def split_usecase(x, y):
     return x.split(y)
 
+def lower_usecase(x):
+    return x.lower()
 
 def split_with_maxsplit_usecase(x, y, maxsplit):
     return x.split(y, maxsplit)
@@ -473,6 +475,13 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
                              "'%s'.split('%s')?" % (test_str, splitter))
+
+    def test_lower(self):
+        pyfunc = lower_usecase
+        cfunc = njit(pyfunc)
+
+        for test_str in UNICODE_EXAMPLES:
+            self.assertEqual(cfunc(test_str), pyfunc(test_str))
 
     def test_split_with_maxsplit(self):
         CASES = [

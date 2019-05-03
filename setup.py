@@ -276,9 +276,13 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
+    ext_string_lower = Extension(name='string_lower_ext',
+                                 sources=['numba/_str_lower.c'],
+                                 include_dirs=["numba"])
+
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
                    ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
-                   ext_jitclass_box, ext_cuda_extras]
+                   ext_jitclass_box, ext_cuda_extras, ext_string_lower]
 
     ext_modules += ext_npyufunc_workqueue_impls
 
