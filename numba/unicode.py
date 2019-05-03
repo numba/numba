@@ -696,6 +696,66 @@ def unicode_zfill(string, width):
     return zfill_impl
 
 
+@register_jitable
+def strip_impl(func_id, string, chars=' '):
+
+    if chars is None:
+        chars = ' '
+
+    str_len = len(string)
+
+    left_it = 0
+    right_it = str_len
+
+    if func_id != 1:
+        while left_it < str_len and string[left_it] in chars:
+            left_it += 1
+
+    if func_id != 0:
+        right_it -= 1
+        while right_it >= left_it and string[right_it] in chars:
+            right_it -= 1
+        right_it += 1
+
+    return string[left_it:right_it]
+
+
+@overload_method(types.UnicodeType, 'lstrip')
+def unicode_lstrip(string, chars=' '):
+    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
+        raise TypingError('The arg must be a UnicodeType or None')
+
+    def wrap(string, chars=' '):
+        return strip_impl(0, string, chars)
+    return wrap
+
+    return wrap
+
+
+@overload_method(types.UnicodeType, 'rstrip')
+def unicode_rtrip(string, chars=' '):
+    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
+        raise TypingError('The arg must be a UnicodeType or None')
+
+    def wrap(string, chars=' '):
+        return strip_impl(1, string, chars)
+    return wrap
+
+    return wrap
+
+
+@overload_method(types.UnicodeType, 'strip')
+def unicode_strip(string, chars=' '):
+    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
+        raise TypingError('The arg must be a UnicodeType or None')
+
+    def wrap(string, chars=' '):
+        return strip_impl(2, string, chars)
+    return wrap
+
+    return wrap
+
+
 # String creation
 
 @njit
