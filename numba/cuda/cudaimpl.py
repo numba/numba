@@ -413,6 +413,7 @@ def ptx_selp(context, builder, sig, args):
     test, a, b = args
     return builder.select(test, a, b)
 
+
 @lower(max, types.f4, types.f4)
 def ptx_max_f4(context, builder, sig, args):
     fn = builder.module.get_or_insert_function(
@@ -421,6 +422,7 @@ def ptx_max_f4(context, builder, sig, args):
             (lc.Type.float(), lc.Type.float())),
         '__nv_fmaxf')
     return builder.call(fn, args)
+
 
 @lower(max, types.f8, types.f4)
 @lower(max, types.f4, types.f8)
@@ -432,6 +434,7 @@ def ptx_max_f8(context, builder, sig, args):
             (lc.Type.double(), lc.Type.double())),
         '__nv_fmax')
     return builder.call(fn, args)
+
 
 @lower(min, types.f4, types.f4)
 def ptx_min_f4(context, builder, sig, args):
