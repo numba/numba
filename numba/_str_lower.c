@@ -51,7 +51,7 @@ int _PyUnicode_ToLower(char ch, char *res)
     {
         for(unsigned int j=0; j < strlen(res); j++){
             const _PyUnicode_TypeRecord *temptype = gettyperecord(res[j]);
-            res[i] = res[i] + temptype->lower;
+            res[j] = res[j] + temptype->lower;
         }
         return 1;
     }

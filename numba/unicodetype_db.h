@@ -4154,6 +4154,7 @@ static const unsigned short index2[] = {
 /* Returns the numeric value as double for Unicode characters
  * having this property, -1.0 otherwise.
  */
+
 double _PyUnicode_ChToNumeric(Py_UCS4 ch)
 {
     switch (ch) {
@@ -6148,6 +6149,7 @@ double _PyUnicode_ChToNumeric(Py_UCS4 ch)
 /* Returns 1 for Unicode characters having the bidirectional
  * type 'WS', 'B' or 'S' or the category 'Zs', 0 otherwise.
  */
+
 int _PyUnicode_IsWhiteSpace(const Py_UCS4 ch)
 {
     switch (ch) {
@@ -6189,6 +6191,7 @@ int _PyUnicode_IsWhiteSpace(const Py_UCS4 ch)
  * property 'BK', 'CR', 'LF' or 'NL' or having bidirectional
  * type 'B', 0 otherwise.
  */
+
 int _PyUnicode_IsLineBreak(const Py_UCS4 ch)
 {
     switch (ch) {
