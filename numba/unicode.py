@@ -696,6 +696,12 @@ def unicode_zfill(string, width):
     return zfill_impl
 
 
+# const style variable to enumerate variants of "strip" operations family
+UNICODE_OP_LSTRIP = 0
+UNICODE_OP_RSTRIP = 1
+UNICODE_OP_STRIP = 2
+
+
 @register_jitable
 def strip_impl(func_id, string, chars=' '):
 
@@ -707,11 +713,11 @@ def strip_impl(func_id, string, chars=' '):
     left_it = 0
     right_it = str_len
 
-    if func_id != 1:
+    if func_id in [UNICODE_OP_LSTRIP, UNICODE_OP_STRIP]:
         while left_it < str_len and string[left_it] in chars:
             left_it += 1
 
-    if func_id != 0:
+    if func_id in [UNICODE_OP_RSTRIP, UNICODE_OP_STRIP]:
         right_it -= 1
         while right_it >= left_it and string[right_it] in chars:
             right_it -= 1
@@ -720,39 +726,35 @@ def strip_impl(func_id, string, chars=' '):
     return string[left_it:right_it]
 
 
-@overload_method(types.UnicodeType, 'lstrip')
-def unicode_lstrip(string, chars=' '):
+def unicode_lstrip_types_check(chars):
     if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
         raise TypingError('The arg must be a UnicodeType or None')
 
-    def wrap(string, chars=' '):
-        return strip_impl(0, string, chars)
-    return wrap
 
+@overload_method(types.UnicodeType, 'lstrip')
+def unicode_lstrip(string, chars=' '):
+    unicode_lstrip_types_check(chars)
+
+    def wrap(string, chars=' '):
+        return strip_impl(UNICODE_OP_LSTRIP, string, chars)
     return wrap
 
 
 @overload_method(types.UnicodeType, 'rstrip')
 def unicode_rtrip(string, chars=' '):
-    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
-        raise TypingError('The arg must be a UnicodeType or None')
+    unicode_lstrip_types_check(chars)
 
     def wrap(string, chars=' '):
-        return strip_impl(1, string, chars)
-    return wrap
-
+        return strip_impl(UNICODE_OP_RSTRIP, string, chars)
     return wrap
 
 
 @overload_method(types.UnicodeType, 'strip')
 def unicode_strip(string, chars=' '):
-    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
-        raise TypingError('The arg must be a UnicodeType or None')
+    unicode_lstrip_types_check(chars)
 
     def wrap(string, chars=' '):
-        return strip_impl(2, string, chars)
-    return wrap
-
+        return strip_impl(UNICODE_OP_STRIP, string, chars)
     return wrap
 
 
