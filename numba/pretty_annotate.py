@@ -1,23 +1,5 @@
 """
 This module implements code highlighting of numba function annotations.
-
-Example:
-
-    >>> import numba 
-    ... from numba_annotate import Annotate
-    ... @numba.jit
-    ... def test(q):
-    ...     res = 0
-    ...     for i in range(q):
-    ...         res += i
-    ...     return res
-    ...     
-    ... test(10)
-    ... Annotate(test)
-
-The last line will return an HTML and/or ANSI representation that will be
-displayed accordingly in IPython/Jupyter. 
-
 """
 
 from warnings import warn
@@ -245,21 +227,24 @@ class Annotate:
 
     Example:
 
-    >>> import numba 
-    ... from numba_annotate import Annotate
+    >>> import numba
+    ... from numba.pretty_annotate import Annotate
+    ...
     ... @numba.jit
     ... def test(q):
     ...     res = 0
     ...     for i in range(q):
     ...         res += i
     ...     return res
-    ...     
+    ...
     ... test(10)
     ... Annotate(test)
 
+    The last line will return an HTML and/or ANSI representation that will be
+    displayed accordingly in Jupyter/IPython.
+
     Function annotations persist across compilation for newly encountered
     type signatures and as a result annotations are shown for all signatures.
-
     """
     def __init__(self, function, **kwargs):
 
