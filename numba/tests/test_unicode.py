@@ -115,12 +115,28 @@ def join_empty_usecase(x):
     return x.join(l)
 
 
+def center_usecase(x, y):
+    return x.center(y)
+
+
+def center_usecase_fillchar(x, y, fillchar):
+    return x.center(y, fillchar)
+
+
 def ljust_usecase(x, y):
     return x.ljust(y)
 
 
 def ljust_usecase_fillchar(x, y, fillchar):
     return x.ljust(y, fillchar)
+
+
+def rjust_usecase(x, y):
+    return x.rjust(y)
+
+
+def rjust_usecase_fillchar(x, y, fillchar):
+    return x.rjust(y, fillchar)
 
 
 def iter_usecase(x):
@@ -585,53 +601,57 @@ class TestUnicode(BaseTest):
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
 
-    def test_ljust(self):
-        pyfunc = ljust_usecase
-        cfunc = njit(pyfunc)
+    def test_justification(self):
+        for pyfunc, case_name in [(center_usecase, 'center'),
+                                  (ljust_usecase, 'ljust'),
+                                  (rjust_usecase, 'rjust')]:
+            cfunc = njit(pyfunc)
 
-        with self.assertRaises(TypingError) as raises:
-            cfunc(UNICODE_EXAMPLES[0], 1.1)
-        self.assertIn('The width must be an Integer', str(raises.exception))
-
-        for s in UNICODE_EXAMPLES:
-            for width in range(-3, 20):
-                self.assertEqual(pyfunc(s, width),
-                                 cfunc(s, width),
-                                 "'%s'.ljust(%d)?" % (s, width))
-
-    def test_ljust_fillchar(self):
-        pyfunc = ljust_usecase_fillchar
-        cfunc = njit(pyfunc)
-
-        # allowed fillchar cases
-        for fillchar in [' ', '+', 'ú', '处']:
             with self.assertRaises(TypingError) as raises:
-                cfunc(UNICODE_EXAMPLES[0], 1.1, fillchar)
+                cfunc(UNICODE_EXAMPLES[0], 1.1)
             self.assertIn('The width must be an Integer', str(raises.exception))
 
             for s in UNICODE_EXAMPLES:
                 for width in range(-3, 20):
-                    self.assertEqual(pyfunc(s, width, fillchar),
-                                     cfunc(s, width, fillchar),
-                                     "'%s'.ljust(%d, '%s')?" % (s, width, fillchar))
+                    self.assertEqual(pyfunc(s, width),
+                                     cfunc(s, width),
+                                     "'%s'.%s(%d)?" % (s, case_name, width))
 
-    def test_ljust_fillchar_exception(self):
+    def test_justification_fillchar(self):
+        for pyfunc, case_name in [(center_usecase_fillchar, 'center'),
+                                  (ljust_usecase_fillchar, 'ljust'),
+                                  (rjust_usecase_fillchar, 'rjust')]:
+            cfunc = njit(pyfunc)
+
+            # allowed fillchar cases
+            for fillchar in [' ', '+', 'ú', '处']:
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 1.1, fillchar)
+                self.assertIn('The width must be an Integer', str(raises.exception))
+
+                for s in UNICODE_EXAMPLES:
+                    for width in range(-3, 20):
+                        self.assertEqual(pyfunc(s, width, fillchar),
+                                         cfunc(s, width, fillchar),
+                                         "'%s'.%s(%d, '%s')?" % (s, case_name, width, fillchar))
+
+    def test_justification_fillchar_exception(self):
         self.disable_leak_check()
 
-        pyfunc = ljust_usecase_fillchar
-        cfunc = njit(pyfunc)
+        for pyfunc in [center_usecase_fillchar, ljust_usecase_fillchar, rjust_usecase_fillchar]:
+            cfunc = njit(pyfunc)
 
-        # disallowed fillchar cases
-        for fillchar in ['', '+0', 'quién', '处着']:
-            with self.assertRaises(ValueError) as raises:
-                cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The fill character must be exactly one', str(raises.exception))
+            # disallowed fillchar cases
+            for fillchar in ['', '+0', 'quién', '处着']:
+                with self.assertRaises(ValueError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+                self.assertIn('The fill character must be exactly one', str(raises.exception))
 
-        # forbid fillchar cases with different types
-        for fillchar in [1, 1.1]:
-            with self.assertRaises(TypingError) as raises:
-                cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
+            # forbid fillchar cases with different types
+            for fillchar in [1, 1.1]:
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+                self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
