@@ -33,7 +33,7 @@ def gradient_descent_numpy(X, Y, theta, alpha, num_iters):
 
 # <codecell>
 
-from numba import autojit, jit, f8, int32, void
+from numba import jit, f8, int32, void
 
 @jit(void(f8[:], f8[:], f8[:], f8, int32))
 def gradient_descent_numba(X, Y, theta, alpha, num_iters):
