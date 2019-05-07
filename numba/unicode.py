@@ -741,7 +741,7 @@ def unicode_lstrip(string, chars=' '):
 
 
 @overload_method(types.UnicodeType, 'rstrip')
-def unicode_rtrip(string, chars=' '):
+def unicode_rstrip(string, chars=' '):
     unicode_lstrip_types_check(chars)
 
     def wrap(string, chars=' '):
