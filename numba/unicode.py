@@ -696,66 +696,59 @@ def unicode_zfill(string, width):
     return zfill_impl
 
 
-# const style variable to enumerate variants of "strip" operations family
-UNICODE_OP_LSTRIP = 0
-UNICODE_OP_RSTRIP = 1
-UNICODE_OP_STRIP = 2
+@register_jitable
+def unicode_strip_left_bound(string, chars):
+    chars = ' ' if chars is None else chars
+    str_len = len(string)
+
+    for i in range(str_len):
+        if string[i] not in chars:
+            return i
+    return str_len
 
 
 @register_jitable
-def strip_impl(func_id, string, chars=' '):
-
-    if chars is None:
-        chars = ' '
-
+def unicode_strip_right_bound(string, chars):
+    chars = ' ' if chars is None else chars
     str_len = len(string)
 
-    left_it = 0
-    right_it = str_len
-
-    if func_id in [UNICODE_OP_LSTRIP, UNICODE_OP_STRIP]:
-        while left_it < str_len and string[left_it] in chars:
-            left_it += 1
-
-    if func_id in [UNICODE_OP_RSTRIP, UNICODE_OP_STRIP]:
-        right_it -= 1
-        while right_it >= left_it and string[right_it] in chars:
-            right_it -= 1
-        right_it += 1
-
-    return string[left_it:right_it]
+    for i in range(str_len - 1, -1, -1):
+        if string[i] not in chars:
+            i += 1
+            break
+    return i
 
 
-def unicode_lstrip_types_check(chars):
-    if not (chars == ' ' or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
+def unicode_strip_types_check(chars):
+    if not (chars is None or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
 @overload_method(types.UnicodeType, 'lstrip')
-def unicode_lstrip(string, chars=' '):
-    unicode_lstrip_types_check(chars)
+def unicode_lstrip(string, chars=None):
+    unicode_strip_types_check(chars)
 
-    def wrap(string, chars=' '):
-        return strip_impl(UNICODE_OP_LSTRIP, string, chars)
-    return wrap
+    def lstrip_impl(string, chars=None):
+        return string[unicode_strip_left_bound(string, chars):]
+    return lstrip_impl
 
 
 @overload_method(types.UnicodeType, 'rstrip')
-def unicode_rstrip(string, chars=' '):
-    unicode_lstrip_types_check(chars)
+def unicode_rstrip(string, chars=None):
+    unicode_strip_types_check(chars)
 
-    def wrap(string, chars=' '):
-        return strip_impl(UNICODE_OP_RSTRIP, string, chars)
-    return wrap
+    def rstrip_impl(string, chars=None):
+        return string[:unicode_strip_right_bound(string, chars)]
+    return rstrip_impl
 
 
 @overload_method(types.UnicodeType, 'strip')
-def unicode_strip(string, chars=' '):
-    unicode_lstrip_types_check(chars)
+def unicode_strip(string, chars=None):
+    unicode_strip_types_check(chars)
 
-    def wrap(string, chars=' '):
-        return strip_impl(UNICODE_OP_STRIP, string, chars)
-    return wrap
+    def strip_impl(string, chars=None):
+        return string[unicode_strip_left_bound(string, chars):unicode_strip_right_bound(string, chars)]
+    return strip_impl
 
 
 # String creation
