@@ -241,7 +241,7 @@ class Annotate:
     ... Annotate(test)
 
     The last line will return an HTML and/or ANSI representation that will be
-    displayed accordingly in IPython/Jupyter.
+    displayed accordingly in Jupyter/IPython.
 
     Function annotations persist across compilation for newly encountered
     type signatures and as a result annotations are shown for all signatures.
