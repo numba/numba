@@ -164,8 +164,8 @@ There are two things there:
   array, a scalar (symbolically denoted by the empty tuple ``()``) and
   returns a *n*-element one-dimension array;
 
-* the list of supported concrete *signatures* as in ``@vectorize``; here we
-  only support ``int64`` arrays.
+* the list of supported concrete *signatures* as per ``@vectorize``; here,
+  as in the above example, we demonstrate ``int64`` arrays.
 
 .. note::
    1D array type can also receive scalar arguments (those with shape ``()``).
