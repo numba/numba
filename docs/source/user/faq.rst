@@ -272,10 +272,10 @@ value, for example::
 Miscellaneous
 =============
 
-Where does the project name Numba come from?
---------------------------------------------
+Where does the project name "Numba" come from?
+----------------------------------------------
 
-"Numba" is a combination of "Numpy" and "Mamba". Mambas are some of the fastest
+"Numba" is a combination of "NumPy" and "Mamba". Mambas are some of the fastest
 snakes in the world, and Numba makes your Python code fast.
 
 How do I reference/cite/acknowledge Numba in other work?
