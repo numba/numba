@@ -44,8 +44,6 @@ def find_file(pat, libdir=None):
         libdirs = list(libdir)
     files = []
     for ldir in libdirs:
-        entries = os.listdir(ldir)
-        candidates = [os.path.join(ldir, ent)
-                      for ent in entries if pat.match(ent)]
-        files.extend([c for c in candidates if os.path.isfile(c)])
+        # Walk current directory and subdirectories, get the full path when pattern matches.
+        files.extend([os.path.join(dirname, ent) for dirname, _, entries in os.walk(ldir) for ent in entries if pat.match(ent)])
     return files

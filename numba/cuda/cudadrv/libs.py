@@ -16,7 +16,10 @@ else:
 
 def get_libdevice(arch):
     libdir = (os.environ.get('NUMBAPRO_LIBDEVICE') or
-              os.environ.get('NUMBAPRO_CUDALIB'))
+              os.environ.get('NUMBAPRO_CUDALIB') or
+              os.environ.get('CUDA_HOME') or
+              os.environ.get('CUDA_ROOT') or
+              os.environ.get('CUDA_PATH'))
 
     pat = r'libdevice\.%s(\.\d+)*\.bc$' % arch
     candidates = find_file(re.compile(pat), libdir)
@@ -37,7 +40,10 @@ def open_libdevice(arch):
 def get_cudalib(lib, platform=None):
     if lib == 'nvvm' and os.environ.get('NUMBAPRO_NVVM'):
         return os.environ.get('NUMBAPRO_NVVM')
-    libdir = os.environ.get('NUMBAPRO_CUDALIB')
+    libdir = (os.environ.get('NUMBAPRO_CUDALIB') or
+              os.environ.get('CUDA_HOME') or
+              os.environ.get('CUDA_ROOT') or
+              os.environ.get('CUDA_PATH'))
     candidates = find_lib(lib, libdir, platform)
     return max(candidates) if candidates else None
 
