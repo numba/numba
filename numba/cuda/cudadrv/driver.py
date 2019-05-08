@@ -39,9 +39,11 @@ def get_numbapro_envvar(envvar, default=None):
     # use vanilla get here so as to use `None` as a signal for not-set
     value = os.environ.get(envvar)
     if value is not None:
+        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+               "deprecation.html#deprecation-of-numbapro-environment-variables")
         msg = ("\nEnvironment variables with the 'NUMBAPRO' prefix are "
-                "scheduled for deprecation, found use of %s=%s. See this URL "
-                "for more information" % (envvar, value))
+               "deprecated, found use of %s=%s.\n\nFor more information visit "
+               "%s" % (envvar, value, url))
         warnings.warn(errors.NumbaDeprecationWarning(msg))
         return value
     else:

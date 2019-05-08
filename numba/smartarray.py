@@ -62,8 +62,10 @@ class SmartArray(object):
         (The optional 'where' argument specifies where to allocate the array
         initially. (Default: 'host')
         """
-        msg = ("\nSmartArray is scheduled for deprecation.\n\nSee URL for more "
-               "information.")
+        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                "deprecation.html#deprecation-of-smartarray")
+        msg = ("\nSmartArray is deprecated.\n\nFor more information visit %s"
+               % url)
         warnings.warn(NumbaDeprecationWarning(msg), stacklevel=1)
 
         if where not in self._targets:

@@ -16,7 +16,7 @@ from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
-from numba.ir_utils import raise_on_unsupported_feature, raise_on_deprecated
+from numba.ir_utils import raise_on_unsupported_feature, warn_deprecated
 from numba.compiler_lock import global_compiler_lock
 from numba.analysis import dead_branch_prune
 
@@ -721,9 +721,13 @@ class BasePipeline(object):
             warnings.warn(errors.NumbaWarning(warn_msg,
                                               self.func_ir.loc))
 
-            msg = ("\nFallback from the nopython compilation path to the "
+            url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                   "deprecation.html#deprecation-of-object-mode-fall-"
+                   "back-behaviour-when-using-jit")
+            msg = ("\nFall-back from the nopython compilation path to the "
                    "object mode compilation path has been detected, this is "
-                   "scheduled for deprecation.\n\nSee this URL")
+                   "deprecated behaviour.\n\nFor more information visit %s" %
+                   url)
             warnings.warn(errors.NumbaDeprecationWarning(msg, self.func_ir.loc))
             if self.flags.release_gil:
                 warn_msg = ("Code running in object mode won't allow parallel"
@@ -758,7 +762,7 @@ class BasePipeline(object):
 
     def stage_ir_legalization(self):
         raise_on_unsupported_feature(self.func_ir, self.typemap)
-        raise_on_deprecated(self.func_ir, self.typemap)
+        warn_deprecated(self.func_ir, self.typemap)
 
     def stage_cleanup(self):
         """

@@ -48,7 +48,13 @@ class NumbaPerformanceWarning(NumbaWarning):
 
 class NumbaDeprecationWarning(NumbaWarning):
     """
-    Warning category for use of a deprecated feature
+    Warning category for use of a deprecated feature.
+    """
+
+
+class NumbaPendingDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a feature that is pending deprecation.
     """
 
 

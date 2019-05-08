@@ -11,14 +11,15 @@ into code that is consuming Numba.
 
 Suppressing Deprecation warnings
 ================================
-All Numba deprecations are issued via ``NumbaDeprecationWarning`` s, to suppress
-the reporting of ``NumbaDeprecationWarning`` s the following code snippet can be
-used::
+All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
+``NumbaPendingDeprecationWarning`` s, to suppress the reporting of
+these the following code snippet can be used::
 
-    from numba.errors import NumbaDeprecationWarning
+    from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
     import warnings
 
     warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
+    warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 
 The ``action`` used above is ``'ignore'``, other actions are available, see
 `The Warnings Filter <https://docs.python.org/3/library/warnings.html#the-warnings-filter>`_
@@ -73,9 +74,11 @@ implemented yet!), synonymous with the ``typed.Dict``.
 
 Schedule
 --------
-Deprecation warnings will be issued for a number of releases starting with 0.44.
-A final warning notice will be made in the last release to support the behaviour
-scheduled for deprecation.
+This feature will be removed with respect to this schedule:
+
+* Pending-deprecation warnings will be issued in version 0.44.0
+* Deprecation warnings and replacements will be issued in version 0.45.0
+* Support will be removed in version 0.46.0
 
 Recommendations
 ---------------
@@ -116,8 +119,8 @@ Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
 The ``numba.jit`` decorator has for a long time followed the behaviour of first
 attempting to compile the decorated function in :term:`nopython mode` and should
 this compilation fail it will `fall-back` and try again to compile but this time
-in :term:`object mode`. It it this `fall-back` behaviour which is scheduled for
-deprecation, the result of which will be that ``numba.jit`` will by default
+in :term:`object mode`. It it this `fall-back` behaviour which is being
+deprecated, the result of which will be that ``numba.jit`` will by default
 compile in :term:`nopython mode` and :term:`object mode` compilation will
 become `opt-in` only.
 
@@ -162,7 +165,7 @@ Further, it has long been considered best practice that the
 :term:`nopython mode` keyword argument in the ``numba.jit`` decorator is set to
 ``True`` and that any user effort spent should go into making code work in this
 mode as there's very little gain if it does not. The result is that, as Numba
-has evolved, the amount of use :term:`object mode` gets in practice and it's
+has evolved, the amount of use :term:`object mode` gets in practice and its
 general utility has decreased. It can be noted that there are some minor
 improvements available through the notion of :term:`loop-lifting`, the cases of
 this being used in practice are, however, rare and often a legacy from use of
@@ -188,9 +191,10 @@ will simply not compile, a ``TypingError`` would be raised.
 
 Schedule
 --------
-Deprecation warnings will be issued for a number of releases starting with 0.44.
-A final warning notice will be made in the last release to support the behaviour
-scheduled for deprecation.
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.44.0
+* Support will be removed in version 0.47.0
 
 Recommendations
 ---------------
@@ -236,9 +240,10 @@ Code using ``SmartArray`` will cease to work, e.g. this will fail::
 
 Schedule
 --------
-Deprecation warnings will be issued for a number of releases starting with 0.44.
-A final warning notice will be made in the last release to support the behaviour
-scheduled for deprecation.
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.44.0
+* Support will be removed in version 0.45.0
 
 Recommendations
 ---------------
@@ -271,9 +276,10 @@ the impact of another, none of which is documented.
 
 Schedule
 --------
-Deprecation warnings will be issued for a number of releases starting with 0.44.
-A final warning notice will be made in the last release to support the behaviour
-scheduled for deprecation.
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.44.0
+* Support will be removed in version 0.45.0
 
 Recommendations
 ---------------
@@ -288,3 +294,34 @@ Numba will gain a new set of CUDA related environment variables to replace the
 ``NUMBAPRO`` environment variables. This change will be part of permitting
 discovery of system level CUDA drivers and libraries, as well as making it easy
 to point Numba to a particular CUDA SDK instance.
+
+
+Deprecation of ``numba.autojit``
+================================
+The decorator ``numba.autojit`` was inherited from the time of ``NumbaPro`` and
+has not been recommended for use for some time.
+
+Reason for deprecation
+----------------------
+It is functionally no different to ``numba.jit`` and in fact just calls out to
+this function. It has not been in active use or recommended for use for a
+significant period of time.
+
+Schedule
+--------
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.44.0
+* Support will be removed in version 0.47.0
+
+Recommendations
+---------------
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour, or consider following
+the recommendations below.
+
+Recommendations
+---------------
+The recommended method for accommodating the deprecation of ``numba.autojit``
+is to simply replace it with the semantically and functionally equivalent
+``numba.jit`` decorator.

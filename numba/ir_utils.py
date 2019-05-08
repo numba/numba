@@ -20,7 +20,8 @@ from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
-from numba.errors import TypingError, UnsupportedError, NumbaDeprecationWarning
+from numba.errors import (TypingError, UnsupportedError,
+                          NumbaPendingDeprecationWarning)
 import copy
 
 _unique_var_count = 0
@@ -1904,7 +1905,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
-def raise_on_deprecated(func_ir, typemap):
+def warn_deprecated(func_ir, typemap):
     # first pass, just walk the type map
     for name, ty in typemap.items():
         # the Type Metaclass has a reflected member
@@ -1915,8 +1916,11 @@ def raise_on_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
+                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                       "deprecation.html#deprecation-of-reflection-for-list-and"
+                       "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
                         "deprecation: type 'reflected %s' found for argument "
-                        "'%s' of function '%s'.\n\nFor more information see: URL"
-                        % (tyname, arg, fname))
-                warnings.warn(NumbaDeprecationWarning(msg, loc=loc))
+                        "'%s' of function '%s'.\n\nFor more information visit "
+                        "%s" % (tyname, arg, fname, url))
+                warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))

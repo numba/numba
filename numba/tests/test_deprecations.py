@@ -6,24 +6,27 @@ import threading
 import warnings
 import numpy as np
 from numba import jit, autojit, SmartArray, cuda, config
-from numba.errors import NumbaDeprecationWarning, NumbaWarning
+from numba.errors import (NumbaDeprecationWarning,
+                          NumbaPendingDeprecationWarning, NumbaWarning)
 import numba.unittest_support as unittest
+
 
 class TestDeprecation(unittest.TestCase):
 
     def test_autojit(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
+
             def dummy():
                 pass
             autojit(dummy)
             self.assertEqual(len(w), 1)
 
-
     def check_warning(self, warnings, expected_str, category):
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0].category, category)
         self.assertIn(expected_str, str(warnings[0].message))
+        self.assertIn("http://numba.pydata.org", str(warnings[0].message))
 
     def test_jitfallback(self):
         # tests that @jit falling back to object mode raises a
@@ -33,10 +36,10 @@ class TestDeprecation(unittest.TestCase):
             warnings.simplefilter("always", category=NumbaDeprecationWarning)
 
             def foo():
-                return [] # empty list cannot be typed
+                return []  # empty list cannot be typed
             jit(foo)()
 
-            msg = ("Fallback from the nopython compilation path to the object "
+            msg = ("Fall-back from the nopython compilation path to the object "
                    "mode compilation path")
             self.check_warning(w, msg, NumbaDeprecationWarning)
 
@@ -50,19 +53,21 @@ class TestDeprecation(unittest.TestCase):
 
         for f in [foo_list, foo_set]:
             container = f.__name__.strip('foo_')
-            inp = eval(container)([10,])
+            inp = eval(container)([10, ])
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("ignore", category=NumbaWarning)
-                warnings.simplefilter("always", category=NumbaDeprecationWarning)
+                warnings.simplefilter("always",
+                                      category=NumbaPendingDeprecationWarning)
                 jit(nopython=True)(f)(inp)
                 self.assertEqual(len(w), 1)
-                self.assertEqual(w[0].category, NumbaDeprecationWarning)
+                self.assertEqual(w[0].category, NumbaPendingDeprecationWarning)
                 warn_msg = str(w[0].message)
                 msg = ("Encountered the use of a type that is scheduled for "
                        "deprecation")
                 self.assertIn(msg, warn_msg)
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
+                self.assertIn("http://numba.pydata.org", warn_msg)
 
     def test_smartarray(self):
         # tests deprecation of SmartArray
@@ -73,8 +78,9 @@ class TestDeprecation(unittest.TestCase):
             self.assertEqual(len(w), 1)
             self.assertEqual(w[0].category, NumbaDeprecationWarning)
             warn_msg = str(w[0].message)
-            msg = "SmartArray is scheduled for deprecation"
+            msg = "SmartArray is deprecated"
             self.assertIn(msg, warn_msg)
+            self.assertIn("http://numba.pydata.org", warn_msg)
 
     def run_cmd(self, cmdline, env, kill_is_ok=False):
         popen = subprocess.Popen(cmdline,
@@ -94,9 +100,10 @@ class TestDeprecation(unittest.TestCase):
             out, err = popen.communicate()
             retcode = popen.returncode
             if retcode != 0:
-                raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\nstdout :%s" %
-                    (retcode, err.decode(), out.decode()))
+                raise AssertionError("process failed with code %s: stderr "
+                                     "follows\n%s\nstdout :%s" % (retcode,
+                                                                  err.decode(),
+                                                                  out.decode()))
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -108,10 +115,10 @@ class TestDeprecation(unittest.TestCase):
         # tests deprecation of NUMBAPRO_ environment variables
 
         expected = ("Environment variables with the 'NUMBAPRO' prefix are "
-                    "scheduled for deprecation, found use of %s=%s")
+                    "deprecated, found use of %s=%s")
 
         NUMBAPRO_VARS = [(['NVVM', 'CUDALIB', 'LIBDEVICE'], '/'),
-                         (['VERBOSE_CU_JIT_LOG',], '1')]
+                         (['VERBOSE_CU_JIT_LOG', ], '1')]
 
         # NUMBAPRO_CUDA_LOG_SIZE is not tested, needs a live module/linker
 
@@ -125,8 +132,8 @@ class TestDeprecation(unittest.TestCase):
                 out, err = self.run_cmd(' '.join(cmdline), env_copy)
                 self.assertIn('NumbaDeprecationWarning:', err)
                 self.assertIn(expected % (numbapro_var, val), err)
+                self.assertIn("http://numba.pydata.org", err)
 
 
 if __name__ == '__main__':
     unittest.main()
-
