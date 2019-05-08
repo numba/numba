@@ -3695,11 +3695,11 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
     If an array argument is written to then it may alias any of the other array arguments.
     If so, check for aliasing dynamically and create two variants, one for aliasing and one without.
     """
-    if flags.noalias:
+    if flags.argument_alias != 'maybe':
         return False
 
     blocks = func_ir.blocks
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.noalias)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.argument_alias == 'never')
     if config.DEBUG_ARRAY_OPT >= 1:
         print("generate_aliasing_variants")
         print("alias_map:", alias_map)
@@ -3721,8 +3721,13 @@ def generate_aliasing_variants(func_ir, typemap, calltypes, array_analysis, typi
         print("args_written_to:", args_written_to)
 
     if args_written_to:
-        """ If we found some input array or some alias thereof written into by this function
-            then generate code to check potential aliasing at runtime.
+        print("WARNING: Numba has inserted a runtime check for argument aliasing.")
+        print("    This may increase runtime performance when there is no aliasing but")
+        print("    may also increase compilation time.  Consider adding the 'argument_alias'")
+        print("    jit argument to decrease compilation time if you know aliasing behavior.")
+
+        """ If we found some input array or some alias thereof written into by this
+            function then generate code to check potential aliasing at runtime.
         """
         dprint_func_ir(func_ir, "before alias duplication")
         func_ir.blocks = duplicate_code(blocks, typemap, calltypes, func_ir.arg_names, typingctx, array_args)
@@ -3739,7 +3744,7 @@ def maximize_fusion(func_ir, blocks, typemap, flags, up_direction=True):
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.noalias)
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir, None, None, flags.argument_alias == 'never')
     for block in blocks.values():
         order_changed = True
         while order_changed:

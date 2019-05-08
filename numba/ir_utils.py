@@ -698,6 +698,10 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 # only mutable types can alias
                 if is_immutable_type(lhs, typemap):
                     continue
+                if (typemap is None or
+                    lhs not in typemap or
+                    not isinstance(typemap[lhs], types.npytypes.Array)):
+                    continue
                 # Assignments like A = B alias.
                 if isinstance(expr, ir.Var):
                     if lhs != expr.name:

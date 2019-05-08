@@ -267,7 +267,7 @@ class CPUTargetOptions(TargetOptions):
         "fastmath": FastMathOptions,
         "error_model": str,
         "parallel": ParallelOptions,
-        "noalias": bool,
+        "argument_alias": str,
     }
 
 

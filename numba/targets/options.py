@@ -72,8 +72,11 @@ class TargetOptions(object):
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
 
-        if kws.pop('noalias', False):
-            flags.set('noalias')
+        if 'argument_alias' in kws:
+            aa_value = kws.pop('argument_alias')
+            if aa_value not in ['maybe', 'never', 'always']:
+                raise ValueError("Unrecognized argument_alias value: %s" % aa_value)
+            flags.set('argument_alias', aa_value)
 
         flags.set("enable_pyobject_looplift")
 

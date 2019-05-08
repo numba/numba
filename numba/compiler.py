@@ -53,6 +53,7 @@ class Flags(utils.ConfigOptions):
         'fastmath': cpu.FastMathOptions(False),
         'pa_outlined_kernel': False,
         'noalias': False,
+        'argument_alias': 'maybe',
     }
 
 

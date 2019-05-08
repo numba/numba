@@ -7,7 +7,7 @@ JIT functions
 
 .. _jit-decorator:
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, noalias=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, noalias=False, argument_alias='maybe', locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -100,6 +100,30 @@ JIT functions
    In some cases, this assertion can reduce Numba compilation time as the
    compiler need not consider potential object aliasing issues.  This assertion
    may also enable additional compilation optimizations that can reduce runtime.
+
+   The *argument_alias* option specifies whether any of the arguments to
+   the function will alias each other at runtime.  Setting it to 'maybe'
+   indicates that you do not know if any of the arguments will alias at
+   runtime.  This is the default value.  If this option is set to 'maybe'
+   and automatic parallelization is
+   enabled with the *parallel* option and some mutable argument is modified
+   by the function, then Numba duplicates the parallel portions of the
+   function and inserts a dynamic aliasing check to determine which version
+   of the code to run.  One version specializes to assume that arguments may
+   alias and the other specializes to assume that the arguments do not alias.
+   This is done because in the normal case where arguments do not alias,
+   there are additional optimizations possible for higher performance.
+   However, this code duplication can result in increased compilation time.
+   Setting the *argument_alias* option to 'never' indicates that the
+   arguments to the function will never alias each other.  This enables code
+   duplication to be avoided, reduces compilation time and produces faster
+   code under the assumption that arguments do not alias.  If this
+   assumption is violated then incorrect results may occur.
+   Setting the *argument_alias* option to 'always' indicates that you want
+   Numba to assume that arguments to the function will alias each other.
+   This also disables code duplication and reduces compilation time but
+   may produce code that is slower in cases where the arguments happen to
+   not alias.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the
