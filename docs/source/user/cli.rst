@@ -149,7 +149,7 @@ Debugging
 ---------
 
 As shown in the help output above, the ``numba`` command includes options that
-can help you to debug Numba.
+can help you to debug Numba compiled code.
 
 To try it out, create an example script called ``myscript.py``::
 
