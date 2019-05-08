@@ -596,17 +596,6 @@ def unicode_split(a, sep=None, maxsplit=-1):
             return parts
         return split_whitespace_impl
 
-ll.add_symbol('strlower', string_lower_ext.strlower)
-_strlower = types.ExternalFunction("strlower", types.intc(types.voidptr))
-
-@overload_method(types.UnicodeType, 'lower')
-def unicode_lower(a):
-    if isinstance(a, types.UnicodeType):
-        def lower_impl(a):
-            _strlower(a._data)
-            return a
-        return lower_impl
-
 
 ll.add_symbol('strlower', string_lower_ext.strlower)
 _strlower = types.ExternalFunction("strlower", types.intc(types.voidptr))

@@ -43,13 +43,15 @@ int _PyUnicode_ToLower(char ch, char *res)
     if(ctype->flags & EXTENDED_CASE_MASK){
         int index = ctype->lower & 0xFFFF;
         int n = ctype->lower >> 24;
-        for(int i = 0; i < n; i++){
+        int i = 0;
+        for(i = 0; i < n; i++){
             res[i] = _PyUnicode_ExtendedCase[index + i];
         }
         return n;
     } else
     {
-        for(unsigned int j=0; j < strlen(res); j++){
+        unsigned int j = 0;
+        for(j=0; j < strlen(res); j++){
             const _PyUnicode_TypeRecord *temptype = gettyperecord(res[j]);
             res[j] = res[j] + temptype->lower;
         }
