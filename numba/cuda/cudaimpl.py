@@ -433,7 +433,11 @@ def ptx_max_f8(context, builder, sig, args):
             lc.Type.double(),
             (lc.Type.double(), lc.Type.double())),
         '__nv_fmax')
-    return builder.call(fn, args)
+
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
+        context.cast(builder, args[1], sig.args[1], types.double),
+    ])
 
 
 @lower(min, types.f4, types.f4)
@@ -455,7 +459,11 @@ def ptx_min_f8(context, builder, sig, args):
             lc.Type.double(),
             (lc.Type.double(), lc.Type.double())),
         '__nv_fmin')
-    return builder.call(fn, args)
+
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
+        context.cast(builder, args[1], sig.args[1], types.double),
+    ])
 
 
 def _normalize_indices(context, builder, indty, inds):
