@@ -359,6 +359,12 @@ class List(MutableSequence):
     def is_precise(self):
         return self.dtype.is_precise()
 
+    def __getitem__(self, args):
+        """
+        Overrides the default __getitem__ from Type.
+        """
+        return self.dtype
+
 
 class ListIter(BaseContainerIterator):
     """
