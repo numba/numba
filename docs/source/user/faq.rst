@@ -272,6 +272,12 @@ value, for example::
 Miscellaneous
 =============
 
+Where does the project name "Numba" come from?
+----------------------------------------------
+
+"Numba" is a combination of "NumPy" and "Mamba". Mambas are some of the fastest
+snakes in the world, and Numba makes your Python code fast.
+
 How do I reference/cite/acknowledge Numba in other work?
 --------------------------------------------------------
 For academic use, the best option is to cite our ACM Proceedings: `Numba: a
