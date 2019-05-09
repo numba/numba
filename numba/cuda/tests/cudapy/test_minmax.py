@@ -12,8 +12,7 @@ def builtin_max(A, B, C):
     if i >= len(C):
         return
 
-    cmp = max(A[i], B[i])
-    C[i] = float64(cmp)
+    C[i] = float64(max(A[i], B[i]))
 
 
 def builtin_min(A, B, C):
@@ -22,8 +21,7 @@ def builtin_min(A, B, C):
     if i >= len(C):
         return
 
-    cmp = min(A[i], B[i])
-    C[i] = float64(cmp)
+    C[i] = float64(min(A[i], B[i]))
 
 
 @skip_on_cudasim('Tests PTX emission')
@@ -43,9 +41,7 @@ class TestCudaMinMax(SerialMixin, unittest.TestCase):
         b = np.full(n, fill_value=2, dtype=dtype_right)
 
         kernel[1, c.shape](a, b, c)
-        np.testing.assert_allclose(
-            c,
-            numpy_equivalent(a, b))
+        np.testing.assert_allclose(c, numpy_equivalent(a, b))
 
         ptx = next(p for p in kernel.inspect_asm().values())
         self.assertIn(ptx_instruction, ptx)
