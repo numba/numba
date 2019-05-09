@@ -578,11 +578,14 @@ class BasePipeline(object):
         if not has_parfor:
             # parfor calls the compiler chain again with a string
             if not self.func_ir.loc.filename == '<string>':
+                url = ("http://numba.pydata.org/numba-doc/latest/user/"
+                       "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
                        "possible.\n\nTo find out why, try turning on parallel "
-                       "diagnostics, see URL for help.")
-                warnings.warn(errors.NumbaWarning(msg, self.func_ir.loc))
+                       "diagnostics, see %s for help." % url)
+                warnings.warn(errors.NumbaPerformanceWarning(msg,
+                                                             self.func_ir.loc))
 
     def stage_inline_pass(self):
         """

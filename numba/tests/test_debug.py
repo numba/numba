@@ -14,7 +14,7 @@ from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
 from numba.targets.cpu import ParallelOptions
-from numba.errors import NumbaWarning
+from numba.errors import NumbaPerformanceWarning
 from numba import compiler, prange
 from .test_parfors import skip_unsupported
 from .matmul_usecase import needs_blas
@@ -247,7 +247,7 @@ class TestParforsDebug(TestCase):
         """
         arr_ty = types.Array(types.float64, 2, "C")
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", NumbaWarning)
+            warnings.simplefilter("always", NumbaPerformanceWarning)
             cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                     flags=force_parallel_flags)
         self.check_parfors_warning(w)

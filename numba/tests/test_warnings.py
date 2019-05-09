@@ -9,8 +9,8 @@ from numba.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
 class TestBuiltins(unittest.TestCase):
 
     def check_objmode_deprecation_warning(self, w):
-        # Object mode fallback is slated for deprecation, check the warning
-        msg = ("Fallback from the nopython compilation path to the object "
+        # Object mode fall-back is slated for deprecation, check the warning
+        msg = ("Fall-back from the nopython compilation path to the object "
                 "mode compilation path has been detected")
         self.assertEqual(w.category, NumbaDeprecationWarning)
         self.assertIn(msg, str(w.message))
@@ -55,7 +55,7 @@ class TestBuiltins(unittest.TestCase):
             self.assertEqual(w[0].category, NumbaWarning)
             self.assertIn('return type', str(w[0].message))
 
-            # Object mode fallback
+            # Object mode fall-back
             self.assertEqual(w[1].category, NumbaWarning)
             self.assertIn('object mode without forceobj=True',
                           str(w[1].message))
@@ -109,7 +109,7 @@ class TestBuiltins(unittest.TestCase):
 
             self.assertEqual(len(w), 4)
 
-            # Type inference failure (1st pass, in npm, fallback to objmode
+            # Type inference failure (1st pass, in npm, fall-back to objmode
             # with looplift)
             self.assertEqual(w[0].category, NumbaWarning)
             self.assertIn('type inference', str(w[0].message))

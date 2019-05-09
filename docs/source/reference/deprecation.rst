@@ -25,6 +25,11 @@ The ``action`` used above is ``'ignore'``, other actions are available, see
 `The Warnings Filter <https://docs.python.org/3/library/warnings.html#the-warnings-filter>`_
 documentation for more information.
 
+.. note:: It is **strongly recommended** that applications and libraries which
+          choose to suppress these warnings should pin their Numba dependency
+          to a suitable version because their users will no longer be aware of
+          the coming incompatibility.
+
 Deprecation of reflection for List and Set types
 ================================================
 Reflection (:term:`reflection`) is the jargon used in Numba to describe the
@@ -38,20 +43,19 @@ Reason for deprecation
 ----------------------
 First recall that for Numba to be able to compile a function in ``nopython``
 mode all the variables must have a concrete type ascertained through type
-inference. For functions which have mutable Python containers as arguments the
-type of these arguments is the container type, but the container type
-must also have a type, and then if the container type is also a container type
-it must also have a type and so on. Essentially it is relatively easy to build
-up containers with a high level of type complexity, and because the containers
-are arguments any updates made to them must be ``reflected`` back into the
-interpreter. After a number of years of experience with this problem, it is
-clear that providing this behaviour is both fraught with difficulty and often
-leads to code which does not have good performance (all reflected data has to go
-through special APIs to convert the data to native formats at call time and
-and then back to CPython formats at return time). As a result of this, the sheer
-number of reported problems in the issue tracker, and how well a new approach
-that was taken with ``typed.Dict`` (typed dictionaries) has gone, the core
-developers have decided to deprecate the noted ``reflection`` behaviour.
+inference. In simple cases, it is clear how to reflect changes to containers
+inside ``nopython`` mode back to the original Python containers. However,
+reflecting changes to complex data structures with nested container types (for
+example, lists of lists of integers) quickly becomes impossible to do
+efficiently and consistently. After a number of years of experience with this
+problem, it is clear that providing this behaviour is both fraught with
+difficulty and often leads to code which does not have good performance (all
+reflected data has to go through special APIs to convert the data to native
+formats at call time and and then back to CPython formats at return time). As a
+result of this, the sheer number of reported problems in the issue tracker, and
+how well a new approach that was taken with ``typed.Dict`` (typed dictionaries)
+has gone, the core developers have decided to deprecate the noted ``reflection``
+behaviour.
 
 
 Example(s) of the impact
@@ -317,11 +321,6 @@ This feature will be removed with respect to this schedule:
 Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour, or consider following
-the recommendations below.
-
-Recommendations
----------------
-The recommended method for accommodating the deprecation of ``numba.autojit``
-is to simply replace it with the semantically and functionally equivalent
-``numba.jit`` decorator.
+on Numba to a version prior to removal of this behaviour. The recommended method
+for accommodating the deprecation of ``numba.autojit`` is to simply replace it
+with the semantically and functionally equivalent ``numba.jit`` decorator.
