@@ -40,7 +40,7 @@ requirements:
     - python
     - numpy x.x
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.29.0dev0_llvm8*
+    - llvmlite 0.29.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
   run_constrained:
