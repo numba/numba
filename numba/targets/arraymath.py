@@ -3475,7 +3475,6 @@ def np_select(condlist, choicelist, default=0):
     def np_select_impl(condlist, choicelist, default=0):
         #alternatively, _broadcast_to_shape could be used
         out = default * np.ones(choicelist[0].shape, choicelist[0].dtype)
-
         #should use reversed+zip, but reversed is not available
         for i in range(len(condlist) - 1, -1, -1):
             cond = condlist[i]
@@ -3483,14 +3482,16 @@ def np_select(condlist, choicelist, default=0):
             out = np.where(cond, choice, out)
         return out
 
-    print(type(condlist), type(choicelist), type(condlist[0]), '/', (condlist[0].dtype))
-    if ((isinstance(condlist, types.List)
-         or isinstance(condlist, types.UniTuple))
-        and
-        (isinstance(choicelist, types.List)
-          or isinstance(choicelist, types.UniTuple))
-         and isinstance(condlist[0], types.Array)
-     and isinstance(condlist[0].dtype, types.Boolean)):
+    # print(type(default), type(condlist), type(choicelist), choicelist.dtype ,  type(condlist[0]),condlist[0].ndim, '/', (condlist[0].dtype))
+    if ((isinstance(condlist, (types.List, types.UniTuple)))
+        and (isinstance(choicelist, (types.List, types.UniTuple)))
+        and isinstance(condlist[0], types.Array)
+        and isinstance(condlist[0].dtype, types.Boolean)
+        and isinstance(default, (int, types.scalars.Number))):
+        if condlist[0].ndim != choicelist[0].ndim:
+            raise TypeError('condlist and choicelist elements must have the same number of dimensions')
 
-
-        return np_select_impl
+        if condlist[0].ndim < 1:
+            raise TypeError('condlist and choicelist elements must be arrays of at least dimension 1')
+        else:
+            return np_select_impl

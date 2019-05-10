@@ -2692,40 +2692,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         np_nbfunc = njit(np_select)
 
 
-        def check(condlist, choicelist):
-            self.assertPreciseEqual(np_pyfunc(condlist, choicelist),
-                                    np_nbfunc(condlist, choicelist))
-
         for condlist,  choicelist, default in [
-            # ((x < 3, x > 5), (x, x ** 2),0),
-
+            #each test case below is one tuple. Each tuple is separated by
+            #a blank line
             ([x < 3, x > 5], [x, x ** 2],0),
-            #
-            # ([np.array([1, 2, 3]),
-            #   np.array([4, 5, 6]),
-            #   np.array([7, 8, 9])],
-            #  [np.array([False, False, False]),
-            #   np.array([False, True, False]),
-            #   np.array([False, False, True]),15]
-            #  ),
-            #
-            # ([np.array(True), np.array([False, True, False])],
-            #  [np.array(1), np.arange(12).reshape(4, 3)], 0),
-            #
-            # ([True], [0], [0]),
-            #
-            # (np.array([1, 2, 3, np.nan, 5, 7]),
-            #  np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))),
-            #
-            # ([np.array([False])] * 100, [np.array([1])] * 100, 0)
+
+            ((x < 3, x > 5), (x, x ** 2), 0),
+
+            ([np.array([False, False, False]),
+              np.array([False, True, False]),
+              np.array([False, False, True])],
+             [np.array([1, 2, 3]),
+              np.array([4, 5, 6]),
+              np.array([7, 8, 9])],15),
+
+            ([np.array([True]), np.array([False])], [np.array([1]), np.array([2])], 0),
+
+            ([np.array([False])] * 100, [np.array([1])] * 100, 0)
         ]:
-            self.assertPreciseEqual(np_pyfunc(condlist, choicelist),
-                                    np_nbfunc(condlist, choicelist))
+            self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
+                                    np_nbfunc(condlist, choicelist, default))
 
 
 
     def test_select_exception(self):
 
+        # ([np.array(True), np.array([False, True, False])],
+        #  [np.array(1), np.arange(12).reshape(4, 3)], 0),
+
+        ([np.array(True), np.array(False)], [np.array([1]), np.array([2])], 0)
+        ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0)
+        (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])), np.array([1, 2, 3, np.nan, 5, 7]), 0)
+
+        ([True], [0], [0]),
 
 
         def test_deprecated_empty(self):
