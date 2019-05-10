@@ -200,6 +200,18 @@ def np_blackman(M):
     return np.blackman(M)
 
 
+def np_hamming(M):
+    return np.hamming(M)
+
+
+def np_hanning(M):
+    return np.hanning(M)
+
+
+def np_kaiser(M, beta):
+    return np.kaiser(M, beta)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2770,6 +2782,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = np_pyfunc(M)
             got = np_nbfunc(M)
             self.assertPreciseEqual(expected, got)
+
+    def test_hamming(self):
+        np_pyfunc = np_hamming
+        np_nbfunc = njit(np_hamming)
+
+        for M in [0, 1, 12]:
+            expected = np_pyfunc(M)
+            got = np_nbfunc(M)
+            self.assertPreciseEqual(expected, got)
+
+    def test_hanning(self):
+        np_pyfunc = np_hanning
+        np_nbfunc = njit(np_hanning)
+
+        for M in [0, 1, 12]:
+            expected = np_pyfunc(M)
+            got = np_nbfunc(M)
+            self.assertPreciseEqual(expected, got)
+
+    def test_kaiser(self):
+        np_pyfunc = np_kaiser
+        np_nbfunc = njit(np_kaiser)
+
+        for M in [0, 1, 12]:
+            for beta in [0.0, 5.0, 14.0]:
+                expected = np_pyfunc(M, beta)
+                got = np_nbfunc(M, beta)
+                self.assertPreciseEqual(expected, got)
 
 
 class TestNPMachineParameters(TestCase):
