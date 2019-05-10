@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
+import random
 import sys
 
 import numpy as np
@@ -866,6 +867,29 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         set26(t, 2)
         self.assertEqual(t[2:2:1], 2)
         self.assertEqual(t[6:6:1], 3)
+
+    def test_jitclass_longlabel_not_truncated(self):
+        # See issue #3872, llvm 7 introduced a max label length of 1024 chars
+        # Numba ships patched llvm 7.1 (ppc64le) and patched llvm 8 to undo this
+        # change, this test is here to make sure long labels are ok:
+        alphabet = [chr(ord('a') + x) for x in range(26)]
+
+        spec = [(letter * 10, float64) for letter in alphabet]
+        spec.extend([(letter.upper() * 10, float64) for letter in alphabet])
+
+        @jitclass(spec)
+        class TruncatedLabel(object):
+            def __init__(self,):
+                self.aaaaaaaaaa = 10.
+
+            def meth1(self):
+                self.bbbbbbbbbb = random.gauss(self.aaaaaaaaaa, self.aaaaaaaaaa)
+
+            def meth2(self):
+                self.meth1()
+
+        # unpatched LLVMs will raise here...
+        TruncatedLabel().meth2()
 
 
 if __name__ == '__main__':
