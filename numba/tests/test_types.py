@@ -211,6 +211,12 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
+    def test_list_type_getitem(self):
+        for listty in (types.int64, types.Array(types.float64, 1, 'C')):
+            l_int = types.List(listty)
+            self.assertTrue(isinstance(l_int, types.List))
+            self.assertTrue(isinstance(l_int[0], type(listty)))
+
 
 class TestNumbers(TestCase):
     """
@@ -575,6 +581,7 @@ class TestDType(TestCase):
             return a.type(0)
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
+
 
 if __name__ == '__main__':
     unittest.main()
