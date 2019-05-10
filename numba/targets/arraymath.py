@@ -2795,7 +2795,7 @@ def np_delete(arr, obj):
 
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
-            handler = np_delete_handler_isslice 
+            handler = np_delete_handler_isslice
         else:
             if not isinstance(obj.dtype, types.Integer):
                 raise TypingError('obj should be of Integer dtype')
@@ -3472,3 +3472,34 @@ def np_extract(condition, arr):
         return np.array(out)
 
     return np_extract_impl
+
+#----------------------------------------------------------------------------
+# Windowing functions
+
+@overload(np.bartlett)
+def np_bartlett(M):
+
+    def np_bartlett_impl(M):
+        if M < 1:
+            tmp = [np.float_(x) for x in range(0)]
+            return np.array(tmp, dtype=np.float_)
+        if M == 1:
+            return np.ones(1, dtype=np.float_)
+        n = np.arange(0, M)
+        return np.where(np.less_equal(n, (M-1)/2.0), 2.0*n/(M-1), 2.0 - 2.0*n/(M-1))
+
+    return np_bartlett_impl
+
+@overload(np.blackman)
+def np_blackman(M):
+
+    def np_blackman_impl(M):
+        if M < 1:
+            tmp = [np.float_(x) for x in range(0)]
+            return np.array(tmp, dtype=np.float_)
+        if M == 1:
+            return np.ones(1, dtype=np.float_)
+        n = np.arange(0, M)
+        return 0.42 - 0.5*np.cos(2.0*np.pi*n/(M-1)) + 0.08*np.cos(4.0*np.pi*n/(M-1))
+
+    return np_blackman_impl

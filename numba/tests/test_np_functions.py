@@ -192,6 +192,14 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_bartlett(M):
+    return np.bartlett(M)
+
+
+def np_blackman(M):
+    return np.blackman(M)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2744,6 +2752,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for rep in [True, "a", "1"]:
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
+
+    def test_bartlett(self):
+        np_pyfunc = np_bartlett
+        np_nbfunc = njit(np_bartlett)
+
+        for M in [0, 1, 12]:
+            expected = np_pyfunc(M)
+            got = np_nbfunc(M)
+            self.assertPreciseEqual(expected, got)
+
+    def test_blackman(self):
+        np_pyfunc = np_blackman
+        np_nbfunc = njit(np_blackman)
+
+        for M in [0, 1, 12]:
+            expected = np_pyfunc(M)
+            got = np_nbfunc(M)
+            self.assertPreciseEqual(expected, got)
 
 
 class TestNPMachineParameters(TestCase):
