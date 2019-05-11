@@ -404,7 +404,7 @@ bytes, bytearray, memoryview
 ----------------------------
 
 The :class:`bytearray` type and, on Python 3, the :class:`bytes` type
-support index   ing, iteration and retrieving the len().
+support indexing, iteration and retrieving the len().
 
 The :class:`memoryview` type supports indexing, slicing, iteration,
 retrieving the len(), and also the following attributes:
