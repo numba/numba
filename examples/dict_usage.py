@@ -72,3 +72,39 @@ def ex_typed_dict_njit():
     # magictoken.ex_typed_dict_njit.end
     np.testing.assert_array_equal(d['posx'], [0, 1, 2])
     np.testing.assert_array_equal(d['posy'], [3, 4, 5])
+
+
+def ex_thread_safetiness_dict():
+    # magictoken.ex_thread_safetiness_dict.begin
+    import threading
+    from numba import njit, types
+    from numba.typed import Dict
+
+    d = Dict.empty(
+        key_type=types.int64,
+        value_type=types.int64,
+    )
+
+    def foo(d):
+        # the below set of operations are un-atomic.
+        for x in range(1000):
+            d[x] = x
+            k, v = d.popitem()
+            d[k] = v
+
+    # when nogil = False, the function foo which will "run" without throwing errors
+    # when nogil = True, the function foo will throw segfaults
+    for nogil in [False, True]:
+        print("Running with nogil=%s" % nogil)
+        jit_foo = njit(nogil=nogil)(foo)
+
+        threads = [threading.Thread(target=jit_foo, args=(d,)) for _ in range(4)]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        print(d)
+    # magictoken.ex_thread_safetiness_dict.end
