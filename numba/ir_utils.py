@@ -1822,6 +1822,13 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
+    
+    for arg_name in func_ir.arg_names:
+        if isinstance(typemap[arg_name], types.containers.UniTuple) and \
+           (typemap[arg_name].count > 1000):
+            raise TypingError(
+                    "Tuple '{}' length must be smaller "
+                    "than 1000".format(arg_name))
 
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
