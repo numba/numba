@@ -373,6 +373,25 @@ using the dictionary in interpreted code:
    :dedent: 4
    :linenos:
 
+Regarding the thread-safetiness of ``numba.typed.Dict``, it should be noted that
+when you compile functions containing un-atomic operations in python
+(`found here`<https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe>)
+with ``nogil=True`` and run it on multiple threads(>1), they will throw out
+``Segmentation fault``. However, since the operations in ``foo`` are un-atomic,
+the results obtained when compiled with ``nogil=False`` will be inaccurate if
+locks aren't used.
+
+Here's an example that demonstrates that.
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_thread_safetiness_dict`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_thread_safetiness_dict.begin
+   :end-before: magictoken.ex_thread_safetiness_dict.end
+   :dedent: 4
+   :linenos:
+
+
 
 None
 ----
@@ -385,7 +404,7 @@ bytes, bytearray, memoryview
 ----------------------------
 
 The :class:`bytearray` type and, on Python 3, the :class:`bytes` type
-support indexing, iteration and retrieving the len().
+support index   ing, iteration and retrieving the len().
 
 The :class:`memoryview` type supports indexing, slicing, iteration,
 retrieving the len(), and also the following attributes:
