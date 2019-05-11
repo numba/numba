@@ -376,9 +376,10 @@ using the dictionary in interpreted code:
 Regarding the thread-safetiness of ``numba.typed.Dict``, it should be noted that
 when you compile functions containing un-atomic operations in python
 (`found here`_) with ``nogil=True`` and run it on multiple threads(>1),
-they will throw out ``Segmentation fault``. However, since the operations in
-``foo`` are un-atomic, the results obtained when compiled with ``nogil=False``
-will be inaccurate if locks aren't used.
+they will throw out ``Segmentation fault``. Although the function ``foo`` in the
+below example when compiled with ``nogil=False`` runs successfully, since the
+operations in ``foo`` are un-atomic, the results obtained will be inaccurate if
+locks aren't used.
 
 Here's an example that demonstrates that.
 
