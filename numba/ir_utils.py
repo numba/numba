@@ -1824,7 +1824,8 @@ def raise_on_unsupported_feature(func_ir, typemap):
     gdb_calls = [] # accumulate calls to gdb/gdb_init
     
     for arg_name in func_ir.arg_names:
-        if isinstance(typemap[arg_name], types.containers.UniTuple) and \
+        if arg_name in typemap and \
+           isinstance(typemap[arg_name], types.containers.UniTuple) and \
            (typemap[arg_name].count > 1000):
             raise TypingError(
                     "Tuple '{}' length must be smaller "
