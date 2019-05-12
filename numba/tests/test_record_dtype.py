@@ -812,6 +812,15 @@ class TestRecordDtype(unittest.TestCase):
         got = cfunc(arr.copy())
         np.testing.assert_equal(expect, got)
 
+    def test_record_dtype_with_titles_roundtrip(self):
+        recdtype = np.dtype([(("title a", 'a'), np.float), ('b', np.float)])
+        nbtype = numpy_support.from_dtype(recdtype)
+        self.assertTrue(nbtype.is_title('title a'))
+        self.assertFalse(nbtype.is_title('a'))
+        self.assertFalse(nbtype.is_title('b'))
+        got = numpy_support.as_dtype(nbtype)
+        self.assertTrue(got, recdtype)
+
 
 def _get_cfunc_nopython(pyfunc, argspec):
     return jit(argspec, nopython=True)(pyfunc)

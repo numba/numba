@@ -664,6 +664,13 @@ def is_pure(rhs, lives, call_table):
         return False
     return True
 
+def is_const_call(module_name, func_name):
+    # Returns True if there is no state in the given module changed by the given function.
+    if module_name == 'numpy':
+        if func_name in ['empty']:
+            return True
+    return False
+
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
@@ -1890,6 +1897,15 @@ def raise_on_unsupported_feature(func_ir, typemap):
                         "'view' can only be called on NumPy dtypes, "
                         "try wrapping the variable {}with 'np.<dtype>()'".
                         format(vardescr), loc=stmt.loc)
+
+            # checks for globals that are also reflected
+            if isinstance(stmt.value, ir.Global):
+                ty = typemap[stmt.target.name]
+                if getattr(ty, 'reflected', False):
+                    msg = ("Writing to a %s defined in globals is not "
+                           "supported as globals are considered compile-time "
+                           "constants.")
+                    raise TypingError(msg % ty, loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

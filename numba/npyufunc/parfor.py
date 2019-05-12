@@ -18,7 +18,8 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname,
                             get_call_table, is_pure, get_np_ufunc_typ,
-                            get_unused_var_name, find_potential_aliases)
+                            get_unused_var_name, find_potential_aliases,
+                            is_const_call)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
@@ -26,6 +27,7 @@ from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
+import types as pytypes
 
 import warnings
 from ..errors import ParallelSafetyWarning
@@ -493,9 +495,14 @@ def add_to_def_once_sets(a_def, def_once, def_more):
     else:
         def_once.add(a_def)
 
-def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap):
+def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns):
     '''Effect changes to the set of variables defined once or more than once
        for a single block.
+       block - the block to process
+       def_once - set of variable names known to be defined exactly once
+       def_more - set of variable names known to be defined more than once
+       getattr_taken - dict mapping variable name to tuple of object and attribute taken
+       module_assigns - dict mapping variable name to the Global that they came from
     '''
     # The only "defs" occur in assignments, so find such instructions.
     assignments = block.find_insts(ir.Assign)
@@ -507,12 +514,33 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap):
         add_to_def_once_sets(a_def, def_once, def_more)
 
         rhs = one_assign.value
+        if isinstance(rhs, ir.Global):
+            # Remember assignments of the form "a = Global(...)"
+            # Is this a module?
+            if isinstance(rhs.value, pytypes.ModuleType):
+                module_assigns[a_def] = rhs.value.__name__
         if isinstance(rhs, ir.Expr) and rhs.op == 'getattr' and rhs.value.name in def_once:
-            getattr_taken[a_def] = rhs.value.name
+            # Remember assignments of the form "a = b.c"
+            getattr_taken[a_def] = (rhs.value.name, rhs.attr)
         if isinstance(rhs, ir.Expr) and rhs.op == 'call' and rhs.func.name in getattr_taken:
-            # Calling a method on an object is like a def of that object.
-            base_obj = getattr_taken[rhs.func.name]
-            add_to_def_once_sets(base_obj, def_once, def_more)
+            # If "a" is being called then lookup the getattr definition of "a"
+            # as above, getting the module variable "b" (base_obj)
+            # and the attribute "c" (base_attr).
+            base_obj, base_attr = getattr_taken[rhs.func.name]
+            if base_obj in module_assigns:
+                # If we know the definition of the module variable then get the module
+                # name from module_assigns.
+                base_mod_name = module_assigns[base_obj]
+                if not is_const_call(base_mod_name, base_attr):
+                    # Calling a method on an object could modify the object and is thus
+                    # like a def of that object.  We call is_const_call to see if this module/attribute
+                    # combination is known to not modify the module state.  If we don't know that
+                    # the combination is safe then we have to assume there could be a modification to
+                    # the module and thus add the module variable as defined more than once.
+                    add_to_def_once_sets(base_obj, def_once, def_more)
+            else:
+                # Assume the worst and say that base_obj could be modified by the call.
+                add_to_def_once_sets(base_obj, def_once, def_more)
         if isinstance(rhs, ir.Expr) and rhs.op == 'call':
             # If a mutable object is passed to a function, then it may be changed and
             # therefore can't be hoisted.
@@ -529,7 +557,7 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap):
                     # to the def lists.
                     add_to_def_once_sets(argvar, def_once, def_more)
 
-def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap):
+def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns):
     '''Compute the set of variables defined exactly once in the given set of blocks
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
@@ -538,14 +566,14 @@ def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, type
     for label, block in loop_body.items():
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
         # based on the instructions in that block.
-        compute_def_once_block(block, def_once, def_more, getattr_taken, typemap)
+        compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns)
         # Have to recursively process parfors manually here.
         for inst in block.body:
             if isinstance(inst, parfor.Parfor):
                 # Recursively compute for the parfor's init block.
-                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken, typemap)
+                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken, typemap, module_assigns)
                 # Recursively compute for the parfor's loop body.
-                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken, typemap)
+                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
 
 def compute_def_once(loop_body, typemap):
     '''Compute the set of variables defined exactly once in the given set of blocks.
@@ -553,7 +581,8 @@ def compute_def_once(loop_body, typemap):
     def_once = set()   # set to hold variables defined exactly once
     def_more = set()   # set to hold variables defined more than once
     getattr_taken = {}
-    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap)
+    module_assigns = {}
+    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
     return def_once
 
 def find_vars(var, varset):

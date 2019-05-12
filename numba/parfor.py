@@ -19,6 +19,7 @@ import os
 import textwrap
 import copy
 import inspect
+import linecache
 from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
@@ -648,6 +649,18 @@ class ParforDiagnostics(object):
         parfors_list = []
         self._get_parfors(self.func_ir.blocks, parfors_list)
         return parfors_list
+
+    def hoisted_allocations(self):
+        allocs = []
+        for pf_id, data in self.hoist_info.items():
+            stmt = data.get('hoisted', [])
+            for inst in stmt:
+                if isinstance(inst.value, ir.Expr):
+                    if inst.value.op == 'call':
+                        call = guard(find_callname, self.func_ir, inst.value)
+                        if call is not None and call == ('empty', 'numpy'):
+                            allocs.append(inst)
+        return allocs
 
     def compute_graph_info(self, _a):
         """

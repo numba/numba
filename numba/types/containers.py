@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
-from .misc import Undefined, unliteral
+from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
 
@@ -359,6 +359,12 @@ class List(MutableSequence):
     def is_precise(self):
         return self.dtype.is_precise()
 
+    def __getitem__(self, args):
+        """
+        Overrides the default __getitem__ from Type.
+        """
+        return self.dtype
+
 
 class ListIter(BaseContainerIterator):
     """
@@ -458,6 +464,12 @@ class DictType(IterableType):
         assert not isinstance(valty, TypeRef)
         keyty = unliteral(keyty)
         valty = unliteral(valty)
+        if isinstance(keyty, (Optional, NoneType)):
+            fmt = 'Dict.key_type cannot be of type {}'
+            raise TypingError(fmt.format(keyty))
+        if isinstance(valty, (Optional, NoneType)):
+            fmt = 'Dict.value_type cannot be of type {}'
+            raise TypingError(fmt.format(valty))
         _sentry_forbidden_types(keyty, valty)
         self.key_type = keyty
         self.value_type = valty

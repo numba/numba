@@ -15,6 +15,7 @@ from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode
+from numba.extending import overload
 from .support import MemoryLeak, TestCase, captured_stdout
 
 
@@ -777,6 +778,25 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         self.assertPreciseEqual(foo(), foo.py_func())
         self.assertIs(objmode, objmode_context)
+
+    def test_objmode_in_overload(self):
+        def foo(s):
+            pass
+
+        @overload(foo)
+        def foo_overload(s):
+            def impl(s):
+                with objmode(out='intp'):
+                    out = s + 3
+                return out
+            return impl
+
+        @numba.njit
+        def f():
+            return foo(1)
+
+        self.assertEqual(f(), 1 + 3)
+
 
 class TestBogusContext(BaseTestWithLifting):
     def test_undefined_global(self):
