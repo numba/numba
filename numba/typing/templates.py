@@ -5,7 +5,7 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
-from types import MethodType
+from types import MethodType, FunctionType
 
 from .. import types, utils
 from ..errors import TypingError, InternalError
@@ -421,32 +421,87 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        cache_key = self.context, tuple(args), tuple(kws.items())
-        try:
-            disp = self._impl_cache[cache_key]
-        except KeyError:
-            # Get the overload implementation for the given types
-            pyfunc = self._overload_func(*args, **kws)
-            if pyfunc is None:
-                # No implementation => fail typing
-                self._impl_cache[cache_key] = None
-                return
-            # check that the typing and impl sigs match up
-            if self._strict:
-                self._validate_sigs(self._overload_func, pyfunc)
-            from numba import jit
-            jitdecor = jit(nopython=True, **self._jit_options)
-            disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
-        else:
-            if disp is None:
-                return
-
+        disp, args = self._get_impl(args, kws)
+        if disp is None:
+            return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
         sig = disp_type.get_call_type(self.context, args, kws)
         # Store the compiled overload for use in the lowering phase
         self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
+
+    def _get_impl(self, args, kws):
+        """Get implementation given the argument types.
+
+        Returning a Dispatcher object.  The Dispatcher object is cached
+        internally in `self._impl_cache`.
+        """
+        cache_key = self.context, tuple(args), tuple(kws.items())
+        try:
+            impl, args = self._impl_cache[cache_key]
+        except KeyError:
+            impl, args = self._build_impl(cache_key, args, kws)
+        return impl, args
+
+    def _build_impl(self, cache_key, args, kws):
+        """Build and cache the implementation.
+
+        Given the positional (`args`) and keyword arguments (`kws`), obtains
+        the `overload` implementation and wrap it in a Dispatcher object.
+        The expected argument types are returned for use by type-inference.
+        The expected argument types are only different from the given argument
+        types if there is an imprecise type in the given argument types.
+
+        Parameters
+        ----------
+        cache_key : hashable
+            The key used for caching the implementation.
+        args : Tuple[Type]
+            Types of positional argument.
+        kws : Dict[Type]
+            Types of keyword argument.
+
+        Returns
+        -------
+        disp, args :
+            On success, returns `(Dispatcher, Tuple[Type])`.
+            On failure, returns `(None, None)`.
+
+        """
+        from numba import jit
+
+        # Get the overload implementation for the given types
+        ovf_result = self._overload_func(*args, **kws)
+        if ovf_result is None:
+            # No implementation => fail typing
+            self._impl_cache[cache_key] = None, None
+            return None, None
+        elif isinstance(ovf_result, tuple):
+            # The implementation returned a signature that the type-inferencer
+            # should be using.
+            sig, pyfunc = ovf_result
+            args = sig.args
+            cache_key = None            # don't cache
+        else:
+            # Regular case
+            pyfunc = ovf_result
+
+        # Check type of pyfunc
+        if not isinstance(pyfunc, FunctionType):
+            msg = ("Implementator function returned by `@overload` "
+                   "has an unexpected type.  Got {}")
+            raise AssertionError(msg.format(pyfunc))
+
+        # check that the typing and impl sigs match up
+        if self._strict:
+            self._validate_sigs(self._overload_func, pyfunc)
+        # Make dispatcher
+        jitdecor = jit(nopython=True, **self._jit_options)
+        disp = jitdecor(pyfunc)
+        if cache_key is not None:
+            self._impl_cache[cache_key] = disp, args
+        return disp, args
 
     def get_impl_key(self, sig):
         """

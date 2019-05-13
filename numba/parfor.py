@@ -19,6 +19,7 @@ import os
 import textwrap
 import copy
 import inspect
+import linecache
 from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
@@ -651,6 +652,18 @@ class ParforDiagnostics(object):
         parfors_list = []
         self._get_parfors(self.func_ir.blocks, parfors_list)
         return parfors_list
+
+    def hoisted_allocations(self):
+        allocs = []
+        for pf_id, data in self.hoist_info.items():
+            stmt = data.get('hoisted', [])
+            for inst in stmt:
+                if isinstance(inst.value, ir.Expr):
+                    if inst.value.op == 'call':
+                        call = guard(find_callname, self.func_ir, inst.value)
+                        if call is not None and call == ('empty', 'numpy'):
+                            allocs.append(inst)
+        return allocs
 
     def compute_graph_info(self, _a):
         """
@@ -1326,7 +1339,7 @@ class PreParforPass(object):
                             if check is not None:
                                 g[check.name] = check.func
                             # inline the parallel implementation
-                            new_blocks = inline_closure_call(self.func_ir, g,
+                            new_blocks, _ = inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, typs,
                                             self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)

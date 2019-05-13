@@ -9,6 +9,7 @@ import numpy
 import types as pytypes
 import collections
 import operator
+import warnings
 
 from llvmlite import ir as lir
 
@@ -19,7 +20,8 @@ from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
-from numba.errors import TypingError, UnsupportedError
+from numba.errors import (TypingError, UnsupportedError,
+                          NumbaPendingDeprecationWarning)
 import copy
 
 _unique_var_count = 0
@@ -664,6 +666,13 @@ def is_pure(rhs, lives, call_table):
         return False
     return True
 
+def is_const_call(module_name, func_name):
+    # Returns True if there is no state in the given module changed by the given function.
+    if module_name == 'numpy':
+        if func_name in ['empty']:
+            return True
+    return False
+
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
@@ -698,6 +707,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 # only mutable types can alias
                 if is_immutable_type(lhs, typemap):
                     continue
+
                 if (typemap is None or
                     lhs not in typemap or
                     not isinstance(typemap[lhs], types.npytypes.Array)):
@@ -714,9 +724,13 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     # subarrays like A = B[0] for 2D B
                     if expr.op == 'cast' or expr.op in ['getitem', 'static_getitem']:
                         _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
-                    # array attributes like A.T
-                    elif expr.op == 'getattr' and expr.attr in ['T', 'ctypes', 'flat']:
-                        _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                    elif expr.op == 'getattr':
+                        # array attributes like A.T
+                        if expr.attr in ['T', 'ctypes', 'flat']:
+                            _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                        # a = b.c.  a should alias b
+                        elif expr.value.name in arg_aliases:
+                            _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                     # calls that can create aliases such as B = A.ravel()
                     elif expr.op == 'call':
                         fdef = guard(find_callname, func_ir, expr, typemap)
@@ -1838,7 +1852,7 @@ def find_global_value(func_ir, var):
     raise GuardException
 
 
-def raise_on_unsupported_feature(func_ir):
+def raise_on_unsupported_feature(func_ir, typemap):
     """
     Helper function to walk IR and raise if it finds op codes
     that are unsupported. Could be extended to cover IR sequences
@@ -1896,6 +1910,36 @@ def raise_on_unsupported_feature(func_ir):
                 if found:
                     gdb_calls.append(stmt.loc) # report last seen location
 
+            # this checks that np.<type> was called if view is called
+            if isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == 'getattr' and stmt.value.attr == 'view':
+                    var = stmt.value.value.name
+                    if isinstance(typemap[var], types.Array):
+                        continue
+                    df = func_ir.get_definition(var)
+                    cn = guard(find_callname, func_ir, df)
+                    if cn and cn[1] == 'numpy':
+                        ty = getattr(numpy, cn[0])
+                        if (numpy.issubdtype(ty, numpy.integer) or
+                                numpy.issubdtype(ty, numpy.floating)):
+                            continue
+
+                    vardescr = '' if var.startswith('$') else "'{}' ".format(var)
+                    raise TypingError(
+                        "'view' can only be called on NumPy dtypes, "
+                        "try wrapping the variable {}with 'np.<dtype>()'".
+                        format(vardescr), loc=stmt.loc)
+
+            # checks for globals that are also reflected
+            if isinstance(stmt.value, ir.Global):
+                ty = typemap[stmt.target.name]
+                msg = ("Writing to a %s defined in globals is not "
+                        "supported as globals are considered compile-time "
+                        "constants.")
+                if (getattr(ty, 'reflected', False) or
+                    isinstance(ty, types.DictType)):
+                    raise TypingError(msg % ty, loc=stmt.loc)
+
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
         msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "
@@ -1907,3 +1951,23 @@ def raise_on_unsupported_feature(func_ir):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
+def warn_deprecated(func_ir, typemap):
+    # first pass, just walk the type map
+    for name, ty in typemap.items():
+        # the Type Metaclass has a reflected member
+        if ty.reflected:
+            # if its an arg, report function call
+            if name.startswith('arg.'):
+                loc = func_ir.loc
+                arg = name.split('.')[1]
+                fname = func_ir.func_id.func_qualname
+                tyname = 'list' if isinstance(ty, types.List) else 'set'
+                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                       "deprecation.html#deprecation-of-reflection-for-list-and"
+                       "-set-types")
+                msg = ("\nEncountered the use of a type that is scheduled for "
+                        "deprecation: type 'reflected %s' found for argument "
+                        "'%s' of function '%s'.\n\nFor more information visit "
+                        "%s" % (tyname, arg, fname, url))
+                warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))

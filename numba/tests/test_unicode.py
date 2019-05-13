@@ -16,6 +16,9 @@ from numba.errors import TypingError
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 
+isascii = lambda s: all(ord(c) < 128 for c in s)
+
+
 def literal_usecase():
     return '大处着眼，小处着手。'
 
@@ -36,8 +39,16 @@ def getitem_usecase(x, i):
     return x[i]
 
 
+def zfill_usecase(x, y):
+    return x.zfill(y)
+
+
 def concat_usecase(x, y):
     return x + y
+
+
+def repeat_usecase(x, y):
+    return x * y
 
 
 def inplace_concat_usecase(x, y):
@@ -102,6 +113,30 @@ def join_empty_usecase(x):
     l = ['']
     l.pop()
     return x.join(l)
+
+
+def center_usecase(x, y):
+    return x.center(y)
+
+
+def center_usecase_fillchar(x, y, fillchar):
+    return x.center(y, fillchar)
+
+
+def ljust_usecase(x, y):
+    return x.ljust(y)
+
+
+def ljust_usecase_fillchar(x, y, fillchar):
+    return x.ljust(y, fillchar)
+
+
+def rjust_usecase(x, y):
+    return x.rjust(y)
+
+
+def rjust_usecase_fillchar(x, y, fillchar):
+    return x.rjust(y, fillchar)
 
 
 def iter_usecase(x):
@@ -353,6 +388,37 @@ class TestUnicode(BaseTest):
                                          cfunc(s, sl),
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
+    def test_zfill(self):
+        pyfunc = zfill_usecase
+        cfunc = njit(pyfunc)
+
+        ZFILL_INPUTS = [
+            'ascii',
+            '+ascii',
+            '-ascii',
+            '-asc ii-',
+            '12345',
+            '-12345',
+            '+12345',
+            '',
+            '¡Y tú crs?',
+            '🐍⚡',
+            '+🐍⚡',
+            '-🐍⚡',
+            '大眼，小手。',
+            '+大眼，小手。',
+            '-大眼，小手。',
+        ]
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(ZFILL_INPUTS[0], 1.1)
+        self.assertIn('<width> must be an Integer', str(raises.exception))
+
+        for s in ZFILL_INPUTS:
+            for width in range(-3, 20):
+                self.assertEqual(pyfunc(s, width),
+                                 cfunc(s, width))
+
     def test_concat(self, flags=no_pyobj_flags):
         pyfunc = concat_usecase
         cfunc = njit(pyfunc)
@@ -361,6 +427,23 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
+
+    def test_repeat(self, flags=no_pyobj_flags):
+        pyfunc = repeat_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + ['']:
+            for b in (-1, 0, 1, 2, 3, 4, 5, 7, 8, 15, 70):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b))
+                self.assertEqual(pyfunc(b, a),
+                                 cfunc(b, a))
+
+    def test_repeat_exception_float(self):
+        self.disable_leak_check()
+        cfunc = njit(repeat_usecase)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hi', 2.5)
+        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
@@ -517,6 +600,58 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
+
+    def test_justification(self):
+        for pyfunc, case_name in [(center_usecase, 'center'),
+                                  (ljust_usecase, 'ljust'),
+                                  (rjust_usecase, 'rjust')]:
+            cfunc = njit(pyfunc)
+
+            with self.assertRaises(TypingError) as raises:
+                cfunc(UNICODE_EXAMPLES[0], 1.1)
+            self.assertIn('The width must be an Integer', str(raises.exception))
+
+            for s in UNICODE_EXAMPLES:
+                for width in range(-3, 20):
+                    self.assertEqual(pyfunc(s, width),
+                                     cfunc(s, width),
+                                     "'%s'.%s(%d)?" % (s, case_name, width))
+
+    def test_justification_fillchar(self):
+        for pyfunc, case_name in [(center_usecase_fillchar, 'center'),
+                                  (ljust_usecase_fillchar, 'ljust'),
+                                  (rjust_usecase_fillchar, 'rjust')]:
+            cfunc = njit(pyfunc)
+
+            # allowed fillchar cases
+            for fillchar in [' ', '+', 'ú', '处']:
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 1.1, fillchar)
+                self.assertIn('The width must be an Integer', str(raises.exception))
+
+                for s in UNICODE_EXAMPLES:
+                    for width in range(-3, 20):
+                        self.assertEqual(pyfunc(s, width, fillchar),
+                                         cfunc(s, width, fillchar),
+                                         "'%s'.%s(%d, '%s')?" % (s, case_name, width, fillchar))
+
+    def test_justification_fillchar_exception(self):
+        self.disable_leak_check()
+
+        for pyfunc in [center_usecase_fillchar, ljust_usecase_fillchar, rjust_usecase_fillchar]:
+            cfunc = njit(pyfunc)
+
+            # disallowed fillchar cases
+            for fillchar in ['', '+0', 'quién', '处着']:
+                with self.assertRaises(ValueError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+                self.assertIn('The fill character must be exactly one', str(raises.exception))
+
+            # forbid fillchar cases with different types
+            for fillchar in [1, 1.1]:
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
+                self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
@@ -701,6 +836,53 @@ class TestUnicodeInTuple(BaseTest):
             return ('aa', 1) < ('aa', 2)
 
         self.assertEqual(f.py_func(), f())
+
+    def test_ascii_flag_unbox(self):
+        @njit
+        def f(s):
+            return s._is_ascii
+
+        for s in UNICODE_EXAMPLES:
+            self.assertEqual(f(s), isascii(s))
+
+    def test_ascii_flag_join(self):
+        @njit
+        def f():
+            s1 = 'abc'
+            s2 = '123'
+            s3 = '🐍⚡'
+            s4 = '大处着眼，小处着手。'
+            return (",".join([s1, s2])._is_ascii,
+                    "🐍⚡".join([s1, s2])._is_ascii,
+                    ",".join([s1, s3])._is_ascii,
+                    ",".join([s3, s4])._is_ascii)
+
+        self.assertEqual(f(), (1, 0, 0, 0))
+
+    def test_ascii_flag_getitem(self):
+        @njit
+        def f():
+            s1 = 'abc123'
+            s2 = '🐍⚡🐍⚡🐍⚡'
+            return (s1[0]._is_ascii, s1[2:]._is_ascii, s2[0]._is_ascii,
+                    s2[2:]._is_ascii)
+
+        self.assertEqual(f(), (1, 1, 0, 0))
+
+    def test_ascii_flag_add_mul(self):
+        @njit
+        def f():
+            s1 = 'abc'
+            s2 = '123'
+            s3 = '🐍⚡'
+            s4 = '大处着眼，小处着手。'
+            return ((s1 + s2)._is_ascii,
+                    (s1 + s3)._is_ascii,
+                    (s3 + s4)._is_ascii,
+                    (s1 * 2)._is_ascii,
+                    (s3 * 2)._is_ascii)
+
+        self.assertEqual(f(), (1, 0, 0, 1, 0))
 
 
 @unittest.skipUnless(_py34_or_later,

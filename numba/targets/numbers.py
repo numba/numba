@@ -14,7 +14,9 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
-from .. import typing, types, cgutils, utils
+from .. import typing, types, cgutils, utils, errors
+from ..extending import intrinsic, overload_method
+from ..unsafe.numbers import viewer
 
 
 def _int_arith_flags(rettype):
@@ -1352,3 +1354,24 @@ def constant_complex(context, builder, ty, pyval):
 def constant_integer(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
+
+
+#-------------------------------------------------------------------------------
+# View
+
+def scalar_view(scalar, viewty):
+    """ Typing for the np scalar 'view' method. """
+    if (isinstance(scalar, (types.Float, types.Integer))
+            and isinstance(viewty, types.abstract.DTypeSpec)):
+        if scalar.bitwidth != viewty.dtype.bitwidth:
+            raise errors.TypingError(
+                "Changing the dtype of a 0d array is only supported if the "
+                "itemsize is unchanged")
+
+        def impl(scalar, viewty):
+            return viewer(scalar, viewty)
+        return impl
+
+
+overload_method(types.Float, 'view')(scalar_view)
+overload_method(types.Integer, 'view')(scalar_view)

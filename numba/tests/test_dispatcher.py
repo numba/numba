@@ -1132,9 +1132,8 @@ class TestCache(BaseCacheUsecasesTest):
             self.check_pycache(0)
 
         self.assertEqual(len(w), 1)
-        self.assertEqual(str(w[0].message),
-                         'Cannot cache compiled function "looplifted" '
-                         'as it uses lifted loops')
+        self.assertIn('Cannot cache compiled function "looplifted" '
+                      'as it uses lifted loops', str(w[0].message))
 
     def test_big_array(self):
         # Code references big array globals cannot be cached

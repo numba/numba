@@ -95,6 +95,13 @@ def identity(tup):
 def index_method_usecase(tup, value):
     return tup.index(value)
 
+def tuple_unpack_static_getitem_err():
+    # see issue3895, `c` is imprecise
+    a, b, c, d = [], [], [], 0.0
+    a.append(1)
+    b.append(1)
+    return
+
 
 class TestTupleReturn(TestCase):
 
@@ -222,6 +229,15 @@ class TestOperations(TestCase):
         typ = types.UniTuple(types.int64, 1)
         with self.assertTypingError():
             cr = compile_isolated(pyfunc, (typ,))
+
+        # test unpack, staticgetitem with imprecise type (issue #3895)
+        pyfunc = tuple_unpack_static_getitem_err
+        with self.assertTypingError() as raises:
+            cr = compile_isolated(pyfunc, ())
+        msg = ("Cannot infer the type of variable 'c', have imprecise type: "
+               "list(undefined).")
+        self.assertIn(msg, str(raises.exception))
+
 
     def test_in(self):
         pyfunc = in_usecase

@@ -10,7 +10,7 @@ from itertools import product
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, numpy_support, types
+from numba import numpy_support, types
 from .support import TestCase, tag
 from .enum_usecases import Shake, RequestError
 
@@ -121,20 +121,20 @@ class TestFromDtype(TestCase):
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)])
         check(dtype,
-              fields={'a': (types.int16, 0),
-                      'b': (types.int32, 2)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 2, None, None)},
               size=6, aligned=False)
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)], align=True)
         check(dtype,
-              fields={'a': (types.int16, 0),
-                      'b': (types.int32, 4)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 4, None, None)},
               size=8, aligned=True)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
         check(dtype,
-              fields={'m': (types.int32, 0),
-                      'n': (types.CharSeq(5), 4)},
+              fields={'m': (types.int32, 0, None, None),
+                      'n': (types.CharSeq(5), 4, None, None)},
               size=9, aligned=False)
 
     @tag('important')
@@ -187,7 +187,8 @@ class ValueTypingTestBase(object):
         f = func
         for unit in [
             '', 'Y', 'M', 'D', 'h', 'm', 's',
-            'ms', 'us', 'ns', 'ps', 'fs', 'as']:
+            'ms', 'us', 'ns', 'ps', 'fs', 'as',
+        ]:
             if unit:
                 t = np_type(3, unit)
             else:
@@ -257,6 +258,7 @@ class FakeUFunc(object):
             in_, out = self.types[0].split('->')
             assert len(in_) == self.nin
             assert len(out) == self.nout
+
 
 # Typical types for np.add, np.multiply, np.isnan
 _add_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',

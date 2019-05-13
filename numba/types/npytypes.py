@@ -44,7 +44,10 @@ class UnicodeCharSeq(Type):
         return self.count
 
 
-_RecordField = collections.namedtuple('_RecordField', 'type,offset')
+_RecordField = collections.namedtuple(
+    '_RecordField',
+    'type,offset,alignment,title',
+)
 
 
 class Record(Type):
@@ -84,8 +87,10 @@ class Record(Type):
             # align
             misaligned = offset % align
             if misaligned:
-                offset += size - misaligned
-            fields.append((k, {'type': ty, 'offset': offset}))
+                offset += align - misaligned
+            fields.append((k, {
+                'type': ty, 'offset': offset, 'alignment': align,
+            }))
             offset += size
         # Adjust sizeof structure
         abi_size = ctx.get_abi_sizeof(ir.LiteralStructType(lltypes))
@@ -99,9 +104,14 @@ class Record(Type):
 
         # Create description
         descbuf = []
-        fmt = "{}[type={};offset={}]"
+        fmt = "{}[type={};offset={}{}]"
         for k, infos in fields:
-            descbuf.append(fmt.format(k, infos.type, infos.offset))
+            extra = ""
+            if infos.alignment is not None:
+                extra += ';alignment={}'.format(infos.alignment)
+            elif infos.title is not None:
+                extra += ';title={}'.format(infos.title)
+            descbuf.append(fmt.format(k, infos.type, infos.offset, extra))
 
         desc = ','.join(descbuf)
         name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
@@ -111,11 +121,22 @@ class Record(Type):
     def _normalize_fields(cls, fields):
         """
         fields:
-            [name: str, { type: Type, offset: int }]
+            [name: str,
+             value: {
+                 type: Type,
+                 offset: int,
+                 [ alignment: int ],
+                 [ title : str],
+             }]
         """
         res = []
         for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
-            fd = _RecordField(type=infos['type'], offset=infos['offset'])
+            fd = _RecordField(
+                type=infos['type'],
+                offset=infos['offset'],
+                alignment=infos.get('alignment'),
+                title=infos.get('title'),
+            )
             res.append((name, fd))
         return res
 
@@ -143,6 +164,23 @@ class Record(Type):
         """Get the type of a field.
         """
         return self.fields[key].type
+
+    def alignof(self, key):
+        """Get the specified alignment of the field.
+
+        Since field alignment is optional, this may return None.
+        """
+        return self.fields[key].alignment
+
+    def has_titles(self):
+        """Returns True the record uses titles.
+        """
+        return any(fd.title is not None for fd in self.fields.values())
+
+    def is_title(self, key):
+        """Returns True if the field named *key* is a title.
+        """
+        return self.fields[key].title == key
 
     @property
     def members(self):

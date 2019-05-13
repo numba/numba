@@ -16,6 +16,7 @@ from numba.targets import registry
 from numba.targets.imputils import lower_builtin
 from numba.extending import register_jitable
 from numba.six import exec_
+import numba
 
 import operator
 
@@ -45,6 +46,12 @@ def raise_if_incompatible_array_sizes(a, *args):
                 raise ValueError("Secondary stencil array has some dimension "
                                  "smaller the same dimension in the first "
                                  "stencil input.")
+
+def slice_addition(the_slice, addend):
+    """ Called by stencil in Python mode to add the loop index to a
+        user-specified slice.
+    """
+    return slice(the_slice.start + addend, the_slice.stop + addend)
 
 class StencilFunc(object):
     """
@@ -115,7 +122,7 @@ class StencilFunc(object):
         return ret_blocks
 
     def add_indices_to_kernel(self, kernel, index_names, ndim,
-                              neighborhood, standard_indexed):
+                              neighborhood, standard_indexed, typemap, calltypes):
         """
         Transforms the stencil kernel as specified by the user into one
         that includes each dimension's index variable as part of the getitem
@@ -196,12 +203,30 @@ class StencilFunc(object):
                         index_var = ir.Var(scope, index_names[0], loc)
                         tmpname = ir_utils.mk_unique_var("stencil_index")
                         tmpvar  = ir.Var(scope, tmpname, loc)
-                        acc_call = ir.Expr.binop(operator.add, stmt_index_var,
-                                                 index_var, loc)
-                        new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                        new_body.append(ir.Assign(
-                                       ir.Expr.getitem(stmt.value.value,tmpvar,loc),
-                                       stmt.target,loc))
+                        stmt_index_var_typ = typemap[stmt_index_var.name]
+                        # If the array is indexed with a slice then we
+                        # have to add the index value with a call to
+                        # slice_addition.
+                        if isinstance(stmt_index_var_typ, types.misc.SliceType):
+                            sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                            sa_func = numba.njit(slice_addition)
+                            sa_func_typ = types.functions.Dispatcher(sa_func)
+                            typemap[sa_var.name] = sa_func_typ
+                            g_sa = ir.Global("slice_addition", sa_func, loc)
+                            new_body.append(ir.Assign(g_sa, sa_var, loc))
+                            slice_addition_call = ir.Expr.call(sa_var, [stmt_index_var, index_var], (), loc)
+                            calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [stmt_index_var_typ, types.intp], {})
+                            new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
+                            new_body.append(ir.Assign(
+                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
+                                           stmt.target, loc))
+                        else:
+                            acc_call = ir.Expr.binop(operator.add, stmt_index_var,
+                                                     index_var, loc)
+                            new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                            new_body.append(ir.Assign(
+                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
+                                           stmt.target, loc))
                     else:
                         index_vars = []
                         sum_results = []
@@ -210,6 +235,7 @@ class StencilFunc(object):
                         const_index_vars = []
                         ind_stencils = []
 
+                        stmt_index_var_typ = typemap[stmt_index_var.name]
                         # Same idea as above but you have to extract
                         # individual elements out of the tuple indexing
                         # expression and add the corresponding index variable
@@ -232,9 +258,25 @@ class StencilFunc(object):
                             getitemcall = ir.Expr.getitem(stmt_index_var,
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                            acc_call = ir.Expr.binop(operator.add, getitemvar,
-                                                     index_vars[dim], loc)
-                            new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                            # Get the type of this particular part of the index tuple.
+                            one_index_typ = stmt_index_var_typ[dim]
+                            # If the array is indexed with a slice then we
+                            # have to add the index value with a call to
+                            # slice_addition.
+                            if isinstance(one_index_typ, types.misc.SliceType):
+                                sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                                sa_func = numba.njit(slice_addition)
+                                sa_func_typ = types.functions.Dispatcher(sa_func)
+                                typemap[sa_var.name] = sa_func_typ
+                                g_sa = ir.Global("slice_addition", sa_func, loc)
+                                new_body.append(ir.Assign(g_sa, sa_var, loc))
+                                slice_addition_call = ir.Expr.call(sa_var, [getitemvar, index_vars[dim]], (), loc)
+                                calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [one_index_typ, types.intp], {})
+                                new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
+                            else:
+                                acc_call = ir.Expr.binop(operator.add, getitemvar,
+                                                         index_vars[dim], loc)
+                                new_body.append(ir.Assign(acc_call, tmpvar, loc))
 
                         tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
@@ -478,7 +520,7 @@ class StencilFunc(object):
         # arrays.
         kernel_size, relatively_indexed = self.add_indices_to_kernel(
                 kernel_copy, index_vars, the_array.ndim,
-                self.neighborhood, standard_indexed)
+                self.neighborhood, standard_indexed, typemap, copy_calltypes)
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 

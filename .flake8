@@ -40,7 +40,6 @@ exclude =
     numba/parfor.py
     numba/numba_entry.py
     numba/stencilparfor.py
-    numba/numpy_support.py
     numba/ir.py
     numba/itanium_mangler.py
     numba/unittest_support.py
@@ -104,7 +103,6 @@ exclude =
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
     numba/targets/iterators.py
-    numba/targets/arrayobj.py
     numba/targets/codegen.py
     numba/targets/polynomial.py
     numba/targets/mergesort.py
@@ -232,7 +230,6 @@ exclude =
     numba/tests/test_debug.py
     numba/tests/test_interproc.py
     numba/tests/test_typeconv.py
-    numba/tests/test_np_functions.py
     numba/tests/test_tracing.py
     numba/tests/usecases.py
     numba/tests/test_vectorization_type_inference.py
@@ -252,7 +249,6 @@ exclude =
     numba/tests/cffi_usecases.py
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
-    numba/tests/test_numpy_support.py
     numba/tests/compile_with_pycc.py
     numba/tests/test_ir.py
     numba/tests/test_deprecations.py
@@ -323,7 +319,6 @@ exclude =
     numba/tests/test_hashing.py
     numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_closure.py
     numba/tests/test_dispatcher.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
@@ -339,7 +334,6 @@ exclude =
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
-    numba/tests/test_record_dtype.py
     numba/tests/test_types.py
     numba/tests/test_random.py
     numba/tests/test_nan.py
@@ -360,7 +354,6 @@ exclude =
     numba/typing/setdecl.py
     numba/typing/npydecl.py
     numba/typing/arraydecl.py
-    numba/typing/context.py
     numba/typing/collections.py
     numba/typing/ctypes_utils.py
     numba/typing/enumdecl.py
