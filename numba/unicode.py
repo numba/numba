@@ -720,6 +720,7 @@ def unicode_strip_right_bound(string, chars):
 
 
 def unicode_strip_types_check(chars):
+    chars = chars.type if isinstance(chars, types.Optional) else chars
     if not (chars is None or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))):
         raise TypingError('The arg must be a UnicodeType or None')
 
