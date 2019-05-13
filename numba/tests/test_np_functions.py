@@ -2765,51 +2765,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
 
-    def test_bartlett(self):
-        np_pyfunc = np_bartlett
-        np_nbfunc = njit(np_bartlett)
+    def test_windowing(self):
+        def check_window(func):
+            np_pyfunc = func
+            np_nbfunc = njit(func)
 
-        for M in [0, 1, 12]:
-            expected = np_pyfunc(M)
-            got = np_nbfunc(M)
-            self.assertPreciseEqual(expected, got)
+            for M in [0, 1, 5, 12]:
+                expected = np_pyfunc(M)
+                got = np_nbfunc(M)
+                self.assertPreciseEqual(expected, got)
 
-    def test_blackman(self):
-        np_pyfunc = np_blackman
-        np_nbfunc = njit(np_blackman)
+            with self.assertRaises(TypingError):
+                for M in [-1.1, 0.0, 1.1]:
+                    np_nbfunc(M)
 
-        for M in [0, 1, 12]:
-            expected = np_pyfunc(M)
-            got = np_nbfunc(M)
-            self.assertPreciseEqual(expected, got)
+        check_window(np_bartlett)
+        check_window(np_blackman)
+        check_window(np_hamming)
+        check_window(np_hanning)
 
-    def test_hamming(self):
-        np_pyfunc = np_hamming
-        np_nbfunc = njit(np_hamming)
-
-        for M in [0, 1, 12]:
-            expected = np_pyfunc(M)
-            got = np_nbfunc(M)
-            self.assertPreciseEqual(expected, got)
-
-    def test_hanning(self):
-        np_pyfunc = np_hanning
-        np_nbfunc = njit(np_hanning)
-
-        for M in [0, 1, 12]:
-            expected = np_pyfunc(M)
-            got = np_nbfunc(M)
-            self.assertPreciseEqual(expected, got)
-
-    def test_kaiser(self):
+        # Test np.kaiser separately
         np_pyfunc = np_kaiser
         np_nbfunc = njit(np_kaiser)
 
-        for M in [0, 1, 12]:
+        for M in [0, 1, 5, 12]:
             for beta in [0.0, 5.0, 14.0]:
                 expected = np_pyfunc(M, beta)
                 got = np_nbfunc(M, beta)
                 self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError):
+            for M in [-1.1, 0.0, 1.1]:
+                for beta in [0.0, 5.0, 14.0]:
+                    np_nbfunc(M, beta)
 
 
 class TestNPMachineParameters(TestCase):

@@ -3475,65 +3475,57 @@ def np_extract(condition, arr):
 
 #----------------------------------------------------------------------------
 # Windowing functions
+#   - translated from the numpy implementations found in:
+#   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233
+#   at commit: f1c4c758e1c24881560dd8ab1e64ae750
 
-@overload(np.bartlett)
-def np_bartlett(M):
-
-    def np_bartlett_impl(M):
-        if M < 1:
-            tmp = [np.float_(x) for x in range(0)]
-            return np.array(tmp, dtype=np.float_)
-        if M == 1:
-            return np.ones(1, dtype=np.float_)
-        n = np.arange(0, M)
-        return np.where(np.less_equal(n, (M-1)/2.0), 2.0*n/(M-1), 2.0 - 2.0*n/(M-1))
-
-    return np_bartlett_impl
+@register_jitable
+def np_bartlett_impl(M):
+    n = np.arange(M)
+    return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
+            2.0 - 2.0 * n / (M - 1))
 
 
-@overload(np.blackman)
-def np_blackman(M):
-
-    def np_blackman_impl(M):
-        if M < 1:
-            tmp = [np.float_(x) for x in range(0)]
-            return np.array(tmp, dtype=np.float_)
-        if M == 1:
-            return np.ones(1, dtype=np.float_)
-        n = np.arange(0, M)
-        return 0.42 - 0.5*np.cos(2.0*np.pi*n/(M-1)) + 0.08*np.cos(4.0*np.pi*n/(M-1))
-
-    return np_blackman_impl
+@register_jitable
+def np_blackman_impl(M):
+    n = np.arange(M)
+    return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
+            0.08 * np.cos(4.0* np.pi * n / (M - 1)))
 
 
-@overload(np.hamming)
-def np_hamming(M):
-
-    def np_hamming_impl(M):
-        if M < 1:
-            tmp = [np.float_(x) for x in range(0)]
-            return np.array(tmp, dtype=np.float_)
-        if M == 1:
-            return np.ones(1, dtype=np.float_)
-        n = np.arange(0, M)
-        return 0.54 - 0.46*np.cos(2.0*np.pi*n/(M-1))
-
-    return np_hamming_impl
+@register_jitable
+def np_hamming_impl(M):
+    n = np.arange(M)
+    return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
 
 
-@overload(np.hanning)
-def np_hanning(M):
+@register_jitable
+def np_hanning_impl(M):
+    n = np.arange(M)
+    return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
 
-    def np_hanning_impl(M):
-        if M < 1:
-            tmp = [np.float_(x) for x in range(0)]
-            return np.array(tmp, dtype=np.float_)
-        if M == 1:
-            return np.ones(1, dtype=np.float_)
-        n = np.arange(0, M)
-        return 0.5 - 0.5*np.cos(2.0*np.pi*n/(M-1))
 
-    return np_hanning_impl
+def window_generator(func):
+    def window_overload(M):
+        if not isinstance(M, types.Integer):
+            raise TypingError('M must be an integer')
+
+        def window_impl(M):
+
+            if M < 1:
+                return np.array((), dtype=np.float_)
+            if M == 1:
+                return np.ones(1, dtype=np.float_)
+            return func(M)
+
+        return window_impl
+    return window_overload
+
+overload(np.bartlett)(window_generator(np_bartlett_impl))
+overload(np.blackman)(window_generator(np_blackman_impl))
+overload(np.hamming)(window_generator(np_hamming_impl))
+overload(np.hanning)(window_generator(np_hanning_impl))
+
 
 _i0A = np.array([
     -4.41534164647933937950E-18,
@@ -3625,18 +3617,39 @@ def _i0n(n, alpha, beta):
     y = np.empty_like(n, dtype=np.float_)
     t = _i0(float(beta))
     for i in range(len(y)):
-        y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha)/alpha)**2.0)) / t
+        y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
     return y
+
+@lower_builtin(np.i0, types.Array)
+def array_i0(context, builder, sig, args):
+    def array_i0_impl(arr):
+        out = np.zeros_like(arr)
+        for index, val in np.ndenumerate(arr):
+            out[index] = _i0(val)
+        return out
+    res = context.compile_internal(builder, array_i0_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@lower_builtin(np.i0, types.Number)
+def scalar_i0(context, builder, sig, args):
+    scalar_dtype = sig.return_type
+    def scalar_i0_impl(val):
+        out = np.zeros((1,), dtype=scalar_dtype)
+        out[0] = _i0(val)
+        return out
+    res = context.compile_internal(builder, scalar_i0_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @overload(np.kaiser)
 def np_kaiser(M, beta):
+    if not isinstance(M, types.Integer):
+        raise TypingError('M must be an integer')
 
     def np_kaiser_impl(M, beta):
         if M < 1:
-            tmp = [np.float_(x) for x in range(0)]
-            return np.array(tmp, dtype=np.float_)
+            return np.array((), dtype=np.float_)
         if M == 1:
             return np.ones(1, dtype=np.float_)
 
