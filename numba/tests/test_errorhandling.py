@@ -42,6 +42,21 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
                 "<creating a function from a closure>"
             self.assertIn(expected, str(raises.exception))
 
+class TestTupleLengthError(unittest.TestCase):
+
+    def test_tuple_length_error(self):
+        # issue 2195
+        # raise an error on tuples greater than 1000
+        @njit
+        def eattuple(tup):
+            return len(tup);
+
+        with self.assertRaises(errors.TypingError) as raises:
+            tup = tuple(range(1001))
+            eattuple(tup)
+
+        expected = "Tuple 'tup' length must be smaller than 1000"
+        self.assertIn(expected, str(raises.exception))
 
 class TestUnsupportedReporting(unittest.TestCase):
 
