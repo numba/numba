@@ -2684,17 +2684,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_select(self):
         x = np.arange(10)
-        condlist = (x < 3, x > 5)
-        choicelist = (x, x ** 2)
-
-
         np_pyfunc = np_select
         np_nbfunc = njit(np_select)
-
-
         for condlist,  choicelist, default in [
-            #each test case below is one tuple. Each tuple is separated by
-            #a blank line
+            # Each test case below is one tuple.
+            # Each tuple is separated by a blank line
             ([x < 3, x > 5], [x, x ** 2],0),
 
             ((x < 3, x > 5), (x, x ** 2), 0),
@@ -2706,7 +2700,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
               np.array([4, 5, 6]),
               np.array([7, 8, 9])],15),
 
-            ([np.array([True]), np.array([False])], [np.array([1]), np.array([2])], 0),
+            ([np.array([True]),
+              np.array([False])], [np.array([1]), np.array([2])], 0),
 
             ([np.array([False])] * 100, [np.array([1])] * 100, 0)
         ]:
@@ -2714,42 +2709,45 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                     np_nbfunc(condlist, choicelist, default))
 
 
-
     def test_select_exception(self):
+        np_nbfunc = njit(np_select)
+        x = np.arange(10)
+        for condlist, choicelist, default, expected_error, expected_text in [
+            # Each test case below is one tuple.
+            # Each tuple is separated by a blank line
+            ([np.array([True]), np.array([False, True, False])],
+             [np.array([1]), np.arange(12).reshape(4, 3)], 0, TypeError,
+             "can't unbox heterogeneous list"),
 
-        # ([np.array(True), np.array([False, True, False])],
-        #  [np.array(1), np.arange(12).reshape(4, 3)], 0),
+            ([np.array(True), np.array([False, True, False])],
+             [np.array(1), np.arange(12).reshape(4, 3)], 0,
+             TypingError, "condlist and choicelist elements must be arrays "
+                          "of at least dimension 1"),
 
-        ([np.array(True), np.array(False)], [np.array([1]), np.array([2])], 0)
-        ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0)
-        (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])), np.array([1, 2, 3, np.nan, 5, 7]), 0)
+            ([np.array(True), np.array(False)], [np.array([1]), np.array([2])],
+             0, TypingError, "condlist and choicelist elements must have the "
+                             "same number of dimensions"),
 
-        ([True], [0], [0]),
+            ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0,
+                         TypingError, "condlist and choicelist elements must be arrays "
+                                      "of at least dimension 1"),
 
+            (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
+             np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
+             "Invalid use of Function(<function select"),
 
-        def test_deprecated_empty(self):
-            with warnings.catch_warnings(record=True):
-                warnings.simplefilter("always")
-                assert_equal(select([], [], 3j), 3j)
+            ([True], [0], [0], TypingError,
+             "Invalid use of Function(<function select"),
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("always")
-                assert_warns(DeprecationWarning, select, [], [])
-                warnings.simplefilter("error")
-                assert_raises(DeprecationWarning, select, [], [])
+            ([], [], 0, ValueError,
+             "empty list"),
 
-        def test_non_bool_deprecation(self):
-            choices = self.choices
-            conditions = self.conditions[:]
-            with warnings.catch_warnings():
-                warnings.filterwarnings("always")
-                conditions[0] = conditions[0].astype(np.int_)
-                assert_warns(DeprecationWarning, select, conditions, choices)
-                conditions[0] = conditions[0].astype(np.uint8)
-                assert_warns(DeprecationWarning, select, conditions, choices)
-                warnings.filterwarnings("error")
-                assert_raises(DeprecationWarning, select, conditions, choices)
-
+            ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0, TypingError,
+             "Invalid use of Function(<function select"),
+        ]:
+            with self.assertRaises(expected_error) as e:
+                np_nbfunc(condlist, choicelist, default)
+            self.assertIn(expected_text, str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

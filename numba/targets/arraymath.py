@@ -3425,55 +3425,10 @@ def np_extract(condition, arr):
     return np_extract_impl
 
 
-# from .arrayobj import _broadcast_to_shape
-
-
-# def np_select_impl(condlist, choicelist, default=0):
-#     return 1
-#     ### how to handle defaul???
-#     # choicelist.append(np.asarray(default))
-#
-#     # Check the size of condlist and choicelist are the same, or abort.
-#     if len(condlist) != len(choicelist):
-#         raise ValueError('list of cases must be same length as list of conditions')
-#
-#     # handle the deprecated select([], []) case
-#     if len(condlist) == 0:
-#         raise ValueError('select with an empty condition list is not possible')
-#
-#     # need to get the result type before broadcasting for correct scalar
-#     # behaviour
-#     dtype = choicelist[0].dtype
-#
-#     # Convert conditions to arrays and broadcast conditions and choices
-#     # as the shape is needed for the result. Doing it separately optimizes
-#     # for example when all choices are scalars.
-#     condlist = np.broadcast_arrays(*condlist)
-#     choicelist = np.broadcast_arrays(*choicelist)
-#
-#     if choicelist[0].ndim == 0:
-#         # This may be common, so avoid the call.
-#         result_shape = condlist[0].shape
-#     else:
-#         result_shape = np.broadcast_arrays(condlist[0], choicelist[0])[0].shape
-#
-#     result = np.full(result_shape, np.asarray(default), dtype)
-#
-#     # Use np.copyto to burn each choicelist array onto result, using the
-#     # corresponding condlist as a boolean mask. This is done in reverse
-#     # order since the first choice should take precedence.
-#     choicelist = choicelist[-1::-1]
-#     condlist = condlist[::-1]
-#     for choice, cond in zip(choicelist, condlist):
-#         np.copyto(result, choice, where=cond)
-#
-#     return result
-
 @overload(np.select)
 def np_select(condlist, choicelist, default=0):
 
     def np_select_impl(condlist, choicelist, default=0):
-        #alternatively, _broadcast_to_shape could be used
         out = default * np.ones(choicelist[0].shape, choicelist[0].dtype)
         #should use reversed+zip, but reversed is not available
         for i in range(len(condlist) - 1, -1, -1):
@@ -3482,7 +3437,6 @@ def np_select(condlist, choicelist, default=0):
             out = np.where(cond, choice, out)
         return out
 
-    # print(type(default), type(condlist), type(choicelist), choicelist.dtype ,  type(condlist[0]),condlist[0].ndim, '/', (condlist[0].dtype))
     if ((isinstance(condlist, (types.List, types.UniTuple)))
         and (isinstance(choicelist, (types.List, types.UniTuple)))
         and isinstance(condlist[0], types.Array)
