@@ -17,7 +17,7 @@ from llvmlite.llvmpy.core import Constant, Type
 
 from numba import types, cgutils, typing, generated_jit
 from numba.extending import overload, overload_method, register_jitable
-from numba.numpy_support import as_dtype
+from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
@@ -3422,6 +3422,12 @@ def _is_nonelike(ty):
 
 @overload(np.asarray)
 def np_asarray(a, dtype=None):
+
+    # developer note... keep this function (type_can_asarray) in sync with the
+    # accepted types implementations below!
+    if not type_can_asarray(a):
+        return None
+
     impl = None
     if isinstance(a, types.Array):
         if _is_nonelike(dtype) or a.dtype == dtype.dtype:

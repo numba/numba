@@ -594,3 +594,10 @@ def is_fortran(dims, strides, itemsize):
             return False
         ax += 1
     return True
+
+def type_can_asarray(arr):
+    """ Returns True if the type of 'arr' is supported by the Numba `np.asarray`
+    implementation, False otherwise.
+    """
+    ok = (types.Array, types.Sequence, types.Tuple, types.Number, types.Boolean)
+    return isinstance(arr, ok)

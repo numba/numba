@@ -19,6 +19,7 @@ from numba import types, cgutils, typing, utils, extending, pndindex, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import type_can_asarray
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
@@ -1830,6 +1831,18 @@ def _change_dtype(context, builder, oldty, newty, ary):
     update_array_info(newty, ary)
     res = impl_ret_borrowed(context, builder, sig.return_type, res)
     return res
+
+
+@overload(np.shape)
+def np_shape(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.shape must be array-like")
+
+    def impl(a):
+        return np.asarray(a).shape
+    return impl
+
+#-------------------------------------------------------------------------------
 
 
 @overload(np.unique)
@@ -3693,6 +3706,7 @@ def numpy_arange_3(context, builder, sig, args):
 
     res = context.compile_internal(builder, arange, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.arange, types.Number, types.Number,
                types.Number, types.DTypeSpec)
