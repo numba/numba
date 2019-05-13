@@ -30,7 +30,7 @@ from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
 
 import warnings
-from ..errors import ParallelSafetyWarning
+from ..errors import NumbaParallelSafetyWarning
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -757,12 +757,10 @@ def _create_gufunc_for_parfor_body(
 
     races = races.difference(set(parfor_redvars))
     for race in races:
-        warnings.warn_explicit("Variable %s used in parallel loop may be written "
-                      "to simultaneously by multiple workers and may result "
-                      "in non-deterministic or unintended results." % race,
-                      ParallelSafetyWarning,
-                      loc.filename,
-                      loc.line)
+        msg = ("Variable %s used in parallel loop may be written "
+               "to simultaneously by multiple workers and may result "
+               "in non-deterministic or unintended results." % race)
+        warnings.warn(NumbaParallelSafetyWarning(msg, loc))
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     if config.DEBUG_ARRAY_OPT == 1:

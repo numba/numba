@@ -143,8 +143,8 @@ creating an array in constant memory is through the use of:
    Allocate and make accessible an array in constant memory based on array-like
    *arr*.
 
-SmartArrays (experimental)
-==========================
+SmartArrays (deprecated since version 0.44)
+===========================================
 
 Numba provides an Array-like data type that manages data movement to
 and from the device automatically. It can be used as drop-in replacement for
@@ -166,7 +166,8 @@ the data on the device and merely updates the host-side if there are any externa
 references to that.
 Thus, if the next operation is another invocation of a cuda.jit-compiled function,
 the data does not need to be transferred again, making the compound operation more
-efficient (and making the use of the GPU advantagous even for smaller data sizes).
+efficient (and making the use of the GPU advantageous even for smaller data
+sizes).
 
 Deallocation Behavior
 =====================

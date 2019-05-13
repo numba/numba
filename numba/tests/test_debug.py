@@ -14,7 +14,7 @@ from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
 from numba.targets.cpu import ParallelOptions
-from numba.errors import NumbaWarning
+from numba.errors import NumbaPerformanceWarning
 from numba import compiler, prange
 from .test_parfors import skip_unsupported
 from .matmul_usecase import needs_blas
@@ -229,8 +229,8 @@ class TestParforsDebug(TestCase):
     _numba_parallel_test_ = False
 
     def check_parfors_warning(self, warn_list):
-        msg = ("parallel=True was specified but no transformation for parallel"
-               " execution was possible.")
+        msg = ("'parallel=True' was specified but no transformation for "
+               "parallel execution was possible.")
         warning_found = False
         for w in warn_list:
             if msg in str(w.message):
@@ -243,15 +243,14 @@ class TestParforsDebug(TestCase):
     def test_warns(self):
         """
         Test that using parallel=True on a function that does not have parallel
-        semantics warns if NUMBA_WARNINGS is set.
+        semantics warns.
         """
-        with override_env_config('NUMBA_WARNINGS', '1'):
-            arr_ty = types.Array(types.float64, 2, "C")
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always", NumbaWarning)
-                cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
-                                        flags=force_parallel_flags)
-            self.check_parfors_warning(w)
+        arr_ty = types.Array(types.float64, 2, "C")
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", NumbaPerformanceWarning)
+            cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
+                                    flags=force_parallel_flags)
+        self.check_parfors_warning(w)
 
     @skip_unsupported
     def test_array_debug_opt_stats(self):
