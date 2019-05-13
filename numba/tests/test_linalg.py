@@ -69,10 +69,10 @@ class TestProduct(TestCase):
         Check performance warning(s) for non-contiguity.
         """
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', errors.PerformanceWarning)
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
             yield
         self.assertGreaterEqual(len(w), 1)
-        self.assertIs(w[0].category, errors.PerformanceWarning)
+        self.assertIs(w[0].category, errors.NumbaPerformanceWarning)
         self.assertIn("faster on contiguous arrays", str(w[0].message))
         self.assertEqual(w[0].filename, pyfunc.__code__.co_filename)
         # This works because our functions are one-liners
