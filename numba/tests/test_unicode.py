@@ -91,8 +91,10 @@ def endswith_usecase(x, y):
 def split_usecase(x, y):
     return x.split(y)
 
+
 def lower_usecase(x):
     return x.lower()
+
 
 def split_with_maxsplit_usecase(x, y, maxsplit):
     return x.split(y, maxsplit)
