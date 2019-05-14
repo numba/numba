@@ -32,11 +32,24 @@ from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi, _extras
-from numba import config, serialize
+from numba import config, serialize, errors
 from numba.utils import longint as long
 
+def get_numbapro_envvar(envvar, default=None):
+    # use vanilla get here so as to use `None` as a signal for not-set
+    value = os.environ.get(envvar)
+    if value is not None:
+        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+               "deprecation.html#deprecation-of-numbapro-environment-variables")
+        msg = ("\nEnvironment variables with the 'NUMBAPRO' prefix are "
+               "deprecated, found use of %s=%s.\n\nFor more information visit "
+               "%s" % (envvar, value, url))
+        warnings.warn(errors.NumbaDeprecationWarning(msg))
+        return value
+    else:
+        return default
 
-VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
+VERBOSE_JIT_LOG = int(get_numbapro_envvar('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
@@ -84,7 +97,9 @@ class CudaAPIError(CudaDriverError):
 
 
 def find_driver():
-    envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER', None)
+
+    envpath = get_numbapro_envvar('NUMBAPRO_CUDA_DRIVER')
+
     if envpath == '0':
         # Force fail
         _raise_driver_not_found()
@@ -863,7 +878,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+    logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1569,7 +1584,7 @@ FILE_EXTENSION_MAP = {
 
 class Linker(object):
     def __init__(self, max_registers=0):
-        logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+        logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 

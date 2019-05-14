@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import itertools
 import math
+import platform
 from functools import partial
 
 import numpy as np
@@ -346,6 +347,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
+    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
+    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
     def test_delete(self):
 
         def arrays():

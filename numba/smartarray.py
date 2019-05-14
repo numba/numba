@@ -1,5 +1,6 @@
 from numba.tracing import trace
-from numba.errors import deprecated
+from numba.errors import deprecated, NumbaDeprecationWarning
+import warnings
 
 import sys
 
@@ -61,6 +62,11 @@ class SmartArray(object):
         (The optional 'where' argument specifies where to allocate the array
         initially. (Default: 'host')
         """
+        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                "deprecation.html#deprecation-of-smartarray")
+        msg = ("\nSmartArray is deprecated.\n\nFor more information visit %s"
+               % url)
+        warnings.warn(NumbaDeprecationWarning(msg), stacklevel=1)
 
         if where not in self._targets:
             raise ValueError('"%s" is not a valid target'%where)
@@ -204,7 +210,7 @@ class SmartArray(object):
             return SmartArray(value, copy=False)
         else:
             return value
-        
+
     @trace
     def __getattr__(self, name):
         """Transparently forward attribute access to the host array."""

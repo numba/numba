@@ -3,13 +3,14 @@ Unspecified error handling tests
 """
 from __future__ import division
 
-from numba import jit, njit
+from numba import jit, njit, typed, int64
 from numba import unittest_support as unittest
 from numba import errors, utils
 import numpy as np
 
-# used in TestMiscErrorHandling::test_handling_of_write_to_global
+# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]
+_global_dict = typed.Dict.empty(int64, int64)
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
 
@@ -108,17 +109,28 @@ class TestMiscErrorHandling(unittest.TestCase):
         expected = 'File "unknown location", line 0:'
         self.assertIn(expected, str(raises.exception))
 
-    def test_handling_of_write_to_global(self):
-        @njit
-        def foo():
-            _global_list[0] = 10
-
+    def check_write_to_globals(self, func):
         with self.assertRaises(errors.TypingError) as raises:
-            foo()
+            func()
 
         expected = ["Writing to a", "defined in globals is not supported"]
         for ex in expected:
             self.assertIn(ex, str(raises.exception))
+
+
+    def test_handling_of_write_to_reflected_global(self):
+        @njit
+        def foo():
+            _global_list[0] = 10
+
+        self.check_write_to_globals(foo)
+
+    def test_handling_of_write_to_typed_dict_global(self):
+        @njit
+        def foo():
+            _global_dict[0] = 10
+
+        self.check_write_to_globals(foo)
 
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):

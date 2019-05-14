@@ -159,6 +159,8 @@ it would require a pervasive change that rewrites the code to extract kernel
 computation that can be parallelized, which was both tedious and challenging.
 
 
+.. _numba-parallel-diagnostics:
+
 Diagnostics
 ===========
 

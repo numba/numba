@@ -318,17 +318,11 @@ def get_arch_option(major, minor):
     return 'compute_%d%d' % arch
 
 
-MISSING_LIBDEVICE_MSG = '''
-Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice
-/path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
-files in the installation of CUDA.  (requires CUDA >=8.0)
-'''
-
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
-Please ensure you have package cudatoolkit 8.0.
+Please ensure you have package cudatoolkit >= 8.
 Install package by:
 
-    conda install cudatoolkit=8.0
+    conda install cudatoolkit
 '''
 
 

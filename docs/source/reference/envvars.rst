@@ -36,16 +36,6 @@ for permanent use by adding::
     color_scheme: dark_bg
 
 
-Errors and warnings display
----------------------------
-
-.. envvar:: NUMBA_WARNINGS
-
-   If set to non-zero, printout of Numba warnings is enabled, otherwise
-   the warnings are suppressed.  The warnings can give insight into the
-   compilation process.
-
-
 Debugging
 ---------
 

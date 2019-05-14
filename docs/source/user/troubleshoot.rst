@@ -328,24 +328,41 @@ around as generic Python objects, without Numba trying to look into them
 to reason about their raw values.  This is a situation you want to avoid
 when caring about the speed of your code.
 
-There are several ways of understanding why a function fails to
-compile in nopython mode:
+If a function fails to compile in ``nopython`` mode warnings will be emitted
+with explanation as to why compilation failed. For example with the ``f()``
+function above (slightly edited for documentation purposes)::
 
-* pass *nopython=True*, which will raise an error indicating what went wrong
-  (see above :ref:`code-doesnt-compile`);
-* enable warnings by setting the :envvar:`NUMBA_WARNINGS` environment
-  variable; for example with the ``f()`` function above::
+    >>> f(1, 2)
+    3.0
+    >>> f(1, "2")
+    example.py:7: NumbaWarning:
+    Compilation is falling back to object mode WITH looplifting enabled because Function "f" failed type inference due to: Invalid use of Function(<class 'float'>) with argument(s) of type(s): (unicode_type)
+    * parameterized
+    In definition 0:
+        TypeError: float() only support for numbers
+        raised from <path>/numba/typing/builtins.py:880
+    In definition 1:
+        TypeError: float() only support for numbers
+        raised from <path>/numba/typing/builtins.py:880
+    This error is usually caused by passing an argument of a type that is unsupported by the named function.
+    [1] During: resolving callee type: Function(<class 'float'>)
+    [2] During: typing of call at example.py (9)
 
-      >>> f(1, 2)
-      3.0
-      >>> f(1, "2")
-      example.py:7: NumbaWarning: Function "f" failed type inference: Internal error at <numba.typeinfer.CallConstrain object at 0x7f6b8dd24550>:
-      float() only support for numbers
-      File "example.py", line 9
-        @jit
-      example.py:7: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
-        @jit
-      3.0
+
+    File "example.py", line 9:
+    def f(a, b):
+        s = a + float(b)
+        ^
+
+    <path>/numba/compiler.py:722: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
+
+    File "example.py", line 8:
+    @jit
+    def f(a, b):
+    ^
+
+    3.0
+
 
 Disabling JIT compilation
 =========================

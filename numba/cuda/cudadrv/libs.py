@@ -5,6 +5,7 @@ import sys
 import ctypes
 import platform
 from numba.findlib import find_lib, find_file
+from .driver import get_numbapro_envvar
 
 if sys.platform == 'win32':
     _dllopener = ctypes.WinDLL
@@ -15,8 +16,8 @@ else:
 
 
 def get_libdevice(arch):
-    libdir = (os.environ.get('NUMBAPRO_LIBDEVICE') or
-              os.environ.get('NUMBAPRO_CUDALIB'))
+    libdir = (get_numbapro_envvar('NUMBAPRO_LIBDEVICE') or
+              get_numbapro_envvar('NUMBAPRO_CUDALIB'))
 
     pat = r'libdevice\.%s(\.\d+)*\.bc$' % arch
     candidates = find_file(re.compile(pat), libdir)
@@ -35,9 +36,13 @@ def open_libdevice(arch):
 
 
 def get_cudalib(lib, platform=None):
-    if lib == 'nvvm' and os.environ.get('NUMBAPRO_NVVM'):
-        return os.environ.get('NUMBAPRO_NVVM')
-    libdir = os.environ.get('NUMBAPRO_CUDALIB')
+
+    _lnvvm = get_numbapro_envvar('NUMBAPRO_NVVM')
+    if lib == 'nvvm' and _lnvvm:
+        return _lnvvm
+
+    libdir = get_numbapro_envvar('NUMBAPRO_CUDALIB')
+
     candidates = find_lib(lib, libdir, platform)
     return max(candidates) if candidates else None
 

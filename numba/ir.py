@@ -27,15 +27,22 @@ class Loc(object):
     """
     _defmatcher = re.compile('def\s+(\w+)\(.*')
 
-    def __init__(self, filename, line, col=None):
+    def __init__(self, filename, line, col=None, maybe_decorator=False):
+        """ Arguments:
+        filename - name of the file
+        line - line in file
+        col - column
+        maybe_decorator - Set to True if location is likely a jit decorator
+        """
         self.filename = filename
         self.line = line
         self.col = col
         self.lines = None # the source lines from the linecache
+        self.maybe_decorator = maybe_decorator
 
     @classmethod
     def from_function_id(cls, func_id):
-        return cls(func_id.filename, func_id.firstlineno)
+        return cls(func_id.filename, func_id.firstlineno, maybe_decorator=True)
 
     def __repr__(self):
         return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
@@ -50,7 +57,7 @@ class Loc(object):
     def _find_definition(self):
         # try and find a def, go backwards from error line
         fn_name = None
-        lines = self._get_lines()
+        lines = self.get_lines()
         for x in reversed(lines[:self.line - 1]):
             if 'def ' in x:
                 fn_name = x
@@ -66,7 +73,7 @@ class Loc(object):
             # Probably exec(<string>) or REPL.
             return None
 
-    def _get_lines(self):
+    def get_lines(self):
         if self.lines is None:
 
             self.lines = linecache.getlines(self._get_path())
@@ -89,10 +96,35 @@ class Loc(object):
 
     def strformat(self, nlines_up=2):
 
-        lines = self._get_lines()
+        lines = self.get_lines()
+
+        use_line = self.line
+
+        if self.maybe_decorator:
+            # try and sort out a better `loc`, if it's suspected that this loc
+            # points at a jit decorator by virtue of
+            # `__code__.co_firstlineno`
+
+            # get lines, add a dummy entry at the start as lines count from
+            # 1 but list index counts from 0
+            tmplines = [''] + lines
+
+            if lines and use_line and 'def ' not in tmplines[use_line]:
+                # look forward 10 lines, unlikely anyone managed to stretch
+                # a jit call declaration over >10 lines?!
+                min_line = max(0, use_line)
+                max_line = use_line + 10
+                selected = tmplines[min_line : max_line]
+                index = 0
+                for idx, x in enumerate(selected):
+                    if 'def ' in x:
+                        index = idx
+                        break
+                use_line = use_line + index
+
 
         ret = [] # accumulates output
-        if lines and self.line:
+        if lines and use_line:
 
             def count_spaces(string):
                 spaces = 0
@@ -104,7 +136,7 @@ class Loc(object):
             # this is often in places where exceptions are used for the purposes
             # of flow control. As a result max is in use to prevent slice from
             # `[negative: positive]`
-            selected = lines[max(0, self.line - nlines_up):self.line]
+            selected = lines[max(0, use_line - nlines_up):use_line]
 
             # see if selected contains a definition
             def_found = False
@@ -116,7 +148,7 @@ class Loc(object):
             if not def_found:
                 # try and find a def, go backwards from error line
                 fn_name = None
-                for x in reversed(lines[:self.line - 1]):
+                for x in reversed(lines[:use_line - 1]):
                     if 'def ' in x:
                         fn_name = x
                         break
@@ -138,7 +170,7 @@ class Loc(object):
             ret = "<source missing, REPL/exec in use?>"
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
-        tmp = err % (self._get_path(), self.line, _termcolor.code(''.join(ret)))
+        tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
         return tmp
 
     def with_lineno(self, line, col=None):
