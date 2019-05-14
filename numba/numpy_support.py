@@ -595,6 +595,7 @@ def is_fortran(dims, strides, itemsize):
         ax += 1
     return True
 
+
 def type_can_asarray(arr):
     """ Returns True if the type of 'arr' is supported by the Numba `np.asarray`
     implementation, False otherwise.
