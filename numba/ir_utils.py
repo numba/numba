@@ -1831,11 +1831,11 @@ def raise_on_unsupported_feature(func_ir, typemap):
             # Raise an exception when len(tuple) > 1000. The choice of this number (1000)
             # was entirely arbitrary
             msg = ("Tuple '{}' length must be smaller than 1000.\n"
-                   "Large tuples generates a prohibitively large "
-                   "LLVM IR which causes excess memory pressure "
+                   "Large tuples lead to the generation of a prohibitively large "
+                   "LLVM IR which causes excessive memory pressure "
                    "and large compile times.\n"
-                   "As an alternative, one can use a 'list' instead "
-                   "of a 'tuple'. Lists do not suffer from this same problem.".format(arg_name))
+                   "As an alternative, the use of a 'list' is recommended in "
+                   "place of a 'tuple' as lists do not suffer from this problem.".format(arg_name))
             raise UnsupportedError(msg, func_ir.loc)
 
     for blk in func_ir.blocks.values():
