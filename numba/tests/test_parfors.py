@@ -1403,6 +1403,25 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_unsupported
+    def test_reshape_with_neg_one(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
