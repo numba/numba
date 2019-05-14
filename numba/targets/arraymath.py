@@ -3612,40 +3612,24 @@ def _i0(x):
 
     return np.exp(x) * _chbevl(32.0 / x - 2.0, _i0B) / np.sqrt(x)
 
+
 @register_jitable
 def _i0n(n, alpha, beta):
     y = np.empty_like(n, dtype=np.float_)
-    t = _i0(float(beta))
+    t = _i0(np.float_(beta))
     for i in range(len(y)):
         y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
     return y
-
-@lower_builtin(np.i0, types.Array)
-def array_i0(context, builder, sig, args):
-    def array_i0_impl(arr):
-        out = np.zeros_like(arr)
-        for index, val in np.ndenumerate(arr):
-            out[index] = _i0(val)
-        return out
-    res = context.compile_internal(builder, array_i0_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-@lower_builtin(np.i0, types.Number)
-def scalar_i0(context, builder, sig, args):
-    scalar_dtype = sig.return_type
-    def scalar_i0_impl(val):
-        out = np.zeros((1,), dtype=scalar_dtype)
-        out[0] = _i0(val)
-        return out
-    res = context.compile_internal(builder, scalar_i0_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @overload(np.kaiser)
 def np_kaiser(M, beta):
     if not isinstance(M, types.Integer):
         raise TypingError('M must be an integer')
+
+    if not isinstance(beta, (types.Integer, types.Float)):
+        raise TypingError('beta must be an integer or float')
 
     def np_kaiser_impl(M, beta):
         if M < 1:

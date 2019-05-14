@@ -1180,20 +1180,6 @@ class Sinc(AbstractTemplate):
             return signature(arg, arg)
 
 
-@infer_global(np.i0)
-class I0(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        arg = args[0]
-        supported_scalars = (types.Float, types.Complex)
-        if (isinstance(arg, supported_scalars) or
-              (isinstance(arg, types.Array) and
-               isinstance(arg.dtype, supported_scalars))):
-            return signature(arg, arg)
-
-
 @infer_global(np.angle)
 class Angle(CallableTemplate):
     """
