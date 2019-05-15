@@ -3,22 +3,44 @@
 Command line interface
 ======================
 
-.. _cli_overview:
-
-Overview
---------
-
 Numba is a Python package, usually you ``import numba`` from Python and use the
 Python application programming interface (API). However, Numba also ships with a
-command line interface (CLI), i.e. a tool ``numba`` that you gets installed when
-you install Numba.
+command line interface (CLI), i.e. a tool ``numba`` that is installed when you
+install Numba.
 
 Currently, the only purpose of the CLI is to allow you to quickly show some
 information about your system and installation, or to quickly get some debugging
-information for a Python script using Numba. To see which options are available,
-use ``numba --help``:
+information for a Python script using Numba.
 
-::
+.. _cli_usage:
+
+Usage
+-----
+
+To use the Numba CLI from the terminal, use ``numba`` followed by the options
+and arguments like ``--help`` or ``-s``, as explained below.
+
+Sometimes it can happen that you get a "command not found" error when you type
+``numba``, because your ``PATH`` isn't configured properly. In that case you can
+use the equivalent commmand ``python -m numba``. If that still gives "command
+not found", try to ``import numba`` as suggested here:
+:ref:`numba-source-install-check`.
+
+The two versions ``numba`` and ``python -m numba`` are the same. The first is
+shorter to type, but if you get a "command not found" error because your
+``PATH`` doesn't contain the location where ``numba`` is installed, having the
+``python -m numba`` variant is useful.
+
+To use the Numba CLI from IPython or Jupyter, use ``!numba``, i.e. prefix the
+command with an exclamation mark. This is a general IPython/Jupyter feature to
+execute shell commands, it is not available in the regular ``python`` terminal.
+
+.. _cli_help:
+
+Help
+----
+
+To see all available options, use ``numba --help``::
 
     $ numba --help
     usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized]
@@ -41,38 +63,21 @@ use ``numba --help``:
                             Output source annotation as html
       -s, --sysinfo         Output system information for bug reporting
 
-Sometimes it can happen that you get a "command not found" error when you type
-``numba``, because your ``PATH`` isn't configured properly. In that case you can
-use the equivalent commmand ``python -m numba``. If that still gives "command
-not found", try to ``import numba`` as suggested here:
-:ref:`numba-source-install-check`.
-
 .. _cli_sysinfo:
 
 System information
 ------------------
 
-The ``numba --sysinfo`` (or ``numba -s`` for short) command prints a lot of
+The ``numba -s`` (or the equivalent ``numba --sysinfo``) command prints a lot of
 information about your system and your Numba installation and relevant
 dependencies.
 
-You can execute it from the terminal like this::
-
-    $ numba -s
-    $ python -m numba -s
-
-To see your system information from IPython or Jupyter, prefix the command with
-an exclamation mark like this::
-
-    !numba -s
-    !python -m numba -s
-
-The two versions ``numba`` and ``python -m numba`` are the same. The first is
-shorter to type, but if you get a "command not found" error because your
-``PATH`` doesn't contain the location where ``numba`` is installed, having the
-``python -m numba`` variant is useful.
+Remember: you can use ``!numba -s`` with an exclamation mark to see this
+information from IPython or Jupyter.
 
 Example output::
+
+    $ numba -s
 
     System info:
     --------------------------------------------------------------------------------
@@ -141,7 +146,6 @@ Example output::
 
     __Current Conda Env__
     (output truncated due to length)
-
 
 .. _cli_debug:
 
