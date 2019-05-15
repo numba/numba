@@ -158,6 +158,7 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-check:
 
 Checking your installation
 --------------------------
@@ -172,8 +173,11 @@ You should be able to import Numba from the Python prompt::
     >>> numba.__version__
     '0.39.0+0.g4e49566.dirty'
 
-You can also try executing the `numba -s` command to report information about
-your system capabilities::
+You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
+command to report information about your system capabilities. See :ref:`cli` for
+further information.
+
+::
 
     $ numba -s
     System info:
@@ -212,3 +216,5 @@ your system capabilities::
                                   pci bus id: 1
 
 (output truncated due to length)
+
+
