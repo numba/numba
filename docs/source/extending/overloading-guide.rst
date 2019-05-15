@@ -40,11 +40,12 @@ usually work with integer arrays and your colleague works with floats and becaus
 of duck typing the code works equally well for both types.
 
 Profiling reveals that this function is used very often in your ``@jit``
-decorated functions, for example in ``myalgorithm``, and  you choose to use to
-``@overload`` to accelerate your algorithm. You consult the documentation and
-discover the following annotated template that outlines how the specific parts
-ought to looks like when using ``@overload``. This gives you an idea as
-to the structure required.
+decorated functions such as ``myalgorithm``. In order to further speed up your
+calculations, You decide to use Numba again. In this case however, you will use
+the ``overload`` decorator as you wish to dispatch specialisations based on
+type. The following annotated template outlines what the specific parts ought
+to look like when using ``@overload``. This should give you an idea as to the
+structure required.
 
 .. literalinclude:: template.py
 
