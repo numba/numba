@@ -5,19 +5,21 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit
 from numba.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
+from numba import errors
+
 
 class TestBuiltins(unittest.TestCase):
 
     def check_objmode_deprecation_warning(self, w):
         # Object mode fall-back is slated for deprecation, check the warning
         msg = ("Fall-back from the nopython compilation path to the object "
-                "mode compilation path has been detected")
+               "mode compilation path has been detected")
         self.assertEqual(w.category, NumbaDeprecationWarning)
         self.assertIn(msg, str(w.message))
 
     def test_type_infer_warning(self):
         def add(x, y):
-            a = {}
+            a = {} # noqa dead
             return x + y
 
         with warnings.catch_warnings(record=True) as w:
@@ -40,6 +42,7 @@ class TestBuiltins(unittest.TestCase):
 
     def test_return_type_warning(self):
         y = np.ones(4, dtype=np.float32)
+
         def return_external_array():
             return y
 
@@ -80,10 +83,9 @@ class TestBuiltins(unittest.TestCase):
             # No more warning
             self.assertEqual(len(w), 0)
 
-
     def test_no_warning_with_forceobj(self):
         def add(x, y):
-            a = []
+            a = [] # noqa dead
             return x + y
 
         with warnings.catch_warnings(record=True) as w:
@@ -96,7 +98,7 @@ class TestBuiltins(unittest.TestCase):
 
     def test_loop_lift_warn(self):
         def do_loop(x):
-            a = {}
+            a = {} # noqa dead
             for i in range(x.shape[0]):
                 x[i] *= 2
 
@@ -132,7 +134,8 @@ class TestBuiltins(unittest.TestCase):
 
     def test_deprecated(self):
         @deprecated('foo')
-        def bar(): pass
+        def bar():
+            pass
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
@@ -142,6 +145,28 @@ class TestBuiltins(unittest.TestCase):
             self.assertEqual(w[0].category, DeprecationWarning)
             self.assertIn('bar', str(w[0].message))
             self.assertIn('foo', str(w[0].message))
+
+    def test_warnings_fixer(self):
+        # For some context, see #4083
+
+        wfix = errors.WarningsFixer(errors.NumbaWarning)
+        with wfix.catch_warnings('foo', 10):
+            warnings.warn(errors.NumbaWarning('same'))
+            warnings.warn(errors.NumbaDeprecationWarning('same'))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            wfix.flush()
+
+            self.assertEqual(len(w), 2)
+            # the order of these will be backwards to the above, the
+            # WarningsFixer flush method sorts with a key based on str
+            # comparison
+            self.assertEqual(w[0].category, NumbaDeprecationWarning)
+            self.assertEqual(w[1].category, NumbaWarning)
+            self.assertIn('same', str(w[0].message))
+            self.assertIn('same', str(w[1].message))
+
 
 if __name__ == '__main__':
     unittest.main()
