@@ -1,7 +1,6 @@
 from numba import njit, types
 from numba.extending import overload
 
-
 import mymodule
 
 

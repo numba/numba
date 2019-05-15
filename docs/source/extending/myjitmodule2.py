@@ -45,6 +45,7 @@ def set_to_x_jit_v2(arr, x):
 
     # fall through, None returned as no suitable implementation was found
 
+
 @njit
 def myalgorithm(a, x):
     # algorithm code
