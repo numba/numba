@@ -392,25 +392,12 @@ using the dictionary in interpreted code:
    :dedent: 4
    :linenos:
 
-Regarding the thread-safetiness of ``numba.typed.Dict``, it should be noted that
-when you compile functions containing un-atomic operations in python
-(`found here`_) with ``nogil=True`` and run it on multiple threads(>1),
-they will throw out ``Segmentation fault``. Although the function ``foo`` in the
-below example when compiled with ``nogil=False`` runs successfully, since the
-operations in ``foo`` are un-atomic, the results obtained will be inaccurate if
-locks aren't used.
-
-Here's an example that demonstrates that.
-
-.. literalinclude:: ../../../examples/dict_usage.py
-   :language: python
-   :caption: from ``ex_thread_safetiness_dict`` of ``examples/dict_usage.py``
-   :start-after: magictoken.ex_thread_safetiness_dict.begin
-   :end-before: magictoken.ex_thread_safetiness_dict.end
-   :dedent: 4
-   :linenos:
-
-.. _found here: https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
+It should be noted that ``numba.typed.Dict`` is not thread-safe.
+Specifically, functions which modify a dictionary from multiple
+threads will potentially corrupt memory, causing a
+segmentation fault. However, dictionaries can be safely read from
+multiple threads as long as the contents of the dictionary do not
+change during the parallel access.
 
 None
 ----
