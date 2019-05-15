@@ -923,6 +923,8 @@ class ArrayAnalysis(object):
 
         if config.DEBUG_ARRAY_OPT == 1:
             self.dump()
+            print("variable types: ", sorted(self.typemap.items()))
+            print("call types: ", self.calltypes)
 
         dprint_func_ir(self.func_ir, "after array analysis", blocks)
 
@@ -1152,15 +1154,18 @@ class ArrayAnalysis(object):
             size_typ = self.typemap[dsize.name]
             lhs_typ = self.typemap[lhs.name]
             rhs_typ = self.typemap[rhs.name]
-            zero_var = ir.Var(scope, mk_unique_var("zero"), loc)
 
+            # Fill in the left side of the slice's ":" with 0 if it wasn't specified.
             if isinstance(lhs_typ, types.NoneType):
+                zero_var = ir.Var(scope, mk_unique_var("zero"), loc)
                 zero = ir.Const(0, loc)
                 stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
-                self._define(equiv_set, zero_var, size_typ, zero)
+                self._define(equiv_set, zero_var, types.IntegerLiteral(0), zero)
                 lhs = zero_var
-                lhs_typ = size_typ
+                lhs_typ = types.IntegerLiteral(0)
 
+            # Fill in the right side of the slice's ":" with the array
+            # length if it wasn't specified.
             if isinstance(rhs_typ, types.NoneType):
                 rhs = dsize
                 rhs_typ = size_typ
@@ -1172,30 +1177,36 @@ class ArrayAnalysis(object):
                 rhs_rel[1] == 0):
                 return dsize
 
+            slice_typ = types.intp
+
             size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
             size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
-            self.calltypes[size_val] = signature(size_typ, lhs_typ, rhs_typ)
-            self._define(equiv_set, size_var, size_typ, size_val)
+            self.calltypes[size_val] = signature(slice_typ, lhs_typ, rhs_typ)
+            self._define(equiv_set, size_var, slice_typ, size_val)
 
             # short cut size_val to a constant if its relation is known to be
-            # a constant or its basis matches dsize
+            # a constant
             size_rel = equiv_set.get_rel(size_var)
-            if (isinstance(size_rel, int) or (isinstance(size_rel, tuple) and
-                equiv_set.is_equiv(size_rel[0], dsize.name))):
+            if (isinstance(size_rel, int)):
+                #or (isinstance(size_rel, tuple) and equiv_set.is_equiv(size_rel[0], dsize.name))):
+                # The above additional 'or' clause was originally in the code
+                # but it just seems wrong.  For test slice1, a[0:n-2] comes here
+                # with size_rel = (n,-2) and so it sets the slice size to -2.
                 rel = size_rel if isinstance(size_rel, int) else size_rel[1]
                 size_val = ir.Const(rel, loc=loc)
                 size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
-                self._define(equiv_set, size_var, size_typ, size_val)
+                slice_typ = types.IntegerLiteral(rel)
+                self._define(equiv_set, size_var, slice_typ, size_val)
 
             wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
             wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
             fnty = get_global_func_typ(wrap_index)
-            sig = self.context.resolve_function_type(fnty, (size_typ, size_typ,), {})
+            sig = self.context.resolve_function_type(fnty, (slice_typ, size_typ,), {})
             self._define(equiv_set, wrap_var, fnty, wrap_def)
 
             var = ir.Var(scope, mk_unique_var("var"), loc)
             value = ir.Expr.call(wrap_var, [size_var, dsize], {}, loc)
-            self._define(equiv_set, var, size_typ, value)
+            self._define(equiv_set, var, slice_typ, value)
             self.calltypes[value] = sig
 
             stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))

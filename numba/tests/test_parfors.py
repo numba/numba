@@ -120,6 +120,7 @@ class TestParforsBase(TestCase):
         scheduler_type = kwargs.pop('scheduler_type', None)
         check_fastmath = kwargs.pop('check_fastmath', None)
         fastmath_pcres = kwargs.pop('fastmath_pcres', None)
+        check_scheduling = kwargs.pop('check_scheduling', True)
 
         def copy_args(*args):
             if not args:
@@ -150,7 +151,8 @@ class TestParforsBase(TestCase):
 
         self.assertEqual(type(njit_output), type(parfor_output))
 
-        self.check_scheduling(cpfunc, scheduler_type)
+        if check_scheduling:
+            self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
         if fastmath_pcres is not None:
@@ -2545,6 +2547,16 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.ones(10))
 
+    @skip_unsupported
+    def test_parfor_slice20(self):
+        # issues #4075, slice size
+        def test_impl():
+            a = np.ones(10)
+            c = a[1:]
+            s = len(c)
+            return s
+
+        self.check(test_impl, check_scheduling=False)
 
 class TestParforsOptions(TestParforsBase):
 
