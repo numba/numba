@@ -68,7 +68,7 @@ floating point number. The following error arises:
         All templates rejected without literals.
     This error is usually caused by passing an argument of a type that is unsupported by the named function.
     [1] During: resolving callee type: Function(<function set_to_x at 0x11aea71e0>)
-    [2] During: typing of call at /Users/mr-numba/git/numba/docs/source/extending/myjitmodule.py (25)
+    [2] During: typing of call at <path>/numba/docs/source/extending/myjitmodule.py (25)
 
 
     File myjitmodule.py", line 25:
@@ -181,11 +181,11 @@ additional things to watch out for.
         FAIL: test_foo (numba.tests.test_np_functions.TestNPFunctions)
         ----------------------------------------------------------------------
         Traceback (most recent call last):
-        File "/Users/vhaenel/git/numba/numba/tests/support.py", line 645, in tearDown
+        File "<path>/numba/numba/tests/support.py", line 645, in tearDown
             self.memory_leak_teardown()
-        File "/Users/vhaenel/git/numba/numba/tests/support.py", line 619, in memory_leak_teardown
+        File "<path>/numba/numba/tests/support.py", line 619, in memory_leak_teardown
             self.assert_no_memory_leak()
-        File "/Users/vhaenel/git/numba/numba/tests/support.py", line 628, in assert_no_memory_leak
+        File "<path>/numba/numba/tests/support.py", line 628, in assert_no_memory_leak
             self.assertEqual(total_alloc, total_free)
         AssertionError: 36 != 35
 
