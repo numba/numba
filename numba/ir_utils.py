@@ -1831,6 +1831,21 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
+    
+    # issue 2195: check for excessively large tuples
+    for arg_name in func_ir.arg_names:
+        if arg_name in typemap and \
+           isinstance(typemap[arg_name], types.containers.UniTuple) and \
+           typemap[arg_name].count > 1000:
+            # Raise an exception when len(tuple) > 1000. The choice of this number (1000)
+            # was entirely arbitrary
+            msg = ("Tuple '{}' length must be smaller than 1000.\n"
+                   "Large tuples lead to the generation of a prohibitively large "
+                   "LLVM IR which causes excessive memory pressure "
+                   "and large compile times.\n"
+                   "As an alternative, the use of a 'list' is recommended in "
+                   "place of a 'tuple' as lists do not suffer from this problem.".format(arg_name))
+            raise UnsupportedError(msg, func_ir.loc)
 
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
