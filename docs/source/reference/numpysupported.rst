@@ -346,6 +346,7 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
+* :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
