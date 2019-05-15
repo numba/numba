@@ -221,7 +221,6 @@ exclude =
     numba/tests/test_return_values.py
     numba/tests/test_parallel_backend.py
     numba/tests/test_nrt.py
-    numba/tests/test_warnings.py
     numba/tests/test_mangling.py
     numba/tests/test_npdatetime.py
     numba/tests/test_fancy_indexing.py

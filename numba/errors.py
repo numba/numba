@@ -24,6 +24,7 @@ class NumbaWarning(Warning):
     """
     Base category for all Numba compiler warnings.
     """
+
     def __init__(self, msg, loc=None, highlighting=True, ):
         self.msg = msg
         self.loc = loc
@@ -422,7 +423,15 @@ class WarningsFixer(object):
         """
         Emit all stored warnings.
         """
-        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+        def key(arg):
+            # It is possible through codegen to create entirely identical
+            # warnings, this leads to comparing types when sorting which breaks
+            # on Python 3. Key as str() and if the worse happens then `id`
+            # creates some uniqueness
+            return str(arg) + str(id(arg))
+
+        for (filename, lineno, category), messages in sorted(
+                self._warnings.items(), key=key):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
