@@ -13,7 +13,7 @@ def wrap_set_to_x(arr, x):
     mymodule.set_to_x(arr, x)
 
 
-class TestSpam(support.TestCase):
+class TestSetToX(support.TestCase):
 
     def test_int(self):
         a = np.arange(10)

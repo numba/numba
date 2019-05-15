@@ -10,8 +10,8 @@ As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to create a Numba implementation of a
 function that can be used in :term:`nopython mode` functions. A common use case
 is to re-implement NumPy functions so that they can be called in ``@jit``
-decorated code. In this section will discuss how and when to use the
-``@overload`` decorator and what contributing such a function to Numba might
+decorated code. This section discusses how and when to use the
+``@overload`` decorator and what contributing such a function to the Numba code base might
 entail. This should help you get started when needing to use the ``@overload``
 decorator or when attempting to contribute new functions to Numba itself.
 
@@ -35,12 +35,12 @@ Both you and your colleague are using this function as part of your algorithms:
         mymodule.set_to_x(a, x)
         # more algorithm code
 
-However, both of make use of this function in slightly different contexts. You
-usually work with integer arrays and your colleague works with floats. Because
+However, you both make use of this function in slightly different contexts. You
+usually work with integer arrays and your colleague works with floats and because
 of duck typing the code works equally well for both types.
 
 Profiling reveals that this function is used very often in your ``@jit``
-decorated functions, for example in ``myalgorithm`` and  you choose to use to
+decorated functions, for example in ``myalgorithm``, and  you choose to use to
 ``@overload`` to accelerate your algorithm. You consult the documentation and
 discover the following annotated template that outlines how the specific parts
 ought to looks like when using ``@overload``. This gives you an idea as
@@ -82,14 +82,14 @@ Providing multiple implementations and dispatching based on types
 =================================================================
 
 As you saw above, the overload implementation for ``set_to_x`` function
-doesn't accept floating-point arguments. Let's formalise the specification of
+doesn't accept floating-point arguments. Let's formalise and, for pedagogical reasons, enhance the specification of
 the function as follows:
 
 * The numerical type of the array ``arr`` must match the numerical type of the
   scalar ``x`` argument, i.e. if ``arr`` is of type ``int64``, then ``x`` must
   be of this type too.
 * Only integer and floating-point types are to be supported for argument ``x``.
-* No ``nan`` values are allowed in ``arr`` when it is of floating-point type and if
+* No ``NaN`` values are allowed in ``arr`` when it is of floating-point type and if
   such a value is encountered an appropriate ``ValueError`` should be raised.
 * If a tuple is used instead of an array as a value for ``arr``, a custom error
   message with a hint for the user should be issued.
@@ -99,10 +99,10 @@ The resulting implementation could look like the following:
 .. literalinclude:: myjitmodule2.py
 
 As you can see, the typing checking code has been increased significantly to
-match the formalised requirements. Also, multiple implementations---one for
-integers and one for floating-point---are provided. We check inside the typing
+match the formal requirements. Also, multiple implementations, one for
+integers and one for floating-point, are provided. We check inside the typing
 scope which implementation should be used and also raise any custom error
-messages required. Importantly, the check for ``nan`` values is only present in
+messages required. Importantly, the check for ``NaN`` values is only present in
 the floating point implementation as this additional check creates a runtime
 overhead.
 
@@ -144,24 +144,24 @@ additional things to watch out for.
 
 * The Numba implementation should match the NumPy implementation as closely as
   feasible with respect to accepted types, arguments, raised exceptions and
-  runtime (Big-O / Landau order).
+  algorithmic complexity (Big-O / Landau order).
 
-* When implementing supported argument types, bear in mind that---thanks to
-  duck typing---NumPy does tend to accept a multitude of argument types beyond
-  NumPy arrays such as scalar, list, tuple, set, iterator, generator etc.. So
-  you will need to account for that during type inference and subsequently as
+* When implementing supported argument types, bear in mind that, due to
+  duck typing, NumPy does tend to accept a multitude of argument types beyond
+  NumPy arrays such as scalar, list, tuple, set, iterator, generator etc.
+  You will need to account for that during type inference and subsequently as
   part of the tests.
 
 * A NumPy function may return a scalar, array or a data structure
-  which matches one of its inputs - so you need to watch out for type
+  which matches one of its inputs, you need to watch be aware of type
   unification problems and dispatch to appropriate implementations. For
-  example, ``np.corrcoef`` may return an array or a scalar depending on it's
+  example, ``np.corrcoef`` may return an array or a scalar depending on its
   inputs.
 
 * If you are implementing a new function, you should always update the
   `documentation
   <http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html>`_.
-  The sources can be found in `docs/source/reference/numpysupported.rst``. Be
+  The sources can be found in ``docs/source/reference/numpysupported.rst``. Be
   sure to mention any limitations that your implementation has, e.g. no support
   for the ``axis`` keyword.
 
@@ -191,12 +191,12 @@ additional things to watch out for.
 
   This occurs because raising exceptions from jitted code leads to reference leaks. Ideally, you will
   place all exception testing in a separate test method and then add a call in each test to
-  ``self.disable_leak_check()`` to disable the leak-check. (Remember to inherit
+  ``self.disable_leak_check()`` to disable the leak-check (inherit
   from ``numba.tests.support.TestCase`` to make that available).
 
 * For many of the functions that are available in NumPy, there are
-  corresponding methods defined on the NumPy array type. For example, the
-  function ``repeat`` is available in two flavours.
+  corresponding methods defined on the NumPy ``ndarray`` type. For example, the
+  function ``repeat`` is available as a NumPy module level function and a member function on the ``ndarray`` class.
 
   .. code:: python
 
@@ -230,16 +230,16 @@ additional things to watch out for.
   ``@overload`` decorated functions.
 
 * The Numba continuous integration (CI) setup  tests a wide variety of NumPy
-  versions---you'll sometimes be alerted to a change in behaviour back in some
+  versions, you'll sometimes be alerted to a change in behaviour from some
   previous NumPy version. If you can find supporting evidence in the NumPy
-  change log / repo, then you'll need to decide whether to branch logic and
+  change log / repository, then you'll need to decide whether to create branches and
   attempt to replicate the logic across versions, or use a version gate (with
-  associated wording in the docs) to advertise that Numba replicates NumPy from
+  associated wording in the documentation) to advertise that Numba replicates NumPy from
   some particular version onwards.
 
 * You can look at the Numba source code for inspiration, many of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Below, you
-  will find a list of implementations to look at, that are well implemented in
+  will find a list of implementations to look at that are well implemented in
   terms of accepted types and test coverage.
 
   * ``np.repeat``

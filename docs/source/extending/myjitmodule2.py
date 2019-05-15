@@ -16,7 +16,7 @@ def set_to_x_jit_v2(arr, x):
     # implementation for floating-point
     def set_to_x_impl_float(arr, x):
         if np.any(np.isnan(arr)):
-            raise ValueError("no element of arr must be nan")
+            raise ValueError("no element of arr may be NaN")
         arr[:] = x
 
     # check that it is an array
