@@ -392,6 +392,12 @@ using the dictionary in interpreted code:
    :dedent: 4
    :linenos:
 
+It should be noted that ``numba.typed.Dict`` is not thread-safe.
+Specifically, functions which modify a dictionary from multiple
+threads will potentially corrupt memory, causing a
+range of possible failures. However, the dictionary can be safely read from
+multiple threads as long as the contents of the dictionary do not
+change during the parallel access.
 
 None
 ----
