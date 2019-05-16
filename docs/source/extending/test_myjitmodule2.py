@@ -15,15 +15,20 @@ def wrap_set_to_x(arr, x):
 
 class TestSetToX(support.TestCase):
 
+    def _check(self, a, b, x):
+        wrap_set_to_x(a, x)
+        wrap_set_to_x.py_func(b, x)
+        self.assertPreciseEqual(a, b)
+
     def test_int(self):
-        a = np.arange(10)
-        wrap_set_to_x(a, 1)
-        self.assertPreciseEqual(np.ones(10, dtype=np.int64), a)
+        self._check(np.zeros(10, dtype=np.int64),
+                    np.zeros(10, dtype=np.int64),
+                    1)
 
     def test_float(self):
-        a = np.arange(10, dtype=np.float64)
-        wrap_set_to_x(a, 1.0)
-        self.assertPreciseEqual(np.ones(10), a)
+        self._check(np.zeros(10, dtype=np.float64),
+                    np.zeros(10, dtype=np.float64),
+                    1.0)
 
     def test_float_exception_on_nan(self):
         a = np.arange(10, dtype=np.float64)
