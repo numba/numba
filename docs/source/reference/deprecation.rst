@@ -324,3 +324,53 @@ Projects that need/rely on the deprecated behaviour should pin their dependency
 on Numba to a version prior to removal of this behaviour. The recommended method
 for accommodating the deprecation of ``numba.autojit`` is to simply replace it
 with the semantically and functionally equivalent ``numba.jit`` decorator.
+
+
+Deprecation of ``iternext_impl`` without a supplied ``RefType``
+===============================================================
+Whilst ``numba.targets.imputils.iternext_impl`` is technically an internal API
+it has been used in external code bases as a convenient piece of functionality
+when implementing the low level details of iteration.
+
+Reason for deprecation
+----------------------
+The original definition of ``iternext_impl`` assumed that the reference type of
+the yielded item was always ``borrowed``. The addition of ``unicode`` type
+support to Numba meant that an iterator may yield an item which is a new
+reference. As a result, support for ``unicode`` type iteration required a
+behavioural change in ``iternext_impl`` and this was encapsulated in an API
+change.
+
+Example(s) of the impact
+------------------------
+
+In future code such as::
+
+  from numba.targets.imputils import iternext_impl
+
+  @iternext_impl
+  def mytype_iter(context, builder, sig, args, result):
+    #details
+
+will require adjustment to use the new API.
+
+Schedule
+--------
+The deprecated API will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.44.0
+* Support will be removed in version 0.46.0
+
+Recommendations
+---------------
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour. Alternatively, to
+accommodate these changes, a direct replacement for the deprecated API is as
+follows::
+
+  from numba.targets.imputils import iternext_impl, RefType
+
+  @iternext_impl(RefType.BORROWED)
+  #              ^--- only change required is the specification of a RefType
+  def mytype_iter(context, builder, sig, args, result):
+    #details
