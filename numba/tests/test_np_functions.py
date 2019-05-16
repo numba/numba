@@ -2715,9 +2715,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for condlist, choicelist, default, expected_error, expected_text in [
             # Each test case below is one tuple.
             # Each tuple is separated by a blank line
-            ([np.array([True]), np.array([False, True, False])],
-             [np.array([1]), np.arange(12).reshape(4, 3)], 0, TypeError,
-             "can't unbox heterogeneous list"),
 
             ([np.array(True), np.array([False, True, False])],
              [np.array(1), np.arange(12).reshape(4, 3)], 0,
@@ -2739,8 +2736,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ([True], [0], [0], TypingError,
              "Invalid use of Function(<function select"),
 
-            ([], [], 0, ValueError,
-             "empty list"),
 
             ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0, TypingError,
              "Invalid use of Function(<function select"),
