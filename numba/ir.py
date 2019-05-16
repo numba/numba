@@ -59,7 +59,9 @@ class Loc(object):
         fn_name = None
         lines = self.get_lines()
         for x in reversed(lines[:self.line - 1]):
-            if 'def ' in x:
+            # the strip and startswith is to handle user code with commented out
+            # 'def' or use of 'def' in a docstring.
+            if x.strip().startswith('def '):
                 fn_name = x
                 break
 
