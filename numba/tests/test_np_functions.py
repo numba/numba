@@ -2731,14 +2731,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
              np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
-             "Invalid use of Function(<function select"),
+             "Invalid use of Function"),
 
             ([True], [0], [0], TypingError,
-             "Invalid use of Function(<function select"),
+             "Invalid use of Function"),
 
 
             ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0, TypingError,
-             "Invalid use of Function(<function select"),
+             "Invalid use of Function"),
         ]:
             with self.assertRaises(expected_error) as e:
                 np_nbfunc(condlist, choicelist, default)
