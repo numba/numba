@@ -120,13 +120,18 @@ def _if_osx_10_5():
 _env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
 
 
-def _get_nvvm_path():
+def _get_nvvm_path_decision():
     options = [
         ('NUMBAPRO_NVVM', get_numbapro_envvar('NUMBAPRO_NVVM')),
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('CUDA_HOME', get_cuda_home('nvvm', 'lib')),
     ]
     by, libdir = _find_valid_path(options)
+    return by, libdir
+
+
+def _get_nvvm_path():
+    by, libdir = _get_nvvm_path_decision()
     candidates = find_lib('nvvm', libdir)
     path = max(candidates) if candidates else None
     return _env_path_tuple(by, path)
@@ -144,13 +149,18 @@ def _find_valid_path(options):
         return 'Conda environment', None
 
 
-def _get_libdevice_paths():
+def _get_libdevice_path_decision():
     options = [
         ('NUMBAPRO_LIBDEVICE', get_numbapro_envvar('NUMBAPRO_LIBDEVICE')),
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
     ]
     by, libdir = _find_valid_path(options)
+    return by, libdir
+
+
+def _get_libdevice_paths():
+    by, libdir = _get_libdevice_path_decision()
     # Search for pattern
     pat = r'libdevice(\.(?P<arch>compute_\d+))?(\.\d+)*\.bc$'
     candidates = find_file(re.compile(pat), libdir)
