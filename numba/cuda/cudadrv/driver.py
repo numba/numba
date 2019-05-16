@@ -49,7 +49,20 @@ def get_numbapro_envvar(envvar, default=None):
     else:
         return default
 
-VERBOSE_JIT_LOG = int(get_numbapro_envvar('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
+
+def get_numba_envvar(envvar, default=None):
+    """Tries to load an environment variable with numba ``PREFIX + envvar``.
+    Two prefixes are tried.  First "NUMBA_". Then, "NUMBAPRO_".
+    """
+    assert not envvar.startswith('NUMBA')
+    value = os.environ.get('NUMBA_' + envvar)
+    if value is None:
+        return get_numbapro_envvar('NUMBAPRO_' + envvar, default=default)
+    else:
+        return default
+
+
+VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
@@ -98,7 +111,7 @@ class CudaAPIError(CudaDriverError):
 
 def find_driver():
 
-    envpath = get_numbapro_envvar('NUMBAPRO_CUDA_DRIVER')
+    envpath = get_numba_envvar('CUDA_DRIVER')
 
     if envpath == '0':
         # Force fail
@@ -878,7 +891,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+    logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1584,7 +1597,7 @@ FILE_EXTENSION_MAP = {
 
 class Linker(object):
     def __init__(self, max_registers=0):
-        logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+        logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
