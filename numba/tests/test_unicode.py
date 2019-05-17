@@ -8,7 +8,7 @@ from __future__ import print_function
 import sys
 from itertools import permutations
 
-from numba import njit
+from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
@@ -707,14 +707,28 @@ class TestUnicode(BaseTest):
                                   (rstrip_usecase_chars, 'rstrip')]:
             cfunc = njit(pyfunc)
 
-            with self.assertRaises(TypingError) as raises:
-                cfunc('tú quis?', 1.1)
-            self.assertIn('The arg must be a UnicodeType or None', str(raises.exception))
+            sig1 = types.unicode_type(types.unicode_type,
+                                      types.Optional(types.unicode_type))
+            cfunc_optional = njit([sig1])(pyfunc)
 
-            for string, chars in STRIP_CASES:
-                self.assertEqual(pyfunc(string, chars),
-                                 cfunc(string, chars),
-                                 "'%s'.%s('%s')?" % (string, case_name, chars))
+            def try_compile_bad_optional(*args):
+                bad = types.unicode_type(types.unicode_type,
+                                         types.Optional(types.float64))
+                njit([bad])(pyfunc)
+
+            for fn in cfunc, try_compile_bad_optional:
+                with self.assertRaises(TypingError) as raises:
+                    fn('tú quis?', 1.1)
+                self.assertIn('The arg must be a UnicodeType or None',
+                              str(raises.exception))
+
+            for fn in cfunc, cfunc_optional:
+
+                for string, chars in STRIP_CASES:
+                    self.assertEqual(pyfunc(string, chars),
+                                     fn(string, chars),
+                                     "'%s'.%s('%s')?" % (string, case_name,
+                                                         chars))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
