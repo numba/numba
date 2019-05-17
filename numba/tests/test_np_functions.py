@@ -2726,7 +2726,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0,
              TypingError, "condlist and choicelist elements must be arrays "
-                                      "of at least dimension 1"),
+                          "of at least dimension 1"),
 
             (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
              np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
