@@ -49,7 +49,7 @@ type::
    $ conda install cudatoolkit
 
 If you are not using Conda or if you want to use a different version of CUDA
-toolkit, the following describe how Numba search for a CUDA toolkit
+toolkit, the following describe how Numba searches for a CUDA toolkit
 installation.
 
 .. _cudatoolkit-lookup:
@@ -57,7 +57,7 @@ installation.
 Setting CUDA Installation Path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Numba search for CUDA toolkit installation in the following order:
+Numba searches for a CUDA toolkit installation in the following order:
 
 1. Old and deprecated environment variables: ``NUMBAPRO_NVVM``,
    ``NUMBAPRO_LIBDEVICE``, and ``NUMBAPRO_CUDALIB``.
@@ -65,15 +65,19 @@ Numba search for CUDA toolkit installation in the following order:
 3. Environment variable ``CUDA_HOME``, which points to the directory of the
    installed CUDA toolkit (i.e. ``/home/user/cuda-10``)
 4. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
-   Versioned installation paths (i.e. ``/usr/loca/cuda-10.0``) are intentionally
+   Versioned installation paths (i.e. ``/usr/local/cuda-10.0``) are intentionally
    ignored.  Users can use ``CUDA_HOME`` to select specific versions.
 
-An up-to-date CUDA driver is required. It is typically installed by the CUDA
-toolkit installer.  The CUDA driver is usually located in system default
-location and Numba can find it automatically.  If the driver
-is in a different location,  users can set environment variable
-``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
-driver shared library file.
+In addition to the CUDA toolkit libraries, which can be installed by conda into
+an environment  or installed system-wide by the `CUDA SDK installer
+<(https://developer.nvidia.com/cuda-downloads)>`_, the CUDA target in Numba
+also requires an up-to-date NVIDIA graphics driver.  Updated graphics drivers
+are also installed by the CUDA SDK installer, so there is no need to do both.
+Note that on macOS, the CUDA SDK must be installed to get the required driver,
+and the driver is only supported on macOS prior to 10.14 (Mojave).  If the
+`libcuda.so` library is in a non-standard location, users can set environment
+variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
+shared library file.
 
 
 Missing CUDA Features

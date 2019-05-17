@@ -76,6 +76,8 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
     * ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory*
       which contains .bc files
 
+    Numba should now be able to detect CUDA libraries installed system-wide on
+    Linux.
 
 Enabling AMD ROCm GPU Support
 -----------------------------
