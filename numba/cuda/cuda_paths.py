@@ -112,7 +112,8 @@ def get_conda_ctk():
     paths = find_lib('nvvm')
     if not paths:
         return
-    return os.path.join(sys.prefix, 'lib')
+    # Use the directory name of the max path
+    return os.path.dirname(max(paths))
 
 
 def get_cuda_home(*subdirs):
