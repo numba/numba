@@ -136,10 +136,10 @@ def find_driver():
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid path" %
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid path" %
                              envpath)
         if not os.path.isfile(envpath):
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid file "
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid file "
                              "path.  Note it must be a filepath of the .so/"
                              ".dll/.dylib or the driver" % envpath)
         candidates = [envpath]
@@ -174,7 +174,7 @@ def find_driver():
 DRIVER_NOT_FOUND_MSG = """
 CUDA driver library cannot be found.
 If you are sure that a CUDA driver is installed,
-try setting environment variable NUMBAPRO_CUDA_DRIVER
+try setting environment variable NUMBA_CUDA_DRIVER
 with the file path of the CUDA driver shared library.
 """
 
