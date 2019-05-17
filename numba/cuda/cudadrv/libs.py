@@ -132,6 +132,18 @@ def get_conda_ctk():
     return os.path.join(sys.prefix, 'lib')
 
 
+def get_system_ctk(*subdirs):
+    """Return path to system-wide cudatoolkit; or, None if it doesn't exist.
+    """
+    # Linux?
+    if sys.platform.startswith('linux'):
+        # Is cuda alias to /usr/local/cuda?
+        # We are intentionally not getting versioned cuda installation.
+        base = '/usr/local/cuda'
+        if os.path.exists(base):
+            return os.path.join(base, *subdirs)
+
+
 def _nvvm_lib_dir():
     if IS_WIN32:
         return 'nvvm', 'bin'
@@ -145,6 +157,7 @@ def _get_nvvm_path_decision():
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
+        ('System', get_system_ctk(*_nvvm_lib_dir())),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
@@ -175,6 +188,7 @@ def _get_libdevice_path_decision():
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
+        ('System', get_system_ctk('nvvm', 'libdevice')),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
@@ -205,6 +219,7 @@ def _get_cudalib_dir_path_decision():
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home(_cudalib_path())),
+        ('System', get_system_ctk(_cudalib_path())),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
