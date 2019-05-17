@@ -209,7 +209,7 @@ class Optional(Type):
         assert not isinstance(typ, (Optional, NoneType))
         typ = unliteral(typ)
         self.type = typ
-        name = "OptionalType(%s)" % typ
+        name = "OptionalType(%s) i.e. the type '%s or None'" % (typ, typ)
         super(Optional, self).__init__(name)
 
     @property
