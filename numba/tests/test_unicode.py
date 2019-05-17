@@ -8,7 +8,7 @@ from __future__ import print_function
 import sys
 from itertools import permutations
 
-from numba import njit
+from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
@@ -451,7 +451,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(repeat_usecase)
         with self.assertRaises(TypingError) as raises:
             cfunc('hi', 2.5)
-        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
+        self.assertIn('Invalid use of Function(<built-in function mul>)',
+                      str(raises.exception))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
@@ -512,8 +513,10 @@ class TestUnicode(BaseTest):
             ('abababa', 'aba', 5),
         ]
 
-        for pyfunc, fmt_str in [(split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
-                                (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
+        for pyfunc, fmt_str in [(split_with_maxsplit_usecase,
+                                 "'%s'.split('%s', %d)?"),
+                                (split_with_maxsplit_kwarg_usecase,
+                                 "'%s'.split('%s', maxsplit=%d)?")]:
 
             cfunc = njit(pyfunc)
             for test_str, splitter, maxsplit in CASES:
@@ -522,15 +525,17 @@ class TestUnicode(BaseTest):
                                  fmt_str % (test_str, splitter, maxsplit))
 
     def test_split_whitespace(self):
-        # explicit sep=None cases covered in test_split and test_split_with_maxsplit
+        # explicit sep=None cases covered in test_split and
+        # test_split_with_maxsplit
         pyfunc = split_whitespace_usecase
         cfunc = njit(pyfunc)
 
         # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
         all_whitespace = ''.join(map(chr, [
-            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020,
-            0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
-            0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E,
+            0x001F, 0x0020, 0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002,
+            0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+            0x2028, 0x2029, 0x202F, 0x205F, 0x3000
         ]))
 
         CASES = [
@@ -571,7 +576,8 @@ class TestUnicode(BaseTest):
         # Handle empty separator exception
         with self.assertRaises(TypingError) as raises:
             cfunc('', [1, 2, 3])
-        # This error message is obscure, but indicates the error was trapped in typing of str.join()
+        # This error message is obscure, but indicates the error was trapped in
+        # typing of str.join()
         # Feel free to change this as we update error messages.
         exc_message = str(raises.exception)
         self.assertIn("Invalid use of BoundFunction", exc_message)
@@ -637,7 +643,8 @@ class TestUnicode(BaseTest):
                 for width in range(-3, 20):
                     self.assertEqual(pyfunc(s, width, fillchar),
                                      cfunc(s, width, fillchar),
-                                     "'%s'.ljust(%d, '%s')?" % (s, width, fillchar))
+                                     "'%s'.ljust(%d, '%s')?" % (s, width,
+                                                                fillchar))
 
     def test_ljust_fillchar_exception(self):
         self.disable_leak_check()
@@ -649,13 +656,15 @@ class TestUnicode(BaseTest):
         for fillchar in ['', '+0', 'quién', '处着']:
             with self.assertRaises(ValueError) as raises:
                 cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The fill character must be exactly one', str(raises.exception))
+            self.assertIn('The fill character must be exactly one',
+                          str(raises.exception))
 
         # forbid fillchar cases with different types
         for fillchar in [1, 1.1]:
             with self.assertRaises(TypingError) as raises:
                 cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-            self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
+            self.assertIn('The fillchar must be a UnicodeType',
+                          str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
@@ -707,14 +716,28 @@ class TestUnicode(BaseTest):
                                   (rstrip_usecase_chars, 'rstrip')]:
             cfunc = njit(pyfunc)
 
-            with self.assertRaises(TypingError) as raises:
-                cfunc('tú quis?', 1.1)
-            self.assertIn('The arg must be a UnicodeType or None', str(raises.exception))
+            sig1 = types.unicode_type(types.unicode_type,
+                                      types.Optional(types.unicode_type))
+            cfunc_optional = njit([sig1])(pyfunc)
 
-            for string, chars in STRIP_CASES:
-                self.assertEqual(pyfunc(string, chars),
-                                 cfunc(string, chars),
-                                 "'%s'.%s('%s')?" % (string, case_name, chars))
+            def try_compile_bad_optional(*args):
+                bad = types.unicode_type(types.unicode_type,
+                                         types.Optional(types.float64))
+                njit([bad])(pyfunc)
+
+            for fn in cfunc, try_compile_bad_optional:
+                with self.assertRaises(TypingError) as raises:
+                    fn('tú quis?', 1.1)
+                self.assertIn('The arg must be a UnicodeType or None',
+                              str(raises.exception))
+
+            for fn in cfunc, cfunc_optional:
+
+                for string, chars in STRIP_CASES:
+                    self.assertEqual(pyfunc(string, chars),
+                                     fn(string, chars),
+                                     "'%s'.%s('%s')?" % (string, case_name,
+                                                         chars))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
