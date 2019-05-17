@@ -120,10 +120,22 @@ def _if_osx_10_5():
 _env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
 
 
+def get_conda_ctk():
+    is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
+    if not is_conda_env:
+        return
+    # Asssume the existence of NVVM to imply cudatoolkit installed
+    paths = find_lib('nvvm')
+    if not paths:
+        return
+    return os.path.join(sys.prefix, 'lib')
+
+
 def _get_nvvm_path_decision():
     options = [
         ('NUMBAPRO_NVVM', get_numbapro_envvar('NUMBAPRO_NVVM')),
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
+        ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'lib')),
     ]
     by, libdir = _find_valid_path(options)
@@ -146,13 +158,14 @@ def _find_valid_path(options):
         if data is not None:
             return by, data
     else:
-        return 'Conda environment', None
+        raise RuntimeError("cuda libraries not found")
 
 
 def _get_libdevice_path_decision():
     options = [
         ('NUMBAPRO_LIBDEVICE', get_numbapro_envvar('NUMBAPRO_LIBDEVICE')),
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
+        ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
     ]
     by, libdir = _find_valid_path(options)
@@ -175,12 +188,18 @@ def _get_libdevice_paths():
     return _env_path_tuple(by, out)
 
 
-def _get_cudalib_dir():
+def _get_cudalib_dir_path_decision():
     options = [
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
+        ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('lib')),
     ]
     by, libdir = _find_valid_path(options)
+    return by, libdir
+
+
+def _get_cudalib_dir():
+    by, libdir = _get_cudalib_dir_path_decision()
     return _env_path_tuple(by, libdir)
 
 

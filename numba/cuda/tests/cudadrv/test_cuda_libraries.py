@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import sys
 import os
 import multiprocessing as mp
 
@@ -9,6 +10,7 @@ from numba.findlib import find_lib
 from numba.cuda.cudadrv.libs import (
     _get_libdevice_path_decision,
     _get_nvvm_path_decision,
+    _get_cudalib_dir_path_decision,
 )
 
 
@@ -50,6 +52,12 @@ class LibraryLookupBase(unittest.TestCase):
         self.child_process.join(3)
         # Ensure the process is terminated
         self.assertIsNotNone(self.child_process)
+
+    def remote_fail(self, action):
+        self.qsend.put(action)
+        out = self.qrecv.get()
+        self.assertIsInstance(out, BaseException)
+        return out
 
     def remote_do(self, action):
         self.qsend.put(action)
@@ -95,7 +103,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         # Check that the default is using conda environment
         by, _ = self.remote_do(self.do_clear_envs)
         self.assertEqual(by, 'Conda environment')
-        # Check that CUDA_HOME works
+        # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
         self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'libdevice'))
@@ -103,6 +111,10 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         by, info = self.remote_do(self.do_set_libdevice)
         self.assertEqual(by, 'NUMBAPRO_LIBDEVICE')
         self.assertEqual(info, os.path.join('nbp_libdevice'))
+        # Fake remove conda environment so no cudatoolkit is available
+        exc = self.remote_fail(self.do_clear_envs)
+        self.assertIsInstance(exc, RuntimeError)
+        self.assertEqual(str(exc), "cuda libraries not found")
 
     @staticmethod
     def do_clear_envs():
@@ -114,6 +126,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
     @staticmethod
     def do_set_cuda_home():
         os.environ['CUDA_HOME'] = os.path.join('mycudahome')
+        _fake_non_conda_env()
         return True, _get_libdevice_path_decision()
 
     @staticmethod
@@ -129,7 +142,7 @@ class TestNvvmLookUp(LibraryLookupBase):
         # Check that the default is using conda environment
         by, _ = self.remote_do(self.do_clear_envs)
         self.assertEqual(by, 'Conda environment')
-        # Check that CUDA_HOME works
+        # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
         self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib'))
@@ -137,6 +150,14 @@ class TestNvvmLookUp(LibraryLookupBase):
         by, info = self.remote_do(self.do_set_cuda_lib)
         self.assertEqual(by, 'NUMBAPRO_CUDALIB')
         self.assertEqual(info, os.path.join('nbp_cudalib'))
+        # Check that NUMBAPRO_NVVM override works
+        by, info = self.remote_do(self.do_set_nvvm)
+        self.assertEqual(by, 'NUMBAPRO_NVVM')
+        self.assertEqual(info, os.path.join('nbp_nvvm'))
+        # Fake remove conda environment so no cudatoolkit is available
+        exc = self.remote_fail(self.do_clear_envs)
+        self.assertIsInstance(exc, RuntimeError)
+        self.assertEqual(str(exc), "cuda libraries not found")
 
     @staticmethod
     def do_clear_envs():
@@ -148,6 +169,7 @@ class TestNvvmLookUp(LibraryLookupBase):
     @staticmethod
     def do_set_cuda_home():
         os.environ['CUDA_HOME'] = os.path.join('mycudahome')
+        _fake_non_conda_env()
         return True, _get_nvvm_path_decision()
 
     @staticmethod
@@ -155,4 +177,53 @@ class TestNvvmLookUp(LibraryLookupBase):
         os.environ['NUMBAPRO_CUDALIB'] = 'nbp_cudalib'
         return True, _get_nvvm_path_decision()
 
+    @staticmethod
+    def do_set_nvvm():
+        os.environ['NUMBAPRO_NVVM'] = 'nbp_nvvm'
+        return True, _get_nvvm_path_decision()
 
+
+
+@skip_on_cudasim('Library detection unsupported in the simulator')
+@unittest.skipUnless(has_mp_get_context, 'mp.get_context not available')
+class TestCudaLibLookUp(LibraryLookupBase):
+    def test_cudalib_path_decision(self):
+        # Check that the default is using conda environment
+        by, _ = self.remote_do(self.do_clear_envs)
+        self.assertEqual(by, 'Conda environment')
+        # Check that CUDA_HOME works by removing conda-env
+        by, info = self.remote_do(self.do_set_cuda_home)
+        self.assertEqual(by, 'CUDA_HOME')
+        self.assertEqual(info, os.path.join('mycudahome', 'lib'))
+        # Check that NUMBAPRO_CUDALIB override works
+        by, info = self.remote_do(self.do_set_cuda_lib)
+        self.assertEqual(by, 'NUMBAPRO_CUDALIB')
+        self.assertEqual(info, os.path.join('nbp_cudalib'))
+        # Fake remove conda environment so no cudatoolkit is available
+        exc = self.remote_fail(self.do_clear_envs)
+        self.assertIsInstance(exc, RuntimeError)
+        self.assertEqual(str(exc), "cuda libraries not found")
+
+    @staticmethod
+    def do_clear_envs():
+        remove_env('CUDA_HOME')
+        remove_env('NUMBAPRO_CUDALIB')
+        return True, _get_cudalib_dir_path_decision()
+
+    @staticmethod
+    def do_set_cuda_home():
+        os.environ['CUDA_HOME'] = os.path.join('mycudahome')
+        _fake_non_conda_env()
+        return True, _get_cudalib_dir_path_decision()
+
+    @staticmethod
+    def do_set_cuda_lib():
+        os.environ['NUMBAPRO_CUDALIB'] = 'nbp_cudalib'
+        return True, _get_cudalib_dir_path_decision()
+
+
+def _fake_non_conda_env():
+    """
+    Monkeypatch sys.prefix to hide the fact we are in a conda-env
+    """
+    sys.prefix = ''
