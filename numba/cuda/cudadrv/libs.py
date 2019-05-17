@@ -5,16 +5,13 @@ user supplied location from CUDA_HOME, or old deprecating NUMBAPRO_ prefixed
 environment variables.
 """
 from __future__ import print_function
-import re
 import os
 import sys
 import ctypes
 import platform
-from collections import namedtuple, defaultdict
 
-from numba.config import IS_WIN32
-from numba.findlib import find_lib, find_file
-from .driver import get_numbapro_envvar
+from numba.findlib import find_lib
+from numba.cuda.cuda_paths import get_cuda_paths
 
 if sys.platform == 'win32':
     _dllopener = ctypes.WinDLL
@@ -22,12 +19,6 @@ elif sys.platform == 'darwin':
     _dllopener = ctypes.CDLL
 else:
     _dllopener = ctypes.CDLL
-
-
-def get_cuda_home(*subdirs):
-    cuda_home = os.environ.get('CUDA_HOME')
-    if cuda_home is not None:
-        return os.path.join(cuda_home, *subdirs)
 
 
 def get_libdevice(arch):
@@ -116,141 +107,3 @@ def _if_osx_10_5():
         if vers < (10, 6):
             return True
     return False
-
-
-_env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
-
-
-def get_conda_ctk():
-    is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
-    if not is_conda_env:
-        return
-    # Asssume the existence of NVVM to imply cudatoolkit installed
-    paths = find_lib('nvvm')
-    if not paths:
-        return
-    return os.path.join(sys.prefix, 'lib')
-
-
-def get_system_ctk(*subdirs):
-    """Return path to system-wide cudatoolkit; or, None if it doesn't exist.
-    """
-    # Linux?
-    if sys.platform.startswith('linux'):
-        # Is cuda alias to /usr/local/cuda?
-        # We are intentionally not getting versioned cuda installation.
-        base = '/usr/local/cuda'
-        if os.path.exists(base):
-            return os.path.join(base, *subdirs)
-
-
-def _nvvm_lib_dir():
-    if IS_WIN32:
-        return 'nvvm', 'bin'
-    else:
-        return 'nvvm', 'lib'
-
-
-def _get_nvvm_path_decision():
-    options = [
-        ('NUMBAPRO_NVVM', get_numbapro_envvar('NUMBAPRO_NVVM')),
-        ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
-        ('Conda environment', get_conda_ctk()),
-        ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
-        ('System', get_system_ctk(*_nvvm_lib_dir())),
-    ]
-    by, libdir = _find_valid_path(options)
-    return by, libdir
-
-
-def _get_nvvm_path():
-    by, libdir = _get_nvvm_path_decision()
-    candidates = find_lib('nvvm', libdir)
-    path = max(candidates) if candidates else None
-    return _env_path_tuple(by, path)
-
-
-def _find_valid_path(options):
-    """Find valid path from *options*, which is a list of 2-tuple of
-    (name, path).  Return first pair where *path* is not None; or, return
-    ('Conda environment', None) for default conda path.
-    """
-    for by, data in options:
-        if data is not None:
-            return by, data
-    else:
-        raise RuntimeError("cuda libraries not found")
-
-
-def _get_libdevice_path_decision():
-    options = [
-        ('NUMBAPRO_LIBDEVICE', get_numbapro_envvar('NUMBAPRO_LIBDEVICE')),
-        ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
-        ('Conda environment', get_conda_ctk()),
-        ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
-        ('System', get_system_ctk('nvvm', 'libdevice')),
-    ]
-    by, libdir = _find_valid_path(options)
-    return by, libdir
-
-
-def _get_libdevice_paths():
-    by, libdir = _get_libdevice_path_decision()
-    # Search for pattern
-    pat = r'libdevice(\.(?P<arch>compute_\d+))?(\.\d+)*\.bc$'
-    candidates = find_file(re.compile(pat), libdir)
-    # Grouping
-    out = defaultdict(list)
-    for path in candidates:
-        m = re.search(pat, path)
-        arch = m.group('arch')
-        out[arch].append(path)
-    # Keep only the max (most recent version) of the bitcode files.
-    out = {k: max(v) for k, v in out.items()}
-    return _env_path_tuple(by, out)
-
-
-def _cudalib_path():
-    return 'bin' if IS_WIN32 else 'lib'
-
-
-def _get_cudalib_dir_path_decision():
-    options = [
-        ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
-        ('Conda environment', get_conda_ctk()),
-        ('CUDA_HOME', get_cuda_home(_cudalib_path())),
-        ('System', get_system_ctk(_cudalib_path())),
-    ]
-    by, libdir = _find_valid_path(options)
-    return by, libdir
-
-
-def _get_cudalib_dir():
-    by, libdir = _get_cudalib_dir_path_decision()
-    return _env_path_tuple(by, libdir)
-
-
-def get_cuda_paths():
-    """Returns a dictionary mapping component names to a 2-tuple
-    of (source_variable, info).
-
-    The returned dictionary will have the following keys and infos:
-    - "nvvm": file_path
-    - "libdevice": List[Tuple[arch, file_path]]
-    - "cudalib_dir": directory_path
-
-    Note: The result of the function is cached.
-    """
-    # Check cache
-    if hasattr(get_cuda_paths, '_cached_result'):
-        return get_cuda_paths._cached_result
-    else:
-        # Not in cache
-        d = {
-            'nvvm': _get_nvvm_path(),
-            'libdevice': _get_libdevice_paths(),
-            'cudalib_dir': _get_cudalib_dir(),
-        }
-        # Cache result
-        get_cuda_paths._cached_result = d
-        return d

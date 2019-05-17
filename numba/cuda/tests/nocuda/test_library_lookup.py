@@ -7,7 +7,7 @@ import multiprocessing as mp
 from numba.config import IS_WIN32
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
-from numba.cuda.cudadrv.libs import (
+from numba.cuda.cuda_paths import (
     _get_libdevice_path_decision,
     _get_nvvm_path_decision,
     _get_cudalib_dir_path_decision,
