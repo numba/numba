@@ -6,7 +6,7 @@ import multiprocessing as mp
 
 from numba.config import IS_WIN32
 from numba.cuda.testing import unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.cuda.cuda_paths import (
     _get_libdevice_path_decision,
     _get_nvvm_path_decision,
@@ -18,7 +18,7 @@ from numba.cuda.cuda_paths import (
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
-class LibraryLookupBase(unittest.TestCase):
+class LibraryLookupBase(SerialMixin, unittest.TestCase):
     def setUp(self):
         ctx = mp.get_context('spawn')
 
