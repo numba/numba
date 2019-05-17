@@ -78,9 +78,7 @@ in code that is being JIT-compiled, for example when you decorate your
 ``jit_norm`` will be called with the currently encountered types and will then
 return either ``_oneD_norm_x`` in the vector case and ``_two_D_norm_2``.
 
-You can download the example code from above including tests here:
-
-* :download:`mynorm.py </extending/mynorm.py>`
+You can download the example code here: :download:`mynorm.py </extending/mynorm.py>`
 
 Implementing ``@overload`` for NumPy functions
 ==============================================
