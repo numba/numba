@@ -20,7 +20,8 @@ from numba.ir_utils import (
     find_callname,
     find_build_sequence,
     find_const,
-    is_namedtuple_class)
+    is_namedtuple_class,
+    build_definitions)
 from numba.analysis import (compute_cfg_from_blocks)
 from numba.typing import npydecl, signature
 import collections
@@ -861,6 +862,8 @@ class ArrayAnalysis(object):
         """
         if blocks == None:
             blocks = self.func_ir.blocks
+
+        self.func_ir._definitions = build_definitions(blocks)
 
         if equiv_set == None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
