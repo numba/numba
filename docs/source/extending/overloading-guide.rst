@@ -103,8 +103,11 @@ additional things to watch out for.
 * A NumPy function may return a scalar, array or a data structure
   which matches one of its inputs, you need to watch be aware of type
   unification problems and dispatch to appropriate implementations. For
-  example, ``np.corrcoef`` may return an array or a scalar depending on its
+  example, |np.corrcoef|_ may return an array or a scalar depending on its
   inputs.
+
+.. |np.corrcoef| replace:: ``np.corrcoef``
+.. _np.corrcoef: https://docs.scipy.org/doc/numpy/reference/generated/numpy.corrcoef.html
 
 * If you are implementing a new function, you should always update the
   `documentation
