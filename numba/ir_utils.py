@@ -500,7 +500,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     if alias_map is None or arg_aliases is None:
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
@@ -802,7 +802,7 @@ def copy_propagate(blocks, typemap):
                                  | (in_copies[label] - kill_copies[label]))
         old_point = new_point
         new_point = copy.deepcopy(out_copies)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("copy propagate out_copies:", out_copies)
     return in_copies, out_copies
 
@@ -1002,7 +1002,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
     """Debug print function IR, with an optional blocks argument
     that may differ from the IR's original blocks.
     """
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         ir_blocks = func_ir.blocks
         func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
@@ -1355,7 +1355,7 @@ def simplify(func_ir, typemap, calltypes):
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after simplify")
 
 class GuardException(Exception):
