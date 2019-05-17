@@ -48,6 +48,33 @@ type::
 
    $ conda install cudatoolkit
 
+If you are not using Conda or if you want to use a different version of CUDA
+toolkit, the following describe how Numba search for a CUDA toolkit
+installation.
+
+.. _cudatoolkit-lookup:
+
+Setting CUDA Installation Path
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Numba search for CUDA toolkit installation in the following order:
+
+1. Old and deprecated environment variables: ``NUMBAPRO_NVVM``,
+   ``NUMBAPRO_LIBDEVICE``, and ``NUMBAPRO_CUDALIB``.
+2. Conda installed `cudatoolkit` package.
+3. Environment variable ``CUDA_HOME``, which points to the directory of the
+   installed CUDA toolkit (i.e. ``/home/user/cuda-10``)
+4. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
+   Versioned installation paths (i.e. ``/usr/loca/cuda-10.0``) are intentionally
+   ignored.  Users can use ``CUDA_HOME`` to select specific versions.
+
+An up-to-date CUDA driver is required. It is typically installed by the CUDA
+toolkit installer.  The CUDA driver is usually located in system default
+location and Numba can find it automatically.  If the driver
+is in a different location,  users can set environment variable
+``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
+driver shared library file.
+
 
 Missing CUDA Features
 =====================
