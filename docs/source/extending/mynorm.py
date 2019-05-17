@@ -8,18 +8,23 @@ import scipy.linalg
 
 @register_jitable
 def _oneD_norm_2(a):
+    # re-usable implementation of the 2-norm
     val = np.abs(a)
     return np.sqrt(np.sum(val * val))
 
 
 @overload(scipy.linalg.norm)
 def jit_norm(a, ord=None):
+    # Reject non-ndarray types
     if not isinstance(a, types.Array):
         raise TypingError("Only accepts NumPy ndarray")
+    # Reject ndarrays with non integer or floating-point types
     if not isinstance(a.dtype, (types.Integer, types.Float)):
         raise TypingError("Only integer and floating point types accpeted")
+    # Reject ndarrays with unsupported dimensionality
     if a.ndim not in [1, 2]:
         raise TypingError('3D and beyond are not allowed')
+    # Implementation for vectors
     elif a.ndim == 1:
         def _oneD_norm_x(a, ord=None):
             if ord == 2 or ord is None:
@@ -35,21 +40,25 @@ def jit_norm(a, ord=None):
             else:
                 return np.sum(np.abs(a)**ord)**(1. / ord)
         return _oneD_norm_x
+    # Implementation for matrices
     elif a.ndim == 2:
         def _two_D_norm_2(a, ord=None):
             return _oneD_norm_2(a.ravel())
         return _two_D_norm_2
 
 
-@njit
-def use(a, ord=None):
-    return scipy.linalg.norm(a, ord)
-
-
 if __name__ == "__main__":
+    @njit
+    def use(a, ord=None):
+        # simple test function to check that the overload works
+        return scipy.linalg.norm(a, ord)
+
+    # spot check for vectors
     a = np.arange(10)
     print(use(a))
     print(scipy.linalg.norm(a))
+
+    # spot check for matrices
     b = np.arange(9).reshape((3, 3))
     print(use(b))
     print(scipy.linalg.norm(b))
