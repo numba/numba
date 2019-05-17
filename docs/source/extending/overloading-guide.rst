@@ -15,125 +15,72 @@ decorated code. This section discusses how and when to use the
 entail. This should help you get started when needing to use the ``@overload``
 decorator or when attempting to contribute new functions to Numba itself.
 
+The ``@overload`` decorator and it's variants are useful when you have a
+third-party library that you do not control and you wish to provide Numba
+compatible implementations for specific functions from that library.
 
 Concrete Example
 ================
 
-Let's assume that you have a module called ``mymodule.py`` which implements a single
-a function called ``set_to_x`` which sets all elements of a NumPy array to a
-specific value.
+Let's assume that you are working on a minimization algorithm that makes use of
+|scipy.linalg.norm|_ to find different vector norms and the `frobenius
+norm <https://en.wikipedia.org/wiki/Frobenius_inner_product>`_ for matrices.
+You know that only integer and real numbers will be involved. (While this may
+sound like an artificial example, especially because a Numba implementation of
+``numpy.linalg.norm`` exists, it is largely pedagogical and serves to
+illustrate how and when to use ``@overload``).
 
-.. literalinclude:: mymodule.py
+.. |scipy.linalg.norm| replace:: ``scipy.linalg.norm``
+.. _scipy.linalg.norm: https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.norm.html
 
-Both you and your colleague are using this function as part of your algorithms:
+The skeleton might look something like this::
 
-.. code:: python
+    def algorithm():
+        # setup
+        v = ...
+        while True:
+            # take a step
+            d = scipy.linalg.norm(v)
+            if d < tolerance:
+                break
 
-    @jit
-    def myalgorithm(h, j, k, l):
-        # algorithm code
-        mymodule.set_to_x(a, x)
-        # more algorithm code
-
-However, you both make use of this function in slightly different contexts. You
-usually work with integer arrays and your colleague works with floats and because
-of duck typing the code works equally well for both types.
-
-Profiling reveals that this function is used very often in your ``@jit``
-decorated functions such as ``myalgorithm``. In order to further speed up your
-calculations, You decide to use Numba again. In this case however, you will use
-the ``overload`` decorator as you wish to dispatch specialisations based on
-type. The following annotated template outlines what the specific parts ought
-to look like when using ``@overload``. This should give you an idea as to the
-structure required.
+Now, let's further assume, that you have heard of Numba and you now wish to use
+it to accelerate your function. However, after adding the
+``jit(nopython=True)``
+decorator, Numba complains that ``scipy.linalg.norm`` isn't supported. From
+looking at the documentation, you realize that a norm is probably fairly easy
+to implement using NumPy and you wanted to learn a little about the inner
+workings of Numba anyway. So, after some back and forth with the
+core-developers via Gitter you receive the following annotated template in your
+INBOX:
 
 .. literalinclude:: template.py
 
-Inspired by the template above, your implementation might look something like:
+After some deliberation and tinkering, you end up with the following code:
 
-.. literalinclude:: myjitmodule.py
+.. literalinclude:: mynorm.py
 
-While this is fine for your use-cases, this implementation doesn't generalize
-to your colleague's use-case, who would like to use ``set_to_x`` with a
-floating point number. The following error arises:
+As you can see, the implementation only supports what you need right now:
 
-.. code:: pycon
+* Only supports 
+* Only integer and floating-point types
+* All vector norms
+* Only the Frobenius norm for matrices
+* Code sharing between vector and matrix implementations using
+  ``@register_jitable``.
+* Norms are implemented using NumPy syntax. (This is possible because
+  Numba is very aware of NumPy and many functions are supported.)
 
-    In [4]: myjitmodule.myalgorithm(a, 1.0)
-    TypingError: Failed in nopython mode pipeline (step: nopython frontend)
-    Invalid use of Function(<function set_to_x at 0x11aea71e0>) with argument(s) of type(s): (array(int64, 1d, C), float64)
-    * parameterized
-    In definition 0:
-        All templates rejected with literals.
-    In definition 1:
-        All templates rejected without literals.
-    This error is usually caused by passing an argument of a type that is unsupported by the named function.
-    [1] During: resolving callee type: Function(<function set_to_x at 0x11aea71e0>)
-    [2] During: typing of call at <path>/numba/docs/source/extending/myjitmodule.py (25)
-
-
-    File myjitmodule.py", line 25:
-    def myalgorithm(h, j, k, l):
-        # algorithm code
-        mymodule.set_to_x(a, x)
-        # algorithm code
-
-
-Providing multiple implementations and dispatching based on types
-=================================================================
-
-As you saw above, the overload implementation for ``set_to_x`` function
-doesn't accept floating-point arguments. Let's formalise and, for pedagogical reasons, enhance the specification of
-the function as follows:
-
-* The numerical type of the array ``arr`` must match the numerical type of the
-  scalar ``x`` argument, i.e. if ``arr`` is of type ``int64``, then ``x`` must
-  be of this type too.
-* Only integer and floating-point types are to be supported for argument ``x``.
-* No ``NaN`` values are allowed in ``arr`` when it is of floating-point type and if
-  such a value is encountered an appropriate ``ValueError`` should be raised.
-* If a tuple is used instead of an array as a value for ``arr``, a custom error
-  message with a hint for the user should be issued.
-
-The resulting implementation could look like the following:
-
-.. literalinclude:: myjitmodule2.py
-
-As you can see, the typing checking code has been increased significantly to
-match the formal requirements. Also, multiple implementations, one for
-integers and one for floating-point, are provided. We check inside the typing
-scope which implementation should be used and also raise any custom error
-messages required. Importantly, the check for ``NaN`` values is only present in
-the floating point implementation as this additional check creates a runtime
-overhead.
-
-Writing Tests
-=============
-
-The following is a sufficient piece of test code for the overloaded
-``set_to_x`` implementation. As you can see, only a small part of the test-code
-is about testing if the function works correctly. Most of the test code in this
-example checks that all error cases are handled and that all raised exceptions
-are of the correct type and have the correct error message. When implementing
-tests cases for Numba, you should always use ``numba.tests.support.TestCase``.
-
-.. literalinclude:: test_myjitmodule2.py
-
-While it is a pretty decent test, it wouldn't be accepted into Numba.
-There are a few more test-cases that should be implemented:
-
-* Empty array
-* Single value array
-* Multidimensional arrays
-* Tests for ``int32`` and ``float32`` types
+So what actually happens here? The ``overload`` decorator registers a suitable
+implementation for ``scipy.linalg.norm`` in case a call to this is encountered
+in code that is being JIT-compiled, for example when you decorate your
+``algorithm`` function with ``@jit(nopython=True)``. In that case, the function
+``jit_norm`` will be called with the currently encountered types and will then
+return either ``_oneD_norm_x`` in the vector case and ``_two_D_norm_2``.
 
 You can download the example code from above including tests here:
 
-* :download:`mymodule.py </extending/mymodule.py>`
-* :download:`myjitmodule.py </extending/myjitmodule.py>`
-* :download:`myjitmodule2.py </extending/myjitmodule2.py>`
-* :download:`test_myjitmodule2.py </extending/test_myjitmodule2.py>`
-
+* :download:`mynorm.py </extending/mynorm.py>`
 
 Implementing ``@overload`` for NumPy functions
 ==============================================
