@@ -3,7 +3,7 @@ import re
 import os
 from collections import defaultdict, namedtuple
 
-from numba.config import IS_WIN32
+from numba.config import IS_WIN32, IS_OSX
 from numba.findlib import find_lib, find_file
 from numba.cuda.envvars import get_numbapro_envvar
 
@@ -38,8 +38,10 @@ def _get_libdevice_path_decision():
 def _nvvm_lib_dir():
     if IS_WIN32:
         return 'nvvm', 'bin'
-    else:
+    elif IS_OSX:
         return 'nvvm', 'lib'
+    else:
+        return 'nvvm', 'lib64'
 
 
 def _get_nvvm_path_decision():
@@ -71,7 +73,12 @@ def _get_libdevice_paths():
 
 
 def _cudalib_path():
-    return 'bin' if IS_WIN32 else 'lib'
+    if IS_WIN32:
+        return 'bin'
+    elif IS_OSX:
+        return 'lib'
+    else:
+        return 'lib64'
 
 
 def _get_cudalib_dir_path_decision():

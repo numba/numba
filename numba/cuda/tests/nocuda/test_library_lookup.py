@@ -4,7 +4,7 @@ import sys
 import os
 import multiprocessing as mp
 
-from numba.config import IS_WIN32
+from numba.config import IS_WIN32, IS_OSX
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
@@ -142,8 +142,10 @@ class TestNvvmLookUp(LibraryLookupBase):
         self.assertEqual(by, 'CUDA_HOME')
         if IS_WIN32:
             self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'bin'))
-        else:
+        elif IS_OSX:
             self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib'))
+        else:
+            self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib64'))
         # Check that NUMBAPRO_CUDALIB override works
         by, info = self.remote_do(self.do_set_cuda_lib)
         self.assertEqual(by, 'NUMBAPRO_CUDALIB')
@@ -202,8 +204,10 @@ class TestCudaLibLookUp(LibraryLookupBase):
         self.assertEqual(by, 'CUDA_HOME')
         if IS_WIN32:
             self.assertEqual(info, os.path.join('mycudahome', 'bin'))
-        else:
+        elif IS_OSX:
             self.assertEqual(info, os.path.join('mycudahome', 'lib'))
+        else:
+            self.assertEqual(info, os.path.join('mycudahome', 'lib64'))
         # Check that NUMBAPRO_CUDALIB override works
         by, info = self.remote_do(self.do_set_cuda_lib)
         self.assertEqual(by, 'NUMBAPRO_CUDALIB')
