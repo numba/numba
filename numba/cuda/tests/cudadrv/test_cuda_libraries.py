@@ -4,6 +4,7 @@ import sys
 import os
 import multiprocessing as mp
 
+from numba.config import IS_WIN32
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
 from numba.findlib import find_lib
@@ -145,7 +146,10 @@ class TestNvvmLookUp(LibraryLookupBase):
         # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
-        self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib'))
+        if IS_WIN32:
+            self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'bin'))
+        else:
+            self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib'))
         # Check that NUMBAPRO_CUDALIB override works
         by, info = self.remote_do(self.do_set_cuda_lib)
         self.assertEqual(by, 'NUMBAPRO_CUDALIB')
@@ -183,7 +187,6 @@ class TestNvvmLookUp(LibraryLookupBase):
         return True, _get_nvvm_path_decision()
 
 
-
 @skip_on_cudasim('Library detection unsupported in the simulator')
 @unittest.skipUnless(has_mp_get_context, 'mp.get_context not available')
 class TestCudaLibLookUp(LibraryLookupBase):
@@ -194,7 +197,10 @@ class TestCudaLibLookUp(LibraryLookupBase):
         # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
-        self.assertEqual(info, os.path.join('mycudahome', 'lib'))
+        if IS_WIN32:
+            self.assertEqual(info, os.path.join('mycudahome', 'bin'))
+        else:
+            self.assertEqual(info, os.path.join('mycudahome', 'lib'))
         # Check that NUMBAPRO_CUDALIB override works
         by, info = self.remote_do(self.do_set_cuda_lib)
         self.assertEqual(by, 'NUMBAPRO_CUDALIB')

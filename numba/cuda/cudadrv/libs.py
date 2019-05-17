@@ -12,6 +12,7 @@ import ctypes
 import platform
 from collections import namedtuple, defaultdict
 
+from numba.config import IS_WIN32
 from numba.findlib import find_lib, find_file
 from .driver import get_numbapro_envvar
 
@@ -131,12 +132,19 @@ def get_conda_ctk():
     return os.path.join(sys.prefix, 'lib')
 
 
+def _nvvm_lib_dir():
+    if IS_WIN32:
+        return 'nvvm', 'bin'
+    else:
+        return 'nvvm', 'lib'
+
+
 def _get_nvvm_path_decision():
     options = [
         ('NUMBAPRO_NVVM', get_numbapro_envvar('NUMBAPRO_NVVM')),
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('Conda environment', get_conda_ctk()),
-        ('CUDA_HOME', get_cuda_home('nvvm', 'lib')),
+        ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
@@ -188,11 +196,15 @@ def _get_libdevice_paths():
     return _env_path_tuple(by, out)
 
 
+def _cudalib_path():
+    return 'bin' if IS_WIN32 else 'lib'
+
+
 def _get_cudalib_dir_path_decision():
     options = [
         ('NUMBAPRO_CUDALIB', get_numbapro_envvar('NUMBAPRO_CUDALIB')),
         ('Conda environment', get_conda_ctk()),
-        ('CUDA_HOME', get_cuda_home('lib')),
+        ('CUDA_HOME', get_cuda_home(_cudalib_path())),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
