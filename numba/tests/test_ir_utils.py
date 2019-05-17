@@ -189,7 +189,6 @@ class TestIrUtils(TestCase):
                 const_c = ir_utils.guard(
                     ir_utils.find_const, f_ir, inst.target)
 
-
         self.assertEqual(const_b, GLOBAL_B)
         self.assertEqual(const_c, FREEVAR_C)
 
