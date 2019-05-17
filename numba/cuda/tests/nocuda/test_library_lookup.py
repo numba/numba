@@ -5,6 +5,7 @@ import os
 import multiprocessing as mp
 
 from numba.config import IS_WIN32
+from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.cuda.cuda_paths import (
@@ -15,6 +16,7 @@ from numba.cuda.cuda_paths import (
 )
 
 
+has_cuda = nvvm.is_available()
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
@@ -38,12 +40,6 @@ class LibraryLookupBase(SerialMixin, unittest.TestCase):
         self.child_process.join(3)
         # Ensure the process is terminated
         self.assertIsNotNone(self.child_process)
-
-    def remote_fail(self, action):
-        self.qsend.put(action)
-        out = self.qrecv.get()
-        self.assertIsInstance(out, BaseException)
-        return out
 
     def remote_do(self, action):
         self.qsend.put(action)
@@ -87,8 +83,12 @@ def check_lib_lookup(qout, qin):
 class TestLibDeviceLookUp(LibraryLookupBase):
     def test_libdevice_path_decision(self):
         # Check that the default is using conda environment
-        by, _ = self.remote_do(self.do_clear_envs)
-        self.assertEqual(by, 'Conda environment')
+        by, info = self.remote_do(self.do_clear_envs)
+        if has_cuda:
+            self.assertEqual(by, 'Conda environment')
+        else:
+            self.assertEqual(by, "<unavailable>")
+            self.assertIsNone(info)
         # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
@@ -99,12 +99,12 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         self.assertEqual(info, os.path.join('nbp_libdevice'))
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
-            exc = self.remote_fail(self.do_clear_envs)
-            self.assertIsInstance(exc, RuntimeError)
-            self.assertEqual(str(exc), "cuda libraries not found")
+            by, info = self.remote_do(self.do_clear_envs)
+            self.assertEqual(by, '<unavailable>')
+            self.assertIsNone(info)
         else:
             # Use system available cudatoolkit
-            exc = self.remote_do(self.do_clear_envs)
+            by, info = self.remote_do(self.do_clear_envs)
             self.assertEqual(by, 'System')
 
     @staticmethod
@@ -131,8 +131,12 @@ class TestLibDeviceLookUp(LibraryLookupBase):
 class TestNvvmLookUp(LibraryLookupBase):
     def test_nvvm_path_decision(self):
         # Check that the default is using conda environment
-        by, _ = self.remote_do(self.do_clear_envs)
-        self.assertEqual(by, 'Conda environment')
+        by, info = self.remote_do(self.do_clear_envs)
+        if has_cuda:
+            self.assertEqual(by, 'Conda environment')
+        else:
+            self.assertEqual(by, "<unavailable>")
+            self.assertIsNone(info)
         # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
@@ -150,12 +154,12 @@ class TestNvvmLookUp(LibraryLookupBase):
         self.assertEqual(info, os.path.join('nbp_nvvm'))
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
-            exc = self.remote_fail(self.do_clear_envs)
-            self.assertIsInstance(exc, RuntimeError)
-            self.assertEqual(str(exc), "cuda libraries not found")
+            by, info = self.remote_do(self.do_clear_envs)
+            self.assertEqual(by, '<unavailable>')
+            self.assertIsNone(info)
         else:
             # Use system available cudatoolkit
-            exc = self.remote_do(self.do_clear_envs)
+            by, info = self.remote_do(self.do_clear_envs)
             self.assertEqual(by, 'System')
 
     @staticmethod
@@ -187,8 +191,12 @@ class TestNvvmLookUp(LibraryLookupBase):
 class TestCudaLibLookUp(LibraryLookupBase):
     def test_cudalib_path_decision(self):
         # Check that the default is using conda environment
-        by, _ = self.remote_do(self.do_clear_envs)
-        self.assertEqual(by, 'Conda environment')
+        by, info = self.remote_do(self.do_clear_envs)
+        if has_cuda:
+            self.assertEqual(by, 'Conda environment')
+        else:
+            self.assertEqual(by, "<unavailable>")
+            self.assertIsNone(info)
         # Check that CUDA_HOME works by removing conda-env
         by, info = self.remote_do(self.do_set_cuda_home)
         self.assertEqual(by, 'CUDA_HOME')
@@ -202,12 +210,12 @@ class TestCudaLibLookUp(LibraryLookupBase):
         self.assertEqual(info, os.path.join('nbp_cudalib'))
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
-            exc = self.remote_fail(self.do_clear_envs)
-            self.assertIsInstance(exc, RuntimeError)
-            self.assertEqual(str(exc), "cuda libraries not found")
+            by, info = self.remote_do(self.do_clear_envs)
+            self.assertEqual(by, "<unavailable>")
+            self.assertIsNone(info)
         else:
             # Use system available cudatoolkit
-            exc = self.remote_do(self.do_clear_envs)
+            by, info = self.remote_do(self.do_clear_envs)
             self.assertEqual(by, 'System')
 
     @staticmethod

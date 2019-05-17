@@ -13,14 +13,14 @@ _env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
 
 def _find_valid_path(options):
     """Find valid path from *options*, which is a list of 2-tuple of
-    (name, path).  Return first pair where *path* is not None; or, return
-    ('Conda environment', None) for default conda path.
+    (name, path).  Return first pair where *path* is not None.
+    If no valid path is found, return ('<unavailable>', None)
     """
     for by, data in options:
         if data is not None:
             return by, data
     else:
-        raise RuntimeError("cuda libraries not found")
+        return '<unavailable>', None
 
 
 def _get_libdevice_path_decision():
