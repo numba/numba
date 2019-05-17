@@ -6,8 +6,12 @@ import multiprocessing as mp
 
 from numba.config import IS_WIN32, IS_OSX
 from numba.cuda.cudadrv import nvvm
-from numba.cuda.testing import unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import (
+    unittest,
+    skip_on_cudasim,
+    SerialMixin,
+    skip_unless_conda_cudatoolkit,
+)
 from numba.cuda.cuda_paths import (
     _get_libdevice_path_decision,
     _get_nvvm_path_decision,
@@ -80,6 +84,7 @@ def check_lib_lookup(qout, qin):
 
 @skip_on_cudasim('Library detection unsupported in the simulator')
 @unittest.skipUnless(has_mp_get_context, 'mp.get_context not available')
+@skip_unless_conda_cudatoolkit('test assumes conda installed cudatoolkit')
 class TestLibDeviceLookUp(LibraryLookupBase):
     def test_libdevice_path_decision(self):
         # Check that the default is using conda environment
@@ -128,6 +133,7 @@ class TestLibDeviceLookUp(LibraryLookupBase):
 
 @skip_on_cudasim('Library detection unsupported in the simulator')
 @unittest.skipUnless(has_mp_get_context, 'mp.get_context not available')
+@skip_unless_conda_cudatoolkit('test assumes conda installed cudatoolkit')
 class TestNvvmLookUp(LibraryLookupBase):
     def test_nvvm_path_decision(self):
         # Check that the default is using conda environment
@@ -190,6 +196,7 @@ class TestNvvmLookUp(LibraryLookupBase):
 
 @skip_on_cudasim('Library detection unsupported in the simulator')
 @unittest.skipUnless(has_mp_get_context, 'mp.get_context not available')
+@skip_unless_conda_cudatoolkit('test assumes conda installed cudatoolkit')
 class TestCudaLibLookUp(LibraryLookupBase):
     def test_cudalib_path_decision(self):
         # Check that the default is using conda environment
