@@ -1362,12 +1362,12 @@ class ArrayAnalysis(object):
             # Make a variable to hold the new build_tuple.
             replacement_build_tuple_var = ir.Var(scope,
                                           mk_unique_var("replacement_build_tuple"),
-                                          size[0].loc)
+                                          ind_shape[0].loc)
             # Create the build tuple from the accumulated index vars above.
-            new_build_tuple = ir.Expr.build_tuple(index_var_list, size[0].loc)
+            new_build_tuple = ir.Expr.build_tuple(index_var_list, ind_shape[0].loc)
             stmts.append(ir.Assign(value=new_build_tuple,
                                    target=replacement_build_tuple_var,
-                                   loc=size[0].loc))
+                                   loc=ind_shape[0].loc))
             # New build_tuple has same type as the original one.
             self.typemap[replacement_build_tuple_var.name] = ind_typ
         else:
