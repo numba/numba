@@ -1451,7 +1451,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # ----------------------------------------------------------------------------
     # prepare data
-    data = builder.inttoptr(zero, byte_ptr_t)
+    data = cgutils.get_null_value(byte_ptr_t)
 
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
