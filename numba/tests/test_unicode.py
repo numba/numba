@@ -8,7 +8,7 @@ from __future__ import print_function
 import sys
 from itertools import permutations
 
-from numba import njit
+from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
@@ -102,6 +102,30 @@ def split_with_maxsplit_kwarg_usecase(x, y, maxsplit):
 
 def split_whitespace_usecase(x):
     return x.split()
+
+
+def lstrip_usecase(x):
+    return x.lstrip()
+
+
+def lstrip_usecase_chars(x, chars):
+    return x.lstrip(chars)
+
+
+def rstrip_usecase(x):
+    return x.rstrip()
+
+
+def rstrip_usecase_chars(x, chars):
+    return x.rstrip(chars)
+
+
+def strip_usecase(x):
+    return x.strip()
+
+
+def strip_usecase_chars(x, chars):
+    return x.strip(chars)
 
 
 def join_usecase(x, y):
@@ -661,6 +685,70 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
+
+    def test_strip(self):
+
+        STRIP_CASES = [
+            ('ass cii', 'ai'),
+            ('ass cii', None),
+            ('asscii', 'ai '),
+            ('asscii ', 'ai '),
+            (' asscii  ', 'ai '),
+            (' asscii  ', 'asci '),
+            (' asscii  ', 's'),
+            ('      ', ' '),
+            ('', ' '),
+            ('', ''),
+            ('  asscii  ', 'ai '),
+            ('  asscii  ', ''),
+            ('  asscii  ', None),
+            ('tú quién te crees?', 'étú? '),
+            ('  tú quién te crees?   ', 'étú? '),
+            ('  tú qrees?   ', ''),
+            ('  tú quién te crees?   ', None),
+            ('大处 着眼，小处着手。大大大处', '大处'),
+            (' 大处大处  ', ''),
+            (' 大处大处  ', None)
+        ]
+
+        # form with no parameter
+        for pyfunc, case_name in [(strip_usecase, 'strip'),
+                                  (lstrip_usecase, 'lstrip'),
+                                  (rstrip_usecase, 'rstrip')]:
+            cfunc = njit(pyfunc)
+
+            for string, chars in STRIP_CASES:
+                self.assertEqual(pyfunc(string),
+                                 cfunc(string),
+                                 "'%s'.%s()?" % (string, case_name))
+        # parametrized form
+        for pyfunc, case_name in [(strip_usecase_chars, 'strip'),
+                                  (lstrip_usecase_chars, 'lstrip'),
+                                  (rstrip_usecase_chars, 'rstrip')]:
+            cfunc = njit(pyfunc)
+
+            sig1 = types.unicode_type(types.unicode_type,
+                                      types.Optional(types.unicode_type))
+            cfunc_optional = njit([sig1])(pyfunc)
+
+            def try_compile_bad_optional(*args):
+                bad = types.unicode_type(types.unicode_type,
+                                         types.Optional(types.float64))
+                njit([bad])(pyfunc)
+
+            for fn in cfunc, try_compile_bad_optional:
+                with self.assertRaises(TypingError) as raises:
+                    fn('tú quis?', 1.1)
+                self.assertIn('The arg must be a UnicodeType or None',
+                              str(raises.exception))
+
+            for fn in cfunc, cfunc_optional:
+
+                for string, chars in STRIP_CASES:
+                    self.assertEqual(pyfunc(string, chars),
+                                     fn(string, chars),
+                                     "'%s'.%s('%s')?" % (string, case_name,
+                                                         chars))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
