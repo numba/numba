@@ -269,6 +269,11 @@ with Numba via the following environment variables:
 * ``NUMBAPRO_VERBOSE_CU_JIT_LOG``
 
 These are being deprecated with view of removal in the near future.
+Please refer to :ref:`this guide <cudatoolkit-lookup>` for alternatives to
+``NUMBAPRO_NVVM``, ``NUMBAPRO_CUDALIB`` and ``NUMBAPRO_LIBDEVICE``.
+For ``NUMBAPRO_CUDA_LOG_SIZE`` and ``NUMBAPRO_VERBOSE_CU_JIT_LOG``, replace
+the ``NUMBAPRO`` prefix with ``NUMBA``.
+
 
 Reason for deprecation
 ----------------------
