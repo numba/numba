@@ -1451,7 +1451,7 @@ class ArrayAnalysis(object):
                         neg_one_index = arg_index
                     else:
                         msg = ("The reshape API may only include one -1 argument.")
-                        raise errors.ApiError(msg)
+                        raise errors.ApiError(msg, loc=reshape_arg.loc)
 
         if neg_one_index >= 0:
             # If exactly one -1 argument to reshape was found, then we are
