@@ -613,6 +613,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         # indices for Slice objects.
         self.ext_shapes = ext_shapes if ext_shapes else {}
         self.rel_map = {}
+        self.wrap_map = {}
         super(SymbolicEquivSet, self).__init__(
             typemap, defs, ind_to_var, obj_to_ind, ind_to_obj, next_id)
 
@@ -827,6 +828,31 @@ class SymbolicEquivSet(ShapeEquivSet):
             else:
                 return super(SymbolicEquivSet, self)._get_shape(obj)
 
+class WrapIndexMeta(object):
+    """
+      Array analysis should be able to analyze all the function
+      calls that it adds to the IR.  That way, array analysis can
+      be run as often as needed and you should get the same
+      equivalencies.  A difficult call to analyze that array
+      analysis will add is to wrap_index.  The important thing to
+      note is that if the equivalence classes of the slice size
+      and the dimension's size are the same for two wrap index
+      calls then we can be assured of the answer being the same.
+      So, we maintain the wrap_map dict that maps from a tuple
+      of equivalence class ids for the slice and dimension size
+      to some new equivalence class id for the output size.
+      However, when we are analyzing the first such wrap_index
+      call we don't have a variable there to associate to the
+      size since we're in the process of analyzing the instruction
+      that creates that mapping.  So, instead we return an object
+      of this special class and analyze_inst will establish the
+      connection between a tuple of the parts of this object
+      below and the left-hand side variable.
+    """
+    def __init__(self, slice_size, dim_size):
+        self.slice_size = slice_size
+        self.dim_size = dim_size
+
 class ArrayAnalysis(object):
 
     """Analyzes Numpy array computations for properties such as
@@ -863,7 +889,7 @@ class ArrayAnalysis(object):
         if blocks == None:
             blocks = self.func_ir.blocks
 
-        self.func_ir._definitions = build_definitions(blocks)
+        self.func_ir._definitions = build_definitions(self.func_ir.blocks)
 
         if equiv_set == None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
@@ -974,6 +1000,19 @@ class ArrayAnalysis(object):
             elif (isinstance(shape, ir.Var) and
                   isinstance(self.typemap[shape.name], types.Integer)):
                 shape = (shape,)
+            elif isinstance(shape, WrapIndexMeta):
+                """ Here we've got the special WrapIndexMeta object
+                    back from analyzing a wrap_index call.  We define
+                    the lhs and then get it's equivalence class then
+                    add the mapping from the tuple of slice size and
+                    dimensional size equivalence ids to the lhs
+                    equivalence id.
+                """
+                equiv_set.define(lhs, self.func_ir, typ)
+                lhs_ind = equiv_set._get_ind(lhs.name)
+                if lhs_ind != -1:
+                    equiv_set.wrap_map[(shape.slice_size, shape.dim_size)] = lhs_ind
+                return pre, post
 
             if isinstance(typ, types.ArrayCompatible):
                 if (shape == None or isinstance(shape, tuple) or
@@ -1447,6 +1486,7 @@ class ArrayAnalysis(object):
             args = expr.args
         fname = "_analyze_op_call_{}_{}".format(
             mod_name, fname).replace('.', '_')
+        print("analyze_op_call", fname)
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
             return self._analyze_broadcast(scope, equiv_set, expr.loc, args)
         else:
@@ -1475,6 +1515,34 @@ class ArrayAnalysis(object):
                                                         equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
+
+    def _analyze_op_call_numba_array_analysis_wrap_index(self, scope,
+                                                        equiv_set, args, kws):
+        """ Analyze wrap_index calls added by a previous run of
+            Array Analysis
+        """
+        require(len(args) == 2)
+        # Two parts to wrap index, the specified slice size...
+        slice_size = args[0].name
+        # ...and the size of the dimension.
+        dim_size = args[1].name
+        # Get the equivalence class ids for both.
+        slice_eq = equiv_set._get_or_add_ind(slice_size)
+        dim_eq = equiv_set._get_or_add_ind(dim_size)
+        # See if a previous wrap_index calls we've analyzed maps from
+        # the same pair of equivalence class ids for slice and dim size.
+        if (slice_eq, dim_eq) in equiv_set.wrap_map:
+            wrap_ind = equiv_set.wrap_map[(slice_eq, dim_eq)]
+            require(wrap_ind in equiv_set.ind_to_var)
+            vs = equiv_set.ind_to_var[wrap_ind]
+            require(vs != [])
+            # Return the shape of the variable from the previous wrap_index.
+            return ((vs[0],),[])
+        else:
+            # We haven't seen this combination of slice and dim
+            # equivalence class ids so return a WrapIndexMeta so that
+            # _analyze_inst can establish the connection to the lhs var.
+            return (WrapIndexMeta(slice_eq, dim_eq),[])
 
     def _analyze_numpy_create_array(self, scope, equiv_set, args, kws):
         shape_var = None
