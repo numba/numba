@@ -366,7 +366,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
             # llvm should align to wordsize
             llalign = np.dtype(np.intp).alignment
             msg = ("NumPy is using a different alignment ({}) "
-                   "than Numba/LLVM".format(npalign))
+                   "than Numba/LLVM ".format(npalign))
             if not _is_armv7l:
                 tmp = "({}) for complex128. This is likely a NumPy bug."
                 msg += tmp.format(llalign)
