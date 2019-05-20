@@ -2791,11 +2791,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         np_pyfunc = np_kaiser
         np_nbfunc = njit(np_kaiser)
 
+        ulps = 2 if IS_32BITS else 1
+
         for M in [0, 1, 5, 12]:
             for beta in [0.0, 5.0, 14.0]:
                 expected = np_pyfunc(M, beta)
                 got = np_nbfunc(M, beta)
-                self.assertPreciseEqual(expected, got)
+                self.assertPreciseEqual(expected, got, ulps=ulps)
 
         with self.assertRaises(TypingError):
             for M in [-1.1, 0.0, 1.1]:
