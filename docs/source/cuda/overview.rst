@@ -69,13 +69,13 @@ Numba searches for a CUDA toolkit installation in the following order:
    ignored.  Users can use ``CUDA_HOME`` to select specific versions.
 
 In addition to the CUDA toolkit libraries, which can be installed by conda into
-an environment  or installed system-wide by the `CUDA SDK installer
+an environment or installed system-wide by the `CUDA SDK installer
 <(https://developer.nvidia.com/cuda-downloads)>`_, the CUDA target in Numba
 also requires an up-to-date NVIDIA graphics driver.  Updated graphics drivers
 are also installed by the CUDA SDK installer, so there is no need to do both.
 Note that on macOS, the CUDA SDK must be installed to get the required driver,
 and the driver is only supported on macOS prior to 10.14 (Mojave).  If the
-`libcuda.so` library is in a non-standard location, users can set environment
+``libcuda`` library is in a non-standard location, users can set environment
 variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
 shared library file.
 
