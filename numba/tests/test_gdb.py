@@ -152,13 +152,13 @@ class TestGdbBinding(TestCase):
                                  stderr=subprocess.PIPE,
                                  env=env,
                                  shell=True)
-        # finish in 20s or kill it, there's no work being done
+        # finish in 60s or kill it, there's no work being done
 
         def kill():
             popen.stdout.flush()
             popen.stderr.flush()
             popen.kill()
-        timeout = threading.Timer(20., kill)
+        timeout = threading.Timer(60., kill)
         try:
             timeout.start()
             out, err = popen.communicate()
