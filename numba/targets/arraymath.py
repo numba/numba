@@ -1088,6 +1088,7 @@ def check_valid(q, q_upper_bound):
         for i in range(q.size):
             if q[i] < 0.0 or q[i] > q_upper_bound or np.isnan(q[i]):
                 valid = False
+                break
     else:
         if np.any(np.isnan(q)) or np.any(q < 0.0) or np.any(q > q_upper_bound):
             valid = False
