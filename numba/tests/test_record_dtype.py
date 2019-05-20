@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import platform
 import sys
 
 import numpy as np
@@ -12,6 +13,9 @@ from numba.utils import IS_PY3
 from numba.config import IS_WIN32
 from numba.numpy_support import version as numpy_version
 from .support import tag
+
+
+_is_armv7l = platform.machine() == 'armv7l'
 
 
 def get_a(ary, i):
@@ -361,12 +365,12 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
             npalign = np.dtype(np.complex128).alignment
             # llvm should align to wordsize
             llalign = np.dtype(np.intp).alignment
-            self.assertIn(
-                ("NumPy is using a different alignment ({}) "
-                 "than Numba/LLVM ({}) for complex128. "
-                 "This is likely a NumPy bug.").format(npalign, llalign),
-                str(raises.exception),
-            )
+            msg = ("NumPy is using a different alignment ({}) "
+                   "than Numba/LLVM".format(npalign))
+            if not _is_armv7l:
+                tmp = "({}) for complex128. This is likely a NumPy bug."
+                msg += tmp.format(llalign)
+            self.assertIn(msg, str(raises.exception))
 
 
 class TestRecordDtype(unittest.TestCase):
