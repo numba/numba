@@ -2778,9 +2778,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = np_nbfunc(M)
                 self.assertPreciseEqual(expected, got)
 
-            with self.assertRaises(TypingError):
-                for M in [-1.1, 0.0, 1.1]:
-                    np_nbfunc(M)
+            for M in ['a', 1.1, 1j]:
+                with self.assertRaises(TypingError) as raises:
+                    np_nbfunc(1.1)
+                self.assertIn("M must be an integer", str(raises.exception))
 
         check_window(np_bartlett)
         check_window(np_blackman)
@@ -2801,10 +2802,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     self.assertPreciseEqual(expected, got, prec='exact')
 
-        with self.assertRaises(TypingError):
-            for M in [-1.1, 0.0, 1.1]:
-                for beta in [0.0, 5.0, 14.0]:
-                    np_nbfunc(M, beta)
+        for M in ['a', 1.1, 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(M, 1.0)
+            self.assertIn("M must be an integer", str(raises.exception))
+
+        for beta in ['a', 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(5, beta)
+            self.assertIn("beta must be an integer or float", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
