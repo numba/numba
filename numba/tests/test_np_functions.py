@@ -2797,7 +2797,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = np_nbfunc(M, beta)
 
                 if IS_32BITS:
-                    self.assertPreciseEqual(expected, got, prec='double')
+                    self.assertPreciseEqual(expected, got, prec='double', ulps=2)
                 else:
                     self.assertPreciseEqual(expected, got, prec='exact')
 
