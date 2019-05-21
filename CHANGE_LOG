@@ -33,7 +33,8 @@ Enhancements from user contributed PRs (with thanks!):
   arguments in #3852.
 - Nick White enhanced the CUDA backend to use min/max PTX instructions where
   possible in #4054.
-- User @luk-f-a implemented the unicode string ``__mul__`` function in #3952.
+- Lucio Fernandez-Arjona implemented the unicode string ``__mul__`` function in
+  #3952.
 - Dimitri Vorona wrote the bulk of the code to implement getitem and setitem for
   jitclass in #3861.
 
@@ -145,7 +146,7 @@ Contributors:
 * Ehsan Totoni (core dev)
 * Guilherme Leobas
 * Leo Schwarz
-* luk-f-a
+* Lucio Fernandez-Arjona
 * Max Bolingbroke
 * NanduTej
 * Nick White
