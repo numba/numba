@@ -131,6 +131,12 @@ def array_nanpercentile_global(arr, q):
 def array_ptp_global(a):
     return np.ptp(a)
 
+def array_quantile_global(arr, q):
+    return np.quantile(arr, q)
+
+def array_nanquantile_global(arr, q):
+    return np.nanquantile(arr, q)
+
 def base_test_arrays(dtype):
     if dtype == np.bool_:
         def factory(n):
@@ -337,6 +343,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in array_variations(np.arange(64) + 10.5):
             check_even(a)
 
+    @staticmethod
+    def _array_variations(a):
+        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
+        yield a
+        a = a[::-1].copy()
+        yield a
+        np.random.shuffle(a)
+        yield a
+        a[a % 4 >= 1] = 3.5
+        yield a
+        a[a % 4 >= 2] = np.nan
+        yield a
+        a[:] = np.nan
+        yield a
+
     @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
@@ -353,66 +374,74 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
-    def check_percentile_basic(self, pyfunc, array_variations, percentile_variations):
+    def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 
-        def check(a, q):
+        def check(a, q, abs_tol=1e-12):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol='eps')
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
-        def check_err(a, q):
-            with self.assertRaises(ValueError) as raises:
-                cfunc(a, q)
-            self.assertEqual("Percentiles must be in the range [0,100]", str(raises.exception))
+        a = self.random.randn(27).reshape(3, 3, 3)
+        q = np.linspace(0, q_upper_bound, 14)[::-1]
+        check(a, q)
+        check(a, 0)
+        check(a, q_upper_bound / 2)
+        check(a, q_upper_bound)
 
-        def perform_checks(a, q):
-            check(a, q)
-            a = a.reshape((3, 3, 7))
-            check(a, q)
-            check(a.astype(np.int32), q)
+        not_finite = [np.nan, -np.inf, np.inf]
+        a.flat[:10] = self.random.choice(not_finite, 10)
+        self.random.shuffle(a)
+        self.random.shuffle(q)
+        check(a, q)
 
-        for a in array_variations(np.arange(63) - 10.5):
-            for q in percentile_variations(np.array([0, 50, 100, 66.6])):
-                perform_checks(a, q)
+        a = a.flatten().tolist()
+        q = q.flatten().tolist()
+        check(a, q)
+        check(tuple(a), tuple(q))
 
-        # Exceptions leak references
-        self.disable_leak_check()
+        a = self.random.choice([1, 2, 3, 4], 10)
+        q = np.linspace(0, q_upper_bound, 5)
+        check(a, q)
 
-        a = np.arange(5)
-        check_err(a, -5)  # q less than 0
-        check_err(a, (1, 10, 105))  # q contains value greater than 100
-        check_err(a, (1, 10, np.nan))  # q contains nan
+        # tests inspired by
+        # https://github.com/numpy/numpy/blob/345b2f6e/numpy/lib/tests/test_function_base.py
+        x = np.arange(8) * 0.5
+        np.testing.assert_equal(cfunc(x, 0), 0.)
+        np.testing.assert_equal(cfunc(x, q_upper_bound), 3.5)
+        np.testing.assert_equal(cfunc(x, q_upper_bound / 2), 1.75)
 
-    @staticmethod
-    def _array_variations(a):
-        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
-        yield a
-        a = a[::-1].copy()
-        yield a
-        np.random.shuffle(a)
-        yield a
-        a[a % 4 >= 1] = 3.5
-        yield a
-        a[a % 4 >= 2] = np.nan
-        yield a
-        a[:] = np.nan
-        yield a
+        x = np.arange(12).reshape(3, 4)
+        q = np.array((0.25, 0.5, 1.0)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q), [2.75, 5.5, 11.0])
 
-    @staticmethod
-    def _percentile_variations(q):
-        yield q
-        yield q[::-1].astype(np.int32).tolist()
-        yield q[-1]
-        yield int(q[-1])
-        yield tuple(q)
-        yield False
+        x = np.arange(3 * 4 * 5 * 6).reshape(3, 4, 5, 6)
+        q = np.array((0.25, 0.50)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q).shape, (2,))
 
-    def check_percentile_edge_cases(self, pyfunc):
+        q = np.array((0.25, 0.50, 0.75)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q).shape, (3,))
+
+        x = np.arange(12).reshape(3, 4)
+        np.testing.assert_equal(cfunc(x, q_upper_bound / 2), 5.5)
+        self.assertTrue(np.isscalar(cfunc(x, q_upper_bound / 2)))
+
+        np.testing.assert_equal(cfunc([1, 2, 3], 0), 1)
+
+        a = np.array([2, 3, 4, 1])
+        cfunc(a, [q_upper_bound / 2])
+        np.testing.assert_equal(a, np.array([2, 3, 4, 1]))
+
+    def check_percentile_edge_cases(self, pyfunc, q_upper_bound=100):
         cfunc = jit(nopython=True)(pyfunc)
 
-        def check(a, q, abs_tol):
+        def check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        def convert_to_float_and_check(a, q, abs_tol=1e-14):
+            expected = pyfunc(a, q).astype(np.float64)
             got = cfunc(a, q)
             self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
 
@@ -422,22 +451,115 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                     yield np.array(comb)
 
         # high number of combinations, many including non-finite values
-        q = (0, 10, 20, 100)
+        q = (0, 0.1 * q_upper_bound, 0.2 * q_upper_bound, q_upper_bound)
         element_pool = (1, -1, np.nan, np.inf, -np.inf)
         for a in _array_combinations(element_pool):
-            check(a, q, abs_tol=1e-14)  # 'eps' fails, tbd...
+            check(a, q)
+
+        # edge cases - numpy exhibits behavioural differences across
+        # platforms, see: https://github.com/numpy/numpy/issues/13272
+        if q_upper_bound == 1:
+            _check = convert_to_float_and_check
+        else:
+            _check = check
+
+        a = np.array(5)
+        q = np.array(1)
+        _check(a, q)
+
+        a = True
+        q = False
+        _check(a, q)
+
+        a = np.array([False, True, True])
+        q = a
+        _check(a, q)
+
+        a = 5
+        q = q_upper_bound / 2
+        _check(a, q)
+
+    def check_percentile_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertEqual(
+                "Percentiles must be in the range [0, 100]",
+                str(raises.exception)
+            )
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(5)
+        check_err(a, -5)  # q less than 0
+        check_err(a, (1, 10, 105))  # q contains value greater than 100
+        check_err(a, (1, 10, np.nan))  # q contains nan
+
+        with self.assertTypingError() as e:
+            a = np.arange(5) * 1j
+            q = 0.1
+            cfunc(a, q)
+
+        self.assertIn('Not supported for complex dtype', str(e.exception))
+
+    def check_quantile_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertEqual(
+                "Quantiles must be in the range [0, 1]",
+                str(raises.exception)
+            )
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(5)
+        check_err(a, -0.5)  # q less than 0
+        check_err(a, (0.1, 0.10, 1.05))  # q contains value greater than 1
+        check_err(a, (0.1, 0.10, np.nan))  # q contains nan
+
+        with self.assertTypingError() as e:
+            a = np.arange(5) * 1j
+            q = 0.1
+            cfunc(a, q)
+
+        self.assertIn('Not supported for complex dtype', str(e.exception))
 
     @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
-        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
-        self.check_percentile_edge_cases(pyfunc)
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
+        self.check_percentile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 11), "nanpercentile needs Numpy 1.11+")
+    @unittest.skipUnless(np_version >= (1, 11),
+                         "nanpercentile needs Numpy 1.11+")
     def test_nanpercentile_basic(self):
         pyfunc = array_nanpercentile_global
-        self.check_percentile_basic(pyfunc, self._array_variations, self._percentile_variations)
-        self.check_percentile_edge_cases(pyfunc)
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
+        self.check_percentile_exceptions(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
+    def test_quantile_basic(self):
+        pyfunc = array_quantile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
+        self.check_quantile_exceptions(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 15),
+                         "nanquantile needs Numpy 1.15+")
+    def test_nanquantile_basic(self):
+        pyfunc = array_nanquantile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
+        self.check_quantile_exceptions(pyfunc)
 
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):

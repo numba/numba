@@ -1080,11 +1080,34 @@ def _can_collect_percentiles(a, nan_mask, skip_nan):
         return True
 
 @register_jitable
-def _collect_percentiles(a, q, skip_nan=False):
-    if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
-        raise ValueError('Percentiles must be in the range [0,100]')
+def check_valid(q, q_upper_bound):
+    valid = True
 
-    temp_arry = a.flatten()
+    # avoid expensive reductions where possible
+    if q.ndim == 1 and q.size < 10:
+        for i in range(q.size):
+            if q[i] < 0.0 or q[i] > q_upper_bound or np.isnan(q[i]):
+                valid = False
+                break
+    else:
+        if np.any(np.isnan(q)) or np.any(q < 0.0) or np.any(q > q_upper_bound):
+            valid = False
+
+    return valid
+
+@register_jitable
+def percentile_is_valid(q):
+    if not check_valid(q, q_upper_bound=100.0):
+        raise ValueError('Percentiles must be in the range [0, 100]')
+
+@register_jitable
+def quantile_is_valid(q):
+    if not check_valid(q, q_upper_bound=1.0):
+        raise ValueError('Quantiles must be in the range [0, 1]')
+
+@register_jitable
+def _collect_percentiles(a, q, skip_nan):
+    temp_arry = a.copy()
     nan_mask = np.isnan(temp_arry)
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
@@ -1095,34 +1118,57 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     return out
 
-def _np_percentile_impl(a, q, skip_nan):
+@register_jitable
+def _collect_percentiles(a, q, check_q, factor, skip_nan):
+    q = np.asarray(q, dtype=np.float64).flatten()
+    check_q(q)
+    q = q * factor
+
+    temp_arry = np.asarray(a, dtype=np.float64).flatten()
+    nan_mask = np.isnan(temp_arry)
+
+    if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
+        temp_arry = temp_arry[~nan_mask]
+        out = _collect_percentiles_inner(temp_arry, q)
+    else:
+        out = np.full(len(q), np.nan)
+
+    return out
+
+def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
+    """
+    The underlying algorithm to find percentiles and quantiles
+    is the same, hence we converge onto the same code paths
+    in this inner function implementation
+    """
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        raise TypingError('Not supported for complex dtype')
+        # this could be supported, but would require a
+        # lexicographic comparison
+
     def np_percentile_q_scalar_impl(a, q):
-        percentiles = np.array([q])
-        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)[0]
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)[0]
 
-    def np_percentile_q_sequence_impl(a, q):
-        percentiles = np.array(q)
-        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)
+    def np_percentile_impl(a, q):
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)
 
-    def np_percentile_q_array_impl(a, q):
-        return _collect_percentiles(a, q, skip_nan=skip_nan)
-
-    if isinstance(q, (types.Float, types.Integer, types.Boolean)):
+    if isinstance(q, (types.Number, types.Boolean)):
         return np_percentile_q_scalar_impl
-
-    elif isinstance(q, (types.Tuple, types.Sequence)):
-        return np_percentile_q_sequence_impl
-
-    elif isinstance(q, types.Array):
-        return np_percentile_q_array_impl
+    elif isinstance(q, types.Array) and q.ndim == 0:
+        return np_percentile_q_scalar_impl
+    else:
+        return np_percentile_impl
 
 if numpy_version >= (1, 10):
     @overload(np.percentile)
     def np_percentile(a, q):
-        # Note: np.percentile behaviour in the case of an array containing one or
-        # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+        # Note: np.percentile behaviour in the case of an array containing one
+        # or more NaNs was changed in numpy 1.10 to return an array of np.NaN of
         # length equal to q, hence version guard.
-        return _np_percentile_impl(a, q, skip_nan=False)
+        return _percentile_quantile_inner(
+            a, q, skip_nan=False, factor=1.0, check_q=percentile_is_valid
+        )
 
 if numpy_version >= (1, 11):
     @overload(np.nanpercentile)
@@ -1130,7 +1176,23 @@ if numpy_version >= (1, 11):
         # Note: np.nanpercentile return type in the case of an all-NaN slice
         # was changed in 1.11 to be an array of np.NaN of length equal to q,
         # hence version guard.
-        return _np_percentile_impl(a, q, skip_nan=True)
+        return _percentile_quantile_inner(
+            a, q, skip_nan=True, factor=1.0, check_q=percentile_is_valid
+        )
+
+if numpy_version >= (1, 15):
+    @overload(np.quantile)
+    def np_quantile(a, q):
+        return _percentile_quantile_inner(
+            a, q, skip_nan=False, factor=100.0, check_q=quantile_is_valid
+        )
+
+if numpy_version >= (1, 15):
+    @overload(np.nanquantile)
+    def np_nanquantile(a, q):
+        return _percentile_quantile_inner(
+            a, q, skip_nan=True, factor=100.0, check_q=quantile_is_valid
+        )
 
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
