@@ -31,7 +31,7 @@ Enhancements from user contributed PRs (with thanks!):
   numerous documentation fixes.
 - Leo Schwarz wrote the bulk of the code for jitclass default constructor
   arguments in #3852.
-- Nick White enhanced the CUDA backend to use min/min PTX instructions where
+- Nick White enhanced the CUDA backend to use min/max PTX instructions where
   possible in #4054.
 - User @luk-f-a implemented the unicode string ``__mul__`` function in #3952.
 - Dimitri Vorona wrote the bulk of the code to implement getitem and setitem for
