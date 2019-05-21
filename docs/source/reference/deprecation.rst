@@ -294,15 +294,7 @@ Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
 on Numba to a version prior to removal of this behaviour, or consider following
-replacement instructions that will be issued outlining how to adjust to the
-change.
-
-Expected Replacement
---------------------
-Numba will gain a new set of CUDA related environment variables to replace the
-``NUMBAPRO`` environment variables. This change will be part of permitting
-discovery of system level CUDA drivers and libraries, as well as making it easy
-to point Numba to a particular CUDA SDK instance.
+replacement instructions outlined in :ref:`this guide <cudatoolkit-lookup>`.
 
 
 Deprecation of ``numba.autojit``
