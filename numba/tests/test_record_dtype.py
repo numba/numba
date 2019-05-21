@@ -359,8 +359,8 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
                 dtype = ty.dtype
             # get numpy alignment
             npalign = np.dtype(np.complex128).alignment
-            # llvm should align to wordsize
-            llalign = np.dtype(np.intp).alignment
+            # llvm should align to alignment of double.
+            llalign = np.dtype(np.double).alignment
             self.assertIn(
                 ("NumPy is using a different alignment ({}) "
                  "than Numba/LLVM ({}) for complex128. "

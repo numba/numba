@@ -9,6 +9,7 @@ from numba import jit, autojit, SmartArray, cuda, config
 from numba.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
 import numba.unittest_support as unittest
+from numba.targets.imputils import iternext_impl
 
 
 class TestDeprecation(unittest.TestCase):
@@ -81,6 +82,19 @@ class TestDeprecation(unittest.TestCase):
             msg = "SmartArray is deprecated"
             self.assertIn(msg, warn_msg)
             self.assertIn("http://numba.pydata.org", warn_msg)
+
+    def test_iternext_impl(self):
+        # tests deprecation of iternext_impl without a RefType supplied
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+            @iternext_impl
+            def foo(ctx, builder, sig, args, res):
+                pass
+            self.assertEqual(len(w), 1)
+            self.assertEqual(w[0].category, NumbaDeprecationWarning)
+            warn_msg = str(w[0].message)
+            msg = ("The use of iternext_impl without specifying a "
+                   "numba.targets.imputils.RefType is deprecated")
 
     def run_cmd(self, cmdline, env, kill_is_ok=False):
         popen = subprocess.Popen(cmdline,
