@@ -20,6 +20,7 @@ import functools
 import copy
 import warnings
 import logging
+import threading
 from itertools import product
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
@@ -350,15 +351,67 @@ class Driver(object):
         for dev in self.devices.values():
             dev.reset()
 
-    def get_context(self):
-        """Get current active context in CUDA driver runtime.
-        Note: Lowlevel calls that returns the handle.
+    def pop_active_context(self):
+        """Pop the active CUDA context and return the handle.
+        If no CUDA context is active, return None.
         """
-        handle = drvapi.cu_context(0)
-        driver.cuCtxGetCurrent(byref(handle))
-        if not handle.value:
-            return None
-        return handle
+        with self.get_active_context() as ac:
+            if ac.devnum is not None:
+                popped = drvapi.cu_context()
+                driver.cuCtxPopCurrent(byref(popped))
+                return popped
+
+    def get_active_context(self):
+        """Returns an instance of ``_ActiveContext``.
+        """
+        return _ActiveContext()
+
+
+class _ActiveContext(object):
+    """An contextmanager object to cache active context to reduce dependency
+    on querying the CUDA driver API.
+
+    Once entering the context, it is assumed that the active CUDA context is
+    not changed until the context is exited.
+    """
+    _tls_cache = threading.local()
+
+    def __enter__(self):
+        is_top = False
+        # check TLS cache
+        if hasattr(self._tls_cache, 'ctx_devnum'):
+            hctx, devnum = self._tls_cache.ctx_devnum
+        # Not cached. Query the driver API.
+        else:
+            hctx = drvapi.cu_context(0)
+            driver.cuCtxGetCurrent(byref(hctx))
+            hctx = hctx if hctx.value else None
+
+            if hctx is None:
+                devnum = None
+            else:
+                hdevice = drvapi.cu_device()
+                driver.cuCtxGetDevice(byref(hdevice))
+                devnum = hdevice.value
+
+                self._tls_cache.ctx_devnum = (hctx, devnum)
+                is_top = True
+
+        self._is_top = is_top
+        self.context_handle = hctx
+        self.devnum = devnum
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._is_top:
+            delattr(self._tls_cache, 'ctx_devnum')
+
+    def __bool__(self):
+        """Returns True is there's a valid and active CUDA context.
+        """
+        return self.context_handle is not None
+
+    __nonzero__ = __bool__
 
 
 driver = Driver()
@@ -605,13 +658,13 @@ class Context(object):
         """
         Clean up all owned resources in this context.
         """
-        _logger.info('reset context of device %s', self.device.id)
         # Free owned resources
         _logger.info('reset context of device %s', self.device.id)
         self.allocations.clear()
         self.modules.clear()
         # Clear trash
-        self.deallocations.clear()
+        if self.deallocations:
+            self.deallocations.clear()
 
     def get_memory_info(self):
         """Returns (free, total) memory in bytes in the context.
@@ -669,8 +722,7 @@ class Context(object):
         Pops this context off the current CPU thread. Note that this context must
         be at the top of the context stack, otherwise an error will occur.
         """
-        popped = drvapi.cu_context()
-        driver.cuCtxPopCurrent(byref(popped))
+        popped = driver.pop_active_context()
         assert popped.value == self.handle.value
 
     def _attempt_allocation(self, allocator):
