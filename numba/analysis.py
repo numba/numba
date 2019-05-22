@@ -7,8 +7,8 @@ from collections import namedtuple, defaultdict
 
 from numba import ir
 from numba.controlflow import CFGraph
-from numba import types, consts
-
+from numba import types, consts, typeof
+import numpy as np
 #
 # Analysis related to variable lifetime
 #
@@ -434,3 +434,86 @@ def dead_branch_prune(func_ir, called_args):
     if DEBUG > 1:
         print("after".center(80, '-'))
         print(func_ir.dump())
+
+
+def rewrite_semantic_constants(func_ir, called_args):
+    """
+    This rewrites values known to be constant by their semantics as ir.Const
+    nodes, this is to give branch pruning the best chance possible of killing
+    branches. An example might be switching the multiple statements needed to
+    do `np.float64` to be ir.Const(types.float64)
+
+    func_ir is the IR
+    called_args are the actual arguments with which the function is called
+    """
+    print(("rewrite_semantic_constants: " +
+           func_ir.func_id.func_name).center(80, '-'))
+    print("before".center(80, '*'))
+    func_ir.dump()
+
+    def rewrite_statement(func_ir, stmt, new_val):
+        """
+        Rewrites the stmt as a ir.Const new_val and fixes up the entries in
+        func_ir._definitions
+        """
+        stmt.value = ir.Const(new_val, stmt.loc)
+        defns = func_ir._definitions[stmt.target.name]
+        repl_idx = defns.index(val)
+        defns[repl_idx] = stmt.value
+
+    from .ir_utils import get_definition, guard, find_const, GuardException
+    for blk in func_ir.blocks.values():
+        for stmt in blk.body:
+            if isinstance(stmt, ir.Assign):
+                val = stmt.value
+                if isinstance(val, ir.Expr):
+                    if getattr(val, 'op', None) == 'getattr':
+                        # rewrite Array.ndim as const(ndim)
+                        if val.attr == 'ndim':
+                            name = val.value.name
+                            if name in func_ir.arg_names:
+                                idx = func_ir.arg_names.index(name)
+                                argty = called_args[idx]
+                                if isinstance(argty, types.Array):
+                                     rewrite_statement(func_ir, stmt,
+                                                       argty.ndim)
+
+                        # rewrite Array.dtype as const(dtype)
+                        if val.attr == 'dtype':
+                            name = val.value.name
+                            if name in func_ir.arg_names:
+                                idx = func_ir.arg_names.index(name)
+                                argty = called_args[idx]
+                                if isinstance(argty, types.Array):
+                                    rewrite_statement(func_ir, stmt,
+                                                      argty.dtype)
+
+                        # rewrite np.<dtype> as const(nb_type)
+                        defn = guard(get_definition, func_ir, val.value)
+                        if defn is not None and isinstance(defn, ir.Global):
+                            if defn.value == np:
+                                try:
+                                    np_ty = np.dtype(getattr(np, val.attr))
+                                    dt_ty = typeof(np_ty).dtype
+                                except BaseException:
+                                    pass
+                                else:
+                                    rewrite_statement(func_ir, stmt, dt_ty)
+
+                    # rewrite len(tuple) as const(len(tuple))
+                    if getattr(val, 'op', None) == 'call':
+                        func = guard(get_definition, func_ir, val.func)
+                        if (func is not None and isinstance(func, ir.Global) and
+                            func.value == len):
+                            (arg,) = val.args
+                            name = arg.name
+                            if name in func_ir.arg_names:
+                                idx = func_ir.arg_names.index(name)
+                                argty = called_args[idx]
+                                if isinstance(argty, types.BaseTuple):
+                                    rewrite_statement(func_ir, stmt,
+                                                      argty.count)
+
+    print("after".center(80, '*'))
+    func_ir.dump()
+    print('-' * 80)

@@ -18,7 +18,7 @@ from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature, warn_deprecated
 from numba.compiler_lock import global_compiler_lock
-from numba.analysis import dead_branch_prune
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -479,6 +479,7 @@ class BasePipeline(object):
                'pass encountered during compilation of '
                'function "%s"' % (self.func_id.func_name,))
         with self.fallback_context(msg):
+            rewrite_semantic_constants(self.func_ir, self.args)
             dead_branch_prune(self.func_ir, self.args)
 
         if config.DEBUG or config.DUMP_IR:
