@@ -10,7 +10,7 @@ from .arrayobj import make_array
 from .imputils import (lower_builtin, lower_cast,
                        iterator_impl, impl_ret_untracked)
 from numba.typing import signature
-from numba.extending import intrinsic
+from numba.extending import intrinsic, overload, overload_attribute
 from numba.parfor import internal_prange
 
 def make_range_iterator(typ):
@@ -210,3 +210,25 @@ def range_iter_len(typingctx, val):
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
         return signature(types.intp, val), codegen
+
+
+def make_range_attr(index, attribute):
+    @intrinsic
+    def rangetype_attr_getter(typingctx, a):
+        if isinstance(a, types.RangeType):
+            def codegen(context, builder, sig, args):
+                (val,) = args
+                items = cgutils.unpack_tuple(builder, val, 3)
+                return impl_ret_untracked(context, builder, sig.return_type,
+                                          items[index])
+            return signature(a.dtype, a), codegen
+
+    @overload_attribute(types.RangeType, attribute)
+    def range_attr(rnge):
+        def get(rnge):
+            return rangetype_attr_getter(rnge)
+        return get
+
+
+for ix, attr in enumerate(('start', 'stop', 'step')):
+    make_range_attr(index=ix, attribute=attr)
