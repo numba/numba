@@ -7,7 +7,7 @@ import sys
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types
+from numba import types, utils
 from .support import tag
 
 
@@ -162,6 +162,7 @@ class TestRange(unittest.TestCase):
         self.assertEqual(cfunc(arglist), len(arglist))
 
     @tag('important')
+    @unittest.skipUnless(utils.IS_PY3, "range() attrs are Py3 only")
     def test_range_attrs(self):
         pyfunc = range_attrs
         arglist = [(0, 0, 1),
