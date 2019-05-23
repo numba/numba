@@ -29,6 +29,9 @@ class TestContextStack(SerialMixin, unittest.TestCase):
 
 class TestContextAPI(SerialMixin, unittest.TestCase):
 
+    def tearDown(self):
+        cuda.close()
+
     def test_context_memory(self):
         mem = cuda.current_context().get_memory_info()
 
@@ -66,6 +69,9 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
 
 
 class Test3rdPartyContext(SerialMixin, unittest.TestCase):
+    def tearDown(self):
+        cuda.close()
+
     def test_attached_primary(self):
         # Emulate primary context creation by 3rd party
         the_driver = driver.driver
@@ -74,12 +80,12 @@ class Test3rdPartyContext(SerialMixin, unittest.TestCase):
         try:
             ctx = driver.Context(weakref.proxy(self), hctx)
             ctx.push()
-
             # Check that the context from numba matches the created primary
-            # context
+            # context.
             my_ctx = cuda.current_context()
             self.assertEqual(my_ctx.handle.value, ctx.handle.value)
         finally:
+            ctx.pop()
             the_driver.cuDevicePrimaryCtxRelease(0)
 
     def test_attached_non_primary(self):
@@ -87,7 +93,6 @@ class Test3rdPartyContext(SerialMixin, unittest.TestCase):
         the_driver = driver.driver
         hctx = driver.drvapi.cu_context()
         the_driver.cuCtxCreate(byref(hctx), 0, 0)
-
         try:
             cuda.current_context()
         except RuntimeError as e:
@@ -98,7 +103,6 @@ class Test3rdPartyContext(SerialMixin, unittest.TestCase):
             self.fail("No RuntimeError raised")
         finally:
             the_driver.cuCtxDestroy(hctx)
-
 
 
 if __name__ == '__main__':
