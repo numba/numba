@@ -215,9 +215,7 @@ def require_context(fn):
     """
     A decorator that ensures a CUDA context is available when *fn* is executed.
 
-    Note
-    ----
-    The function *fn* cannot switch CUDA-context.
+    Note: The function *fn* cannot switch CUDA-context.
     """
     @functools.wraps(fn)
     def _require_cuda_context(*args, **kws):
