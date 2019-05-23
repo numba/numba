@@ -21,7 +21,8 @@ from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.errors import (TypingError, UnsupportedError,
-                          NumbaPendingDeprecationWarning)
+                          NumbaPendingDeprecationWarning, NumbaWarning,
+                          feedback_details)
 import copy
 
 _unique_var_count = 0
@@ -1956,3 +1957,18 @@ def warn_deprecated(func_ir, typemap):
                         "'%s' of function '%s'.\n\nFor more information visit "
                         "%s" % (tyname, arg, fname, url))
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+
+def check_and_legalize_ir(func_ir):
+    """
+    This checks that the IR presented is legal, warns and legalizes if not
+    """
+    orig_ir = func_ir.copy()
+    post_proc = numba.postproc.PostProcessor(func_ir)
+    post_proc.run()
+    msg = ("\nNumba has detected inconsistencies in its internal "
+           "representation of the code at %s. Numba can probably recover from "
+           "this problem and is attempting to do, however something inside "
+           "Numba needs fixing...\n%s\n") % (func_ir.loc, feedback_details)
+    if not func_ir.equal_ir(orig_ir):
+        msg +=  func_ir.diff_str(orig_ir)
+        warnings.warn(NumbaWarning(msg, loc=func_ir.loc))

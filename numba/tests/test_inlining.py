@@ -59,6 +59,10 @@ class InlineTestPipeline(numba.compiler.BasePipeline):
             if guard(find_callname,self.func_ir, stmt.value) is not None:
                 inline_closure_call(self.func_ir, {}, block, i, lambda: None,
                     self.typingctx, (), self.typemap, self.calltypes)
+                # also fix up the IR so that ir.Dels appear correctly/in correct
+                # locations
+                post_proc = numba.postproc.PostProcessor(self.func_ir)
+                post_proc.run()
                 break
 
 
