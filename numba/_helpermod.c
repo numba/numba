@@ -119,6 +119,7 @@ build_c_helpers_dict(void)
 
     /* Unicode string support */
     declmethod(extract_unicode);
+    declmethod(str2int_unicode);
 
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);

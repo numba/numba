@@ -1036,7 +1036,7 @@ numba_unpickle(const char *data, int n)
     PyObject *buf, *obj;
     static PyObject *loads;
 
-    /* Caching the pickle.loads function shaves a couple µs here. */
+    /* Caching the pickle.loads function shaves a couple ms here. */
     if (loads == NULL) {
         PyObject *picklemod;
 #if PY_MAJOR_VERSION >= 3
@@ -1121,6 +1121,21 @@ numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
     /* this function only works in Python 3 */
     return NULL;
 #endif
+}
+
+
+/*
+ * defined string conversion to integer
+ */
+NUMBA_EXPORT_FUNC(uint64_t)
+numba_str2int_unicode(const char* str, int base)
+{
+    if (!str)
+    {
+        return 0;
+    }
+
+    return strtol(str, NULL, base);
 }
 
 

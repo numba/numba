@@ -2,6 +2,7 @@ import operator
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
+from llvmlite import ir
 
 from numba.extending import (
     models,
@@ -30,9 +31,6 @@ from numba.targets import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
-
-import llvmlite.binding as ll
-import string_conversion_ext
 
 # DATA MODEL
 
@@ -814,12 +812,32 @@ def iternext_unicode(context, builder, sig, args, result):
         nindex = cgutils.increment_index(builder, index)
         builder.store(nindex, iterobj.index)
 
+@intrinsic
+def _str2int_unicode(typingctx, stringty, basety):
+    """Wrap numba_str2int_unicode
 
-ll.add_symbol('str2int', string_conversion_ext.str2int)
-_str2int = types.ExternalFunction("str2int", types.long_(types.voidptr, types.intc, types.intc))
+    Returns number from converted string.
+    """
+    resty = types.int64
+    sig = resty(stringty, basety)
 
+    def codegen(context, builder, sig, args):
+        [string, base] = args
+        fnty = ir.FunctionType(ir.IntType(64), [ir.IntType(8).as_pointer(), ir.IntType(32)])
+        fn = builder.module.get_or_insert_function(fnty, name='numba_str2int_unicode')
+        n = builder.call(fn, [string, cgutils.int32_t(32)])
+        return n
+
+    return sig, codegen
 
 @overload(int)
-def int_overload(str, base=10):
-    if isinstance(str, types.UnicodeType):
-        return lambda str, base=10: _str2int(str._data, str._length, base)
+def int_overload(string, base):
+    if not isinstance(string, types.UnicodeType):
+        return
+
+    stringty, basety = string, base
+
+    def impl(string, base):
+        return _str2int_unicode(stringty, basety)
+
+    return impl
