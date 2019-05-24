@@ -22,13 +22,8 @@ from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, enums_ext, drvapi
 from numba.utils import longint as long
+from numba.six import Sequence
 import numpy as np
-
-
-if config.PYVERSION >= (3, 3):
-    from collections.abc import Sequence
-else:
-    from collections import Sequence
 
 
 _logger = logging.getLogger(__name__)

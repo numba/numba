@@ -14,7 +14,9 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
-from .. import typing, types, cgutils, utils
+from .. import typing, types, cgutils, utils, errors
+from ..extending import intrinsic, overload_method
+from ..unsafe.numbers import viewer
 
 
 def _int_arith_flags(rettype):
@@ -1234,72 +1236,7 @@ lower_builtin(operator.not_, types.boolean)(number_not_impl)
 
 
 #------------------------------------------------------------------------------
-# Hashing numbers
-
-@lower_builtin(hash, types.Integer)
-@lower_builtin(hash, types.Boolean)
-def hash_int(context, builder, sig, args):
-    ty, = sig.args
-    retty = sig.return_type
-    val, = args
-
-    if isinstance(ty, types.Integer) and ty.bitwidth > retty.bitwidth:
-        # Value is wider than hash => fold MSB into LSB
-        nbits = ty.bitwidth - retty.bitwidth
-        val = builder.add(val,
-                          builder.lshr(val, ir.Constant(val.type, nbits)))
-
-    return context.cast(builder, val, ty, retty)
-
-@lower_builtin(hash, types.Float)
-def hash_float(context, builder, sig, args):
-    ty, = sig.args
-    retty = sig.return_type
-    val, = args
-
-    # NOTE: CPython's algorithm is more involved as it seeks to maintain
-    # the invariant that hash(float(x)) == hash(x) for every integer x
-    # exactly representable as a float.
-    # Numba doesn't care as it doesn't support heterogeneous associative
-    # containers.
-
-    intty = types.Integer("int%d" % ty.bitwidth)
-    ll_intty = ir.IntType(ty.bitwidth)
-
-    # XXX Disabled as llvm.canonicalize doesn't work:
-    # http://lists.llvm.org/pipermail/llvm-dev/2016-February/095746.html
-    #func_name = "llvm.canonicalize.f%d" % (ty.bitwidth,)
-    #fnty = ir.FunctionType(val.type, (val.type,))
-    #fn = builder.module.get_or_insert_function(fnty, func_name)
-    #val = builder.call(fn, (val,))
-
-    # Take the float's binary representation as an int
-    val_p = cgutils.alloca_once_value(builder, val)
-    # y = *(int *)(&val)
-    y = builder.load(builder.bitcast(val_p, ll_intty.as_pointer()))
-
-    if intty.bitwidth > retty.bitwidth:
-        # Value is wider than hash => fold MSB into LSB
-        nbits = intty.bitwidth - retty.bitwidth
-        y = builder.add(y,
-                        builder.lshr(y, ir.Constant(y.type, nbits)))
-
-    return context.cast(builder, y, intty, retty)
-
-@lower_builtin(hash, types.Complex)
-def hash_complex(context, builder, sig, args):
-    ty, = sig.args
-    val, = args
-    fltty = ty.underlying_float
-
-    z = context.make_complex(builder, ty, val)
-    float_hash_sig = typing.signature(sig.return_type, fltty)
-    h_real = hash_float(context, builder, float_hash_sig, (z.real,))
-    h_imag = hash_float(context, builder, float_hash_sig, (z.imag,))
-    mult = ir.Constant(h_imag.type, 1000003)
-
-    return builder.add(h_real, builder.mul(h_imag, mult))
-
+# Hashing numbers, see hashing.py
 
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
@@ -1417,3 +1354,24 @@ def constant_complex(context, builder, ty, pyval):
 def constant_integer(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
+
+
+#-------------------------------------------------------------------------------
+# View
+
+def scalar_view(scalar, viewty):
+    """ Typing for the np scalar 'view' method. """
+    if (isinstance(scalar, (types.Float, types.Integer))
+            and isinstance(viewty, types.abstract.DTypeSpec)):
+        if scalar.bitwidth != viewty.dtype.bitwidth:
+            raise errors.TypingError(
+                "Changing the dtype of a 0d array is only supported if the "
+                "itemsize is unchanged")
+
+        def impl(scalar, viewty):
+            return viewer(scalar, viewty)
+        return impl
+
+
+overload_method(types.Float, 'view')(scalar_view)
+overload_method(types.Integer, 'view')(scalar_view)

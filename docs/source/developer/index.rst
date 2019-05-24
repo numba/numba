@@ -8,6 +8,7 @@ Developer Manual
    :maxdepth: 2
 
    contributing.rst
+   repomap.rst
    architecture.rst
    dispatching.rst
    generators.rst
@@ -18,4 +19,5 @@ Developer Manual
    stencil.rst
    custom_pipeline.rst
    environment.rst
+   hashing.rst
    roadmap.rst

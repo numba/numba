@@ -37,6 +37,9 @@ from .jitclass import jitclass
 import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode
 
+# Initialize typed containers
+import numba.typed
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -61,7 +64,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 27, 0)
+_min_llvmlite_version = (0, 29, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():

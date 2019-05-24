@@ -74,7 +74,7 @@ class TestParforsBase(TestCase):
         self.fast_pflags = Flags()
         self.fast_pflags.set('auto_parallel', cpu.ParallelOptions(True))
         self.fast_pflags.set('nrt')
-        self.fast_pflags.set('fastmath')
+        self.fast_pflags.set('fastmath', cpu.FastMathOptions(True))
         super(TestParforsBase, self).__init__(*args)
 
     def _compile_this(self, func, sig, flags):
@@ -306,7 +306,9 @@ def get_optimized_numba_ir(test_func, args, **kws):
         typingctx.refresh()
         targetctx.refresh()
 
-        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir, options)
+        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir,
+                                                               options,
+                                                               typed=True)
         inline_pass.run()
 
         numba.rewrites.rewrite_registry.apply(
@@ -1363,6 +1365,16 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A)
 
     @skip_unsupported
+    def test_preparfor_datetime64(self):
+        # test array.dtype transformation for datetime64
+        def test_impl(A):
+            return A.dtype
+
+        A = np.empty(1, np.dtype('datetime64[ns]'))
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
+        self.assertEqual(cpfunc.entry_point(A), test_impl(A))
+
+    @skip_unsupported
     def test_no_hoisting_with_member_function_call(self):
         def test_impl(X):
             n = X.shape[0]
@@ -1378,6 +1390,18 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, np.random.ranf(128))
 
+    @skip_unsupported
+    def test_array_compare_scalar(self):
+        """ issue3671: X != 0 becomes an arrayexpr with operator.ne.
+            That is turned into a parfor by devectorizing.  Make sure
+            the return type of the devectorized operator.ne
+            on integer types works properly.
+        """
+        def test_impl():
+            X = np.zeros(10, dtype=np.int_)
+            return X != 0
+
+        self.check(test_impl)
 
 class TestPrangeBase(TestParforsBase):
 
@@ -2027,6 +2051,91 @@ class TestPrange(TestPrangeBase):
                         "in non-deterministic or unintended results.")
         self.assertIn(expected_msg, str(warning_obj.message))
 
+    @skip_unsupported
+    def test_nested_parfor_push_call_vars(self):
+        """ issue 3686: if a prange has something inside it that causes
+            a nested parfor to be generated and both the inner and outer
+            parfor use the same call variable defined outside the parfors
+            then ensure that when that call variable is pushed into the
+            parfor that the call variable isn't duplicated with the same
+            name resulting in a redundant type lock.
+        """
+        def test_impl():
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
+            for i in range(2):
+                this_matters = f(1.)
+                B += f(np.zeros(1,))[0]
+
+            return B
+        self.prange_tester(test_impl)
+
+    @skip_unsupported
+    def test_multiple_call_getattr_object(self):
+        def test_impl(n):
+            B = 0
+            f = np.negative
+            for i in range(1):
+                this_matters = f(1.0)
+                B += f(n)
+
+            return B
+        self.prange_tester(test_impl, 1.0)
+
+    @skip_unsupported
+    def test_argument_alias_recarray_field(self):
+        # Test for issue4007.
+        def test_impl(n):
+            for i in range(len(n)):
+                n.x[i] = 7.0
+            return n
+        X1 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X2 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X3 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        v1 = X1.view(np.recarray)
+        v2 = X2.view(np.recarray)
+        v3 = X3.view(np.recarray)
+
+        # Numpy doesn't seem to support almost equal on recarray.
+        # So, we convert to list and use assertEqual instead.
+        python_res = list(test_impl(v1))
+        njit_res = list(njit(test_impl)(v2))
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = list(pa_func(v3))
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
+    @skip_unsupported
+    def test_mutable_list_param(self):
+        """ issue3699: test that mutable variable to call in loop
+            is not hoisted.  The call in test_impl forces a manual
+            check here rather than using prange_tester.
+        """
+        @njit
+        def list_check(X):
+            """ If the variable X is hoisted in the test_impl prange
+                then subsequent list_check calls would return increasing
+                values.
+            """
+            ret = X[-1]
+            a = X[-1] + 1
+            X.append(a)
+            return ret
+        def test_impl(n):
+            for i in prange(n):
+                X = [100]
+                a = list_check(X)
+            return a
+        python_res = test_impl(10)
+        njit_res = njit(test_impl)(10)
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = pa_func(10)
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
 
 @skip_parfors_unsupported
 @x86_only
@@ -2596,6 +2705,22 @@ class TestParforsMisc(TestParforsBase):
         for line in stdout.getvalue().splitlines():
             self.assertEqual('a[3]: 2.0', line)
 
+    @skip_unsupported
+    def test_parfor_ufunc_typing(self):
+        def test_impl(A):
+            return np.isinf(A)
+
+        A = np.array([np.inf, 0.0])
+        cfunc = njit(parallel=True)(test_impl)
+        # save global state
+        old_seq_flag = numba.parfor.sequential_parfor_lowering
+        try:
+            numba.parfor.sequential_parfor_lowering = True
+            np.testing.assert_array_equal(test_impl(A), cfunc(A))
+        finally:
+            # recover global state
+            numba.parfor.sequential_parfor_lowering = old_seq_flag
+
 
 @skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
@@ -2625,7 +2750,7 @@ class TestParforsDiagnostics(TestParforsBase):
 
     def assert_diagnostics(self, diagnostics, parfors_count=None,
                            fusion_info=None, nested_fusion_info=None,
-                           replaced_fns=None):
+                           replaced_fns=None, hoisted_allocations=None):
         if parfors_count is not None:
             self.assertEqual(parfors_count, diagnostics.count_parfors())
         if fusion_info is not None:
@@ -2642,9 +2767,15 @@ class TestParforsDiagnostics(TestParforsBase):
                 else:
                     msg = "Replacement for %s was not found. Had %s" % (x, repl)
                     raise AssertionError(msg)
+
+        if hoisted_allocations is not None:
+            hoisted_allocs = diagnostics.hoisted_allocations()
+            self.assertEqual(hoisted_allocations, len(hoisted_allocs))
+
         # just make sure that the dump() function doesn't have an issue!
         with captured_stdout():
-            diagnostics.dump(4)
+            for x in range(1, 5):
+                diagnostics.dump(x)
 
     def test_array_expr(self):
         def test_impl():
@@ -2726,6 +2857,23 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
+
+    def test_allocation_hoisting(self):
+        def test_impl():
+            n = 10
+            m = 5
+            acc = 0
+            for i in prange(n):
+                temp = np.zeros((m,)) # the np.empty call should get hoisted
+                for j in range(m):
+                    temp[j] = i
+                acc += temp[-1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, hoisted_allocations=1)
 
 
 if __name__ == "__main__":

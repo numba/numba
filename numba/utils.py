@@ -23,11 +23,6 @@ except ImportError:
     from io import StringIO
 from numba.config import PYVERSION, MACHINE_BITS
 
-if PYVERSION >= (3, 3):
-    from collections.abc import Mapping
-else:
-    from collections import Mapping
-
 
 IS_PY3 = PYVERSION >= (3, 0)
 
@@ -78,9 +73,42 @@ else:
 
 try:
     from inspect import signature as pysignature
+    from inspect import Signature as pySignature
+    from inspect import Parameter as pyParameter
 except ImportError:
     try:
         from funcsigs import signature as pysignature
+        from funcsigs import Signature as pySignature
+        from funcsigs import Parameter as pyParameter
+        from funcsigs import BoundArguments
+
+        # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3
+        # This patch is from https://github.com/aliles/funcsigs/pull/30/files
+        # with minor modifications, and thanks!
+        # See LICENSES.third-party.
+        def apply_defaults(self):
+            arguments = self.arguments
+
+            # Creating a new one and not modifying in-place for thread safety.
+            new_arguments = []
+
+            for name, param in self._signature.parameters.items():
+                try:
+                    new_arguments.append((name, arguments[name]))
+                except KeyError:
+                    if param.default is not param.empty:
+                        val = param.default
+                    elif param.kind is _VAR_POSITIONAL:
+                        val = ()
+                    elif param.kind is _VAR_KEYWORD:
+                        val = {}
+                    else:
+                        # BoundArguments was likely created by bind_partial
+                        continue
+                    new_arguments.append((name, val))
+
+            self.arguments = collections.OrderedDict(new_arguments)
+        BoundArguments.apply_defaults = apply_defaults
     except ImportError:
         raise ImportError("please install the 'funcsigs' package "
                           "('pip install funcsigs')")

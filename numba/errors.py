@@ -25,21 +25,48 @@ class NumbaWarning(Warning):
     Base category for all Numba compiler warnings.
     """
 
+    def __init__(self, msg, loc=None, highlighting=True, ):
+        self.msg = msg
+        self.loc = loc
+        if highlighting:
+            highlight = termcolor().errmsg
+        else:
+            def highlight(x):
+                return x
+        if loc:
+            super(NumbaWarning, self).__init__(
+                highlight("%s\n%s\n" % (msg, loc.strformat())))
+        else:
+            super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
-class PerformanceWarning(NumbaWarning):
+
+class NumbaPerformanceWarning(NumbaWarning):
     """
     Warning category for when an operation might not be
     as fast as expected.
     """
 
 
-class ParallelSafetyWarning(RuntimeWarning):
+class NumbaDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a deprecated feature.
+    """
+
+
+class NumbaPendingDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a feature that is pending deprecation.
+    """
+
+
+class NumbaParallelSafetyWarning(NumbaWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.
     """
 
 # These are needed in the color formatting of errors setup
+
 
 @six.add_metaclass(abc.ABCMeta)
 class _ColorScheme(object):
@@ -109,7 +136,7 @@ try:
     # coloring so CI system output is consistently readable without having
     # to read between shell escape characters.
     if os.environ.get('NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING', None):
-        raise ImportError # just to trigger the exception handler below
+        raise ImportError  # just to trigger the exception handler below
 
 except ImportError:
 
@@ -142,8 +169,7 @@ except ImportError:
 
 else:
 
-    from colorama import init, reinit, deinit, Fore, Back, Style
-    from contextlib import contextmanager
+    from colorama import init, reinit, deinit, Fore, Style
 
     class ColorShell(object):
         _has_initialized = False
@@ -175,10 +201,10 @@ else:
 
     # No color added, just bold weighting
     themes['no_color'] = {'code': None,
-                         'errmsg': None,
-                         'filename': None,
-                         'indicate': None,
-                         'highlight': None, }
+                          'errmsg': None,
+                          'filename': None,
+                          'indicate': None,
+                          'highlight': None, }
 
     # suitable for terminals with a dark background
     themes['dark_bg'] = {'code': Fore.BLUE,
@@ -203,10 +229,10 @@ else:
 
     # suitable for use in jupyter notebooks
     themes['jupyter_nb'] = {'code': Fore.BLACK,
-                         'errmsg': Fore.BLACK,
-                         'filename': Fore.GREEN,
-                         'indicate': Fore.CYAN,
-                         'highlight': Fore.RED, }
+                            'errmsg': Fore.BLACK,
+                            'filename': Fore.GREEN,
+                            'indicate': Fore.CYAN,
+                            'highlight': Fore.RED, }
 
     default_theme = themes['no_color']
 
@@ -253,6 +279,15 @@ else:
             _termcolor_inst = HighlightColorScheme(scheme)
         return _termcolor_inst
 
+feedback_details = """
+Please report the error message and traceback, along with a minimal reproducer
+at: https://github.com/numba/numba/issues/new
+
+If more help is needed please feel free to speak to the Numba core developers
+directly at: https://gitter.im/numba/numba
+
+Thanks in advance for your help in improving Numba!
+"""
 
 unsupported_error_info = """
 Unsupported functionality was found in the code Numba was trying to compile.
@@ -279,9 +314,16 @@ http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
 constant_inference_info = """
 Numba could not make a constant out of something that it decided should be
 a constant. This could well be a current limitation in Numba's internals,
-please either raise a bug report along with a minimal reproducer at:
-https://github.com/numba/numba/issues/new
-"""
+however please first check that your code is valid for compilation,
+particularly with respect to string interpolation (not supported!) and
+the requirement of compile time constants as arguments to exceptions:
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
+
+If the code is valid and the unsupported functionality is important to you
+please file a feature request at: https://github.com/numba/numba/issues/new
+
+If you think your code should work with Numba. %s
+""" % feedback_details
 
 typing_error_info = """
 This is not usually a problem with Numba itself but instead often caused by
@@ -303,15 +345,8 @@ https://github.com/numba/numba/issues/new
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
-
-Please report the error message and traceback, along with a minimal reproducer
-at: https://github.com/numba/numba/issues/new
-
-If more help is needed please feel free to speak to the Numba core developers
-directly at: https://gitter.im/numba/numba
-
-Thanks in advance for your help in improving Numba!
-"""
+%s
+""" % feedback_details
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
@@ -388,7 +423,15 @@ class WarningsFixer(object):
         """
         Emit all stored warnings.
         """
-        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+        def key(arg):
+            # It is possible through codegen to create entirely identical
+            # warnings, this leads to comparing types when sorting which breaks
+            # on Python 3. Key as str() and if the worse happens then `id`
+            # creates some uniqueness
+            return str(arg) + str(id(arg))
+
+        for (filename, lineno, category), messages in sorted(
+                self._warnings.items(), key=key):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
@@ -402,7 +445,8 @@ class NumbaError(Exception):
         if highlighting:
             highlight = termcolor().errmsg
         else:
-            def highlight(x): return x
+            def highlight(x):
+                return x
         if loc:
             super(NumbaError, self).__init__(
                 highlight("%s\n%s\n" % (msg, loc.strformat())))
@@ -461,6 +505,7 @@ class NotDefinedError(IRError):
     """
     An undefined variable is encountered during interpretation of IR.
     """
+
     def __init__(self, name, loc=None):
         self.name = name
         msg = "Variable '%s' is not defined." % name
@@ -496,6 +541,7 @@ class LoweringError(NumbaError):
     """
     An error occurred during lowering.
     """
+
     def __init__(self, msg, loc=None):
         super(LoweringError, self).__init__(msg, loc=loc)
 
@@ -505,7 +551,6 @@ class UnsupportedParforsError(NumbaError):
     An error ocurred because parfors is not supported on the platform.
     """
     pass
-
 
 
 class ForbiddenConstruct(LoweringError):
@@ -539,6 +584,7 @@ class ByteCodeSupportError(NumbaError):
     """
     Failure to extract the bytecode of the user's function.
     """
+
     def __init__(self, msg, loc=None):
         super(ByteCodeSupportError, self).__init__(msg, loc=loc)
 
@@ -554,10 +600,9 @@ class ConstantInferenceError(NumbaError):
     """
     Failure during constant inference.
     """
+
     def __init__(self, value, loc=None):
-        self.value = value
-        msg = "Cannot make a constant from: %s" % value
-        super(ConstantInferenceError, self).__init__(msg, loc=loc)
+        super(ConstantInferenceError, self).__init__(value, loc=loc)
 
 
 class InternalError(NumbaError):
@@ -589,7 +634,6 @@ def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
 
 
-import os.path
 _numba_path = os.path.dirname(__file__)
 loc_info = {}
 

@@ -32,11 +32,12 @@ from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi, _extras
-from numba import config, serialize
+from numba import config, serialize, errors
 from numba.utils import longint as long
+from numba.cuda.envvars import get_numba_envvar, get_numbapro_envvar
 
 
-VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
+VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
@@ -84,7 +85,9 @@ class CudaAPIError(CudaDriverError):
 
 
 def find_driver():
-    envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER', None)
+
+    envpath = get_numba_envvar('CUDA_DRIVER')
+
     if envpath == '0':
         # Force fail
         _raise_driver_not_found()
@@ -108,10 +111,10 @@ def find_driver():
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid path" %
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid path" %
                              envpath)
         if not os.path.isfile(envpath):
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid file "
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid file "
                              "path.  Note it must be a filepath of the .so/"
                              ".dll/.dylib or the driver" % envpath)
         candidates = [envpath]
@@ -146,7 +149,7 @@ def find_driver():
 DRIVER_NOT_FOUND_MSG = """
 CUDA driver library cannot be found.
 If you are sure that a CUDA driver is installed,
-try setting environment variable NUMBAPRO_CUDA_DRIVER
+try setting environment variable NUMBA_CUDA_DRIVER
 with the file path of the CUDA driver shared library.
 """
 
@@ -863,7 +866,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+    logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1569,7 +1572,7 @@ FILE_EXTENSION_MAP = {
 
 class Linker(object):
     def __init__(self, max_registers=0):
-        logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+        logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
@@ -1715,7 +1718,7 @@ def device_memory_size(devmem):
         s, e = device_extents(devmem)
         sz = e - s
         devmem._cuda_memsize_ = sz
-    assert sz > 0, "zero length array"
+    assert sz >= 0, "{} length array".format(sz)
     return sz
 
 
@@ -1734,9 +1737,11 @@ def _workaround_for_datetime(obj):
         obj = obj.view(np.int64)
     return obj
 
+def host_pointer(obj, readonly=False):
+    """Get host pointer from an obj.
 
-def host_pointer(obj):
-    """
+    If `readonly` is False, the buffer must be writable.
+
     NOTE: The underlying data pointer from the host data buffer is used and
     it should not be changed until the operation which can be asynchronous
     completes.
@@ -1744,10 +1749,12 @@ def host_pointer(obj):
     if isinstance(obj, (int, long)):
         return obj
 
-    forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
-    obj = _workaround_for_datetime(obj)
-    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
+    forcewritable = False
+    if not readonly:
+        forcewritable = isinstance(obj, np.void) or _is_datetime_dtype(obj)
 
+    obj = _workaround_for_datetime(obj)
+    return mviewbuf.memoryview_get_buffer(obj, forcewritable, readonly)
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
@@ -1828,7 +1835,7 @@ def host_to_device(dst, src, size, stream=0):
     else:
         fn = driver.cuMemcpyHtoD
 
-    fn(device_pointer(dst), host_pointer(src), size, *varargs)
+    fn(device_pointer(dst), host_pointer(src, readonly=True), size, *varargs)
 
 
 def device_to_host(dst, src, size, stream=0):

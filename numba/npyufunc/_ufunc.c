@@ -3,16 +3,16 @@
 #include "_internal.h"
 
 static int
-get_string(PyObject *obj, char **s, const char *type_error_message)
+get_string(PyObject *obj, const char **s, const char *type_error_message)
 {
-    *s = NULL;
     if (!PyString_Check(obj) && obj != Py_None) {
         PyErr_SetString(PyExc_TypeError, type_error_message);
         return -1;
     }
+    *s = NULL;
     if (obj != Py_None) {
         *s = PyString_AsString(obj);
-        if (!*s)
+        if (*s == NULL)
             return -1;
     }
     return 0;
@@ -32,7 +32,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     PyObject *data_obj;
     PyObject *object; /* object to hold on to while ufunc is alive */
     PyObject *pyname, *pydoc;
-    char *name = NULL, *doc = NULL;
+    const char *name = NULL, *doc = NULL;
     char *signature = NULL;
     int identity;
 

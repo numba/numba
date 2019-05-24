@@ -31,13 +31,16 @@ def normalize_signature(sig):
     elif isinstance(parsed, typing.Signature):
         args, return_type = parsed.args, parsed.return_type
     else:
-        raise TypeError("invalid signature: %r instance not allowed"
-                        % (sig.__class__.__name__,))
+        raise TypeError("invalid signature: %r (type: %r) evaluates to %r "
+                        "instead of tuple or Signature" % (
+                            sig, sig.__class__.__name__,
+                            parsed.__class__.__name__
+                        ))
 
     def check_type(ty):
         if not isinstance(ty, types.Type):
-            raise TypeError("invalid signature: expected a type instance, "
-                            "got %r" % (ty,))
+            raise TypeError("invalid type in signature: expected a type "
+                            "instance, got %r" % (ty,))
 
     if return_type is not None:
         check_type(return_type)

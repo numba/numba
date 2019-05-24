@@ -7,6 +7,7 @@ from collections import namedtuple, defaultdict
 
 from numba import ir
 from numba.controlflow import CFGraph
+from numba import types, consts
 
 #
 # Analysis related to variable lifetime
@@ -17,6 +18,7 @@ _use_defs_result = namedtuple('use_defs_result', 'usemap,defmap')
 # other packages that define new nodes add calls for finding defs
 # format: {type:function}
 ir_extension_usedefs = {}
+
 
 def compute_use_defs(blocks):
     """
@@ -259,3 +261,170 @@ def find_top_level_loops(cfg):
     for loop in cfg.loops().values():
         if loop.header not in blocks_in_loop:
             yield loop
+
+
+# Functions to manipulate IR
+def dead_branch_prune(func_ir, called_args):
+    """
+    Removes dead branches based on constant inference from function args.
+    This directly mutates the IR.
+
+    func_ir is the IR
+    called_args are the actual arguments with which the function is called
+    """
+    from .ir_utils import get_definition, guard, find_const, GuardException
+
+    DEBUG = 0
+
+    def find_branches(func_ir):
+        # find *all* branches
+        branches = []
+        for blk in func_ir.blocks.values():
+            branch_or_jump = blk.body[-1]
+            if isinstance(branch_or_jump, ir.Branch):
+                branch = branch_or_jump
+                condition = guard(get_definition, func_ir, branch.cond.name)
+                if condition is not None:
+                    branches.append((branch, condition, blk))
+        return branches
+
+    def do_prune(take_truebr, blk):
+        keep = branch.truebr if take_truebr else branch.falsebr
+        # replace the branch with a direct jump
+        jmp = ir.Jump(keep, loc=branch.loc)
+        blk.body[-1] = jmp
+        return 1 if keep == branch.truebr else 0
+
+    def prune_by_type(branch, condition, blk, *conds):
+        # this prunes a given branch and fixes up the IR
+        # at least one needs to be a NoneType
+        lhs_cond, rhs_cond = conds
+        lhs_none = isinstance(lhs_cond, types.NoneType)
+        rhs_none = isinstance(rhs_cond, types.NoneType)
+        if lhs_none or rhs_none:
+            take_truebr = condition.fn(lhs_cond, rhs_cond)
+            if DEBUG > 0:
+                kill = branch.falsebr if take_truebr else branch.truebr
+                print("Pruning %s" % kill, branch, lhs_cond, rhs_cond,
+                      condition.fn)
+            taken = do_prune(take_truebr, blk)
+            return True, taken
+        return False, None
+
+    def prune_by_value(branch, condition, blk, *conds):
+        lhs_cond, rhs_cond = conds
+        take_truebr = condition.fn(lhs_cond, rhs_cond)
+        if DEBUG > 0:
+            kill = branch.falsebr if take_truebr else branch.truebr
+            print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
+        taken = do_prune(take_truebr, blk)
+        return True, taken
+
+    class Unknown(object):
+        pass
+
+    def resolve_input_arg_const(input_arg):
+        """
+        Resolves an input arg to a constant (if possible)
+        """
+        idx = func_ir.arg_names.index(input_arg)
+        input_arg_ty = called_args[idx]
+
+        # comparing to None?
+        if isinstance(input_arg_ty, types.NoneType):
+            return input_arg_ty
+
+        # is it a kwarg default
+        if isinstance(input_arg_ty, types.Omitted):
+            val = input_arg_ty.value
+            if isinstance(val, types.NoneType):
+                return val
+            elif val is None:
+                return types.NoneType('none')
+
+        # literal type, return the type itself so comparisons like `x == None`
+        # still work as e.g. x = types.int64 will never be None/NoneType so
+        # the branch can still be pruned
+        return getattr(input_arg_ty, 'literal_type', Unknown())
+
+    if DEBUG > 1:
+        print("before".center(80, '-'))
+        print(func_ir.dump())
+
+    # This looks for branches where:
+    # at least one arg of the condition is in input args and const
+    # at least one an arg of the condition is a const
+    # if the condition is met it will replace the branch with a jump
+    branch_info = find_branches(func_ir)
+    nullified_conditions = [] # stores conditions that have no impact post prune
+    for branch, condition, blk in branch_info:
+        const_conds = []
+        if isinstance(condition, ir.Expr) and condition.op == 'binop':
+            prune = prune_by_value
+            for arg in [condition.lhs, condition.rhs]:
+                resolved_const = Unknown()
+                if arg.name in func_ir.arg_names:
+                    # it's an e.g. literal argument to the function
+                    resolved_const = resolve_input_arg_const(arg.name)
+                    prune = prune_by_type
+                else:
+                    # it's some const argument to the function, cannot use guard
+                    # here as the const itself may be None
+                    try:
+                        resolved_const = find_const(func_ir, arg)
+                        if resolved_const is None:
+                            resolved_const = types.NoneType('none')
+                    except GuardException:
+                        pass
+
+                if not isinstance(resolved_const, Unknown):
+                    const_conds.append(resolved_const)
+
+            # lhs/rhs are consts
+            if len(const_conds) == 2:
+                # prune the branch, switch the branch for an unconditional jump
+                prune_stat, taken = prune(branch, condition, blk, *const_conds)
+                if(prune_stat):
+                    # add the condition to the list of nullified conditions
+                    nullified_conditions.append((condition, taken))
+
+    # 'ERE BE DRAGONS...
+    # It is the evaluation of the condition expression that often trips up type
+    # inference, so ideally it would be removed as it is effectively rendered
+    # dead by the unconditional jump if a branch was pruned. However, there may
+    # be references to the condition that exist in multiple places (e.g. dels)
+    # and we cannot run DCE here as typing has not taken place to give enough
+    # information to run DCE safely. Upshot of all this is the condition gets
+    # rewritten below into a benign const that typing will be happy with and DCE
+    # can remove it and its reference post typing when it is safe to do so
+    # (if desired). It is required that the const is assigned a value that
+    # indicates the branch taken as its mutated value would be read in the case
+    # of object mode fall back in place of the condition itself. For
+    # completeness the func_ir._definitions and ._consts are also updated to
+    # make the IR state self consistent.
+
+    deadcond = [x[0] for x in nullified_conditions]
+    for _, cond, blk in branch_info:
+        if cond in deadcond:
+            for x in blk.body:
+                if isinstance(x, ir.Assign) and x.value is cond:
+                    # rewrite the condition as a true/false bit
+                    branch_bit = nullified_conditions[deadcond.index(cond)][1]
+                    x.value = ir.Const(branch_bit, loc=x.loc)
+                    # update the specific definition to the new const
+                    defns = func_ir._definitions[x.target.name]
+                    repl_idx = defns.index(cond)
+                    defns[repl_idx] = x.value
+
+    # Remove dead blocks, this is safe as it relies on the CFG only.
+    cfg = compute_cfg_from_blocks(func_ir.blocks)
+    for dead in cfg.dead_nodes():
+        del func_ir.blocks[dead]
+
+    # if conditions were nullified then consts were rewritten, update
+    if nullified_conditions:
+        func_ir._consts = consts.ConstantInference(func_ir)
+
+    if DEBUG > 1:
+        print("after".center(80, '-'))
+        print(func_ir.dump())

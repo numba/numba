@@ -2,10 +2,8 @@ from __future__ import print_function, unicode_literals
 
 import sys
 
-import numpy as np
-
 import numba.unittest_support as unittest
-from numba import utils, jit
+from numba import jit
 from .support import TestCase
 
 

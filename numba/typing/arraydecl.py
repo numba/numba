@@ -168,10 +168,8 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemBuffer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
@@ -451,7 +449,9 @@ class ArrayAttribute(AttributeTemplate):
                             "cannot convert from %s to %s"
                             % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
-        retty = ary.copy(dtype=dtype, layout=layout)
+        # reset the write bit irrespective of whether the cast type is the same
+        # as the current dtype, this replicates numpy
+        retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
         return signature(retty, *args)
 
     @bound_function("array.ravel")
@@ -518,7 +518,8 @@ class StaticGetItemArray(AbstractTemplate):
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
             isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
-                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                ret = ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                return signature(ret, *args)
 
 
 @infer_getattr
@@ -540,7 +541,7 @@ class StaticGetItemRecord(AbstractTemplate):
         if isinstance(record, types.Record) and isinstance(idx, str):
             ret = record.typeof(idx)
             assert ret
-            return ret
+            return signature(ret, *args)
 
 @infer
 class StaticSetItemRecord(AbstractTemplate):
@@ -626,10 +627,15 @@ def sum_expand(self, args, kws):
         out = signature(_expand_integer(self.this.dtype), *args,
                         recvr=self.this)
     else:
-        # There is an axis paramter so the return type of this summation is
-        # an array of dimension one less than the input array.
-        return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                                  ndim=self.this.ndim-1, layout='C')
+        # There is an axis parameter
+        if self.this.ndim == 1:
+            # 1d reduces to a scalar
+            return_type = self.this.dtype
+        else:
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                                    ndim=self.this.ndim-1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
     return out.replace(pysig=pysig)
 

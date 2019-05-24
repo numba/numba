@@ -117,6 +117,44 @@ class TestSlicing(unittest.TestCase):
             self.assertEqual(got.shape, expect.shape)
             self.assertEqual(got.strides, expect.strides)
 
+    #### Strided
+
+    def test_strided_1d(self):
+        nparr = np.empty(4)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides,
+                              nparr.dtype.itemsize)
+        xx = -2, -1, 1, 2
+        for x in xx:
+            expect = nparr[::x]
+            got = arr[::x]
+            self.assertSameContig(got, expect)
+            self.assertEqual(got.shape, expect.shape)
+            self.assertEqual(got.strides, expect.strides)
+
+    def test_strided_2d(self):
+        nparr = np.empty((4, 5))
+        arr = Array.from_desc(0, nparr.shape, nparr.strides,
+                              nparr.dtype.itemsize)
+        xx = -2, -1, 1, 2
+        for a, b in itertools.product(xx, xx):
+            expect = nparr[::a, ::b]
+            got = arr[::a, ::b]
+            self.assertSameContig(got, expect)
+            self.assertEqual(got.shape, expect.shape)
+            self.assertEqual(got.strides, expect.strides)
+
+    def test_strided_3d(self):
+        nparr = np.empty((4, 5, 6))
+        arr = Array.from_desc(0, nparr.shape, nparr.strides,
+                              nparr.dtype.itemsize)
+        xx = -2, -1, 1, 2
+        for a, b, c in itertools.product(xx, xx, xx):
+            expect = nparr[::a, ::b, ::c]
+            got = arr[::a, ::b, ::c]
+            self.assertSameContig(got, expect)
+            self.assertEqual(got.shape, expect.shape)
+            self.assertEqual(got.strides, expect.strides)
+
 
 class TestReshape(unittest.TestCase):
     def test_reshape_2d2d(self):
@@ -190,7 +228,7 @@ class TestSqueeze(unittest.TestCase):
             arr.squeeze(axis=1)
         with self.assertRaises(ValueError):
             arr.squeeze(axis=(2, 3))
-        
+
 
 class TestExtent(unittest.TestCase):
     def test_extent_1d(self):

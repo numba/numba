@@ -227,12 +227,20 @@ class CodeLibrary(object):
             if gv.name.startswith('numba.dynamic.globals'):
                 self._dynamic_globals.append(gv.name)
 
+    def _verify_declare_only_symbols(self):
+        # Verify that no declare-only function compiled by numba.
+        for fn in self._final_module.functions:
+            # We will only check for symbol name starting with '_ZN5numba'
+            if fn.is_declaration and fn.name.startswith('_ZN5numba'):
+                msg = 'Symbol {} not linked properly'
+                raise AssertionError(msg.format(fn.name))
 
     def _finalize_final_module(self):
         """
         Make the underlying LLVM module ready to use.
         """
         self._finalize_dyanmic_globals()
+        self._verify_declare_only_symbols()
 
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)

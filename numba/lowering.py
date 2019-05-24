@@ -355,6 +355,11 @@ class Lower(BaseLower):
             assert signature is not None
             return self.lower_setitem(inst.target, inst.index, inst.value, signature)
 
+        elif isinstance(inst, ir.StoreMap):
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            return self.lower_setitem(inst.dct, inst.key, inst.value, signature)
+
         elif isinstance(inst, ir.DelItem):
             target = self.loadvar(inst.target.name)
             index = self.loadvar(inst.index.name)
@@ -364,7 +369,11 @@ class Lower(BaseLower):
 
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('delitem', signature)
+
+            op = operator.delitem
+            fnop = self.context.typing_context.resolve_value_type(op)
+            fnop.get_call_type(self.context.typing_context, signature.args, {})
+            impl = self.context.get_function(fnop, signature)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,
@@ -411,7 +420,10 @@ class Lower(BaseLower):
         valuety = self.typeof(value_var.name)
         indexty = self.typeof(index_var.name)
 
-        impl = self.context.get_function('setitem', signature)
+        op = operator.setitem
+        fnop = self.context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(self.context.typing_context, signature.args, {})
+        impl = self.context.get_function(fnop, signature)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
@@ -698,6 +710,18 @@ class Lower(BaseLower):
         else:
             res = self._lower_call_normal(fnty, expr, signature)
 
+        # If lowering the call returned None, interpret that as returning dummy
+        # value if the return type of the function is void, otherwise there is
+        # a problem
+        if res is None:
+            if signature.return_type == types.void:
+                res = self.context.get_dummy_value()
+            else:
+                raise LoweringError(
+                    msg="non-void function returns None from implementation",
+                    loc=self.loc
+                )
+
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
@@ -825,17 +849,6 @@ class Lower(BaseLower):
             )
         return res
 
-    def _lower_call_NumbaFunction(self, fnty, expr, signature):
-        # Handle a compiled Numba function
-        self.debug_print("# calling numba function")
-        argvals = self.fold_call_args(
-            fnty, signature, expr.args, expr.vararg, expr.kws,
-        )
-        raise RuntimeError(str(fnty))
-        return self.context.call_internal(
-            self.builder, fnty.fndesc, fnty.sig, argvals,
-        )
-
     def _lower_call_RecursiveCall(self, fnty, expr, signature):
         # Recursive call
         argvals = self.fold_call_args(
@@ -875,11 +888,6 @@ class Lower(BaseLower):
             argvals = [the_self] + list(argvals)
 
         res = impl(self.builder, argvals, self.loc)
-
-        libs = getattr(impl, "libs", ())
-        for lib in libs:
-            self.library.add_linking_library(lib)
-
         return res
 
     def lower_expr(self, resty, expr):
@@ -1060,6 +1068,23 @@ class Lower(BaseLower):
             castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_set(self.builder, resty, castvals)
+
+        elif expr.op == "build_map":
+            items = expr.items
+            keys, values = [], []
+            key_types, value_types = [], []
+            for k, v in items:
+                key = self.loadvar(k.name)
+                keytype = self.typeof(k.name)
+                val = self.loadvar(v.name)
+                valtype = self.typeof(v.name)
+                keys.append(key)
+                values.append(val)
+                key_types.append(keytype)
+                value_types.append(valtype)
+            return self.context.build_map(self.builder, resty,
+                                          list(zip(key_types, value_types)),
+                                          list(zip(keys, values)))
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)

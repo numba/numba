@@ -295,14 +295,14 @@ void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
 }
 
 void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("NRT_acquire %p refct=%zu\n", mi,
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_acquire %p refct=%zu\n", mi,
                                                             mi->refct));
     assert(mi->refct > 0 && "RefCt cannot be zero");
     TheMSys.atomic_inc(&mi->refct);
 }
 
 void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_call_dtor %p\n", mi));
     if (mi->dtor && !TheMSys.shutting)
         /* We have a destructor and the system is not shutting down */
         mi->dtor(mi->data, mi->size, mi->dtor_info);
@@ -311,7 +311,7 @@ void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
 }
 
 void NRT_MemInfo_release(NRT_MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("NRT_release %p refct=%zu\n", mi,
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_release %p refct=%zu\n", mi,
                                                             mi->refct));
     assert (mi->refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
@@ -339,7 +339,7 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
 
 static void
 nrt_varsize_dtor(void *ptr, size_t size, void *info) {
-    NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
+    NRT_Debug(nrt_debug_print("nrt_varsize_dtor %p\n", ptr));
     if (info) {
         /* call element dtor */
         typedef void dtor_fn_t(void *ptr);

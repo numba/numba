@@ -19,6 +19,16 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertEquals(dary.ndim, 1)
         devicearray.verify_cuda_ndarray_interface(dary)
 
+    def test_device_array_from_readonly(self):
+        ary = np.arange(100, dtype=np.float32)
+        # Make the array readonly
+        ary.flags.writeable = False
+        self.assertFalse(ary.flags.writeable)
+        # Ensure that we can copy the readonly array
+        dary = cuda.to_device(ary)
+        retr = dary.copy_to_host()
+        np.testing.assert_array_equal(retr, ary)
+
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
         cuda.to_device(array, copy=False)
@@ -287,7 +297,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertEqual(
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
-        
+
 
 if __name__ == '__main__':
     unittest.main()

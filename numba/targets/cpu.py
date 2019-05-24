@@ -11,7 +11,9 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
+from numba.targets import (
+    callconv, codegen, externals, intrinsics, listobj, setobj, dictimpl,
+)
 from .options import TargetOptions
 from numba.runtime import rtsys
 from numba.compiler_lock import global_compiler_lock
@@ -127,9 +129,15 @@ class CPUContext(BaseContext):
         """
         return setobj.build_set(self, builder, set_type, items)
 
+    def build_map(self, builder, dict_type, item_types, items):
+        from numba import dictobject
+
+        return dictobject.build_map(self, builder, dict_type, item_types, items)
+
+
     def post_lowering(self, mod, library):
-        if self.enable_fastmath:
-            fastmathpass.rewrite_module(mod)
+        if self.fastmath:
+            fastmathpass.rewrite_module(mod, self.fastmath)
 
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
@@ -186,6 +194,41 @@ class CPUContext(BaseContext):
         return self.get_abi_sizeof(self.get_value_type(aryty))
 
 
+class FastMathOptions(object):
+    """
+    Options for controlling fast math optimization.
+    """
+    def __init__(self, value):
+        # https://releases.llvm.org/7.0.0/docs/LangRef.html#fast-math-flags
+        valid_flags = {
+            'fast',
+            'nnan', 'ninf', 'nsz', 'arcp',
+            'contract', 'afn', 'reassoc',
+        }
+
+        if value is True:
+            self.flags = {'fast'}
+        elif value is False:
+            self.flags = set()
+        elif isinstance(value, set):
+            invalid = value - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = value
+        elif isinstance(value, dict):
+            invalid = set(value.keys()) - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = {v for v, enable in value.items() if enable}
+        else:
+            raise ValueError("Expected fastmath option(s) to be either a bool, dict or set")
+
+    def __bool__(self):
+        return bool(self.flags)
+
+    __nonzero__ = __bool__
+
+
 class ParallelOptions(object):
     """
     Options for controlling auto parallelization.
@@ -229,7 +272,7 @@ class CPUTargetOptions(TargetOptions):
         "_nrt": bool,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,
-        "fastmath": bool,
+        "fastmath": FastMathOptions,
         "error_model": str,
         "parallel": ParallelOptions,
     }

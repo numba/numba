@@ -69,10 +69,10 @@ class TestProduct(TestCase):
         Check performance warning(s) for non-contiguity.
         """
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', errors.PerformanceWarning)
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
             yield
         self.assertGreaterEqual(len(w), 1)
-        self.assertIs(w[0].category, errors.PerformanceWarning)
+        self.assertIs(w[0].category, errors.NumbaPerformanceWarning)
         self.assertIn("faster on contiguous arrays", str(w[0].message))
         self.assertEqual(w[0].filename, pyfunc.__code__.co_filename)
         # This works because our functions are one-liners
@@ -2051,6 +2051,16 @@ class TestLinalgCond(TestLinalgBase):
         # empty
         for sz in [(0, 1), (1, 0), (0, 0)]:
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
+
+        # singular systems to trip divide-by-zero
+        # only for np > 1.14, before this norm was computed via inversion which
+        # will fail with numpy.linalg.linalg.LinAlgError: Singular matrix
+        if numpy_version > (1, 14):
+            x = np.array([[1, 0], [0, 0]], dtype=np.float64)
+            check(x)
+            check(x, p=2)
+            x = np.array([[0, 0], [0, 0]], dtype=np.float64)
+            check(x, p=-2)
 
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from

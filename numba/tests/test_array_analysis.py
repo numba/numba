@@ -7,7 +7,8 @@ import sys
 from collections import namedtuple
 
 from numba import unittest_support as unittest
-from numba import njit, typeof, types, typing, typeof, ir, utils, bytecode
+from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
+    jitclass, prange)
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Pipeline, Flags, _PipelineManager
@@ -21,6 +22,15 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+
+
+# test class for #3700
+@jitclass([('L', types.int32), ('T', types.int32)])
+class ExampleClass3700(object):
+    def __init__(self, n):
+        self.L = n
+        self.T = n + 1
+
 
 class TestEquivSet(TestCase):
 
@@ -903,6 +913,21 @@ class TestArrayAnalysisParallelRequired(TestCase):
             return res
 
         self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
+    @skip_unsupported
+    def test_array_T_issue_3700(self):
+
+        def test_impl(t_obj, X):
+            for i in prange(t_obj.T):
+                X[i] = i
+            return X.sum()
+
+        n = 5
+        t_obj = ExampleClass3700(n)
+        X1 = np.zeros(t_obj.T)
+        X2 = np.zeros(t_obj.T)
+        self.assertEqual(
+            njit(test_impl, parallel=True)(t_obj, X1), test_impl(t_obj, X2))
 
 if __name__ == '__main__':
     unittest.main()

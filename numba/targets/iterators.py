@@ -5,7 +5,7 @@ Implementation of various iterable and iterator types.
 from numba import types, cgutils
 from numba.targets.imputils import (
     lower_builtin, iternext_impl, call_iternext, call_getiter,
-    impl_ret_borrowed, impl_ret_new_ref)
+    impl_ret_borrowed, impl_ret_new_ref, RefType)
 
 
 
@@ -44,7 +44,7 @@ def make_enumerate_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.EnumerateType)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
@@ -61,6 +61,10 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
+        # As a iternext_impl function, this will incref the yieled value.
+        # We need to release the new reference from call_iternext.
+        if context.enable_nrt:
+            context.nrt.decref(builder, enumty.yield_type[1], srcval)
         result.yield_(context.make_tuple(builder, enumty.yield_type,
                                          [count, srcval]))
 
@@ -83,7 +87,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args
@@ -121,15 +125,14 @@ def iternext_zip(context, builder, sig, args, result):
 # generator implementation
 
 @lower_builtin('iternext', types.Generator)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args
     gen, = args
-    # XXX We should link with the generator's library.
-    # Currently, this doesn't make a difference as the library has already
-    # been linked for the generator init function.
     impl = context.get_generator_impl(genty)
     status, retval = impl(context, builder, sig, args)
+    context.add_linking_libs(getattr(impl, 'libs', ()))
+
     with cgutils.if_likely(builder, status.is_ok):
         result.set_valid(True)
         result.yield_(retval)

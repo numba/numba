@@ -27,10 +27,13 @@ from .errors import (TypingError, UntypedAttributeError, new_error_context,
 from .funcdesc import qualifying_prefix
 
 
-class NOTSET: pass
+class NOTSET:
+    pass
+
 
 # terminal color markup
 _termcolor = termcolor()
+
 
 class TypeVar(object):
     def __init__(self, context, var):
@@ -207,7 +210,8 @@ class ArgConstraint(object):
             ty = src.getone()
             if isinstance(ty, types.Omitted):
                 ty = typeinfer.context.resolve_value_type(ty.value)
-            assert ty.is_precise()
+            if not ty.is_precise():
+                raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
@@ -239,7 +243,8 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of list at {0}", self.loc):
+        with new_error_context("typing of {0} at {1}",
+                               self.container_type, self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
@@ -261,6 +266,30 @@ class BuildListConstraint(_BuildContainerConstraint):
 
 class BuildSetConstraint(_BuildContainerConstraint):
     container_type = types.Set
+
+
+class BuildMapConstraint(object):
+
+    def __init__(self, target, items, loc):
+        self.target = target
+        self.items = items
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of dict at {0}", self.loc):
+            typevars = typeinfer.typevars
+            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
+                     for k, v in self.items]
+            if not tsets:
+                typeinfer.add_type(self.target,
+                                   types.DictType(types.undefined,
+                                                  types.undefined),
+                                   loc=self.loc)
+            else:
+                key_type, value_type = tsets[0]
+                typeinfer.add_type(self.target,
+                                   types.DictType(key_type, value_type),
+                                   loc=self.loc)
 
 
 class ExhaustIterConstraint(object):
@@ -348,10 +377,14 @@ class StaticGetItemConstraint(object):
         with new_error_context("typing of static-get-item at {0}", self.loc):
             typevars = typeinfer.typevars
             for ty in typevars[self.value.name].get():
-                itemty = typeinfer.context.resolve_static_getitem(
-                            value=ty, index=self.index)
-                if itemty is not None:
-                    assert itemty.is_precise()
+                sig = typeinfer.context.resolve_static_getitem(
+                    value=ty, index=self.index,
+                )
+
+                if sig is not None:
+                    itemty = sig.return_type
+                    # if the itemty is not precise, let it through, unification
+                    # will catch it and produce a better error message
                     typeinfer.add_type(self.target, itemty, loc=self.loc)
                 elif self.fallback is not None:
                     self.fallback(typeinfer)
@@ -490,10 +523,18 @@ class CallConstraint(object):
                     sig = sig.replace(return_type=targetty)
 
         self.signature = sig
+        self._add_refine_map(typeinfer, typevars, sig)
 
+    def _add_refine_map(self, typeinfer, typevars, sig):
+        """Add this expression to the refine_map base on the type of target_type
+        """
         target_type = typevars[self.target].getone()
+        # Array
         if (isinstance(target_type, types.Array)
                 and isinstance(sig.return_type.dtype, types.Undefined)):
+            typeinfer.refine_map[self.target] = self
+        # DictType
+        if isinstance(target_type, types.DictType) and not target_type.is_precise():
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
@@ -506,6 +547,9 @@ class CallConstraint(object):
                 assert updated_type.is_precise()
                 newtype = aryty.copy(dtype=updated_type.dtype)
                 typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
+        else:
+            m = 'no type refinement implemented for function {} updating to {}'
+            raise TypingError(m.format(self.func, updated_type))
 
     def get_call_signature(self):
         return self.signature
@@ -556,7 +600,26 @@ class GetAttrConstraint(object):
             value=self.value, attr=self.attr)
 
 
-class SetItemConstraint(object):
+class SetItemRefinement(object):
+    """A mixin class to provide the common refinement logic in setitem
+    and static setitem.
+    """
+    def _refine_target_type(self, typeinfer, targetty, idxty, valty, sig):
+        """Refine the target-type given the known index type and value type.
+        """
+        # For array setitem, refine imprecise array dtype
+        if _is_array_not_precise(targetty):
+            typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
+        # For Dict setitem
+        if isinstance(targetty, types.DictType) and not targetty.is_precise():
+            refined = targetty.refine(idxty, valty)
+            typeinfer.add_type(
+                self.target.name, refined,
+                loc=self.loc,
+            )
+
+
+class SetItemConstraint(SetItemRefinement):
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -578,18 +641,14 @@ class SetItemConstraint(object):
                 raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
                                   (targetty, idxty, valty), loc=self.loc)
 
-            # For array setitem, refine imprecise array dtype
-            if _is_array_not_precise(targetty):
-                assert sig.args[0].is_precise()
-                typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
-
             self.signature = sig
+            self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
     def get_call_signature(self):
         return self.signature
 
 
-class StaticSetItemConstraint(object):
+class StaticSetItemConstraint(SetItemRefinement):
     def __init__(self, target, index, index_var, value, loc):
         self.target = target
         self.index = index
@@ -615,6 +674,7 @@ class StaticSetItemConstraint(object):
                 raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
                                   (targetty, self.index, valty), loc=self.loc)
             self.signature = sig
+            self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
     def get_call_signature(self):
         return self.signature
@@ -963,13 +1023,13 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 val = getattr(offender, 'value', 'unknown operation')
                 loc = getattr(offender, 'loc', ir.unknown_loc)
                 msg = ("Type of variable '%s' cannot be determined, operation:"
-                      " %s, location: %s")
+                       " %s, location: %s")
                 raise TypingError(msg % (var, val, loc), loc)
             tp = tv.getone()
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
-                      "have imprecise type: %s. %s")
+                       "have imprecise type: %s. %s")
                 istmp = " (temporary variable)" if var.startswith('$') else ""
                 loc = getattr(offender, 'loc', ir.unknown_loc)
                 # is this an untyped list? try and provide help
@@ -1008,9 +1068,28 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             msg = "Cannot type generator: it does not yield any value"
             raise TypingError(msg)
         yield_type = self.context.unify_types(*yield_types)
-        if yield_type is None:
+        if yield_type is None or isinstance(yield_type, types.Optional):
             msg = "Cannot type generator: cannot unify yielded types %s"
-            raise TypingError(msg % (yield_types,))
+            yp_highlights = []
+            for y in gi.get_yield_points():
+                msg = (_termcolor.errmsg("Yield of: IR '%s', type '%s', "
+                                         "location: %s"))
+                yp_highlights.append(msg % (str(y.inst),
+                                            typdict[y.inst.value.name],
+                                            y.inst.loc.strformat()))
+
+            explain_ty = set()
+            for ty in yield_types:
+                if isinstance(ty, types.Optional):
+                    explain_ty.add(ty.type)
+                    explain_ty.add(types.NoneType('none'))
+                else:
+                    explain_ty.add(ty)
+            raise TypingError("Can't unify yield type from the "
+                              "following types: %s"
+                              % ", ".join(sorted(map(str, explain_ty))) +
+                              "\n\n" + "\n".join(yp_highlights))
+
         return types.Generator(self.func_id.func, yield_type, arg_types,
                                state_types, has_finalizer=True)
 
@@ -1091,6 +1170,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_setattr(inst)
         elif isinstance(inst, ir.Print):
             self.typeof_print(inst)
+        elif isinstance(inst, ir.StoreMap):
+            self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -1105,6 +1186,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_setitem(self, inst):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_storemap(self, inst):
+        constraint = SetItemConstraint(target=inst.dct, index=inst.key,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
@@ -1313,9 +1400,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
             self.calls.append((inst.value, constraint))
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(
-                inst, target, operator.getitem, expr.value, expr.index,
-                )
+            self.typeof_intrinsic_call(inst, target, operator.getitem,
+                                       expr.value, expr.index,)
         elif expr.op == 'getattr':
             constraint = GetAttrConstraint(target.name, attr=expr.attr,
                                            value=expr.value, loc=inst.loc,
@@ -1331,6 +1417,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
         elif expr.op == 'build_set':
             constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_map':
+            constraint = BuildMapConstraint(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':

@@ -379,6 +379,8 @@ def _lower_array_expr(lowerer, expr):
     outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
+        if isinstance(argty, types.Optional):
+            argty = argty.type
         if isinstance(argty, types.Array):
             inner_sig_args.append(argty.dtype)
         else:

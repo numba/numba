@@ -2,7 +2,32 @@
 
 set -v -e
 
-CONDA_INSTALL="conda install -q -y"
+network_tolerant_conda() {
+    local cmd=$1
+    shift
+    local attempts=$1
+    shift
+    for i in `seq $(($attempts + 1))`; do
+        conda $cmd -q -y $*
+        if [ $? == 0 ]; then
+                break;
+        else
+            if [ $i != $(($attempts + 1)) ]; then
+                echo "Connection/conda problem... retrying (attempt $i/$attempts)"
+            else
+                msg="Unresolved connection/conda problem...
+                     exiting after $attempts additional attempts"
+                echo $msg
+                exit 1
+            fi
+        fi
+    done
+}
+
+CONDA_INSTALL="network_tolerant_conda install 3"
+CONDA_CREATE="network_tolerant_conda create 3"
+CONDA_REMOVE="network_tolerant_conda remove 3"
+CONDA_EXPORT="network_tolerant_conda export 3"
 PIP_INSTALL="pip install -q"
 
 
@@ -14,19 +39,20 @@ fi
 
 # Deactivate any environment
 source deactivate
+
 # Display root environment (for debugging)
 conda list
 # Clean up any left-over from a previous build
 # (note workaround for https://github.com/conda/conda/issues/2679:
 #  `conda env remove` issue)
-conda remove --all -q -y -n $CONDA_ENV
+$CONDA_REMOVE --all -n $CONDA_ENV
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+$CONDA_CREATE -n $CONDA_ENV ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
 
 # Activate first
 set +v

@@ -4,12 +4,13 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-import operator
 import sys
-from types import MethodType
+from types import MethodType, FunctionType
 
 from .. import types, utils
-from ..errors import TypingError, UntypedAttributeError
+from ..errors import TypingError, InternalError
+
+_IS_PY3 = sys.version_info >= (3,)
 
 
 class Signature(object):
@@ -85,6 +86,13 @@ class Signature(object):
             return self
         sig = signature(self.return_type, *self.args[1:],
                         recvr=self.args[0])
+
+        # Adjust the python signature
+        params = list(self.pysig.parameters.values())[1:]
+        sig.pysig = utils.pySignature(
+            parameters=params,
+            return_annotation=self.pysig.return_annotation,
+        )
         return sig
 
     def as_function(self):
@@ -133,8 +141,25 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - default_handler(index, param, default) is called for omitted arguments
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
-    ba = pysig.bind(*args, **kws)
-    defargs = []
+
+    # deal with kwonly args
+    params = pysig.parameters
+    kwonly = []
+    for name, p in params.items():
+        if p.kind == p.KEYWORD_ONLY:
+            kwonly.append(name)
+
+    if kwonly:
+        bind_args = args[:-len(kwonly)]
+    else:
+        bind_args = args
+    bind_kws = kws.copy()
+    if kwonly:
+        for idx, n in enumerate(kwonly):
+            bind_kws[n] = args[len(kwonly) + idx]
+
+    # now bind
+    ba = pysig.bind(*bind_args, **bind_kws)
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -150,11 +175,6 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             # Non-stararg, omitted
             assert default is not param.empty
             ba.arguments[name] = default_handler(i, param, default)
-    if ba.kwargs:
-        # There's a remaining keyword argument, e.g. if omitting
-        # some argument with a default value before it.
-        raise NotImplementedError("unhandled keyword argument: %s"
-                                  % list(ba.kwargs))
     # Collect args in the right order
     args = tuple(ba.arguments[param.name]
                  for param in pysig.parameters.values())
@@ -203,6 +223,13 @@ class AbstractTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         sig = generic(args, kws)
+        # Enforce that *generic()* must return None or Signature
+        if sig is not None:
+            if not isinstance(sig, Signature):
+                raise AssertionError(
+                    "generic() must return a Signature or None. "
+                    "{} returned {}".format(generic, type(sig)),
+                )
 
         # Unpack optional type if no matching signature
         if not sig and any(isinstance(x, types.Optional) for x in args):
@@ -294,34 +321,187 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     A base class of templates for overload functions.
     """
 
+    def _validate_sigs(self, typing_func, impl_func):
+        # check that the impl func and the typing func have the same signature!
+        typing_sig = utils.pysignature(typing_func)
+        impl_sig = utils.pysignature(impl_func)
+        # the typing signature is considered golden and must be adhered to by
+        # the implementation...
+        # Things that are valid:
+        # 1. args match exactly
+        # 2. kwargs match exactly in name and default value
+        # 3. Use of *args in the same location by the same name in both typing
+        #    and implementation signature
+        # 4. Use of *args in the implementation signature to consume any number
+        #    of arguments in the typing signature.
+        # Things that are invalid:
+        # 5. Use of *args in the typing signature that is not replicated
+        #    in the implementing signature
+        # 6. Use of **kwargs
+
+        def get_args_kwargs(sig):
+            kws = []
+            args = []
+            pos_arg = None
+            for x in sig.parameters.values():
+                if x.default == utils.pyParameter.empty:
+                    args.append(x)
+                    if x.kind == utils.pyParameter.VAR_POSITIONAL:
+                        pos_arg = x
+                    elif x.kind == utils.pyParameter.VAR_KEYWORD:
+                        msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
+                               "unsupported. (offending argument name is '%s')")
+                        raise InternalError(msg % x)
+                else:
+                    kws.append(x)
+            return args, kws, pos_arg
+
+        ty_args, ty_kws, ty_pos = get_args_kwargs(typing_sig)
+        im_args, im_kws, im_pos = get_args_kwargs(impl_sig)
+
+        sig_fmt = ("Typing signature:         %s\n"
+                   "Implementation signature: %s")
+        sig_str = sig_fmt % (typing_sig, impl_sig)
+
+        err_prefix = "Typing and implementation arguments differ in "
+
+        a = ty_args
+        b = im_args
+        if ty_pos:
+            if not im_pos:
+                # case 5. described above
+                msg = ("VAR_POSITIONAL (e.g. *args) argument kind (offending "
+                       "argument name is '%s') found in the typing function "
+                       "signature, but is not in the implementing function "
+                       "signature.\n%s") % (ty_pos, sig_str)
+                raise InternalError(msg)
+        else:
+            if im_pos:
+                # no *args in typing but there's a *args in the implementation
+                # this is case 4. described above
+                b = im_args[:im_args.index(im_pos)]
+                try:
+                    a = ty_args[:ty_args.index(b[-1]) + 1]
+                except ValueError:
+                    # there's no b[-1] arg name in the ty_args, something is
+                    # very wrong, we can't work out a diff (*args consumes
+                    # unknown quantity of args) so just report first error
+                    specialized = "argument names.\n%s\nFirst difference: '%s'"
+                    msg = err_prefix + specialized % (sig_str, b[-1])
+                    raise InternalError(msg)
+
+        if _IS_PY3:
+            def gen_diff(typing, implementing):
+                diff = set(typing) ^ set(implementing)
+                return "Difference: %s" % diff
+        else:
+            # funcsigs.Parameter cannot be hashed
+            def gen_diff(typing, implementing):
+                pass
+
+        if a != b:
+            specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))
+            raise InternalError(err_prefix + specialized)
+
+        # ensure kwargs are the same
+        ty = [x.name for x in ty_kws]
+        im = [x.name for x in im_kws]
+        if ty != im:
+            specialized = "keyword argument names.\n%s\n%s"
+            msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
+            raise InternalError(msg)
+        same = [x.default for x in ty_kws] == [x.default for x in im_kws]
+        if not same:
+            specialized = "keyword argument default values.\n%s\n%s"
+            msg = err_prefix + specialized % (sig_str, gen_diff(ty_kws, im_kws))
+            raise InternalError(msg)
+
     def generic(self, args, kws):
         """
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        cache_key = self.context, tuple(args), tuple(kws.items())
-        try:
-            disp = self._impl_cache[cache_key]
-        except KeyError:
-            # Get the overload implementation for the given types
-            pyfunc = self._overload_func(*args, **kws)
-            if pyfunc is None:
-                # No implementation => fail typing
-                self._impl_cache[cache_key] = None
-                return
-            from numba import jit
-            jitdecor = jit(nopython=True, **self._jit_options)
-            disp = self._impl_cache[cache_key] = jitdecor(pyfunc)
-        else:
-            if disp is None:
-                return
-
+        disp, args = self._get_impl(args, kws)
+        if disp is None:
+            return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
         sig = disp_type.get_call_type(self.context, args, kws)
         # Store the compiled overload for use in the lowering phase
         self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
+
+    def _get_impl(self, args, kws):
+        """Get implementation given the argument types.
+
+        Returning a Dispatcher object.  The Dispatcher object is cached
+        internally in `self._impl_cache`.
+        """
+        cache_key = self.context, tuple(args), tuple(kws.items())
+        try:
+            impl, args = self._impl_cache[cache_key]
+        except KeyError:
+            impl, args = self._build_impl(cache_key, args, kws)
+        return impl, args
+
+    def _build_impl(self, cache_key, args, kws):
+        """Build and cache the implementation.
+
+        Given the positional (`args`) and keyword arguments (`kws`), obtains
+        the `overload` implementation and wrap it in a Dispatcher object.
+        The expected argument types are returned for use by type-inference.
+        The expected argument types are only different from the given argument
+        types if there is an imprecise type in the given argument types.
+
+        Parameters
+        ----------
+        cache_key : hashable
+            The key used for caching the implementation.
+        args : Tuple[Type]
+            Types of positional argument.
+        kws : Dict[Type]
+            Types of keyword argument.
+
+        Returns
+        -------
+        disp, args :
+            On success, returns `(Dispatcher, Tuple[Type])`.
+            On failure, returns `(None, None)`.
+
+        """
+        from numba import jit
+
+        # Get the overload implementation for the given types
+        ovf_result = self._overload_func(*args, **kws)
+        if ovf_result is None:
+            # No implementation => fail typing
+            self._impl_cache[cache_key] = None, None
+            return None, None
+        elif isinstance(ovf_result, tuple):
+            # The implementation returned a signature that the type-inferencer
+            # should be using.
+            sig, pyfunc = ovf_result
+            args = sig.args
+            cache_key = None            # don't cache
+        else:
+            # Regular case
+            pyfunc = ovf_result
+
+        # Check type of pyfunc
+        if not isinstance(pyfunc, FunctionType):
+            msg = ("Implementator function returned by `@overload` "
+                   "has an unexpected type.  Got {}")
+            raise AssertionError(msg.format(pyfunc))
+
+        # check that the typing and impl sigs match up
+        if self._strict:
+            self._validate_sigs(self._overload_func, pyfunc)
+        # Make dispatcher
+        jitdecor = jit(nopython=True, **self._jit_options)
+        disp = jitdecor(pyfunc)
+        if cache_key is not None:
+            self._impl_cache[cache_key] = disp, args
+        return disp, args
 
     def get_impl_key(self, sig):
         """
@@ -331,7 +511,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return self._compiled_overloads[sig.args]
 
 
-def make_overload_template(func, overload_func, jit_options):
+def make_overload_template(func, overload_func, jit_options, strict):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -340,7 +520,8 @@ def make_overload_template(func, overload_func, jit_options):
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options)
+               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
+               _strict=strict)
     return type(base)(name, (base,), dct)
 
 
@@ -467,7 +648,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
         """
-        cache_key = context, typ, attr
+        cache_key = context, typ, attr, tuple(sig_args), tuple(sig_kws.items())
         try:
             disp = cls._impl_cache[cache_key]
         except KeyError:
@@ -536,6 +717,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
                 sig = self._resolve_impl_sig(typ, attr, args, kws)
@@ -591,6 +773,7 @@ def bound_function(template_key):
         def attribute_resolver(self, ty):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
+
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:

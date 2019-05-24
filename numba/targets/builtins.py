@@ -13,7 +13,8 @@ import llvmlite.llvmpy.core as lc
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant, iternext_impl,
                        call_getiter, call_iternext,
-                       impl_ret_borrowed, impl_ret_untracked)
+                       impl_ret_borrowed, impl_ret_untracked,
+                       numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
 
 
@@ -111,7 +112,7 @@ def getitem_cpointer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin('setitem', types.CPointer, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.CPointer, types.Integer, types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
     elem_ptr = builder.gep(base_ptr, [idx])
@@ -261,6 +262,7 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
+@lower_builtin(types.TypeRef, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
@@ -434,7 +436,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 from numba.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload
+from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
@@ -446,22 +448,80 @@ def impl_index_value(context, builder, sig, args):
     index_value.value = value
     return index_value._getvalue()
 
+
 @overload(min)
-def indval_min(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
+def indval_min(indval1, indval2):
+    if isinstance(indval1, IndexValueType) and \
+       isinstance(indval2, IndexValueType):
         def min_impl(indval1, indval2):
             if indval1.value > indval2.value:
                 return indval2
             return indval1
         return min_impl
 
+
 @overload(max)
-def indval_max(*args):
-    if len(args) == 2 and (isinstance(args[0], IndexValueType)
-                        and isinstance(args[1], IndexValueType)):
+def indval_max(indval1, indval2):
+    if isinstance(indval1, IndexValueType) and \
+       isinstance(indval2, IndexValueType):
         def max_impl(indval1, indval2):
             if indval2.value > indval1.value:
                 return indval2
             return indval1
         return max_impl
+
+
+greater_than = register_jitable(lambda a, b: a > b)
+less_than = register_jitable(lambda a, b: a < b)
+
+
+@register_jitable
+def min_max_impl(iterable, op):
+    if isinstance(iterable, types.IterableType):
+        def impl(iterable):
+            it = iter(iterable)
+            return_val = next(it)
+            for val in it:
+                if op(val, return_val):
+                    return_val = val
+            return return_val
+        return impl
+
+
+@overload(min)
+def iterable_min(iterable):
+    return min_max_impl(iterable, less_than)
+
+
+@overload(max)
+def iterable_max(iterable):
+    return min_max_impl(iterable, greater_than)
+
+
+@lower_builtin(types.TypeRef)
+def redirect_type_ctor(context, builder, sig, args):
+    """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
+    which should be overloaded by type implementator.
+
+    For example:
+
+        d = Dict()
+
+    `d` will be typed as `TypeRef[DictType]()`.  Thus, it will call into this
+    implementation.  We need to redirect the lowering to a function
+    named ``numba_typeref_ctor``.
+    """
+    cls = sig.return_type
+
+    def call_ctor(cls, *args):
+        return numba_typeref_ctor(cls, *args)
+
+    # Pack arguments into a tuple for `*args`
+    ctor_args = types.Tuple.from_types(sig.args)
+    # Make signature T(TypeRef[T], *args) where T is cls
+    sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
+
+    args = (context.get_dummy_value(),   # Type object has no runtime repr.
+            context.make_tuple(builder, sig.args[1], args))
+
+    return context.compile_internal(builder, call_ctor, sig, args)

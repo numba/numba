@@ -1090,7 +1090,7 @@ class ArrayAnalysis(object):
 
     def _analyze_op_getattr(self, scope, equiv_set, expr):
         # TODO: getattr of npytypes.Record
-        if expr.attr == 'T':
+        if expr.attr == 'T' and self._isarray(expr.value.name):
             return self._analyze_op_call_numpy_transpose(scope, equiv_set, [expr.value], {})
         elif expr.attr == 'shape':
             shape = equiv_set.get_shape(expr.value)
@@ -1183,7 +1183,7 @@ class ArrayAnalysis(object):
             if (isinstance(size_rel, int) or (isinstance(size_rel, tuple) and
                 equiv_set.is_equiv(size_rel[0], dsize.name))):
                 rel = size_rel if isinstance(size_rel, int) else size_rel[1]
-                size_val = ir.Const(rel, size_typ)
+                size_val = ir.Const(rel, loc=loc)
                 size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
                 self._define(equiv_set, size_var, size_typ, size_val)
 

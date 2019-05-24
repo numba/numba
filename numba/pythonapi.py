@@ -1136,21 +1136,29 @@ class PythonAPI(object):
         The ``buffer`` is a i8* of the output buffer.
         The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
         The ``kind`` is a i32 (int32) of the Unicode kind constant
+        The ``hash`` is a long/uint64_t (py_hash_t) of the Unicode constant hash
         """
         if PYVERSION >= (3, 3):
             p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
             p_kind = cgutils.alloca_once(self.builder, Type.int())
+            p_ascii = cgutils.alloca_once(self.builder, Type.int())
+            p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
             fnty = Type.function(self.cstring, [self.pyobj,
                                                 self.py_ssize_t.as_pointer(),
-                                                Type.int().as_pointer()])
+                                                Type.int().as_pointer(),
+                                                Type.int().as_pointer(),
+                                                self.py_hash_t.as_pointer()])
             fname = "numba_extract_unicode"
             fn = self._get_function(fnty, name=fname)
 
-            buffer = self.builder.call(fn, [strobj, p_length, p_kind])
+            buffer = self.builder.call(
+                fn, [strobj, p_length, p_kind, p_ascii, p_hash])
             ok = self.builder.icmp_unsigned('!=',
                                             ir.Constant(buffer.type, None),
                                             buffer)
-            return (ok, buffer, self.builder.load(p_length), self.builder.load(p_kind))
+            return (ok, buffer, self.builder.load(p_length),
+                    self.builder.load(p_kind), self.builder.load(p_ascii),
+                    self.builder.load(p_hash))
         else:
             assert False, 'not supported on Python < 3.3'
 
@@ -1188,6 +1196,12 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
+    def object_hash(self, obj):
+        fnty = Type.function(self.py_hash_t, [self.pyobj,])
+        fname = "PyObject_Hash"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj,])
+
     def object_str(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_Str")
@@ -1203,7 +1217,10 @@ class PythonAPI(object):
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
-        fn = self._get_function(fnty, name="PySys_WriteStdout")
+        if PYVERSION >= (3, 2):
+            fn = self._get_function(fnty, name="PySys_FormatStdout")
+        else:
+            fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
 
     def object_dump(self, obj):
@@ -1253,6 +1270,32 @@ class PythonAPI(object):
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [data, pyobj])
+
+    def nrt_meminfo_as_pyobject(self, miptr):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            self.pyobj,
+            [cgutils.voidptr_t]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_as_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miptr])
+
+    def nrt_meminfo_from_pyobject(self, miobj):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [self.pyobj]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_from_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miobj])
 
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt

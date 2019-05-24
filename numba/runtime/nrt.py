@@ -7,6 +7,8 @@ from llvmlite import binding as ll
 
 from numba.utils import finalize as _finalize
 from numba.compiler_lock import global_compiler_lock
+from numba.typing.typeof import typeof_impl
+from numba import types
 from . import _nrt_python as _nrt
 
 _nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
@@ -108,6 +110,12 @@ class _Runtime(object):
 
 # Alias to _nrt_python._MemInfo
 MemInfo = _nrt._MemInfo
+
+
+@typeof_impl.register(MemInfo)
+def typeof_meminfo(val, c):
+    return types.MemInfoPointer(types.voidptr)
+
 
 # Create runtime
 _nrt.memsys_use_cpython_allocator()
