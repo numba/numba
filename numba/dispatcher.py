@@ -38,7 +38,6 @@ class OmittedArg(object):
 
 
 class _FunctionCompiler(object):
-
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
         self.py_func = py_func
@@ -47,6 +46,10 @@ class _FunctionCompiler(object):
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
         self.pipeline_class = pipeline_class
+        # Remember key=(args, return_type) combinations that will fail
+        # compilation to avoid compilation attempt on them.  The values are
+        # the exceptions.
+        self._failed_cache = {}
 
     def fold_argument_types(self, args, kws):
         """
@@ -70,6 +73,28 @@ class _FunctionCompiler(object):
         return self.pysig, args
 
     def compile(self, args, return_type):
+        status, retval = self._compile_cached(args, return_type)
+        if status:
+            return retval
+        else:
+            raise retval
+
+    def _compile_cached(self, args, return_type):
+        key = tuple(args), return_type
+        try:
+            return False, self._failed_cache[key]
+        except KeyError:
+            pass
+
+        try:
+            retval = self._compile_core(args, return_type)
+        except errors.TypingError as e:
+            self._failed_cache[key] = e
+            return False, e
+        else:
+            return True, retval
+
+    def _compile_core(self, args, return_type):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)

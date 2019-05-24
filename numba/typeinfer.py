@@ -128,18 +128,12 @@ class ConstraintNetwork(object):
     def append(self, constraint):
         self.constraints.append(constraint)
 
-    def propagate(self, typeinfer, raise_errors):
+    def propagate(self, typeinfer):
         """
-        Execute all constraints.
-
-        Parameters
-        ----------
-        typeinfer : TypeInferer
-        raise_errors : bool
-
-
-        If *raise_errors* is set, errors are caught and returned as a list.
-        This allows progressing even though some constraints.
+        Execute all constraints.  Errors are caught and returned as a list.
+        This allows progressing even though some constraints may fail
+        due to lack of information
+        (e.g. imprecise types such as List(undefined)).
         """
         errors = []
         for constraint in self.constraints:
@@ -152,10 +146,7 @@ class ConstraintNetwork(object):
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    if raise_errors:
-                        raise e
-                    else:
-                        errors.append(e)
+                    errors.append(e)
                 except Exception:
                     msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
                     e = TypingError(msg.format(con=constraint,
@@ -163,10 +154,7 @@ class ConstraintNetwork(object):
                                                sep='--%<' + '-' * 76),
                                     loc=constraint.loc,
                                     highlighting=False)
-                    if raise_errors:
-                        raise e
-                    else:
-                        errors.append(e)
+                    raise e
         return errors
 
 
@@ -321,9 +309,9 @@ class ExhaustIterConstraint(object):
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
-            else:
-                raise TypingError("failed to unpack {}".format(tp),
-                                  loc=self.loc)
+                else:
+                    raise TypingError("failed to unpack {}".format(tp),
+                                      loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -919,7 +907,7 @@ class TypeInferer(object):
             oldtoken = newtoken
             # Errors can appear when the type set is incomplete; only
             # raise them when there is no progress anymore.
-            errors = self.constraints.propagate(self, raise_errors=raise_errors)
+            errors = self.constraints.propagate(self)
             newtoken = self.get_state_token()
             self.debug.propagate_finished()
         if errors:
