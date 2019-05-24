@@ -43,8 +43,8 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
 
         self.assertLessEqual(mem.free, mem.total)
 
-    @skip_on_cudasim('CUDA HW required')
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
+    @skip_on_cudasim('CUDA HW required')
     def test_forbidden_context_switch(self):
         # Cannot switch context inside a `cuda.require_context`
         @cuda.require_context
