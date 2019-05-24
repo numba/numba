@@ -193,6 +193,26 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_bartlett(M):
+    return np.bartlett(M)
+
+
+def np_blackman(M):
+    return np.blackman(M)
+
+
+def np_hamming(M):
+    return np.hamming(M)
+
+
+def np_hanning(M):
+    return np.hanning(M)
+
+
+def np_kaiser(M, beta):
+    return np.kaiser(M, beta)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2747,6 +2767,50 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for rep in [True, "a", "1"]:
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
+
+    def test_windowing(self):
+        def check_window(func):
+            np_pyfunc = func
+            np_nbfunc = njit(func)
+
+            for M in [0, 1, 5, 12]:
+                expected = np_pyfunc(M)
+                got = np_nbfunc(M)
+                self.assertPreciseEqual(expected, got)
+
+            for M in ['a', 1.1, 1j]:
+                with self.assertRaises(TypingError) as raises:
+                    np_nbfunc(1.1)
+                self.assertIn("M must be an integer", str(raises.exception))
+
+        check_window(np_bartlett)
+        check_window(np_blackman)
+        check_window(np_hamming)
+        check_window(np_hanning)
+
+        # Test np.kaiser separately
+        np_pyfunc = np_kaiser
+        np_nbfunc = njit(np_kaiser)
+
+        for M in [0, 1, 5, 12]:
+            for beta in [0.0, 5.0, 14.0]:
+                expected = np_pyfunc(M, beta)
+                got = np_nbfunc(M, beta)
+
+                if IS_32BITS:
+                    self.assertPreciseEqual(expected, got, prec='double', ulps=2)
+                else:
+                    self.assertPreciseEqual(expected, got, prec='exact')
+
+        for M in ['a', 1.1, 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(M, 1.0)
+            self.assertIn("M must be an integer", str(raises.exception))
+
+        for beta in ['a', 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(5, beta)
+            self.assertIn("beta must be an integer or float", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

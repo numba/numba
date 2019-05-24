@@ -307,7 +307,9 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
+* :func:`numpy.bartlett`
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -332,9 +334,12 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.hamming`
+* :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
