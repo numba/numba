@@ -5,7 +5,7 @@ from ctypes import byref
 import weakref
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 from numba.cuda.cudadrv import driver
 
 
@@ -43,6 +43,7 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
 
         self.assertLessEqual(mem.free, mem.total)
 
+    @skip_on_cudasim
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_forbidden_context_switch(self):
         # Cannot switch context inside a `cuda.require_context`
@@ -68,6 +69,7 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
         self.assertEqual(devid, 1)
 
 
+@skip_on_cudasim
 class Test3rdPartyContext(SerialMixin, unittest.TestCase):
     def tearDown(self):
         cuda.close()
