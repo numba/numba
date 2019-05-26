@@ -813,6 +813,7 @@ def iternext_unicode(context, builder, sig, args, result):
         nindex = cgutils.increment_index(builder, index)
         builder.store(nindex, iterobj.index)
 
+
 @intrinsic
 def _str2int_unicode(typingctx, string_ty, base_ty):
     """Wrap numba_str2int_unicode
@@ -839,11 +840,12 @@ def _str2int_unicode(typingctx, string_ty, base_ty):
 
     return sig, codegen
 
+
 @overload(int)
 def int_overload(string, base=10):
     if isinstance(base, types.Optional):
         base = base.type # catch optional type with invalid non-None type
-        
+
     if not isinstance(string, types.UnicodeType):
         raise TypingError('First parameter should be UnicodeType')
 

@@ -705,7 +705,7 @@ class TestUnicode(BaseTest):
         ]
 
         # form with no parameter
-        pyfunc = str2int_usecase 
+        pyfunc = str2int_usecase
         cfunc = njit(pyfunc)
 
         for string, base in INT_CASES:
@@ -714,7 +714,7 @@ class TestUnicode(BaseTest):
                              "int('%s')?" % string)
 
         # parametrized form
-        pyfunc = str2int_usecase_base 
+        pyfunc = str2int_usecase_base
         cfunc = njit(pyfunc)
 
         # haven't found portable construction to concatenate CASES
