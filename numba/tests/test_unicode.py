@@ -142,6 +142,14 @@ def literal_iter_stopiteration_usecase():
         next(i)
 
 
+def str2int_usecase(x):
+    return int(x)
+
+
+def str2int_usecase_base(x, base):
+    return int(x, base)
+
+
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
@@ -669,6 +677,65 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+    def test_str2int(self):
+
+        INT_CASES = [
+            ('123', [10, 16]),
+            (' 000168000', [10, 9]),
+            (' 000111000', [2, 4, 8, 10, 16, 35]),
+            ('2147483647', []),
+            ('2147483648', []),
+            ('-2147483648', []),
+            ('-2147483649', []),
+            (' 893 ', []),
+            (' -567 ', [8, 16]),
+            (' +567 ', [8, 16]),
+            ('+567', [0]),
+            ('-567', [])
+        ]
+
+        INT_EXTRA_CASES = [
+            (' 0A00F200', [16, 32]),
+            ('A00F200', [16, 32]),
+            ('0xA00F200', []),
+            (' 0x0A00F200', [16]),
+            (' 0x7fffffffffffffff', [16]),
+            ('-9223372036854775808', [])
+        ]
+
+        # form with no parameter
+        pyfunc = str2int_usecase 
+        cfunc = njit(pyfunc)
+
+        for string, base in INT_CASES:
+            self.assertEqual(pyfunc(string),
+                             cfunc(string),
+                             "int('%s')?" % string)
+
+        # parametrized form
+        pyfunc = str2int_usecase_base 
+        cfunc = njit(pyfunc)
+
+        # haven't found portable construction to concatenate CASES
+        for items in INT_CASES, INT_EXTRA_CASES:
+            for string, base_arr in items:
+                for base in base_arr:
+                    self.assertEqual(pyfunc(string, base),
+                                     cfunc(string, base),
+                                     "int('%s', %d)?" % (string, base))
+
+    def test_str2int_err(self):
+        self.disable_leak_check()
+
+        pyfunc = str2int_usecase_base
+        cfunc = njit(pyfunc)
+
+        for base in [-40, -1, 1, 37, 123]:
+            with self.assertRaises(ValueError) as raises:
+                cfunc('123', base)
+            self.assertIn('Base must be >= 2 and <= 36, or 0',
+                          str(raises.exception))
 
 
 @unittest.skipUnless(_py34_or_later,

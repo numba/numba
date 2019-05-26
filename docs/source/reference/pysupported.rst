@@ -165,6 +165,7 @@ the user, of course.)
 The following functions, attributes and methods are currently supported:
 
 * ``len()``
+* ``int()`` (convert strings to integer)
 * ``+`` (concatenation of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)

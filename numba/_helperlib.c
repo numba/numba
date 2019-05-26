@@ -5,6 +5,8 @@
  */
 
 #include "_pymodule.h"
+#include <errno.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
@@ -1036,7 +1038,7 @@ numba_unpickle(const char *data, int n)
     PyObject *buf, *obj;
     static PyObject *loads;
 
-    /* Caching the pickle.loads function shaves a couple ms here. */
+    /* Caching the pickle.loads function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
 #if PY_MAJOR_VERSION >= 3
@@ -1126,16 +1128,28 @@ numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
 
 /*
  * defined string conversion to integer
+ * base must be >= 2 and <= 36, or 0 that checked on Python side
  */
-NUMBA_EXPORT_FUNC(uint64_t)
-numba_str2int_unicode(const char* str, int base)
+NUMBA_EXPORT_FUNC(int64_t)
+numba_str2int_unicode(const char* str, int64_t base)
 {
     if (!str)
     {
         return 0;
     }
 
-    return strtol(str, NULL, base);
+    int64_t result = 0;
+    errno = 0;
+
+    // Use strtoll() instead strtol()
+    // because int64_t is always expected by Python
+    result = strtoll(str, NULL, base);
+    if (errno != 0)
+    {
+    	return 0;
+    }
+
+    return result;
 }
 
 
