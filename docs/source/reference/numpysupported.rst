@@ -280,12 +280,18 @@ The following reduction functions are supported:
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
-* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
+* :func:`numpy.nanpercentile` (only the 2 first arguments,
+  requires NumPy >= 1.11, complex dtypes unsupported)
+* :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
+  complex dtypes unsupported)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
-* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
+* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
+  complex dtypes unsupported)
+* :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
+  complex dtypes unsupported)
 
 Other functions
 ---------------
@@ -301,7 +307,9 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
+* :func:`numpy.bartlett`
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -310,6 +318,7 @@ The following top-level functions are supported:
   SciPy >= 0.16; extreme value handling per NumPy 1.11+)
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
+* :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
@@ -325,9 +334,12 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.hamming`
+* :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
@@ -345,6 +357,7 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
+* :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`

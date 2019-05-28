@@ -355,6 +355,11 @@ class Lower(BaseLower):
             assert signature is not None
             return self.lower_setitem(inst.target, inst.index, inst.value, signature)
 
+        elif isinstance(inst, ir.StoreMap):
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            return self.lower_setitem(inst.dct, inst.key, inst.value, signature)
+
         elif isinstance(inst, ir.DelItem):
             target = self.loadvar(inst.target.name)
             index = self.loadvar(inst.index.name)
@@ -1063,6 +1068,23 @@ class Lower(BaseLower):
             castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_set(self.builder, resty, castvals)
+
+        elif expr.op == "build_map":
+            items = expr.items
+            keys, values = [], []
+            key_types, value_types = [], []
+            for k, v in items:
+                key = self.loadvar(k.name)
+                keytype = self.typeof(k.name)
+                val = self.loadvar(v.name)
+                valtype = self.typeof(v.name)
+                keys.append(key)
+                values.append(val)
+                key_types.append(keytype)
+                value_types.append(valtype)
+            return self.context.build_map(self.builder, resty,
+                                          list(zip(key_types, value_types)),
+                                          list(zip(keys, values)))
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)

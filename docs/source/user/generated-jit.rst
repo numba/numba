@@ -9,7 +9,7 @@ While the :func:`~numba.jit` decorator is useful for many situations,
 sometimes you want to write a function that has different implementations
 depending on its input types.  The :func:`~numba.generated_jit` decorator
 allows the user to control the selection of a specialization at compile-time,
-while fulling retaining runtime execution speed of a JIT function.
+while fully retaining runtime execution speed of a JIT function.
 
 
 Example

@@ -2377,46 +2377,43 @@ def cond_impl(a, p=None):
 
     _check_linalg_matrix(a, "cond")
 
-    def _get_cond_impl(a, p):
-        # handle the p==None case separately for type inference to work ok
-        if p in (None, types.none):
-            def cond_none_impl(a, p=None):
-                s = _compute_singular_values(a)
-                return s[0] / s[-1]
-            return cond_none_impl
+    def impl(a, p=None):
+        # This is extracted for performance, numpy does approximately:
+        # `condition = norm(a) * norm(inv(a))`
+        # in the cases of `p == 2` or `p ==-2` singular values are used
+        # for computing norms. This costs numpy an svd of `a` then an
+        # inversion of `a` and another svd of `a`.
+        # Below is a different approach, which also gives a more
+        # accurate answer as there is no inversion involved.
+        # Recall that the singular values of an inverted matrix are the
+        # reciprocal of singular values of the original matrix.
+        # Therefore calling `svd(a)` once yields all the information
+        # needed about both `a` and `inv(a)` without the cost or
+        # potential loss of accuracy incurred through inversion.
+        # For the case of `p == 2`, the result is just the ratio of
+        # `largest singular value/smallest singular value`, and for the
+        # case of `p==-2` the result is simply the
+        # `smallest singular value/largest singular value`.
+        # As a result of this, numba accepts non-square matrices as
+        # input when p==+/-2 as well as when p==None.
+        if p == 2 or p == -2 or p is None:
+            s = _compute_singular_values(a)
+            if p == 2 or p is None:
+                r = np.divide(s[0], s[-1])
+            else:
+                r = np.divide(s[-1], s[0])
+        else:  # cases np.inf, -np.inf, 1, -1
+            norm_a = np.linalg.norm(a, p)
+            norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
+            r = norm_a * norm_inv_a
+        # NumPy uses a NaN mask, if the input has a NaN, it will return NaN,
+        # Numba calls ban NaN through the use of _check_finite_matrix but this
+        # catches cases where NaN occurs through floating point use
+        if np.isnan(r):
+            return np.inf
         else:
-            def cond_not_none_impl(a, p=None):
-                # This is extracted for performance, numpy does approximately:
-                # `condition = norm(a) * norm(inv(a))`
-                # in the cases of `p == 2` or `p ==-2` singular values are used
-                # for computing norms. This costs numpy an svd of `a` then an
-                # inversion of `a` and another svd of `a`.
-                # Below is a different approach, which also gives a more
-                # accurate answer as there is no inversion involved.
-                # Recall that the singular values of an inverted matrix are the
-                # reciprocal of singular values of the original matrix.
-                # Therefore calling `svd(a)` once yields all the information
-                # needed about both `a` and `inv(a)` without the cost or
-                # potential loss of accuracy incurred through inversion.
-                # For the case of `p == 2`, the result is just the ratio of
-                # `largest singular value/smallest singular value`, and for the
-                # case of `p==-2` the result is simply the
-                # `smallest singular value/largest singular value`.
-                # As a result of this, numba accepts non-square matrices as
-                # input when p==+/-2 as well as when p==None.
-                if p == 2 or p == -2:
-                    s = _compute_singular_values(a)
-                    if p == 2:
-                        return s[0] / s[-1]
-                    else:
-                        return s[-1] / s[0]
-                else:  # cases np.inf, -np.inf, 1, -1
-                    norm_a = np.linalg.norm(a, p)
-                    norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
-                    return norm_a * norm_inv_a
-            return cond_not_none_impl
-
-    return _get_cond_impl(a, p)
+            return r
+    return impl
 
 
 @register_jitable

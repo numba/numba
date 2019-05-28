@@ -25,15 +25,41 @@ class NumbaWarning(Warning):
     Base category for all Numba compiler warnings.
     """
 
+    def __init__(self, msg, loc=None, highlighting=True, ):
+        self.msg = msg
+        self.loc = loc
+        if highlighting:
+            highlight = termcolor().errmsg
+        else:
+            def highlight(x):
+                return x
+        if loc:
+            super(NumbaWarning, self).__init__(
+                highlight("%s\n%s\n" % (msg, loc.strformat())))
+        else:
+            super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
-class PerformanceWarning(NumbaWarning):
+
+class NumbaPerformanceWarning(NumbaWarning):
     """
     Warning category for when an operation might not be
     as fast as expected.
     """
 
 
-class ParallelSafetyWarning(RuntimeWarning):
+class NumbaDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a deprecated feature.
+    """
+
+
+class NumbaPendingDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a feature that is pending deprecation.
+    """
+
+
+class NumbaParallelSafetyWarning(NumbaWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.
@@ -397,7 +423,15 @@ class WarningsFixer(object):
         """
         Emit all stored warnings.
         """
-        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+        def key(arg):
+            # It is possible through codegen to create entirely identical
+            # warnings, this leads to comparing types when sorting which breaks
+            # on Python 3. Key as str() and if the worse happens then `id`
+            # creates some uniqueness
+            return str(arg) + str(id(arg))
+
+        for (filename, lineno, category), messages in sorted(
+                self._warnings.items(), key=key):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()

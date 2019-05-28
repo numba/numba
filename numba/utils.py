@@ -23,11 +23,6 @@ except ImportError:
     from io import StringIO
 from numba.config import PYVERSION, MACHINE_BITS
 
-if PYVERSION >= (3, 3):
-    from collections.abc import Mapping
-else:
-    from collections import Mapping
-
 
 IS_PY3 = PYVERSION >= (3, 0)
 

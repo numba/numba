@@ -12,13 +12,7 @@ import textwrap
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
-from numba.config import PYVERSION
-
-
-if PYVERSION >= (3, 3):
-    from collections.abc import Mapping
-else:
-    from collections import Mapping
+from numba.six import Mapping
 
 
 class SourceLines(Mapping):

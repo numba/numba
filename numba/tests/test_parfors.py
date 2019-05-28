@@ -2086,6 +2086,29 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, 1.0)
 
     @skip_unsupported
+    def test_argument_alias_recarray_field(self):
+        # Test for issue4007.
+        def test_impl(n):
+            for i in range(len(n)):
+                n.x[i] = 7.0
+            return n
+        X1 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X2 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        X3 = np.zeros(10, dtype=[('x', float), ('y', int), ])
+        v1 = X1.view(np.recarray)
+        v2 = X2.view(np.recarray)
+        v3 = X3.view(np.recarray)
+
+        # Numpy doesn't seem to support almost equal on recarray.
+        # So, we convert to list and use assertEqual instead.
+        python_res = list(test_impl(v1))
+        njit_res = list(njit(test_impl)(v2))
+        pa_func = njit(test_impl, parallel=True)
+        pa_res = list(pa_func(v3))
+        self.assertEqual(python_res, njit_res)
+        self.assertEqual(python_res, pa_res)
+
+    @skip_unsupported
     def test_mutable_list_param(self):
         """ issue3699: test that mutable variable to call in loop
             is not hoisted.  The call in test_impl forces a manual
@@ -2727,7 +2750,7 @@ class TestParforsDiagnostics(TestParforsBase):
 
     def assert_diagnostics(self, diagnostics, parfors_count=None,
                            fusion_info=None, nested_fusion_info=None,
-                           replaced_fns=None):
+                           replaced_fns=None, hoisted_allocations=None):
         if parfors_count is not None:
             self.assertEqual(parfors_count, diagnostics.count_parfors())
         if fusion_info is not None:
@@ -2744,9 +2767,15 @@ class TestParforsDiagnostics(TestParforsBase):
                 else:
                     msg = "Replacement for %s was not found. Had %s" % (x, repl)
                     raise AssertionError(msg)
+
+        if hoisted_allocations is not None:
+            hoisted_allocs = diagnostics.hoisted_allocations()
+            self.assertEqual(hoisted_allocations, len(hoisted_allocs))
+
         # just make sure that the dump() function doesn't have an issue!
         with captured_stdout():
-            diagnostics.dump(4)
+            for x in range(1, 5):
+                diagnostics.dump(x)
 
     def test_array_expr(self):
         def test_impl():
@@ -2828,6 +2857,23 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
+
+    def test_allocation_hoisting(self):
+        def test_impl():
+            n = 10
+            m = 5
+            acc = 0
+            for i in prange(n):
+                temp = np.zeros((m,)) # the np.empty call should get hoisted
+                for j in range(m):
+                    temp[j] = i
+                acc += temp[-1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, hoisted_allocations=1)
 
 
 if __name__ == "__main__":

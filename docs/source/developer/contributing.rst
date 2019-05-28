@@ -176,12 +176,12 @@ following test runner options:
 * The ``--failed-first`` option is added to capture the list of failed tests
   and to re-execute them first::
 
-    $ python -m numba.runtests --failed-first -mvb
+    $ python -m numba.runtests --failed-first -m -v -b
 
 * The ``--last-failed`` option is used with ``--failed-first`` to execute
   the previously failed tests only::
 
-    $ python -m numba.runtests --last-failed -mvb
+    $ python -m numba.runtests --last-failed -m -v -b
 
 Development rules
 -----------------

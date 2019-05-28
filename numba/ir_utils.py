@@ -9,6 +9,7 @@ import numpy
 import types as pytypes
 import collections
 import operator
+import warnings
 
 from llvmlite import ir as lir
 
@@ -19,7 +20,8 @@ from numba.typing.templates import signature, infer_global, AbstractTemplate
 from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
-from numba.errors import TypingError, UnsupportedError
+from numba.errors import (TypingError, UnsupportedError,
+                          NumbaPendingDeprecationWarning)
 import copy
 
 _unique_var_count = 0
@@ -664,6 +666,13 @@ def is_pure(rhs, lives, call_table):
         return False
     return True
 
+def is_const_call(module_name, func_name):
+    # Returns True if there is no state in the given module changed by the given function.
+    if module_name == 'numpy':
+        if func_name in ['empty']:
+            return True
+    return False
+
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
@@ -700,6 +709,10 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                # a = b.c.  a should alias b
+                if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.value.name in arg_aliases):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
                 if isinstance(expr, ir.Expr) and expr.op == 'call':
@@ -1818,6 +1831,21 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
+    
+    # issue 2195: check for excessively large tuples
+    for arg_name in func_ir.arg_names:
+        if arg_name in typemap and \
+           isinstance(typemap[arg_name], types.containers.UniTuple) and \
+           typemap[arg_name].count > 1000:
+            # Raise an exception when len(tuple) > 1000. The choice of this number (1000)
+            # was entirely arbitrary
+            msg = ("Tuple '{}' length must be smaller than 1000.\n"
+                   "Large tuples lead to the generation of a prohibitively large "
+                   "LLVM IR which causes excessive memory pressure "
+                   "and large compile times.\n"
+                   "As an alternative, the use of a 'list' is recommended in "
+                   "place of a 'tuple' as lists do not suffer from this problem.".format(arg_name))
+            raise UnsupportedError(msg, func_ir.loc)
 
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
@@ -1887,6 +1915,16 @@ def raise_on_unsupported_feature(func_ir, typemap):
                         "try wrapping the variable {}with 'np.<dtype>()'".
                         format(vardescr), loc=stmt.loc)
 
+            # checks for globals that are also reflected
+            if isinstance(stmt.value, ir.Global):
+                ty = typemap[stmt.target.name]
+                msg = ("Writing to a %s defined in globals is not "
+                        "supported as globals are considered compile-time "
+                        "constants.")
+                if (getattr(ty, 'reflected', False) or
+                    isinstance(ty, types.DictType)):
+                    raise TypingError(msg % ty, loc=stmt.loc)
+
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
         msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "
@@ -1898,3 +1936,23 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
+def warn_deprecated(func_ir, typemap):
+    # first pass, just walk the type map
+    for name, ty in typemap.items():
+        # the Type Metaclass has a reflected member
+        if ty.reflected:
+            # if its an arg, report function call
+            if name.startswith('arg.'):
+                loc = func_ir.loc
+                arg = name.split('.')[1]
+                fname = func_ir.func_id.func_qualname
+                tyname = 'list' if isinstance(ty, types.List) else 'set'
+                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                       "deprecation.html#deprecation-of-reflection-for-list-and"
+                       "-set-types")
+                msg = ("\nEncountered the use of a type that is scheduled for "
+                        "deprecation: type 'reflected %s' found for argument "
+                        "'%s' of function '%s'.\n\nFor more information visit "
+                        "%s" % (tyname, arg, fname, url))
+                warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))

@@ -83,13 +83,9 @@ propagate to all computations involving those variables.
 How can I tell if ``parallel=True`` worked?
 -------------------------------------------
 
-Set the :ref:`environment variable <numba-envvars>` ``NUMBA_WARNINGS`` to
-non-zero and if the ``parallel=True`` transformations failed for a function
-decorated as such, a warning will be displayed.
-
-Also, setting the :ref:`environment variable <numba-envvars>`
-``NUMBA_DEBUG_ARRAY_OPT_STATS`` will show some statistics about which
-operators/calls are converted to parallel for-loops.
+If the ``parallel=True`` transformations failed for a function
+decorated as such, a warning will be displayed. See also
+:ref:`numba-parallel-diagnostics` for information about parallel diagnostics.
 
 Performance
 ===========
@@ -271,6 +267,12 @@ value, for example::
 
 Miscellaneous
 =============
+
+Where does the project name "Numba" come from?
+----------------------------------------------
+
+"Numba" is a combination of "NumPy" and "Mamba". Mambas are some of the fastest
+snakes in the world, and Numba makes your Python code fast.
 
 How do I reference/cite/acknowledge Numba in other work?
 --------------------------------------------------------

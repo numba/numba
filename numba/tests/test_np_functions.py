@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import itertools
 import math
+import platform
 from functools import partial
 
 import numpy as np
@@ -30,6 +31,10 @@ def angle1(x):
 
 def angle2(x, deg):
     return np.angle(x, deg)
+
+
+def delete(arr, obj):
+    return np.delete(arr, obj)
 
 
 def diff1(a):
@@ -187,9 +192,28 @@ def np_repeat(a, repeats):
 def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
-
+  
 def np_select(condlist, choicelist, default=0):
     return np.select(condlist, choicelist, default=0)
+
+def np_bartlett(M):
+    return np.bartlett(M)
+
+
+def np_blackman(M):
+    return np.blackman(M)
+
+
+def np_hamming(M):
+    return np.hamming(M)
+
+
+def np_hanning(M):
+    return np.hanning(M)
+
+
+def np_kaiser(M, beta):
+    return np.kaiser(M, beta)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -345,6 +369,71 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
+    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+    def test_delete(self):
+
+        def arrays():
+            # array, obj
+            #
+            # an array-like type
+            yield [1, 2, 3, 4, 5], 3
+            yield [1, 2, 3, 4, 5], [2, 3]
+            # 1d array, scalar
+            yield np.arange(10), 3
+            yield np.arange(10), -3 # Negative obj
+            # 1d array, list
+            yield np.arange(10), [3, 5, 6]
+            yield np.arange(10), [2, 3, 4, 5]
+            # 3d array, scalar
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), 2
+            # 3d array, list
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), [5, 30, 27, 8]
+            # slices
+            yield [1, 2, 3, 4], slice(1, 3, 1)
+            yield np.arange(10), slice(10)
+
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj in arrays():
+            expected = pyfunc(arr, obj)
+            got = cfunc(arr, obj)
+            self.assertPreciseEqual(expected, got)
+
+    def test_delete_exceptions(self):
+        pyfunc = delete
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3.14)
+        self.assertIn(
+            'obj should be of Integer dtype',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(10), [3.5, 5.6, 6.2])
+        self.assertIn(
+            'obj should be of Integer dtype',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 3)
+        self.assertIn(
+            'arr must be either an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc([1, 2], 3)
+        self.assertIn(
+            'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
 
     def diff_arrays(self):
         """
@@ -2741,6 +2830,50 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(expected_error) as e:
                 np_nbfunc(condlist, choicelist, default)
             self.assertIn(expected_text, str(e.exception))
+
+    def test_windowing(self):
+        def check_window(func):
+            np_pyfunc = func
+            np_nbfunc = njit(func)
+
+            for M in [0, 1, 5, 12]:
+                expected = np_pyfunc(M)
+                got = np_nbfunc(M)
+                self.assertPreciseEqual(expected, got)
+
+            for M in ['a', 1.1, 1j]:
+                with self.assertRaises(TypingError) as raises:
+                    np_nbfunc(1.1)
+                self.assertIn("M must be an integer", str(raises.exception))
+
+        check_window(np_bartlett)
+        check_window(np_blackman)
+        check_window(np_hamming)
+        check_window(np_hanning)
+
+        # Test np.kaiser separately
+        np_pyfunc = np_kaiser
+        np_nbfunc = njit(np_kaiser)
+
+        for M in [0, 1, 5, 12]:
+            for beta in [0.0, 5.0, 14.0]:
+                expected = np_pyfunc(M, beta)
+                got = np_nbfunc(M, beta)
+
+                if IS_32BITS:
+                    self.assertPreciseEqual(expected, got, prec='double', ulps=2)
+                else:
+                    self.assertPreciseEqual(expected, got, prec='exact')
+
+        for M in ['a', 1.1, 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(M, 1.0)
+            self.assertIn("M must be an integer", str(raises.exception))
+
+        for beta in ['a', 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(5, beta)
+            self.assertIn("beta must be an integer or float", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

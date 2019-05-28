@@ -231,7 +231,8 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of list at {0}", self.loc):
+        with new_error_context("typing of {0} at {1}",
+                               self.container_type, self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
@@ -253,6 +254,30 @@ class BuildListConstraint(_BuildContainerConstraint):
 
 class BuildSetConstraint(_BuildContainerConstraint):
     container_type = types.Set
+
+
+class BuildMapConstraint(object):
+
+    def __init__(self, target, items, loc):
+        self.target = target
+        self.items = items
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of dict at {0}", self.loc):
+            typevars = typeinfer.typevars
+            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
+                     for k, v in self.items]
+            if not tsets:
+                typeinfer.add_type(self.target,
+                                   types.DictType(types.undefined,
+                                                  types.undefined),
+                                   loc=self.loc)
+            else:
+                key_type, value_type = tsets[0]
+                typeinfer.add_type(self.target,
+                                   types.DictType(key_type, value_type),
+                                   loc=self.loc)
 
 
 class ExhaustIterConstraint(object):
@@ -1133,6 +1158,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_setattr(inst)
         elif isinstance(inst, ir.Print):
             self.typeof_print(inst)
+        elif isinstance(inst, ir.StoreMap):
+            self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -1147,6 +1174,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_setitem(self, inst):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_storemap(self, inst):
+        constraint = SetItemConstraint(target=inst.dct, index=inst.key,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
@@ -1372,6 +1405,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
         elif expr.op == 'build_set':
             constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_map':
+            constraint = BuildMapConstraint(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
