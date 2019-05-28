@@ -12,6 +12,7 @@ import warnings
 import inspect
 import pickle
 import weakref
+from timeit import default_timer as timer
 
 try:
     import jinja2
@@ -26,7 +27,7 @@ except ImportError:
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof
+from numba import utils, jit, generated_jit, types, typeof, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
@@ -43,6 +44,7 @@ from .support import skip_parfors_unsupported
 import llvmlite.binding as ll
 
 _is_armv7l = platform.machine() == 'armv7l'
+
 
 def dummy(x):
     return x
@@ -110,6 +112,7 @@ class BaseTest(TestCase):
             self.assertPreciseEqual(result, expected)
         f = jit(**self.jit_args)(pyfunc)
         return f, check
+
 
 def check_access_is_preventable():
     # This exists to check whether it is possible to prevent access to
@@ -264,7 +267,7 @@ class TestDispatcher(BaseTest):
             r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
             r"\(float64, float32\) -> float64"
-            )
+        )
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
 
@@ -408,7 +411,7 @@ class TestDispatcher(BaseTest):
         self.assertEqual(memo_size, len(memo))
 
         # show that deserializing creates a new object
-        newer_foo = pickle.loads(serialized_foo)
+        pickle.loads(serialized_foo)
         self.assertIs(ref(), None)
 
     @needs_lapack
@@ -571,6 +574,7 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
+
 class TestSignatureHandling(BaseTest):
     """
     Test support for various parameter passing styles.
@@ -673,7 +677,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j), 5 + 1j)
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
-
 
     @tag('important')
     def test_generated_dtype(self):
@@ -1165,7 +1168,7 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertIn(
                 'Cannot cache compiled function "{}"'.format(f.__name__),
                 str(w[0].message),
-                )
+            )
 
     def test_closure(self):
         mod = self.import_module()
@@ -1744,6 +1747,105 @@ class TestBoxingDefaultError(unittest.TestCase):
             cres.entry_point()
         pat = "cannot convert native Module.* to Python object"
         self.assertRegexpMatches(str(raises.exception), pat)
+
+
+
+class TestNoRetryFailedSignature(unittest.TestCase):
+    """Test that failed-to-compile signatures are not recompiled.
+    """
+    def test_direct_call(self):
+        @jit(nopython=True)
+        def foo(x):
+            return x[0]
+
+        fcom = foo._compiler
+        self.assertEqual(len(fcom._failed_cache), 0)
+        # expected failure because `int` has no `__getitem__`
+        with self.assertRaises(errors.TypingError):
+            foo(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry
+        with self.assertRaises(errors.TypingError):
+            foo(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry with double
+        with self.assertRaises(errors.TypingError):
+            foo(1.0)
+        self.assertEqual(len(fcom._failed_cache), 2)
+
+    def test_nested_call(self):
+        @jit(nopython=True)
+        def bar(x):
+            return x[0]
+
+        @jit(nopython=True)
+        def foobar(x):
+            bar(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(x) + foobar(x)
+
+        fcom = foo._compiler
+        self.assertEqual(len(fcom._failed_cache), 0)
+        # expected failure because `int` has no `__getitem__`
+        with self.assertRaises(errors.TypingError):
+            foo(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry
+        with self.assertRaises(errors.TypingError):
+            foo(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry with double
+        with self.assertRaises(errors.TypingError):
+            foo(1.0)
+        self.assertEqual(len(fcom._failed_cache), 2)
+
+    def test_performance(self):
+
+        def check(field, would_fail):
+            # Slightly modified from the reproducer in issue #4117.
+            # Before the patch, the compilation time of the failing case is
+            # mush longer than of the successful case.
+            arr = np.arange(200).reshape(100,2)
+            arr_view = arr.ravel().view(dtype=[('a', 'int64'), ('b', 'int64')])
+            k = 20
+            @jit(nopython=True)
+            def ident(out, x, arr):
+                pass
+
+            def chain_assign(fs, inner=ident):
+                tab_head, tab_tail = fs[-1], fs[:-1]
+
+                @jit(nopython=True)
+                def assign(out, x, arr):
+                    inner(out, x, arr)
+                    out[0] += tab_head(x, arr)
+
+                if tab_tail:
+                    return chain_assign(tab_tail, assign)
+                else:
+                    return assign
+
+            @jit(nopython=True)
+            def get_field(x, arr):
+                return arr[2][field]
+
+            chain = chain_assign((get_field,) * k)
+            out = np.ones(2)
+            ts = timer()
+            if would_fail:
+                with self.assertRaises(errors.TypingError):
+                    chain(out, 1, arr_view)
+            else:
+                chain(out, 1, arr_view)
+            # Returns the compilation time
+            return timer() - ts
+
+        time_ok = check('a', False)
+        time_bad = check('c', True)
+        # Compiling the failing case should be shorter than the success case.
+        self.assertLessEqual(time_bad, time_ok)
 
 
 if __name__ == '__main__':
