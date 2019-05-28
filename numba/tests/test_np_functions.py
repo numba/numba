@@ -192,9 +192,10 @@ def np_repeat(a, repeats):
 def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
-  
+
 def np_select(condlist, choicelist, default=0):
     return np.select(condlist, choicelist, default=0)
+
 
 def np_bartlett(M):
     return np.bartlett(M)
