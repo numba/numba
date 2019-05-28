@@ -558,13 +558,6 @@ class TypingError(NumbaError):
     pass
 
 
-class ApiError(NumbaError):
-    """
-    The user used an API incorrectly.
-    """
-    pass
-
-
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
         module = getattr(value, 'pymod', None)

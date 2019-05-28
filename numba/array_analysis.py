@@ -1433,12 +1433,12 @@ class ArrayAnalysis(object):
             if isinstance(typ, types.BaseTuple):
                 return args[1], []
 
-        # Reshape is allowed to take one argument that has the value -1.
+        # Reshape is allowed to take one argument that has the value <0.
         # This means that the size of that dimension should be inferred from
         # the size of the array being reshaped and the other dimensions
         # specified.  Our general approach here is to see if the reshape
-        # has any -1 arguments.  If it has more than one then throw a
-        # ValueError.  If exactly one -1 argument is found, remember its
+        # has any <0 arguments.  If it has more than one then throw a
+        # ValueError.  If exactly one <0 argument is found, remember its
         # argument index.
         stmts = []
         neg_one_index = -1
@@ -1446,19 +1446,19 @@ class ArrayAnalysis(object):
             reshape_arg = args[arg_index]
             reshape_arg_def = guard(get_definition, self.func_ir, reshape_arg)
             if isinstance(reshape_arg_def, ir.Const):
-                if reshape_arg_def.value == -1:
+                if reshape_arg_def.value < 0:
                     if neg_one_index == -1:
                         neg_one_index = arg_index
                     else:
-                        msg = ("The reshape API may only include one -1 argument.")
-                        raise errors.ApiError(msg, loc=reshape_arg.loc)
+                        msg = ("The reshape API may only include one negative argument. %s" % str(reshape_arg.loc))
+                        raise ValueError(msg)
 
         if neg_one_index >= 0:
-            # If exactly one -1 argument to reshape was found, then we are
+            # If exactly one <0 argument to reshape was found, then we are
             # going to insert code to calculate the missing dimension and then
-            # replace the -1 with the calculated size.  We do this because we
+            # replace the negative with the calculated size.  We do this because we
             # can't let array equivalence analysis think that some array has
-            # a -1 dimension size.
+            # a negative dimension size.
             loc = args[0].loc
             # Create a variable to hold the size of the array being reshaped.
             calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
@@ -1468,9 +1468,9 @@ class ArrayAnalysis(object):
             stmts.append(init_calc_var)
             # For each other dimension, divide the current size by the specified
             # dimension size.  Once all such dimensions have been done then what is
-            # left is the size of the -1 dimension.
+            # left is the size of the negative dimension.
             for arg_index in range(1, len(args)):
-                # Skip the -1 dimension.
+                # Skip the negative dimension.
                 if arg_index == neg_one_index:
                     continue
                 div_calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
@@ -1481,7 +1481,7 @@ class ArrayAnalysis(object):
                 self.calltypes[new_binop] = signature(types.intp, types.intp, types.intp)
                 stmts.append(div_calc)
                 calc_size_var = div_calc_size_var
-            # Put the calculated value back into the reshape arguments, replacing the -1.
+            # Put the calculated value back into the reshape arguments, replacing the negative.
             args[neg_one_index] = div_calc_size_var
 
         return tuple(args[1:]), stmts

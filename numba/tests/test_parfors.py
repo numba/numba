@@ -1425,7 +1425,7 @@ class TestParfors(TestParforsBase):
     @skip_unsupported
     def test_reshape_with_too_many_neg_one(self):
         # issue3314
-        with self.assertRaises(errors.ApiError) as raised:
+        with self.assertRaises(ValueError) as raised:
             @njit(parallel=True)
             def test_impl(a, b):
                 rm = np.zeros((b, b, 1), dtype=np.float64)
@@ -1442,7 +1442,7 @@ class TestParfors(TestParforsBase):
             b = 3
             test_impl(a, b)
 
-        msg = ("The reshape API may only include one -1 argument.")
+        msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
 
 class TestPrangeBase(TestParforsBase):
