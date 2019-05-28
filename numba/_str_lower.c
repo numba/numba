@@ -59,17 +59,9 @@ int _PyUnicode_ToLower(char ch, char *res)
     }
 }
 
-int strlower(char *str)
+int numba_str_lower(char *str)
 {
 	char ch = str[0];
+    printf("inside the c file now..");
     return _PyUnicode_ToLower(ch, str);
-}
-
-MOD_INIT(string_lower_ext) {
-    PyObject *m;
-    MOD_DEF(m, "string_lower_ext", "No docs", NULL)
-        if (m == NULL)
-            return MOD_ERROR_VAL;
-    PyModule_AddObject(m, "strlower", PyLong_FromVoidPtr(&strlower));
-    return MOD_SUCCESS_VAL(m);
 }

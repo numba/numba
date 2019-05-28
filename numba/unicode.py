@@ -1,10 +1,10 @@
 import operator
 
 import numpy as np
+from llvmlite import ir
 from llvmlite.ir import IntType, Constant
 
 import llvmlite.binding as ll
-import string_lower_ext
 
 from numba.extending import (
     models,
@@ -31,6 +31,7 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
 )
 from numba.targets import slicing
+from numba import _helperlib
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
@@ -597,15 +598,23 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return split_whitespace_impl
 
 
-ll.add_symbol('strlower', string_lower_ext.strlower)
-_strlower = types.ExternalFunction("strlower", types.intc(types.voidptr))
-
+@intrinsic
+def _strlower(typingctx, src):
+    resty = types.int64
+    sig = resty(src)
+    def codegen(context, builder, sig, args):
+        [src] = args
+        fnty = ir.FunctionType(types.intc, [types.UnicodeType])
+        fn = builder.module.get_or_insert_function(fnty, name='numba_str_lower')
+        n = builder.call(fn, src)
+        return n
+    return sig, codegen
 
 @overload_method(types.UnicodeType, 'lower')
 def unicode_lower(a):
     if isinstance(a, types.UnicodeType):
         def lower_impl(a):
-            _strlower(a._data)
+            _strlower(a)
             return a
         return lower_impl
 

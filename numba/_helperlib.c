@@ -1165,3 +1165,4 @@ numba_gdb_breakpoint(void) {
  * Dictionary support
  */
  #include "_dictobject.c"
+ #include "_str_lower.c"

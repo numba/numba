@@ -99,7 +99,6 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
-
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             extra_compile_args=CFLAGS,
@@ -130,6 +129,7 @@ def get_ext_modules():
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
                                        "numba/_dictobject.c",
+                                       "numba/_str_lower.c",
                                        "numba/mathnames.inc",],
                               **np_compile_args)
 
@@ -145,7 +145,6 @@ def get_ext_modules():
                                             "numba/npyufunc/_internal.h",
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
-
 
     ext_npyufunc_workqueue_impls = []
 
@@ -276,13 +275,9 @@ def get_ext_modules():
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
-    ext_string_lower = Extension(name='string_lower_ext',
-                                 sources=['numba/_str_lower.c'],
-                                 include_dirs=["numba"])
-
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
                    ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
-                   ext_jitclass_box, ext_cuda_extras, ext_string_lower]
+                   ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
 
