@@ -146,6 +146,7 @@ def check_access_is_preventable():
         shutil.rmtree(test_dir)
     return ret
 
+
 _access_preventable = check_access_is_preventable()
 _access_msg = "Cannot create a directory to which writes are preventable"
 skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
@@ -1747,7 +1748,6 @@ class TestBoxingDefaultError(unittest.TestCase):
             cres.entry_point()
         pat = "cannot convert native Module.* to Python object"
         self.assertRegexpMatches(str(raises.exception), pat)
-
 
 
 class TestNoRetryFailedSignature(unittest.TestCase):
