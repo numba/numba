@@ -379,12 +379,13 @@ def _count(substr, s, begin, e):
     count = 0
     if(e == -1):
         e = len(s) - len(substr) + 1
-    for i in range(begin, e):
+    i = 0
+    while i < e:
         if _cmp_region(s, i, substr, 0, len(substr)) == 0:
             count = count + 1
-    
-    if (count == 0):
-        return -1
+            i = i + len(substr)
+        else:
+            i = i + 1
     return count
 
 @njit

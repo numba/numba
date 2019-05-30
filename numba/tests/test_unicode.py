@@ -95,10 +95,6 @@ def split_usecase(x, y):
     return x.split(y)
 
 
-def lower_usecase(x):
-    return x.lower()
-
-
 def split_with_maxsplit_usecase(x, y, maxsplit):
     return x.split(y, maxsplit)
 
@@ -328,10 +324,20 @@ class TestUnicode(BaseTest):
                 'aaabcb',
                 'abbccdefff',
                 'AaBBcd',
-                'abc bbd cbb']
+                'abc bbd cbb',
+                'abc * 15',
+                '122222223']
+
+        substr_examples = [
+                'b',
+                'aa',
+                'ab',
+                '22',
+                'B']
 
         for s in str_examples:
-            self.assertEqual(pyfunc(s, 'bb'), cfunc(s, 'bb'))
+            for substr in substr_examples:
+                self.assertEqual(pyfunc(s, substr), cfunc(s, substr))
 
 
     def test_getitem(self):
@@ -510,13 +516,6 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
                              "'%s'.split('%s')?" % (test_str, splitter))
-
-    def test_lower(self):
-        pyfunc = lower_usecase
-        cfunc = njit(pyfunc)
-
-        for test_str in UNICODE_EXAMPLES:
-            self.assertEqual(cfunc(test_str), pyfunc(test_str))
 
     def test_split_with_maxsplit(self):
         CASES = [
