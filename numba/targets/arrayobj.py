@@ -1491,6 +1491,8 @@ def array_transpose_vararg(context, builder, sig, args):
 
 @overload(np.transpose)
 def numpy_transpose(a, axes=None):
+    if isinstance(a, types.BaseTuple):
+        raise errors.UnsupportedError("np.transpose does not accept tuples")
 
     if axes is None:
         def np_transpose_impl(a, axes=None):
