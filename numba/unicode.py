@@ -1,10 +1,7 @@
 import operator
 
 import numpy as np
-from llvmlite import ir
 from llvmlite.ir import IntType, Constant
-
-import llvmlite.binding as ll
 
 from numba.extending import (
     models,
@@ -19,8 +16,7 @@ from numba.extending import (
     register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
-                                    iternext_impl, impl_ret_new_ref, 
-                                    impl_ret_untracked, RefType)
+                                    iternext_impl, impl_ret_new_ref, RefType)
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
@@ -32,7 +28,6 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
 )
 from numba.targets import slicing
-from numba import _helperlib
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
@@ -615,60 +610,6 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             return parts
         return split_whitespace_impl
-
-
-@intrinsic
-def _strlower(typingctx, string_arg_type):
-    #typingctx : typing context
-    #string_arg_type: the arg, as its type
-
-    resty = types.int64
-
-    #typing signature for this intrinsic
-    sig = resty(string_arg_type)
-
-    def codegen(context, builder, sig, args):
-        # context : code gen context
-        # builder : LLVM IR builder(minor extension on llvmlite.builder.IRBuilder)
-        # sig : signature(Numba typing types)
-        # args: arguments as LLVM IR instructions
-
-        #unpack the args, here this function has 1: the string
-        [string_args,] = args
-
-        #Create a proxy for the unicode structure
-        string_struct_proxy = cgutils.create_struct_proxy(types.unicode_type)
-
-        #instantiate the proxy with string arg
-        string_struct = string_struct_proxy(context, builder, value=string_arg)
-
-        # This aprt is about calling the C function that does the work,
-        # the function is declared in C as `int numba_str_lower`
-        # it's described using llvmlite IR as it will be used in
-        # `get_or_insert_function` and subsequently in the call to
-        # inject the IR necessary to stage the call
-        fnty = ir.FunctionType(types.IntType(64), [ir.IntType(8).as_pointer])
-        fn = builder.module.get_or_insert_function(fnty, name='numba_str_lower')
-
-        # This call site takes the funciton, and then an iterable of the arg(s)
-        # in this case, the `.data` member of the unicode struct type is used
-        # as it points to the raw unicode data
-        n = builder.call(fn, [string.struct.data,])
-
-
-        return impl_ret_untracked(context, builder, sig.return_type, n)
-
-    # return the typing signature and the code generation function
-    return sig, codegen
-
-@overload_method(types.UnicodeType, 'lower')
-def unicode_lower(a):
-    if isinstance(a, types.UnicodeType):
-        def lower_impl(a):
-            _strlower(a)
-            return a
-        return lower_impl
-
 
 @overload_method(types.UnicodeType, 'center')
 def unicode_center(string, width, fillchar=' '):
