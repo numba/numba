@@ -221,6 +221,10 @@ def np_kaiser(M, beta):
     return np.kaiser(M, beta)
 
 
+def np_cross(a, b):
+    return np.cross(a, b)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2925,6 +2929,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 np_nbfunc(5, beta)
             self.assertIn("beta must be an integer or float", str(raises.exception))
+
+    def test_cross(self):
+        pyfunc = np_cross
+        cfunc = jit(nopython=True)(pyfunc)
+        # TODO: define meaningful set of (a,b) pairs to test
+        a = np.array((1, 0, 0))
+        b = np.array((0, 1, 0))
+        expected = pyfunc(a, b)
+        got = cfunc(a, b)
+        self.assertPreciseEqual(expected, got)
 
 
 class TestNPMachineParameters(TestCase):

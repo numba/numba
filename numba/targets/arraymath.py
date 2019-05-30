@@ -3948,3 +3948,14 @@ def np_kaiser(M, beta):
         return _i0n(n, alpha, beta)
 
     return np_kaiser_impl
+
+
+@overload(np.cross)
+def np_cross(a, b):
+    if isinstance(a, types.Array) and isinstance(b, types.Array):
+
+        def np_cross_impl(a, b):
+            # TODO: implement
+            pass
+
+        return np_cross_impl
