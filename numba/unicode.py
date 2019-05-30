@@ -19,7 +19,8 @@ from numba.extending import (
     register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
-                                    iternext_impl, impl_ret_new_ref, RefType)
+                                    iternext_impl, impl_ret_new_ref, 
+                                    impl_ret_untracked, RefType)
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
@@ -378,6 +379,18 @@ def _find(substr, s):
             return i
     return -1
 
+@njit
+def _count(substr, s, begin, e):
+    count = 0
+    if(e == -1):
+        e = len(s) - len(substr) + 1
+    for i in range(begin, e):
+        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
+            count = count + 1
+    
+    if (count == 0):
+        return -1
+    return count
 
 @njit
 def _is_whitespace(code_point):
@@ -501,6 +514,12 @@ def unicode_find(a, b):
             return _find(substr=b, s=a)
         return find_impl
 
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(st, sub, start=0, end=-1):
+    if isinstance(sub, types.UnicodeType):
+        def count_impl(st, sub, begin=start, e=end):
+            return _count(sub, st, begin, e)
+        return count_impl
 
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
@@ -599,15 +618,47 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
 
 @intrinsic
-def _strlower(typingctx, src):
+def _strlower(typingctx, string_arg_type):
+    #typingctx : typing context
+    #string_arg_type: the arg, as its type
+
     resty = types.int64
-    sig = resty(src)
+
+    #typing signature for this intrinsic
+    sig = resty(string_arg_type)
+
     def codegen(context, builder, sig, args):
-        [src] = args
-        fnty = ir.FunctionType(types.intc, [types.UnicodeType])
+        # context : code gen context
+        # builder : LLVM IR builder(minor extension on llvmlite.builder.IRBuilder)
+        # sig : signature(Numba typing types)
+        # args: arguments as LLVM IR instructions
+
+        #unpack the args, here this function has 1: the string
+        [string_args,] = args
+
+        #Create a proxy for the unicode structure
+        string_struct_proxy = cgutils.create_struct_proxy(types.unicode_type)
+
+        #instantiate the proxy with string arg
+        string_struct = string_struct_proxy(context, builder, value=string_arg)
+
+        # This aprt is about calling the C function that does the work,
+        # the function is declared in C as `int numba_str_lower`
+        # it's described using llvmlite IR as it will be used in
+        # `get_or_insert_function` and subsequently in the call to
+        # inject the IR necessary to stage the call
+        fnty = ir.FunctionType(types.IntType(64), [ir.IntType(8).as_pointer])
         fn = builder.module.get_or_insert_function(fnty, name='numba_str_lower')
-        n = builder.call(fn, src)
-        return n
+
+        # This call site takes the funciton, and then an iterable of the arg(s)
+        # in this case, the `.data` member of the unicode struct type is used
+        # as it points to the raw unicode data
+        n = builder.call(fn, [string.struct.data,])
+
+
+        return impl_ret_untracked(context, builder, sig.return_type, n)
+
+    # return the typing signature and the code generation function
     return sig, codegen
 
 @overload_method(types.UnicodeType, 'lower')

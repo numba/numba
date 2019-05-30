@@ -79,6 +79,9 @@ def ge_usecase(x, y):
 def find_usecase(x, y):
     return x.find(y)
 
+def count_usecase(x, y):
+    return x.find(y)
+
 
 def startswith_usecase(x, y):
     return x.startswith(y)
@@ -110,7 +113,6 @@ def split_whitespace_usecase(x):
 
 def join_usecase(x, y):
     return x.join(y)
-
 
 def join_empty_usecase(x):
     # hack to make empty typed list
@@ -316,6 +318,21 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
+    
+    def test_count(self):
+        pyfunc = count_usecase
+        cfunc = njit(pyfunc)
+
+        str_examples = [
+                'abcdef',
+                'aaabcb',
+                'abbccdefff',
+                'AaBBcd',
+                'abc bbd cbb']
+
+        for s in str_examples:
+            self.assertEqual(pyfunc(s, 'bb'), cfunc(s, 'bb'))
+
 
     def test_getitem(self):
         pyfunc = getitem_usecase
