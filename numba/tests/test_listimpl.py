@@ -42,7 +42,7 @@ class List(object):
         return self.list_getitem(i)
 
     def append(self, item):
-        return self.list_append(item)
+        self.list_append(item)
 
     def list_new(self, itemsize, allocated):
         lp = ctypes.c_void_p()
@@ -56,15 +56,18 @@ class List(object):
         return self.tc.numba_list_length(self.lp)
 
     def list_setitem(self, i, item):
-        return self.tc.numba_list_setitem(self.lp, i, item)
+        status = self.tc.numba_list_setitem(self.lp, i, item)
+        self.tc.assertEqual(status, LIST_OK)
 
     def list_getitem(self, i):
         item_out_buffer = ctypes.create_string_buffer(self.itemsize)
-        self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
+        status = self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
+        self.tc.assertEqual(status, LIST_OK)
         return item_out_buffer.raw
 
     def list_append(self, item):
-        return self.tc.numba_list_append(self.lp, item)
+        status = self.tc.numba_list_append(self.lp, item)
+        self.tc.assertEqual(status, LIST_OK)
 
 
 class TestListImpl(TestCase):
@@ -86,25 +89,25 @@ class TestListImpl(TestCase):
         # numba_list_length(NB_List *l)
         self.numba_list_length = wrap(
             'list_length',
-            ctypes.c_ssize_t,
+            ctypes.c_int,
             [list_t],
         )
         # numba_list_setitem(NB_List *l, Py_ssize_t i, const char *item)
         self.numba_list_setitem = wrap(
             'list_setitem',
-            None,
+            ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
         # numba_list_append(NB_List *l, const char *item)
         self.numba_list_append = wrap(
             'list_append',
-            None,
+            ctypes.c_int,
             [list_t, ctypes.c_char_p],
         )
         # numba_list_getitem(NB_List *l,  Py_ssize_t i, char *out)
         self.numba_list_getitem = wrap(
             'list_getitem',
-            ctypes.c_char_p,
+            ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
 
