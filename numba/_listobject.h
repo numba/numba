@@ -34,4 +34,7 @@ numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_length(NB_List *lp);
 
+NUMBA_EXPORT_FUNC(int)
+numba_list_realloc(NB_List *lp, Py_ssize_t newsize);
+
 #endif
