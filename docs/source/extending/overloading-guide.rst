@@ -59,8 +59,7 @@ After some deliberation and tinkering, you end up with the following code:
 
 As you can see, the implementation only supports what you need right now:
 
-* Only supports 
-* Only integer and floating-point types
+* Only supports integer and floating-point types
 * All vector norms
 * Only the Frobenius norm for matrices
 * Code sharing between vector and matrix implementations using
