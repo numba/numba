@@ -1,5 +1,10 @@
 #include "_listobject.h"
 
+typedef enum {
+    LIST_OK = 0,
+    LIST_ERR_NO_MEMORY = -1,
+} ListStatus;
+
 static void
 copy_item(NB_List *lp, char *dst, const char *src){
     memcpy(dst, src, lp->itemsize);
@@ -14,7 +19,7 @@ numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
     lp->items = malloc(aligned_size(lp->itemsize * allocated));
 
     *out = lp;
-    return 0;
+    return LIST_OK;
 }
 
 Py_ssize_t
@@ -27,24 +32,24 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     assert(index < lp->size);
     char *loc = lp->items + lp-> itemsize * index;
     copy_item(lp, loc, item);
-    return 0;
+    return LIST_OK;
 }
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
     assert(index < lp->size);
     char *loc = lp->items + lp->itemsize * index;
     copy_item(lp, out, loc);
-    return 0;
+    return LIST_OK;
 }
 
 int
 numba_list_append(NB_List *lp, const char *item) {
     if (lp->size == lp->allocated) {
         int result = numba_list_realloc(lp, lp->size + 1);
-        if(result < 0) { return result; }
+        if(result < LIST_OK) { return result; }
     }
     numba_list_setitem(lp, lp->size++ , item);
-    return 0;
+    return LIST_OK;
 }
 
 int
@@ -62,7 +67,7 @@ numba_list_realloc(NB_List *lp, Py_ssize_t newsize) {
     new_allocated = (size_t)newsize + (newsize >> 3) + (newsize < 9 ? 3 : 6);
     num_allocated_bytes = new_allocated * lp->itemsize;
     lp->items = realloc(lp->items, aligned_size(num_allocated_bytes));
-    if (!lp->items) { return -1; }
+    if (!lp->items) { return LIST_ERR_NO_MEMORY; }
     lp->allocated = (Py_ssize_t)new_allocated;
-    return 0;
+    return LIST_OK;
 }

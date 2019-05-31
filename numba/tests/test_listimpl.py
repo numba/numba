@@ -13,6 +13,8 @@ from numba.config import IS_32BITS
 
 ALIGN = 4 if IS_32BITS else 8
 
+LIST_OK = 0
+
 
 class List(object):
     """A wrapper around the C-API to provide a minimal list object for
@@ -48,7 +50,7 @@ class List(object):
         status = self.tc.numba_list_new(
             ctypes.byref(lp), itemsize, allocated,
         )
-        self.tc.assertEqual(status, 0)
+        self.tc.assertEqual(status, LIST_OK)
         return lp
 
     def list_length(self):
