@@ -160,7 +160,7 @@ additional things to watch out for.
   ``@overload_method`` and reuse it. Just be sure to check that NumPy doesn't
   diverge in the implementations of its function/method.
 
-  For example for the ``repeat`` function/method:
+  As an example, the ``repeat`` function/method:
 
   .. code:: python
 
@@ -178,7 +178,7 @@ additional things to watch out for.
   This will make those functions available from within your ``@jit`` and
   ``@overload`` decorated functions.
 
-* The Numba continuous integration (CI) setup  tests a wide variety of NumPy
+* The Numba continuous integration (CI) set up tests a wide variety of NumPy
   versions, you'll sometimes be alerted to a change in behaviour from some
   previous NumPy version. If you can find supporting evidence in the NumPy
   change log / repository, then you'll need to decide whether to create branches and
