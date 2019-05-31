@@ -49,10 +49,7 @@ it to accelerate your function. However, after adding the
 ``jit(nopython=True)``
 decorator, Numba complains that ``scipy.linalg.norm`` isn't supported. From
 looking at the documentation, you realize that a norm is probably fairly easy
-to implement using NumPy and you wanted to learn a little about the inner
-workings of Numba anyway. So, after some back and forth with the
-core-developers via Gitter you receive the following annotated template in your
-INBOX:
+to implement using NumPy. A good starting point is the following template.
 
 .. literalinclude:: template.py
 
