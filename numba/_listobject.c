@@ -1,6 +1,5 @@
 #include "_listobject.h"
 
-
 static void
 copy_item(NB_List *lp, char *dst, const char *src){
     memcpy(dst, src, lp->itemsize);
@@ -8,11 +7,11 @@ copy_item(NB_List *lp, char *dst, const char *src){
 
 int
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
-    Py_ssize_t alloc_size = sizeof(NB_List) + itemsize * allocated;
-    NB_List *lp = malloc(aligned_size(alloc_size));
+    NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
     lp->size = 0;
     lp->itemsize = itemsize;
-    /* li->items will be allocated as empty */
+    lp->allocated = allocated;
+    lp->items = malloc(aligned_size(lp->itemsize * allocated));
 
     *out = lp;
     return 0;

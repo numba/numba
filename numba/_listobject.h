@@ -24,7 +24,7 @@ typedef struct {
     Py_ssize_t allocated;
 
     /* Array/pointer for items. Interpretation is governed by itemsize. */
-    char  items[];
+    char  * items;
 } NB_List;
 
 
