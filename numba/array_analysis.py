@@ -7,7 +7,7 @@ from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import numpy
 import operator
-from numba import ir, analysis, types, config, cgutils, typing, errors
+from numba import ir, analysis, types, config, cgutils, typing
 from numba.ir_utils import (
     mk_unique_var,
     replace_vars_inner,
@@ -1450,7 +1450,8 @@ class ArrayAnalysis(object):
                     if neg_one_index == -1:
                         neg_one_index = arg_index
                     else:
-                        msg = ("The reshape API may only include one negative argument. %s" % str(reshape_arg.loc))
+                        msg = ("The reshape API may only include one negative"
+                               " argument. %s" % str(reshape_arg.loc))
                         raise ValueError(msg)
 
         if neg_one_index >= 0:
