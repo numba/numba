@@ -29,7 +29,7 @@ class List(object):
         self.tc = tc
         self.itemsize = itemsize
         self.allocated = allocated
-        self.lo = self.list_new(itemsize, allocated)
+        self.lp = self.list_new(itemsize, allocated)
 
     def __len__(self):
         return self.list_length()
@@ -52,18 +52,18 @@ class List(object):
         return lp
 
     def list_length(self):
-        return self.tc.numba_list_length(self.lo)
+        return self.tc.numba_list_length(self.lp)
 
     def list_setitem(self, i, item):
-        return self.tc.numba_list_setitem(self.lo, i, item)
+        return self.tc.numba_list_setitem(self.lp, i, item)
 
     def list_getitem(self, i):
         item_out_buffer = ctypes.create_string_buffer(self.itemsize)
-        self.tc.numba_list_getitem(self.lo, i, item_out_buffer)
+        self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
         return item_out_buffer.raw
 
     def list_append(self, item):
-        return self.tc.numba_list_append(self.lo, item)
+        return self.tc.numba_list_append(self.lp, item)
 
 
 class TestListImpl(TestCase):
