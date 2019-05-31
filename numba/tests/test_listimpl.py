@@ -4,7 +4,6 @@ Testing C implementation of the numba list
 from __future__ import print_function, absolute_import, division
 
 import ctypes
-import random
 import struct
 
 from .support import TestCase
