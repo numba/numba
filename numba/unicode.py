@@ -4,8 +4,6 @@ import numpy as np
 from llvmlite import ir
 from llvmlite.ir import IntType, Constant
 
-import llvmlite.binding as ll
-
 from numba.extending import (
     models,
     register_model,
@@ -19,7 +17,7 @@ from numba.extending import (
     register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
-                                    iternext_impl, impl_ret_new_ref, 
+                                    iternext_impl, impl_ret_new_ref,
                                     impl_ret_untracked, RefType)
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
@@ -32,7 +30,6 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
 )
 from numba.targets import slicing
-from numba import _helperlib
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
@@ -616,6 +613,7 @@ def _strlower(typingctx, string_arg_type):
         n = builder.call(fn, [string_struct.data,])
         return impl_ret_untracked(context, builder, sig.return_type, n)
     return sig, codegen
+
 
 @overload_method(types.UnicodeType, 'lower')
 def unicode_lower(a):

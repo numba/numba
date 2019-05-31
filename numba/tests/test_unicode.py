@@ -497,18 +497,17 @@ class TestUnicode(BaseTest):
     def test_lower(self):
         pyfunc = lower_usecase
         cfunc = njit(pyfunc)
-        
-        EXAMPLES = [
-                'ABCD',
-                'aBcD',
-                'aa+BC',
-                'abcd'
-                '12345',
-                'aab Cdd',
-                ' ',
-                '¡Y tú crs?',
-                ]
 
+        EXAMPLES = [
+            'ABCD',
+            'aBcD',
+            'aa+BC',
+            'abcd'
+            '12345',
+            'aab Cdd',
+            ' ',
+            '¡Y tú crs?',
+        ]
 
         for test_str in EXAMPLES:
             self.assertEqual(cfunc(test_str), pyfunc(test_str))
