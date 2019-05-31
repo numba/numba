@@ -7,7 +7,7 @@ import sys
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types, utils
+from numba import types, utils, jit, njit
 from .support import tag
 
 
@@ -62,6 +62,16 @@ def range_attrs(start, stop, step):
     for r in (r1, r2, r3):
         tmp.append((r.start, r.stop, r.step))
     return tmp
+
+def range_contains(val, start, stop, step):
+    r1 = range(start)
+    r2 = range(start, stop)
+    r3 = range(start, stop, step)
+    tmp = []
+    for r in (r1, r2, r3):
+        tmp.append(val in r)
+    return tmp
+
 
 class TestRange(unittest.TestCase):
 
@@ -176,6 +186,31 @@ class TestRange(unittest.TestCase):
         cfunc = cres.entry_point
         for arg in arglist:
             self.assertEqual(cfunc(*arg), pyfunc(*arg))
+
+    @tag('important')
+    def test_range_contains(self):
+        pyfunc = range_contains
+        arglist = [(0, 0, 1),
+                   (0, -1, 1),
+                   (-1, 1, 1),
+                   (-1, 4, 1),
+                   (-1, 4, 10),
+                   (5, -5, -2),]
+
+        vallist = [-10, -6, -5, -4, -2, -1, 0,
+                1, 2, 4, 5, 6, 10, -1.1, False, True,
+                1 + 0j, 1 + 1j, 1.1 + 0j, 1.0 + 1.1j]
+
+        cfunc = njit(pyfunc)
+        for arg in arglist:
+            for val in vallist:
+                self.assertEqual(cfunc(val, *arg), pyfunc(val, *arg))
+
+        cfunc_obj = jit(pyfunc, forceobj=True)
+        for arg in arglist:
+            for val in [{'a': 1}, [1,], 'abc']:
+                self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
+
 
 
 if __name__ == '__main__':
