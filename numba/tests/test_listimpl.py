@@ -76,14 +76,11 @@ class TestListImpl(TestCase):
             proto = ctypes.CFUNCTYPE(restype, *argtypes)
             return proto(_helperlib.c_helpers[name])
 
+        # numba_list_new(NB_List *l, Py_ssize_t itemsize, Py_ssize_t allocated)
         self.numba_list_new = wrap(
             'list_new',
             ctypes.c_int,
-            [
-                ctypes.POINTER(list_t),  # out
-                ctypes.c_ssize_t,        # itemsize
-                ctypes.c_ssize_t,        # allocated
-            ],
+            [ctypes.POINTER(list_t), ctypes.c_ssize_t, ctypes.c_ssize_t],
         )
         # numba_list_length(NB_List *l)
         self.numba_list_length = wrap(
