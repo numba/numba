@@ -3954,8 +3954,34 @@ def np_kaiser(M, beta):
 def np_cross(a, b):
     if isinstance(a, types.Array) and isinstance(b, types.Array):
 
+        dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+
         def np_cross_impl(a, b):
-            # TODO: implement
-            pass
+            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
+                raise ValueError('dimension must be 2 or 3')
+
+
+            # Create the output array
+
+            if a.shape[-1] == 3 or b.shape[-1] == 3:
+                # Case: last output dim has 3 elements
+                if a.ndim == 1 and b.ndim == 1:
+                    # Case: inputs are 1D arrays
+                    cp = np.empty((3,), dtype)
+                else:
+                    # Case: inputs are ND arrays
+
+                    # we can't use np.broadcast; use np.add
+                    # since we only need the broadcast shape
+                    shape_ = np.add(a[..., 0], b[..., 0]).shape
+                    cp = np.empty(shape_ + (3,), dtype)
+            else:
+                # Case: last output dim is scalar
+                # TODO
+                pass
+
+            # TODO: populate cp values
+
+            return cp
 
         return np_cross_impl

@@ -2933,12 +2933,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_cross(self):
         pyfunc = np_cross
         cfunc = jit(nopython=True)(pyfunc)
-        # TODO: define meaningful set of (a,b) pairs to test
-        a = np.array((1, 0, 0))
-        b = np.array((0, 1, 0))
-        expected = pyfunc(a, b)
-        got = cfunc(a, b)
-        self.assertPreciseEqual(expected, got)
+        pairs = [
+            (np.array([1, 2, 3]), np.array([4, 5, 6])),
+            #(np.array([[1, 2, 3], [4, 5, 6]]), np.array([[4, 5, 6], [1, 2, 3]])),
+            #(np.array([1, 2]), np.array([4, 5, 6])),
+            #(np.array([1, 2]), np.array([4, 5])),
+
+        ]
+        for x, y in pairs:
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    # TODO check exceptions for np.cross
 
 
 class TestNPMachineParameters(TestCase):
