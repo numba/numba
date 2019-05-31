@@ -95,7 +95,7 @@ additional things to watch out for.
   part of the tests.
 
 * A NumPy function may return a scalar, array or a data structure
-  which matches one of its inputs, you need to watch be aware of type
+  which matches one of its inputs, you need to be aware of type
   unification problems and dispatch to appropriate implementations. For
   example, |np.corrcoef|_ may return an array or a scalar depending on its
   inputs.
