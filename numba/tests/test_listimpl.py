@@ -5,6 +5,7 @@ from __future__ import print_function, absolute_import, division
 
 import ctypes
 import random
+import struct
 
 from .support import TestCase
 from numba import _helperlib
@@ -33,8 +34,14 @@ class List(object):
     def __len__(self):
         return self.list_length()
 
-    def list_length(self):
-        return self.tc.numba_list_length(self.lo)
+    def __setitem__(self, i, item):
+        return self.list_setitem(item)
+
+    def __getitem__(self, i):
+        return self.list_getitem(i)
+
+    def append(self, item):
+        return self.list_append(item)
 
     def list_new(self, itemsize, allocated):
         lp = ctypes.c_void_p()
@@ -43,6 +50,20 @@ class List(object):
         )
         self.tc.assertEqual(status, 0)
         return lp
+
+    def list_length(self):
+        return self.tc.numba_list_length(self.lo)
+
+    def list_setitem(self, i, item):
+        return self.tc.numba_list_setitem(self.lo, i, item)
+
+    def list_getitem(self, i):
+        item_out_buffer = ctypes.create_string_buffer(self.itemsize)
+        self.tc.numba_list_getitem(self.lo, i, item_out_buffer)
+        return item_out_buffer.raw
+
+    def list_append(self, item):
+        return self.tc.numba_list_append(self.lo, item)
 
 
 class TestListImpl(TestCase):
@@ -70,7 +91,39 @@ class TestListImpl(TestCase):
             ctypes.c_ssize_t,
             [list_t],
         )
+        # numba_list_setitem(NB_List *l, Py_ssize_t i, const char *item)
+        self.numba_list_setitem = wrap(
+            'list_setitem',
+            None,
+            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+        )
+        # numba_list_append(NB_List *l, const char *item)
+        self.numba_list_append = wrap(
+            'list_append',
+            None,
+            [list_t, ctypes.c_char_p],
+        )
+        # numba_list_getitem(NB_List *l,  Py_ssize_t i, char *out)
+        self.numba_list_getitem = wrap(
+            'list_getitem',
+            ctypes.c_char_p,
+            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+        )
 
     def test_length(self):
         l = List(self, 8, 0)
         self.assertEqual(len(l), 0)
+
+    def test_append_get_string(self):
+        l = List(self, 8, 1)
+        l.append(b"abcdefgh")
+        self.assertEqual(len(l), 1)
+        r = l[0]
+        self.assertEqual(r, b"abcdefgh")
+
+    def test_append_get_int(self):
+        l = List(self, 8, 1)
+        l.append(struct.pack("q", 1))
+        self.assertEqual(len(l), 1)
+        r = struct.unpack("q", l[0])[0]
+        self.assertEqual(r, 1)

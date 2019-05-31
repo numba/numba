@@ -142,6 +142,9 @@ build_c_helpers_dict(void)
     /* for list support */
     declmethod(list_new);
     declmethod(list_length);
+    declmethod(list_setitem);
+    declmethod(list_getitem);
+    declmethod(list_append);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
