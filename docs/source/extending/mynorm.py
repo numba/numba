@@ -17,7 +17,7 @@ def _oneD_norm_2(a):
 def jit_norm(a, ord=None):
     if isinstance(ord, types.Optional):
         ord = ord.type
-    # Reject non integer or floating-point types for ord
+    # Reject non integer, floating-point or None types for ord
     if not isinstance(ord, (types.Integer, types.Float, types.NoneType)):
         raise TypingError("'ord' must be either integer or floating-point")
     # Reject non-ndarray types
