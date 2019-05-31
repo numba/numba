@@ -19,7 +19,8 @@ from numba.extending import (
     register_jitable,
 )
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
-                                    iternext_impl, impl_ret_new_ref, RefType)
+                                    iternext_impl, impl_ret_new_ref, 
+                                    impl_ret_untracked, RefType)
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
@@ -599,23 +600,33 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
 
 @intrinsic
-def _strlower(typingctx, src):
+def _strlower(typingctx, string_arg_type):
+
     resty = types.int64
-    sig = resty(src)
+    sig = resty(string_arg_type)
+
     def codegen(context, builder, sig, args):
-        [src] = args
-        fnty = ir.FunctionType(types.intc, [types.UnicodeType])
+        [string_arg,] = args
+
+        string_struct_proxy = cgutils.create_struct_proxy(types.unicode_type)
+
+        string_struct = string_struct_proxy(context, builder, value=string_arg)
+        fnty = ir.FunctionType(ir.IntType(64), [ir.IntType(8).as_pointer()])
         fn = builder.module.get_or_insert_function(fnty, name='numba_str_lower')
-        n = builder.call(fn, src)
-        return n
+        n = builder.call(fn, [string_struct.data,])
+        return impl_ret_untracked(context, builder, sig.return_type, n)
     return sig, codegen
 
 @overload_method(types.UnicodeType, 'lower')
 def unicode_lower(a):
     if isinstance(a, types.UnicodeType):
         def lower_impl(a):
-            _strlower(a)
-            return a
+            result_kind = a._kind
+            result_len = len(a)
+            result = _empty_string(result_kind, result_len, a._is_ascii)
+            _strncpy(result, 0, a, 0, result_len)
+            _strlower(result)
+            return result
         return lower_impl
 
 

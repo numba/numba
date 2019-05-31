@@ -62,6 +62,6 @@ int _PyUnicode_ToLower(char ch, char *res)
 int numba_str_lower(char *str)
 {
 	char ch = str[0];
-    printf("inside the c file now..");
     return _PyUnicode_ToLower(ch, str);
+
 }
