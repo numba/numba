@@ -111,8 +111,8 @@ additional things to watch out for.
   for the ``axis`` keyword.
 
 * When writing tests for the functionality itself, it's useful to include
-  handling of non-finite values; arrays with different shapes and layouts;
-  complex inputs; scalar inputs; inputs with types for which support is not
+  handling of non-finite values, arrays with different shapes and layouts,
+  complex inputs, scalar inputs, inputs with types for which support is not
   documented (e.g. a function which the NumPy docs say requires a float or int
   input might also 'work' if given a bool or complex input).
 
