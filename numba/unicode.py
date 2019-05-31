@@ -374,6 +374,7 @@ def _find(substr, s):
             return i
     return -1
 
+
 @njit
 def _count(substr, s, begin, e):
     count = 0
@@ -387,6 +388,7 @@ def _count(substr, s, begin, e):
         else:
             i = i + 1
     return count
+
 
 @njit
 def _is_whitespace(code_point):
@@ -510,12 +512,14 @@ def unicode_find(a, b):
             return _find(substr=b, s=a)
         return find_impl
 
+
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(st, sub, start=0, end=-1):
     if isinstance(sub, types.UnicodeType):
         def count_impl(st, sub, begin=start, e=end):
             return _count(sub, st, begin, e)
         return count_impl
+
 
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
@@ -611,6 +615,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             return parts
         return split_whitespace_impl
+
 
 @overload_method(types.UnicodeType, 'center')
 def unicode_center(string, width, fillchar=' '):
