@@ -10,8 +10,8 @@ As mentioned in the :ref:`high-level extension API <high-level-extending>`, you
 can use the ``@overload`` decorator to create a Numba implementation of a
 function that can be used in :term:`nopython mode` functions. A common use case
 is to re-implement NumPy functions so that they can be called in ``@jit``
-decorated code. This section discusses how and when to use the
-``@overload`` decorator and what contributing such a function to the Numba code base might
+decorated code. This section discusses how and when to use the ``@overload``
+decorator and what contributing such a function to the Numba code base might
 entail. This should help you get started when needing to use the ``@overload``
 decorator or when attempting to contribute new functions to Numba itself.
 
@@ -134,14 +134,16 @@ additional things to watch out for.
             self.assertEqual(total_alloc, total_free)
         AssertionError: 36 != 35
 
-  This occurs because raising exceptions from jitted code leads to reference leaks. Ideally, you will
-  place all exception testing in a separate test method and then add a call in each test to
-  ``self.disable_leak_check()`` to disable the leak-check (inherit
-  from ``numba.tests.support.TestCase`` to make that available).
+  This occurs because raising exceptions from jitted code leads to reference
+  leaks. Ideally, you will place all exception testing in a separate test
+  method and then add a call in each test to ``self.disable_leak_check()`` to
+  disable the leak-check (inherit from ``numba.tests.support.TestCase`` to make
+  that available).
 
 * For many of the functions that are available in NumPy, there are
   corresponding methods defined on the NumPy ``ndarray`` type. For example, the
-  function ``repeat`` is available as a NumPy module level function and a member function on the ``ndarray`` class.
+  function ``repeat`` is available as a NumPy module level function and a
+  member function on the ``ndarray`` class.
 
   .. code:: python
 
@@ -177,10 +179,10 @@ additional things to watch out for.
 * The Numba continuous integration (CI) set up tests a wide variety of NumPy
   versions, you'll sometimes be alerted to a change in behaviour from some
   previous NumPy version. If you can find supporting evidence in the NumPy
-  change log / repository, then you'll need to decide whether to create branches and
-  attempt to replicate the logic across versions, or use a version gate (with
-  associated wording in the documentation) to advertise that Numba replicates NumPy from
-  some particular version onwards.
+  change log / repository, then you'll need to decide whether to create
+  branches and attempt to replicate the logic across versions, or use a version
+  gate (with associated wording in the documentation) to advertise that Numba
+  replicates NumPy from some particular version onwards.
 
 * You can look at the Numba source code for inspiration, many of the overloaded
   NumPy functions and methods are in ``numba/targets/arrayobj.py``. Below, you
