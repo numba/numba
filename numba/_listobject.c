@@ -25,15 +25,14 @@ numba_list_length(NB_List *lp) {
 
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
-    if(index >= lp->size){
-        return  1;
-    }
+    assert(index < lp->size);
     char *loc = lp->items + lp-> itemsize * index;
     copy_item(lp, loc, item);
     return 0;
 }
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
+    assert(index < lp->size);
     char *loc = lp->items + lp->itemsize * index;
     copy_item(lp, out, loc);
     return 0;
