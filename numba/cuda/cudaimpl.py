@@ -466,6 +466,19 @@ def ptx_min_f8(context, builder, sig, args):
     ])
 
 
+@lower(round, types.f4)
+@lower(round, types.f8)
+def ptx_round(context, builder, sig, args):
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.int(64),
+            (lc.Type.double(),)),
+        '__nv_llrint')
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
+    ])
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp
