@@ -79,6 +79,48 @@ def _list_get_data(context, builder, list_ty, l):
     return dstruct.data
 
 
+# FIXME: copied from dictobject.py
+def _as_bytes(builder, ptr):
+    """Helper to do (void*)ptr
+    """
+    return builder.bitcast(ptr, cgutils.voidptr_t)
+
+
+# FIXME: copied from dictobject.py
+@intrinsic
+def _cast(typingctx, val, typ):
+    """Cast *val* to *typ*
+    """
+    def codegen(context, builder, signature, args):
+        [val, typ] = args
+        context.nrt.incref(builder, signature.return_type, val)
+        return val
+    # Using implicit casting in argument types
+    casted = typ.instance_type
+    _sentry_safe_cast(val, casted)
+    sig = casted(casted, typ)
+    return sig, codegen
+
+
+# FIXME: copied from dictobject.py
+def _sentry_safe_cast(fromty, toty):
+    """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
+    """
+    tyctxt = cpu_target.typing_context
+    by = tyctxt.can_convert(fromty, toty)
+    if by is None or by > Conversion.safe:
+        if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            # Accept if both types are ints
+            return
+        if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
+            # Accept if ints to floats
+            return
+        if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
+            # Accept if floats to floats
+            return
+        raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
+
+
 def _call_list_free(context, builder, ptr):
     """Call numba_list_free(ptr)
     """
@@ -260,3 +302,68 @@ def _list_length(typingctx, l):
         return n
 
     return sig, codegen
+
+
+@intrinsic
+def _list_append(typingctx, l, item):
+    """Wrap numba_list_append
+    """
+    resty = types.int32
+    sig = resty(l, l.item_type)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_bytes],
+        )
+        [l, item] = args
+        [tl, titem] = sig.args
+        fn = builder.module.get_or_insert_function(fnty, name='numba_list_append')
+
+        dm_item = context.data_model_manager[titem]
+
+        data_item = dm_item.as_data(builder, item)
+
+        ptr_item = cgutils.alloca_once_value(builder, data_item)
+
+        lp = _list_get_data(context, builder, tl, l)
+        status = builder.call(
+            fn,
+            [
+                lp,
+                _as_bytes(builder, ptr_item),
+            ],
+        )
+        return status
+
+    return sig, codegen
+
+
+@overload_method(types.ListType, 'append')
+def impl_append(l, item):
+    if not isinstance(l, types.ListType):
+        return
+
+    itemty = l.item_type
+
+    def impl(l, item):
+        casteditem = _cast(item, itemty)
+        status = _list_append(l, casteditem)
+        if status == ListStatus.LIST_OK:
+            return
+        elif status == ListStatus.LIST_ERR_NO_MEMORY:
+            raise MemoryError('Unable to allocate memory to append item')
+        else:
+            raise RuntimeError('list.append failed unexpectedly')
+
+    if l.is_precise():
+        # Handle the precise case.
+        return impl
+    else:
+        # Handle the imprecise case.
+        l = l.refine(item)
+        # Re-bind the item type match the arguments.
+        itemty = l.item_type
+        # Create the signature that we wanted this impl to have.
+        sig = typing.signature(types.void, l, itemty)
+        return sig, impl
