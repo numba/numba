@@ -22,7 +22,7 @@ from numba.extending import (
 from numba.targets.imputils import iternext_impl
 from numba import types
 from numba.types import (
-    DictType,
+    ListType,
     DictItemsIterableType,
     DictKeysIterableType,
     DictValuesIterableType,

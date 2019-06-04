@@ -448,6 +448,48 @@ class SetEntry(Type):
         return self.set_type
 
 
+class ListType(IterableType):
+    """List type
+    """
+    def __init__(self, itemty):
+        assert not isinstance(itemty, TypeRef)
+        itemty = unliteral(itemty)
+        if isinstance(itemty, (Optional, NoneType)):
+            fmt = 'List.item_type cannot be of type {}'
+            raise TypingError(fmt.format(itemty))
+        # FIXME: _sentry_forbidden_types(itemty)
+        self.item_type = itemty
+        name = '{}[{}]'.format(
+            self.__class__.__name__,
+            itemty,
+        )
+        super(ListType, self).__init__(name)
+
+    def is_precise(self):
+        return isinstance(self.item_type, Undefined),
+
+    @property
+    def iterator_type(self):
+        raise NotImplementedError
+
+    @classmethod
+    def refine(cls, itemty):
+        """Refine to a precise list type
+        """
+        res = cls(itemty)
+        res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* list.
+        """
+        # If other is list
+        if isinstance(other, ListType):
+            if not other.is_precise():
+                return self
+
+
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
