@@ -223,3 +223,40 @@ def impl_new_list(item):
         return l
 
     return imp
+
+
+@overload(len)
+def impl_len(l):
+    """len(list)
+    """
+    if not isinstance(l, types.ListType):
+        return
+
+    def impl(l):
+        return _list_length(l)
+
+    return impl
+
+
+@intrinsic
+def _list_length(typingctx, l):
+    """Wrap numba_list_length
+
+    Returns the length of the list.
+    """
+    resty = types.intp
+    sig = resty(l)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(fnty, name='numba_list_length')
+        [l] = args
+        [tl] = sig.args
+        lp = _list_get_data(context, builder, tl, l)
+        n = builder.call(fn, [lp])
+        return n
+
+    return sig, codegen
