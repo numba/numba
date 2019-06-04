@@ -362,7 +362,7 @@ def dead_branch_prune(func_ir, called_args):
             prune = prune_by_value
             for arg in [condition.lhs, condition.rhs]:
                 resolved_const = Unknown()
-                arg_def = get_definition(func_ir, arg)
+                arg_def = guard(get_definition, func_ir, arg)
                 if isinstance(arg_def, ir.Arg):
                     # it's an e.g. literal argument to the function
                     resolved_const = resolve_input_arg_const(arg_def.index)
