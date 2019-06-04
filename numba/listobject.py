@@ -71,6 +71,14 @@ def _raise_if_error(context, builder, status, msg):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
+def _list_get_data(context, builder, list_ty, l):
+    """Helper to get the C list pointer in a numba list.
+    """
+    ctor = cgutils.create_struct_proxy(list_ty)
+    dstruct = ctor(context, builder, value=l)
+    return dstruct.data
+
+
 def _call_list_free(context, builder, ptr):
     """Call numba_list_free(ptr)
     """
