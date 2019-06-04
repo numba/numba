@@ -84,7 +84,7 @@ JIT functions
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
-   warning is emitted; use :envvar:`NUMBA_WARNINGS` to see it.
+   warning is emitted.
 
    .. _jit-decorator-fastmath:
 

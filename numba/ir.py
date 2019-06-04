@@ -9,9 +9,10 @@ import pprint
 import re
 import sys
 import warnings
-from numba import config, errors
 import operator
+from types import FunctionType, BuiltinFunctionType
 
+from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
@@ -26,15 +27,22 @@ class Loc(object):
     """
     _defmatcher = re.compile('def\s+(\w+)\(.*')
 
-    def __init__(self, filename, line, col=None):
+    def __init__(self, filename, line, col=None, maybe_decorator=False):
+        """ Arguments:
+        filename - name of the file
+        line - line in file
+        col - column
+        maybe_decorator - Set to True if location is likely a jit decorator
+        """
         self.filename = filename
         self.line = line
         self.col = col
         self.lines = None # the source lines from the linecache
+        self.maybe_decorator = maybe_decorator
 
     @classmethod
     def from_function_id(cls, func_id):
-        return cls(func_id.filename, func_id.firstlineno)
+        return cls(func_id.filename, func_id.firstlineno, maybe_decorator=True)
 
     def __repr__(self):
         return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
@@ -49,9 +57,11 @@ class Loc(object):
     def _find_definition(self):
         # try and find a def, go backwards from error line
         fn_name = None
-        lines = self._get_lines()
+        lines = self.get_lines()
         for x in reversed(lines[:self.line - 1]):
-            if 'def ' in x:
+            # the strip and startswith is to handle user code with commented out
+            # 'def' or use of 'def' in a docstring.
+            if x.strip().startswith('def '):
                 fn_name = x
                 break
 
@@ -65,7 +75,7 @@ class Loc(object):
             # Probably exec(<string>) or REPL.
             return None
 
-    def _get_lines(self):
+    def get_lines(self):
         if self.lines is None:
 
             self.lines = linecache.getlines(self._get_path())
@@ -88,10 +98,35 @@ class Loc(object):
 
     def strformat(self, nlines_up=2):
 
-        lines = self._get_lines()
+        lines = self.get_lines()
+
+        use_line = self.line
+
+        if self.maybe_decorator:
+            # try and sort out a better `loc`, if it's suspected that this loc
+            # points at a jit decorator by virtue of
+            # `__code__.co_firstlineno`
+
+            # get lines, add a dummy entry at the start as lines count from
+            # 1 but list index counts from 0
+            tmplines = [''] + lines
+
+            if lines and use_line and 'def ' not in tmplines[use_line]:
+                # look forward 10 lines, unlikely anyone managed to stretch
+                # a jit call declaration over >10 lines?!
+                min_line = max(0, use_line)
+                max_line = use_line + 10
+                selected = tmplines[min_line : max_line]
+                index = 0
+                for idx, x in enumerate(selected):
+                    if 'def ' in x:
+                        index = idx
+                        break
+                use_line = use_line + index
+
 
         ret = [] # accumulates output
-        if lines and self.line:
+        if lines and use_line:
 
             def count_spaces(string):
                 spaces = 0
@@ -103,7 +138,7 @@ class Loc(object):
             # this is often in places where exceptions are used for the purposes
             # of flow control. As a result max is in use to prevent slice from
             # `[negative: positive]`
-            selected = lines[max(0, self.line - nlines_up):self.line]
+            selected = lines[max(0, use_line - nlines_up):use_line]
 
             # see if selected contains a definition
             def_found = False
@@ -115,7 +150,7 @@ class Loc(object):
             if not def_found:
                 # try and find a def, go backwards from error line
                 fn_name = None
-                for x in reversed(lines[:self.line - 1]):
+                for x in reversed(lines[:use_line - 1]):
                     if 'def ' in x:
                         fn_name = x
                         break
@@ -137,7 +172,7 @@ class Loc(object):
             ret = "<source missing, REPL/exec in use?>"
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
-        tmp = err % (self._get_path(), self.line, _termcolor.code(''.join(ret)))
+        tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
         return tmp
 
     def with_lineno(self, line, col=None):
@@ -183,7 +218,13 @@ class VarMap(object):
         return self._con.iterkeys()
 
 
-class Inst(object):
+class AbstractRHS(object):
+    """Abstract base class for anything that can be the RHS of an assignment.
+    This class **does not** define any methods.
+    """
+
+
+class Inst(AbstractRHS):
     """
     Base class for all IR instructions.
     """
@@ -254,6 +295,8 @@ class Expr(Inst):
     """
 
     def __init__(self, op, loc, **kws):
+        assert isinstance(op, str)
+        assert isinstance(loc, Loc)
         self.op = op
         self.loc = loc
         self._kws = kws
@@ -271,15 +314,21 @@ class Expr(Inst):
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
-        assert not isinstance(fn, str)
+        assert isinstance(fn, BuiltinFunctionType)
+        assert isinstance(lhs, Var)
+        assert isinstance(rhs, Var)
+        assert isinstance(loc, Loc)
         op = 'binop'
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs,
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
     def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
-        assert not isinstance(fn, str)
-        assert not isinstance(immutable_fn, str)
+        assert isinstance(fn, BuiltinFunctionType)
+        assert isinstance(immutable_fn, BuiltinFunctionType)
+        assert isinstance(lhs, Var)
+        assert isinstance(rhs, Var)
+        assert isinstance(loc, Loc)
         op = 'inplace_binop'
         return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
                    lhs=lhs, rhs=rhs,
@@ -287,73 +336,100 @@ class Expr(Inst):
 
     @classmethod
     def unary(cls, fn, value, loc):
+        assert isinstance(value, (str, Var, FunctionType))
+        assert isinstance(loc, Loc)
         op = 'unary'
         fn = UNARY_BUITINS_TO_OPERATORS.get(fn, fn)
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
     def call(cls, func, args, kws, loc, vararg=None):
+        assert isinstance(func, (Var, Intrinsic))
+        assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
                    vararg=vararg)
 
     @classmethod
     def build_tuple(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_tuple'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_list(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_list'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_set(cls, items, loc):
+        assert isinstance(loc, Loc)
         op = 'build_set'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
     def build_map(cls, items, size, loc):
+        assert isinstance(loc, Loc)
         op = 'build_map'
         return cls(op=op, loc=loc, items=items, size=size)
 
     @classmethod
     def pair_first(cls, value, loc):
+        assert isinstance(value, Var)
         op = 'pair_first'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def pair_second(cls, value, loc):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'pair_second'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def getiter(cls, value, loc):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def iternext(cls, value, loc):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'iternext'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
     def exhaust_iter(cls, value, count, loc):
+        assert isinstance(value, Var)
+        assert isinstance(count, int)
+        assert isinstance(loc, Loc)
         op = 'exhaust_iter'
         return cls(op=op, loc=loc, value=value, count=count)
 
     @classmethod
     def getattr(cls, value, attr, loc):
+        assert isinstance(value, Var)
+        assert isinstance(attr, str)
+        assert isinstance(loc, Loc)
         op = 'getattr'
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
     def getitem(cls, value, index, loc):
+        assert isinstance(value, Var)
+        assert isinstance(index, Var)
+        assert isinstance(loc, Loc)
         op = 'getitem'
         return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
     def static_getitem(cls, value, index, index_var, loc):
+        assert isinstance(value, Var)
+        assert index_var is None or isinstance(index_var, Var)
+        assert isinstance(loc, Loc)
         op = 'static_getitem'
         return cls(op=op, loc=loc, value=value, index=index,
                    index_var=index_var)
@@ -363,6 +439,8 @@ class Expr(Inst):
         """
         A node for implicit casting at the return statement
         """
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         op = 'cast'
         return cls(op=op, value=value, loc=loc)
 
@@ -371,6 +449,7 @@ class Expr(Inst):
         """
         A node for making a function object.
         """
+        assert isinstance(loc, Loc)
         op = 'make_function'
         return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
 
@@ -406,6 +485,10 @@ class SetItem(Stmt):
     """
 
     def __init__(self, target, index, value, loc):
+        assert isinstance(target, Var)
+        assert isinstance(index, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.value = value
@@ -421,6 +504,11 @@ class StaticSetItem(Stmt):
     """
 
     def __init__(self, target, index, index_var, value, loc):
+        assert isinstance(target, Var)
+        assert not isinstance(index, Var)
+        assert isinstance(index_var, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.index_var = index_var
@@ -437,6 +525,9 @@ class DelItem(Stmt):
     """
 
     def __init__(self, target, index, loc):
+        assert isinstance(target, Var)
+        assert isinstance(index, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.index = index
         self.loc = loc
@@ -447,6 +538,10 @@ class DelItem(Stmt):
 
 class SetAttr(Stmt):
     def __init__(self, target, attr, value, loc):
+        assert isinstance(target, Var)
+        assert isinstance(attr, str)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
         self.value = value
@@ -458,6 +553,9 @@ class SetAttr(Stmt):
 
 class DelAttr(Stmt):
     def __init__(self, target, attr, loc):
+        assert isinstance(target, Var)
+        assert isinstance(attr, str)
+        assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
         self.loc = loc
@@ -468,6 +566,10 @@ class DelAttr(Stmt):
 
 class StoreMap(Stmt):
     def __init__(self, dct, key, value, loc):
+        assert isinstance(dct, Var)
+        assert isinstance(key, Var)
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.dct = dct
         self.key = key
         self.value = value
@@ -479,6 +581,8 @@ class StoreMap(Stmt):
 
 class Del(Stmt):
     def __init__(self, value, loc):
+        assert isinstance(value, str)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
 
@@ -490,6 +594,8 @@ class Raise(Terminator):
     is_exit = True
 
     def __init__(self, exception, loc):
+        assert exception is None or isinstance(exception, Var)
+        assert isinstance(loc, Loc)
         self.exception = exception
         self.loc = loc
 
@@ -509,6 +615,9 @@ class StaticRaise(Terminator):
     is_exit = True
 
     def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
         self.loc = loc
@@ -533,6 +642,8 @@ class Return(Terminator):
     is_exit = True
 
     def __init__(self, value, loc):
+        assert isinstance(value, Var), type(value)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
 
@@ -549,6 +660,7 @@ class Jump(Terminator):
     """
 
     def __init__(self, target, loc):
+        assert isinstance(loc, Loc)
         self.target = target
         self.loc = loc
 
@@ -565,6 +677,8 @@ class Branch(Terminator):
     """
 
     def __init__(self, cond, truebr, falsebr, loc):
+        assert isinstance(cond, Var)
+        assert isinstance(loc, Loc)
         self.cond = cond
         self.truebr = truebr
         self.falsebr = falsebr
@@ -582,6 +696,9 @@ class Assign(Stmt):
     Assign to a variable.
     """
     def __init__(self, value, target, loc):
+        assert isinstance(value, AbstractRHS)
+        assert isinstance(target, Var)
+        assert isinstance(loc, Loc)
         self.value = value
         self.target = target
         self.loc = loc
@@ -595,7 +712,10 @@ class Print(Stmt):
     Print some values.
     """
     def __init__(self, args, vararg, loc):
-        self.args = args
+        assert all(isinstance(x, Var) for x in args)
+        assert vararg is None or isinstance(vararg, Var)
+        assert isinstance(loc, Loc)
+        self.args = tuple(args)
         self.vararg = vararg
         # Constant-inferred arguments
         self.consts = {}
@@ -607,6 +727,8 @@ class Print(Stmt):
 
 class Yield(Inst):
     def __init__(self, value, loc, index):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
         self.index = index
@@ -631,6 +753,8 @@ class EnterWith(Stmt):
         loc : int
             Source location
         """
+        assert isinstance(contextmanager, Var)
+        assert isinstance(loc, Loc)
         self.contextmanager = contextmanager
         self.begin = begin
         self.end = end
@@ -643,8 +767,11 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(object):
+class Arg(AbstractRHS):
     def __init__(self, name, index, loc):
+        assert isinstance(name, str)
+        assert isinstance(index, int)
+        assert isinstance(loc, Loc)
         self.name = name
         self.index = index
         self.loc = loc
@@ -656,8 +783,9 @@ class Arg(object):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(object):
+class Const(AbstractRHS):
     def __init__(self, value, loc, use_literal_type=True):
+        assert isinstance(loc, Loc)
         self.value = value
         self.loc = loc
         # Note: need better way to tell if this is a literal or not.
@@ -669,8 +797,9 @@ class Const(object):
     def infer_constant(self):
         return self.value
 
-class Global(object):
+class Global(AbstractRHS):
     def __init__(self, name, value, loc):
+        assert isinstance(loc, Loc)
         self.name = name
         self.value = value
         self.loc = loc
@@ -687,13 +816,16 @@ class Global(object):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(object):
+class FreeVar(AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
     """
 
     def __init__(self, index, name, value, loc):
+        assert isinstance(index, int)
+        assert isinstance(name, str)
+        assert isinstance(loc, Loc)
         # index inside __code__.co_freevars
         self.index = index
         # variable name
@@ -709,7 +841,7 @@ class FreeVar(object):
         return self.value
 
 
-class Var(object):
+class Var(AbstractRHS):
     """
     Attributes
     -----------
@@ -722,6 +854,10 @@ class Var(object):
     """
 
     def __init__(self, scope, name, loc):
+        # NOTE: Use of scope=None should be removed.
+        assert scope is None or isinstance(scope, Scope)
+        assert isinstance(name, str)
+        assert isinstance(loc, Loc)
         self.scope = scope
         self.name = name
         self.loc = loc
@@ -776,6 +912,8 @@ class Scope(object):
     """
 
     def __init__(self, parent, loc):
+        assert parent is None or isinstance(parent, Scope)
+        assert isinstance(loc, Loc)
         self.parent = parent
         self.localvars = VarMap()
         self.loc = loc
@@ -858,6 +996,8 @@ class Block(object):
     """
 
     def __init__(self, scope, loc):
+        assert isinstance(scope, Scope)
+        assert isinstance(loc, Loc)
         self.scope = scope
         self.body = []
         self.loc = loc

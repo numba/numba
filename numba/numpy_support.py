@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 
-from . import errors, types, config, npdatetime, utils
+from . import errors, types, config, utils
 
 
 version = tuple(map(int, np.__version__.split('.')[:2]))
@@ -149,18 +149,48 @@ def as_dtype(nbtype):
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
+
 def as_struct_dtype(rec):
     """Convert Numba Record type to NumPy structured dtype
     """
     assert isinstance(rec, types.Record)
-    names = [k for k, _ in rec.members]
+    names = []
+    formats = []
+    offsets = []
+    titles = []
+    # Fill the fields if they are not a title.
+    for k, t in rec.members:
+        if not rec.is_title(k):
+            names.append(k)
+            formats.append(as_dtype(t))
+            offsets.append(rec.offset(k))
+            titles.append(rec.fields[k].title)
+
     fields = {
         'names': names,
-        'formats': [as_dtype(t) for _, t in rec.members],
-        'offsets': [rec.offset(k) for k in names],
+        'formats': formats,
+        'offsets': offsets,
         'itemsize': rec.size,
+        'titles': titles,
     }
+    _check_struct_alignment(rec, fields)
     return np.dtype(fields, align=rec.aligned)
+
+
+def _check_struct_alignment(rec, fields):
+    """Check alignment compatibility with Numpy"""
+    if rec.aligned:
+        for k, dt in zip(fields['names'], fields['formats']):
+            llvm_align = rec.alignof(k)
+            npy_align = dt.alignment
+            if llvm_align is not None and npy_align != llvm_align:
+                msg = (
+                    'NumPy is using a different alignment ({}) '
+                    'than Numba/LLVM ({}) for {}. '
+                    'This is likely a NumPy bug.'
+                )
+                raise ValueError(msg.format(npy_align, llvm_align, dt))
+
 
 def is_arrayscalar(val):
     return np.dtype(type(val)) in FROM_DTYPE
@@ -202,12 +232,10 @@ def select_array_wrapper(inputs):
     An index into *inputs* is returned.
     """
     max_prio = float('-inf')
-    selected_input = None
     selected_index = None
     for index, ty in enumerate(inputs):
         # Ties are broken by choosing the first winner, as in Numpy
         if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
-            selected_input = ty
             selected_index = index
             max_prio = ty.array_priority
 
@@ -267,7 +295,7 @@ def supported_ufunc_loop(ufunc, loop):
         supported_types = '?bBhHiIlLqQfd'
         # check if all the types involved in the ufunc loop are
         # supported in this mode
-        supported_loop =  all(t in supported_types for t in loop_types)
+        supported_loop = all(t in supported_types for t in loop_types)
 
     return supported_loop
 
@@ -418,12 +446,15 @@ def from_struct_dtype(dtype):
 
     fields = []
     for name, info in dtype.fields.items():
-        # *info* may have 3 element if it has a "title", which can be ignored
+        # *info* may have 3 element
         [elemdtype, offset] = info[:2]
+        title = info[2] if len(info) == 3 else None
+
         ty = from_dtype(elemdtype)
         infos = {
             'type': ty,
             'offset': offset,
+            'title': title,
         }
         fields.append((name, infos))
 
@@ -444,6 +475,7 @@ def _get_bytes_buffer(ptr, nbytes):
         ptr = ptr.value
     arrty = ctypes.c_byte * nbytes
     return arrty.from_address(ptr)
+
 
 def _get_array_from_ptr(ptr, nbytes, dtype):
     return np.frombuffer(_get_bytes_buffer(ptr, nbytes), dtype)
@@ -562,3 +594,11 @@ def is_fortran(dims, strides, itemsize):
             return False
         ax += 1
     return True
+
+
+def type_can_asarray(arr):
+    """ Returns True if the type of 'arr' is supported by the Numba `np.asarray`
+    implementation, False otherwise.
+    """
+    ok = (types.Array, types.Sequence, types.Tuple, types.Number, types.Boolean)
+    return isinstance(arr, ok)

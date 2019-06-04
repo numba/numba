@@ -188,7 +188,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     PyUFuncObject *ufunc=NULL;
     int identity=PyUFunc_None;
     int nin=-1, nout=1;
-    char *name=NULL, *doc=NULL;
+    const char *name=NULL, *doc=NULL;
 
     static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
                               "nout", NULL};

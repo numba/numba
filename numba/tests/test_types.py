@@ -19,6 +19,7 @@ from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support, typeof
+from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .enum_usecases import *
 
@@ -209,6 +210,12 @@ class TestTypes(TestCase):
         ty = types.NPTimedelta('')
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
+
+    def test_list_type_getitem(self):
+        for listty in (types.int64, types.Array(types.float64, 1, 'C')):
+            l_int = types.List(listty)
+            self.assertTrue(isinstance(l_int, types.List))
+            self.assertTrue(isinstance(l_int[0], type(listty)))
 
 
 class TestNumbers(TestCase):
@@ -498,8 +505,9 @@ class TestSignatures(TestCase):
         check("(complex64, int16)", (c64, i16), None)
         check(typing.signature(i16, c64), (c64,), i16)
 
-        check_error((types.Integer,), "invalid signature")
-        check_error((None,), "invalid signature")
+        msg = "invalid type in signature: expected a type instance"
+        check_error((types.Integer,), msg)
+        check_error((None,), msg)
         check_error([], "invalid signature")
 
 
@@ -573,6 +581,7 @@ class TestDType(TestCase):
             return a.type(0)
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -215,7 +215,7 @@ class BaseContext(object):
     allow_dynamic_globals = False
 
     # Fast math flags
-    enable_fastmath = False
+    fastmath = False
 
     # python exceution environment
     environment = None
@@ -262,7 +262,7 @@ class BaseContext(object):
         # Populate built-in registry
         from . import (arraymath, enumimpl, iterators, linalg, numbers,
                        optional, polynomial, rangeobj, slicing, smartarray,
-                       tupleobj, gdb_hook, hashing)
+                       tupleobj, gdb_hook, hashing, heapq)
         try:
             from . import npdatetime
         except NotImplementedError:

@@ -129,7 +129,8 @@ def get_ext_modules():
                                        "numba/_lapack.c",
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
-                                       "numba/mathnames.inc"],
+                                       "numba/_dictobject.c",
+                                       "numba/mathnames.inc",],
                               **np_compile_args)
 
     ext_typeconv = Extension(name="numba.typeconv._typeconv",
@@ -304,11 +305,10 @@ packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
-install_requires = ['llvmlite>=0.27.0dev0', 'numpy']
-if sys.version_info < (3, 4):
-    install_requires.extend(['enum34', 'singledispatch'])
-if sys.version_info < (3, 3):
-    install_requires.append('funcsigs')
+install_requires = ['llvmlite>=0.29.0dev0', 'numpy']
+install_requires.extend(['enum34; python_version < "3.4"'])
+install_requires.extend(['singledispatch; python_version < "3.4"'])
+install_requires.extend(['funcsigs; python_version < "3.3"'])
 
 metadata = dict(
     name='numba',

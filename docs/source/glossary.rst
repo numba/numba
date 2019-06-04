@@ -67,6 +67,15 @@ Glossary
       no faster than Python interpreted code, unless the Numba compiler can
       take advantage of :term:`loop-jitting`.
 
+   ``OptionalType``
+     An ``OptionalType`` is effectively a type union of a ``type`` and ``None``.
+     They typically occur in practice due to a variable being set to ``None``
+     and then in a branch the variable being set to some other value. It's
+     often not possible at compile time to determine if the branch will execute
+     so to permit :term:`type inference` to complete, the type of the variable
+     becomes the union of a ``type`` (from the value) and ``None``,
+     i.e. ``OptionalType(type)``.
+
    type inference
       The process by which Numba determines the specialized types of all
       values within a function being compiled.  Type inference can fail

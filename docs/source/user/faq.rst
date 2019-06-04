@@ -83,13 +83,9 @@ propagate to all computations involving those variables.
 How can I tell if ``parallel=True`` worked?
 -------------------------------------------
 
-Set the :ref:`environment variable <numba-envvars>` ``NUMBA_WARNINGS`` to
-non-zero and if the ``parallel=True`` transformations failed for a function
-decorated as such, a warning will be displayed.
-
-Also, setting the :ref:`environment variable <numba-envvars>`
-``NUMBA_DEBUG_ARRAY_OPT_STATS`` will show some statistics about which
-operators/calls are converted to parallel for-loops.
+If the ``parallel=True`` transformations failed for a function
+decorated as such, a warning will be displayed. See also
+:ref:`numba-parallel-diagnostics` for information about parallel diagnostics.
 
 Performance
 ===========
@@ -272,8 +268,18 @@ value, for example::
 Miscellaneous
 =============
 
+Where does the project name "Numba" come from?
+----------------------------------------------
+
+"Numba" is a combination of "NumPy" and "Mamba". Mambas are some of the fastest
+snakes in the world, and Numba makes your Python code fast.
+
 How do I reference/cite/acknowledge Numba in other work?
 --------------------------------------------------------
-For academic use, the best option is to cite our ACM Proceedings:
-`Numba: a LLVM-based Python JIT compiler.
-<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_
+For academic use, the best option is to cite our ACM Proceedings: `Numba: a
+LLVM-based Python JIT compiler.
+<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_ You can also find
+`the sources on github <https://github.com/numba/Numba-SC15-Paper>`_, including
+`a pre-print pdf
+<https://github.com/numba/Numba-SC15-Paper/raw/master/numba_sc15.pdf>`_, in case
+you don't have access to the ACM site but would like to read the paper.

@@ -9,6 +9,7 @@ import struct
 import sys
 import uuid
 import weakref
+from copy import deepcopy
 
 from numba import _dispatcher, compiler, utils, types, config, errors
 from numba.typeconv.rules import default_type_manager
@@ -762,15 +763,16 @@ class LiftedCode(_DispatcherBase):
 
             self._pre_compile(args, return_type, flags)
 
-            # Clone IR to avoid mutation in rewrite pass
+            # Clone IR to avoid (some of the) mutation in the rewrite pass
             cloned_func_ir = self.func_ir.copy()
             cres = compiler.compile_ir(typingctx=self.typingctx,
-                                        targetctx=self.targetctx,
-                                        func_ir=cloned_func_ir,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=self.locals,
-                                        lifted=(),
-                                        lifted_from=self.lifted_from)
+                                       targetctx=self.targetctx,
+                                       func_ir=cloned_func_ir,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from,
+                                       is_lifted_loop=True,)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:

@@ -5,7 +5,8 @@ import functools
 import sys
 
 from numba import utils
-
+from numba.ir import Loc
+from numba.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
@@ -33,8 +34,8 @@ class CFBlock(object):
         return iter(self.body)
 
 
-class Loop(
-    collections.namedtuple("Loop", ("entries", "exits", "header", "body"))):
+class Loop(collections.namedtuple("Loop",
+                                  ("entries", "exits", "header", "body"))):
     """
     A control flow loop, as detected by a CFGraph object.
     """
@@ -234,6 +235,8 @@ class CFGraph(object):
         pprint.pprint(self._loops, stream=file)
         print("CFG node-to-loops:", file=file)
         pprint.pprint(self._in_loops, stream=file)
+        print("CFG backbone:", file=file)
+        pprint.pprint(self.backbone(), stream=file)
 
     # Internal APIs
 
@@ -443,7 +446,7 @@ class CFGraph(object):
         self._in_loops = in_loops
 
     def _dump_adj_lists(self, file):
-        adj_lists = dict((src, list(dests))
+        adj_lists = dict((src, sorted(list(dests)))
                          for src, dests in self._succs.items())
         import pprint
         pprint.pprint(adj_lists, stream=file)
@@ -513,7 +516,11 @@ class ControlFlowAnalysis(object):
             if fn is not None:
                 fn(inst)
             else:
-                assert not inst.is_jump, inst
+                # this catches e.g. try... except
+                if inst.is_jump:
+                    l = Loc(self.bytecode.func_id.filename, inst.lineno)
+                    msg = "Use of unsupported opcode (%s) found" % inst.opname
+                    raise UnsupportedError(msg, loc=l)
 
         # Close all blocks
         for cur, nxt in zip(self.blockseq, self.blockseq[1:]):

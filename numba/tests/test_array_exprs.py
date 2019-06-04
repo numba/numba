@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba import unittest_support as unittest
-from numba import compiler, typing, typeof, ir, utils
+from numba import compiler, typing, typeof, ir, utils, types
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
 from .support import MemoryLeakMixin, TestCase
@@ -484,6 +484,134 @@ class TestSemantics(MemoryLeakMixin, unittest.TestCase):
         expect = pyfunc(a, b, c)
         got = cfunc(a, b, c)
         np.testing.assert_array_equal(expect, got)
+
+
+class TestOptionals(MemoryLeakMixin, unittest.TestCase):
+    """ Tests the arrival and correct lowering of Optional types at a arrayexpr
+    derived ufunc, see #3972"""
+
+    def test_optional_scalar_type(self):
+
+        @njit
+        def arr_expr(x, y):
+            return x + y
+
+        @njit
+        def do_call(x, y):
+            if y > 0:
+                z = None
+            else:
+                z = y
+            return arr_expr(x, z)
+
+        args = (np.arange(5), -1.2)
+
+        # check result
+        res = do_call(*args)
+        expected = do_call.py_func(*args)
+        np.testing.assert_allclose(res, expected)
+
+        # check type
+        s = arr_expr.signatures
+        oty = s[0][1]
+        self.assertTrue(isinstance(oty, types.Optional))
+        self.assertTrue(isinstance(oty.type, types.Float))
+
+
+    def test_optional_array_type(self):
+
+        @njit
+        def arr_expr(x, y):
+            return x + y
+
+        @njit
+        def do_call(x, y):
+            if y[0] > 0:
+                z = None
+            else:
+                z = y
+            return arr_expr(x, z)
+
+        args = (np.arange(5), np.arange(5.))
+
+        # check result
+        res = do_call(*args)
+        expected = do_call.py_func(*args)
+        np.testing.assert_allclose(res, expected)
+
+        # check type
+        s = arr_expr.signatures
+        oty = s[0][1]
+        self.assertTrue(isinstance(oty, types.Optional))
+        self.assertTrue(isinstance(oty.type, types.Array))
+        self.assertTrue(isinstance(oty.type.dtype, types.Float))
+
+
+class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
+    # same as above, but the Optional resolves to None and TypeError's
+
+    def test_optional_scalar_type_exception_on_none(self):
+
+        self.disable_leak_check()
+
+        @njit
+        def arr_expr(x, y):
+            return x + y
+
+        @njit
+        def do_call(x, y):
+            if y > 0:
+                z = None
+            else:
+                z = y
+            return arr_expr(x, z)
+
+        args = (np.arange(5), 1.0)
+
+        # check result
+        with self.assertRaises(TypeError) as raises:
+            do_call(*args)
+
+        self.assertIn("expected float64, got None", str(raises.exception))
+
+        # check type
+        s = arr_expr.signatures
+        oty = s[0][1]
+        self.assertTrue(isinstance(oty, types.Optional))
+        self.assertTrue(isinstance(oty.type, types.Float))
+
+    def test_optional_array_type_exception_on_none(self):
+
+        self.disable_leak_check()
+
+        @njit
+        def arr_expr(x, y):
+            return x + y
+
+        @njit
+        def do_call(x, y):
+            if y[0] > 0:
+                z = None
+            else:
+                z = y
+            return arr_expr(x, z)
+
+        args = (np.arange(5), np.arange(1., 5.))
+
+        # check result
+        with self.assertRaises(TypeError) as raises:
+            do_call(*args)
+
+        excstr = str(raises.exception)
+        self.assertIn("expected array(float64,", excstr)
+        self.assertIn("got None", excstr)
+
+        # check type
+        s = arr_expr.signatures
+        oty = s[0][1]
+        self.assertTrue(isinstance(oty, types.Optional))
+        self.assertTrue(isinstance(oty.type, types.Array))
+        self.assertTrue(isinstance(oty.type.dtype, types.Float))
 
 
 if __name__ == "__main__":

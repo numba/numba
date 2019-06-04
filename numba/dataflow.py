@@ -6,6 +6,8 @@ import sys
 import warnings
 
 from numba import utils
+from .errors import UnsupportedError
+from .ir import Loc
 
 
 class DataFlowAnalysis(object):
@@ -88,9 +90,11 @@ class DataFlowAnalysis(object):
         fn(info, inst)
 
     def handle_unknown_opcode(self, info, inst):
-        msg = "Use of unknown opcode {} at line {} of {}"
-        raise NotImplementedError(msg.format(inst.opname, inst.lineno,
-                                             self.bytecode.func_id.filename))
+        raise UnsupportedError(
+            "Use of unknown opcode '{}'".format(inst.opname),
+            loc=Loc(filename=self.bytecode.func_id.filename,
+                    line=inst.lineno)
+        )
 
     def dup_topx(self, info, inst, count):
         orig = [info.pop() for _ in range(count)]

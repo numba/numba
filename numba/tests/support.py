@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import io
+import ctypes
 
 import numpy as np
 
@@ -397,6 +399,12 @@ class TestCase(unittest.TestCase):
         if isinstance(first, self._complex_types):
             _assertNumberEqual(first.real, second.real, delta)
             _assertNumberEqual(first.imag, second.imag, delta)
+        elif isinstance(first, (np.timedelta64, np.datetime64)):
+            # Since Np 1.16 NaT == NaT is False, so special comparison needed
+            if numpy_support.version >= (1, 16) and np.isnat(first):
+                self.assertEqual(np.isnat(first), np.isnat(second))
+            else:
+                _assertNumberEqual(first, second, delta)
         else:
             _assertNumberEqual(first, second, delta)
 
@@ -674,3 +682,35 @@ def forbid_codegen():
         for (obj, attrname), value in old.items():
             setattr(obj, attrname, value)
 
+
+# For details about redirection of file-descriptor, read
+# https://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
+
+@contextlib.contextmanager
+def redirect_fd(fd):
+    """
+    Temporarily redirect *fd* to a pipe's write end and return a file object
+    wrapping the pipe's read end.
+    """
+
+    from numba import _helperlib
+    libnumba = ctypes.CDLL(_helperlib.__file__)
+
+    libnumba._numba_flush_stdout()
+    save = os.dup(fd)
+    r, w = os.pipe()
+    try:
+        os.dup2(w, fd)
+        yield io.open(r, "r")
+    finally:
+        libnumba._numba_flush_stdout()
+        os.close(w)
+        os.dup2(save, fd)
+        os.close(save)
+
+
+def redirect_c_stdout():
+    """Redirect C stdout
+    """
+    fd = sys.__stdout__.fileno()
+    return redirect_fd(fd)

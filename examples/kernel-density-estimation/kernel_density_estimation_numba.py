@@ -1,7 +1,7 @@
-#                                                                               
-# Copyright (c) 2017 Intel Corporation                                          
-# SPDX-License-Identifier: BSD-2-Clause                                         
-#                                                                               
+#
+# Copyright (c) 2017 Intel Corporation
+# SPDX-License-Identifier: BSD-2-Clause
+#
 
 from numba import njit, prange
 import numpy as np
@@ -15,6 +15,7 @@ def kde(X):
     N = points.shape[0]
     n = X.shape[0]
     exps = 0
+    # prange in a not-parallel jitted function is identical to "range"
     for i in prange(n):
         p = X[i]
         d = (-(p-points)**2)/(2*b**2)

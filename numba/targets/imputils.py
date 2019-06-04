@@ -8,8 +8,10 @@ import collections
 import contextlib
 import inspect
 import functools
+import warnings
+from enum import Enum
 
-from .. import typing, cgutils, types, utils
+from .. import typing, cgutils, types, utils, errors
 from .. typing.templates import BaseRegistryLoader
 
 
@@ -234,7 +236,7 @@ def iterator_impl(iterable_type, iterator_type):
         # These are unbound methods
         iternext = cls.iternext
 
-        @iternext_impl
+        @iternext_impl(RefType.BORROWED)
         def iternext_wrapper(context, builder, sig, args, result):
             (value,) = args
             iterobj = cls(context, builder, value)
@@ -293,25 +295,80 @@ class _IternextResult(object):
         """
         return self._pairobj.first
 
+class RefType(Enum):
+    """
+    Enumerate the reference type
+    """
+    """
+    A new reference
+    """
+    NEW = 1
+    """
+    A borrowed reference
+    """
+    BORROWED = 2
+    """
+    An untracked reference
+    """
+    UNTRACKED = 3
 
-def iternext_impl(func):
+def iternext_impl(ref_type=None):
     """
     Wrap the given iternext() implementation so that it gets passed
     an _IternextResult() object easing the returning of the iternext()
     result pair.
 
+    ref_type: If the ref_type is a numba.targets.imputils.RefType value then the
+    reference type used is that specified through the RefType enum.
+
+    For backwards compatibility Numba will, for a short period of time, maintain
+    the old interface which assumes the reference type is borrowed. This is,
+    however, deprecated behaviour and users of this API are encouraged to update
+    their code.
+
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
+    if ref_type is None:
+        raise ValueError("ref_type must be an enum member of imputils.RefType")
 
-    def wrapper(context, builder, sig, args):
-        pair_type = sig.return_type
-        pairobj = context.make_helper(builder, pair_type)
-        func(context, builder, sig, args,
-             _IternextResult(context, builder, pairobj))
-        return impl_ret_borrowed(context, builder,
-                                 pair_type, pairobj._getvalue())
-    return wrapper
+    if ref_type not in [x for x in RefType]:
+        # this is to make it so the pre-0.44 behaviour of defaulting to a
+        # borrowed reference type and 4 arg call site continues to work
+        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                "deprecation.html#"
+                "deprecation-of-iternext-impl-without-a-supplied-reftype")
+        msg = ("\nThe use of iternext_impl without specifying a "
+               "numba.targets.imputils.RefType is deprecated.\n\nFor more "
+               "information visit %s" % url)
+        warnings.warn(errors.NumbaDeprecationWarning(msg), stacklevel=2)
+        def wrapper(context, builder, sig, args):
+            pair_type = sig.return_type
+            pairobj = context.make_helper(builder, pair_type)
+            ref_type(context, builder, sig, args,
+                _IternextResult(context, builder, pairobj))
+            return impl_ret_borrowed(context, builder,
+                                    pair_type, pairobj._getvalue())
+        return wrapper
+    else:
+        def outer(func):
+            def wrapper(context, builder, sig, args):
+                pair_type = sig.return_type
+                pairobj = context.make_helper(builder, pair_type)
+                func(context, builder, sig, args,
+                    _IternextResult(context, builder, pairobj))
+                if ref_type == RefType.NEW:
+                    impl_ret = impl_ret_new_ref
+                elif ref_type == RefType.BORROWED:
+                    impl_ret = impl_ret_borrowed
+                elif ref_type == RefType.UNTRACKED:
+                    impl_ret = impl_ret_untracked
+                else:
+                    raise ValueError("Unknown ref_type encountered")
+                return impl_ret(context, builder,
+                                        pair_type, pairobj._getvalue())
+            return wrapper
+        return outer
 
 
 def call_getiter(context, builder, iterable_type, val):
@@ -425,3 +482,10 @@ def force_error_model(context, model_name='numpy'):
         yield
     finally:
         context.error_model = old_error_model
+
+
+def numba_typeref_ctor(*args, **kwargs):
+    """A stub for use internally by Numba when a call is emitted
+    on a TypeRef.
+    """
+    raise NotImplementedError("This function should not be executed.")

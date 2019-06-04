@@ -96,7 +96,7 @@ class TestMutualRecursion(TestCase):
         # nopython mode
         cfunc = self.mod.make_inner_error(jit(nopython=True))
         with self.assertRaises(TypingError) as raises:
-                cfunc(2)
+            cfunc(2)
         errmsg = 'Unknown attribute \'ndim\''
         self.assertIn(errmsg, str(raises.exception))
         # objectmode
