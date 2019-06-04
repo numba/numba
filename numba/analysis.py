@@ -323,12 +323,11 @@ def dead_branch_prune(func_ir, called_args):
     class Unknown(object):
         pass
 
-    def resolve_input_arg_const(input_arg):
+    def resolve_input_arg_const(input_arg_idx):
         """
         Resolves an input arg to a constant (if possible)
         """
-        idx = func_ir.arg_names.index(input_arg)
-        input_arg_ty = called_args[idx]
+        input_arg_ty = called_args[input_arg_idx]
 
         # comparing to None?
         if isinstance(input_arg_ty, types.NoneType):
@@ -363,9 +362,10 @@ def dead_branch_prune(func_ir, called_args):
             prune = prune_by_value
             for arg in [condition.lhs, condition.rhs]:
                 resolved_const = Unknown()
-                if arg.name in func_ir.arg_names:
+                arg_def = get_definition(func_ir, arg)
+                if isinstance(arg_def, ir.Arg):
                     # it's an e.g. literal argument to the function
-                    resolved_const = resolve_input_arg_const(arg.name)
+                    resolved_const = resolve_input_arg_const(arg_def.index)
                     prune = prune_by_type
                 else:
                     # it's some const argument to the function, cannot use guard

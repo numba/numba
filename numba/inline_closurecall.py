@@ -325,6 +325,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
     if typingctx:
         from numba import compiler
+        # call branch pruning to simplify IR and avoid inference errors
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
+        numba.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
             f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)

@@ -181,5 +181,38 @@ class TestInlining(TestCase):
 
         self.assertTrue('b' in var_map)
 
+    @skip_unsupported
+    def test_inline_call_branch_pruning(self):
+        # branch pruning pass should run properly in inlining to enable
+        # functions with type checks
+        @njit
+        def foo(A=None):
+            if A is None:
+                return 2
+            else:
+                return A
+
+        def test_impl(A=None):
+            return foo(A)
+
+        class InlineTestPipelinePrune(InlineTestPipeline):
+            def stage_inline_test_pass(self):
+                # assuming the function has one block with one call inside
+                assert len(self.func_ir.blocks) == 1
+                block = list(self.func_ir.blocks.values())[0]
+                for i, stmt in enumerate(block.body):
+                    if (guard(find_callname,self.func_ir, stmt.value)
+                            is not None):
+                        inline_closure_call(self.func_ir, {}, block, i,
+                        foo.py_func, self.typingctx,
+                        (self.typemap[stmt.value.args[0].name],),
+                        self.typemap, self.calltypes)
+                        break
+        j_func = njit(pipeline_class=InlineTestPipelinePrune)(test_impl)
+        A = 3
+        self.assertEqual(test_impl(A), j_func(A))
+        self.assertEqual(test_impl(), j_func())
+
+
 if __name__ == '__main__':
     unittest.main()
