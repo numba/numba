@@ -128,6 +128,47 @@ def new_list(item):
 
 
 @intrinsic
+def _make_list(typingctx, itemty, ptr):
+    """Make a list struct with the given *ptr*
+
+    Parameters
+    ----------
+    itemty: Type
+        Type of the item.
+    ptr : llvm pointer value
+        Points to the list object.
+    """
+    list_ty = types.ListType(itemty.instance_type)
+
+    def codegen(context, builder, signature, args):
+        [_, ptr] = args
+        ctor = cgutils.create_struct_proxy(list_ty)
+        dstruct = ctor(context, builder)
+        dstruct.data = ptr
+
+        alloc_size = context.get_abi_sizeof(
+            context.get_value_type(types.voidptr),
+        )
+        dtor = _imp_dtor(context, builder.module)
+        meminfo = context.nrt.meminfo_alloc_dtor(
+            builder,
+            context.get_constant(types.uintp, alloc_size),
+            dtor,
+        )
+
+        data_pointer = context.nrt.meminfo_data(builder, meminfo)
+        data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
+        builder.store(ptr, data_pointer)
+
+        dstruct.meminfo = meminfo
+
+        return dstruct._getvalue()
+
+    sig = list_ty(itemty, ptr)
+    return sig, codegen
+
+
+@intrinsic
 def _list_new(typingctx, itemty):
     """Wrap numba_list_new.
 
@@ -169,15 +210,16 @@ def _list_new(typingctx, itemty):
 @overload(new_list)
 def impl_new_list(item):
     """Creates a new list with *item* as the type
-    of the list key item, respectively.
+    of the list item, respectively.
     """
     if not isinstance(item, Type):
-        raise TypeError("expecting *item* and *value* to be a numba Type")
+        raise TypeError("expecting *item* to be a numba Type")
 
     itemty = item
 
     def imp(item):
-        l = _list_new(itemty)
+        lp = _list_new(itemty)
+        l = _make_list(itemty, lp)
         return l
 
     return imp
