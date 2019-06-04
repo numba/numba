@@ -22,6 +22,12 @@ numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
     return LIST_OK;
 }
 
+void
+numba_list_free(NB_List *lp) {
+    free(lp->items);
+    free(lp);
+}
+
 Py_ssize_t
 numba_list_length(NB_List *lp) {
     return lp->size;

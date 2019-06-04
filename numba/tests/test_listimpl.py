@@ -32,6 +32,9 @@ class List(object):
         self.allocated = allocated
         self.lp = self.list_new(itemsize, allocated)
 
+    def __del__(self):
+        self.tc.numba_list_free(self.lp)
+
     def __len__(self):
         return self.list_length()
 
@@ -85,6 +88,12 @@ class TestListImpl(TestCase):
             'list_new',
             ctypes.c_int,
             [ctypes.POINTER(list_t), ctypes.c_ssize_t, ctypes.c_ssize_t],
+        )
+        # numba_list_free(NB_List *l)
+        self.numba_list_free = wrap(
+            'list_free',
+            None,
+            [list_t],
         )
         # numba_list_length(NB_List *l)
         self.numba_list_length = wrap(

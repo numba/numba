@@ -31,6 +31,9 @@ typedef struct {
 NUMBA_EXPORT_FUNC(int)
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
 
+NUMBA_EXPORT_FUNC(void)
+numba_list_free(NB_List *lp);
+
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_length(NB_List *lp);
 

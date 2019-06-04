@@ -141,6 +141,7 @@ build_c_helpers_dict(void)
 
     /* for list support */
     declmethod(list_new);
+    declmethod(list_free);
     declmethod(list_length);
     declmethod(list_setitem);
     declmethod(list_getitem);

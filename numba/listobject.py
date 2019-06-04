@@ -58,6 +58,17 @@ def _raise_if_error(context, builder, status, msg):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
+def _call_list_free(context, builder, ptr):
+    """Call numba_list_free(ptr)
+    """
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_list_type],
+    )
+    free = builder.module.get_or_insert_function(fnty, name='numba_list_free')
+    builder.call(free, [ptr])
+
+
 def new_list(item):
     """Construct a new list. (Not implemented in the interpreter yet)
 
