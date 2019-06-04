@@ -82,6 +82,32 @@ def _call_list_free(context, builder, ptr):
     builder.call(free, [ptr])
 
 
+# FIXME: this needs a careful review
+def _imp_dtor(context, module):
+    """Define the dtor for list
+    """
+    llvoidptr = context.get_value_type(types.voidptr)
+    llsize = context.get_value_type(types.uintp)
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [llvoidptr, llsize, llvoidptr],
+    )
+    fname = '_numba_list_dtor'
+    fn = module.get_or_insert_function(fnty, name=fname)
+
+    if fn.is_declaration:
+        # Set linkage
+        fn.linkage = 'linkonce_odr'
+        # Define
+        builder = ir.IRBuilder(fn.append_basic_block())
+        lp = builder.bitcast(fn.args[0], ll_list_type.as_pointer())
+        l = builder.load(lp)
+        _call_list_free(context, builder, l)
+        builder.ret_void()
+
+    return fn
+
+
 def new_list(item):
     """Construct a new list. (Not implemented in the interpreter yet)
 
