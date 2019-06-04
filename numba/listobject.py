@@ -43,6 +43,19 @@ ll_ssize_t = cgutils.intp_t
 ll_bytes = cgutils.voidptr_t
 
 
+_meminfo_listptr = types.MemInfoPointer(types.voidptr)
+
+
+@register_model(ListType)
+class ListModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('meminfo', _meminfo_listptr),
+            ('data', types.voidptr),   # ptr to the C dict
+        ]
+        super(ListModel, self).__init__(dmm, fe_type, members)
+
+
 class ListStatus(IntEnum):
     """Status code for other list operations.
     """
