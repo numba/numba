@@ -37,3 +37,18 @@ class TestListObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(1), 1)
         self.assertEqual(foo(2), 2)
         self.assertEqual(foo(100), 100)
+
+    def test_list_getitem(self):
+        """
+        Exercise list getitem
+        """
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            l.append(n)
+            return l[0]
+
+        self.assertEqual(foo(0), 0)
+        self.assertEqual(foo(1), 1)
+        self.assertEqual(foo(2), 2)
+        self.assertEqual(foo(100), 100)

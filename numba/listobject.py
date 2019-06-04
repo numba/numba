@@ -103,6 +103,23 @@ def _cast(typingctx, val, typ):
 
 
 # FIXME: copied from dictobject.py
+@intrinsic
+def _nonoptional(typingctx, val):
+    """Typing trick to cast Optional[T] to T
+    """
+    if not isinstance(val, types.Optional):
+        raise TypeError('expected an optional')
+
+    def codegen(context, builder, sig, args):
+        context.nrt.incref(builder, sig.return_type, args[0])
+        return args[0]
+
+    casted = val.type
+    sig = casted(casted)
+    return sig, codegen
+
+
+# FIXME: copied from dictobject.py
 def _sentry_safe_cast(fromty, toty):
     """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
     """
@@ -367,3 +384,70 @@ def impl_append(l, item):
         # Create the signature that we wanted this impl to have.
         sig = typing.signature(types.void, l, itemty)
         return sig, impl
+
+
+@intrinsic
+def _list_getitem(typingctx, l, index):
+    """Wrap numba_list_getitem
+
+    Returns 2-tuple of (intp, ?item_type)
+    """
+    resty = types.Tuple([types.intp, types.Optional(l.item_type)])
+    sig = resty(l, index)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_list_type, ll_ssize_t, ll_bytes],
+        )
+        [tl, tindex] = sig.args
+        [l, index] = args
+        fn = builder.module.get_or_insert_function(fnty, name='numba_list_getitem')
+
+        dm_item = context.data_model_manager[tl.item_type]
+        ll_item = context.get_data_type(tl.item_type)
+        ptr_item = cgutils.alloca_once(builder, ll_item)
+
+        lp = _list_get_data(context, builder, tl, l)
+        status = builder.call(
+            fn,
+            [
+                lp,
+                index,
+                _as_bytes(builder, ptr_item),
+            ],
+        )
+        # Load item if output is available
+        found = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+
+        out = context.make_optional_none(builder, tl.item_type)
+        pout = cgutils.alloca_once_value(builder, out)
+
+        with builder.if_then(found):
+            item = dm_item.load_from_data_pointer(builder, ptr_item)
+            context.nrt.incref(builder, tl.item_type, item)
+            loaded = context.make_optional_value(builder, tl.item_type, item)
+            builder.store(loaded, pout)
+
+        out = builder.load(pout)
+        return context.make_tuple(builder, resty, [status, out])
+
+    return sig, codegen
+
+
+@overload(operator.getitem)
+def impl_getitem(l, index):
+    if not isinstance(l, types.ListType):
+        return
+
+    indexty = types.intp
+
+    def impl(l, index):
+        castedindex = _cast(index, indexty)
+        status, item = _list_getitem(l, castedindex)
+        if status == ListStatus.LIST_OK:
+            return _nonoptional(item)
+        else:
+            raise AssertionError("internal list error during getitem")
+
+    return impl
