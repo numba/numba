@@ -333,6 +333,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check_err_axis_oob(arrs[3], (3, 1, 2, 5))
         check_err_axis_oob(arrs[3], (3, 1, 2, -5))
 
+        with self.assertRaises(TypingError) as e:
+            jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
+        self.assertIn("np.transpose does not accept tuples",
+                        str(e.exception))
 
     @tag('important')
     def test_expand_dims(self):
