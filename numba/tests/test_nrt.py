@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import os
+import platform
 import sys
 import re
 
@@ -12,10 +13,21 @@ from numba import njit, targets, typing
 from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
 from numba.runtime import nrtopt
+from numba.extending import intrinsic
+from numba.typing import signature
+from numba.targets.imputils import impl_ret_untracked
+from llvmlite import ir
+import llvmlite.binding as llvm
+
 from .support import MemoryLeakMixin, TestCase
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
+
+linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
+                             'linux only test')
+x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'),
+                           'x86 only test')
 
 
 class Dummy(object):
@@ -434,7 +446,7 @@ B40.backedge:                                     ; preds = %B108.endif.endif.en
 %.294 = icmp sgt i64 %lsr.iv.next, 1
 br i1 %.294, label %B42, label %B160
 }
-    '''
+    ''' # noqa
 
     def test_refct_pruning_op_recognize(self):
         input_ir = self.sample_llvm_ir
@@ -502,6 +514,36 @@ br i1 %.294, label %B42, label %B160
         llvmir = str(extend.inspect_llvm(extend.signatures[0]))
         refops = list(re.finditer(r'(NRT_incref|NRT_decref)\([^\)]+\)', llvmir))
         self.assertEqual(len(refops), 0)
+
+    @linux_only
+    @x86_only
+    def test_inline_asm(self):
+        """The InlineAsm class from llvmlite.ir has no 'name' attr the refcount
+        pruning pass should be tolerant to this"""
+        llvm.initialize()
+        llvm.initialize_native_target()
+        llvm.initialize_native_asmprinter()
+        llvm.initialize_native_asmparser()
+
+        @intrinsic
+        def bar(tyctx, x, y):
+            def codegen(cgctx, builder, sig, args):
+                (arg_0, arg_1) = args
+                fty = ir.FunctionType(ir.IntType(64), [ir.IntType(64),
+                                                       ir.IntType(64)])
+                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=r,r,r",
+                                  (arg_0, arg_1), name="asm_mul",
+                                  side_effect=False)
+                return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
+            return signature(x, x, x), codegen
+
+        @njit(['int64(int64)'])
+        def foo(x):
+            x += 1
+            z = bar(x, 2)
+            return z
+
+        self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
 
 
 if __name__ == '__main__':

@@ -18,6 +18,7 @@ User Manual
    withobjmode.rst
    performance-tips.rst
    threading-layer.rst
+   cli.rst
    troubleshoot.rst
    faq.rst
    examples.rst

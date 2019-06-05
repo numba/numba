@@ -1,3 +1,165 @@
+Version 0.44.0
+--------------
+
+IMPORTANT: In this release a few significant deprecations (and some less
+significant ones) are being made, users are encouraged to read the related
+documentation.
+
+General enhancements in this release include:
+
+- Numba is backed by LLVM 8 on all platforms apart from ppc64le, which, due to
+  bugs, remains on the LLVM 7.x series.
+- Numba's dictionary support now includes type inference for keys and values.
+- The .view() method now works for NumPy scalar types.
+- Newly supported NumPy functions added: np.delete, np.nanquantile, np.quantile,
+  np.repeat, np.shape.
+
+In addition considerable effort has been made to fix some long standing bugs and
+a large number of other bugs, the "Fixes" section is very large this time!
+
+Enhancements from user contributed PRs (with thanks!):
+
+- Max Bolingbroke added support for the selective use of ``fastmath`` flags in
+  #3847.
+- Rob Ennis made min() and max() work on iterables in #3820 and added
+  np.quantile and np.nanquantile in #3899.
+- Sergey Shalnov added numerous unicode string related features, zfill in #3978,
+  ljust in #4001, rjust and center in #4044 and strip, lstrip and rstrip in
+  #4048.
+- Guilherme Leobas added support for np.delete in #3890
+- Christoph Deil exposed the Numba CLI via ``python -m numba`` in #4066 and made
+  numerous documentation fixes.
+- Leo Schwarz wrote the bulk of the code for jitclass default constructor
+  arguments in #3852.
+- Nick White enhanced the CUDA backend to use min/max PTX instructions where
+  possible in #4054.
+- Lucio Fernandez-Arjona implemented the unicode string ``__mul__`` function in
+  #3952.
+- Dimitri Vorona wrote the bulk of the code to implement getitem and setitem for
+  jitclass in #3861.
+
+General Enhancements:
+
+* PR #3820: Min max on iterables
+* PR #3842: Unicode type iteration
+* PR #3847: Allow fine-grained control of fastmath flags to partially address #2923
+* PR #3852: Continuation of PR #2894
+* PR #3861: Continuation of PR #3730
+* PR #3890: Add support for np.delete
+* PR #3899: Support for np.quantile and np.nanquantile
+* PR #3900: Fix 3457 :: Implements np.repeat
+* PR #3928: Add .view() method for NumPy scalars
+* PR #3939: Update icc_rt clone recipe.
+* PR #3952: __mul__ for strings, initial implementation and tests
+* PR #3956: Type-inferred dictionary
+* PR #3959: Create a view for string slicing to avoid extra allocations
+* PR #3978: zfill operation implementation
+* PR #4001: ljust operation implementation
+* PR #4010: Support `dict()` and `{}`
+* PR #4022: Support for llvm 8
+* PR #4034: Make type.Optional str more representative
+* PR #4041: Deprecation warnings
+* PR #4044: rjust and center operations implementation
+* PR #4048: strip, lstrip and rstrip operations implementation
+* PR #4066: Expose numba CLI via python -m numba
+* PR #4081: Impl `np.shape` and support function for `asarray`.
+* PR #4091: Deprecate the use of iternext_impl without RefType
+
+CUDA Enhancements/Fixes:
+
+* PR #3933: Adds `.nbytes` property to CUDA device array objects.
+* PR #4011: Add .inspect_ptx() to cuda device function
+* PR #4054: CUDA: Use min/max PTX Instructions
+* PR #4096: Update env-vars for CUDA libraries lookup
+
+Documentation Updates:
+
+* PR #3867: Code repository map
+* PR #3918: adding Joris' Fosdem 2019 presentation
+* PR #3926: order talks on applications of Numba by date
+* PR #3943: fix two small typos in vectorize docs
+* PR #3944: Fixup jitclass docs
+* PR #3990: mention preprint repo in FAQ. Fixes #3981
+* PR #4012: Correct runtests command in contributing.rst
+* PR #4043: fix typo
+* PR #4047: Ambiguous Documentation fix for guvectorize.
+* PR #4060: Remove remaining mentions of autojit in docs
+* PR #4063: Fix annotate example in docstring
+* PR #4065: Add FAQ entry explaining Numba project name
+* PR #4079: Add Documentation for atomicity of typed.Dict
+* PR #4105: Remove info about CUDA ENVVAR potential replacement
+
+Fixes:
+
+* PR #3719: Resolves issue #3528.  Adds support for slices when not using parallel=True.
+* PR #3727: Remove dels for known dead vars.
+* PR #3845: Fix mutable flag transmission in .astype
+* PR #3853: Fix some minor issues in the C source.
+* PR #3862: Correct boolean reinterpretation of data
+* PR #3863: Comments out the appveyor badge
+* PR #3869: fixes flake8 after merge
+* PR #3871: Add assert to ir.py to help enforce correct structuring
+* PR #3881: fix preparfor dtype transform for datetime64
+* PR #3884: Prevent mutation of objmode fallback IR.
+* PR #3885: Updates for llvmlite 0.29
+* PR #3886: Use `safe_load` from pyyaml.
+* PR #3887: Add tolerance to network errors by permitting conda to retry
+* PR #3893: Fix casting in namedtuple ctor.
+* PR #3894: Fix array inliner for multiple array definition.
+* PR #3905: Cherrypick #3903 to main
+* PR #3920: Raise better error if unsupported jump opcode found.
+* PR #3927: Apply flake8 to the numpy related files
+* PR #3935: Silence DeprecationWarning
+* PR #3938: Better error message for unknown opcode
+* PR #3941: Fix typing of ufuncs in parfor conversion
+* PR #3946: Return variable renaming dict from inline_closurecall
+* PR #3962: Fix bug in alignment computation of `Record.make_c_struct`
+* PR #3967: Fix error with pickling unicode
+* PR #3964: Unicode split algo versioning
+* PR #3975: Add handler for unknown locale to numba -s
+* PR #3991: Permit Optionals in ufunc machinery
+* PR #3995: Remove assert in type inference causing poor error message.
+* PR #3996: add is_ascii flag to UnicodeType
+* PR #4009: Prevent zero division error in np.linalg.cond
+* PR #4014: Resolves #4007.
+* PR #4021: Add a more specific error message for invalid write to a global.
+* PR #4023: Fix handling of titles in record dtype
+* PR #4024: Do a check if a call is const before saying that an object is multiply defined.
+* PR #4027: Fix issue #4020.  Turn off no_cpython_wrapper flag when compiling for…
+* PR #4033: [WIP] Fixing wrong dtype of array inside reflected list #4028
+* PR #4061: Change IPython cache dir name to numba_cache
+* PR #4067: Delete examples/notebooks/LinearRegr.py
+* PR #4070: Catch writes to global typed.Dict and raise.
+* PR #4078: Check tuple length
+* PR #4084: Fix missing incref on optional return None
+* PR #4089: Make the warnings fixer flush work for warning comparing on type.
+* PR #4094: Fix function definition finding logic for commented def
+* PR #4100: Fix alignment check on 32-bit.
+* PR #4104: Use PEP 508 compliant env markers for install deps
+
+Contributors:
+
+* Benjamin Zaitlen
+* Christoph Deil
+* David Hirschfeld
+* Dimitri Vorona
+* Ehsan Totoni (core dev)
+* Guilherme Leobas
+* Leo Schwarz
+* Lucio Fernandez-Arjona
+* Max Bolingbroke
+* NanduTej
+* Nick White
+* Ravi Teja Gutta
+* Rob Ennis
+* Sergey Shalnov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
 Version 0.43.1
 --------------
 
