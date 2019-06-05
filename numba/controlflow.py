@@ -353,10 +353,6 @@ class CFGraph(object):
         preds_table = self._preds
         df = {u: set() for u in idom}
 
-        print('idom', idom)
-        print('preds', preds_table)
-        print('succ', self._succs)
-
         for u in idom:
             if len(preds_table[u]) < 2:
                 continue
