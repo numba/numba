@@ -122,6 +122,8 @@ class CFGraph(object):
         self._find_descendents()
         self._find_loops()
         self._find_post_dominators()
+        self._find_immediate_dominators()
+        self._find_dominance_frontier()
 
     def dominators(self):
         """
@@ -291,6 +293,79 @@ class CFGraph(object):
             if not self._succs.get(n):
                 exit_points.add(n)
         self._exit_points = exit_points
+
+    def _find_postorder(self):
+        succs = self._succs
+        back_edges = self._back_edges
+        post_order = []
+        seen = set()
+
+        def _dfs_rec(node):
+            if node not in seen:
+                seen.add(node)
+                for dest in succs[node]:
+                    if (node, dest) not in back_edges:
+                        _dfs_rec(dest)
+                post_order.append(node)
+
+        _dfs_rec(self._entry_point)
+        return post_order
+
+    def _find_immediate_dominators(self):
+        # The algorithm implemented computes the immediate dominator
+        # for each node in the CFG which is equivalent to build a dominator tree
+        # Based on the implementation from NetworkX library - nx.immediate_dominators
+        # References: 
+        #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy 
+        #   A Simple, Fast Dominance Algorithm 
+        #   https://www.cs.rice.edu/~keith/EMBED/dom.pdf
+        def intersect(u, v):
+            while u != v:
+                while idx[u] < idx[v]:
+                    u = idom[u]
+                while idx[u] > idx[v]:
+                    v = idom[v]
+            return u
+
+        entry = self._entry_point
+        preds_table = self._preds
+
+        order = self._find_postorder()
+        idx = {e: i for i, e in enumerate(order)} # index of each node
+        idom = {entry : entry}
+        order.pop()
+        order.reverse()
+
+        changed = True
+        while changed:
+            changed = False
+            for u in order:
+                new_idom = functools.reduce(intersect, (v for v in preds_table[u] if v in idom))
+                if u not in idom or idom[u] != new_idom:
+                    idom[u] = new_idom
+                    changed = True
+
+        self._idom = idom
+
+    def _find_dominance_frontier(self):
+        entry = self._entry_point
+        idom = self._idom
+        preds_table = self._preds
+        df = {u: set() for u in idom}
+
+        print('idom', idom)
+        print('preds', preds_table)
+        print('succ', self._succs)
+
+        for u in idom:
+            if len(preds_table[u]) < 2:
+                continue
+            for v in preds_table[u]:
+                while v != idom[u]:
+                    df[v].add(u)
+                    v = idom[v]
+
+        self._frontier = df
 
     def _find_dominators_internal(self, post=False):
         # See theoretical description in
