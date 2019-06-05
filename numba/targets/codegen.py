@@ -834,7 +834,7 @@ def initialize_llvm():
     ll.initialize()
     ll.initialize_native_target()
     ll.initialize_native_asmprinter()
-    ll.initialize_csa_target()
+#    ll.initialize_csa_target()
     ll.initialize_all_targets()
 
 
