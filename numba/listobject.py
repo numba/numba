@@ -454,3 +454,60 @@ def impl_getitem(l, index):
             raise AssertionError("internal list error during getitem")
 
     return impl
+
+
+@intrinsic
+def _list_setitem(typingctx, l, index, item):
+    """Wrap numba_list_setitem
+    """
+    resty = types.int32
+    sig = resty(l, index, item)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_ssize_t, ll_bytes],
+        )
+        [l, index, item] = args
+        [tl, tindex, titem] = sig.args
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_setitem')
+
+        dm_item = context.data_model_manager[titem]
+        data_item = dm_item.as_data(builder, item)
+        ptr_item = cgutils.alloca_once_value(builder, data_item)
+
+        lp = _list_get_data(context, builder, tl, l)
+        status = builder.call(
+            fn,
+            [
+                lp,
+                index,
+                _as_bytes(builder, ptr_item),
+            ],
+        )
+        return status
+
+    return sig, codegen
+
+
+@overload(operator.setitem)
+def impl_setitem(l, index, item):
+    if not isinstance(l, types.ListType):
+        return
+
+    indexty = types.intp
+    itemty = l.item_type
+
+    def impl(l, index, item):
+        castedindex = _cast(index, indexty)
+        casteditem = _cast(item, itemty)
+        status = _list_setitem(l, castedindex, casteditem)
+        if status == ListStatus.LIST_OK:
+            pass
+        elif status == ListStatus.LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
+        else:
+            raise AssertionError("internal list error during settitem")
+
+    return impl

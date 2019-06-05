@@ -65,3 +65,32 @@ class TestListObject(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(IndexError):
             bar()
+
+    def test_list_setitem(self):
+        """
+        Exercise list setitem
+        """
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            l.append(0)
+            l[0] = n
+            return l[0]
+
+        self.assertEqual(foo(0), 0)
+        self.assertEqual(foo(1), 1)
+        self.assertEqual(foo(2), 2)
+        self.assertEqual(foo(100), 100)
+
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
+
+        @njit
+        def bar():
+            l = listobject.new_list(int32)
+            l[0] = 1
+
+        with self.assertRaises(IndexError):
+            bar()
