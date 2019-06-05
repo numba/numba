@@ -60,7 +60,8 @@ class ListStatus(IntEnum):
     """Status code for other list operations.
     """
     LIST_OK = 0,
-    LIST_ERR_NO_MEMORY = -1
+    LIST_ERR_INDEX = -1
+    LIST_ERR_NO_MEMORY = -2
 
 
 def _raise_if_error(context, builder, status, msg):
@@ -392,12 +393,12 @@ def _list_getitem(typingctx, l, index):
 
     Returns 2-tuple of (intp, ?item_type)
     """
-    resty = types.Tuple([types.intp, types.Optional(l.item_type)])
+    resty = types.Tuple([types.int32, types.Optional(l.item_type)])
     sig = resty(l, index)
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
-            ll_ssize_t,
+            ll_status,
             [ll_list_type, ll_ssize_t, ll_bytes],
         )
         [tl, tindex] = sig.args
@@ -447,6 +448,8 @@ def impl_getitem(l, index):
         status, item = _list_getitem(l, castedindex)
         if status == ListStatus.LIST_OK:
             return _nonoptional(item)
+        elif status == ListStatus.LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
         else:
             raise AssertionError("internal list error during getitem")
 

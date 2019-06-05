@@ -2,7 +2,8 @@
 
 typedef enum {
     LIST_OK = 0,
-    LIST_ERR_NO_MEMORY = -1,
+    LIST_ERR_INDEX = -1,
+    LIST_ERR_NO_MEMORY = -2,
 } ListStatus;
 
 static void
@@ -35,14 +36,18 @@ numba_list_length(NB_List *lp) {
 
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
-    assert(index < lp->size);
+    if (index >= lp->size) {
+        return LIST_ERR_INDEX;
+    }
     char *loc = lp->items + lp-> itemsize * index;
     copy_item(lp, loc, item);
     return LIST_OK;
 }
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
-    assert(index < lp->size);
+    if (index >= lp->size) {
+        return LIST_ERR_INDEX;
+    }
     char *loc = lp->items + lp->itemsize * index;
     copy_item(lp, out, loc);
     return LIST_OK;

@@ -13,6 +13,7 @@ from numba.config import IS_32BITS
 ALIGN = 4 if IS_32BITS else 8
 
 LIST_OK = 0
+LIST_ERR_INDEX = -1
 
 
 class List(object):
@@ -39,7 +40,7 @@ class List(object):
         return self.list_length()
 
     def __setitem__(self, i, item):
-        return self.list_setitem(item)
+        return self.list_setitem(i, item)
 
     def __getitem__(self, i):
         return self.list_getitem(i)
@@ -60,13 +61,16 @@ class List(object):
 
     def list_setitem(self, i, item):
         status = self.tc.numba_list_setitem(self.lp, i, item)
-        self.tc.assertEqual(status, LIST_OK)
+        if status == LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
 
     def list_getitem(self, i):
         item_out_buffer = ctypes.create_string_buffer(self.itemsize)
         status = self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
-        self.tc.assertEqual(status, LIST_OK)
-        return item_out_buffer.raw
+        if status == LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
+        else:
+            return item_out_buffer.raw
 
     def list_append(self, item):
         status = self.tc.numba_list_append(self.lp, item)
@@ -146,3 +150,10 @@ class TestListImpl(TestCase):
         self.assertEqual(len(l), 2)
         r = l[1]
         self.assertEqual(r, b"hijklmno")
+
+    def test_set_item_getitem_index_error(self):
+        l = List(self, 8, 0)
+        with self.assertRaises(IndexError):
+            l[0]
+        with self.assertRaises(IndexError):
+            l[0] = b"abcdefgh"
