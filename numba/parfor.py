@@ -33,7 +33,6 @@ from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 from numba.extending import register_jitable
 
-
 from numba.ir_utils import (
     mk_unique_var,
     next_label,
@@ -1495,14 +1494,19 @@ class ParforPass(object):
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
-        if sequential_parfor_lowering:
-            lower_parfor_sequential(
-                self.typingctx, self.func_ir, self.typemap, self.calltypes)
+        if sequential_parfor_lowering or self.options.gen_openmp != False:
+            get_parfor_params(self.func_ir.blocks,
+                              self.options.fusion,
+                              self.nested_fusion_info)
+            lower_parfor_sequential(self.typingctx, self.func_ir, self.typemap,
+                                    self.calltypes, self.options.gen_openmp)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
-            parfor_ids = get_parfor_params(self.func_ir.blocks, self.options.fusion, self.nested_fusion_info)
+            parfor_ids = get_parfor_params(self.func_ir.blocks,
+                                           self.options.fusion,
+                                           self.nested_fusion_info)
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -2718,14 +2722,14 @@ def _find_func_var(typemap, func, avail_vars):
     raise RuntimeError("ufunc call variable not found")
 
 
-def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
+def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, openmp):
     ir_utils._max_label = max(ir_utils._max_label,
                               ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found, openmp)
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
@@ -2747,17 +2751,39 @@ def _lower_parfor_sequential_block(
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
+        parfor_found,
+        openmp):
     scope = block.scope
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
         inst = block.body[i]
+        parfor_outputs = get_parfor_outputs(inst, inst.params)
+        parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+            inst, inst.params, calltypes)
+        parfor_inputs = sorted(
+            list(
+                set(inst.params) -
+                set(parfor_outputs) -
+                set(parfor_redvars)))
+
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("lower_parfor_sequential_block", inst, type(inst))
+            print("params", inst.params)
+            print("inputs", parfor_inputs)
+            print("outputs", parfor_outputs)
+            print("redvars", parfor_redvars)
+
         loc = inst.init_block.loc
         # split block across parfor
         prev_block = ir.Block(scope, loc)
         prev_block.body = block.body[:i]
         block.body = block.body[i + 1:]
+
+        # The depth of the parfor loop nests.
+        ndims = len(inst.loop_nests)
+        openmp_tag = numba.npyufunc.parfor.openmp_tag
+
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
@@ -2765,7 +2791,6 @@ def _lower_parfor_sequential_block(
         new_blocks[block_label] = prev_block
         block_label = next_label()
 
-        ndims = len(inst.loop_nests)
         for i in range(ndims):
             loopnest = inst.loop_nests[i]
             # create range block for loop
@@ -2789,6 +2814,94 @@ def _lower_parfor_sequential_block(
             # jump to this new inner loop
             if i == 0:
                 inst.init_block.body.append(ir.Jump(range_label, loc))
+
+                if openmp != False:
+                    #omp_start_blk = inst.init_block
+                    # Remember the header_block branch to add it back in later.
+                    save_branch = header_block.body[-1]
+                    # Temporarily remove the header_block branch.
+                    header_block.body = header_block.body[:-1]
+                    omp_start_blk = header_block
+
+                if openmp == True or openmp == 'cpu':
+                    openmp_start_tags = [ openmp_tag("DIR.OMP.PARALLEL.LOOP") ]
+                    openmp_end_tags = [ openmp_tag("DIR.OMP.END.PARALLEL.LOOP") ]
+
+                    if ndims > 1:
+                        openmp_start_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
+
+                    for i in range(ndims):
+                        loopnest = inst.loop_nests[i]
+                        openmp_start_tags.append(openmp_tag("QUAL.OMP.PRIVATE", loopnest.index_variable))
+
+                    for param in inst.params:
+                        if isinstance(typemap[param], types.npytypes.Array):
+                            openmp_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
+                        else:
+                            openmp_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+
+                    # Add OpenMP LLVM directives.
+                    or_start = numba.npyufunc.parfor.openmp_region_start(openmp_start_tags, loc)
+                    # Append OpenMP directive right to the block right before the loop.
+                    omp_start_blk.body.append(or_start)
+
+                    or_end = numba.npyufunc.parfor.openmp_region_end(or_start, openmp_end_tags, loc)
+                    # Prepend OpenMP directive right to the block right after the loop.
+                    block.body.insert(0, or_end)
+                elif openmp == 'target':
+                    openmp_target_start_tags = [ openmp_tag("DIR.OMP.TARGET"),
+                                                 openmp_tag("QUAL.OMP.OFFLOAD.ENTRY.IDX", 0) ]
+                    openmp_target_end_tags = [ openmp_tag("DIR.OMP.END.TARGET") ]
+                    openmp_teams_start_tags = [ openmp_tag("DIR.OMP.TEAMS") ]
+                    openmp_teams_end_tags = [ openmp_tag("DIR.OMP.END.TEAMS") ]
+                    openmp_distparloop_start_tags = [ openmp_tag("DIR.OMP.DISTRIBUTE.PARLOOP") ]
+                    openmp_distparloop_end_tags = [ openmp_tag("DIR.OMP.END.DISTRIBUTE.PARLOOP") ]
+
+                    for i in range(ndims):
+                        loopnest = inst.loop_nests[i]
+                        openmp_target_start_tags.append(openmp_tag("QUAL.OMP.PRIVATE", loopnest.index_variable))
+                        openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.PRIVATE", loopnest.index_variable))
+                        openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.PRIVATE", loopnest.index_variable))
+
+                    for param in inst.params:
+                        if isinstance(typemap[param], types.npytypes.Array):
+                            openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
+                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
+                        else:
+                            openmp_target_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+                            openmp_distparloop_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+
+                    if ndims > 1:
+                        openmp_distparloop_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
+
+                    # Add OpenMP LLVM directives.
+                    target_start = numba.npyufunc.parfor.openmp_region_start(openmp_target_start_tags, loc)
+                    # Append OpenMP directive right to the block right before the loop.
+                    omp_start_blk.body.append(target_start)
+
+                    teams_start = numba.npyufunc.parfor.openmp_region_start(openmp_teams_start_tags, loc)
+                    # Append OpenMP directive right to the block right before the loop.
+                    omp_start_blk.body.append(teams_start)
+
+                    distparloop_start = numba.npyufunc.parfor.openmp_region_start(openmp_distparloop_start_tags, loc)
+                    # Append OpenMP directive right to the block right before the loop.
+                    omp_start_blk.body.append(distparloop_start)
+
+                    distparloop_end = numba.npyufunc.parfor.openmp_region_end(distparloop_start, openmp_distparloop_end_tags, loc)
+                    # Prepend OpenMP directive right to the block right after the loop.
+                    block.body.insert(0, distparloop_end)
+
+                    teams_end = numba.npyufunc.parfor.openmp_region_end(teams_start, openmp_teams_end_tags, loc)
+                    # Prepend OpenMP directive right to the block right after the loop.
+                    block.body.insert(0, teams_end)
+
+                    target_end = numba.npyufunc.parfor.openmp_region_end(target_start, openmp_target_end_tags, loc)
+                    # Prepend OpenMP directive right to the block right after the loop.
+                    block.body.insert(0, target_end)
+
+                if openmp != False:
+                    omp_start_blk.body.append(save_branch)
+
                 header_block.body[-1].falsebr = block_label
             else:
                 new_blocks[prev_header_label].body[-1].truebr = range_label
@@ -2805,7 +2918,7 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
+                l, b, new_blocks, typemap, calltypes, parfor_found, False)
             new_blocks[l] = b
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
