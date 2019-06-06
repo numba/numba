@@ -72,6 +72,27 @@ def _raise_if_error(context, builder, status, msg):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
+@intrinsic
+def _as_meminfo(typingctx, lstobj):
+    """Returns the MemInfoPointer of a list.
+    """
+    if not isinstance(lstobj, types.ListType):
+        raise TypingError('expected *lstobj* to be a ListType')
+
+    def codegen(context, builder, sig, args):
+        [tl] = sig.args
+        [l] = args
+        # Incref
+        context.nrt.incref(builder, tl, l)
+        ctor = cgutils.create_struct_proxy(tl)
+        lstruct = ctor(context, builder, value=l)
+        # Returns the plain MemInfo
+        return lstruct.meminfo
+
+    sig = _meminfo_listptr(lstobj)
+    return sig, codegen
+
+
 def _list_get_data(context, builder, list_ty, l):
     """Helper to get the C list pointer in a numba list.
     """
