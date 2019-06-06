@@ -381,6 +381,16 @@ def _find(substr, s):
             return i
     return -1
 
+@njit
+def _rfind(substr, s, begin, e):
+    if e == -1:
+        e = len(s)
+    i = e - len(substr)
+    while i >= begin:
+        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
+            return i
+        i = i - 1
+    return -1
 
 @njit
 def _is_whitespace(code_point):
@@ -529,6 +539,14 @@ def unicode_find(a, b):
         def find_impl(a, b):
             return _find(substr=b, s=a)
         return find_impl
+
+
+@overload_method(types.UnicodeType, 'rfind')
+def unicode_rfind(src, sub, start=0, end=-1):
+    if isinstance(sub, types.UnicodeType):
+        def rfind_impl(src, sub, begin=start, e=end):
+            return _rfind(sub, src, begin, e)
+        return rfind_impl
 
 
 @overload_method(types.UnicodeType, 'startswith')

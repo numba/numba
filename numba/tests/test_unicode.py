@@ -80,6 +80,14 @@ def find_usecase(x, y):
     return x.find(y)
 
 
+def rfind_usecase(x, y):
+    return x.rfind(y)
+
+
+def rfind_with_startend_usecase(x, y, start, end):
+    return x.rfind(y, start, end)
+
+
 def startswith_usecase(x, y):
     return x.startswith(y)
 
@@ -337,6 +345,69 @@ class TestUnicode(BaseTest):
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
 
+    def test_rfind(self):
+        pyfunc = rfind_usecase
+        cfunc = njit(pyfunc)
+
+        str_examples = [
+            'abcde',
+            'aabbccddbb',
+            'a22abd2',
+            'abc' * 15,
+            'aBcDefBc',
+            '1223456557',
+            ' ',
+            'ab*cf+*bc',
+            'abc aade',
+            'a555bcgf5555' ]
+
+        substr_examples = [
+            'e',
+            'bb',
+            ' ',
+            '*+',
+            '55',
+            'B' ]
+
+        for s in str_examples:
+            for sub_str in substr_examples:
+                self.assertEqual(pyfunc(s, sub_str),
+                                 cfunc(s, sub_str),
+                                 "'%s'.rfind('%s')?" % (s, sub_str))
+
+    def test_rfind_with_startend(self):
+        pyfunc = rfind_with_startend_usecase
+        cfunc = njit(pyfunc)
+
+        str_examples = [
+            'abcde',
+            'aabbccddbb',
+            'a22abd2',
+            'abc' * 15,
+            'aBcDefBc',
+            '1223456557',
+            ' ',
+            'ab*cf+*bc',
+            'abc aade',
+            'a555bcgf5555' ]
+
+        substr_examples = [
+            'e',
+            'bb',
+            ' ',
+            '*+',
+            '55',
+            'B' ]
+
+        begin = 4
+        end = 8
+
+        for s in str_examples:
+            for sub_str in substr_examples:
+                self.assertEqual(pyfunc(s, sub_str, begin, end),
+                                 cfunc(s, sub_str, begin, end),
+                                 "'%s'.rfind_with_startend('%s')?" % (s, sub_str))
+    
     def test_getitem(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
