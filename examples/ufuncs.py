@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-from numba import vectorize
-from numba import autojit, double, jit
+from numba import jit, vectorize
 import math
 import numpy as np
 

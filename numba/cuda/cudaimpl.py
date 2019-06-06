@@ -414,6 +414,58 @@ def ptx_selp(context, builder, sig, args):
     return builder.select(test, a, b)
 
 
+@lower(max, types.f4, types.f4)
+def ptx_max_f4(context, builder, sig, args):
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.float(),
+            (lc.Type.float(), lc.Type.float())),
+        '__nv_fmaxf')
+    return builder.call(fn, args)
+
+
+@lower(max, types.f8, types.f4)
+@lower(max, types.f4, types.f8)
+@lower(max, types.f8, types.f8)
+def ptx_max_f8(context, builder, sig, args):
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.double(),
+            (lc.Type.double(), lc.Type.double())),
+        '__nv_fmax')
+
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
+        context.cast(builder, args[1], sig.args[1], types.double),
+    ])
+
+
+@lower(min, types.f4, types.f4)
+def ptx_min_f4(context, builder, sig, args):
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.float(),
+            (lc.Type.float(), lc.Type.float())),
+        '__nv_fminf')
+    return builder.call(fn, args)
+
+
+@lower(min, types.f8, types.f4)
+@lower(min, types.f4, types.f8)
+@lower(min, types.f8, types.f8)
+def ptx_min_f8(context, builder, sig, args):
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.double(),
+            (lc.Type.double(), lc.Type.double())),
+        '__nv_fmin')
+
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
+        context.cast(builder, args[1], sig.args[1], types.double),
+    ])
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp

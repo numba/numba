@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types, errors, utils
+from numba import njit, jit, types, errors, utils
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -101,6 +101,23 @@ def tuple_unpack_static_getitem_err():
     a.append(1)
     b.append(1)
     return
+
+
+class TestTupleLengthError(unittest.TestCase):
+
+    def test_tuple_length_error(self):
+        # issue 2195
+        # raise an error on tuples greater than 1000 in length
+        @njit
+        def eattuple(tup):
+            return len(tup)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            tup = tuple(range(1001))
+            eattuple(tup)
+
+        expected = "Tuple 'tup' length must be smaller than 1000"
+        self.assertIn(expected, str(raises.exception))
 
 
 class TestTupleReturn(TestCase):

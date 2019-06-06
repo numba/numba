@@ -16,7 +16,7 @@ from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
-from numba.ir_utils import raise_on_unsupported_feature
+from numba.ir_utils import raise_on_unsupported_feature, warn_deprecated
 from numba.compiler_lock import global_compiler_lock
 from numba.analysis import dead_branch_prune
 
@@ -316,11 +316,16 @@ class BasePipeline(object):
                 if utils.PYVERSION >= (3,):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
-                warnings.warn_explicit('%s: %s' % (msg, e),
+                # this emits a warning containing the error message body in the
+                # case of fallback from npm to objmode
+                loop_lift = '' if self.flags.enable_looplift else 'OUT'
+                msg_rewrite = ("\nCompilation is falling back to object mode "
+                               "WITH%s looplifting enabled because %s"
+                               % (loop_lift, msg))
+                warnings.warn_explicit('%s due to: %s' % (msg_rewrite, e),
                                        errors.NumbaWarning,
                                        self.func_id.filename,
                                        self.func_id.firstlineno)
-
                 raise
 
     @contextmanager
@@ -559,29 +564,28 @@ class BasePipeline(object):
             self.flags.auto_parallel, self.flags, self.parfor_diagnostics)
         parfor_pass.run()
 
-        if config.WARNINGS:
-            # check the parfor pass worked and warn if it didn't
-            has_parfor = False
-            for blk in self.func_ir.blocks.values():
-                for stmnt in blk.body:
-                    if isinstance(stmnt, Parfor):
-                        has_parfor = True
-                        break
-                else:
-                    continue
-                break
+        # check the parfor pass worked and warn if it didn't
+        has_parfor = False
+        for blk in self.func_ir.blocks.values():
+            for stmnt in blk.body:
+                if isinstance(stmnt, Parfor):
+                    has_parfor = True
+                    break
+            else:
+                continue
+            break
 
-            if not has_parfor:
-                # parfor calls the compiler chain again with a string
-                if not self.func_ir.loc.filename == '<string>':
-                    msg = ("parallel=True was specified but no transformation"
-                           " for parallel execution was possible.")
-                    warnings.warn_explicit(
-                        msg,
-                        errors.NumbaWarning,
-                        self.func_id.filename,
-                        self.func_id.firstlineno
-                        )
+        if not has_parfor:
+            # parfor calls the compiler chain again with a string
+            if not self.func_ir.loc.filename == '<string>':
+                url = ("http://numba.pydata.org/numba-doc/latest/user/"
+                       "parallel.html#diagnostics")
+                msg = ("\nThe keyword argument 'parallel=True' was specified "
+                       "but no transformation for parallel execution was "
+                       "possible.\n\nTo find out why, try turning on parallel "
+                       "diagnostics, see %s for help." % url)
+                warnings.warn(errors.NumbaPerformanceWarning(msg,
+                                                             self.func_ir.loc))
 
     def stage_inline_pass(self):
         """
@@ -706,8 +710,10 @@ class BasePipeline(object):
         lowerfn = self.backend_object_mode
         self._backend(lowerfn, objectmode=True)
 
-        # Warn if compiled function in object mode and force_pyobject not set
+        # Warn, deprecated behaviour, code compiled in objmode without
+        # force_pyobject indicates fallback from nopython mode
         if not self.flags.force_pyobject:
+            # first warn about object mode and yes/no to lifted loops
             if len(self.lifted) > 0:
                 warn_msg = ('Function "%s" was compiled in object mode without'
                             ' forceobj=True, but has lifted loops.' %
@@ -715,9 +721,17 @@ class BasePipeline(object):
             else:
                 warn_msg = ('Function "%s" was compiled in object mode without'
                             ' forceobj=True.' % (self.func_id.func_name,))
-            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                   self.func_id.filename,
-                                   self.func_id.firstlineno)
+            warnings.warn(errors.NumbaWarning(warn_msg,
+                                              self.func_ir.loc))
+
+            url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                   "deprecation.html#deprecation-of-object-mode-fall-"
+                   "back-behaviour-when-using-jit")
+            msg = ("\nFall-back from the nopython compilation path to the "
+                   "object mode compilation path has been detected, this is "
+                   "deprecated behaviour.\n\nFor more information visit %s" %
+                   url)
+            warnings.warn(errors.NumbaDeprecationWarning(msg, self.func_ir.loc))
             if self.flags.release_gil:
                 warn_msg = ("Code running in object mode won't allow parallel"
                             " execution despite nogil=True.")
@@ -751,6 +765,7 @@ class BasePipeline(object):
 
     def stage_ir_legalization(self):
         raise_on_unsupported_feature(self.func_ir, self.typemap)
+        warn_deprecated(self.func_ir, self.typemap)
 
     def stage_cleanup(self):
         """

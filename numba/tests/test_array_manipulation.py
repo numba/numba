@@ -132,6 +132,10 @@ def numpy_fill_diagonal(arr, val, wrap=False):
     return np.fill_diagonal(arr, val, wrap)
 
 
+def numpy_shape(arr):
+    return np.shape(arr)
+
+
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
@@ -329,6 +333,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check_err_axis_oob(arrs[3], (3, 1, 2, 5))
         check_err_axis_oob(arrs[3], (3, 1, 2, -5))
 
+        with self.assertRaises(TypingError) as e:
+            jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
+        self.assertIn("np.transpose does not accept tuples",
+                        str(e.exception))
 
     @tag('important')
     def test_expand_dims(self):
@@ -706,6 +714,31 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         val = np.array([-1e100])
         _assert_raises(arr, val)
+
+
+    def test_shape(self):
+        pyfunc = numpy_shape
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(got, expected)
+
+        # check arrays
+        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+            arr = np.empty(t)
+            check(arr)
+
+        # check some types that go via asarray
+        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+            check(arr)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a')
+
+        self.assertIn("The argument to np.shape must be array-like",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':
