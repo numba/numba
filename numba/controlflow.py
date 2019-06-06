@@ -315,9 +315,9 @@ class CFGraph(object):
         # The algorithm implemented computes the immediate dominator
         # for each node in the CFG which is equivalent to build a dominator tree
         # Based on the implementation from NetworkX library - nx.immediate_dominators
-        # References: 
-        #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy 
-        #   A Simple, Fast Dominance Algorithm 
+        # References:
+        #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
+        #   A Simple, Fast Dominance Algorithm
         #   https://www.cs.rice.edu/~keith/EMBED/dom.pdf
         def intersect(u, v):
             while u != v:
@@ -348,7 +348,6 @@ class CFGraph(object):
         self._idom = idom
 
     def _find_dominance_frontier(self):
-        entry = self._entry_point
         idom = self._idom
         preds_table = self._preds
         df = {u: set() for u in idom}
