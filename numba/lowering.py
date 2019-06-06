@@ -192,6 +192,8 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
+            import sys
+            sys.stdout.flush()
 
         # Special optimization to remove NRT on functions that do not need it.
         if self.context.enable_nrt and self.generator_info is None:
