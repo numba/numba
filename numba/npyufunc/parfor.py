@@ -30,14 +30,14 @@ from numba.parfor import print_wrapped, ensure_parallel_support
 
 import warnings
 from ..errors import ParallelSafetyWarning
-from numba.targets import csa
-from numba.targets.registry import csa_target
-from numba.npyufunc import csa
+#from numba.targets import csa
+#from numba.targets.registry import csa_target
+#from numba.npyufunc import csa
 
 import pdb
 
-multi_tile = True
-#multi_tile = False
+#multi_tile = True
+multi_tile = False
 
 @numba.jit(nopython=True)
 def par_start_region(loc):
@@ -57,6 +57,91 @@ def par_start_spmd(loc, num_threads):
 @numba.jit(nopython=True)
 def par_end_spmd(loc):
     return loc
+
+#----------------------------------------------------------------------------------------------
+
+class openmp_tag(object):
+    def __init__(self, name, arg=None):
+        self.name = name
+        self.arg = arg
+
+    def lower(self, lowerer):
+        builder = lowerer.builder
+        decl = ""
+#        print("openmp_tag::lower", self.name, self.arg, type(self.arg))
+        if isinstance(self.arg, ir.Var):
+            #arg_str = lowerer.loadvar(self.arg.name)
+            arg_str = lowerer.getvar(self.arg.name)
+            decl = arg_str.get_decl()
+        elif isinstance(self.arg, str):
+            arg_str = lowerer.getvar(self.arg)
+            decl = arg_str.get_decl()
+        elif isinstance(self.arg, int):
+            decl = "i32 " + str(self.arg)
+        return '"' + self.name + '"(' + decl + ')'
+
+def openmp_tag_list_to_str(tag_list, lowerer):
+    tag_strs = [x.lower(lowerer) for x in tag_list]
+    return '[ ' + ", ".join(tag_strs) + ' ]'
+
+class openmp_region_start(ir.Stmt):
+    def __init__(self, tags, loc):
+        self.tags = tags
+        self.omp_region_var = None
+        self.loc = loc
+
+    def lower(self, lowerer):
+        typingctx = lowerer.context.typing_context
+        targetctx = lowerer.context
+        typemap = lowerer.fndesc.typemap
+        context = lowerer.context
+        builder = lowerer.builder
+        library = lowerer.library
+
+        llvm_int32_t = lc.Type.int(32)
+        self.omp_region_var = cgutils.alloca_once(builder, llvm_int32_t)
+        fnty = lir.FunctionType(llvm_int32_t, [])
+        pre_fn = builder.module.declare_intrinsic('llvm.directive.region.entry', (), fnty)
+        builder.store(builder.call(pre_fn, [], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer)), self.omp_region_var)
+
+class openmp_region_end(ir.Stmt):
+    def __init__(self, start_region, tags, loc):
+        self.start_region = start_region
+        self.tags = tags
+        self.loc = loc
+
+    def lower(self, lowerer):
+        typingctx = lowerer.context.typing_context
+        targetctx = lowerer.context
+        typemap = lowerer.fndesc.typemap
+        context = lowerer.context
+        builder = lowerer.builder
+        library = lowerer.library
+
+        assert self.start_region.omp_region_var != None
+
+        llvm_int32_t = lc.Type.int(32)
+        fnty = lir.FunctionType(lc.Type.void(), [llvm_int32_t])
+        pre_fn = builder.module.declare_intrinsic('llvm.directive.region.exit', (), fnty)
+        builder.call(pre_fn, [builder.load(self.start_region.omp_region_var)], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer))
+
+def openmp_region_start_infer(prs, typeinferer):
+    pass
+
+def openmp_region_end_infer(pre, typeinferer):
+    pass
+
+typeinfer.typeinfer_extensions[openmp_region_start] = openmp_region_start_infer
+typeinfer.typeinfer_extensions[openmp_region_end] = openmp_region_end_infer
+
+def _lower_openmp_region_start(lowerer, prs):
+    prs.lower(lowerer)
+
+def _lower_openmp_region_end(lowerer, pre):
+    pre.lower(lowerer)
+
+lowering.lower_extensions[openmp_region_start] = _lower_openmp_region_start
+lowering.lower_extensions[openmp_region_end] = _lower_openmp_region_end
 
 #----------------------------------------------------------------------------------------------
 
@@ -483,15 +568,16 @@ def _lower_parfor_parallel(lowerer, parfor):
         print("loop_nests = ", parfor.loop_nests)
         print("loop_ranges = ", loop_ranges)
     if not use_sched:
-        call_csa_kernel(
-            lowerer,
-            func,
-            func_sig,
-            func_args,
-            loop_ranges,
-            parfor_redvars,
-            parfor_reddict,
-            parfor.init_block)
+        assert(0)
+#        call_csa_kernel(
+#            lowerer,
+#            func,
+#            func_sig,
+#            func_args,
+#            loop_ranges,
+#            parfor_redvars,
+#            parfor_reddict,
+#            parfor.init_block)
     else:
         gu_signature = _create_shape_signature(
             parfor.get_shape_classes,
@@ -1441,7 +1527,7 @@ def _create_gufunc_for_parfor_body(
             print("No aliases found so adding noalias flag.")
         flags.noalias = True
 
-    remove_dead(gufunc_ir.blocks, gufunc_ir.arg_names)
+    remove_dead(gufunc_ir.blocks, gufunc_ir.arg_names, gufunc_ir, typemap)
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir after remove dead")
@@ -1602,10 +1688,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # Build the wrapper for GUFunc
     args, return_type = sigutils.normalize_signature(outer_sig)
-    if isinstance(cres, csa.CSAKernel):
-        llvm_func = cres.kernel
-    else:
-        llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    #if isinstance(cres, csa.CSAKernel):
+    #    llvm_func = cres.kernel
+    #else:
+    llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+
     if config.DEBUG_ARRAY_OPT:
         print("llvm_func", llvm_func, type(llvm_func))
     sin, sout = gu_signature
