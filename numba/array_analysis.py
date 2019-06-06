@@ -800,15 +800,11 @@ class SymbolicEquivSet(ShapeEquivSet):
         for names in offset_dict.values():
             self._insert(names)
 
-    def set_shape(self, obj, shape):
-        """Overload set_shape to remember shapes of SetItem IR nodes.
+    def set_shape_setitem(self, obj, shape):
+        """remember shapes of SetItem IR nodes.
         """
-        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
-            self.ext_shapes[obj] = shape
-        else:
-            assert(isinstance(obj, ir.Var))
-            typ = self.typemap[obj.name]
-            super(SymbolicEquivSet, self).set_shape(obj, shape)
+        assert isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem)
+        self.ext_shapes[obj] = shape
 
     def _get_shape(self, obj):
         """Overload _get_shape to retrieve the shape of SetItem IR nodes.
@@ -981,10 +977,7 @@ class ArrayAnalysis(object):
                                                          len(typ), shape)
 
             if shape != None:
-                if isinstance(typ, types.SliceType):
-                    equiv_set.set_shape(lhs, shape)
-                else:
-                    equiv_set.insert_equiv(lhs, shape)
+                equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
@@ -995,7 +988,7 @@ class ArrayAnalysis(object):
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
             if value_shape is (): # constant
-                equiv_set.set_shape(inst, target_shape)
+                equiv_set.set_shape_setitem(inst, target_shape)
                 return pre, []
             elif value_shape != None:
                 target_typ = self.typemap[inst.target.name]
@@ -1008,7 +1001,7 @@ class ArrayAnalysis(object):
                 n = len(shape)
                 # shape dimension must be within target dimension
                 assert(target_ndim >= n)
-                equiv_set.set_shape(inst, shape)
+                equiv_set.set_shape_setitem(inst, shape)
                 return pre + asserts, []
             else:
                 return pre, []
