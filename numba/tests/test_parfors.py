@@ -236,7 +236,8 @@ class TestParforsBase(TestCase):
             splitted = ir.splitlines()
             fast_inst = []
             for x in splitted:
-                if 'fast' in x:
+                m = re.search(r'\bfast\b', x)  # \b for wholeword
+                if m is not None:
                     fast_inst.append(x)
             return fast_inst
 
