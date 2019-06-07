@@ -143,6 +143,10 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     wrapperlib.add_ir_module(mod)
     wrapperlib.add_linking_library(library)
+    if ctx.active_code_library:
+        # ctx.active_code_library.add_linking_library(library)
+        ctx.active_code_library.add_linking_library(wrapperlib)
+
     return wrapperlib.get_pointer_to_function(lfunc.name), lfunc.name
 
 
