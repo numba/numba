@@ -98,7 +98,7 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:
-                        atype = self.typemap[inst.target.name]
+                        atype = self.typemap.get(inst.target.name, "<missing>")
 
                     aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
                 elif isinstance(inst, ir.SetItem):
