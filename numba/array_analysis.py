@@ -1268,12 +1268,15 @@ class ArrayAnalysis(object):
 
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
+        added_mod_name = False
         # call via attribute (i.e. array.func)
         if (isinstance(mod_name, ir.Var)
                 and isinstance(self.typemap[mod_name.name],
                                 types.ArrayCompatible)):
             args = [mod_name] + expr.args
             mod_name = 'numpy'
+            # Remember that args and expr.args don't alias.
+            added_mod_name = True
         else:
             args = expr.args
         fname = "_analyze_op_call_{}_{}".format(
@@ -1285,7 +1288,14 @@ class ArrayAnalysis(object):
                 fn = getattr(self, fname)
             except AttributeError:
                 return None
-            return guard(fn, scope, equiv_set, args, dict(expr.kws))
+            result = guard(fn, scope, equiv_set, args, dict(expr.kws))
+            # We want the ability for function fn to modify arguments.
+            # If args and expr.args don't alias then we need the extra
+            # step of assigning back into expr.args from the args that
+            # was passed to fn.
+            if added_mod_name:
+                expr.args = args[1:]
+            return result
 
     def _analyze_op_call___builtin___len(self, scope, equiv_set, args, kws):
         # python 2 version of len()
@@ -1422,7 +1432,60 @@ class ArrayAnalysis(object):
             typ = self.typemap[args[1].name]
             if isinstance(typ, types.BaseTuple):
                 return args[1], []
-        return tuple(args[1:]), []
+
+        # Reshape is allowed to take one argument that has the value <0.
+        # This means that the size of that dimension should be inferred from
+        # the size of the array being reshaped and the other dimensions
+        # specified.  Our general approach here is to see if the reshape
+        # has any <0 arguments.  If it has more than one then throw a
+        # ValueError.  If exactly one <0 argument is found, remember its
+        # argument index.
+        stmts = []
+        neg_one_index = -1
+        for arg_index in range(1, len(args)):
+            reshape_arg = args[arg_index]
+            reshape_arg_def = guard(get_definition, self.func_ir, reshape_arg)
+            if isinstance(reshape_arg_def, ir.Const):
+                if reshape_arg_def.value < 0:
+                    if neg_one_index == -1:
+                        neg_one_index = arg_index
+                    else:
+                        msg = ("The reshape API may only include one negative"
+                               " argument. %s" % str(reshape_arg.loc))
+                        raise ValueError(msg)
+
+        if neg_one_index >= 0:
+            # If exactly one <0 argument to reshape was found, then we are
+            # going to insert code to calculate the missing dimension and then
+            # replace the negative with the calculated size.  We do this because we
+            # can't let array equivalence analysis think that some array has
+            # a negative dimension size.
+            loc = args[0].loc
+            # Create a variable to hold the size of the array being reshaped.
+            calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
+            self.typemap[calc_size_var.name] = types.intp
+            # Assign the size of the array calc_size_var.
+            init_calc_var = ir.Assign(ir.Expr.getattr(args[0], "size", loc), calc_size_var, loc)
+            stmts.append(init_calc_var)
+            # For each other dimension, divide the current size by the specified
+            # dimension size.  Once all such dimensions have been done then what is
+            # left is the size of the negative dimension.
+            for arg_index in range(1, len(args)):
+                # Skip the negative dimension.
+                if arg_index == neg_one_index:
+                    continue
+                div_calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
+                self.typemap[div_calc_size_var.name] = types.intp
+                # Calculate the next size as current size // the current arg's dimension size.
+                new_binop = ir.Expr.binop(operator.floordiv, calc_size_var, args[arg_index], loc)
+                div_calc = ir.Assign(new_binop, div_calc_size_var, loc)
+                self.calltypes[new_binop] = signature(types.intp, types.intp, types.intp)
+                stmts.append(div_calc)
+                calc_size_var = div_calc_size_var
+            # Put the calculated value back into the reshape arguments, replacing the negative.
+            args[neg_one_index] = div_calc_size_var
+
+        return tuple(args[1:]), stmts
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
         in_arr = args[0]
