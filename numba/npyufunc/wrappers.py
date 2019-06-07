@@ -1,4 +1,7 @@
 from __future__ import print_function, division, absolute_import
+
+from collections import namedtuple
+
 import numpy as np
 
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
@@ -6,6 +9,9 @@ from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 from numba import types, cgutils, compiler
 from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
+
+
+_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name', 'fnty'])
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -232,7 +238,11 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
 
     # Link and finalize
     wrapperlib.add_ir_module(wrapper_module)
-    wrapperlib.add_linking_library(library)
+    wrapperlib.add_linking_library(library)  # FIXME: Needed?
+    if context.active_code_library:  # FIXME: refactor + inversion
+        context.active_code_library.add_linking_library(library)
+        context.active_code_library.add_linking_library(wrapperlib)
+
     return wrapperlib.get_pointer_to_function(wrapper.name)
 
 
@@ -399,6 +409,10 @@ class _GufuncWrapper(object):
         # Link
         library.add_ir_module(wrapper_module)
         library.add_linking_library(self.library)
+        if self.context.active_code_library: # FIXME: refactor + inversion
+            self.context.active_code_library.add_linking_library(library)
+            self.context.active_code_library.add_linking_library(self.library)
+        return fnty
 
     @global_compiler_lock
     def build(self):
@@ -411,12 +425,17 @@ class _GufuncWrapper(object):
             wrapperlib = self.context.codegen().create_library(str(self))
             wrapperlib.enable_object_caching()
             # Build wrapper
-            self._build_wrapper(wrapperlib, wrapper_name)
+            fnty = self._build_wrapper(wrapperlib, wrapper_name)
             # Cache
             self.cache.save_overload(self.cres.signature, wrapperlib)
+        else:
+            fnty = None  # FIXME
         # Finalize and get function pointer
         ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-        return ptr, self.env, wrapper_name
+
+        if self.context.active_code_library:  # FIXME: refactor + inversion
+            self.context.active_code_library.add_linking_library(wrapperlib)
+        return _wrapper_info(ptr=ptr, env=self.env, name=wrapper_name, fnty=fnty)
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(

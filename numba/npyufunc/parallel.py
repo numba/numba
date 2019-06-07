@@ -17,6 +17,7 @@ import platform
 import warnings
 from threading import RLock as threadRLock
 from multiprocessing import RLock as procRLock
+from collections import namedtuple
 
 import numpy as np
 
@@ -197,8 +198,12 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         _launch_threads()
 
         # Build wrapper for ufunc entry point
-        ptr, env, wrapper_name = build_gufunc_wrapper(
-            self.py_func, cres, self.sin, self.sout, cache=self.cache)
+        info = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout, cache=self.cache,
+        )
+        ptr = info.ptr
+        env = info.env
+        wrapper_name = info.name
 
         # Get dtypes
         dtypenums = []
@@ -214,13 +219,19 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 # This is not a member of the ParallelGUFuncBuilder function because it is
 # called without an enclosing instance from parfors
 
+_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name', 'fnty'])
+
 
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
-    innerfunc, env, wrapper_name = ufuncbuilder.build_gufunc_wrapper(
-        py_func, cres, sin, sout, cache=cache)
+    info = ufuncbuilder.build_gufunc_wrapper(
+        py_func, cres, sin, sout, cache=cache,
+    )
+    innerfunc = info.ptr
+    env = info.env
+    wrapper_name = info.name
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
@@ -228,7 +239,7 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     ptr, name = build_gufunc_kernel(
         library, ctx, innerfunc, signature, inner_ndim)
 
-    return ptr, env, name
+    return _wrapper_info(ptr=ptr, env=env, name=name, fnty=info.fnty)
 
 # ---------------------------------------------------------------------------
 

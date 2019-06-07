@@ -321,10 +321,13 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres,
-                                                      self.sin, self.sout,
-                                                      cache=self.cache)
+        info = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout, cache=self.cache,
+        )
 
+        ptr = info.ptr
+        env = info.env
+        wrapper_name = info.name
         # Get dtypes
         dtypenums = []
         for a in signature.args:

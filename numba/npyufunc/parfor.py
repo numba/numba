@@ -1105,6 +1105,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("kernel_sig = ", kernel_sig)
 
+    targetctx.active_code_library.add_linking_library(kernel_func.library)
     return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
@@ -1170,8 +1171,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
 
-    wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin,
-                                                          sout, {})
+    info = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
+    wrapper_ptr = info.ptr
+    env = info.env
+    wrapper_name = info.name
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
