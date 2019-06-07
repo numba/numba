@@ -2866,7 +2866,10 @@ def _lower_parfor_sequential_block(
 
                     for param in inst.params:
                         if isinstance(typemap[param], types.npytypes.Array):
-                            openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TOFROM", param))
+                            if param in parfor_outputs:
+                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TOFROM", param))
+                            else:
+                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TO", param))
                             openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
                             openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
                         else:
