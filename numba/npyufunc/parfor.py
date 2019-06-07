@@ -98,11 +98,10 @@ class openmp_region_start(ir.Stmt):
         builder = lowerer.builder
         library = lowerer.library
 
-        llvm_int32_t = lc.Type.int(32)
-        self.omp_region_var = cgutils.alloca_once(builder, llvm_int32_t)
-        fnty = lir.FunctionType(llvm_int32_t, [])
+        llvm_token_t = lc.Type.token()
+        fnty = lir.FunctionType(llvm_token_t, [])
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.entry', (), fnty)
-        builder.store(builder.call(pre_fn, [], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer)), self.omp_region_var)
+        self.omp_region_var = builder.call(pre_fn, [], tail=False, tags=openmp_tag_list_to_str(self.tags, lowerer))
 
 class openmp_region_end(ir.Stmt):
     def __init__(self, start_region, tags, loc):
@@ -120,10 +119,10 @@ class openmp_region_end(ir.Stmt):
 
         assert self.start_region.omp_region_var != None
 
-        llvm_int32_t = lc.Type.int(32)
-        fnty = lir.FunctionType(lc.Type.void(), [llvm_int32_t])
+        llvm_token_t = lc.Type.token()
+        fnty = lir.FunctionType(lc.Type.void(), [llvm_token_t])
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.exit', (), fnty)
-        builder.call(pre_fn, [builder.load(self.start_region.omp_region_var)], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer))
+        builder.call(pre_fn, [self.start_region.omp_region_var], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer))
 
 def openmp_region_start_infer(prs, typeinferer):
     pass
