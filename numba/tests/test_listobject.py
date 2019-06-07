@@ -94,3 +94,25 @@ class TestListObject(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(IndexError):
             bar()
+
+    def test_list_iter(self):
+        """
+        Exercise iter(list)
+        """
+        @njit
+        def foo(items):
+            l = listobject.new_list(int32)
+            # use a simple sum to check this w/o having to return a list
+            r = 0
+            for i in items:
+                l.append(i)
+            for j in l:
+                r += j
+            return r
+
+        items = (1, 2, 3, 4)
+
+        self.assertEqual(
+            foo(items),
+            sum(items)
+        )

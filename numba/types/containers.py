@@ -470,7 +470,7 @@ class ListType(IterableType):
 
     @property
     def iterator_type(self):
-        raise NotImplementedError
+        return ListTypeIterableType(self).iterator_type
 
     @classmethod
     def refine(cls, itemty):
@@ -488,6 +488,27 @@ class ListType(IterableType):
         if isinstance(other, ListType):
             if not other.is_precise():
                 return self
+
+
+class ListTypeIterableType(SimpleIterableType):
+    """List iteratable type
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, ListType)
+        self.parent = parent
+        self.yield_type = self.parent.item_type
+        name = "list[{}]".format(self.parent.name)
+        iterator_type = ListTypeIteratorType(self)
+        super(ListTypeIterableType, self).__init__(name, iterator_type)
+
+
+class ListTypeIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.yield_type
+        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        super(ListTypeIteratorType, self).__init__(name, yield_type)
 
 
 def _sentry_forbidden_types(key, value):

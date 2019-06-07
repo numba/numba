@@ -13,6 +13,9 @@ from numba.config import IS_32BITS
 
 LIST_OK = 0
 LIST_ERR_INDEX = -1
+LIST_ERR_NO_MEMORY = -2
+LIST_ERR_MUTATED = -3
+LIST_ERR_ITER_EXHAUSTED = -4
 
 
 class List(object):
@@ -43,6 +46,9 @@ class List(object):
 
     def __getitem__(self, i):
         return self.list_getitem(i)
+
+    def __iter__(self):
+        return ListIter(self)
 
     def append(self, item):
         self.list_append(item)
@@ -75,12 +81,49 @@ class List(object):
         status = self.tc.numba_list_append(self.lp, item)
         self.tc.assertEqual(status, LIST_OK)
 
+    def list_iter(self, itptr):
+        self.tc.numba_list_iter(itptr, self.lp)
+
+    def list_iter_next(self, itptr):
+        bi = ctypes.c_void_p(0)
+        status = self.tc.numba_list_iter_next(
+            itptr, ctypes.byref(bi),
+        )
+        if status == LIST_ERR_MUTATED:
+            raise ValueError('list mutated')
+        elif status == LIST_ERR_ITER_EXHAUSTED:
+            raise StopIteration
+        else:
+            self.tc.assertGreaterEqual(status, 0)
+            item = (ctypes.c_char * self.itemsize).from_address(bi.value)
+            return item.value
+
+
+class ListIter(object):
+    """An iterator for the `List`.
+    """
+    def __init__(self, parent):
+        self.parent = parent
+        itsize = self.parent.tc.numba_list_iter_sizeof()
+        self.it_state_buf = (ctypes.c_char_p * itsize)(0)
+        self.it = ctypes.cast(self.it_state_buf, ctypes.c_void_p)
+        self.parent.list_iter(self.it)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.parent.list_iter_next(self.it)
+
+    next = __next__    # needed for py2 only
+
 
 class TestListImpl(TestCase):
     def setUp(self):
         """Bind to the c_helper library and provide the ctypes wrapper.
         """
         list_t = ctypes.c_void_p
+        iter_t = ctypes.c_void_p
 
         def wrap(name, restype, argtypes=()):
             proto = ctypes.CFUNCTYPE(restype, *argtypes)
@@ -122,6 +165,35 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
+        # numba_list_iter_sizeof()
+        self.numba_list_iter_sizeof = wrap(
+            'list_iter_sizeof',
+            ctypes.c_size_t,
+        )
+        # numba_list_iter(
+        #     NB_ListIter *it,
+        #     NB_List     *l
+        # )
+        self.numba_list_iter = wrap(
+            'list_iter',
+            None,
+            [
+                iter_t,
+                list_t,
+            ],
+        )
+        # numba_list_iter_next(
+        #     NB_ListIter *it,
+        #     const char **item_ptr,
+        # )
+        self.numba_list_iter_next = wrap(
+            'list_iter_next',
+            ctypes.c_int,
+            [
+                iter_t,                             # it
+                ctypes.POINTER(ctypes.c_void_p),    # item_ptr
+            ],
+        )
 
     def test_length(self):
         l = List(self, 8, 0)
@@ -156,3 +228,13 @@ class TestListImpl(TestCase):
             l[0]
         with self.assertRaises(IndexError):
             l[0] = b"abcdefgh"
+
+    def test_iter(self):
+        l = List(self, 1, 0)
+        values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
+        for i in values:
+            l.append(i)
+        received = []
+        for j in l:
+            received.append(j)
+        self.assertEqual(values, received)

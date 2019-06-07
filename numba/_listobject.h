@@ -28,6 +28,16 @@ typedef struct {
 } NB_List;
 
 
+typedef struct {
+    /* parent list */
+    NB_List         *parent;
+    /* list size */
+    Py_ssize_t       size;
+    /* iterator position; indicates the next position to read */
+    Py_ssize_t       pos;
+} NB_ListIter;
+
+
 NUMBA_EXPORT_FUNC(int)
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
 

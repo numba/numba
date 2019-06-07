@@ -123,6 +123,10 @@ class List(MutableSequence):
         else:
             return _getitem(self, i)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __delitem__(self, i):
         pass
 

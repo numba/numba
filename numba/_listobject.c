@@ -4,6 +4,8 @@ typedef enum {
     LIST_OK = 0,
     LIST_ERR_INDEX = -1,
     LIST_ERR_NO_MEMORY = -2,
+    LIST_ERR_MUTATED = -3,
+    LIST_ERR_ITER_EXHAUSTED = -4,
 } ListStatus;
 
 static void
@@ -81,4 +83,32 @@ numba_list_realloc(NB_List *lp, Py_ssize_t newsize) {
     if (!lp->items) { return LIST_ERR_NO_MEMORY; }
     lp->allocated = (Py_ssize_t)new_allocated;
     return LIST_OK;
+}
+
+
+size_t
+numba_list_iter_sizeof() {
+    return sizeof(NB_ListIter);
+}
+
+void
+numba_list_iter(NB_ListIter *it, NB_List *l) {
+    it->parent = l;
+    it->size = l->size;
+    it->pos = 0;
+}
+
+int
+numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
+    NB_List *lp = it->parent;
+    /* FIXME: Detect list mutation during iteration */
+    if (lp->size != it->size) {
+        return LIST_ERR_MUTATED;
+    }
+    if (it->pos < lp->size) {
+        *item_ptr = lp->items + lp->itemsize * it->pos++;
+        return OK;
+    }else{
+        return LIST_ERR_ITER_EXHAUSTED;
+    }
 }

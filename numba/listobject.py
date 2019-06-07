@@ -23,10 +23,8 @@ from numba.targets.imputils import iternext_impl
 from numba import types
 from numba.types import (
     ListType,
-    DictItemsIterableType,
-    DictKeysIterableType,
-    DictValuesIterableType,
-    DictIteratorType,
+    ListTypeIterableType,
+    ListTypeIteratorType,
     Type,
 )
 from numba.typeconv import Conversion
@@ -54,6 +52,17 @@ class ListModel(models.StructModel):
             ('data', types.voidptr),   # ptr to the C list
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
+
+
+@register_model(ListTypeIterableType)
+@register_model(ListTypeIteratorType)
+class ListIterModel(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('parent', fe_type.parent),  # reference to the list
+            ('state', types.voidptr),    # iterator state in C code
+        ]
+        super(ListIterModel, self).__init__(dmm, fe_type, members)
 
 
 class ListStatus(IntEnum):
@@ -532,3 +541,78 @@ def impl_setitem(l, index, item):
             raise AssertionError("internal list error during settitem")
 
     return impl
+
+
+@lower_builtin('getiter', types.ListType)
+def impl_list_getiter(context, builder, sig, args):
+    """Implement iter(List).
+    """
+    [tl] = sig.args
+    [l] = args
+    iterablety = types.ListTypeIterableType(tl)
+    it = context.make_helper(builder, iterablety.iterator_type)
+
+    fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_listiter_type, ll_list_type],
+    )
+
+    fn = builder.module.get_or_insert_function(fnty, name='numba_list_iter')
+
+    proto = ctypes.CFUNCTYPE(ctypes.c_size_t)
+    listiter_sizeof = proto(_helperlib.c_helpers['list_iter_sizeof'])
+    state_type = ir.ArrayType(ir.IntType(8), listiter_sizeof())
+
+    pstate = cgutils.alloca_once(builder, state_type, zfill=True)
+    it.state = _as_bytes(builder, pstate)
+    it.parent = l
+
+    dp = _list_get_data(context, builder, iterablety.parent, args[0])
+    builder.call(fn, [it.state, dp])
+    return impl_ret_borrowed(
+        context,
+        builder,
+        sig.return_type,
+        it._getvalue(),
+    )
+
+
+@lower_builtin('iternext', types.ListTypeIteratorType)
+@iternext_impl(RefType.BORROWED)
+def impl_iterator_iternext(context, builder, sig, args, result):
+    iter_type = sig.args[0]
+    it = context.make_helper(builder, iter_type, args[0])
+
+    iternext_fnty = ir.FunctionType(
+        ll_status,
+        [ll_listiter_type, ll_bytes.as_pointer()]
+    )
+    iternext = builder.module.get_or_insert_function(
+        iternext_fnty,
+        name='numba_list_iter_next',
+    )
+    item_raw_ptr = cgutils.alloca_once(builder, ll_bytes)
+
+    status = builder.call(iternext, (it.state, item_raw_ptr))
+    # TODO: no handling of error state i.e. mutated list
+    #       all errors are treated as exhausted iterator
+    is_valid = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+    result.set_valid(is_valid)
+
+    with builder.if_then(is_valid):
+        item_ty = iter_type.parent.item_type
+
+        dm_item = context.data_model_manager[item_ty]
+
+        item_ptr = builder.bitcast(
+            builder.load(item_raw_ptr),
+            dm_item.get_data_type().as_pointer(),
+        )
+
+        item = dm_item.load_from_data_pointer(builder, item_ptr)
+
+        if isinstance(iter_type.iterable, ListTypeIterableType):
+            result.yield_(item)
+        else:
+            # unreachable
+            raise AssertionError('unknown type: {}'.format(iter_type.iterable))
