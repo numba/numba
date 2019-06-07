@@ -10,7 +10,6 @@ from .support import TestCase
 from numba import _helperlib
 from numba.config import IS_32BITS
 
-ALIGN = 4 if IS_32BITS else 8
 
 LIST_OK = 0
 LIST_ERR_INDEX = -1

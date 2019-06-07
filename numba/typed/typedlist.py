@@ -23,8 +23,8 @@ def _make_list(itemty):
 
 
 @njit
-def _length(d):
-    return len(d)
+def _length(l):
+    return len(l)
 
 
 @njit

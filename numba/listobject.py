@@ -51,7 +51,7 @@ class ListModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('meminfo', _meminfo_listptr),
-            ('data', types.voidptr),   # ptr to the C dict
+            ('data', types.voidptr),   # ptr to the C list
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 
@@ -97,8 +97,8 @@ def _list_get_data(context, builder, list_ty, l):
     """Helper to get the C list pointer in a numba list.
     """
     ctor = cgutils.create_struct_proxy(list_ty)
-    dstruct = ctor(context, builder, value=l)
-    return dstruct.data
+    lstruct = ctor(context, builder, value=l)
+    return lstruct.data
 
 
 # FIXME: copied from dictobject.py
@@ -224,8 +224,8 @@ def _make_list(typingctx, itemty, ptr):
     def codegen(context, builder, signature, args):
         [_, ptr] = args
         ctor = cgutils.create_struct_proxy(list_ty)
-        dstruct = ctor(context, builder)
-        dstruct.data = ptr
+        lstruct = ctor(context, builder)
+        lstruct.data = ptr
 
         alloc_size = context.get_abi_sizeof(
             context.get_value_type(types.voidptr),
@@ -241,9 +241,9 @@ def _make_list(typingctx, itemty, ptr):
         data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
         builder.store(ptr, data_pointer)
 
-        dstruct.meminfo = meminfo
+        lstruct.meminfo = meminfo
 
-        return dstruct._getvalue()
+        return lstruct._getvalue()
 
     sig = list_ty(itemty, ptr)
     return sig, codegen
@@ -258,7 +258,7 @@ def _list_new(typingctx, itemty):
     Parameters
     ----------
     itemty: Type
-        Type of the key and value, respectively.
+        Type of the items
 
     """
     resty = types.voidptr
