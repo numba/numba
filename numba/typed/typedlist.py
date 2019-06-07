@@ -43,8 +43,7 @@ def _getitem(l, i):
 
 
 def _from_meminfo_ptr(ptr, listtype):
-    l = List(meminfo=ptr, lsttype=listtype)
-    return l
+    return List(meminfo=ptr, lsttype=listtype)
 
 
 class List(MutableSequence):
