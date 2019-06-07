@@ -81,7 +81,7 @@ def find_usecase(x, y):
 
 
 def count_usecase(x, y):
-    return x.find(y)
+    return x.count(y)
 
 
 def startswith_usecase(x, y):
