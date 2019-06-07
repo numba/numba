@@ -381,6 +381,7 @@ def _find(substr, s):
             return i
     return -1
 
+
 @njit
 def _rfind(substr, s, begin, e):
     if e == -1:
@@ -391,6 +392,7 @@ def _rfind(substr, s, begin, e):
             return i
         i = i - 1
     return -1
+
 
 @njit
 def _is_whitespace(code_point):

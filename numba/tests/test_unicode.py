@@ -407,7 +407,7 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(s, sub_str, begin, end),
                                  cfunc(s, sub_str, begin, end),
                                  "'%s'.rfind_with_startend('%s')?" % (s, sub_str))
-    
+
     def test_getitem(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
