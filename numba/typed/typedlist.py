@@ -120,7 +120,7 @@ class List(MutableSequence):
 
     def __getitem__(self, i):
         if not self._typed:
-            raise KeyError(i)
+            raise IndexError
         else:
             return _getitem(self, i)
 
