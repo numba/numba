@@ -2854,7 +2854,8 @@ def _lower_parfor_sequential_block(
                     openmp_target_end_tags = [ openmp_tag("DIR.OMP.END.TARGET") ]
                     openmp_teams_start_tags = [ openmp_tag("DIR.OMP.TEAMS") ]
                     openmp_teams_end_tags = [ openmp_tag("DIR.OMP.END.TEAMS") ]
-                    openmp_distparloop_start_tags = [ openmp_tag("DIR.OMP.DISTRIBUTE.PARLOOP") ]
+                    openmp_distparloop_start_tags = [ openmp_tag("DIR.OMP.DISTRIBUTE.PARLOOP"),
+                                                      openmp_tag("QUAL.OMP.SCHEDULE.STATIC", 1) ]
                     openmp_distparloop_end_tags = [ openmp_tag("DIR.OMP.END.DISTRIBUTE.PARLOOP") ]
 
                     for i in range(ndims):
@@ -2865,14 +2866,15 @@ def _lower_parfor_sequential_block(
 
                     for param in inst.params:
                         if isinstance(typemap[param], types.npytypes.Array):
+                            openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TOFROM", param))
                             openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
                             openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
                         else:
-                            openmp_target_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
-                            openmp_distparloop_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+                            openmp_target_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
 
                     if ndims > 1:
-                        openmp_distparloop_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
+                        openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
 
                     # Add OpenMP LLVM directives.
                     target_start = numba.npyufunc.parfor.openmp_region_start(openmp_target_start_tags, loc)
