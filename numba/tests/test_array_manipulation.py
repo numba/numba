@@ -136,6 +136,10 @@ def numpy_shape(arr):
     return np.shape(arr)
 
 
+def numpy_flatnonzero(a):
+    return np.flatnonzero(a)
+
+
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
@@ -739,6 +743,33 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("The argument to np.shape must be array-like",
                       str(raises.exception))
+
+    def test_flatnonzero_basic(self):
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5)
+            yield np.full(5, fill_value=0)
+            yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
+            yield (0.0, 1.0, 0.0, -6.0)
+            yield ([0, 1], [2, 3])
+            yield ()
+            yield np.nan
+            yield 0
+            yield (True, False, True)
+            a = self.random.randn(100)
+            a[np.abs(a) > 0.2] = 0.0
+            yield a
+            yield a.reshape(5, 5, 4)
+            yield a.reshape(50, 2, order='F')
+            yield a.reshape(25, 4)[1::2]
+            yield a * 1j
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
 
 
 if __name__ == '__main__':

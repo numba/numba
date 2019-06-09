@@ -2396,6 +2396,15 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.flatnonzero)
+def np_flatnonzero(a):
+
+    def impl(a):
+        arr = np.asarray(a)
+        return np.nonzero(np.ravel(arr))[0]
+
+    return impl
+
 @register_jitable
 def _fill_diagonal_params(a, wrap):
     if a.ndim == 2:
