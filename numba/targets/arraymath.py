@@ -2399,6 +2399,12 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 @overload(np.flatnonzero)
 def np_flatnonzero(a):
 
+    if numpy_version < (1, 15):
+        if not isinstance(a, types.Array):
+            raise TypingError("Argument 'a' must be an array")
+            # numpy raises an Attribute error with:
+            # 'xxx' object has no attribute 'ravel'
+
     def impl(a):
         arr = np.asarray(a)
         return np.nonzero(np.ravel(arr))[0]
