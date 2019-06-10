@@ -19,14 +19,43 @@ numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
     lp->size = 0;
     lp->itemsize = itemsize;
     lp->allocated = allocated;
+    memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     lp->items = malloc(aligned_size(lp->itemsize * allocated));
 
     *out = lp;
     return LIST_OK;
 }
 
+static void
+list_incref_item(NB_List *lp, const char *item){
+    if (lp->methods.item_incref) {
+        lp->methods.item_incref(item);
+    }
+}
+
+static void
+list_decref_item(NB_List *lp, const char *item){
+    if (lp->methods.item_decref) {
+        lp->methods.item_decref(item);
+    }
+}
+
+void
+numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods)
+{
+    memcpy(&lp->methods, methods, sizeof(list_type_based_methods_table));
+}
+
 void
 numba_list_free(NB_List *lp) {
+    /* Clear all references from the item */
+    Py_ssize_t i;
+    if (lp->methods.item_decref) {
+        for (i = 0; i < lp->size; i++) {
+            char *item = lp->items + lp->itemsize * i;
+            list_decref_item(lp, item);
+        }
+    }
     free(lp->items);
     free(lp);
 }
@@ -42,7 +71,12 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
         return LIST_ERR_INDEX;
     }
     char *loc = lp->items + lp-> itemsize * index;
+    /* This assume there is already an element at index that will be
+     * overwritten. DO NOT use this to write to an unassigned location.
+     */
+    list_decref_item(lp, loc);
     copy_item(lp, loc, item);
+    list_incref_item(lp, loc);
     return LIST_OK;
 }
 int
@@ -61,7 +95,9 @@ numba_list_append(NB_List *lp, const char *item) {
         int result = numba_list_realloc(lp, lp->size + 1);
         if(result < LIST_OK) { return result; }
     }
-    numba_list_setitem(lp, lp->size++ , item);
+    char *loc = lp->items + lp-> itemsize * lp->size++;
+    copy_item(lp, loc, item);
+    list_incref_item(lp, loc);
     return LIST_OK;
 }
 

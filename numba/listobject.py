@@ -169,6 +169,138 @@ def _sentry_safe_cast(fromty, toty):
         raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
 
 
+# FIXME: copied from dictobject.py with minimal changes
+def _get_incref_decref(context, module, datamodel):
+    assert datamodel.contains_nrt_meminfo()
+
+    fe_type = datamodel.fe_type
+    data_ptr_ty = datamodel.get_data_type().as_pointer()
+    refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
+    incref_fn = module.get_or_insert_function(
+        refct_fnty,
+        name='.numba_list_incref${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(incref_fn.append_basic_block())
+    context.nrt.incref(builder, fe_type, builder.load(incref_fn.args[0]))
+    builder.ret_void()
+
+    decref_fn = module.get_or_insert_function(
+        refct_fnty,
+        name='.numba_list_decref${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(decref_fn.append_basic_block())
+    context.nrt.decref(builder, fe_type, builder.load(decref_fn.args[0]))
+    builder.ret_void()
+
+    return incref_fn, decref_fn
+
+
+# FIXME: copied from dictobject.py with minimal changes
+def _get_equal(context, module, datamodel):
+    assert datamodel.contains_nrt_meminfo()
+
+    fe_type = datamodel.fe_type
+    data_ptr_ty = datamodel.get_data_type().as_pointer()
+
+    wrapfnty = context.call_conv.get_function_type(types.int32, [fe_type, fe_type])
+    argtypes = [fe_type, fe_type]
+
+    def build_wrapper(fn):
+        builder = ir.IRBuilder(fn.append_basic_block())
+        args = context.call_conv.decode_arguments(builder, argtypes, fn)
+
+        sig = typing.signature(types.boolean, fe_type, fe_type)
+        op = operator.eq
+        fnop = context.typing_context.resolve_value_type(op)
+        fnop.get_call_type(context.typing_context, sig.args, {})
+        eqfn = context.get_function(fnop, sig)
+        res = eqfn(builder, args)
+        intres = context.cast(builder, res, types.boolean, types.int32)
+        context.call_conv.return_value(builder, intres)
+
+    wrapfn = module.get_or_insert_function(
+        wrapfnty,
+        name='.numba_list_item_equal.wrap${}'.format(fe_type)
+    )
+    build_wrapper(wrapfn)
+
+    equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
+    equal_fn = module.get_or_insert_function(
+        equal_fnty,
+        name='.numba_list_item_equal${}'.format(fe_type),
+    )
+    builder = ir.IRBuilder(equal_fn.append_basic_block())
+    lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
+    rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
+
+    status, retval = context.call_conv.call_function(
+        builder, wrapfn, types.boolean, argtypes, [lhs, rhs],
+    )
+    with builder.if_then(status.is_ok, likely=True):
+        with builder.if_then(status.is_none):
+            builder.ret(context.get_constant(types.int32, 0))
+        retval = context.cast(builder, retval, types.boolean, types.int32)
+        builder.ret(retval)
+    # Error out
+    builder.ret(context.get_constant(types.int32, -1))
+
+    return equal_fn
+
+
+@intrinsic
+def _list_set_method_table(typingctx, lp, itemty):
+    """Wrap numba_list_set_method_table
+    """
+    resty = types.void
+    sig = resty(lp, itemty)
+
+    def codegen(context, builder, sig, args):
+        vtablety = ir.LiteralStructType([
+            ll_voidptr_type,  # equal
+            ll_voidptr_type,  # item incref
+            ll_voidptr_type,  # item decref
+        ])
+        setmethod_fnty = ir.FunctionType(
+            ir.VoidType(),
+            [ll_list_type, vtablety.as_pointer()]
+        )
+        setmethod_fn = ir.Function(
+            builder.module,
+            setmethod_fnty,
+            name='numba_list_set_method_table',
+        )
+        dp = args[0]
+        vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
+
+        # install key incref/decref
+        item_equal_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+        item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
+        item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 2)
+
+        dm_item = context.data_model_manager[itemty.instance_type]
+        if dm_item.contains_nrt_meminfo():
+            equal = _get_equal(context, builder.module, dm_item)
+            item_incref, item_decref = _get_incref_decref(
+                context, builder.module, dm_item,
+            )
+            builder.store(
+                builder.bitcast(equal, item_equal_ptr.type.pointee),
+                item_equal_ptr,
+            )
+            builder.store(
+                builder.bitcast(item_incref, item_incref_ptr.type.pointee),
+                item_incref_ptr,
+            )
+            builder.store(
+                builder.bitcast(item_decref, item_decref_ptr.type.pointee),
+                item_decref_ptr,
+            )
+
+        builder.call(setmethod_fn, [dp, vtable])
+
+    return sig, codegen
+
+
 def _call_list_free(context, builder, ptr):
     """Call numba_list_free(ptr)
     """
@@ -309,6 +441,7 @@ def impl_new_list(item):
 
     def imp(item):
         lp = _list_new(itemty)
+        _list_set_method_table(lp, itemty)
         l = _make_list(itemty, lp)
         return l
 

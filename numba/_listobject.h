@@ -3,6 +3,14 @@
 #ifndef NUMBA_LIST_H
 #define NUMBA_LIST_H
 
+typedef int (*list_item_comparator_t)(const char *lhs, const char *rhs);
+typedef void (*list_refcount_op_t)(const void*);
+
+typedef struct {
+    list_item_comparator_t    item_equal;
+    list_refcount_op_t       item_incref;
+    list_refcount_op_t       item_decref;
+} list_type_based_methods_table;
 
 typedef struct {
     /* Size of the list.  */
@@ -23,6 +31,9 @@ typedef struct {
      */
     Py_ssize_t allocated;
 
+    /* Method table for type-dependent operations. */
+    list_type_based_methods_table methods;
+
     /* Array/pointer for items. Interpretation is governed by itemsize. */
     char  * items;
 } NB_List;
@@ -40,6 +51,9 @@ typedef struct {
 
 NUMBA_EXPORT_FUNC(int)
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
+
+NUMBA_EXPORT_FUNC(void)
+numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
 NUMBA_EXPORT_FUNC(void)
 numba_list_free(NB_List *lp);

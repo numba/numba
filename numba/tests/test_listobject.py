@@ -116,3 +116,17 @@ class TestListObject(MemoryLeakMixin, TestCase):
             foo(items),
             sum(items)
         )
+
+    @skip_py2
+    def test_string_item(self):
+        @njit
+        def foo():
+            l = listobject.new_list(types.unicode_type)
+            l.append('a')
+            l.append('b')
+            l.append('c')
+            l.append('d')
+            return l[0], l[1], l[2], l[3]
+
+        items = foo()
+        self.assertEqual(['a', 'b', 'c', 'd'], list(items))
