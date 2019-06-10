@@ -7,7 +7,7 @@ from numba import types, rewrites, ir, jit, ir_utils
 from .support import TestCase, MemoryLeakMixin, SerialMixin
 
 
-from numba.analysis import dead_branch_prune
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 
@@ -30,7 +30,7 @@ def compile_to_ir(func):
     return func_ir
 
 
-class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
+class TestBranchPruneBase(MemoryLeakMixin, TestCase):
     """
     Tests branch pruning
     """
@@ -63,6 +63,7 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
             print("before prune")
             func_ir.dump()
 
+        rewrite_semantic_constants(func_ir, args_tys)
         dead_branch_prune(func_ir, args_tys)
 
         after = func_ir
@@ -106,6 +107,9 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
         res = cres.entry_point(*args)
         expected = func(*args)
         self.assertEqual(res, expected)
+
+
+class TestBranchPrune(TestBranchPruneBase, SerialMixin):
 
     def test_single_if(self):
 
@@ -551,3 +555,45 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
                            types.float64, types.NoneType('none')),
                           [None, None],
                           np.zeros((2, 3)), 1.2, None)
+
+
+class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
+    # Tests that semantic constants rewriting works by virtue of branch pruning
+
+    def test_array_ndim_attr(self):
+
+        def impl(array):
+            if array.ndim == 2:
+                if array.shape[1] == 2:
+                    return 1
+            else:
+                return 10
+
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,
+                                                                        None],
+                          np.zeros((2, 3)))
+
+    def test_tuple_len(self):
+
+        def impl(tup):
+            if len(tup) == 3:
+                if tup[2] == 2:
+                    return 1
+            else:
+                return 0
+
+        self.assert_prune(impl, (types.UniTuple(types.int64, 3),), [False,
+                                                                    None],
+                          tuple([1, 2, 3]))
+
+    def test_const_dtype(self):
+
+        def impl(arr):
+            if arr.dtype == np.float64:
+                x = 1
+            else:
+                x = 10
+            return x
+
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,],
+                          np.zeros((10,)))
