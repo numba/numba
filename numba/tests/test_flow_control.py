@@ -1147,6 +1147,30 @@ class TestRealCodeDomFront(TestCase):
         self.assertEqual({blkpts['E']}, domfront[blkpts['D']])
         self.assertEqual({blkpts['F']}, domfront[blkpts['E']])
 
+    def test_infinite_loop(self):
+        def foo():
+            SET_BLOCK_A
+            while True:  # infinite loop
+                if SET_BLOCK_B:
+                    SET_BLOCK_C
+                    return
+                SET_BLOCK_D
+            SET_BLOCK_E
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+
+        idoms = cfa.graph.immediate_dominators()
+        self.assertNotIn(blkpts['E'], idoms)
+        self.assertEqual(blkpts['B'], idoms[blkpts['C']])
+        self.assertEqual(blkpts['B'], idoms[blkpts['D']])
+
+        domfront = cfa.graph.dominance_frontier()
+        self.assertNotIn(blkpts['E'], domfront)
+        self.assertFalse(domfront[blkpts['A']])
+        self.assertFalse(domfront[blkpts['C']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
+
 
 if __name__ == '__main__':
     unittest.main()
