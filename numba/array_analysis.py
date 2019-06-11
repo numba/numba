@@ -833,8 +833,14 @@ class WrapIndexMeta(object):
       Array analysis should be able to analyze all the function
       calls that it adds to the IR.  That way, array analysis can
       be run as often as needed and you should get the same
-      equivalencies.  A difficult call to analyze that array
-      analysis will add is to wrap_index.  The important thing to
+      equivalencies.  One modification to the IR that array analysis
+      makes is the insertion of wrap_index calls.  Thus, repeated
+      array analysis passes should be able to analyze these wrap_index
+      calls.  The difficulty of these calls is that the equivalence
+      class of the left-hand side of the assignment is not present in
+      the arguments to wrap_index in the right-hand side.  Instead,
+      the equivalence class of the wrap_index output is a combination
+      of the wrap_index args.  The important thing to
       note is that if the equivalence classes of the slice size
       and the dimension's size are the same for two wrap index
       calls then we can be assured of the answer being the same.
@@ -1180,6 +1186,22 @@ class ArrayAnalysis(object):
         require(len(ind_shape)==len(seq_typs)==len(var_shape))
         stmts = []
 
+        def gen_explicit_neg(arg, arg_rel, arg_typ, size_typ, loc):
+            # Create var to hold the calculated slice size.
+            explicit_neg_var = ir.Var(scope, mk_unique_var("explicit_neg"), loc)
+            explicit_neg_val = ir.Expr.binop(operator.add, dsize, arg, loc=loc)
+            # Determine the type of that var.  Can be literal if we know the
+            # literal size of the dimension.
+            if isinstance(size_typ, int):
+                explicit_neg_typ = types.IntegerLiteral(size_typ + arg_rel)
+            else:
+                explicit_neg_typ = types.intp
+            self.calltypes[explicit_neg_val] = signature(explicit_neg_typ, size_typ, arg_typ)
+            # We'll prepend this slice size calculation to the get/setitem.
+            stmts.append(ir.Assign(value=explicit_neg_val, target=explicit_neg_var, loc=loc))
+            self._define(equiv_set, explicit_neg_var, explicit_neg_typ, explicit_neg_val)
+            return explicit_neg_var, explicit_neg_typ
+
         def slice_size(index, dsize):
             """Reason about the size of a slice represented by the "index"
             variable, and return a variable that has this size data, or
@@ -1245,19 +1267,7 @@ class ArrayAnalysis(object):
                 if lhs_rel < 0:
                     # Indicate we will need to replace the slice var.
                     need_replacement = True
-                    # Create var to hold the calculated slice size.
-                    explicit_neg_var = ir.Var(scope, mk_unique_var("explicit_neg"), loc)
-                    explicit_neg_val = ir.Expr.binop(operator.add, dsize, lhs, loc=loc)
-                    # Determine the type of that var.  Can be literal if we know the
-                    # literal size of the dimension.
-                    if isinstance(size_typ, int):
-                        explicit_neg_typ = types.IntegerLiteral(size_typ + lhs_rel)
-                    else:
-                        explicit_neg_typ = types.intp
-                    self.calltypes[explicit_neg_val] = signature(explicit_neg_typ, size_typ, lhs_typ)
-                    # We'll prepend this slice size calculation to the get/setitem.
-                    stmts.append(ir.Assign(value=explicit_neg_val, target=explicit_neg_var, loc=loc))
-                    self._define(equiv_set, explicit_neg_var, explicit_neg_typ, explicit_neg_val)
+                    explicit_neg_var, explicit_neg_typ = gen_explicit_neg(lhs, lhs_rel, lhs_typ, size_typ, loc)
                     replacement_slice.args = (explicit_neg_var, rhs)
                     # Update lhs information with the negative removed.
                     lhs = replacement_slice.args[0]
@@ -1273,19 +1283,7 @@ class ArrayAnalysis(object):
                 if rhs_rel < 0:
                     # Indicate we will need to replace the slice var.
                     need_replacement = True
-                    # Create var to hold the calculated slice size.
-                    explicit_neg_var = ir.Var(scope, mk_unique_var("explicit_neg"), loc)
-                    explicit_neg_val = ir.Expr.binop(operator.add, dsize, rhs, loc=loc)
-                    # Determine the type of that var.  Can be literal if we know the
-                    # literal size of the dimension.
-                    if isinstance(size_typ, int):
-                        explicit_neg_typ = types.IntegerLiteral(size_typ + rhs_rel)
-                    else:
-                        explicit_neg_typ = types.intp
-                    self.calltypes[explicit_neg_val] = signature(explicit_neg_typ, size_typ, rhs_typ)
-                    # We'll prepend this slice size calculation to the get/setitem.
-                    stmts.append(ir.Assign(value=explicit_neg_val, target=explicit_neg_var, loc=loc))
-                    self._define(equiv_set, explicit_neg_var, explicit_neg_typ, explicit_neg_val)
+                    explicit_neg_var, explicit_neg_typ = gen_explicit_neg(rhs, rhs_rel, rhs_typ, size_typ, loc)
                     replacement_slice.args = (lhs, explicit_neg_var)
                     # Update rhs information with the negative removed.
                     rhs = replacement_slice.args[1]
@@ -1300,7 +1298,7 @@ class ArrayAnalysis(object):
                 # Create a new var for the replacement slice.
                 replacement_slice_var = ir.Var(scope, mk_unique_var("replacement_slice"), loc)
                 # Create a deepcopy of slice calltype so that when we change it below
-                # the original isn't change.  Make the types of the parts of the slice
+                # the original isn't changed.  Make the types of the parts of the slice
                 # intp.
                 self.calltypes[replacement_slice] = copy.deepcopy(self.calltypes[index_def])
                 self.calltypes[replacement_slice].args = (types.intp, types.intp)
@@ -1338,7 +1336,7 @@ class ArrayAnalysis(object):
 
             # rel_map keeps a map of relative sizes that we have seen so
             # that if we compute the same relative sizes different times
-            # in different ways that we can associate those two instances
+            # in different ways we can associate those two instances
             # of the same relative size to the same equivalence class.
             if isinstance(size_rel, tuple):
                 if config.DEBUG_ARRAY_OPT >= 2:
@@ -1401,17 +1399,21 @@ class ArrayAnalysis(object):
         # If at least one of the dimensions required a new slice variable
         # then we'll need to replace the build_tuple for this get/setitem.
         if replace_index:
-            # Make a variable to hold the new build_tuple.
-            replacement_build_tuple_var = ir.Var(scope,
-                                          mk_unique_var("replacement_build_tuple"),
-                                          ind_shape[0].loc)
-            # Create the build tuple from the accumulated index vars above.
-            new_build_tuple = ir.Expr.build_tuple(index_var_list, ind_shape[0].loc)
-            stmts.append(ir.Assign(value=new_build_tuple,
-                                   target=replacement_build_tuple_var,
-                                   loc=ind_shape[0].loc))
-            # New build_tuple has same type as the original one.
-            self.typemap[replacement_build_tuple_var.name] = ind_typ
+            # Multi-dimensional array access needs a replacement tuple built.
+            if len(index_var_list) > 1:
+                # Make a variable to hold the new build_tuple.
+                replacement_build_tuple_var = ir.Var(scope,
+                                              mk_unique_var("replacement_build_tuple"),
+                                              ind_shape[0].loc)
+                # Create the build tuple from the accumulated index vars above.
+                new_build_tuple = ir.Expr.build_tuple(index_var_list, ind_shape[0].loc)
+                stmts.append(ir.Assign(value=new_build_tuple,
+                                       target=replacement_build_tuple_var,
+                                       loc=ind_shape[0].loc))
+                # New build_tuple has same type as the original one.
+                self.typemap[replacement_build_tuple_var.name] = ind_typ
+            else:
+                replacement_build_tuple_var = index_var_list[0]
         else:
             replacement_build_tuple_var = None
 
@@ -1486,7 +1488,6 @@ class ArrayAnalysis(object):
             args = expr.args
         fname = "_analyze_op_call_{}_{}".format(
             mod_name, fname).replace('.', '_')
-        print("analyze_op_call", fname)
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
             return self._analyze_broadcast(scope, equiv_set, expr.loc, args)
         else:
