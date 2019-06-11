@@ -179,6 +179,42 @@ class TestListObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo((1,2)), 2)
         self.assertEqual(foo((1,2,3)), 3)
 
+    def test_list_insert(self):
+        @njit
+        def foo(index, item):
+            l = listobject.new_list(int32)
+            for i in range(10):
+                l.append(0)
+            l.insert(index, item)
+            return len(l), l[index]
+
+        self.assertEqual(foo(0, 1), (11, 1))
+        self.assertEqual(foo(4, 1), (11, 1))
+        self.assertEqual(foo(9, 1), (11, 1))
+
+    def test_list_insert_empty(self):
+        @njit
+        def foo(index, item):
+            l = listobject.new_list(int32)
+            l.insert(index, item)
+            return len(l), l[0]
+
+        self.assertEqual(foo(0, 1), (1, 1))
+        self.assertEqual(foo(4, 1), (1, 1))
+        self.assertEqual(foo(9, 1), (1, 1))
+
+    def test_list_insert_singleton(self):
+        @njit
+        def foo(index, item):
+            l = listobject.new_list(int32)
+            l.append(0)
+            l.insert(index, item)
+            return len(l), l[0]
+
+        self.assertEqual(foo(0, 1), (2, 1))
+        self.assertEqual(foo(1, 1), (2, 0))
+        self.assertEqual(foo(9, 1), (2, 0))
+
     def test_list_iter(self):
         """
         Exercise iter(list)

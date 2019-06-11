@@ -768,6 +768,32 @@ def impl_extend(l, iterable):
     return impl
 
 
+@overload_method(types.ListType, 'insert')
+def impl_insert(l, index, item):
+    if not isinstance(l, types.ListType):
+        return
+
+    itemty = l.item_type
+
+    def impl(l, index, item):
+        # If the index is larger than the size of the list, just append.
+        # N.B. this also includes the empty list.
+        if index >= len(l):
+            l.append(item)
+        else:
+            # grow the list by one, make room for item
+            l.append(l[0])
+            # reverse iterate over the list and shift all elements
+            i = len(l) - 1
+            while(i > index):
+                l[i] = l[i - 1]
+                i -= 1
+            # finally, insert the item
+            l[index] = _cast(item, itemty)
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

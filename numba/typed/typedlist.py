@@ -62,6 +62,11 @@ def _extend(l, iterable):
     return l.extend(iterable)
 
 
+@njit
+def _insert(l, i, item):
+    l.insert(i, item)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -154,7 +159,7 @@ class List(MutableSequence):
         _pop(self, i)
 
     def insert(self, i, item):
-        pass
+        _insert(self, i, item)
 
     def count(self, item):
         return _count(self, item)
