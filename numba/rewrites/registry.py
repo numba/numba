@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 
-from numba import config, postproc
+from numba import config
 
 
 class Rewrite(object):
@@ -91,6 +91,7 @@ class RewriteRegistry(object):
         # fix-up the IR so that ref counts are valid and optimally placed,
         # see #4093 for context. This has to be run here opposed to in
         # apply() as the CFG needs computing so full IR is needed.
+        from numba import postproc
         post_proc = postproc.PostProcessor(func_ir)
         post_proc.run()
 
