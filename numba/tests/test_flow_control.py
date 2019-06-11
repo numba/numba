@@ -988,18 +988,26 @@ class TestRealCodeDomFront(TestCase):
         return cfa, namedblocks
 
     def _scan_namedblocks(self, bc, cfa):
+        """Scan namedblocks as denoted by a LOAD_GLOBAL bytecode referring
+        to global variables with the pattern "SET_BLOCK_<name>", where "<name>"
+        would be the name for the current block.
+        """
         namedblocks = {}
         blocks = sorted([x.offset for x in cfa.iterblocks()])
         prefix = 'SET_BLOCK_'
 
         for inst in bc:
+            # Find LOAD_GLOBAL that refers to "SET_BLOCK_<name>"
             if inst.opname == 'LOAD_GLOBAL':
                 gv = bc.co_names[inst.arg]
                 if gv.startswith(prefix):
                     name = gv[len(prefix):]
+                    # Find the block where this instruction resides
                     for s, e in zip(blocks, blocks[1:] + [blocks[-1] + 1]):
                         if s <= inst.offset < e:
                             break
+                    else:
+                        raise AssertionError('unreachable loop')
                     blkno = s
                     namedblocks[name] = blkno
         return namedblocks
