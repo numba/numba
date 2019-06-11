@@ -29,9 +29,10 @@ def jit_norm(a, ord=None):
     # Reject ndarrays with unsupported dimensionality
     if a.ndim not in [1, 2]:
         raise TypingError('3D and beyond are not allowed')
-    # Implementation for vectors
+    # Implementation for scalars/0d-arrays
     elif a.ndim == 0:
         return a.item()
+    # Implementation for vectors
     elif a.ndim == 1:
         def _oneD_norm_x(a, ord=None):
             if ord == 2 or ord is None:
