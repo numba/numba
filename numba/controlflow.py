@@ -260,6 +260,33 @@ class CFGraph(object):
         print("CFG backbone:", file=file)
         pprint.pprint(self.backbone(), stream=file)
 
+    def render_dot(self, filename="numba_cfg.dot"):
+        """Render the controlflow graph with GraphViz DOT via the
+        ``graphviz`` python binding.
+
+        Returns
+        -------
+        g : graphviz.Digraph
+            Use `g.view()` to open the graph in the default PDF application.
+        """
+
+        try:
+            import graphviz as gv
+        except ImportError:
+            raise ImportError(
+                "The feature requires `graphviz` but it is not available. "
+                "Please install with `pip install graphviz`"
+            )
+        g = gv.Digraph(filename=filename)
+        # Populate the nodes
+        for n in self._nodes:
+            g.node(str(n))
+        # Populate the edges
+        for n in self._nodes:
+            for edge in self._succs[n]:
+                g.edge(str(n), str(edge))
+        return g
+
     # Internal APIs
 
     def _add_edge(self, from_, to, data=None):
