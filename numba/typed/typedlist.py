@@ -42,6 +42,11 @@ def _getitem(l, i):
     return l[i]
 
 
+@njit
+def _contains(l, item):
+    return item in l
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -126,6 +131,9 @@ class List(MutableSequence):
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
+
+    def __contains__(self, item):
+        return _contains(self, item)
 
     def __delitem__(self, i):
         pass

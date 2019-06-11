@@ -95,6 +95,19 @@ class TestListObject(MemoryLeakMixin, TestCase):
         with self.assertRaises(IndexError):
             bar()
 
+    def test_list_contains(self):
+        """
+        Exercise i in list
+        """
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            l.append(0)
+            return i in l
+
+        self.assertTrue(foo(0))
+        self.assertFalse(foo(1))
+
     def test_list_iter(self):
         """
         Exercise iter(list)

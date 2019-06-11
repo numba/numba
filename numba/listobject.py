@@ -676,6 +676,23 @@ def impl_setitem(l, index, item):
     return impl
 
 
+@overload(operator.contains)
+def impl_contains(l, item):
+    if not isinstance(l, types.ListType):
+        return
+
+    itemty = l.item_type
+
+    def impl(l, item):
+        casteditem = _cast(item, itemty)
+        for i in l:
+            if i == casteditem:
+                return True
+        else:
+            return False
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

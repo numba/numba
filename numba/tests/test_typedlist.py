@@ -40,9 +40,11 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # __iter__
         # the default __iter__ from MutableSequence will raise an IndexError
         # via __getitem__ and thus leak an exception, so this shouldn't
-        l = List.empty_list(int32)
         for i in l:
             pass
+        # contains
+        self.assertTrue(10 in l)
+        self.assertFalse(0 in l)
 
     def test_compiled(self):
         @njit
