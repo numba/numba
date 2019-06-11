@@ -95,6 +95,50 @@ class TestListObject(MemoryLeakMixin, TestCase):
         with self.assertRaises(IndexError):
             bar()
 
+    def test_list_pop(self):
+        """
+        Exercise list.pop()
+        """
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.pop()
+
+        self.assertEqual(foo(), 0)
+
+    def test_list_pop_index(self):
+        """
+        Exercise list.pop(i)
+        """
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(10)
+            l.append(11)
+            l.append(12)
+            return l.pop(1)
+
+        self.assertEqual(foo(), 11)
+
+    def test_list_pop_index_error(self):
+        self.disable_leak_check()
+
+        @njit
+        def bar():
+            l = listobject.new_list(int32)
+            return l.pop()
+        with self.assertRaises(IndexError):
+            bar()
+
+        @njit
+        def bar():
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.pop(1)
+        with self.assertRaises(IndexError):
+            bar()
+
     def test_list_contains(self):
         """
         Exercise i in list

@@ -102,6 +102,33 @@ numba_list_append(NB_List *lp, const char *item) {
 }
 
 int
+numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
+    Py_ssize_t left;
+    if (index >= lp->size) {
+        return LIST_ERR_INDEX;
+    }
+    else if (index == lp->size-1) { /* fast path to pop last item */
+        char *loc = lp->items + lp->itemsize * index;
+        copy_item(lp, out, loc);
+        list_decref_item(lp, loc);
+        lp->size--;
+        return LIST_OK;
+    }else{ /* pop from somewhere else */
+        /* first get item */
+        char *loc = lp->items + lp->itemsize * index;
+        copy_item(lp, out, loc);
+        list_decref_item(lp, loc);
+        /* then incur the dreaded memory copy */
+        left = lp->size - 1 - index;
+        char *new_loc = lp->items + lp->itemsize * (index + 1);
+        memcpy(loc, new_loc, left);
+        lp->size--;
+        return LIST_OK;
+    }
+
+}
+
+int
 numba_list_realloc(NB_List *lp, Py_ssize_t newsize) {
     size_t new_allocated, num_allocated_bytes;
     /* This over-allocates proportional to the list size, making room

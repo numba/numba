@@ -52,6 +52,11 @@ def _count(l, item):
     return l.count(item)
 
 
+@njit
+def _pop(l, i):
+    return l.pop(i)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -141,13 +146,16 @@ class List(MutableSequence):
         return _contains(self, item)
 
     def __delitem__(self, i):
-        pass
+        _pop(self, i)
 
     def insert(self, i, item):
         pass
 
     def count(self, item):
         return _count(self, item)
+
+    def pop(self, i=None):
+        return _pop(self, i)
 
 
 # XXX: should we have a better way to classmethod

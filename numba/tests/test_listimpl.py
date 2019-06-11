@@ -53,6 +53,9 @@ class List(object):
     def append(self, item):
         self.list_append(item)
 
+    def pop(self, i=None):
+        return self.list_pop(i)
+
     def list_new(self, itemsize, allocated):
         lp = ctypes.c_void_p()
         status = self.tc.numba_list_new(
@@ -75,11 +78,23 @@ class List(object):
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
         else:
+            self.tc.assertEqual(status, LIST_OK)
             return item_out_buffer.raw
 
     def list_append(self, item):
         status = self.tc.numba_list_append(self.lp, item)
         self.tc.assertEqual(status, LIST_OK)
+
+    def list_pop(self, i):
+        if i is None:
+            i = len(self) - 1
+        item_out_buffer = ctypes.create_string_buffer(self.itemsize)
+        status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
+        if status == LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
+        else:
+            self.tc.assertEqual(status, LIST_OK)
+            return item_out_buffer.raw
 
     def list_iter(self, itptr):
         self.tc.numba_list_iter(itptr, self.lp)
@@ -165,6 +180,12 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
+        # numba_list_pop(NB_List *l,  Py_ssize_t i, char *out)
+        self.numba_list_pop = wrap(
+            'list_pop',
+            ctypes.c_int,
+            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+        )
         # numba_list_iter_sizeof()
         self.numba_list_iter_sizeof = wrap(
             'list_iter_sizeof',
@@ -238,3 +259,28 @@ class TestListImpl(TestCase):
         for j in l:
             received.append(j)
         self.assertEqual(values, received)
+
+    def test_pop(self):
+        l = List(self, 1, 0)
+        values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
+        for i in values:
+            l.append(i)
+        self.assertEqual(len(l), 8)
+
+        received = l.pop()
+        self.assertEqual(b'h', received)
+        self.assertEqual(len(l), 7)
+        received = [j for j in l]
+        self.assertEqual(received, values[:-1])
+
+        received = l.pop(0)
+        self.assertEqual(b'a', received)
+        self.assertEqual(len(l), 6)
+
+        received = l.pop(2)
+        self.assertEqual(b'd', received)
+        self.assertEqual(len(l), 5)
+
+        expected = [b'b', b'c', b'e', b'f', b'g']
+        received = [j for j in l]
+        self.assertEqual(received, expected)

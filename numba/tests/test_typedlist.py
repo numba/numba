@@ -50,6 +50,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(l.count(0), 0)
         self.assertEqual(l.count(10), 1)
         self.assertEqual(l.count(12), 2)
+        # pop
+        self.assertEqual(len(l), 4)
+        self.assertEqual(l.pop(), 12)
+        self.assertEqual(len(l), 3)
+        self.assertEqual(l.pop(1), 11)
+        self.assertEqual(len(l), 2)
 
     def test_compiled(self):
         @njit

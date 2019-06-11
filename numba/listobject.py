@@ -552,10 +552,24 @@ def impl_append(l, item):
 
 @intrinsic
 def _list_getitem(typingctx, l, index):
-    """Wrap numba_list_getitem
+    return _list_getitem_pop_helper(typingctx, l, index, 'getitem')
+
+
+@intrinsic
+def _list_pop(typingctx, l, index):
+    return _list_getitem_pop_helper(typingctx, l, index, 'pop')
+
+
+def _list_getitem_pop_helper(typingctx, l, index, op):
+    """Wrap numba_list_getitem and numba_list_pop
 
     Returns 2-tuple of (intp, ?item_type)
+
+    This is a helper that is parametrized on the type of operation, which can
+    be either 'pop' or 'getitem'. This is because, signature wise getitem and
+    pop and are the same.
     """
+    assert(op in ("pop", "getitem"))
     resty = types.Tuple([types.int32, types.Optional(l.item_type)])
     sig = resty(l, index)
 
@@ -566,7 +580,8 @@ def _list_getitem(typingctx, l, index):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_getitem')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_{}'.format(op))
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
@@ -672,6 +687,32 @@ def impl_setitem(l, index, item):
             raise IndexError("list index out of range")
         else:
             raise AssertionError("internal list error during settitem")
+
+    return impl
+
+
+@overload_method(types.ListType, 'pop')
+def impl_pop(l, index=None):
+    if not isinstance(l, types.ListType):
+        return
+
+    indexty = types.intp
+
+    def impl(l, index=None):
+        if index is None:
+            if len(l) > 0:
+                castedindex = len(l) - 1
+            else:
+                raise IndexError("list index out of range")
+        else:
+            castedindex = _cast(index, indexty)
+        status, item = _list_pop(l, castedindex)
+        if status == ListStatus.LIST_OK:
+            return _nonoptional(item)
+        elif status == ListStatus.LIST_ERR_INDEX:
+            raise IndexError("list index out of range")
+        else:
+            raise AssertionError("internal list error during pop")
 
     return impl
 
