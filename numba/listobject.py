@@ -752,6 +752,22 @@ def impl_count(l, item):
     return impl
 
 
+@overload_method(types.ListType, 'extend')
+def impl_extend(l, iterable):
+    if not isinstance(l, types.ListType):
+        return
+
+    # FIXME type check iterable
+
+    itemty = l.item_type
+
+    def impl(l, iterable):
+        for i in iterable:
+            l.append(_cast(i, itemty))
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

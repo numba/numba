@@ -57,6 +57,11 @@ def _pop(l, i):
     return l.pop(i)
 
 
+@njit
+def _extend(l, iterable):
+    return l.extend(iterable)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -156,6 +161,9 @@ class List(MutableSequence):
 
     def pop(self, i=None):
         return _pop(self, i)
+
+    def extend(self, iterable):
+        return _extend(self, iterable)
 
 
 # XXX: should we have a better way to classmethod

@@ -168,6 +168,17 @@ class TestListObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(12), 2)
         self.assertEqual(foo(13), 3)
 
+    def test_list_extend(self):
+        @njit
+        def foo(items):
+            l = listobject.new_list(int32)
+            l.extend(items)
+            return len(l)
+
+        self.assertEqual(foo((1,)), 1)
+        self.assertEqual(foo((1,2)), 2)
+        self.assertEqual(foo((1,2,3)), 3)
+
     def test_list_iter(self):
         """
         Exercise iter(list)
