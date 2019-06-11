@@ -25,7 +25,7 @@ def jit_norm(a, ord=None):
         raise TypingError("Only accepts NumPy ndarray")
     # Reject ndarrays with non integer or floating-point dtype
     if not isinstance(a.dtype, (types.Integer, types.Float)):
-        raise TypingError("Only integer and floating point types accpeted")
+        raise TypingError("Only integer and floating point types accepted")
     # Reject ndarrays with unsupported dimensionality
     if a.ndim not in [1, 2]:
         raise TypingError('3D and beyond are not allowed')
