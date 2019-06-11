@@ -97,7 +97,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel." + str(innerfunc))
+    lfunc = mod.add_function(fnty, name=".kernel.{}".format(hash(innerfunc)))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -124,11 +124,17 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     parallel_for = mod.get_or_insert_function(parallel_for_ty,
                                               name='numba_parallel_for')
 
-    # Note: the runtime address is taken and used as a constant in the
-    # function.
-    tmp_voidptr = ctx.add_dynamic_addr(
-        builder, innerfunc, info='parallel_gufunc_innerfunc',
-    )
+    if isinstance(innerfunc, tuple):
+        (innerfunc_fnty, innerfunc_name) = innerfunc
+        tmp_voidptr = mod.get_or_insert_function(innerfunc_fnty, name=innerfunc_name)
+    else:
+        # Note: the runtime address is taken and used as a constant in the
+        # function.
+        tmp_voidptr = ctx.add_dynamic_addr(
+            builder, innerfunc, info='parallel_gufunc_innerfunc',
+        )
+
+
     fnptr = builder.bitcast(tmp_voidptr, byte_ptr_t)
     innerargs = [as_void_ptr(x) for x
                  in [args, dimensions, steps, data]]
@@ -241,7 +247,7 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     inner_ndim = len(sym_in | sym_out)
 
     ptr, name = build_gufunc_kernel(
-        library, ctx, innerfunc, signature, inner_ndim)
+        library, ctx, (info.fnty, wrapper_name), signature, inner_ndim)
 
     return _wrapper_info(ptr=ptr, env=env, name=name, fnty=info.fnty)
 

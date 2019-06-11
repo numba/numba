@@ -347,6 +347,7 @@ class _GufuncWrapper(object):
 
         func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty, name)
+        wrapper.linkage = 'weak_odr'
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
