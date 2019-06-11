@@ -47,6 +47,11 @@ def _contains(l, item):
     return item in l
 
 
+@njit
+def _count(l, item):
+    return l.count(item)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -140,6 +145,9 @@ class List(MutableSequence):
 
     def insert(self, i, item):
         pass
+
+    def count(self, item):
+        return _count(self, item)
 
 
 # XXX: should we have a better way to classmethod

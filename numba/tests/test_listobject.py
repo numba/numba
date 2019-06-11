@@ -108,6 +108,22 @@ class TestListObject(MemoryLeakMixin, TestCase):
         self.assertTrue(foo(0))
         self.assertFalse(foo(1))
 
+    def test_list_count(self):
+        """
+        Exercise l.count(item)
+        """
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            for j in [11, 12, 12, 13, 13, 13]:
+                l.append(j)
+            return l.count(i)
+
+        self.assertEqual(foo(10), 0)
+        self.assertEqual(foo(11), 1)
+        self.assertEqual(foo(12), 2)
+        self.assertEqual(foo(13), 3)
+
     def test_list_iter(self):
         """
         Exercise iter(list)
