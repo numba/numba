@@ -302,7 +302,10 @@ def dead_branch_prune(func_ir, called_args):
         lhs_none = isinstance(lhs_cond, types.NoneType)
         rhs_none = isinstance(rhs_cond, types.NoneType)
         if lhs_none or rhs_none:
-            take_truebr = condition.fn(lhs_cond, rhs_cond)
+            try:
+                take_truebr = condition.fn(lhs_cond, rhs_cond)
+            except:
+                return False, None
             if DEBUG > 0:
                 kill = branch.falsebr if take_truebr else branch.truebr
                 print("Pruning %s" % kill, branch, lhs_cond, rhs_cond,
@@ -313,7 +316,10 @@ def dead_branch_prune(func_ir, called_args):
 
     def prune_by_value(branch, condition, blk, *conds):
         lhs_cond, rhs_cond = conds
-        take_truebr = condition.fn(lhs_cond, rhs_cond)
+        try:
+            take_truebr = condition.fn(lhs_cond, rhs_cond)
+        except:
+            return False, None
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
             print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
@@ -364,9 +370,11 @@ def dead_branch_prune(func_ir, called_args):
             for arg in [condition.lhs, condition.rhs]:
                 resolved_const = Unknown()
                 if arg.name in func_ir.arg_names:
-                    # it's an e.g. literal argument to the function
-                    resolved_const = resolve_input_arg_const(arg.name)
-                    prune = prune_by_type
+                    # make sure there's no redefinition of an arg name
+                    if len(func_ir._definitions[arg.name]) == 1:
+                        # it's an e.g. literal argument to the function
+                        resolved_const = resolve_input_arg_const(arg.name)
+                        prune = prune_by_type
                 else:
                     # it's some const argument to the function, cannot use guard
                     # here as the const itself may be None
