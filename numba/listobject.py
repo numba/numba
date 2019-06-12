@@ -844,6 +844,22 @@ def impl_clear(l):
     return impl
 
 
+@overload_method(types.ListType, 'reverse')
+def impl_reverse(l):
+    if not isinstance(l, types.ListType):
+        return
+
+    def impl(l):
+        front = 0
+        back = len(l) - 1
+        while front < back:
+            l[front], l[back] = l[back], l[front]
+            front += 1
+            back -= 1
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

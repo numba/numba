@@ -79,6 +79,11 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         l.clear()
         self.assertEqual(len(l), 0)
         self.assertEqual(list(l), [])
+        # reverse
+        l.extend(tuple(range(10, 20)))
+        l.reverse()
+        self.assertEqual(list(l), list(range(10, 20))[::-1])
+
 
     def test_compiled(self):
         @njit

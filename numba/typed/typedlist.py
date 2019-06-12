@@ -77,6 +77,11 @@ def _clear(l):
     l.clear()
 
 
+@njit
+def _reverse(l):
+    l.reverse()
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -185,6 +190,9 @@ class List(MutableSequence):
 
     def clear(self):
         return _clear(self)
+
+    def reverse(self):
+        return _reverse(self)
 
 
 # XXX: should we have a better way to classmethod
