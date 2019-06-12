@@ -70,6 +70,11 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(list(l), [0, 10, 12, 13, 100, 200, 300])
         l.insert(100, 400)
         self.assertEqual(list(l), [0, 10, 12, 13, 100, 200, 300, 400])
+        # remove
+        l.remove(0)
+        l.remove(400)
+        l.remove(13)
+        self.assertEqual(list(l), [10, 12, 100, 200, 300])
 
     def test_compiled(self):
         @njit

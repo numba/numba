@@ -67,6 +67,11 @@ def _insert(l, i, item):
     l.insert(i, item)
 
 
+@njit
+def _remove(l, item):
+    l.remove(item)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -169,6 +174,9 @@ class List(MutableSequence):
 
     def extend(self, iterable):
         return _extend(self, iterable)
+
+    def remove(self, item):
+        return _remove(self, item)
 
 
 # XXX: should we have a better way to classmethod
