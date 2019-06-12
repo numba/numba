@@ -84,7 +84,11 @@ function/operator using its previous value in the loop body. The initial value
 of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
 For other functions/operators, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
-are supported for scalars and for arrays of arbitrary dimensions.
+are supported for scalars and for arrays of arbitrary dimensions. Care should be
+taken, however, as reducing into slices or elements of an array is not supported 
+if the elements specified by the slice or index is written to simultaneously by 
+multiple parallel threads. The compiler will not detect such cases and may result 
+in a race condition.
 
 The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
@@ -115,6 +119,23 @@ The following example demonstrates a product reduction on a two-dimensional arra
             result1 *= tmp
 
         return result1
+
+The following example is not allowed and will result in a different result than the
+corresponding function that operates in serial::
+
+    from numba import njit, prange
+    import numpy as np
+
+    @njit(parallel=True)
+    def prange_wrong_result(x):
+        n = x.shape[0]
+        y = np.zeros(4)
+        for i in prange(n):
+            # accumulating into the same element of `y` from different
+            # parallel iterations of the loop results in a race condition
+            y[i % 4] += x[i]
+
+        return y
 
 Examples
 ========
