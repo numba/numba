@@ -832,6 +832,18 @@ def impl_remove(l, item):
     return impl
 
 
+@overload_method(types.ListType, 'clear')
+def impl_clear(l):
+    if not isinstance(l, types.ListType):
+        return
+
+    def impl(l):
+        while len(l):
+            l.pop()
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

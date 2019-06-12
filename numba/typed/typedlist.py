@@ -72,6 +72,11 @@ def _remove(l, item):
     l.remove(item)
 
 
+@njit
+def _clear(l):
+    l.clear()
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -177,6 +182,9 @@ class List(MutableSequence):
 
     def remove(self, item):
         return _remove(self, item)
+
+    def clear(self):
+        return _clear(self)
 
 
 # XXX: should we have a better way to classmethod
