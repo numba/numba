@@ -119,7 +119,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         copy_item(lp, out, loc);
         list_decref_item(lp, loc);
         /* then incur the dreaded memory copy */
-        left = lp->size - 1 - index;
+        left = (lp->size - 1 - index) * lp->itemsize;
         char *new_loc = lp->items + lp->itemsize * (index + 1);
         memcpy(loc, new_loc, left);
         lp->size--;
