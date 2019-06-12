@@ -544,6 +544,40 @@ class TestListReverse(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), (3, 12, 11, 10))
 
 
+class TestListCopy(MemoryLeakMixin, TestCase):
+    """Test list reverse. """
+
+    def test_list_copy_empty(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            n = l.copy()
+            return len(l), len(n)
+
+        self.assertEqual(foo(), (0, 0))
+
+    def test_list_copy_singleton(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            n = l.copy()
+            return len(l), len(n), l[0], n[0]
+
+        self.assertEqual(foo(), (1, 1, 0, 0))
+
+    def test_list_copy_multiple(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in range(10, 13):
+                l.append(j)
+            n = l.copy()
+            return len(l), len(n), l[0], l[1], l[2], l[0], l[1], l[2]
+
+        self.assertEqual(foo(), (3, 3, 10, 11, 12, 10, 11, 12))
+
+
 class TestListObjectIter(MemoryLeakMixin, TestCase):
     """Test list iter. """
 

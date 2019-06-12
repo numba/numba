@@ -860,6 +860,22 @@ def impl_reverse(l):
     return impl
 
 
+@overload_method(types.ListType, 'copy')
+def impl_copy(l):
+    if not isinstance(l, types.ListType):
+        return
+
+    itemty = l.item_type
+
+    def impl(l):
+        newl = new_list(itemty)
+        for i in l:
+            newl.append(i)
+        return newl
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

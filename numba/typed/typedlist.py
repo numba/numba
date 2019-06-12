@@ -82,6 +82,11 @@ def _reverse(l):
     l.reverse()
 
 
+@njit
+def _copy(l):
+    return l.copy()
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -193,6 +198,9 @@ class List(MutableSequence):
 
     def reverse(self):
         return _reverse(self)
+
+    def copy(self):
+        return _copy(self)
 
 
 # XXX: should we have a better way to classmethod
