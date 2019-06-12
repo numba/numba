@@ -14,6 +14,7 @@ from numba.targets.registry import cpu_target
 from numba.extending import (
     overload,
     overload_method,
+    register_jitable,
     intrinsic,
     register_model,
     models,
@@ -550,6 +551,22 @@ def impl_append(l, item):
         return sig, impl
 
 
+@register_jitable
+def handle_index(l, index):
+    """Handle index.
+
+    If the index is negative, convert it. If the index is out of range, raise
+    an IndexError.
+    """
+    # convert negative indices to positive ones
+    if index < 0:
+        index = len(l) + index
+    # check that the index is in range
+    if not (0 <= index < len(l)):
+        raise IndexError("list index out of range")
+    return index
+
+
 @intrinsic
 def _list_getitem(typingctx, l, index):
     return _list_getitem_pop_helper(typingctx, l, index, 'getitem')
@@ -622,6 +639,7 @@ def impl_getitem(l, index):
     indexty = types.intp
 
     def impl(l, index):
+        index = handle_index(l, index)
         castedindex = _cast(index, indexty)
         status, item = _list_getitem(l, castedindex)
         if status == ListStatus.LIST_OK:
@@ -678,13 +696,14 @@ def impl_setitem(l, index, item):
     itemty = l.item_type
 
     def impl(l, index, item):
+        index = handle_index(l, index)
         castedindex = _cast(index, indexty)
         casteditem = _cast(item, itemty)
         status = _list_setitem(l, castedindex, casteditem)
         if status == ListStatus.LIST_OK:
             pass
         elif status == ListStatus.LIST_ERR_INDEX:
-            raise IndexError("list index out of range")
+            raise IndexError("list index out of range from c")
         else:
             raise AssertionError("internal list error during settitem")
 
@@ -692,20 +711,15 @@ def impl_setitem(l, index, item):
 
 
 @overload_method(types.ListType, 'pop')
-def impl_pop(l, index=None):
+def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
 
     indexty = types.intp
 
-    def impl(l, index=None):
-        if index is None:
-            if len(l) > 0:
-                castedindex = len(l) - 1
-            else:
-                raise IndexError("list index out of range")
-        else:
-            castedindex = _cast(index, indexty)
+    def impl(l, index=-1):
+        index = handle_index(l, index)
+        castedindex = _cast(index, indexty)
         status, item = _list_pop(l, castedindex)
         if status == ListStatus.LIST_OK:
             return _nonoptional(item)
@@ -776,12 +790,17 @@ def impl_insert(l, index, item):
     itemty = l.item_type
 
     def impl(l, index, item):
-        # If the index is larger than the size of the list, just append.
-        # N.B. this also includes the empty list.
-        if index >= len(l):
+        # If the index is larger than the size of the list or if the list is
+        # empty, just append.
+        if index >= len(l) or len(l) == 0:
             l.append(item)
+        # Else, do the insert dance
         else:
-            # grow the list by one, make room for item
+            # convert negative indices
+            if index < 0:
+                # if the index is still negative after conversion, use 0
+                index = max(len(l) + index, 0)
+            # grow the list by one, make room for item to insert
             l.append(l[0])
             # reverse iterate over the list and shift all elements
             i = len(l) - 1
