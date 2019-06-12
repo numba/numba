@@ -175,3 +175,129 @@ numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
         return LIST_ERR_ITER_EXHAUSTED;
     }
 }
+
+
+#define CHECK(CASE) {                                                   \
+    if ( !(CASE) ) {                                                    \
+        printf("'%s' failed file %s:%d\n", #CASE, __FILE__, __LINE__);   \
+        return -1;                                                       \
+    }                                                                   \
+}
+
+int
+numba_test_list(void) {
+    NB_List *lp;
+    int status;
+    Py_ssize_t it_count;
+    const char *it_item;
+    NB_ListIter iter;
+    char got_item[4];
+
+    puts("test_list");
+
+
+    status = numba_list_new(&lp, 4, 0);
+    CHECK(status == LIST_OK);
+    CHECK(lp->itemsize == 4);
+    CHECK(lp->size == 0);
+    CHECK(lp->allocated == 0);
+
+    // insert 1st item, this will cause a realloc
+    status = numba_list_append(lp, "abc");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 1);
+    CHECK(lp->allocated == 4);
+    status = numba_list_getitem(lp, 0, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "abc", 4) == 0);
+
+    // insert 2nd item
+    status = numba_list_append(lp, "def");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 2);
+    CHECK(lp->allocated == 4);
+    status = numba_list_getitem(lp, 1, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "def", 4) == 0);
+
+    // insert 3rd item
+    status = numba_list_append(lp, "ghi");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 3);
+    CHECK(lp->allocated == 4);
+    status = numba_list_getitem(lp, 2, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "ghi", 4) == 0);
+
+    // insert 4th item
+    status = numba_list_append(lp, "jkl");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 4);
+    CHECK(lp->allocated == 4);
+    status = numba_list_getitem(lp, 3, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "jkl", 4) == 0);
+
+    // insert 5th item, this will cause another realloc
+    status = numba_list_append(lp, "mno");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 5);
+    CHECK(lp->allocated == 8);
+    status = numba_list_getitem(lp, 4, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "mno", 4) == 0);
+
+    // Overwrite 1st item
+    status = numba_list_setitem(lp, 0, "pqr");
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 5);
+    CHECK(lp->allocated == 8);
+    status = numba_list_getitem(lp, 0, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "pqr", 4) == 0);
+
+    // Pop 1st item, check item shift
+    status = numba_list_pop(lp, 0, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 4);
+    CHECK(lp->allocated == 8);
+    CHECK(memcmp(got_item, "pqr", 4) == 0);
+    CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00mno\x00", 16) == 0);
+
+    // Pop last (4th) item, no shift since only last item affected
+    status = numba_list_pop(lp, 3, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 3);
+    CHECK(lp->allocated == 8);
+    CHECK(memcmp(got_item, "mno", 4) == 0);
+    CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00", 12) == 0);
+
+    // FIXME: test pop until you shrink once shrinking is impl.
+
+    // Test iterator
+    CHECK(lp->size > 0);
+    numba_list_iter(&iter, lp);
+    it_count = 0;
+    CHECK(iter.parent == lp);
+    CHECK(iter.pos == it_count);
+
+    // Current contents of list
+    const char items[] = "def\x00ghi\x00jkl\x00";
+    while ( (status = numba_list_iter_next(&iter, &it_item)) == OK) {
+        it_count += 1;
+        CHECK(iter.pos == it_count); // check iterator position
+        CHECK(it_item != NULL); // quick check item is non-null
+        // go fishing in items
+        CHECK(memcmp((const char *)items + ((it_count-1) * 4), it_item, 4) == 0);
+    }
+
+    CHECK(status == LIST_ERR_ITER_EXHAUSTED);
+    CHECK(lp->size == it_count);
+
+    // free list and return 0
+    numba_list_free(lp);
+    return 0;
+
+}
+
+#undef CHECK

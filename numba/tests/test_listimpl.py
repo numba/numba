@@ -144,6 +144,12 @@ class TestListImpl(TestCase):
             proto = ctypes.CFUNCTYPE(restype, *argtypes)
             return proto(_helperlib.c_helpers[name])
 
+        # numba_test_list()
+        self.numba_test_list = wrap(
+            'test_list',
+            ctypes.c_int,
+        )
+
         # numba_list_new(NB_List *l, Py_ssize_t itemsize, Py_ssize_t allocated)
         self.numba_list_new = wrap(
             'list_new',
@@ -215,6 +221,11 @@ class TestListImpl(TestCase):
                 ctypes.POINTER(ctypes.c_void_p),    # item_ptr
             ],
         )
+
+    def test_simple_c_test(self):
+        # Runs the basic test in C.
+        ret = self.numba_test_list()
+        self.assertEqual(ret, 0)
 
     def test_length(self):
         l = List(self, 8, 0)

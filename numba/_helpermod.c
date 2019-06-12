@@ -140,6 +140,7 @@ build_c_helpers_dict(void)
     declmethod(dict_dump);
 
     /* for list support */
+    declmethod(test_list);
     declmethod(list_new);
     declmethod(list_set_method_table);
     declmethod(list_free);
