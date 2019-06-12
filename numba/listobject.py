@@ -813,6 +813,25 @@ def impl_insert(l, index, item):
     return impl
 
 
+@overload_method(types.ListType, 'remove')
+def impl_remove(l, item):
+    if not isinstance(l, types.ListType):
+        return
+
+    itemty = l.item_type
+
+    def impl(l, item):
+        casteditem = _cast(item, itemty)
+        for i, n in enumerate(l):
+            if casteditem == n:
+                l.pop(i)
+                return
+        else:
+            raise ValueError("list.remove(x): x not in list")
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

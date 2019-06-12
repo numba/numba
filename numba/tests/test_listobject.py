@@ -419,6 +419,65 @@ class TestListObjectInsert(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), (11, 1))
 
 
+class TestListRemove(MemoryLeakMixin, TestCase):
+    """Test list remove. """
+
+    def test_list_remove_empty(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.remove(0)
+
+        with self.assertRaises(ValueError):
+            foo()
+
+    def test_list_remove_singleton(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            l.remove(0)
+            return len(l)
+
+        self.assertEqual(foo(), 0)
+
+    def test_list_remove_singleton_value_error(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(1)
+            l.remove(0)
+
+        with self.assertRaises(ValueError):
+            foo()
+
+    def test_list_remove_multiple(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            l.remove(13)
+            l.remove(19)
+            return len(l)
+
+        self.assertEqual(foo(), 8)
+
+    def test_list_remove_multiple_value_error(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            l.remove(23)
+
+        with self.assertRaises(ValueError):
+            foo()
+
+
 class TestListObjectIter(MemoryLeakMixin, TestCase):
     """Test list iter. """
 
