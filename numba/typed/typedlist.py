@@ -164,7 +164,7 @@ class List(MutableSequence):
     def count(self, item):
         return _count(self, item)
 
-    def pop(self, i=None):
+    def pop(self, i=-1):
         return _pop(self, i)
 
     def extend(self, iterable):

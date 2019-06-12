@@ -37,6 +37,9 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(l[0], 10)
         self.assertEqual(l[1], 11)
         self.assertEqual(l[2], 12)
+        self.assertEqual(l[-3], 10)
+        self.assertEqual(l[-2], 11)
+        self.assertEqual(l[-1], 12)
         # __iter__
         # the default __iter__ from MutableSequence will raise an IndexError
         # via __getitem__ and thus leak an exception, so this shouldn't
