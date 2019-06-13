@@ -8,7 +8,6 @@ import struct
 
 from .support import TestCase
 from numba import _helperlib
-from numba.config import IS_32BITS
 
 
 LIST_OK = 0

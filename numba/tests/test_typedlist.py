@@ -1,21 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
-import sys
 from itertools import product
 
-import numpy as np
-
-
-from numba import njit, utils
-from numba import int32, int64, float32, float64, types
-from numba import typeof
+from numba import njit
+from numba import int32, int64, types
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from numba.errors import TypingError
-from numba.runtime import rtsys
 from .support import TestCase, MemoryLeakMixin, unittest
 
-from numba.unsafe.refcount import dump_refcount, get_refcount
+from numba.unsafe.refcount import get_refcount
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
