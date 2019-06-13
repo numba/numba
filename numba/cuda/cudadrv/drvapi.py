@@ -345,4 +345,80 @@ API_PROTOTYPES = {
 'cuDeviceCanAccessPeer': (c_int,
                           POINTER(c_int), cu_device, cu_device),
 
+# CUresult cuGraphAddChildGraphNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, CUgraph childGraph )
+
+# CUresult cuGraphAddDependencies ( CUgraph hGraph, const CUgraphNode* from, const CUgraphNode* to, size_t numDependencies )
+
+# CUresult cuGraphAddEmptyNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies )
+
+# CUresult cuGraphAddHostNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_HOST_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphAddKernelNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_KERNEL_NODE_PARAMS* nodeParams )
+
+'cuGraphAddKernelNode': (c_int,
+                         c_void_p, c_void_p, c_void_p, c_uint, c_void_p),
+
+# CUresult cuGraphAddMemcpyNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_MEMCPY3D* copyParams, CUcontext ctx )
+
+# CUresult cuGraphAddMemsetNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_MEMSET_NODE_PARAMS* memsetParams, CUcontext ctx )
+
+# CUresult cuGraphChildGraphNodeGetGraph ( CUgraphNode hNode, CUgraph* phGraph )
+
+# CUresult cuGraphClone ( CUgraph* phGraphClone, CUgraph originalGraph )
+
+# CUresult cuGraphCreate ( CUgraph* phGraph, unsigned int  flags )
+
+'cuGraphCreate': (c_int, c_void_p, c_uint),
+
+# CUresult cuGraphDestroy ( CUgraph hGraph )
+
+# CUresult cuGraphDestroyNode ( CUgraphNode hNode )
+
+# CUresult cuGraphExecDestroy ( CUgraphExec hGraphExec )
+
+# CUresult cuGraphExecKernelNodeSetParams ( CUgraphExec hGraphExec, CUgraphNode hNode, const CUDA_KERNEL_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphGetEdges ( CUgraph hGraph, CUgraphNode* from, CUgraphNode* to, size_t* numEdges )
+
+# CUresult cuGraphGetNodes ( CUgraph hGraph, CUgraphNode* nodes, size_t* numNodes )
+
+# CUresult cuGraphGetRootNodes ( CUgraph hGraph, CUgraphNode* rootNodes, size_t* numRootNodes )
+
+# CUresult cuGraphHostNodeGetParams ( CUgraphNode hNode, CUDA_HOST_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphHostNodeSetParams ( CUgraphNode hNode, const CUDA_HOST_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphInstantiate ( CUgraphExec* phGraphExec, CUgraph hGraph, CUgraphNode* phErrorNode, char* logBuffer, size_t bufferSize )
+
+'cuGraphInstantiate': (c_int, c_void_p, c_void_p, c_void_p, c_void_p, c_uint),
+
+# CUresult cuGraphKernelNodeGetParams ( CUgraphNode hNode, CUDA_KERNEL_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphKernelNodeSetParams ( CUgraphNode hNode, const CUDA_KERNEL_NODE_PARAMS* nodeParams )
+
+'cuGraphKernelNodeSetParams': (c_int,
+                               c_void_p, c_void_p),
+
+# CUresult cuGraphLaunch ( CUgraphExec hGraphExec, CUstream hStream )
+
+'cuGraphLaunch': (c_int, c_void_p, c_void_p),
+
+# CUresult cuGraphMemcpyNodeGetParams ( CUgraphNode hNode, CUDA_MEMCPY3D* nodeParams )
+
+# CUresult cuGraphMemcpyNodeSetParams ( CUgraphNode hNode, const CUDA_MEMCPY3D* nodeParams )
+
+# CUresult cuGraphMemsetNodeGetParams ( CUgraphNode hNode, CUDA_MEMSET_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphMemsetNodeSetParams ( CUgraphNode hNode, const CUDA_MEMSET_NODE_PARAMS* nodeParams )
+
+# CUresult cuGraphNodeFindInClone ( CUgraphNode* phNode, CUgraphNode hOriginalNode, CUgraph hClonedGraph )
+
+# CUresult cuGraphNodeGetDependencies ( CUgraphNode hNode, CUgraphNode* dependencies, size_t* numDependencies )
+
+# CUresult cuGraphNodeGetDependentNodes ( CUgraphNode hNode, CUgraphNode* dependentNodes, size_t* numDependentNodes )
+
+# CUresult cuGraphNodeGetType ( CUgraphNode hNode, CUgraphNodeType* type )
+
+# CUresult cuGraphRemoveDependencies ( CUgraph hGraph, const CUgraphNode* from, const CUgraphNode* to, size_t numDependencies )
+
 }
