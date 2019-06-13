@@ -204,14 +204,33 @@ class TestInlining(TestCase):
                     if (guard(find_callname,self.func_ir, stmt.value)
                             is not None):
                         inline_closure_call(self.func_ir, {}, block, i,
-                        foo.py_func, self.typingctx,
-                        (self.typemap[stmt.value.args[0].name],),
-                        self.typemap, self.calltypes)
+                            foo.py_func, self.typingctx,
+                            (self.typemap[stmt.value.args[0].name],),
+                            self.typemap, self.calltypes)
                         break
+
+        # make sure inline_closure_call runs in full pipeline
         j_func = njit(pipeline_class=InlineTestPipelinePrune)(test_impl)
         A = 3
         self.assertEqual(test_impl(A), j_func(A))
         self.assertEqual(test_impl(), j_func())
+
+        # make sure IR doesn't have branches
+        test_ir = compiler.run_frontend(test_impl)
+        typingctx = numba.targets.registry.cpu_target.typing_context
+        typemap, _return_type, calltypes = compiler.type_inference_stage(
+            typingctx, test_ir, (numba.none,), None)
+        block = list(test_ir.blocks.values())[0]
+        for i, stmt in enumerate(block.body):
+            if (guard(find_callname, test_ir, stmt.value)
+                    is not None):
+                inline_closure_call(test_ir, {}, block, i,
+                    foo.py_func, typingctx,
+                    (typemap[stmt.value.args[0].name],),
+                    typemap, calltypes)
+                break
+        test_ir.blocks = numba.ir_utils.simplify_CFG(test_ir.blocks)
+        self.assertEqual(len(test_ir.blocks), 1)
 
 
 if __name__ == '__main__':
