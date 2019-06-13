@@ -130,6 +130,7 @@ def get_ext_modules():
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
                                        "numba/_dictobject.c",
+                                       "numba/_unicodeobject.c",
                                        "numba/mathnames.inc",],
                               **np_compile_args)
 

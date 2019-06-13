@@ -1,7 +1,7 @@
 import operator
 
 import numpy as np
-from llvmlite.ir import IntType, Constant
+from llvmlite.ir import IntType, FunctionType, Constant
 
 from numba.extending import (
     models,
@@ -498,6 +498,46 @@ def unicode_find(a, b):
         return find_impl
 
 
+@intrinsic
+def _isalpha_unicode(typingctx, string_ty):
+    resty = types.boolean
+    sig = resty(string_ty)
+
+    def codegen(context, builder, sig, args):
+        # convert the string LLVM IR arg into a struct, this gives
+        # access to the struct members
+        [string_arg] = args
+        # convert the string LLVM IR arg into a struct, this gives
+        # access to the struct members
+        unicode_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
+        unicode_struct = unicode_str_ctor(context, builder, value=string_arg)
+        # function definition prototype
+        pyobject = context.get_argument_type(types.pyobject)
+        fnty = FunctionType(pyobject, [pyobject])
+        # inserting the function definition into the IR with name
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_unicode_isalpha')
+        # calling the function using the `.data` member of the UnicodeModel
+        boolobj = builder.call(fn, [unicode_struct.parent])
+        pyapi = context.get_python_api(builder)
+        res = pyapi.to_native_value(types.boolean, boolobj).value
+
+        return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+    return sig, codegen
+
+
+@overload_method(types.UnicodeType, 'isalpha')
+def isalpha_unicode(string):
+    if not isinstance(string, types.UnicodeType):
+        raise TypingError('First parameter should be UnicodeType')
+
+    def impl(string):
+        return _isalpha_unicode(string)
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
@@ -777,7 +817,7 @@ def unicode_strip_right_bound(string, chars):
 
 def unicode_strip_types_check(chars):
     if isinstance(chars, types.Optional):
-        chars = chars.type # catch optional type with invalid non-None type
+        chars = chars.type  # catch optional type with invalid non-None type
     if not (chars is None or isinstance(chars, (types.Omitted,
                                                 types.UnicodeType,
                                                 types.NoneType))):

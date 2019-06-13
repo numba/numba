@@ -147,6 +147,10 @@ def center_usecase_fillchar(x, y, fillchar):
     return x.center(y, fillchar)
 
 
+def isalpha_usecase(x):
+    return x.isalpha()
+
+
 def ljust_usecase(x, y):
     return x.ljust(y)
 
@@ -236,6 +240,23 @@ UNICODE_ORDERING_EXAMPLES = [
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
+
+    def test_isalpha(self):
+        pyfunc = isalpha_usecase
+        cfunc = njit(pyfunc)
+
+        test_cases = ['\U00010401',
+                      '\U00010427',
+                      '\U00010429',
+                      '\U0001044E',
+                      '\U0001F40D',
+                      '\U0001F46F']
+        test_cases += UNICODE_EXAMPLES
+
+        for test_case in test_cases:
+            self.assertEqual(pyfunc(test_case),
+                             cfunc(test_case),
+                             "'%s'.%s" % (test_case, 'isalpha'))
 
     def test_literal(self, flags=no_pyobj_flags):
         pyfunc = literal_usecase

@@ -139,6 +139,9 @@ build_c_helpers_dict(void)
     declmethod(dict_iter_next);
     declmethod(dict_dump);
 
+    /* for unicode support */
+    declmethod(unicode_isalpha);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"

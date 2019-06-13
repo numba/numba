@@ -1164,4 +1164,9 @@ numba_gdb_breakpoint(void) {
 /*
  * Dictionary support
  */
- #include "_dictobject.c"
+#include "_dictobject.c"
+
+/*
+ * Unicode support
+ */
+#include "_unicodeobject.c"
