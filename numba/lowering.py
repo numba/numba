@@ -904,9 +904,10 @@ class Lower(BaseLower):
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
+            func_ty = self.context.typing_context.resolve_value_type(expr.fn)
             # Get function
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function(expr.fn, signature)
+            impl = self.context.get_function(func_ty, signature)
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
