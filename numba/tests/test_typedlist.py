@@ -1,8 +1,10 @@
 from __future__ import print_function, absolute_import, division
 
 import sys
+from itertools import product
 
 import numpy as np
+
 
 from numba import njit, utils
 from numba import int32, int64, float32, float64, types
@@ -101,6 +103,53 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         l = producer()
         val = consumer(l)
         self.assertEqual(val, 23)
+
+    def test_getitem_slice(self):
+        """ Test getitem using a slice.
+
+        This tests suffers from combinatorial explosion, so we parametrize it
+        and compare results agains the regular list in a quasi fuzzing approach.
+
+        """
+        # initialize regular list
+        rl = list(range(10, 20))
+        # intialize typed list
+        tl = List.empty_list(int32)
+        for i in range(10, 20):
+            tl.append(i)
+        # define the ranges
+        start_range = list(range(-10, 30))
+        stop_range = list(range(-10, 30))
+        step_range = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]
+
+        # check that they are the same initially
+        self.assertEqual(rl, list(tl))
+        # check that copy by slice works, no start, no stop, no step
+        self.assertEqual(rl[:], list(tl[:]))
+
+        # start only
+        for sa in start_range:
+            self.assertEqual(rl[sa:], list(tl[sa:]))
+        # stop only
+        for so in stop_range:
+            self.assertEqual(rl[:so], list(tl[:so]))
+        # step only
+        for se in step_range:
+            self.assertEqual(rl[::se], list(tl[::se]))
+
+        # start and stop
+        for sa, so in product(start_range, stop_range):
+            self.assertEqual(rl[sa:so], list(tl[sa:so]))
+        # start and step
+        for sa, se in product(start_range, step_range):
+            self.assertEqual(rl[sa::se], list(tl[sa::se]))
+        # stop and step
+        for so, se in product(stop_range, step_range):
+            self.assertEqual(rl[:so:se], list(tl[:so:se]))
+
+        # start, stop and step
+        for sa, so, se in product(start_range, stop_range, step_range):
+            self.assertEqual(rl[sa:so:se], list(tl[sa:so:se]))
 
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):

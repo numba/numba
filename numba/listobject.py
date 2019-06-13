@@ -567,6 +567,29 @@ def handle_index(l, index):
     return index
 
 
+@register_jitable
+def handle_slice(l, s):
+    """Handle slice.
+
+    Convert a slice object for a given list into a range object that can be
+    used to index the list. Many subtle caveats here, especially if the step is
+    negative.
+    """
+    if len(l) == 0:  # ignore slice for empty list
+        return range(0)
+    ll, sa, so, se = len(l), s.start, s.stop, s.step
+    if se > 0:
+        start = max(ll + sa,  0) if s.start < 0 else min(ll, sa)
+        stop = max(ll + so, 0) if so < 0 else min(ll, so)
+    elif se < 0:
+        start = max(ll + sa,  0) if s.start < 0 else min(ll - 1, sa)
+        stop = max(ll + so, -1) if so < 0 else min(ll, so)
+    else:
+        # should be caught earlier, but isn't, so we raise here
+        raise ValueError("slice step cannot be zero")
+    return range(start, stop, s.step)
+
+
 @intrinsic
 def _list_getitem(typingctx, l, index):
     return _list_getitem_pop_helper(typingctx, l, index, 'getitem')
@@ -637,19 +660,30 @@ def impl_getitem(l, index):
         return
 
     indexty = types.intp
+    itemty = l.item_type
 
-    def impl(l, index):
-        index = handle_index(l, index)
-        castedindex = _cast(index, indexty)
-        status, item = _list_getitem(l, castedindex)
-        if status == ListStatus.LIST_OK:
-            return _nonoptional(item)
-        elif status == ListStatus.LIST_ERR_INDEX:
-            raise IndexError("list index out of range")
-        else:
-            raise AssertionError("internal list error during getitem")
+    if isinstance(index, types.Integer):
+        def integer_impl(l, index):
+            index = handle_index(l, index)
+            castedindex = _cast(index, indexty)
+            status, item = _list_getitem(l, castedindex)
+            if status == ListStatus.LIST_OK:
+                return _nonoptional(item)
+            elif status == ListStatus.LIST_ERR_INDEX:
+                raise IndexError("list index out of range")
+            else:
+                raise AssertionError("internal list error during getitem")
 
-    return impl
+        return integer_impl
+
+    elif isinstance(index, types.SliceType):
+        def slice_impl(l, index):
+            newl = new_list(itemty)
+            for i in handle_slice(l, index):
+                newl.append(l[i])
+            return newl
+
+        return slice_impl
 
 
 @intrinsic
