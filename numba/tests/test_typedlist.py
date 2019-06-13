@@ -116,8 +116,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         for i in range(10, 20):
             tl.append(i)
         # define the ranges
-        start_range = list(range(-10, 30))
-        stop_range = list(range(-10, 30))
+        start_range = list(range(-20, 30))
+        stop_range = list(range(-20, 30))
         step_range = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]
 
         # check that they are the same initially

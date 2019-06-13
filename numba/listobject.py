@@ -525,7 +525,7 @@ def handle_slice(l, s):
         start = max(ll + sa,  0) if s.start < 0 else min(ll, sa)
         stop = max(ll + so, 0) if so < 0 else min(ll, so)
     elif se < 0:
-        start = max(ll + sa,  0) if s.start < 0 else min(ll - 1, sa)
+        start = max(ll + sa,  -1) if s.start < 0 else min(ll - 1, sa)
         stop = max(ll + so, -1) if so < 0 else min(ll, so)
     else:
         # should be caught earlier, but isn't, so we raise here
