@@ -32,6 +32,8 @@ from numba.typeconv import Conversion
 from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
 from numba import typing
+# FIXME: shared by list and dict, remain in dictobject.py for now
+from numba.dictobject import _as_bytes, _cast, _nonoptional
 
 
 ll_list_type = cgutils.voidptr_t
@@ -109,65 +111,6 @@ def _list_get_data(context, builder, list_ty, l):
     ctor = cgutils.create_struct_proxy(list_ty)
     lstruct = ctor(context, builder, value=l)
     return lstruct.data
-
-
-# FIXME: copied from dictobject.py
-def _as_bytes(builder, ptr):
-    """Helper to do (void*)ptr
-    """
-    return builder.bitcast(ptr, cgutils.voidptr_t)
-
-
-# FIXME: copied from dictobject.py
-@intrinsic
-def _cast(typingctx, val, typ):
-    """Cast *val* to *typ*
-    """
-    def codegen(context, builder, signature, args):
-        [val, typ] = args
-        context.nrt.incref(builder, signature.return_type, val)
-        return val
-    # Using implicit casting in argument types
-    casted = typ.instance_type
-    _sentry_safe_cast(val, casted)
-    sig = casted(casted, typ)
-    return sig, codegen
-
-
-# FIXME: copied from dictobject.py
-@intrinsic
-def _nonoptional(typingctx, val):
-    """Typing trick to cast Optional[T] to T
-    """
-    if not isinstance(val, types.Optional):
-        raise TypeError('expected an optional')
-
-    def codegen(context, builder, sig, args):
-        context.nrt.incref(builder, sig.return_type, args[0])
-        return args[0]
-
-    casted = val.type
-    sig = casted(casted)
-    return sig, codegen
-
-
-# FIXME: copied from dictobject.py
-def _sentry_safe_cast(fromty, toty):
-    """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
-    """
-    tyctxt = cpu_target.typing_context
-    by = tyctxt.can_convert(fromty, toty)
-    if by is None or by > Conversion.safe:
-        if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
-            # Accept if both types are ints
-            return
-        if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
-            # Accept if ints to floats
-            return
-        if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
-            # Accept if floats to floats
-            return
-        raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
 
 
 # FIXME: copied from dictobject.py with minimal changes
