@@ -19,7 +19,7 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
         def k2(a):
             a[0] *= 3
 
-        n1 = KernelNode(k1, [arr], [])
+        n1 = KernelNode(k1, [arr])
         n2 = KernelNode(k2, [arr], [n1])
         n2.build().launch()
         cuda.synchronize()
@@ -35,7 +35,7 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
         def k2(a):
             a[0] *= 3
 
-        n1 = KernelNode(k1, [arr], [])
+        n1 = KernelNode(k1, [arr])
         n2 = KernelNode(k2, [arr], [n1])
         n2.build().launch()
         cuda.synchronize()

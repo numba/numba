@@ -20,11 +20,11 @@ class Node:
     pass
 
 class KernelNode(Node):
-    def __init__(self, kernel, args = [], deps = [], params = { }):
+    def __init__(self, kernel, args = None, deps = None, params = None):
         self.kernel = kernel
-        self.args = args
-        self.deps = deps
-        self.params = params
+        self.args = args or []
+        self.deps = deps or []
+        self.params = params or { }
         self.builded = { }
         super().__init__()
     
