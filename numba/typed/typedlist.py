@@ -87,6 +87,16 @@ def _copy(l):
     return l.copy()
 
 
+@njit
+def _eq(t, o):
+    return t == o
+
+
+@njit
+def _ne(t, o):
+    return t != o
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -151,6 +161,12 @@ class List(MutableSequence):
             return 0
         else:
             return _length(self)
+
+    def __eq__(self, other):
+        return _eq(self, other)
+
+    def __ne__(self, other):
+        return _ne(self, other)
 
     def append(self, item):
         if not self._typed:

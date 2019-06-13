@@ -81,6 +81,11 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # copy
         new = l.copy()
         self.assertEqual(list(new), list(range(10, 20))[::-1])
+        # equal
+        self.assertEqual(l, new)
+        # not equal
+        new[-1] = 42
+        self.assertNotEqual(l, new)
 
     def test_compiled(self):
         @njit

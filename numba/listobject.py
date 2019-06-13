@@ -897,6 +897,42 @@ def impl_list_getiter(context, builder, sig, args):
     )
 
 
+@overload(operator.eq)
+def impl_equal(this, other):
+    if not isinstance(this, types.ListType):
+        return
+    if not isinstance(other, types.ListType):
+        # If RHS is not a list, always returns False
+        def impl_type_mismatch(this, other):
+            return False
+        return impl_type_mismatch
+
+    otheritemty = other.item_type
+
+    def impl_type_matched(this, other):
+        if len(this) != len(other):
+            return False
+        for this_item, other_item in zip(this, other):
+            # Cast item from LHS to the key-type of RHS
+            this_item = _cast(this_item, otheritemty)
+            if this_item != other_item:
+                return False
+        return True
+
+    return impl_type_matched
+
+
+@overload(operator.ne)
+def impl_not_equal(this, other):
+    if not isinstance(this, types.ListType):
+        return
+
+    def impl(this, other):
+        return not (this == other)
+
+    return impl
+
+
 @lower_builtin('iternext', types.ListTypeIteratorType)
 @iternext_impl(RefType.BORROWED)
 def impl_iterator_iternext(context, builder, sig, args, result):
