@@ -508,6 +508,22 @@ class TestListObjectPop(MemoryLeakMixin, TestCase):
             foo(3)
 
 
+class TestListObjectDelitem(MemoryLeakMixin, TestCase):
+    """Test list delitem.
+    """
+
+    def test_list_delitem(self):
+        # __delitem__ calls pop under the hood, so a basic test suffices
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in (10, 11, 12):
+                l.append(j)
+            del l[0]
+            return len(l), l[0], l[1]
+        self.assertEqual(foo(), (2, 11, 12))
+
+
 class TestListObjectContains(MemoryLeakMixin, TestCase):
     """Test list contains. """
 

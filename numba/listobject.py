@@ -708,6 +708,16 @@ def impl_pop(l, index=-1):
     return impl
 
 
+@overload(operator.delitem)
+def impl_delitem(l, index):
+    if not isinstance(l, types.ListType):
+        return
+
+    def impl(l, index):
+        l.pop(index)
+    return impl
+
+
 @overload(operator.contains)
 def impl_contains(l, item):
     if not isinstance(l, types.ListType):
