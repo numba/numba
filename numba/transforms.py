@@ -498,3 +498,69 @@ def find_setupwiths(blocks):
             known_ranges.append((s, e))
 
     return known_ranges
+
+def ssa_transformation(func_ir):
+
+    def apply(defsites, var, stack, df):
+        # phis is a dict of {node -> list of phi variables defined at a specific node}
+        phis = defaultdict(list)
+
+        print('starting {}, stack: {}'.format(var, stack))
+
+        while len(stack) > 0:
+            N = stack.pop() # grab a basic block
+            # for each node Y in the dominance frontier of N
+            for Y in df[N]: 
+                if var not in phis[Y]:
+                    # insert PHI
+                    # phis[Y].append(var)
+                    if var not in defsites[Y]:
+                        print('appending {} to the stack'.format(Y))
+                        # stack.append(Y)
+
+        print('phis', phis)
+
+    def get_defsites(blocks):
+        # defsites is a map of {var -> [Blocks]} and it records
+        # the sites where a variable was defined
+        defsites = defaultdict(list)
+
+        for offset, block in blocks.items():
+            body = block.body
+            for inst in body:
+                # print('\t', inst, type(inst))
+                if isinstance(inst, ir.Assign):
+                    defsites[inst.target].append(offset)
+
+        print('defsites:', defsites)
+        return defsites
+
+    blocks = func_ir.blocks
+    defsites = get_defsites(blocks)
+
+    vlt = func_ir.variable_lifetime
+    df = vlt.cfg.dominance_frontier()
+
+    for var, defs in defsites.items():
+        stack = list(defs)
+        apply(defsites, var, stack, df)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

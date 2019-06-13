@@ -464,6 +464,9 @@ class BasePipeline(object):
         self.calltypes = defaultdict(lambda: types.pyobject)
         self.return_type = types.pyobject
 
+    def stage_ssa_transformation(self):
+        transforms.ssa_transformation(self.func_ir)
+
     def stage_dead_branch_prune(self):
         """
         This prunes dead branches, a dead branch is one which is derivable as
@@ -770,6 +773,11 @@ class BasePipeline(object):
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
         pm.add_stage(self.stage_process_ir, "processing IR")
 
+    def add_ssa_transformation_stage(self, pm):
+        """Transforms the IR to the SSA format.
+        """
+        pm.add_stage(self.stage_ssa_transformation, "SSA Transformation Pass")
+
     def add_pre_typing_stage(self, pm):
         """Add any stages that go before type-inference.
         The current stages contain type-agnostic rewrite passes.
@@ -816,6 +824,7 @@ class BasePipeline(object):
         pm.create_pipeline(name)
         self.add_preprocessing_stage(pm)
         self.add_with_handling_stage(pm)
+        self.add_ssa_transformation_stage(pm)
         self.add_pre_typing_stage(pm)
         self.add_typing_stage(pm)
         self.add_optimization_stage(pm)
