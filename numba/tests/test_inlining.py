@@ -50,6 +50,10 @@ class InlineTestPipeline(numba.compiler.BasePipeline):
                 "ensure IR is legal prior to lowering")
         self.add_lowering_stage(pm)
         self.add_cleanup_stage(pm)
+        pm.add_stage(self.stage_preserve_final_ir, "preserve IR")
+
+    def stage_preserve_final_ir(self):
+        self.metadata['final_func_ir'] = self.func_ir.copy()
 
     def stage_inline_test_pass(self):
         # assuming the function has one block with one call inside
@@ -201,7 +205,7 @@ class TestInlining(TestCase):
                 assert len(self.func_ir.blocks) == 1
                 block = list(self.func_ir.blocks.values())[0]
                 for i, stmt in enumerate(block.body):
-                    if (guard(find_callname,self.func_ir, stmt.value)
+                    if (guard(find_callname, self.func_ir, stmt.value)
                             is not None):
                         inline_closure_call(self.func_ir, {}, block, i,
                             foo.py_func, self.typingctx,
@@ -216,22 +220,9 @@ class TestInlining(TestCase):
         self.assertEqual(test_impl(), j_func())
 
         # make sure IR doesn't have branches
-        test_ir = compiler.run_frontend(test_impl)
-        typingctx = numba.targets.registry.cpu_target.typing_context
-        typemap, _return_type, calltypes = compiler.type_inference_stage(
-            typingctx, test_ir, (numba.none,), None)
-        block = list(test_ir.blocks.values())[0]
-        for i, stmt in enumerate(block.body):
-            if (guard(find_callname, test_ir, stmt.value)
-                    is not None):
-                inline_closure_call(test_ir, {}, block, i,
-                    foo.py_func, typingctx,
-                    (typemap[stmt.value.args[0].name],),
-                    typemap, calltypes)
-                break
-        test_ir.blocks = numba.ir_utils.simplify_CFG(test_ir.blocks)
-        self.assertEqual(len(test_ir.blocks), 1)
-
+        fir = j_func.overloads[(types.Omitted(None),)].metadata['final_func_ir']
+        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        self.assertEqual(len(fir.blocks), 1)
 
 if __name__ == '__main__':
     unittest.main()
