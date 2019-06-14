@@ -364,7 +364,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
-    If ``zfill`` is set, also filling zeros to the memory at the current
+    If ``zfill`` is set, fill the memory with zeros at the current
     use-site location.  Note that the memory is always zero-filled after the
     ``alloca`` at init-site (the entry block).
     """
