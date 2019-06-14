@@ -14,7 +14,6 @@ from .errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from .analysis import compute_cfg_from_blocks
 from . import debuginfo
 
 
@@ -87,7 +86,6 @@ class BaseLower(object):
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
-        self.cfg = compute_cfg_from_blocks(self.blocks)
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -240,7 +238,6 @@ class BaseLower(object):
             self.fndesc.unique_name))
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
-            self._current_block_offset = offset
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
@@ -1174,20 +1171,6 @@ class Lower(BaseLower):
         # Allocate space for variable
         aptr = cgutils.alloca_once(self.builder, lltype,
                                    name=name, zfill=False)
-        # Zero-fill differently if we are in loops
-        loops = self.cfg.in_loops(self._current_block_offset)
-        # In loops?
-        if loops:
-            innermost = loops[0]
-            # Zero fill at all loop-entries.
-            for ent in innermost.entries:
-                with self.builder.goto_block(self.blkmap[ent]):
-                    self.builder.store(lltype(None), aptr)
-        # Not in loops?
-        else:
-            # Zero-fill at use-site
-            self.builder.store(lltype(None), aptr)
-
         if is_uservar:
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
