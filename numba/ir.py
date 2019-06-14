@@ -205,7 +205,7 @@ class SlotEqualityCheckMixin(object):
     __slots__ = tuple()
 
     def __eq__(self, other):
-        if type(self) == type(other):
+        if type(self) is type(other):
             for name in self.__slots__:
                 if getattr(self, name) != getattr(other, name):
                     return False
@@ -214,7 +214,7 @@ class SlotEqualityCheckMixin(object):
         return False
 
     def __le__(self, other):
-        return str(self) < str(other)
+        return str(self) <= str(other)
 
     def __hash__(self):
         return id(self)
@@ -225,13 +225,12 @@ class EqualityCheckMixin(object):
     """ Mixin for basic equality checking """
 
     def __eq__(self, other):
-        if type(self) == type(other):
+        if type(self) is type(other):
             def fixup(adict):
                 bad = ('loc', 'scope')
                 d = dict(adict)
                 for x in bad:
-                    if x in d:
-                        d.pop(x)
+                    d.pop(x, None)
                 return d
             d1 = fixup(self.__dict__)
             d2 = fixup(other.__dict__)
@@ -278,7 +277,7 @@ class VarMap(object):
         return self._con.iterkeys()
 
     def __eq__(self, other):
-        if type(self) == type(other):
+        if type(self) is type(other):
             # check keys only, else __eq__ ref cycles, scope -> varmap -> var
             return self._con.keys() == other._con.keys()
         return False
@@ -293,7 +292,7 @@ class AbstractRHS(object):
     """
 
 
-class Inst(AbstractRHS, EqualityCheckMixin):
+class Inst(EqualityCheckMixin, AbstractRHS):
     """
     Base class for all IR instructions.
     """
@@ -836,7 +835,7 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(AbstractRHS, EqualityCheckMixin):
+class Arg(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
         assert isinstance(index, int)
@@ -852,7 +851,7 @@ class Arg(AbstractRHS, EqualityCheckMixin):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(AbstractRHS, EqualityCheckMixin):
+class Const(EqualityCheckMixin, AbstractRHS):
     def __init__(self, value, loc, use_literal_type=True):
         assert isinstance(loc, Loc)
         self.value = value
@@ -867,7 +866,7 @@ class Const(AbstractRHS, EqualityCheckMixin):
         return self.value
 
 
-class Global(AbstractRHS, EqualityCheckMixin):
+class Global(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, value, loc):
         assert isinstance(loc, Loc)
         self.name = name
@@ -886,7 +885,7 @@ class Global(AbstractRHS, EqualityCheckMixin):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(AbstractRHS, EqualityCheckMixin):
+class FreeVar(EqualityCheckMixin, AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
@@ -911,7 +910,7 @@ class FreeVar(AbstractRHS, EqualityCheckMixin):
         return self.value
 
 
-class Var(AbstractRHS, EqualityCheckMixin):
+class Var(EqualityCheckMixin, AbstractRHS):
     """
     Attributes
     -----------
