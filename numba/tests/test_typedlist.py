@@ -149,6 +149,142 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         for sa, so, se in product(start_range, stop_range, step_range):
             self.assertEqual(rl[sa:so:se], list(tl[sa:so:se]))
 
+    def test_setitem_slice(self):
+        """ Test setitem using a slice.
+
+        This tests suffers from combinatorial explosion, so we parametrize it
+        and compare results agains the regular list in a quasi fuzzing approach.
+
+        """
+
+        def setup(start=10, stop=20):
+            # initialize regular list
+            rl_ = list(range(start, stop))
+            # intialize typed list
+            tl_ = List.empty_list(int32)
+            # populate typed list
+            for i in range(start, stop):
+                tl_.append(i)
+            # check they are the same
+            self.assertEqual(rl_, list(tl_))
+            return rl_, tl_
+
+        def to_tl(l):
+            tl = List.empty_list(int32)
+            for k in l:
+                tl.append(k)
+            return tl
+
+        ### Simple slicing ###
+
+        # assign to itself
+        rl, tl = setup()
+        rl[:], tl[:] = rl, tl
+        self.assertEqual(rl, list(tl))
+
+        # extend self
+        rl, tl = setup()
+        rl[len(rl):], tl[len(tl):] = rl, tl
+        self.assertEqual(rl, list(tl))
+        # prepend self
+        rl, tl = setup()
+        rl[:0], tl[:0] = rl, tl
+        self.assertEqual(rl, list(tl))
+        # partial assign to self, with equal length
+        rl, tl = setup()
+        rl[3:5], tl[3:5] = rl[6:8], tl[6:8]
+        self.assertEqual(rl, list(tl))
+        # partial assign to self, with larger slice
+        rl, tl = setup()
+        rl[3:5], tl[3:5] = rl[6:9], tl[6:9]
+        self.assertEqual(rl, list(tl))
+        # partial assign to self, with smaller slice
+        rl, tl = setup()
+        rl[3:5], tl[3:5] = rl[6:7], tl[6:7]
+        self.assertEqual(rl, list(tl))
+
+        # extend
+        rl, tl = setup()
+        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+        # extend empty
+        rl, tl = setup(0, 0)
+        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+        # extend singleton
+        rl, tl = setup(0, 1)
+        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+
+        # prepend
+        rl, tl = setup()
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+        # prepend empty
+        rl, tl = setup(0,0)
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+        # prepend singleton
+        rl, tl = setup(0,1)
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        self.assertEqual(rl, list(tl))
+
+        # simple equal length assignment, just replace
+        rl, tl = setup()
+        rl[1:3], tl[1:3] = [100, 200], to_tl([100, 200])
+        self.assertEqual(rl, list(tl))
+
+        # slice for assignment is larger, need to replace and insert
+        rl, tl = setup()
+        rl[1:3], tl[1:3] = [100, 200, 300, 400], to_tl([100, 200, 300, 400])
+        self.assertEqual(rl, list(tl))
+
+        # slice for assignment is smaller, need to replace and delete
+        rl, tl = setup()
+        rl[1:3], tl[1:3] = [100], to_tl([100])
+        self.assertEqual(rl, list(tl))
+
+        # slice for assignment is smaller and item is empty, need to delete
+        rl, tl = setup()
+        rl[1:3], tl[1:3] = [], to_tl([])
+        self.assertEqual(rl, list(tl))
+
+        # Synonym for clear
+        rl, tl = setup()
+        rl[:], tl[:] = [], to_tl([])
+        self.assertEqual(rl, list(tl))
+
+        ### Extended slicing ###
+
+        # replace every second element
+        rl, tl = setup()
+        rl[::2], tl[::2] = [100,200,300,400,500], to_tl([100,200,300,400,500])
+        self.assertEqual(rl, list(tl))
+        # replace every second element, backwards
+        rl, tl = setup()
+        rl[::-2], tl[::-2] = [100,200,300,400,500], to_tl([100,200,300,400,500])
+        self.assertEqual(rl, list(tl))
+
+        # reverse assign to itself
+        rl, tl = setup()
+        rl[::-1], tl[::-1] = rl, tl
+        self.assertEqual(rl, list(tl))
+
+        # delete tl to ensure we don't leak memory
+        del tl
+        # check no leak so far
+        self.assert_no_memory_leak()
+        # disable leak check for exception test
+        self.disable_leak_check()
+
+        with self.assertRaises(ValueError) as raises:
+            rl, tl = setup()
+            tl[8:3:-1] = to_tl([1, 2, 3])
+        self.assertIn(
+            "length mismatch for extended slice and sequence",
+            str(raises.exception),
+        )
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 

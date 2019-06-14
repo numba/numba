@@ -672,19 +672,73 @@ def impl_setitem(l, index, item):
     indexty = types.intp
     itemty = l.item_type
 
-    def impl(l, index, item):
-        index = handle_index(l, index)
-        castedindex = _cast(index, indexty)
-        casteditem = _cast(item, itemty)
-        status = _list_setitem(l, castedindex, casteditem)
-        if status == ListStatus.LIST_OK:
-            pass
-        elif status == ListStatus.LIST_ERR_INDEX:
-            raise IndexError("list index out of range from c")
-        else:
-            raise AssertionError("internal list error during settitem")
+    if isinstance(index, types.Integer):
+        def impl_integer(l, index, item):
+            index = handle_index(l, index)
+            castedindex = _cast(index, indexty)
+            casteditem = _cast(item, itemty)
+            status = _list_setitem(l, castedindex, casteditem)
+            if status == ListStatus.LIST_OK:
+                pass
+            elif status == ListStatus.LIST_ERR_INDEX:
+                raise IndexError("list index out of range from c")
+            else:
+                raise AssertionError("internal list error during settitem")
 
-    return impl
+        return impl_integer
+
+    elif isinstance(index, types.SliceType):
+
+        def impl_slice(l, index, item):
+            # special case "a[i:j] = a", need to copy first
+            if l == item:
+                item = item.copy()
+            slice_range = handle_slice(l, index)
+            # non-extended (simple) slices
+            if slice_range.step == 1:
+                # replace
+                if len(item) == len(slice_range):
+                    for i,j in zip(slice_range, item):
+                        l[i] = j
+                # replace and insert
+                if len(item) > len(slice_range):
+                    # do the replaces we can
+                    for i,j in zip(slice_range, item[:len(slice_range)]):
+                        l[i] = j
+                    # insert the remaining ones
+                    insert_range = range(slice_range.stop,
+                                         slice_range.stop +
+                                         len(item) - len(slice_range))
+                    for i, k in zip(insert_range, item[len(slice_range):]):
+                        # FIXME: This may be slow.  Each insert can incur a
+                        # memory copy of one or more items.
+                        l.insert(i, k)
+                # replace and delete
+                if len(item) < len(slice_range):
+                    # do the replaces we can
+                    replace_range = range(slice_range.start,
+                                          slice_range.start + len(item))
+                    for i,j in zip(replace_range, item):
+                        l[i] = j
+                    # pop the remaining ones
+                    pop_range = range(slice_range.start + len(item),
+                                      slice_range.stop)
+                    # pop will mutate the list, so we always need to pop the
+                    # same index
+                    k = slice_range.start + len(item)
+                    for _ in pop_range:
+                        # FIXME: This may be slow.  Each pop can incur a
+                        # memory copy of one or more items.
+                        l.pop(k)
+            # Extended slices
+            else:
+                if len(slice_range) != len(item):
+                    raise ValueError("length mismatch for extended slice and sequence")
+                # extended slice can only replace
+                for i,j in zip(slice_range, item):
+                    l[i] = j
+
+        return impl_slice
 
 
 @overload_method(types.ListType, 'pop')
