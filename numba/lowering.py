@@ -1185,7 +1185,7 @@ class Lower(BaseLower):
                     self.builder.store(lltype(None), aptr)
         # Not in loops?
         else:
-            # Zerofill at use-site
+            # Zero-fill at use-site
             self.builder.store(lltype(None), aptr)
 
         if is_uservar:
