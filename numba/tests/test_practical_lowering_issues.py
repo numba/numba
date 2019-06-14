@@ -1,5 +1,5 @@
 """
-Tests for lowering specific errors.
+Tests for practical lowering specific errors.
 """
 
 
