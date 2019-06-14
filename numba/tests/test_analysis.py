@@ -380,7 +380,6 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
 
-
     def test_redefined_variables_are_not_considered_in_prune(self):
         # see issue #4163, checks that if a variable that is an argument is
         # redefined in the user code it is not considered const
@@ -470,7 +469,6 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                            types.float64, types.NoneType('none'),),
                           [None, None, None, None],
                           np.zeros((2, 3)), 1., None)
-
 
     def test_redefinition_analysis_different_block_cannot_exec(self):
         # checks that a redefinition in a block guarded by something that

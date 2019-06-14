@@ -304,7 +304,7 @@ def dead_branch_prune(func_ir, called_args):
         if lhs_none or rhs_none:
             try:
                 take_truebr = condition.fn(lhs_cond, rhs_cond)
-            except:
+            except Exception:
                 return False, None
             if DEBUG > 0:
                 kill = branch.falsebr if take_truebr else branch.truebr
@@ -318,7 +318,7 @@ def dead_branch_prune(func_ir, called_args):
         lhs_cond, rhs_cond = conds
         try:
             take_truebr = condition.fn(lhs_cond, rhs_cond)
-        except:
+        except Exception:
             return False, None
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
