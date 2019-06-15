@@ -2405,9 +2405,17 @@ def np_flatnonzero(a):
             # numpy raises an Attribute error with:
             # 'xxx' object has no attribute 'ravel'
 
-    def impl(a):
-        arr = np.asarray(a)
-        return np.nonzero(np.ravel(arr))[0]
+    if type_can_asarray(a):
+        def impl(a):
+            arr = np.asarray(a)
+            return np.nonzero(np.ravel(arr))[0]
+    else:
+        def impl(a):
+            if a is None:
+                data = [x for x in range(0)]
+            else:
+                data = [0]
+            return np.array(data, dtype=np.int64)
 
     return impl
 

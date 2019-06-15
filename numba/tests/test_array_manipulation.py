@@ -775,7 +775,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield ()
         yield np.nan
         yield 0
+        yield 1
+        yield False
         yield (True, False, True)
+        yield 2 + 1j
+        # the following are not array-like, but numpy 1.15+ does not raise
+        yield None
+        yield 'a_string'
 
     @unittest.skipUnless(np_version >= (1, 15),
                          "flatnonzero array-like handling per 1.15+")
