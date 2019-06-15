@@ -8,13 +8,16 @@ from numba import cuda, void, f8
 
 from numba.cuda.graph import KernelNode
 
+
 class TestCudaGraph(SerialMixin, unittest.TestCase):
 
     def test_cuda_kernel(self):
         arr = cuda.to_device(np.array([1.]))
+
         @cuda.jit(void(f8[:]))
         def k1(a):
             a[0] += 2
+
         @cuda.jit(void(f8[:]))
         def k2(a):
             a[0] *= 3
@@ -28,9 +31,11 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
 
     def test_auto_cuda_kernel(self):
         arr = cuda.to_device(np.array([1.]))
+
         @cuda.jit
         def k1(a):
             a[0] += 2
+
         @cuda.jit
         def k2(a):
             a[0] *= 3
@@ -41,6 +46,7 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
         cuda.synchronize()
 
         self.assertTrue(np.all(arr.copy_to_host() == [9]))
+
 
 if __name__ == '__main__':
     unittest.main()
