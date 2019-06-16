@@ -1169,7 +1169,8 @@ class Lower(BaseLower):
         # Is user variable?
         is_uservar = not name.startswith('$')
         # Allocate space for variable
-        aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        aptr = cgutils.alloca_once(self.builder, lltype,
+                                   name=name, zfill=False)
         if is_uservar:
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)
