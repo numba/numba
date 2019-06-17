@@ -98,6 +98,7 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:
+                        # TODO: fix parfor lowering so that typemap is valid.
                         atype = self.typemap.get(inst.target.name, "<missing>")
 
                     aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
