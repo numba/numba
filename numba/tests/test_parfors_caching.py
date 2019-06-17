@@ -26,3 +26,5 @@ class TestParForsCache(BaseCacheUsecasesTest):
         [cres] = f.overloads.values()
         self.assertEqual(dynamic_globals, [False])
         self.check_pycache(2)  # 1 index, 1 data
+
+        self.run_in_separate_process()
