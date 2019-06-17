@@ -246,8 +246,12 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
+    if info.fnty is None:
+        infoargs = info.ptr
+    else:
+        infoargs = (info.fnty, wrapper_name)
     ptr, name = build_gufunc_kernel(
-        library, ctx, (info.fnty, wrapper_name), signature, inner_ndim)
+        library, ctx, infoargs, signature, inner_ndim)
 
     return _wrapper_info(ptr=ptr, env=env, name=name, fnty=info.fnty)
 

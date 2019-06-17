@@ -2666,7 +2666,7 @@ class TestParforsMisc(TestParforsBase):
     _numba_parallel_test_ = False
 
     @skip_unsupported
-    def test_warn_if_cache_set(self):
+    def test_no_warn_if_cache_set(self):
 
         def pyfunc():
             arr = np.ones(100)
@@ -2680,16 +2680,12 @@ class TestParforsMisc(TestParforsBase):
             warnings.simplefilter('always')
             cfunc()
 
-        self.assertEqual(len(raised_warnings), 1)
-        warning_obj = raised_warnings[0]
-        expected_msg = ("as it uses dynamic globals "
-                        "(such as ctypes pointers and large global arrays)")
-        self.assertIn(expected_msg, str(warning_obj.message))
+        self.assertEqual(len(raised_warnings), 0)
 
         # Make sure the dynamic globals flag is set
         has_dynamic_globals = [cres.library.has_dynamic_globals
                                for cres in cfunc.overloads.values()]
-        self.assertEqual(has_dynamic_globals, [True])
+        self.assertEqual(has_dynamic_globals, [False])
 
     @skip_unsupported
     def test_statement_reordering_respects_aliasing(self):
