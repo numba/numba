@@ -63,13 +63,6 @@ The following are optional entries:
     This is for describing more complicated types.  This follows the same
     specification as in the `numpy array interface`_.
 
-- **mask**:  ``None`` or `` object with __cuda_array_interface__``
-
-    All elements of the mask array should be interpreted only as true or not true
-    indicating which elements of this array are valid.The shape of this object
-    should be ``broadcastable`` to the shape of the original array.
-
-
 
 Additional information about the data pointer can be retrieved using
 ``cuPointerGetAttribute`` or ``cudaPointerGetAttributes``.  Such information

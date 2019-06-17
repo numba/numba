@@ -56,9 +56,6 @@ def as_cuda_array(obj):
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
-        if 'mask' in obj.__cuda_array_interface__ and obj.__cuda_array_interface__['mask'] is not None:
-            raise ValueError("*masked arrays* are not currently supported")
-
         return from_cuda_array_interface(obj.__cuda_array_interface__,
                                          owner=obj)
 
