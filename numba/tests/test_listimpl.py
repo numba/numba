@@ -34,6 +34,8 @@ class List(object):
         self.allocated = allocated
         self.lp = self.list_new(itemsize, allocated)
 
+    # The following methods implement part of the list API
+
     def __del__(self):
         self.tc.numba_list_free(self.lp)
 
@@ -52,8 +54,10 @@ class List(object):
     def append(self, item):
         self.list_append(item)
 
-    def pop(self, i=None):
+    def pop(self, i=-1):
         return self.list_pop(i)
+
+    # The methods below are higher-level wrappers for the C-API wrappers
 
     def list_new(self, itemsize, allocated):
         lp = ctypes.c_void_p()
@@ -70,6 +74,8 @@ class List(object):
         status = self.tc.numba_list_setitem(self.lp, i, item)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
+        else:
+            self.tc.assertEqual(status, LIST_OK)
 
     def list_getitem(self, i):
         item_out_buffer = ctypes.create_string_buffer(self.itemsize)
@@ -85,7 +91,11 @@ class List(object):
         self.tc.assertEqual(status, LIST_OK)
 
     def list_pop(self, i):
-        if i is None:
+        # handling negative indices is done at the compiler level, so we only
+        # support -1 to be last element of the list here
+        if i < -1 or len(self) == 0:
+            IndexError("list index out of range")
+        elif i is -1:
             i = len(self) - 1
         item_out_buffer = ctypes.create_string_buffer(self.itemsize)
         status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
@@ -196,10 +206,7 @@ class TestListImpl(TestCase):
             'list_iter_sizeof',
             ctypes.c_size_t,
         )
-        # numba_list_iter(
-        #     NB_ListIter *it,
-        #     NB_List     *l
-        # )
+        # numba_list_iter(NB_ListIter *it, NB_List *l)
         self.numba_list_iter = wrap(
             'list_iter',
             None,
@@ -208,10 +215,7 @@ class TestListImpl(TestCase):
                 list_t,
             ],
         )
-        # numba_list_iter_next(
-        #     NB_ListIter *it,
-        #     const char **item_ptr,
-        # )
+        # numba_list_iter_next(NB_ListIter *it, const char **item_ptr)
         self.numba_list_iter_next = wrap(
             'list_iter_next',
             ctypes.c_int,
@@ -295,6 +299,11 @@ class TestListImpl(TestCase):
         received = [j for j in l]
         self.assertEqual(received, expected)
 
+    def test_pop_index_error(self):
+        l = List(self, 8, 0)
+        with self.assertRaises(IndexError):
+            l.pop()
+
     def test_pop_byte(self):
         l = List(self, 4, 0)
         values = [b'aaaa', b'bbbb', b'cccc', b'dddd',
@@ -320,3 +329,24 @@ class TestListImpl(TestCase):
         expected = [b'bbbb', b'cccc', b'eeee', b'ffff', b'gggg']
         received = [j for j in l]
         self.assertEqual(received, expected)
+
+    def check_sizing(self, item_size, nmax):
+        # Helper to verify different item_sizes
+        l = List(self, item_size, 0)
+
+        def make_item(v):
+            return bytes("{:0{}}".format(nmax - v - 1, item_size)[:item_size],
+                         encoding="ascii")
+
+        for i in range(nmax):
+            l.append(make_item(i))
+
+        self.assertEqual(len(l), nmax)
+
+        for i in range(nmax):
+            self.assertEqual(l[i], make_item(i))
+
+    def test_sizing(self):
+        # Check different sizes of the key & value.
+        for i in range(1, 16):
+            self.check_sizing(item_size=i, nmax=2**i)
