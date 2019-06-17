@@ -66,8 +66,11 @@ The following are optional entries:
 - **mask**:  ``None`` or `` object with __cuda_array_interface__``
 
     All elements of the mask array should be interpreted only as true or not true
-    indicating which elements of this array are valid.The shape of this object
+    indicating which elements of this array are valid. The shape of this object
     should be ``broadcastable`` to the shape of the original array.
+
+    .. note:: Numba does not currently support working with masked CUDA arrays
+              and will raise an exception if one is passed to a GPU function .
 
 
 Additional information about the data pointer can be retrieved using
