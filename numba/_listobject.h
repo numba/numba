@@ -48,12 +48,11 @@ typedef struct {
     Py_ssize_t       pos;
 } NB_ListIter;
 
+NUMBA_EXPORT_FUNC(void)
+numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
 NUMBA_EXPORT_FUNC(int)
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
-
-NUMBA_EXPORT_FUNC(void)
-numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
 NUMBA_EXPORT_FUNC(void)
 numba_list_free(NB_List *lp);
@@ -62,6 +61,28 @@ NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_length(NB_List *lp);
 
 NUMBA_EXPORT_FUNC(int)
+numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item);
+
+NUMBA_EXPORT_FUNC(int)
+numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out);
+
+NUMBA_EXPORT_FUNC(int)
+numba_list_append(NB_List *lp, const char *item);
+
+NUMBA_EXPORT_FUNC(int)
+numba_list_pop(NB_List *lp, Py_ssize_t index, char *out);
+
+// FIXME: should this be public?
+NUMBA_EXPORT_FUNC(int)
 numba_list_resize(NB_List *lp, Py_ssize_t newsize);
+
+NUMBA_EXPORT_FUNC(size_t)
+numba_list_iter_sizeof(void);
+
+NUMBA_EXPORT_FUNC(void)
+numba_list_iter(NB_ListIter *it, NB_List *l);
+
+NUMBA_EXPORT_FUNC(int)
+numba_list_iter_next(NB_ListIter *it, const char **item_ptr);
 
 #endif
