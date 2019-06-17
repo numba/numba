@@ -1,5 +1,63 @@
 #include "_listobject.h"
 
+/* This implements the C component of the Numba typed list. It is loosely
+ * inspired by the list implementation of the cpython list. The exact commit
+ * is:
+ *
+ * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Objects/listobject.c
+ *
+ * Algorithmically, this list is very similar to the cpython implementation so
+ * it should have the same performance (Big-O) characteristics for accessing,
+ * adding and removing elements/items. Specifically, it implements the same
+ * algorithms for list overallocation and growth. However, it never deals with
+ * PyObject types and instead must be typed with a type-size.  As a result, the
+ * typed-list is type homogeneous and in contrast to the cpython version can
+ * not store a mixture of arbitrarily typed objects. Reference counting via the
+ * Numba Runtime (NRT) is supported and incrementing and decrementing functions
+ * are store as part of the struct and can be setup from the compiler level.
+ *
+ * Importantly, Only a very limited subset of the cpython c functions have been
+ * ported over and the rest have been implemented (in Python) at the compiler
+ * level using the c functions provided. Additionally, initialization of, and
+ * iteration over a ListIter is provided
+ *
+ * The following functions are implemented for the list:
+ *
+ * - Creation                 numba_list_new
+ * - Deletion                 numba_list_free
+ * - Accessing the length     numba_list_length
+ * - Appending to the list    numba_list_append
+ * - Getting an item          numba_list_setitem
+ * - Setting an item          numba_list_getitem
+ * - Poping an item           numba_list_pop
+ * - Resizing the list        numba_list_resize
+ *
+ * As you can see, no functions related to slicing have been implemented. This
+ * is all done entirely at the compiler level which then calls the c functions
+ * to mutate the list accordingly. Since slicing allows for replace, insert and
+ * delete operations over multiple items, we can simply implement those using
+ * the basic functions above.
+ *
+ * The following additional functions are implemented for the list, these are
+ * needed to make the list work within Numba.
+ *
+ * - Copying an item          copy_item
+ * - Calling incref on item   list_incref_item
+ * - Calling decref on item   list_decref_item
+ * - Set method table         numba_list_set_method_table
+ *
+ * The following functions are implemented for the iterator:
+ *
+ * - Size of the iterator     numba_list_iter_size
+ * - Initialization of iter   numba_list_iter
+ * - Get next item from iter  numba_list_iter_next
+ *
+ * Lastly a set of pure C level tests are provided which come in handy when
+ * needing to use valgrind and friends.
+ *
+ */
+
+
 typedef enum {
     LIST_OK = 0,
     LIST_ERR_INDEX = -1,
@@ -11,19 +69,6 @@ typedef enum {
 static void
 copy_item(NB_List *lp, char *dst, const char *src){
     memcpy(dst, src, lp->itemsize);
-}
-
-int
-numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
-    NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
-    lp->size = 0;
-    lp->itemsize = itemsize;
-    lp->allocated = allocated;
-    memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
-    lp->items = malloc(aligned_size(lp->itemsize * allocated));
-
-    *out = lp;
-    return LIST_OK;
 }
 
 static void
@@ -46,9 +91,27 @@ numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods)
     memcpy(&lp->methods, methods, sizeof(list_type_based_methods_table));
 }
 
+int
+numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
+    // allocate memory to hold the struct
+    NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
+    // FIXME: what if malloc fails
+    // set up members
+    lp->size = 0;
+    lp->itemsize = itemsize;
+    lp->allocated = allocated;
+    // set method table to zero */
+    memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
+    // allocate memory to hold items
+    lp->items = malloc(aligned_size(lp->itemsize * allocated));
+    // FIXME: what if malloc fails
+
+    *out = lp;
+    return LIST_OK;
+}
 void
 numba_list_free(NB_List *lp) {
-    /* Clear all references from the item */
+    // decref all items, if needed
     Py_ssize_t i;
     if (lp->methods.item_decref) {
         for (i = 0; i < lp->size; i++) {
@@ -56,6 +119,7 @@ numba_list_free(NB_List *lp) {
             list_decref_item(lp, item);
         }
     }
+    // free items and list
     free(lp->items);
     free(lp);
 }
@@ -67,23 +131,31 @@ numba_list_length(NB_List *lp) {
 
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
+    // check index is valid
+    // FIXME: this can be (and probably is) checked at the compiler level
     if (index >= lp->size) {
         return LIST_ERR_INDEX;
     }
+    // set item at desired location
     char *loc = lp->items + lp-> itemsize * index;
     /* This assume there is already an element at index that will be
-     * overwritten. DO NOT use this to write to an unassigned location.
+     * overwritten and thereby have its reference decremented.
+     * DO NOT use this to write to an unassigned location.
      */
     list_decref_item(lp, loc);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
     return LIST_OK;
 }
+
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
+    // check index is valid
+    // FIXME: this can be (and probably is) checked at the compiler level
     if (index >= lp->size) {
         return LIST_ERR_INDEX;
     }
+    // get item at desired location
     char *loc = lp->items + lp->itemsize * index;
     copy_item(lp, out, loc);
     return LIST_OK;
@@ -91,10 +163,12 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
 
 int
 numba_list_append(NB_List *lp, const char *item) {
+    // resize by one, will change list size
     int result = numba_list_resize(lp, lp->size + 1);
     if(result < LIST_OK) {
         return result;
     }
+    // insert item at index: original size before resize
     char *loc = lp->items + lp-> itemsize * (lp->size - 1);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
@@ -104,25 +178,34 @@ numba_list_append(NB_List *lp, const char *item) {
 int
 numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     Py_ssize_t left;
+    // check index is valid
+    // FIXME: this can be (and probably is) checked at the compiler level
     if (index >= lp->size) {
         return LIST_ERR_INDEX;
     }
-    else if (index == lp->size-1) { /* fast path to pop last item */
+    // fast path to pop last item
+    else if (index == lp->size-1) { 
         char *loc = lp->items + lp->itemsize * index;
         copy_item(lp, out, loc);
         list_decref_item(lp, loc);
         numba_list_resize(lp, lp->size-1);
         return LIST_OK;
-    }else{ /* pop from somewhere else */
-        /* first get item */
+    // pop from somewhere else
+    }else{ 
+        // first, get item
         char *loc = lp->items + lp->itemsize * index;
         copy_item(lp, out, loc);
         list_decref_item(lp, loc);
-        /* then incur the dreaded memory copy */
+        // then, incur the dreaded memory copy
         left = (lp->size - 1 - index) * lp->itemsize;
         char *new_loc = lp->items + lp->itemsize * (index + 1);
         memcpy(loc, new_loc, left);
-        numba_list_resize(lp, lp->size-1);
+        // finally, resize
+        result = numba_list_resize(lp, lp->size-1);
+        if(result < LIST_OK) {
+            // Since we are decreasing the size, this should never happen
+            return result;
+        }
         return LIST_OK;
     }
 
@@ -189,6 +272,7 @@ numba_list_iter_sizeof() {
 
 void
 numba_list_iter(NB_ListIter *it, NB_List *l) {
+    // set members of iterator
     it->parent = l;
     it->size = l->size;
     it->pos = 0;
@@ -201,6 +285,7 @@ numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
     if (lp->size != it->size) {
         return LIST_ERR_MUTATED;
     }
+    // get next element
     if (it->pos < lp->size) {
         *item_ptr = lp->items + lp->itemsize * it->pos++;
         return OK;
