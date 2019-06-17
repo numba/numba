@@ -16,7 +16,7 @@ typedef struct {
     /* Size of the list.  */
     Py_ssize_t      size;
     /* Size of the list items. */
-    Py_ssize_t      itemsize;
+    Py_ssize_t      item_size;
 
     /* items contains space for 'allocated' elements.  The number
      * currently in use is size.
@@ -34,7 +34,7 @@ typedef struct {
     /* Method table for type-dependent operations. */
     list_type_based_methods_table methods;
 
-    /* Array/pointer for items. Interpretation is governed by itemsize. */
+    /* Array/pointer for items. Interpretation is governed by item_size. */
     char  * items;
 } NB_List;
 
@@ -52,7 +52,7 @@ NUMBA_EXPORT_FUNC(void)
 numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
 NUMBA_EXPORT_FUNC(int)
-numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated);
+numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated);
 
 NUMBA_EXPORT_FUNC(void)
 numba_list_free(NB_List *lp);

@@ -21,18 +21,18 @@ class List(object):
     """A wrapper around the C-API to provide a minimal list object for
     testing.
     """
-    def __init__(self, tc, itemsize, allocated):
+    def __init__(self, tc, item_size, allocated):
         """
         Parameters
         ----------
         tc : TestCase instance
-        itemsize : int
+        item_size : int
             byte size for the items
         """
         self.tc = tc
-        self.itemsize = itemsize
+        self.item_size = item_size
         self.allocated = allocated
-        self.lp = self.list_new(itemsize, allocated)
+        self.lp = self.list_new(item_size, allocated)
 
     # The following methods implement part of the list API
 
@@ -59,10 +59,10 @@ class List(object):
 
     # The methods below are higher-level wrappers for the C-API wrappers
 
-    def list_new(self, itemsize, allocated):
+    def list_new(self, item_size, allocated):
         lp = ctypes.c_void_p()
         status = self.tc.numba_list_new(
-            ctypes.byref(lp), itemsize, allocated,
+            ctypes.byref(lp), item_size, allocated,
         )
         self.tc.assertEqual(status, LIST_OK)
         return lp
@@ -78,7 +78,7 @@ class List(object):
             self.tc.assertEqual(status, LIST_OK)
 
     def list_getitem(self, i):
-        item_out_buffer = ctypes.create_string_buffer(self.itemsize)
+        item_out_buffer = ctypes.create_string_buffer(self.item_size)
         status = self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
@@ -97,7 +97,7 @@ class List(object):
             IndexError("list index out of range")
         elif i is -1:
             i = len(self) - 1
-        item_out_buffer = ctypes.create_string_buffer(self.itemsize)
+        item_out_buffer = ctypes.create_string_buffer(self.item_size)
         status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
@@ -119,7 +119,7 @@ class List(object):
             raise StopIteration
         else:
             self.tc.assertGreaterEqual(status, 0)
-            item = (ctypes.c_char * self.itemsize).from_address(bi.value)
+            item = (ctypes.c_char * self.item_size).from_address(bi.value)
             return item.value
 
 
@@ -159,7 +159,7 @@ class TestListImpl(TestCase):
             ctypes.c_int,
         )
 
-        # numba_list_new(NB_List *l, Py_ssize_t itemsize, Py_ssize_t allocated)
+        # numba_list_new(NB_List *l, Py_ssize_t item_size, Py_ssize_t allocated)
         self.numba_list_new = wrap(
             'list_new',
             ctypes.c_int,
