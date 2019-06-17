@@ -91,11 +91,11 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
 
 int
 numba_list_append(NB_List *lp, const char *item) {
-    if (lp->size == lp->allocated) {
-        int result = numba_list_realloc(lp, lp->size + 1);
-        if(result < LIST_OK) { return result; }
+    int result = numba_list_resize(lp, lp->size + 1);
+    if(result < LIST_OK) {
+        return result;
     }
-    char *loc = lp->items + lp-> itemsize * lp->size++;
+    char *loc = lp->items + lp-> itemsize * (lp->size - 1);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
     return LIST_OK;
@@ -111,7 +111,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         char *loc = lp->items + lp->itemsize * index;
         copy_item(lp, out, loc);
         list_decref_item(lp, loc);
-        lp->size--;
+        numba_list_resize(lp, lp->size-1);
         return LIST_OK;
     }else{ /* pop from somewhere else */
         /* first get item */
@@ -122,15 +122,38 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         left = (lp->size - 1 - index) * lp->itemsize;
         char *new_loc = lp->items + lp->itemsize * (index + 1);
         memcpy(loc, new_loc, left);
-        lp->size--;
+        numba_list_resize(lp, lp->size-1);
         return LIST_OK;
     }
 
 }
 
+/* Ensure lp->items has room for at least newsize elements, and set
+ * lp->size to newsize.  If newsize > lp->size on entry, the content
+ * of the new slots at exit is undefined heap trash; it's the caller's
+ * responsibility to overwrite them with sane values.
+ * The number of allocated elements may grow, shrink, or stay the same.
+ * Failure is impossible if newsize <= lp->allocated on entry, although
+ * that partly relies on an assumption that the system realloc() never
+ * fails when passed a number of bytes <= the number of bytes last
+ * allocated (the C standard doesn't guarantee this, but it's hard to
+ * imagine a realloc implementation where it wouldn't be true).
+ * Note that lp->items may change, and even if newsize is less
+ * than lp->size on entry.
+ */
 int
-numba_list_realloc(NB_List *lp, Py_ssize_t newsize) {
+numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
+    char * items;
     size_t new_allocated, num_allocated_bytes;
+    /* Bypass realloc() when a previous overallocation is large enough
+       to accommodate the newsize.  If the newsize falls lower than half
+       the allocated size, then proceed with the realloc() to shrink the list.
+    */
+    if (lp->allocated >= newsize && newsize >= (lp->allocated >> 1)) {
+        assert(lp->items != NULL || newsize == 0);
+        lp->size = newsize;
+        return 0;
+    }
     /* This over-allocates proportional to the list size, making room
      * for additional growth.  The over-allocation is mild, but is
      * enough to give linear-time amortized behavior over a long
@@ -141,9 +164,19 @@ numba_list_realloc(NB_List *lp, Py_ssize_t newsize) {
      *       is PY_SSIZE_T_MAX * (9 / 8) + 6 which always fits in a size_t.
      */
     new_allocated = (size_t)newsize + (newsize >> 3) + (newsize < 9 ? 3 : 6);
+    if (new_allocated > (size_t)PY_SSIZE_T_MAX / lp->itemsize) {
+        return LIST_ERR_NO_MEMORY;
+    }
+
+    if (newsize == 0)
+        new_allocated = 0;
     num_allocated_bytes = new_allocated * lp->itemsize;
-    lp->items = realloc(lp->items, aligned_size(num_allocated_bytes));
-    if (!lp->items) { return LIST_ERR_NO_MEMORY; }
+    items = realloc(lp->items, aligned_size(num_allocated_bytes));
+    if (!items) {
+        return LIST_ERR_NO_MEMORY;
+    }
+    lp->items = items;
+    lp->size = newsize;
     lp->allocated = (Py_ssize_t)new_allocated;
     return LIST_OK;
 }
@@ -268,11 +301,10 @@ numba_test_list(void) {
     status = numba_list_pop(lp, 3, got_item);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 3);
-    CHECK(lp->allocated == 8);
+    CHECK(lp->allocated == 6);  // this also shrinks the allocation
     CHECK(memcmp(got_item, "mno", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00", 12) == 0);
 
-    // FIXME: test pop until you shrink once shrinking is impl.
 
     // Test iterator
     CHECK(lp->size > 0);
@@ -293,6 +325,76 @@ numba_test_list(void) {
 
     CHECK(status == LIST_ERR_ITER_EXHAUSTED);
     CHECK(lp->size == it_count);
+
+    // free existing list
+    numba_list_free(lp);
+
+    // test growth upon append and shrink during pop
+    status = numba_list_new(&lp, 1, 0);
+    CHECK(status == LIST_OK);
+    CHECK(lp->itemsize == 1);
+    CHECK(lp->size == 0);
+    CHECK(lp->allocated == 0);
+
+    // first, grow the list
+    uint8_t i;
+    // Use exactly 16 elements, should go through the allocation pattern:
+    // 0, 4, 8, 16, 25
+    for (i = 0; i < 17 ; i++) {
+        switch(i) {
+            // Check the allocation before
+            case 0:  CHECK(lp->allocated == 0); break;
+            case 4:  CHECK(lp->allocated == 4); break;
+            case 8:  CHECK(lp->allocated == 8); break;
+            case 16: CHECK(lp->allocated == 16); break;
+        }
+        // To insert a single byte element into the list, dereference it to get
+        // the point to it's value and then cast that pointer to a
+        // (const char *) so that append will accept it.
+        status = numba_list_append(lp, (const char*)&i);
+        CHECK(status == LIST_OK);
+        switch(i) {
+            // Check that the growth happend accordingly
+            case 0:  CHECK(lp->allocated == 4); break;
+            case 4:  CHECK(lp->allocated == 8); break;
+            case 8:  CHECK(lp->allocated == 16); break;
+            case 16: CHECK(lp->allocated == 25); break;
+        }
+    }
+    CHECK(lp->size == 17);
+
+    // Check current contents of list
+    const char growth_items[] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+    CHECK(memcmp(lp->items, growth_items, 17) == 0);
+
+    // Now, pop them again and check that list shrinks
+    char received[1];
+    for (i = 17; i > 0 ; i--) {
+        switch(i) {
+             // Check the allocation before pop
+             case 17:  CHECK(lp->allocated == 25); break;
+             case 12:  CHECK(lp->allocated == 25); break;
+             case 9:   CHECK(lp->allocated == 18); break;
+             case 6:   CHECK(lp->allocated == 12); break;
+             case 4:   CHECK(lp->allocated == 8); break;
+             case 3:   CHECK(lp->allocated == 6); break;
+             case 2:   CHECK(lp->allocated == 5); break;
+             case 1:   CHECK(lp->allocated == 4); break;
+        }
+        status = numba_list_pop(lp, i-1, received);
+        CHECK(status == LIST_OK);
+        switch(i) {
+             // Check that the shrink happend accordingly
+             case 17:  CHECK(lp->allocated == 25); break;
+             case 12:  CHECK(lp->allocated == 18); break;
+             case 9:   CHECK(lp->allocated == 12); break;
+             case 6:   CHECK(lp->allocated == 8); break;
+             case 4:   CHECK(lp->allocated == 6); break;
+             case 3:   CHECK(lp->allocated == 5); break;
+             case 2:   CHECK(lp->allocated == 4); break;
+             case 1:   CHECK(lp->allocated == 0); break;
+        }
+    }
 
     // free list and return 0
     numba_list_free(lp);
