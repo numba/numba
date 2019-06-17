@@ -23,6 +23,7 @@
  *
  * The following functions are implemented for the list:
  *
+ * - Check valid index        valid_index
  * - Creation                 numba_list_new
  * - Deletion                 numba_list_free
  * - Accessing the length     numba_list_length
@@ -91,11 +92,26 @@ numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods)
     memcpy(&lp->methods, methods, sizeof(list_type_based_methods_table));
 }
 
+static inline int
+valid_index(Py_ssize_t i, Py_ssize_t limit)
+{
+    /* The cast to size_t lets us use just a single comparison
+       to check whether i is in the range: 0 <= i < limit.
+
+       See:  Section 14.2 "Bounds Checking" in the Agner Fog
+       optimization manual found at:
+       https://www.agner.org/optimize/optimizing_cpp.pdf
+    */
+    return (size_t) i < (size_t) limit;
+}
+
 int
 numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
     // allocate memory to hold the struct
     NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
-    // FIXME: what if malloc fails
+    if (!lp) {
+        return LIST_ERR_NO_MEMORY;
+    }
     // set up members
     lp->size = 0;
     lp->itemsize = itemsize;
@@ -103,9 +119,12 @@ numba_list_new(NB_List **out, Py_ssize_t itemsize, Py_ssize_t allocated){
     // set method table to zero */
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     // allocate memory to hold items
-    lp->items = malloc(aligned_size(lp->itemsize * allocated));
-    // FIXME: what if malloc fails
-
+    char *items = malloc(aligned_size(lp->itemsize * allocated));
+    if (!items) {
+        free(lp);
+        return LIST_ERR_NO_MEMORY;
+    }
+    lp->items = items;
     *out = lp;
     return LIST_OK;
 }
@@ -133,7 +152,7 @@ int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
-    if (index >= lp->size) {
+    if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
     // set item at desired location
@@ -152,7 +171,7 @@ int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
-    if (index >= lp->size) {
+    if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
     // get item at desired location
@@ -180,7 +199,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     Py_ssize_t left;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
-    if (index >= lp->size) {
+    if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
     // fast path to pop last item
@@ -201,7 +220,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         char *new_loc = lp->items + lp->itemsize * (index + 1);
         memcpy(loc, new_loc, left);
         // finally, resize
-        result = numba_list_resize(lp, lp->size-1);
+        int result = numba_list_resize(lp, lp->size-1);
         if(result < LIST_OK) {
             // Since we are decreasing the size, this should never happen
             return result;
