@@ -19,6 +19,7 @@ from __future__ import print_function, absolute_import, division
 
 from numba import njit
 from numba import int32, types
+from numba.errors import TypingError
 from numba import listobject
 from numba.utils import IS_PY3
 from .support import TestCase, MemoryLeakMixin, unittest
@@ -77,34 +78,50 @@ class TestListObjectGetitem(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         @njit
-        def bar(i):
+        def foo(i):
             l = listobject.new_list(int32)
             return l[i]
 
-        with self.assertRaises(IndexError):
-            bar(1)
-
-        with self.assertRaises(IndexError):
-            bar(0)
-
-        with self.assertRaises(IndexError):
-            bar(-1)
+        for i in (1, 0, -1):
+            with self.assertRaises(IndexError) as raises:
+                foo(i)
+            self.assertIn(
+                "list index out of range",
+                str(raises.exception),
+            )
 
     def test_list_getitem_multiple_index_error(self):
         self.disable_leak_check()
 
         @njit
-        def bar(i):
+        def foo(i):
             l = listobject.new_list(int32)
             for j in range(10, 20):
                 l.append(j)
             return l[i]
 
-        with self.assertRaises(IndexError):
-            bar(10)
+        for i in (10, -11):
+            with self.assertRaises(IndexError) as raises:
+                foo(i)
+            self.assertIn(
+                "list index out of range",
+                str(raises.exception),
+            )
 
-        with self.assertRaises(IndexError):
-            bar(-11)
+    def test_list_getitem_empty_typing_error(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            return l["xyz"]
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "list indices must be integers or slices",
+            str(raises.exception),
+        )
 
 
 class TestListObjectGetitemSlice(MemoryLeakMixin, TestCase):

@@ -628,6 +628,9 @@ def impl_getitem(l, index):
 
         return slice_impl
 
+    else:
+        raise TypingError("list indices must be integers or slices")
+
 
 @intrinsic
 def _list_setitem(typingctx, l, index, item):
