@@ -423,17 +423,51 @@ class TestListObjectSetitem(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         @njit
-        def bar(i):
+        def foo(i):
             l = listobject.new_list(int32)
             for j in range(10, 20):
                 l.append(j)
             l[i] = 0
 
         with self.assertRaises(IndexError):
-            bar(10)
+            foo(10)
 
         with self.assertRaises(IndexError):
-            bar(-11)
+            foo(-11)
+
+    def test_list_setitem_singleton_typing_error_on_index(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            # slice with a non-{integer,slice}
+            l["xyz"] = 1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "list indices must be integers or slices",
+            str(raises.exception),
+        )
+
+    def test_list_setitem_singleton_typing_error_on_item(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            # assign a non-iterable to a slice
+            l[:] = 1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "can only assign an iterable",
+            str(raises.exception),
+        )
 
 
 class TestListObjectPop(MemoryLeakMixin, TestCase):

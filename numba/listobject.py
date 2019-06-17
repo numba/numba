@@ -691,6 +691,8 @@ def impl_setitem(l, index, item):
         return impl_integer
 
     elif isinstance(index, types.SliceType):
+        if not isinstance(item, types.IterableType):
+            raise TypingError("can only assign an iterable")
 
         def impl_slice(l, index, item):
             # special case "a[i:j] = a", need to copy first
@@ -743,6 +745,8 @@ def impl_setitem(l, index, item):
 
         return impl_slice
 
+    else:
+        raise TypingError("list indices must be integers or slices")
 
 @overload_method(types.ListType, 'pop')
 def impl_pop(l, index=-1):
