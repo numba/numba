@@ -73,7 +73,9 @@ CR_FIELDS = ["typing_context",
              "library",
              "call_helper",
              "environment",
-             "metadata",]
+             "metadata",
+             "reload_init",
+            ]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
@@ -91,11 +93,17 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc.typemap = fndesc.calltypes = None
 
         return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.interpmode, self.lifted, typeann)
+                self.objectmode, self.interpmode, self.lifted, typeann,
+                self.reload_init)
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, interpmode, lifted, typeann):
+                 signature, objectmode, interpmode, lifted, typeann,
+                 reload_init):
+        if reload_init is not None:
+            for fn in reload_init:
+                fn()
+
         library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
         cr = cls(target_context=target_context,
@@ -112,6 +120,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  typing_error=None,
                  call_helper=None,
                  metadata=None, # Do not store, arbitrary and potentially large!
+                 reload_init = reload_init,
                  )
         return cr
 
@@ -292,6 +301,7 @@ class BasePipeline(object):
         self.calltypes = None
         self.type_annotation = None
         self.metadata = {} # holds arbitrary inter-pipeline stage meta data
+        self.reload_init = []
 
         # parfor diagnostics info, add to metadata
         self.parfor_diagnostics = ParforDiagnostics()
@@ -587,6 +597,8 @@ class BasePipeline(object):
                 warnings.warn(errors.NumbaPerformanceWarning(msg,
                                                              self.func_ir.loc))
 
+        self.reload_init.append(_reload_parfors)
+
     def stage_inline_pass(self):
         """
         Inline calls to locally defined closures.
@@ -701,6 +713,7 @@ class BasePipeline(object):
             fndesc=lowered.fndesc,
             environment=lowered.env,
             metadata=self.metadata,
+            reload_init=tuple(self.reload_init),
             )
 
     def stage_objectmode_backend(self):
@@ -1158,3 +1171,11 @@ def py_lowering_stage(targetctx, library, interp, flags):
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
+
+
+def _reload_parfors():
+    """Reloader for cached parfors
+    """
+    # Re-initialize the parallel backend on when load from cache.
+    from numba.npyufunc.parallel import _launch_threads
+    _launch_threads()

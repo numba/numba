@@ -4,9 +4,6 @@ import numpy as np
 
 from numba import njit
 from numba.tests.support import TestCase
-from numba.npyufunc.parallel import _launch_threads
-
-_launch_threads()  # FIXME
 
 
 @njit(parallel=True, cache=True)
