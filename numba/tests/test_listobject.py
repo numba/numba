@@ -42,6 +42,35 @@ class TestListObjectCreateAppendLength(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), i)
 
 
+class TestToFromMeminfo(MemoryLeakMixin, TestCase):
+
+    def test_list_to_from_meminfo(self):
+        """
+        Exercise listobject.{_as_meminfo, _from_meminfo}
+        """
+
+        @njit
+        def boxer():
+            l = listobject.new_list(int32)
+            for i in range(10, 20):
+                l.append(i)
+            return listobject._as_meminfo(l)
+
+        lsttype = types.ListType(int32)
+
+        @njit
+        def unboxer(mi):
+            l = listobject._from_meminfo(mi, lsttype)
+            return l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], l[8], l[9]
+
+        mi = boxer()
+        self.assertEqual(mi.refcount, 1)
+
+        received = list(unboxer(mi))
+        expected = list(range(10, 20))
+        self.assertEqual(received, expected)
+
+
 class TestListObjectGetitem(MemoryLeakMixin, TestCase):
     """Test list getitem. """
 

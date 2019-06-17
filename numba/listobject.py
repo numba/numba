@@ -105,6 +105,41 @@ def _as_meminfo(typingctx, lstobj):
     return sig, codegen
 
 
+@intrinsic
+def _from_meminfo(typingctx, mi, listtyperef):
+    """Recreate a list from a MemInfoPointer
+    """
+    if mi != _meminfo_listptr:
+        raise TypingError('expected a MemInfoPointer for dict.')
+    listtype = listtyperef.instance_type
+    if not isinstance(listtype, ListType):
+        raise TypingError('expected a {}'.format(ListType))
+
+    def codegen(context, builder, sig, args):
+        [tmi, tdref] = sig.args
+        td = tdref.instance_type
+        [mi, _] = args
+
+        ctor = cgutils.create_struct_proxy(td)
+        dstruct = ctor(context, builder)
+
+        data_pointer = context.nrt.meminfo_data(builder, mi)
+        data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
+
+        dstruct.data = builder.load(data_pointer)
+        dstruct.meminfo = mi
+
+        return impl_ret_borrowed(
+            context,
+            builder,
+            listtype,
+            dstruct._getvalue(),
+        )
+
+    sig = listtype(mi, listtyperef)
+    return sig, codegen
+
+
 def _list_get_data(context, builder, list_ty, l):
     """Helper to get the C list pointer in a numba list.
     """
