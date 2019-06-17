@@ -12,6 +12,13 @@ class MyArray(object):
         self.__cuda_array_interface__ = arr.__cuda_array_interface__
 
 
+class MyMaskedArray(object):
+    def __init__(self, arr, mask):
+        self._arr = arr
+        self.__cuda_array_interface__ = arr.__cuda_array_interface__
+        self.__cuda_array_interface__['mask'] = mask
+
+
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(CUDATestCase):
     def test_as_cuda_array(self):
@@ -29,6 +36,13 @@ class TestCudaArrayInterface(CUDATestCase):
         # d_arr and wrapped must be the same buffer
         self.assertEqual(wrapped.device_ctypes_pointer.value,
                          d_arr.device_ctypes_pointer.value)
+
+        # test for masked arrays
+        mask = np.random.choice(a=[False, True], size=len(h_arr))
+        m_arr = cuda.to_device(mask)
+        my_masked_arr = MyMaskedArray(d_arr, m_arr)
+        # raise value error if input is a masked array
+        self.assertRaises(ValueError, lambda: cuda.as_cuda_array(my_masked_arr))
 
     def test_ownership(self):
         # Get the deallocation queue
