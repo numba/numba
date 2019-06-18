@@ -2175,8 +2175,8 @@ class TestParforsVectorizer(TestPrangeBase):
             if assertions:
                 schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
-                self.assertEqual(len(matches), 2) # 1x decl, 1x call
-                self.assertEqual(matches[0], matches[1])
+                self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
+                self.assertEqual(matches[0], schedule_type)
                 self.assertTrue(asm != {})
 
         return asm
