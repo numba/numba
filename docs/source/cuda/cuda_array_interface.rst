@@ -70,6 +70,10 @@ The following are optional entries:
     elements of this array are valid. This has the same definition as *mask*
     in the `numpy array interface`_.
 
+    .. note:: Numba does not currently support working with masked CUDA arrays
+              and will raise a `NotImplementedError` exception if one is passed
+              to a GPU function.
+
 
 
 
