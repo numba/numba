@@ -1,18 +1,13 @@
-""" Tests for the Numba typed list components at:
+""" Tests for the compiler components of the Numba typed-list.
 
-    * numba/_listobject.h
-    * numba/_listobject.c
-    * numba/listobject.py
-
-These are the C and compiler components of the typed list implementation. The
-tests here should exercise everything within an `@njit` context. Importantly,
-the tests should not return a typed list from within such a context as this
-would require code from numba/typed/typedlist.py (this is tested seperately).
-Tests in this file build on each other in the order of writing. For example,
-the first test, tests the creation, append and len of the list. These are the
-barebones to do anything useful with a list. The subsequent test for getitem
-assumes makes use of these three operations and therefore assumes that they
-work.
+The tests here should exercise everything within an `@njit` context.
+Importantly, the tests should not return a typed list from within such a
+context as this would require code from numba/typed/typedlist.py (this is
+tested seperately).  Tests in this file build on each other in the order of
+writing. For example, the first test, tests the creation, append and len of the
+list. These are the barebones to do anything useful with a list. The subsequent
+test for getitem assumes makes use of these three operations and therefore
+assumes that they work.
 
 """
 from __future__ import print_function, absolute_import, division

@@ -1,5 +1,5 @@
 """
-Compiler-side implementation of the list.
+Compiler-side implementation of the Numba  typed-list.
 """
 import ctypes
 import operator
@@ -9,7 +9,6 @@ from llvmlite import ir
 
 from numba import cgutils
 from numba import _helperlib
-from numba.targets.registry import cpu_target
 
 from numba.extending import (
     overload,
@@ -28,7 +27,6 @@ from numba.types import (
     ListTypeIteratorType,
     Type,
 )
-from numba.typeconv import Conversion
 from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
 from numba import typing
