@@ -4,10 +4,12 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 from numba.compiler import compile_isolated, run_frontend
 from numba import types, rewrites, ir, jit, ir_utils
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, SerialMixin
 
 
 from numba.analysis import dead_branch_prune
+
+_GLOBAL = 123
 
 
 def compile_to_ir(func):
@@ -28,7 +30,7 @@ def compile_to_ir(func):
     return func_ir
 
 
-class TestBranchPrune(MemoryLeakMixin, TestCase):
+class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
     """
     Tests branch pruning
     """
@@ -364,7 +366,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         # from the IR mutation
 
         @jit
-        def bug(a,b):
+        def bug(a, b):
             if a.ndim == 1:
                 if b is None:
                     return 10
@@ -376,3 +378,51 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
+
+    def test_global_bake_in(self):
+
+        def impl(x):
+            if _GLOBAL == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        global _GLOBAL
+        tmp = _GLOBAL
+
+        try:
+            _GLOBAL = 5
+
+            def impl(x):
+                if _GLOBAL == 123:
+                    return x
+                else:
+                    return x + 10
+
+            self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+        finally:
+            _GLOBAL = tmp
+
+    def test_freevar_bake_in(self):
+
+        _FREEVAR = 123
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        _FREEVAR = 12
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
