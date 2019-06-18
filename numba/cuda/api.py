@@ -30,6 +30,13 @@ def from_cuda_array_interface(desc, owner=None):
     The *owner* is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
     """
+    version = desc.get('version')
+    if version == 1:
+        mask = desc.get('mask')
+        # Would ideally be better to detect if the mask is all valid
+        if mask is not None:
+            raise NotImplementedError('Masked arrays are not supported')
+
     shape = desc['shape']
     strides = desc.get('strides')
     dtype = np.dtype(desc['typestr'])

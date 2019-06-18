@@ -205,6 +205,21 @@ class TestCudaArrayInterface(CUDATestCase):
         expected_msg = 'D->H copy not implemented for negative strides'
         self.assertIn(expected_msg, str(raises.exception))
 
+    def test_masked_array(self):
+        h_arr = np.random.random(10)
+        h_mask = np.random.randint(2, size=10, dtype='bool')
+        c_arr = cuda.to_device(h_arr)
+        c_mask = cuda.to_device(h_mask)
+
+        # Manually create a masked CUDA Array Interface dictionary
+        masked_cuda_array_interface = c_arr.__cuda_array_interface__.copy()
+        masked_cuda_array_interface['mask'] = c_mask
+
+        with self.assertRaises(NotImplementedError) as raises:
+            cuda.from_cuda_array_interface(masked_cuda_array_interface)
+        expected_msg = 'Masked arrays are not supported'
+        self.assertIn(expected_msg, str(raises.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
