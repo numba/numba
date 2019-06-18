@@ -1,6 +1,13 @@
 
 """
-Python wrapper that connects CPython interpreter to the numba listobject.
+Python wrapper that connects CPython interpreter to the Numba typed-list.
+
+This is the code that is used when creating typed lists outside of a `@jit`
+context and when returning a typed-list from a `@jit` decorated function. It
+basically a Python class that has a Numba allocated typed-list under the hood
+and uses `@jit` functions to access it. Since it inherits from MutableSequence
+it should really quack like the CPython `list`.
+
 """
 from numba.six import MutableSequence
 from numba.types import ListType, TypeRef
