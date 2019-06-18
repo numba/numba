@@ -863,7 +863,8 @@ def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
         return
 
-    # FIXME type check iterable
+    if not isinstance(iterable, types.IterableType):
+        raise TypingError("extend argument must be iterable")
 
     itemty = l.item_type
 
