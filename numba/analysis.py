@@ -440,8 +440,7 @@ def rewrite_semantic_constants(func_ir, called_args):
     """
     This rewrites values known to be constant by their semantics as ir.Const
     nodes, this is to give branch pruning the best chance possible of killing
-    branches. An example might be switching the multiple statements needed to
-    do `np.float64` to be ir.Const(types.float64)
+    branches. An example might be rewriting len(tuple) as the literal length.
 
     func_ir is the IR
     called_args are the actual arguments with which the function is called
@@ -480,28 +479,6 @@ def rewrite_semantic_constants(func_ir, called_args):
                                 if isinstance(argty, types.Array):
                                     rewrite_statement(func_ir, stmt,
                                                       argty.ndim)
-
-                        # rewrite Array.dtype as const(dtype)
-                        if val.attr == 'dtype':
-                            name = val.value.name
-                            if name in func_ir.arg_names:
-                                idx = func_ir.arg_names.index(name)
-                                argty = called_args[idx]
-                                if isinstance(argty, types.Array):
-                                    rewrite_statement(func_ir, stmt,
-                                                      argty.dtype)
-
-                        # rewrite np.<dtype> as const(nb_type)
-                        defn = guard(get_definition, func_ir, val.value)
-                        if defn is not None and isinstance(defn, ir.Global):
-                            if defn.value == np:
-                                try:
-                                    np_ty = np.dtype(getattr(np, val.attr))
-                                    dt_ty = typeof(np_ty).dtype
-                                except BaseException:
-                                    pass
-                                else:
-                                    rewrite_statement(func_ir, stmt, dt_ty)
 
                     # rewrite len(tuple) as const(len(tuple))
                     if getattr(val, 'op', None) == 'call':

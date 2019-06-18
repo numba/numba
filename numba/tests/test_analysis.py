@@ -376,12 +376,12 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         def bug(a, b):
             if a.ndim == 1:
                 if b is None:
-                    return 10
+                    return dict()
                 return 12
             return []
 
-        self.assertEqual(bug(np.arange(10), 4), 12)
-        self.assertEqual(bug(np.arange(10), None), 10)
+        self.assertEqual(bug(np.zeros(10), 4), 12)
+        self.assertEqual(bug(np.arange(10), None), dict())
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
@@ -572,6 +572,10 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,
                                                                         None],
                           np.zeros((2, 3)))
+        self.assert_prune(impl, (types.Array(types.float64, 1, 'C'),), [True,
+                                                                        'both'],
+                          np.zeros((2,)))
+
 
     def test_tuple_len(self):
 
@@ -585,15 +589,7 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         self.assert_prune(impl, (types.UniTuple(types.int64, 3),), [False,
                                                                     None],
                           tuple([1, 2, 3]))
+        self.assert_prune(impl, (types.UniTuple(types.int64, 2),), [True,
+                                                                    'both'],
+                          tuple([1, 2]))
 
-    def test_const_dtype(self):
-
-        def impl(arr):
-            if arr.dtype == np.float64:
-                x = 1
-            else:
-                x = 10
-            return x
-
-        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,],
-                          np.zeros((10,)))
