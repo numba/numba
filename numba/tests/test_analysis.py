@@ -429,6 +429,7 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
                 return x + 10
 
         self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+
     def test_redefined_variables_are_not_considered_in_prune(self):
         # see issue #4163, checks that if a variable that is an argument is
         # redefined in the user code it is not considered const
