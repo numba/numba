@@ -322,7 +322,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         # Buider wrapper for ufunc entry point
         signature = cres.signature
         info = build_gufunc_wrapper(
-            self.py_func, cres, self.sin, self.sout, cache=self.cache,
+            self.py_func, cres, self.sin, self.sout,
+            cache=self.cache, is_parfors=False,
         )
 
         ptr = info.ptr

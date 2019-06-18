@@ -1171,7 +1171,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
 
-    info = build_gufunc_wrapper(llvm_func, cres, sin, sout, {})
+    info = build_gufunc_wrapper(llvm_func, cres, sin, sout,
+                                cache=False, is_parfors=True)
     wrapper_ptr = info.ptr
     env = info.env
     wrapper_name = info.name

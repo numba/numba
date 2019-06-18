@@ -210,6 +210,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         # Build wrapper for ufunc entry point
         info = build_gufunc_wrapper(
             self.py_func, cres, self.sin, self.sout, cache=self.cache,
+            is_parfors=False,
         )
         ptr = info.ptr
         env = info.env
@@ -232,12 +233,12 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 _wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name', 'fnty'])
 
 
-def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
     info = ufuncbuilder.build_gufunc_wrapper(
-        py_func, cres, sin, sout, cache=cache,
+        py_func, cres, sin, sout, cache=cache, is_parfors=is_parfors,
     )
     innerfunc = info.ptr
     env = info.env
