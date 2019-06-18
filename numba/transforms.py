@@ -501,50 +501,74 @@ def find_setupwiths(blocks):
 
 def ssa_transformation(func_ir):
 
-    def apply(defsites, var, stack, df):
-        # phis is a dict of {node -> list of phi variables defined at a specific node}
-        phis = defaultdict(list)
+    def create_phi_node(var, dest_block, incoming_blocks):
+        # This will first create the PHI node and add it to the top of the dest_block
+        blocks = func_ir.blocks
+        name = var.name
+        incoming_vars = []
 
-        print('starting {}, stack: {}'.format(var, stack))
+        for block_num in incoming_blocks:
+            defvar = blocks[block_num].find_variable_assignment(name)
+            incoming_vars += [(defvar.target, block_num)]
 
-        while len(stack) > 0:
-            N = stack.pop() # grab a basic block
+        phi = ir.Assign(ir.PHI(incoming_vars, var.loc), var, var.loc)
+        return phi
+
+    def attach_phi_node(phi, dest_block):
+        block = func_ir.blocks[dest_block]
+        block.prepend(phi)
+
+    # Compute the PHI nodes for a given variable var
+    def compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier):
+        # phis is a dict of {Node (Basic Block) -> list of PHI variables defined at it}
+        while len(worklist) > 0:
+            N = worklist.pop() # grab a basic block N
             # for each node Y in the dominance frontier of N
-            for Y in df[N]: 
+            for Y in dominance_frontier[N]: 
                 if var not in phis[Y]:
                     # insert PHI
-                    # phis[Y].append(var)
-                    if var not in defsites[Y]:
-                        print('appending {} to the stack'.format(Y))
-                        # stack.append(Y)
+                    phi = create_phi_node(var, Y, defsites[var])
+                    attach_phi_node(phi, Y)
 
-        print('phis', phis)
+                    phis[Y].append(var)
+
+                    if Y in defsites and var not in defsites[Y]:
+                        worklist.append(Y)
+
+        return phis
 
     def get_defsites(blocks):
         # defsites is a map of {var -> [Blocks]} and it records
         # the sites where a variable was defined
-        defsites = defaultdict(list)
+        defsites = {}
 
         for offset, block in blocks.items():
             body = block.body
             for inst in body:
-                # print('\t', inst, type(inst))
                 if isinstance(inst, ir.Assign):
+                    if inst.target not in defsites:
+                        defsites[inst.target] = []
                     defsites[inst.target].append(offset)
 
-        print('defsites:', defsites)
         return defsites
 
     blocks = func_ir.blocks
     defsites = get_defsites(blocks)
 
     vlt = func_ir.variable_lifetime
-    df = vlt.cfg.dominance_frontier()
+    dominance_frontier = vlt.cfg.dominance_frontier()
 
+    # defs are all the definition sites of var
+    phis = defaultdict(list) 
     for var, defs in defsites.items():
-        stack = list(defs)
-        apply(defsites, var, stack, df)
+        # ignore variables that has only one definition site
+        if len(defs) > 1:
+            worklist = list(defs)
+            compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier)
 
+    # for node, phi in phis.items():
+    #     print (node, phi)
+    # print(phis)
 
 
 

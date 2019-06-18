@@ -663,7 +663,7 @@ class Assign(Stmt):
     """
     def __init__(self, value, target, loc):
         assert isinstance(value, AbstractRHS)
-        assert isinstance(target, Var)
+        assert isinstance(target, Var) or isinstance(target, PHI)
         assert isinstance(loc, Loc)
         self.value = value
         self.target = target
@@ -689,6 +689,27 @@ class Print(Stmt):
 
     def __str__(self):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
+
+
+class PHI(AbstractRHS):
+    """
+    PHI instruction.
+    """
+
+    def __init__(self, incoming_vars, loc):
+        assert isinstance(loc, Loc)
+        assert isinstance(incoming_vars, list)
+        self.num_vars = len(incoming_vars)
+        self.incoming_vars = incoming_vars
+        self.loc = loc
+
+    def get_incoming_var(self, i):
+        if i < self.num_vars:
+            raise KeyError("No incoming var for value %d" % (i))
+        return self.incoming_vars[i]
+
+    def __repr__(self):
+        return "PHI %s" % (self.incoming_vars)
 
 
 class Yield(Inst):
