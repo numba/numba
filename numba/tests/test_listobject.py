@@ -648,7 +648,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
     """
 
     def test_list_delitem(self):
-        # __delitem__ calls pop under the hood, so a basic test suffices
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -657,6 +657,18 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             del l[0]
             return len(l), l[0], l[1]
         self.assertEqual(foo(), (2, 11, 12))
+
+    @unittest.expectedFailure
+    def test_list_delitem_slice(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in (10, 11, 12):
+                l.append(j)
+            del l[:]
+            return len(l)
+        self.assertEqual(foo(), 0)
 
 
 class TestContains(MemoryLeakMixin, TestCase):

@@ -816,9 +816,20 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    def impl(l, index):
-        l.pop(index)
-    return impl
+    if index in types.signed_domain:
+        def integer_impl(l, index):
+            l.pop(index)
+
+        return integer_impl
+
+    elif isinstance(index, types.SliceType):
+        def slice_impl(l, index):
+            raise NotImplementedError
+
+        return slice_impl
+
+    else:
+        raise TypingError("list indices must be signed integers or slices")
 
 
 @overload(operator.contains)
