@@ -1148,10 +1148,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     '''
     context = lowerer.context
     builder = lowerer.builder
-    library = lowerer.library
 
-    from .parallel import (ParallelGUFuncBuilder, build_gufunc_wrapper,
-                           get_thread_count, _launch_threads)
+    from .parallel import (build_gufunc_wrapper,
+                           get_thread_count,
+                           _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
@@ -1173,8 +1173,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     info = build_gufunc_wrapper(llvm_func, cres, sin, sout,
                                 cache=False, is_parfors=True)
-    wrapper_ptr = info.ptr
-    env = info.env
     wrapper_name = info.name
     cres.library._ensure_finalized()
 
@@ -1217,8 +1215,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
     # Prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
-    sched_name = expr_args.pop(0)
-    sched_typ = outer_sig.args[0]
+    expr_args.pop(0)
     sched_sig = sin.pop(0)
 
     if config.DEBUG_ARRAY_OPT:
@@ -1438,7 +1435,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             sizeof = context.get_abi_sizeof(typ)
             # Set stepsize to the size of that dtype.
             stepsize = context.get_constant(types.intp, sizeof)
-            if red_stride != None:
+            if red_stride is not None:
                 for rs in red_stride:
                     stepsize = builder.mul(stepsize, rs)
         else:
@@ -1465,7 +1462,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "before calling kernel %p\n", fn)
-    result = builder.call(fn, [args, shapes, steps, data])
+    builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
@@ -1473,8 +1470,5 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         arg, rv_arg = v
         only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
-
-    scope = init_block.scope
-    loc = init_block.loc
 
     context.active_code_library.add_linking_library(cres.library)
