@@ -46,6 +46,8 @@ ll_bytes = cgutils.voidptr_t
 
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
+INDEXTY = types.intp
+
 
 @register_model(ListType)
 class ListModel(models.StructModel):
@@ -637,10 +639,10 @@ def impl_getitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    indexty = types.intp
+    indexty = INDEXTY
     itemty = l.item_type
 
-    if isinstance(index, types.Integer):
+    if index in types.signed_domain:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -664,7 +666,7 @@ def impl_getitem(l, index):
         return slice_impl
 
     else:
-        raise TypingError("list indices must be integers or slices")
+        raise TypingError("list indices must be signed integers or slices")
 
 
 @intrinsic
@@ -707,10 +709,10 @@ def impl_setitem(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    indexty = types.intp
+    indexty = INDEXTY
     itemty = l.item_type
 
-    if isinstance(index, types.Integer):
+    if index in types.signed_domain:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -781,27 +783,34 @@ def impl_setitem(l, index, item):
         return impl_slice
 
     else:
-        raise TypingError("list indices must be integers or slices")
+        raise TypingError("list indices must be signed integers or slices")
+
 
 @overload_method(types.ListType, 'pop')
 def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
 
-    indexty = types.intp
+    indexty = INDEXTY
 
-    def impl(l, index=-1):
-        index = handle_index(l, index)
-        castedindex = _cast(index, indexty)
-        status, item = _list_pop(l, castedindex)
-        if status == ListStatus.LIST_OK:
-            return _nonoptional(item)
-        elif status == ListStatus.LIST_ERR_INDEX:
-            raise IndexError("list index out of range")
-        else:
-            raise AssertionError("internal list error during pop")
+    # FIXME: this type check works, but it isn't clear why and if it optimal
+    if (isinstance(index, int)
+            or index in types.signed_domain
+            or isinstance(index, types.Omitted)):
+        def impl(l, index=-1):
+            index = handle_index(l, index)
+            castedindex = _cast(index, indexty)
+            status, item = _list_pop(l, castedindex)
+            if status == ListStatus.LIST_OK:
+                return _nonoptional(item)
+            elif status == ListStatus.LIST_ERR_INDEX:
+                raise IndexError("list index out of range")
+            else:
+                raise AssertionError("internal list error during pop")
+        return impl
 
-    return impl
+    else:
+        raise TypingError("argument for pop must be a signed integer")
 
 
 @overload(operator.delitem)

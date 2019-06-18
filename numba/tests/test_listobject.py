@@ -141,16 +141,30 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         @njit
-        def foo():
+        def foo(i):
             l = listobject.new_list(int32)
-            return l["xyz"]
+            return l[i]
 
-        with self.assertRaises(TypingError) as raises:
-            foo()
-        self.assertIn(
-            "list indices must be integers or slices",
-            str(raises.exception),
-        )
+        for i in "xyz", 1.0, 1j:
+            with self.assertRaises(TypingError) as raises:
+                foo(i)
+            self.assertIn(
+                "list indices must be signed integers or slices",
+                str(raises.exception),
+            )
+
+    def test_list_getitem_integer_types_as_index(self):
+
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l[i]
+
+        # try all signed integers and make sure they are cast
+        for t in (types.signed_domain
+                  ):
+            self.assertEqual(foo((t(0))), 0)
 
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
@@ -468,18 +482,19 @@ class TestSetitem(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         @njit
-        def foo():
+        def foo(i):
             l = listobject.new_list(int32)
             l.append(0)
             # slice with a non-{integer,slice}
-            l["xyz"] = 1
+            l[i] = 1
 
-        with self.assertRaises(TypingError) as raises:
-            foo()
-        self.assertIn(
-            "list indices must be integers or slices",
-            str(raises.exception),
-        )
+        for i in "xyz", 1.0, 1j:
+            with self.assertRaises(TypingError) as raises:
+                foo(i)
+            self.assertIn(
+                "list indices must be signed integers or slices",
+                str(raises.exception),
+            )
 
     def test_list_setitem_singleton_typing_error_on_item(self):
         self.disable_leak_check()
@@ -497,6 +512,20 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             "can only assign an iterable",
             str(raises.exception),
         )
+
+    def test_list_setitem_integer_types_as_index(self):
+
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            l.append(0)
+            l[i] = 1
+            return l[i]
+
+        # try all signed integers and make sure they are cast
+        for t in (types.signed_domain
+                  ):
+            self.assertEqual(foo((t(0))), 1)
 
 
 class TestPop(MemoryLeakMixin, TestCase):
@@ -545,6 +574,19 @@ class TestPop(MemoryLeakMixin, TestCase):
         for i, n in ((-3, 10), (-2, 11), (-1, 12)):
             self.assertEqual(foo(i), (n, 2))
 
+    def test_list_pop_integer_types_as_index(self):
+
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.pop(i)
+
+        # try all signed integers and make sure they are cast
+        for t in (types.signed_domain
+                  ):
+            self.assertEqual(foo((t(0))), 0)
+
     def test_list_pop_empty_index_error_no_index(self):
         self.disable_leak_check()
 
@@ -586,6 +628,24 @@ class TestPop(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(IndexError):
             foo(3)
+
+    def test_list_pop_singleton_typing_error_on_index(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            l.append(0)
+            # slice with a non-{integer,slice}
+            return l.pop(i)
+
+        for i in "xyz", 1.0, 1j:
+            with self.assertRaises(TypingError) as raises:
+                foo(i)
+            self.assertIn(
+                "argument for pop must be a signed integer",
+                str(raises.exception),
+            )
 
 
 class TestListObjectDelitem(MemoryLeakMixin, TestCase):
