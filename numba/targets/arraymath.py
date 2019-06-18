@@ -1080,11 +1080,34 @@ def _can_collect_percentiles(a, nan_mask, skip_nan):
         return True
 
 @register_jitable
-def _collect_percentiles(a, q, skip_nan=False):
-    if np.any(np.isnan(q)) or np.any(q < 0) or np.any(q > 100):
-        raise ValueError('Percentiles must be in the range [0,100]')
+def check_valid(q, q_upper_bound):
+    valid = True
 
-    temp_arry = a.flatten()
+    # avoid expensive reductions where possible
+    if q.ndim == 1 and q.size < 10:
+        for i in range(q.size):
+            if q[i] < 0.0 or q[i] > q_upper_bound or np.isnan(q[i]):
+                valid = False
+                break
+    else:
+        if np.any(np.isnan(q)) or np.any(q < 0.0) or np.any(q > q_upper_bound):
+            valid = False
+
+    return valid
+
+@register_jitable
+def percentile_is_valid(q):
+    if not check_valid(q, q_upper_bound=100.0):
+        raise ValueError('Percentiles must be in the range [0, 100]')
+
+@register_jitable
+def quantile_is_valid(q):
+    if not check_valid(q, q_upper_bound=1.0):
+        raise ValueError('Quantiles must be in the range [0, 1]')
+
+@register_jitable
+def _collect_percentiles(a, q, skip_nan):
+    temp_arry = a.copy()
     nan_mask = np.isnan(temp_arry)
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
@@ -1095,34 +1118,57 @@ def _collect_percentiles(a, q, skip_nan=False):
 
     return out
 
-def _np_percentile_impl(a, q, skip_nan):
+@register_jitable
+def _collect_percentiles(a, q, check_q, factor, skip_nan):
+    q = np.asarray(q, dtype=np.float64).flatten()
+    check_q(q)
+    q = q * factor
+
+    temp_arry = np.asarray(a, dtype=np.float64).flatten()
+    nan_mask = np.isnan(temp_arry)
+
+    if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
+        temp_arry = temp_arry[~nan_mask]
+        out = _collect_percentiles_inner(temp_arry, q)
+    else:
+        out = np.full(len(q), np.nan)
+
+    return out
+
+def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
+    """
+    The underlying algorithm to find percentiles and quantiles
+    is the same, hence we converge onto the same code paths
+    in this inner function implementation
+    """
+    dt = determine_dtype(a)
+    if np.issubdtype(dt, np.complexfloating):
+        raise TypingError('Not supported for complex dtype')
+        # this could be supported, but would require a
+        # lexicographic comparison
+
     def np_percentile_q_scalar_impl(a, q):
-        percentiles = np.array([q])
-        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)[0]
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)[0]
 
-    def np_percentile_q_sequence_impl(a, q):
-        percentiles = np.array(q)
-        return _collect_percentiles(a, percentiles, skip_nan=skip_nan)
+    def np_percentile_impl(a, q):
+        return _collect_percentiles(a, q, check_q, factor, skip_nan)
 
-    def np_percentile_q_array_impl(a, q):
-        return _collect_percentiles(a, q, skip_nan=skip_nan)
-
-    if isinstance(q, (types.Float, types.Integer, types.Boolean)):
+    if isinstance(q, (types.Number, types.Boolean)):
         return np_percentile_q_scalar_impl
-
-    elif isinstance(q, (types.Tuple, types.Sequence)):
-        return np_percentile_q_sequence_impl
-
-    elif isinstance(q, types.Array):
-        return np_percentile_q_array_impl
+    elif isinstance(q, types.Array) and q.ndim == 0:
+        return np_percentile_q_scalar_impl
+    else:
+        return np_percentile_impl
 
 if numpy_version >= (1, 10):
     @overload(np.percentile)
     def np_percentile(a, q):
-        # Note: np.percentile behaviour in the case of an array containing one or
-        # more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+        # Note: np.percentile behaviour in the case of an array containing one
+        # or more NaNs was changed in numpy 1.10 to return an array of np.NaN of
         # length equal to q, hence version guard.
-        return _np_percentile_impl(a, q, skip_nan=False)
+        return _percentile_quantile_inner(
+            a, q, skip_nan=False, factor=1.0, check_q=percentile_is_valid
+        )
 
 if numpy_version >= (1, 11):
     @overload(np.nanpercentile)
@@ -1130,7 +1176,23 @@ if numpy_version >= (1, 11):
         # Note: np.nanpercentile return type in the case of an all-NaN slice
         # was changed in 1.11 to be an array of np.NaN of length equal to q,
         # hence version guard.
-        return _np_percentile_impl(a, q, skip_nan=True)
+        return _percentile_quantile_inner(
+            a, q, skip_nan=True, factor=1.0, check_q=percentile_is_valid
+        )
+
+if numpy_version >= (1, 15):
+    @overload(np.quantile)
+    def np_quantile(a, q):
+        return _percentile_quantile_inner(
+            a, q, skip_nan=False, factor=100.0, check_q=quantile_is_valid
+        )
+
+if numpy_version >= (1, 15):
+    @overload(np.nanquantile)
+    def np_nanquantile(a, q):
+        return _percentile_quantile_inner(
+            a, q, skip_nan=True, factor=100.0, check_q=quantile_is_valid
+        )
 
 if numpy_version >= (1, 9):
     @overload(np.nanmedian)
@@ -2795,7 +2857,7 @@ def np_delete(arr, obj):
 
     if isinstance(obj, (types.Array, types.Sequence, types.SliceType)):
         if isinstance(obj, (types.SliceType)):
-            handler = np_delete_handler_isslice 
+            handler = np_delete_handler_isslice
         else:
             if not isinstance(obj.dtype, types.Integer):
                 raise TypingError('obj should be of Integer dtype')
@@ -3478,3 +3540,174 @@ def np_extract(condition, arr):
         return np.array(out)
 
     return np_extract_impl
+
+#----------------------------------------------------------------------------
+# Windowing functions
+#   - translated from the numpy implementations found in:
+#   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233
+#   at commit: f1c4c758e1c24881560dd8ab1e64ae750
+
+@register_jitable
+def np_bartlett_impl(M):
+    n = np.arange(M)
+    return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
+            2.0 - 2.0 * n / (M - 1))
+
+
+@register_jitable
+def np_blackman_impl(M):
+    n = np.arange(M)
+    return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
+            0.08 * np.cos(4.0* np.pi * n / (M - 1)))
+
+
+@register_jitable
+def np_hamming_impl(M):
+    n = np.arange(M)
+    return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
+
+
+@register_jitable
+def np_hanning_impl(M):
+    n = np.arange(M)
+    return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
+
+
+def window_generator(func):
+    def window_overload(M):
+        if not isinstance(M, types.Integer):
+            raise TypingError('M must be an integer')
+
+        def window_impl(M):
+
+            if M < 1:
+                return np.array((), dtype=np.float_)
+            if M == 1:
+                return np.ones(1, dtype=np.float_)
+            return func(M)
+
+        return window_impl
+    return window_overload
+
+overload(np.bartlett)(window_generator(np_bartlett_impl))
+overload(np.blackman)(window_generator(np_blackman_impl))
+overload(np.hamming)(window_generator(np_hamming_impl))
+overload(np.hanning)(window_generator(np_hanning_impl))
+
+
+_i0A = np.array([
+    -4.41534164647933937950E-18,
+    3.33079451882223809783E-17,
+    -2.43127984654795469359E-16,
+    1.71539128555513303061E-15,
+    -1.16853328779934516808E-14,
+    7.67618549860493561688E-14,
+    -4.85644678311192946090E-13,
+    2.95505266312963983461E-12,
+    -1.72682629144155570723E-11,
+    9.67580903537323691224E-11,
+    -5.18979560163526290666E-10,
+    2.65982372468238665035E-9,
+    -1.30002500998624804212E-8,
+    6.04699502254191894932E-8,
+    -2.67079385394061173391E-7,
+    1.11738753912010371815E-6,
+    -4.41673835845875056359E-6,
+    1.64484480707288970893E-5,
+    -5.75419501008210370398E-5,
+    1.88502885095841655729E-4,
+    -5.76375574538582365885E-4,
+    1.63947561694133579842E-3,
+    -4.32430999505057594430E-3,
+    1.05464603945949983183E-2,
+    -2.37374148058994688156E-2,
+    4.93052842396707084878E-2,
+    -9.49010970480476444210E-2,
+    1.71620901522208775349E-1,
+    -3.04682672343198398683E-1,
+    6.76795274409476084995E-1
+    ])
+
+_i0B = np.array([
+    -7.23318048787475395456E-18,
+    -4.83050448594418207126E-18,
+    4.46562142029675999901E-17,
+    3.46122286769746109310E-17,
+    -2.82762398051658348494E-16,
+    -3.42548561967721913462E-16,
+    1.77256013305652638360E-15,
+    3.81168066935262242075E-15,
+    -9.55484669882830764870E-15,
+    -4.15056934728722208663E-14,
+    1.54008621752140982691E-14,
+    3.85277838274214270114E-13,
+    7.18012445138366623367E-13,
+    -1.79417853150680611778E-12,
+    -1.32158118404477131188E-11,
+    -3.14991652796324136454E-11,
+    1.18891471078464383424E-11,
+    4.94060238822496958910E-10,
+    3.39623202570838634515E-9,
+    2.26666899049817806459E-8,
+    2.04891858946906374183E-7,
+    2.89137052083475648297E-6,
+    6.88975834691682398426E-5,
+    3.36911647825569408990E-3,
+    8.04490411014108831608E-1
+    ])
+
+
+@register_jitable
+def _chbevl(x, vals):
+    b0 = vals[0]
+    b1 = 0.0
+
+    for i in range(1, len(vals)):
+        b2 = b1
+        b1 = b0
+        b0 = x * b1 - b2 + vals[i]
+
+    return 0.5 * (b0 - b2)
+
+
+@register_jitable
+def _i0(x):
+    if x < 0:
+        x = -x
+    if x <= 8.0:
+        y = (0.5 * x) - 2.0
+        return np.exp(x) * _chbevl(y, _i0A)
+
+    return np.exp(x) * _chbevl(32.0 / x - 2.0, _i0B) / np.sqrt(x)
+
+
+@register_jitable
+def _i0n(n, alpha, beta):
+    y = np.empty_like(n, dtype=np.float_)
+    t = _i0(np.float_(beta))
+    for i in range(len(y)):
+        y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
+
+    return y
+
+
+@overload(np.kaiser)
+def np_kaiser(M, beta):
+    if not isinstance(M, types.Integer):
+        raise TypingError('M must be an integer')
+
+    if not isinstance(beta, (types.Integer, types.Float)):
+        raise TypingError('beta must be an integer or float')
+
+    def np_kaiser_impl(M, beta):
+        if M < 1:
+            return np.array((), dtype=np.float_)
+        if M == 1:
+            return np.ones(1, dtype=np.float_)
+
+        n = np.arange(0, M)
+        alpha = (M - 1) / 2.0
+
+        return _i0n(n, alpha, beta)
+
+    return np_kaiser_impl

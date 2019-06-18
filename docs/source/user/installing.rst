@@ -65,14 +65,19 @@ versions installed on the system) as the required components are bundled into
 the llvmlite wheel.
 
 To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
-<https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Then you may need to
-set the following environment variables so Numba can locate the required
-libraries:
+<https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
+:ref:`cudatoolkit-lookup` for details.
 
-* ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
-* ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
-* ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory* which contains .bc files
+.. note:: Previous versions suggest the following deprecated environment
+    variables to be set:
 
+    * ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
+    * ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
+    * ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory*
+      which contains .bc files
+
+    Numba should now be able to detect CUDA libraries installed system-wide on
+    Linux.
 
 Enabling AMD ROCm GPU Support
 -----------------------------
@@ -140,7 +145,7 @@ development environment with conda.
 
 If you are building Numba from source for other reasons, first follow the
 `llvmlite installation guide <https://llvmlite.readthedocs.io/en/latest/admin-guide/install.html>`_.
-Once that is completed, you can download the latest Numba source code from 
+Once that is completed, you can download the latest Numba source code from
 `Github <https://github.com/numba/numba>`_::
 
     $ git clone git://github.com/numba/numba.git
@@ -149,7 +154,7 @@ Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
 * A C compiler compatible with your Python installation.  If you are using
-  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64`` 
+  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64``
   and ``gxx_linux-64``, or macOS packages ``clang_osx-64`` and
   ``clangxx_osx-64``.
 * `NumPy <http://www.numpy.org/>`_
@@ -184,30 +189,30 @@ further information.
     --------------------------------------------------------------------------------
     __Time Stamp__
     2018-08-28 15:46:24.631054
-    
+
     __Hardware Information__
     Machine                             : x86_64
     CPU Name                            : haswell
     CPU Features                        :
     aes avx avx2 bmi bmi2 cmov cx16 f16c fma fsgsbase lzcnt mmx movbe pclmul popcnt
     rdrnd sse sse2 sse3 sse4.1 sse4.2 ssse3 xsave xsaveopt
-    
+
     __OS Information__
     Platform                            : Darwin-17.6.0-x86_64-i386-64bit
     Release                             : 17.6.0
     System Name                         : Darwin
     Version                             : Darwin Kernel Version 17.6.0: Tue May  8 15:22:16 PDT 2018; root:xnu-4570.61.1~1/RELEASE_X86_64
     OS specific info                    : 10.13.5   x86_64
-    
+
     __Python Information__
     Python Compiler                     : GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)
     Python Implementation               : CPython
     Python Version                      : 2.7.15
     Python Locale                       : en_US UTF-8
-    
+
     __LLVM information__
     LLVM version                        : 6.0.0
-    
+
     __CUDA Information__
     Found 1 CUDA devices
     id 0         GeForce GT 750M                              [SUPPORTED]

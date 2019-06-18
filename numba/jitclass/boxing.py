@@ -135,9 +135,13 @@ def _box_class_instance(typ, val, c):
     # Create Box instance
     box_subclassed = _specialize_box(typ)
     # Note: the ``box_subclassed`` is kept alive by the cache
-    int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
+    voidptr_boxcls = c.context.add_dynamic_addr(
+        c.builder,
+        id(box_subclassed),
+        info="box_class_instance",
+    )
+    box_cls = c.builder.bitcast(voidptr_boxcls, c.pyapi.pyobj)
 
-    box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
     box = c.pyapi.call_function_objargs(box_cls, ())
 
     # Initialize Box instance

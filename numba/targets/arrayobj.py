@@ -1491,6 +1491,8 @@ def array_transpose_vararg(context, builder, sig, args):
 
 @overload(np.transpose)
 def numpy_transpose(a, axes=None):
+    if isinstance(a, types.BaseTuple):
+        raise errors.UnsupportedError("np.transpose does not accept tuples")
 
     if axes is None:
         def np_transpose_impl(a, axes=None):
@@ -2262,10 +2264,9 @@ def array_record_getattr(context, builder, typ, value, attr):
 
     constoffset = context.get_constant(types.intp, offset)
 
-    llintp = context.get_value_type(types.intp)
-    newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
-    newdataptr = builder.inttoptr(newdata, rary.data.type)
-
+    newdataptr = cgutils.pointer_add(
+        builder, array.data, constoffset,  return_type=rary.data.type,
+    )
     datasize = context.get_abi_sizeof(context.get_data_type(dtype))
     populate_array(rary,
                    data=newdataptr,

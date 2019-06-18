@@ -520,7 +520,8 @@ def unicode_endswith(a, b):
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or
-            isinstance(maxsplit, (types.Omitted, types.Integer, types.IntegerLiteral))):
+            isinstance(maxsplit, (types.Omitted, types.Integer,
+                                  types.IntegerLiteral))):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeType):
@@ -544,7 +545,8 @@ def unicode_split(a, sep=None, maxsplit=-1):
             else:
                 split_count = 0
 
-                while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
+                while idx < a_len and (maxsplit == -1 or
+                                       split_count < maxsplit):
                     if _cmp_region(a, idx, sep, 0, sep_len) == 0:
                         parts.append(a[last:idx])
                         idx += sep_len
@@ -558,7 +560,8 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             return parts
         return split_impl
-    elif sep is None or isinstance(sep, types.NoneType) or getattr(sep, 'value', False) is None:
+    elif sep is None or isinstance(sep, types.NoneType) or \
+            getattr(sep, 'value', False) is None:
         def split_whitespace_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
 
@@ -747,6 +750,67 @@ def unicode_zfill(string, width):
         return newstr
 
     return zfill_impl
+
+
+@register_jitable
+def unicode_strip_left_bound(string, chars):
+    chars = ' ' if chars is None else chars
+    str_len = len(string)
+
+    for i in range(str_len):
+        if string[i] not in chars:
+            return i
+    return str_len
+
+
+@register_jitable
+def unicode_strip_right_bound(string, chars):
+    chars = ' ' if chars is None else chars
+    str_len = len(string)
+
+    for i in range(str_len - 1, -1, -1):
+        if string[i] not in chars:
+            i += 1
+            break
+    return i
+
+
+def unicode_strip_types_check(chars):
+    if isinstance(chars, types.Optional):
+        chars = chars.type # catch optional type with invalid non-None type
+    if not (chars is None or isinstance(chars, (types.Omitted,
+                                                types.UnicodeType,
+                                                types.NoneType))):
+        raise TypingError('The arg must be a UnicodeType or None')
+
+
+@overload_method(types.UnicodeType, 'lstrip')
+def unicode_lstrip(string, chars=None):
+    unicode_strip_types_check(chars)
+
+    def lstrip_impl(string, chars=None):
+        return string[unicode_strip_left_bound(string, chars):]
+    return lstrip_impl
+
+
+@overload_method(types.UnicodeType, 'rstrip')
+def unicode_rstrip(string, chars=None):
+    unicode_strip_types_check(chars)
+
+    def rstrip_impl(string, chars=None):
+        return string[:unicode_strip_right_bound(string, chars)]
+    return rstrip_impl
+
+
+@overload_method(types.UnicodeType, 'strip')
+def unicode_strip(string, chars=None):
+    unicode_strip_types_check(chars)
+
+    def strip_impl(string, chars=None):
+        lb = unicode_strip_left_bound(string, chars)
+        rb = unicode_strip_right_bound(string, chars)
+        return string[lb:rb]
+    return strip_impl
 
 
 # String creation

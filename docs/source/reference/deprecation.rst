@@ -269,6 +269,11 @@ with Numba via the following environment variables:
 * ``NUMBAPRO_VERBOSE_CU_JIT_LOG``
 
 These are being deprecated with view of removal in the near future.
+Please refer to :ref:`this guide <cudatoolkit-lookup>` for alternatives to
+``NUMBAPRO_NVVM``, ``NUMBAPRO_CUDALIB`` and ``NUMBAPRO_LIBDEVICE``.
+For ``NUMBAPRO_CUDA_LOG_SIZE`` and ``NUMBAPRO_VERBOSE_CU_JIT_LOG``, replace
+the ``NUMBAPRO`` prefix with ``NUMBA``.
+
 
 Reason for deprecation
 ----------------------
@@ -289,15 +294,7 @@ Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
 on Numba to a version prior to removal of this behaviour, or consider following
-replacement instructions that will be issued outlining how to adjust to the
-change.
-
-Expected Replacement
---------------------
-Numba will gain a new set of CUDA related environment variables to replace the
-``NUMBAPRO`` environment variables. This change will be part of permitting
-discovery of system level CUDA drivers and libraries, as well as making it easy
-to point Numba to a particular CUDA SDK instance.
+replacement instructions outlined in :ref:`this guide <cudatoolkit-lookup>`.
 
 
 Deprecation of ``numba.autojit``

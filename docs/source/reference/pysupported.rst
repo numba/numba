@@ -177,6 +177,9 @@ The following functions, attributes and methods are currently supported:
 * ``.rjust()``
 * ``.split()``
 * ``.join()``
+* ``.lstrip()``
+* ``.rstrip()``
+* ``.strip()``
 * ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
