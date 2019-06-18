@@ -859,6 +859,31 @@ class TestDispatcherMethods(TestCase):
         # Exercise the method
         foo.inspect_types(utils.StringIO())
 
+        # Test output
+        expected = str(foo.overloads[foo.signatures[0]].type_annotation)
+        with captured_stdout() as out:
+            foo.inspect_types()
+        assert expected in out.getvalue()
+
+    def test_inspect_types_signature(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.0)
+        # Inspect all signatures
+        with captured_stdout() as total:
+            foo.inspect_types()
+        # Inspect first signature
+        with captured_stdout() as first:
+            foo.inspect_types(signature=foo.signatures[0])
+        # Inspect second signature
+        with captured_stdout() as second:
+            foo.inspect_types(signature=foo.signatures[1])
+
+        assert total.getvalue() == first.getvalue() + second.getvalue()
+
     @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
     @unittest.skipIf(pygments is None, "please install the 'pygments' package")
     def test_inspect_types_pretty(self):

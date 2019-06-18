@@ -383,7 +383,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None, **kwargs):
+    def inspect_types(self, file=None, signature=None, **kwargs):
         """
         print or return annotated source with Numba intermediate IR
 
@@ -394,11 +394,15 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         pretty = kwargs.get('pretty', False)
         style = kwargs.get('style', 'default')
 
+        overloads = self.overloads
+        if signature is not None:
+            overloads = {signature: self.overloads[signature]}
+
         if not pretty:
             if file is None:
                 file = sys.stdout
 
-            for ver, res in utils.iteritems(self.overloads):
+            for ver, res in utils.iteritems(overloads):
                 print("%s %s" % (self.py_func.__name__, ver), file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)
