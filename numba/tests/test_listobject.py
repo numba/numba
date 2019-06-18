@@ -27,7 +27,7 @@ from .support import TestCase, MemoryLeakMixin, unittest
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 
-class TestListObjectCreateAppendLength(MemoryLeakMixin, TestCase):
+class TestCreateAppendLength(MemoryLeakMixin, TestCase):
     """Test list creation, append and len. """
 
     def test_list_create(self):
@@ -71,7 +71,7 @@ class TestToFromMeminfo(MemoryLeakMixin, TestCase):
         self.assertEqual(received, expected)
 
 
-class TestListObjectGetitem(MemoryLeakMixin, TestCase):
+class TestGetitem(MemoryLeakMixin, TestCase):
     """Test list getitem. """
 
     def test_list_getitem_singleton(self):
@@ -153,7 +153,7 @@ class TestListObjectGetitem(MemoryLeakMixin, TestCase):
         )
 
 
-class TestListObjectGetitemSlice(MemoryLeakMixin, TestCase):
+class TestGetitemSlice(MemoryLeakMixin, TestCase):
     """Test list getitem when indexing with slices. """
 
     def test_list_getitem_empty_slice_defaults(self):
@@ -395,7 +395,7 @@ class TestListObjectGetitemSlice(MemoryLeakMixin, TestCase):
         )
 
 
-class TestListObjectSetitem(MemoryLeakMixin, TestCase):
+class TestSetitem(MemoryLeakMixin, TestCase):
     """Test list setitem. """
 
     def test_list_setitem_singleton(self):
@@ -499,7 +499,7 @@ class TestListObjectSetitem(MemoryLeakMixin, TestCase):
         )
 
 
-class TestListObjectPop(MemoryLeakMixin, TestCase):
+class TestPop(MemoryLeakMixin, TestCase):
     """Test list pop. """
 
     def test_list_pop_singleton(self):
@@ -604,7 +604,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), (2, 11, 12))
 
 
-class TestListObjectContains(MemoryLeakMixin, TestCase):
+class TestContains(MemoryLeakMixin, TestCase):
     """Test list contains. """
 
     def test_list_contains_empty(self):
@@ -641,7 +641,7 @@ class TestListObjectContains(MemoryLeakMixin, TestCase):
             self.assertFalse(foo(i))
 
 
-class TestListObjectCount(MemoryLeakMixin, TestCase):
+class TestCount(MemoryLeakMixin, TestCase):
     """Test list count. """
 
     def test_list_count_empty(self):
@@ -676,7 +676,7 @@ class TestListObjectCount(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(13), 3)
 
 
-class TestListObjectExtend(MemoryLeakMixin, TestCase):
+class TestExtend(MemoryLeakMixin, TestCase):
     """Test list extend. """
 
     def test_list_extend_empty(self):
@@ -691,7 +691,7 @@ class TestListObjectExtend(MemoryLeakMixin, TestCase):
         self.assertEqual(foo((1,2,3)), 3)
 
 
-class TestListObjectInsert(MemoryLeakMixin, TestCase):
+class TestInsert(MemoryLeakMixin, TestCase):
     """Test list insert. """
 
     def test_list_insert_empty(self):
@@ -757,7 +757,7 @@ class TestListObjectInsert(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), (11, 1))
 
 
-class TestListRemove(MemoryLeakMixin, TestCase):
+class TestRemove(MemoryLeakMixin, TestCase):
     """Test list remove. """
 
     def test_list_remove_empty(self):
@@ -816,7 +816,7 @@ class TestListRemove(MemoryLeakMixin, TestCase):
             foo()
 
 
-class TestListClear(MemoryLeakMixin, TestCase):
+class TestClear(MemoryLeakMixin, TestCase):
     """Test list clear. """
 
     def test_list_clear_empty(self):
@@ -849,7 +849,7 @@ class TestListClear(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), 0)
 
 
-class TestListReverse(MemoryLeakMixin, TestCase):
+class TestReverse(MemoryLeakMixin, TestCase):
     """Test list reverse. """
 
     def test_list_reverse_empty(self):
@@ -882,8 +882,8 @@ class TestListReverse(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), (3, 12, 11, 10))
 
 
-class TestListCopy(MemoryLeakMixin, TestCase):
-    """Test list reverse. """
+class TestCopy(MemoryLeakMixin, TestCase):
+    """Test list copy. """
 
     def test_list_copy_empty(self):
         @njit
@@ -916,7 +916,8 @@ class TestListCopy(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), (3, 3, 10, 11, 12, 10, 11, 12))
 
 
-class TestListObjectEqualNotEqual(MemoryLeakMixin, TestCase):
+class TestEqualNotEqual(MemoryLeakMixin, TestCase):
+    """Test list equal and not equal. """
 
     def test_list_empty_equal(self):
         @njit
@@ -996,13 +997,10 @@ class TestListObjectEqualNotEqual(MemoryLeakMixin, TestCase):
         self.assertEqual(foo((1,)), (False, True))
 
 
-class TestListObjectIter(MemoryLeakMixin, TestCase):
+class TestIter(MemoryLeakMixin, TestCase):
     """Test list iter. """
 
     def test_list_iter(self):
-        """
-        Exercise iter(list)
-        """
         @njit
         def foo(items):
             l = listobject.new_list(int32)
@@ -1021,7 +1019,7 @@ class TestListObjectIter(MemoryLeakMixin, TestCase):
         )
 
 
-class TestListObjectStringItem(MemoryLeakMixin, TestCase):
+class TestStringItem(MemoryLeakMixin, TestCase):
     """Test list can take strings as items. """
 
     @skip_py2
