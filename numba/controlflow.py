@@ -335,6 +335,7 @@ class CFGraph(object):
         # The algorithm implemented computes the immediate dominator
         # for each node in the CFG which is equivalent to build a dominator tree
         # Based on the implementation from NetworkX library - nx.immediate_dominators
+        # https://github.com/networkx/networkx/blob/858e7cb183541a78969fed0cbcd02346f5866c02/networkx/algorithms/dominance.py
         # References:
         #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
         #   A Simple, Fast Dominance Algorithm
