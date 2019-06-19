@@ -208,37 +208,30 @@ numba_list_append(NB_List *lp, const char *item) {
 
 int
 numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
-    Py_ssize_t left;
+    Py_ssize_t leftover_bytes;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
-    // fast path to pop last item
-    else if (index == lp->size-1) { 
-        char *loc = lp->items + lp->item_size * index;
-        copy_item(lp, out, loc);
-        list_decref_item(lp, loc);
-        numba_list_resize(lp, lp->size-1);
-        return LIST_OK;
-    // pop from somewhere else
-    }else{ 
-        // first, get item
-        char *loc = lp->items + lp->item_size * index;
-        copy_item(lp, out, loc);
-        list_decref_item(lp, loc);
-        // then, incur the dreaded memory copy
-        left = (lp->size - 1 - index) * lp->item_size;
-        char *new_loc = lp->items + lp->item_size * (index + 1);
-        memcpy(loc, new_loc, left);
-        // finally, resize
-        int result = numba_list_resize(lp, lp->size-1);
-        if(result < LIST_OK) {
-            // Since we are decreasing the size, this should never happen
-            return result;
-        }
-        return LIST_OK;
+    // obtain item and decref if needed
+    char *loc = lp->items + lp->item_size * index;
+    copy_item(lp, out, loc);
+    list_decref_item(lp, loc);
+    if (index != lp->size-1) {
+        // pop from somewhere other than the end, incur the dreaded memory copy
+        leftover_bytes = (lp->size - 1 - index) * lp->item_size;
+        char *new_loc = lp->items + (lp->item_size * (index + 1));
+        // use memmove instead of memcpy, memcpy isn't safe on Linux
+        memmove(loc, new_loc, leftover_bytes);
     }
+    // finally, shrink list by one
+    int result = numba_list_resize(lp, lp->size-1);
+    if(result < LIST_OK) {
+         // Since we are decreasing the size, this should never happen
+        return result;
+    }
+    return LIST_OK;
 
 }
 
