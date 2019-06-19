@@ -531,6 +531,67 @@ def unicode_find(a, b):
         return find_impl
 
 
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(src, sub, start=None, end=None):
+
+    if not (start is None or isinstance(start, (types.Omitted, types.Integer, types.Optional))):
+        raise TypingError("Start arg must be of type Integer, Omitted or Optional")
+
+    if isinstance(sub, types.UnicodeType):
+        def count_impl(src, sub, start=start, e=end):
+            count = 0
+            src_len = len(src)
+            sub_len = len(sub)
+
+            if start is None:           #This means no optional arguments are given
+                begin = 0
+                new_end = src_len
+            else:
+                begin = start
+                new_end = e
+            if (begin < 0 and new_end < 0 and begin < new_end):
+                cond_flag = 1
+            else:
+                cond_flag = 0
+            if (begin >= 0 or cond_flag == 1):
+                if(new_end < 0 and cond_flag == 0):
+                    new_end = src_len + new_end      # Positive end bound makes the search easier
+                    if(new_end < begin):
+                        return 0
+                if(cond_flag == 1):                  # If both bounds are negative then turn it into positive limits
+                    begin = begin + src_len
+                    new_end = new_end + src_len
+                i = begin
+                if( (new_end - begin) == sub_len):
+                    temp_end = new_end
+                else:
+                    temp_end = new_end - sub_len + 1
+                while (i < temp_end):
+                    temp_count = 0
+                    offset = 0
+                    for j in range(sub_len):
+                        src_char = _get_code_point(src, i + offset)
+                        sub_char = _get_code_point(sub, j)
+                        if src_char != sub_char:
+                            break
+                        else:
+                            temp_count = temp_count + 1
+                            offset = offset + 1
+                        if (i + offset) > new_end:
+                            break
+                    if temp_count == sub_len:
+                        count = count + 1
+                        i = i + sub_len
+                    else:
+                        i = i + 1
+                    if i == 0:
+                        break
+                return count
+            else:
+                return 0
+        return count_impl
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):

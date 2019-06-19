@@ -80,6 +80,14 @@ def find_usecase(x, y):
     return x.find(y)
 
 
+def count_usecase(x, y):
+    return x.count(y)
+
+
+def count_with_startend_usecase(x,y,start,end):
+    return x.count(y, start, end)
+
+
 def startswith_usecase(x, y):
     return x.startswith(y)
 
@@ -336,6 +344,29 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
+
+    def test_count(self):
+        pyfunc = count_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            extras = [' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+            for sub in [x for x in extras]:
+                self.assertEqual(pyfunc(sub, s),
+                                 cfunc(sub, s),
+                                 "'%s' in '%s'?" % (sub, s))
+
+    def test_count_with_startend(self):
+        pyfunc = count_with_startend_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            extras = [' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+            for sub in [x for x in extras]:
+                for i , j in zip(range(-2,4), (0,6)):
+                    self.assertEqual(pyfunc(sub, s, 2, -1),
+                                     cfunc(sub, s, 2, -1),
+                                     "'%s' in '%s'?" % (sub, s))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
