@@ -164,7 +164,8 @@ class TestMiscErrorHandling(unittest.TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        expected = "'prange' is a Numba internal function, has it been imported"
+        expected = ("'prange' looks like a Numba internal function, "
+                    "has it been imported")
         self.assertIn(expected, str(raises.exception))
 
 

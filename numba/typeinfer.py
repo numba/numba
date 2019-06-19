@@ -1330,10 +1330,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # if the untyped global is a numba internal function then add
                 # to the error message asking if it's been imported.
                 from numba import special
-                numba_internals = special.__all__[1:]
-                if nm in numba_internals:
-                    tmp = ("\n'%s' is a Numba internal function, has it been "
-                           "imported (i.e. 'from numba import %s')?\n" %
+                if nm in special.__all__:
+                    tmp = ("\n'%s' looks like a Numba internal function, has "
+                           "it been imported (i.e. 'from numba import %s')?\n" %
                            (nm, nm))
                     msg += _termcolor.errmsg(tmp)
                 e.patch_message(msg % e)
