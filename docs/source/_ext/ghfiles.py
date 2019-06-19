@@ -33,14 +33,17 @@ def intersperse(lst, item):
 
 
 def ghfile_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    """ Emit hyperlink nodes for a given file in repomap. """
     my_nodes = []
     if "{" in text:  # myfile.{c, h} - make two nodes
+        # could have used regexes, but this will be fine..
         base = text[:text.find(".") + 1]
         exts = text[text.find("{") + 1:text.find("}")].split(",")
         for e in exts:
             node = nodes.reference(rawtext, base + e, refuri=make_ref(base + e), **options)
             my_nodes.append(node)
     elif "*" in text:  # path/*_files.py - link to directory
+        # Could have used something from os.path, but this will be fine..
         ref = text[:text.rfind("/") + 1]
         node = nodes.reference(rawtext, text, refuri=make_ref(ref), **options)
         my_nodes.append(node)
