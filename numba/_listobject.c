@@ -109,7 +109,7 @@ int
 numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     // allocate memory to hold the struct
     NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
-    if (!lp) {
+    if (lp == NULL) {
         return LIST_ERR_NO_MEMORY;
     }
     // set up members
@@ -118,16 +118,26 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     lp->allocated = allocated;
     // set method table to zero */
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
-    // allocate memory to hold items
-    char *items = malloc(aligned_size(lp->item_size * allocated));
-    if (!items) {
-        free(lp);
-        return LIST_ERR_NO_MEMORY;
+    // allocate memory to hold items, if requested
+    if (allocated != 0) {
+        char *items = malloc(aligned_size(lp->item_size * allocated));
+        // allocated was definitely not zero, if malloc returns NULL
+        // this is definitely an error
+        if (items == NULL) {
+            // free previously allocated struct to avoid leaking memory
+            free(lp);
+            return LIST_ERR_NO_MEMORY;
+        }
+        lp->items = items;
     }
-    lp->items = items;
+    else {
+        // be explicit
+        lp-> items = NULL;
+    }
     *out = lp;
     return LIST_OK;
 }
+
 void
 numba_list_free(NB_List *lp) {
     // decref all items, if needed
@@ -139,7 +149,9 @@ numba_list_free(NB_List *lp) {
         }
     }
     // free items and list
-    free(lp->items);
+    if (lp->items != NULL) {
+        free(lp->items);
+    }
     free(lp);
 }
 
@@ -274,7 +286,8 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
         new_allocated = 0;
     num_allocated_bytes = new_allocated * lp->item_size;
     items = realloc(lp->items, aligned_size(num_allocated_bytes));
-    if (!items) {
+    // realloc may return NULL if requested size is 0
+    if (num_allocated_bytes != 0 && items == NULL) {
         return LIST_ERR_NO_MEMORY;
     }
     lp->items = items;
