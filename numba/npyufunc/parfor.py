@@ -1105,7 +1105,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("kernel_sig = ", kernel_sig)
 
-    targetctx.active_code_library.add_linking_library(kernel_func.library)
     return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
@@ -1457,8 +1456,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
 
-    mod = builder.module
-    fn = mod.get_or_insert_function(fnty, name=wrapper_name)
+    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "before calling kernel %p\n", fn)

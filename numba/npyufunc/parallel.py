@@ -29,6 +29,9 @@ from numba.numpy_support import as_dtype
 from numba import types, config
 
 
+_wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])
+
+
 def get_thread_count():
     """
     Gets the available thread count.
@@ -100,7 +103,8 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel.{}".format(info))
+    kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
+    lfunc = mod.add_function(fnty, name=kernel_name)
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -152,11 +156,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
 
     wrapperlib.add_ir_module(mod)
     wrapperlib.add_linking_library(library)
-    if ctx.active_code_library:
-        # ctx.active_code_library.add_linking_library(library)
-        ctx.active_code_library.add_linking_library(wrapperlib)
-
-    return wrapperlib.get_pointer_to_function(lfunc.name), lfunc.name
+    return _wrapper_info(library=wrapperlib, name=lfunc.name, env=info.env)
 
 
 # ------------------------------------------------------------------------------
@@ -171,7 +171,8 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         library = cres.library
         fname = cres.fndesc.llvm_func_name
 
-        ptr = build_ufunc_wrapper(library, ctx, fname, signature, cres)
+        info = build_ufunc_wrapper(library, ctx, fname, signature, cres)
+        ptr = info.library.get_pointer_to_function(info.name)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -183,9 +184,9 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
     innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, fname,
                                                  signature, objmode=False,
                                                  cres=cres)
-    ptr, name = build_gufunc_kernel(library, ctx, innerfunc, signature,
-                                    len(signature.args))
-    return ptr
+    info = build_gufunc_kernel(library, ctx, innerfunc, signature,
+                               len(signature.args))
+    return info
 
 # ---------------------------------------------------------------------------
 
@@ -215,7 +216,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             self.py_func, cres, self.sin, self.sout, cache=self.cache,
             is_parfors=False,
         )
-        ptr = info.ptr
+        ptr = info.library.get_pointer_to_function(info.name)
         env = info.env
 
         # Get dtypes
@@ -233,25 +234,21 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 # This is not a member of the ParallelGUFuncBuilder function because it is
 # called without an enclosing instance from parfors
 
-_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name'])
-
-
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature
-    info = ufuncbuilder.build_gufunc_wrapper(
+    innerinfo = ufuncbuilder.build_gufunc_wrapper(
         py_func, cres, sin, sout, cache=cache, is_parfors=is_parfors,
     )
-    env = info.env
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    ptr, name = build_gufunc_kernel(
-        library, ctx, info, signature, inner_ndim)
-
-    return _wrapper_info(ptr=ptr, env=env, name=name)
+    info = build_gufunc_kernel(
+        library, ctx, innerinfo, signature, inner_ndim,
+    )
+    return info
 
 # ---------------------------------------------------------------------------
 

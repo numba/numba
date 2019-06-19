@@ -74,6 +74,8 @@ CR_FIELDS = ["typing_context",
              "call_helper",
              "environment",
              "metadata",
+             # List of functions to call to initialize on unserialization
+             # (i.e cache load).
              "reload_init",
             ]
 
@@ -100,7 +102,8 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
     def _rebuild(cls, target_context, libdata, fndesc, env,
                  signature, objectmode, interpmode, lifted, typeann,
                  reload_init):
-        if reload_init is not None:
+        if reload_init:
+            # Re-run all
             for fn in reload_init:
                 fn()
 
@@ -120,7 +123,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  typing_error=None,
                  call_helper=None,
                  metadata=None, # Do not store, arbitrary and potentially large!
-                 reload_init = reload_init,
+                 reload_init=reload_init,
                  )
         return cr
 
@@ -596,7 +599,7 @@ class BasePipeline(object):
                        "diagnostics, see %s for help." % url)
                 warnings.warn(errors.NumbaPerformanceWarning(msg,
                                                              self.func_ir.loc))
-
+        # Add reload function to initialize the parallel backend.
         self.reload_init.append(_reload_parfors)
 
     def stage_inline_pass(self):
@@ -713,7 +716,7 @@ class BasePipeline(object):
             fndesc=lowered.fndesc,
             environment=lowered.env,
             metadata=self.metadata,
-            reload_init=tuple(self.reload_init),
+            reload_init=self.reload_init,
             )
 
     def stage_objectmode_backend(self):
@@ -1176,6 +1179,6 @@ def py_lowering_stage(targetctx, library, interp, flags):
 def _reload_parfors():
     """Reloader for cached parfors
     """
-    # Re-initialize the parallel backend on when load from cache.
+    # Re-initialize the parallel backend when load from cache.
     from numba.npyufunc.parallel import _launch_threads
     _launch_threads()

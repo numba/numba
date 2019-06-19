@@ -139,6 +139,10 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
 def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     """
     Wrap the scalar function with a loop that iterates over the arguments
+
+    Returns
+    -------
+    (library, env, name)
     """
     assert isinstance(fname, str)
     byte_t = Type.int(8)
@@ -239,11 +243,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
 
     # Link and finalize
     wrapperlib.add_ir_module(wrapper_module)
-    wrapperlib.add_linking_library(library)  # FIXME: Needed?
-    if context.active_code_library:  # FIXME: refactor + inversion
-        context.active_code_library.add_linking_library(library)
-        context.active_code_library.add_linking_library(wrapperlib)
-
+    wrapperlib.add_linking_library(library)
     return _wrapper_info(library=wrapperlib, env=env, name=wrapper.name)
 
 
@@ -417,9 +417,6 @@ class _GufuncWrapper(object):
         # Link
         library.add_ir_module(wrapper_module)
         library.add_linking_library(self.library)
-        if self.context.active_code_library: # FIXME: refactor + inversion
-            self.context.active_code_library.add_linking_library(library)
-            self.context.active_code_library.add_linking_library(self.library)
 
     def _compile_wrapper(self, wrapper_name):
         # Gufunc created by Parfors?
@@ -449,11 +446,9 @@ class _GufuncWrapper(object):
     def build(self):
         wrapper_name = "__gufunc__." + self.fndesc.mangled_name
         wrapperlib = self._compile_wrapper(wrapper_name)
-        ## Finalize and get function pointer
-        # ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-        if self.context.active_code_library:  # FIXME: refactor + inversion
-            self.context.active_code_library.add_linking_library(wrapperlib)
-        return _wrapper_info(library=wrapperlib, env=self.env, name=wrapper_name)
+        return _wrapper_info(
+            library=wrapperlib, env=self.env, name=wrapper_name,
+        )
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(

@@ -1096,8 +1096,7 @@ class BaseContext(object):
     def active_code_library(self):
         """Get the active code library
         """
-        if self._codelib_stack:
-            return self._codelib_stack[-1]
+        return self._codelib_stack[-1]
 
     @contextmanager
     def push_code_library(self, lib):
