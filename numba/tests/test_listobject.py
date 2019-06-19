@@ -660,6 +660,8 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
 
     @unittest.expectedFailure
     def test_list_delitem_slice(self):
+        # remove when tests no longer fails
+        self.disable_leak_check()
 
         @njit
         def foo():
