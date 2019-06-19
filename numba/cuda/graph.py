@@ -1,4 +1,5 @@
 from ctypes import c_void_p, addressof, c_uint, POINTER, Structure
+from numba.cuda.errors import normalize_kernel_dimensions
 from numba.cuda.cudadrv.driver import driver, is_device_memory, device_ctypes_pointer, byref
 from numba.cuda.compiler import AutoJitCUDAKernel, CUDAKernel
 
@@ -33,12 +34,15 @@ class KernelNode(Node):
 
     def _get_params(self):
         params = KernelParams()
-        params.blockDimX = self.params.get('blockDimX', 1)
-        params.blockDimY = self.params.get('blockDimY', 1)
-        params.blockDimZ = self.params.get('blockDimZ', 1)
-        params.gridDimX = self.params.get('gridDimX', 1)
-        params.gridDimY = self.params.get('gridDimY', 1)
-        params.gridDimZ = self.params.get('gridDimZ', 1)
+
+        gridDim, blockDim = self.params.get('gridDim', (1, 1, 1)), self.params.get('blockDim', (1, 1, 1))
+        gridDim, blockDim = normalize_kernel_dimensions(gridDim, blockDim)
+        params.gridDimX = self.params.get('gridDimX', gridDim[0])
+        params.gridDimY = self.params.get('gridDimY', gridDim[1])
+        params.gridDimZ = self.params.get('gridDimZ', gridDim[2])
+        params.blockDimX = self.params.get('blockDimX', blockDim[0])
+        params.blockDimY = self.params.get('blockDimY', blockDim[1])
+        params.blockDimZ = self.params.get('blockDimZ', blockDim[2])
         params.sharedMemBytes = self.params.get('sharedMemBytes', 0)
 
         if isinstance(self.kernel, AutoJitCUDAKernel):
