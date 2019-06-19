@@ -576,7 +576,6 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
                                                                         'both'],
                           np.zeros((2,)))
 
-
     def test_tuple_len(self):
 
         def impl(tup):
@@ -592,4 +591,3 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         self.assert_prune(impl, (types.UniTuple(types.int64, 2),), [True,
                                                                     'both'],
                           tuple([1, 2]))
-

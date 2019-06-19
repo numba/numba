@@ -2237,6 +2237,7 @@ def dtype_type(context, builder, dtypety, dtypeval):
 lower_getattr(types.DType, 'type')(dtype_type)
 lower_getattr(types.DType, 'kind')(dtype_type)
 
+
 def make_equality_op(op):
     @overload(op)
     def dtype_eq_dtype(a, b):
@@ -2244,9 +2245,11 @@ def make_equality_op(op):
         maybe_dtype = (types.NumberClass, types.DType)
         if isinstance(a, maybe_dtype) and isinstance(b, maybe_dtype):
             ret = op(a.dtype, b.dtype)
+
             def impl(a, b):
                 return ret
             return impl
+
 
 for x in operator.__eq__, operator.__ne__:
     make_equality_op(x)
