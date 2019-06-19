@@ -406,7 +406,6 @@ exclude =
     numba/npyufunc/sigparse.py
     numba/npyufunc/parfor.py
     numba/npyufunc/array_exprs.py
-    numba/npyufunc/parallel.py
     numba/npyufunc/decorators.py
     numba/servicelib/service.py
     numba/datamodel/models.py

@@ -1,18 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
-import warnings
 from collections import namedtuple
 
 import numpy as np
 
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
-from numba import types, cgutils, errors
+from numba import types, cgutils
 from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
 
 
-_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name', 'fnty'])
+_wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -245,7 +244,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
         context.active_code_library.add_linking_library(library)
         context.active_code_library.add_linking_library(wrapperlib)
 
-    return wrapperlib.get_pointer_to_function(wrapper.name)
+    return _wrapper_info(library=wrapperlib, env=env, name=wrapper.name)
 
 
 class UArrayArg(object):
@@ -444,18 +443,17 @@ class _GufuncWrapper(object):
                 # Cache
                 self.cache.save_overload(self.cres.signature, wrapperlib)
 
-        fnty = self._wrapper_function_type()
-        return wrapperlib, fnty
+        return wrapperlib
 
     @global_compiler_lock
     def build(self):
         wrapper_name = "__gufunc__." + self.fndesc.mangled_name
-        wrapperlib, fnty = self._compile_wrapper(wrapper_name)
-        # Finalize and get function pointer
-        ptr = wrapperlib.get_pointer_to_function(wrapper_name)
+        wrapperlib = self._compile_wrapper(wrapper_name)
+        ## Finalize and get function pointer
+        # ptr = wrapperlib.get_pointer_to_function(wrapper_name)
         if self.context.active_code_library:  # FIXME: refactor + inversion
             self.context.active_code_library.add_linking_library(wrapperlib)
-        return _wrapper_info(ptr=ptr, env=self.env, name=wrapper_name, fnty=fnty)
+        return _wrapper_info(library=wrapperlib, env=self.env, name=wrapper_name)
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(

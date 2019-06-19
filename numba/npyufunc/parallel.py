@@ -11,13 +11,13 @@ to steal works from other threads.
 """
 from __future__ import print_function, absolute_import
 
-import sys
 import os
 import platform
 import warnings
 from threading import RLock as threadRLock
 from multiprocessing import RLock as procRLock
 from collections import namedtuple
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -26,7 +26,7 @@ import llvmlite.binding as ll
 
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
-from numba import types, utils, cgutils, config
+from numba import types, config
 
 
 def get_thread_count():
@@ -42,7 +42,7 @@ def get_thread_count():
 NUM_THREADS = get_thread_count()
 
 
-def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
+def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     """Wrap the original CPU ufunc/gufunc with a parallel dispatcher.
     This function will wrap gufuncs and ufuncs something like.
 
@@ -51,8 +51,8 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     ctx
         numba's codegen context
 
-    innerfunc
-        llvm function of the original CPU gufunc
+    info: (library, env, name)
+        inner function info
 
     sig
         type signature of the gufunc
@@ -85,11 +85,14 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     NOTE: The execution backend is passed the requested thread count, but it can
     choose to ignore it (TBB)!
     """
+    assert isinstance(info, tuple)  # guard against old usage
     # Declare types and function
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
+    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
 
     intp_t = ctx.get_value_type(types.intp)
+    intp_ptr_t = lc.Type.pointer(intp_t)
 
     fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
                                              lc.Type.pointer(intp_t),
@@ -97,7 +100,7 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
                                              byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    lfunc = mod.add_function(fnty, name=".kernel.{}".format(hash(innerfunc)))
+    lfunc = mod.add_function(fnty, name=".kernel.{}".format(info))
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -124,17 +127,17 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     parallel_for = mod.get_or_insert_function(parallel_for_ty,
                                               name='numba_parallel_for')
 
-    if isinstance(innerfunc, tuple):
-        (innerfunc_fnty, innerfunc_name) = innerfunc
-        tmp_voidptr = mod.get_or_insert_function(innerfunc_fnty, name=innerfunc_name)
-    else:
-        # Note: the runtime address is taken and used as a constant in the
-        # function.
-        tmp_voidptr = ctx.add_dynamic_addr(
-            builder, innerfunc, info='parallel_gufunc_innerfunc',
-        )
+    # Reference inner-function and link
+    innerfunc_fnty = lc.Type.function(
+        lc.Type.void(),
+        [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
+    )
+    tmp_voidptr = mod.get_or_insert_function(
+        innerfunc_fnty, name=info.name,
+    )
+    wrapperlib.add_linking_library(info.library)
 
-
+    # Prepare call
     fnptr = builder.bitcast(tmp_voidptr, byte_ptr_t)
     innerargs = [as_void_ptr(x) for x
                  in [args, dimensions, steps, data]]
@@ -214,7 +217,6 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
         )
         ptr = info.ptr
         env = info.env
-        wrapper_name = info.name
 
         # Get dtypes
         dtypenums = []
@@ -227,10 +229,11 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 
         return dtypenums, ptr, env
 
+
 # This is not a member of the ParallelGUFuncBuilder function because it is
 # called without an enclosing instance from parfors
 
-_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name', 'fnty'])
+_wrapper_info = namedtuple('_wrapper_info', ['ptr', 'env', 'name'])
 
 
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
@@ -240,21 +243,15 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     info = ufuncbuilder.build_gufunc_wrapper(
         py_func, cres, sin, sout, cache=cache, is_parfors=is_parfors,
     )
-    innerfunc = info.ptr
     env = info.env
-    wrapper_name = info.name
     sym_in = set(sym for term in sin for sym in term)
     sym_out = set(sym for term in sout for sym in term)
     inner_ndim = len(sym_in | sym_out)
 
-    if info.fnty is None:
-        infoargs = info.ptr
-    else:
-        infoargs = (info.fnty, wrapper_name)
     ptr, name = build_gufunc_kernel(
-        library, ctx, infoargs, signature, inner_ndim)
+        library, ctx, info, signature, inner_ndim)
 
-    return _wrapper_info(ptr=ptr, env=env, name=name, fnty=info.fnty)
+    return _wrapper_info(ptr=ptr, env=env, name=name)
 
 # ---------------------------------------------------------------------------
 
@@ -264,17 +261,18 @@ try:
     _backend_init_process_lock = procRLock()
 except OSError as e:
     # probably lack of /dev/shm for semaphore writes, warn the user
-    msg =("Could not obtain multiprocessing lock due to OS level error: %s\n"
-          "A likely cause of this problem is '/dev/shm' is missing or"
-          "read-only such that necessary semaphores cannot be written.\n"
-          "*** The responsibility of ensuring multiprocessing safe access to "
-          "this initialization sequence/module import is deferred to the user! "
-          "***\n")
+    msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
+           "A likely cause of this problem is '/dev/shm' is missing or"
+           "read-only such that necessary semaphores cannot be written.\n"
+           "*** The responsibility of ensuring multiprocessing safe access to "
+           "this initialization sequence/module import is deferred to the user! "
+           "***\n")
     warnings.warn(msg % str(e))
-    from contextlib import contextmanager
+
     @contextmanager
     def nop():
         yield
+
     _backend_init_process_lock = nop()
 
 _is_initialized = False
@@ -296,12 +294,11 @@ def threading_layer():
 def _launch_threads():
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
-
             global _is_initialized
             if _is_initialized:
                 return
 
-            from ctypes import CFUNCTYPE, c_void_p, c_int
+            from ctypes import CFUNCTYPE, c_int
 
             def select_known_backend(backend):
                 """
