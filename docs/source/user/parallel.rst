@@ -134,9 +134,52 @@ parallel for-loop results in an incorrect return value::
         for i in prange(n):
             # accumulating into the same element of `y` from different
             # parallel iterations of the loop results in a race condition
+            y[:] += x[i]
+
+        return y
+
+as does the following example where explicitly specifying the accumulating element::
+
+    from numba import njit, prange
+    import numpy as np
+
+    @njit(parallel=True)
+    def prange_wrong_result(x):
+        n = x.shape[0]
+        y = np.zeros(4)
+        for i in prange(n):
+            # accumulating into the same element of `y` from different
+            # parallel iterations of the loop results in a race condition
             y[i % 4] += x[i]
 
         return y
+
+whereas performing a whole array reduction is fine::
+
+   from numba import njit, prange
+   import numpy as np
+
+   @njit(parallel=True)
+   def prange_ok_result_whole_arr(x):
+       n = x.shape[0]
+       y = np.zeros(4)
+       for i in prange(n):
+           y += x[i]
+       return y
+
+as is creating a slice reference outside of the parallel reduction loop::
+
+   from numba import njit, prange
+   import numpy as np
+
+   @njit(parallel=True)
+   def prange_ok_result_outer_slice(x):
+       n = x.shape[0]
+       y = np.zeros(4)
+       z = y[:]
+       for i in prange(n):
+           z += x[i]
+       return y
 
 Examples
 ========
