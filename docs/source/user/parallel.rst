@@ -84,7 +84,7 @@ function/operator using its previous value in the loop body. The initial value
 of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
 For other functions/operators, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
-are supported for scalars and for arrays of arbitrary dimensions. 
+are supported for scalars and for arrays of arbitrary dimensions.
 
 The example below demonstrates a parallel loop with a
 reduction (``A`` is a one-dimensional Numpy array)::
@@ -138,7 +138,7 @@ parallel for-loop results in an incorrect return value::
 
         return y
 
-as does the following example where explicitly specifying the accumulating element::
+as does the following example where the accumulating element is explicitly specified::
 
     from numba import njit, prange
     import numpy as np
