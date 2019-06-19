@@ -20,7 +20,7 @@ def make_ref(text):
     elif path.isdir(full_path):
         ref = "https://www.github.com/numba/numba/tree/master/" + text
     else:
-        print("Failed to find file:" + text)
+        logger.warn("Failed to find file in repomap: " + text)
         ref = "https://www.github.com/numba/numba"
     return ref
 
