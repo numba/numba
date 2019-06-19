@@ -1156,6 +1156,7 @@ class TestItemCasting(TestCase):
         self.check_good(types.boolean, types.float64)
         self.check_good(types.boolean, types.complex128)
 
+    @skip_py2
     def test_cast_fail_unicode_int(self):
 
         @njit
@@ -1170,6 +1171,7 @@ class TestItemCasting(TestCase):
             str(raises.exception),
         )
 
+    @skip_py2
     def test_cast_fail_int_unicode(self):
 
         @njit

@@ -8,6 +8,7 @@ import struct
 
 from .support import TestCase
 from numba import _helperlib
+from numba.six import b
 
 
 LIST_OK = 0
@@ -335,8 +336,7 @@ class TestListImpl(TestCase):
         l = List(self, item_size, 0)
 
         def make_item(v):
-            return bytes("{:0{}}".format(nmax - v - 1, item_size)[:item_size],
-                         encoding="ascii")
+            return b("{:0{}}".format(nmax - v - 1, item_size)[:item_size])
 
         for i in range(nmax):
             l.append(make_item(i))
