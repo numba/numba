@@ -40,7 +40,6 @@ Continuous Integration
   platforms
 - :ghfile:`.travis.yml` - Travis CI config (active: Mac/Linux, will be
   dropped in the future)
-- :ghfile:`appveyor.yml` - Appveyor CI config (inactive: Win)
 - :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
