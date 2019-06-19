@@ -1019,7 +1019,7 @@ def unicode_repeat(a, b):
 def unicode_not(a):
     if isinstance(a, types.UnicodeType):
         def impl(a):
-            return True if a == "" else False
+            return len(a) == 0
         return impl
 
 
