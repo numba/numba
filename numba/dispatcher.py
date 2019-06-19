@@ -411,7 +411,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if file is not None:
                 raise ValueError("`file` must be None if `pretty=True`")
             from .pretty_annotate import Annotate
-            return Annotate(self, style=style)
+            return Annotate(self, signature=signature, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None):
         """
@@ -441,10 +441,15 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         signature. If no signature is supplied a dictionary of signature to
         annotation information is returned.
         """
-        if signature is not None:
-            cres = self.overloads[signature]
-            return cres.type_annotation.annotate_raw()
-        return dict((sig, self.annotate(sig)) for sig in self.signatures)
+        signatures = self.signatures if signature is None else [signature]
+        out = collections.OrderedDict()
+        for sig in signatures:
+            cres = self.overloads[sig]
+            ta = cres.type_annotation
+            key = (ta.func_id.filename + ':' + str(ta.func_id.firstlineno + 1),
+                   ta.signature)
+            out[key] = ta.annotate_raw()[key]
+        return out
 
     def _explain_ambiguous(self, *args, **kws):
         """

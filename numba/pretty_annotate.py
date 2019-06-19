@@ -246,13 +246,12 @@ class Annotate:
     Function annotations persist across compilation for newly encountered
     type signatures and as a result annotations are shown for all signatures.
     """
-    def __init__(self, function, **kwargs):
+    def __init__(self, function, signature=None, **kwargs):
 
         style = kwargs.get('style', 'default')
         if not function.signatures:
             raise ValueError('function need to be jitted for at least one signature')
-        for sig in function.signatures:
-            ann = function.get_annotation_info(sig)
+        ann = function.get_annotation_info(signature=signature)
         self.ann = ann
 
         for k,v in ann.items():

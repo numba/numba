@@ -12,6 +12,8 @@ import warnings
 import inspect
 import pickle
 import weakref
+import collections
+from itertools import chain
 
 try:
     import jinja2
@@ -911,6 +913,19 @@ class TestDispatcherMethods(TestCase):
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
+
+    def test_get_annotation_info(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.3)
+
+        expected = dict(chain.from_iterable(foo.get_annotation_info(i).items()
+                                            for i in foo.signatures))
+        result = foo.get_annotation_info()
+        assert expected == result
 
     def test_issue_with_array_layout_conflict(self):
         """
