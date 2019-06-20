@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 from itertools import product
 
 from numba import njit
-from numba import int32, int64, types
+from numba import int32, types
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
 from .support import TestCase, MemoryLeakMixin, unittest
