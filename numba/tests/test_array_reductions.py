@@ -209,9 +209,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
         check(arr)
-        # Only NaNs
-        arr = np.float64(['nan', 'nan'])
+        arr = np.float64([5.0, 'nan', -1.5, 'nan'])
         check(arr)
+        if all_nans:
+            # Only NaNs
+            arr = np.float64(['nan', 'nan'])
+            check(arr)
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
