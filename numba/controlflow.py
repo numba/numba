@@ -122,6 +122,8 @@ class CFGraph(object):
         self._find_descendents()
         self._find_loops()
         self._find_post_dominators()
+        self._find_immediate_dominators()
+        self._find_dominance_frontier()
 
     def dominators(self):
         """
@@ -141,6 +143,26 @@ class CFGraph(object):
         through P.
         """
         return self._post_doms
+
+    def immediate_dominators(self):
+        """
+        Return a dictionary of {node -> node} mapping each node to its
+        immediate dominator (idom).
+
+        The idom(B) is the closest strict dominator of V
+        """
+        return self._idom
+
+    def dominance_frontier(self):
+        """
+        Return a dictionary of {node -> set(nodes)} mapping each node to
+        the nodes in its dominance frontier.
+
+        The dominance frontier _df(N) is the set of all nodes that are
+        immediate successors to blocks dominanted by N but which aren't
+        stricly dominanted by N
+        """
+        return self._df
 
     def descendents(self, node):
         """
@@ -291,6 +313,75 @@ class CFGraph(object):
             if not self._succs.get(n):
                 exit_points.add(n)
         self._exit_points = exit_points
+
+    def _find_postorder(self):
+        succs = self._succs
+        back_edges = self._back_edges
+        post_order = []
+        seen = set()
+
+        def _dfs_rec(node):
+            if node not in seen:
+                seen.add(node)
+                for dest in succs[node]:
+                    if (node, dest) not in back_edges:
+                        _dfs_rec(dest)
+                post_order.append(node)
+
+        _dfs_rec(self._entry_point)
+        return post_order
+
+    def _find_immediate_dominators(self):
+        # The algorithm implemented computes the immediate dominator
+        # for each node in the CFG which is equivalent to build a dominator tree
+        # Based on the implementation from NetworkX library - nx.immediate_dominators
+        # https://github.com/networkx/networkx/blob/858e7cb183541a78969fed0cbcd02346f5866c02/networkx/algorithms/dominance.py
+        # References:
+        #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
+        #   A Simple, Fast Dominance Algorithm
+        #   https://www.cs.rice.edu/~keith/EMBED/dom.pdf
+        def intersect(u, v):
+            while u != v:
+                while idx[u] < idx[v]:
+                    u = idom[u]
+                while idx[u] > idx[v]:
+                    v = idom[v]
+            return u
+
+        entry = self._entry_point
+        preds_table = self._preds
+
+        order = self._find_postorder()
+        idx = {e: i for i, e in enumerate(order)} # index of each node
+        idom = {entry : entry}
+        order.pop()
+        order.reverse()
+
+        changed = True
+        while changed:
+            changed = False
+            for u in order:
+                new_idom = functools.reduce(intersect, (v for v in preds_table[u] if v in idom))
+                if u not in idom or idom[u] != new_idom:
+                    idom[u] = new_idom
+                    changed = True
+
+        self._idom = idom
+
+    def _find_dominance_frontier(self):
+        idom = self._idom
+        preds_table = self._preds
+        df = {u: set() for u in idom}
+
+        for u in idom:
+            if len(preds_table[u]) < 2:
+                continue
+            for v in preds_table[u]:
+                while v != idom[u]:
+                    df[v].add(u)
+                    v = idom[v]
+
+        self._df = df
 
     def _find_dominators_internal(self, post=False):
         # See theoretical description in
