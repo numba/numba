@@ -1057,7 +1057,7 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
         order = find_topo_order(blocks)
     else:
         order = list(blocks.keys())
-    
+
     for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
@@ -1500,7 +1500,7 @@ def find_const(func_ir, var):
     """
     require(isinstance(var, ir.Var))
     var_def = get_definition(func_ir, var)
-    require(isinstance(var_def, ir.Const))
+    require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
@@ -1831,7 +1831,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
-    
+
     # issue 2195: check for excessively large tuples
     for arg_name in func_ir.arg_names:
         if arg_name in typemap and \
