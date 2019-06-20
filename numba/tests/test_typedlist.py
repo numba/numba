@@ -270,16 +270,19 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         rl[::-1], tl[::-1] = rl, tl
         self.assertEqual(rl, list(tl))
 
-        # delete tl to ensure we don't leak memory
-        del tl
-        # check no leak so far
-        self.assert_no_memory_leak()
-        # disable leak check for exception test
+    def test_setitem_slice_value_error(self):
         self.disable_leak_check()
 
+        tl = List.empty_list(int32)
+        for i in range(10,20):
+            tl.append(i)
+
+        assignment = List.empty_list(int32)
+        for i in range(1, 4):
+            assignment.append(i)
+
         with self.assertRaises(ValueError) as raises:
-            rl, tl = setup()
-            tl[8:3:-1] = to_tl([1, 2, 3])
+            tl[8:3:-1] = assignment
         self.assertIn(
             "length mismatch for extended slice and sequence",
             str(raises.exception),
