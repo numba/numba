@@ -1918,12 +1918,13 @@ def raise_on_unsupported_feature(func_ir, typemap):
             # checks for globals that are also reflected
             if isinstance(stmt.value, ir.Global):
                 ty = typemap[stmt.target.name]
-                msg = ("Writing to a %s defined in globals is not "
-                        "supported as globals are considered compile-time "
-                        "constants.")
+                msg = ("The use of a %s type, assigned to variable '%s' in "
+                       "globals, is not supported as globals are considered "
+                       "compile-time constants and there is no known way to "
+                       "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
                     isinstance(ty, types.DictType)):
-                    raise TypingError(msg % ty, loc=stmt.loc)
+                    raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

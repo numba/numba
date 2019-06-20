@@ -135,7 +135,7 @@ class TestMiscErrorHandling(unittest.TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             func()
 
-        expected = ["Writing to a", "defined in globals is not supported"]
+        expected = ["The use of a", "in globals, is not supported as globals"]
         for ex in expected:
             self.assertIn(ex, str(raises.exception))
 
