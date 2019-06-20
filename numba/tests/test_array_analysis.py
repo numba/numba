@@ -337,6 +337,28 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
 
+        def test_11():
+            a = np.ones(5)
+            b = np.ones(5)
+            c = a[1:]
+            d = b[:-1]
+            e = len(c)
+            f = len(d)
+            return e == f
+        self._compile_and_test(test_11, (),
+                               equivs=[self.with_equiv('e', 'f')])
+
+        def test_12():
+            a = np.ones(25).reshape((5,5))
+            b = np.ones(25).reshape((5,5))
+            c = a[1:,:]
+            d = b[:-1,:]
+            e = c.shape[0]
+            f = d.shape[0]
+            return e == f
+        self._compile_and_test(test_12, (),
+                               equivs=[self.with_equiv('e', 'f')])
+
         def test_tup_arg(T):
             T2 = T
             return T2[0]
