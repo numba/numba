@@ -92,7 +92,8 @@ numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods)
     memcpy(&lp->methods, methods, sizeof(list_type_based_methods_table));
 }
 
-static inline int
+// FIXME: need to find a way to inline this, even for Python 2.7 on Windows
+static int
 valid_index(Py_ssize_t i, Py_ssize_t limit)
 {
     /* The cast to size_t lets us use just a single comparison
@@ -107,8 +108,10 @@ valid_index(Py_ssize_t i, Py_ssize_t limit)
 
 int
 numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
+    NB_List *lp;
+    char *items;
     // allocate memory to hold the struct
-    NB_List *lp = malloc(aligned_size(sizeof(NB_List)));
+    lp = malloc(aligned_size(sizeof(NB_List)));
     if (lp == NULL) {
         return LIST_ERR_NO_MEMORY;
     }
@@ -120,7 +123,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     // allocate memory to hold items, if requested
     if (allocated != 0) {
-        char *items = malloc(aligned_size(lp->item_size * allocated));
+        items = malloc(aligned_size(lp->item_size * allocated));
         // allocated was definitely not zero, if malloc returns NULL
         // this is definitely an error
         if (items == NULL) {
@@ -162,13 +165,14 @@ numba_list_length(NB_List *lp) {
 
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
+    char *loc;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
     // set item at desired location
-    char *loc = lp->items + lp-> item_size * index;
+    loc = lp->items + lp-> item_size * index;
     /* This assume there is already an element at index that will be
      * overwritten and thereby have its reference decremented.
      * DO NOT use this to write to an unassigned location.
@@ -181,26 +185,28 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
 
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
+    char *loc;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
     // get item at desired location
-    char *loc = lp->items + lp->item_size * index;
+    loc = lp->items + lp->item_size * index;
     copy_item(lp, out, loc);
     return LIST_OK;
 }
 
 int
 numba_list_append(NB_List *lp, const char *item) {
+    char *loc;
     // resize by one, will change list size
     int result = numba_list_resize(lp, lp->size + 1);
     if(result < LIST_OK) {
         return result;
     }
     // insert item at index: original size before resize
-    char *loc = lp->items + lp-> item_size * (lp->size - 1);
+    loc = lp->items + lp-> item_size * (lp->size - 1);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
     return LIST_OK;
@@ -208,6 +214,8 @@ numba_list_append(NB_List *lp, const char *item) {
 
 int
 numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
+    char *loc, *new_loc;
+    int result;
     Py_ssize_t leftover_bytes;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
@@ -215,18 +223,18 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         return LIST_ERR_INDEX;
     }
     // obtain item and decref if needed
-    char *loc = lp->items + lp->item_size * index;
+    loc = lp->items + lp->item_size * index;
     copy_item(lp, out, loc);
     list_decref_item(lp, loc);
     if (index != lp->size-1) {
         // pop from somewhere other than the end, incur the dreaded memory copy
         leftover_bytes = (lp->size - 1 - index) * lp->item_size;
-        char *new_loc = lp->items + (lp->item_size * (index + 1));
+        new_loc = lp->items + (lp->item_size * (index + 1));
         // use memmove instead of memcpy, memcpy isn't safe on Linux
         memmove(loc, new_loc, leftover_bytes);
     }
     // finally, shrink list by one
-    int result = numba_list_resize(lp, lp->size-1);
+    result = numba_list_resize(lp, lp->size-1);
     if(result < LIST_OK) {
          // Since we are decreasing the size, this should never happen
         return result;
@@ -305,7 +313,8 @@ numba_list_iter(NB_ListIter *it, NB_List *l) {
 
 int
 numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
-    NB_List *lp = it->parent;
+    NB_List *lp;
+    lp = it->parent;
     /* FIXME: Detect list mutation during iteration */
     if (lp->size != it->size) {
         return LIST_ERR_MUTATED;
@@ -335,7 +344,8 @@ numba_test_list(void) {
     const char *it_item;
     NB_ListIter iter;
     char got_item[4];
-
+    const char *test_items_1, *test_items_2;
+    uint8_t i;
     puts("test_list");
 
 
@@ -424,13 +434,13 @@ numba_test_list(void) {
     CHECK(iter.pos == it_count);
 
     // Current contents of list
-    const char items[] = "def\x00ghi\x00jkl\x00";
+    test_items_1 = "def\x00ghi\x00jkl\x00";
     while ( (status = numba_list_iter_next(&iter, &it_item)) == OK) {
         it_count += 1;
         CHECK(iter.pos == it_count); // check iterator position
         CHECK(it_item != NULL); // quick check item is non-null
-        // go fishing in items
-        CHECK(memcmp((const char *)items + ((it_count-1) * 4), it_item, 4) == 0);
+        // go fishing in test_items_1
+        CHECK(memcmp((const char *)test_items_1 + ((it_count-1) * 4), it_item, 4) == 0);
     }
 
     CHECK(status == LIST_ERR_ITER_EXHAUSTED);
@@ -447,7 +457,6 @@ numba_test_list(void) {
     CHECK(lp->allocated == 0);
 
     // first, grow the list
-    uint8_t i;
     // Use exactly 16 elements, should go through the allocation pattern:
     // 0, 4, 8, 16, 25
     for (i = 0; i < 17 ; i++) {
@@ -474,11 +483,10 @@ numba_test_list(void) {
     CHECK(lp->size == 17);
 
     // Check current contents of list
-    const char growth_items[] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
-    CHECK(memcmp(lp->items, growth_items, 17) == 0);
+    test_items_2  = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+    CHECK(memcmp(lp->items, test_items_2, 17) == 0);
 
     // Now, pop them again and check that list shrinks
-    char received[1];
     for (i = 17; i > 0 ; i--) {
         switch(i) {
              // Check the allocation before pop
@@ -491,7 +499,7 @@ numba_test_list(void) {
              case 2:   CHECK(lp->allocated == 5); break;
              case 1:   CHECK(lp->allocated == 4); break;
         }
-        status = numba_list_pop(lp, i-1, received);
+        status = numba_list_pop(lp, i-1, got_item);
         CHECK(status == LIST_OK);
         switch(i) {
              // Check that the shrink happend accordingly
