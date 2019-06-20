@@ -16,7 +16,7 @@ def make_ref(text):
     """ Make hyperlink to Github """
     full_path = path.join(top, text)
     if path.isfile(full_path):
-        ref = "https://github.com/numba/numba/blob/master/" + text
+        ref = "https://www.github.com/numba/numba/blob/master/" + text
     elif path.isdir(full_path):
         ref = "https://www.github.com/numba/numba/tree/master/" + text
     else:
@@ -26,7 +26,14 @@ def make_ref(text):
 
 
 def intersperse(lst, item):
-    """ Insert item between each item in lst. """
+    """ Insert item between each item in lst.
+
+    Copied under CC-BY-SA from stackoverflow at:
+
+    https://stackoverflow.com/questions/5920643/
+    add-an-item-between-each-item-already-in-the-list
+
+    """
     result = [item] * (len(lst) * 2 - 1)
     result[0::2] = lst
     return result
@@ -35,16 +42,19 @@ def intersperse(lst, item):
 def ghfile_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     """ Emit hyperlink nodes for a given file in repomap. """
     my_nodes = []
-    if "{" in text:  # myfile.{c, h} - make two nodes
+    if "{" in text:  # myfile.{c,h} - make two nodes
         # could have used regexes, but this will be fine..
         base = text[:text.find(".") + 1]
         exts = text[text.find("{") + 1:text.find("}")].split(",")
         for e in exts:
-            node = nodes.reference(rawtext, base + e, refuri=make_ref(base + e), **options)
+            node = nodes.reference(rawtext,
+                                   base + e,
+                                   refuri=make_ref(base + e),
+                                   **options)
             my_nodes.append(node)
     elif "*" in text:  # path/*_files.py - link to directory
         # Could have used something from os.path, but this will be fine..
-        ref = text[:text.rfind("/") + 1]
+        ref = path.dirname(text) + path.sep
         node = nodes.reference(rawtext, text, refuri=make_ref(ref), **options)
         my_nodes.append(node)
     else:  # everything else is taken verbatim

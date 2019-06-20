@@ -45,7 +45,7 @@ extensions = [
 ]
 
 # Adding the github files extension
-sys.path.append(os.path.abspath("./_ext"))
+sys.path.append(os.path.abspath(os.path.join(".", "_ext")))
 extensions.append('ghfiles')
 
 todo_include_todos = True
