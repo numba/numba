@@ -496,6 +496,22 @@ def array_min(context, builder, sig, args):
                         min_value = v
             return min_value
 
+    elif isinstance(ty, types.Float):
+        def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            min_value = next(it).take(0)
+
+            for view in it:
+                v = view.item()
+                if np.isnan(v):
+                    return v
+                if v < min_value:
+                    min_value = v
+            return min_value
+
     else:
         def array_min_impl(arry):
             if arry.size == 0:
@@ -536,6 +552,23 @@ def array_max(context, builder, sig, args):
                     if v.imag > max_value.imag:
                         max_value = v
             return max_value
+
+    elif isinstance(ty, types.Float):
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+
+            for view in it:
+                v = view.item()
+                if np.isnan(v):
+                    return v
+                if v > max_value:
+                    max_value = v
+            return max_value
+
     else:
         def array_max_impl(arry):
             if arry.size == 0:
@@ -586,6 +619,25 @@ def array_argmin(context, builder, sig, args):
                 idx += 1
             return min_idx
 
+    elif isinstance(ty, types.Float):
+        def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
+            for v in arry.flat:
+                min_value = v
+                min_idx = 0
+                break
+
+            idx = 0
+            for v in arry.flat:
+                if np.isnan(v):
+                    return idx
+                if v < min_value:
+                    min_value = v
+                    min_idx = idx
+                idx += 1
+            return min_idx
+
     else:
         def array_argmin_impl(arry):
             if arry.size == 0:
@@ -611,23 +663,43 @@ def array_argmin(context, builder, sig, args):
 @lower_builtin(np.argmax, types.Array)
 @lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
-    def array_argmax_impl(arry):
-        if arry.size == 0:
-            raise ValueError("attempt to get argmax of an empty sequence")
-        for v in arry.flat:
-            max_value = v
-            max_idx = 0
-            break
-        else:
-            raise RuntimeError('unreachable')
+    ty = sig.args[0].dtype
 
-        idx = 0
-        for v in arry.flat:
-            if v > max_value:
+    if isinstance(ty, types.Float):
+        def array_argmax_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmax of an empty sequence")
+            for v in arry.flat:
                 max_value = v
-                max_idx = idx
-            idx += 1
-        return max_idx
+                max_idx = 0
+                break
+
+            idx = 0
+            for v in arry.flat:
+                if np.isnan(v):
+                    return idx
+                if v > max_value:
+                    max_value = v
+                    max_idx = idx
+                idx += 1
+            return max_idx
+
+    else:
+        def array_argmax_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmax of an empty sequence")
+            for v in arry.flat:
+                max_value = v
+                max_idx = 0
+                break
+
+            idx = 0
+            for v in arry.flat:
+                if v > max_value:
+                    max_value = v
+                    max_idx = idx
+                idx += 1
+            return max_idx
     res = context.compile_internal(builder, array_argmax_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
