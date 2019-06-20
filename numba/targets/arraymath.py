@@ -2951,7 +2951,9 @@ def np_bincount(a, weights=None):
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
-        out_dtype = weights.dtype
+        # weights is promoted to double in C impl
+        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95
+        out_dtype = np.float64
 
         @register_jitable
         def validate_inputs(a, weights):
