@@ -2051,7 +2051,7 @@ class InlineInlinables(object):
 
 class InlineOverloads(object):
 
-    _DEBUG = True
+    _DEBUG = False
 
     def __init__(self, func_ir, tyctx, cgctx, type_annotation):
         self.func_ir = func_ir
