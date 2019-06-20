@@ -340,8 +340,8 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
     def test_dict_as_item_in_list(self):
         @njit
         def foo():
-            l = List.empty_list(Dict.empty(int64, int64))
-            d = {}
+            l = List.empty_list(Dict.empty(int32, int32))
+            d = Dict.empty(int32, int32)
             d[0] = 1
             # This increments the refcount for d
             l.append(d)
@@ -354,10 +354,10 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
         def foo():
-            l = List.empty_list(Dict.empty(int64, int64))
-            d = {}
+            l = List.empty_list(Dict.empty(int32, int32))
+            d = Dict.empty(int32, int32)
             d[0] = 1
-            # This increments the refcount for d
+            # This increments the refcount for d, twice
             l.append(d)
             l.append(d)
             return get_refcount(d)
@@ -369,8 +369,8 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
     def test_list_as_value_in_dict(self):
         @njit
         def foo():
-            d = Dict.empty(int64, List.empty_list(int64))
-            l = List.empty_list(int64)
+            d = Dict.empty(int32, List.empty_list(int32))
+            l = List.empty_list(int32)
             l.append(0)
             # This increments the refcount for l
             d[0] = l
