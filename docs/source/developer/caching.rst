@@ -38,7 +38,7 @@ Debugging note:
 
 - Look for the usage of ``inttoptr`` in the LLVM IR or
   ``target_context.add_dynamic_add()`` in the lowering code in Python.
-  They indicate potential usage of runtime address. Not all usage are
+  They indicate potential usage of runtime address. Not all usages are
   problematic and some are necessary. Only the conversion of constant integers
   into pointers will affect caching.
 - Misuse of dynamic address or dynamic symbols will likely result in a
@@ -47,7 +47,7 @@ Debugging note:
   Linking should start from the leaf nodes of the dependency graph.
 
 
-Features compatible with caching
+Features Compatible with Caching
 --------------------------------
 
 The following features are explicitly verified to work with caching.
