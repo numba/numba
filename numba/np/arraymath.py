@@ -545,8 +545,6 @@ def array_max(context, builder, sig, args):
 
             it = np.nditer(arry)
             max_value = next(it).take(0)
-            if np.isnan(max_value):
-                return max_value
 
             for view in it:
                 v = view.item()
@@ -564,6 +562,8 @@ def array_max(context, builder, sig, args):
 
             it = np.nditer(arry)
             max_value = next(it).take(0)
+            if np.isnan(max_value):
+                return max_value
 
             for view in it:
                 v = view.item()
