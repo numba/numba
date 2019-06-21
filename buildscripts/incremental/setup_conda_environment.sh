@@ -4,7 +4,7 @@ set -v -e
 
 # first configure conda to have more tolerance of network problems, these
 # numbers are not scientifically chosen, just merely larger than defaults
-conda config
+conda config --write-default
 conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
