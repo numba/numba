@@ -339,13 +339,12 @@ numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
 int
 numba_test_list(void) {
     NB_List *lp;
-    int status;
+    int status, i;
     Py_ssize_t it_count;
     const char *it_item;
     NB_ListIter iter;
     char got_item[4];
     const char *test_items_1, *test_items_2;
-    uint8_t i;
     puts("test_list");
 
 
