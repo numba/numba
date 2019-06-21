@@ -422,6 +422,8 @@ def array_min(context, builder, sig, args):
 
             it = np.nditer(arry)
             min_value = next(it).take(0)
+            if np.isnan(min_value):
+                return min_value
 
             for view in it:
                 v = view.item()
@@ -462,6 +464,8 @@ def array_max(context, builder, sig, args):
 
             it = np.nditer(arry)
             max_value = next(it).take(0)
+            if np.isnan(max_value):
+                return max_value
 
             for view in it:
                 v = view.item()
@@ -549,6 +553,8 @@ def array_argmin(context, builder, sig, args):
                 min_value = v
                 min_idx = 0
                 break
+            if np.isnan(min_value):
+                return min_idx
 
             idx = 0
             for v in arry.flat:
@@ -593,6 +599,8 @@ def array_argmax(context, builder, sig, args):
                 max_value = v
                 max_idx = 0
                 break
+            if np.isnan(max_value):
+                return max_idx
 
             idx = 0
             for v in arry.flat:
