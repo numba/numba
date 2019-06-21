@@ -13,17 +13,17 @@ The Implementation
 
 Caching is done by saving the compiled *object code*, the ELF object of the
 executable code.  By using the *object code*, cached functions have minimal
-overhead because no compilation is needed. The cached data is saved under
+overhead because no compilation is needed. The cached data is saved under the
 ``__pycache__`` directory. The index of the cache is stored in a ``.nbi``
-file.  One index per function. It lists all the overloaded signatures compiled
-for the function. The *object code* is stored in files of ``.nbc`` extension.
-One per overload.
+file, with one index per function, and it lists all the overloaded signatures compiled
+for the function. The *object code* is stored in files with an ``.nbc`` extension,
+one file per overload.
 
 
 Requirements for Cacheability
 -----------------------------
 
-Developers should note the requirements for a function to be cached to ensure
+Developers should note the requirements of a function to permit it to be cached to ensure
 that the features they are working on are compatible with caching.
 
 Requirements for cacheable function:
@@ -38,7 +38,7 @@ Debugging note:
 
 - Look for the usage of ``inttoptr`` in the LLVM IR or
   ``target_context.add_dynamic_add()`` in the lowering code in Python.
-  They indicate potential usage of runtime address. Not all usages are
+  They indicate potential usage of runtime address. Not all uses are
   problematic and some are necessary. Only the conversion of constant integers
   into pointers will affect caching.
 - Misuse of dynamic address or dynamic symbols will likely result in a
