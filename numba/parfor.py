@@ -2725,6 +2725,10 @@ def _find_func_var(typemap, func, avail_vars):
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, openmp):
     ir_utils._max_label = max(ir_utils._max_label,
                               ir_utils.find_max_label(func_ir.blocks))
+    if openmp != False:
+        parfor_openmp = get_info_for_openmp(func_ir, typemap, calltypes)
+        print("parfor_openmp", parfor_openmp)
+
     parfor_found = False
     new_blocks = {}
     for (block_label, block) in func_ir.blocks.items():
@@ -2744,6 +2748,99 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, openmp):
     post_proc.run()
     return
 
+class ParforOpenmpInfo(object):
+    def __init__(self, inputs, outputs, redvars, start, end):
+        self.inputs = inputs
+        self.outputs = outputs
+        self.redvars = redvars
+        self.vars_on_target_start = start
+        self.vars_on_target_end = end
+
+    def __str__(self):
+        return str(self.inputs) + str(self.outputs) + str(self.redvars) + str(self.vars_on_target_start) + str(self.vars_on_target_end)
+
+class ParforBlockInfo(object):
+    def __init__(self, start, end, parfors):
+        self.vars_on_target_start = start
+        self.vars_on_target_end = end
+        self.parfors = parfors
+
+    def __str__(self):
+        return str(self.vars_on_target_start) + str(self.vars_on_target_end) + str(self.parfors)
+
+def remove_non_arrays(the_set, typemap):
+    new_set = set()
+    for i in the_set:
+        if isinstance(typemap[i], types.npytypes.Array):
+            new_set.add(i)
+    return new_set
+
+def get_info_for_openmp(
+        func_ir,
+        typemap,
+        calltypes):
+
+    parfor_openmp = {}
+
+    dprint_func_ir(func_ir, "Start of get_info_for_openmp")
+
+    blocks = func_ir.blocks
+    topo_order = find_topo_order(blocks)
+    cfg = compute_cfg_from_blocks(blocks)
+    cfg.dump()
+    usedefs = compute_use_defs(blocks)
+    print("usedefs:", usedefs)
+    live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
+    print("live_map:", live_map)
+    loops = cfg.loops()
+    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    print("alias_map", alias_map)
+
+    for block_label in reversed(topo_order):
+        block = func_ir.blocks[block_label]
+        parfor_info_list = []
+        print("block_label:", block_label)
+
+        live_arrays = set()
+        for succ, edge_data in cfg.successors(block_label):
+            print("block", block_label, "has successor", succ) 
+            succ_info = parfor_openmp[succ]
+            live_arrays = live_arrays.union(succ_info.vars_on_target_start)
+        vars_on_target_end = copy.copy(live_arrays)
+        print("vars_on_target_end", vars_on_target_end)
+
+        for stmt in reversed(block.body):
+            if isinstance(stmt, Parfor):
+                parfor_outputs = get_parfor_outputs(stmt, stmt.params)
+                parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+                    stmt, stmt.params, calltypes)
+                parfor_inputs = sorted(
+                    list(
+                        set(stmt.params) -
+                        set(parfor_outputs) -
+                        set(parfor_redvars)))
+                parfor_inputs  = remove_non_arrays(parfor_inputs, typemap)
+                parfor_outputs = remove_non_arrays(parfor_outputs, typemap)
+                parfor_redvars = remove_non_arrays(parfor_redvars, typemap)
+
+                parfor_vars_on_target_end = copy.copy(live_arrays)
+                print("parfor_vars_on_target_end", parfor_vars_on_target_end)
+                if config.DEBUG_ARRAY_OPT >= 1:
+                    print("lower_parfor_sequential_block", stmt, type(stmt))
+                    print("params", stmt.params)
+                    print("inputs", parfor_inputs)
+                    print("outputs", parfor_outputs)
+                    print("redvars", parfor_redvars)
+
+                live_arrays = live_arrays.union(set(parfor_inputs)).difference(expand_aliases(set(parfor_outputs).union(set(parfor_redvars)), alias_map))
+                print("parfor_vars_on_target_start", live_arrays)
+
+                parfor_info_list = [ParforOpenmpInfo(parfor_inputs, parfor_outputs, parfor_redvars, live_arrays, parfor_vars_on_target_end)] + parfor_info_list
+        print("vars_on_target_start", live_arrays)
+
+        parfor_openmp[block_label] = ParforBlockInfo(live_arrays, vars_on_target_end, parfor_info_list)
+
+    return parfor_openmp
 
 def _lower_parfor_sequential_block(
         block_label,
@@ -2770,9 +2867,9 @@ def _lower_parfor_sequential_block(
         if config.DEBUG_ARRAY_OPT >= 1:
             print("lower_parfor_sequential_block", inst, type(inst))
             print("params", inst.params)
-            print("inputs", parfor_inputs)
-            print("outputs", parfor_outputs)
-            print("redvars", parfor_redvars)
+            print("inputs", parfor_inputs, type(parfor_inputs))
+            print("outputs", parfor_outputs, type(parfor_outputs))
+            print("redvars", parfor_redvars, type(parfor_redvars))
 
         loc = inst.init_block.loc
         # split block across parfor
@@ -2836,9 +2933,9 @@ def _lower_parfor_sequential_block(
 
                     for param in inst.params:
                         if isinstance(typemap[param], types.npytypes.Array):
-                            openmp_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
+                            openmp_start_tags.append(openmp_tag("QUAL.OMP.SHARED", ir.Var(scope, param, loc)))
                         else:
-                            openmp_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+                            openmp_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", ir.Var(scope, param, loc)))
 
                     # Add OpenMP LLVM directives.
                     or_start = numba.npyufunc.parfor.openmp_region_start(openmp_start_tags, loc)
@@ -2867,14 +2964,14 @@ def _lower_parfor_sequential_block(
                     for param in inst.params:
                         if isinstance(typemap[param], types.npytypes.Array):
                             if param in parfor_outputs:
-                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TOFROM", param))
+                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TOFROM", ir.Var(scope, param, loc)))
                             else:
-                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TO", param))
-                            openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
-                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.SHARED", param))
+                                openmp_target_start_tags.append(openmp_tag("QUAL.OMP.MAP.TO", ir.Var(scope, param, loc)))
+                            openmp_teams_start_tags.append(openmp_tag("QUAL.OMP.SHARED", ir.Var(scope, param, loc)))
+                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.SHARED", ir.Var(scope, param, loc)))
                         else:
-                            openmp_target_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
-                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", param))
+                            openmp_target_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", ir.Var(scope, param, loc)))
+                            openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", ir.Var(scope, param, loc)))
 
                     if ndims > 1:
                         openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))

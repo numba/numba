@@ -19,7 +19,9 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname, remove_dead,
                             get_call_table, is_pure, build_definitions, get_np_ufunc_typ,
-                            get_unused_var_name, find_potential_aliases)
+                            get_unused_var_name, find_potential_aliases,
+                            apply_copy_propagate_extensions, replace_vars_inner,
+                            visit_vars_extensions, visit_vars_inner)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
@@ -33,8 +35,6 @@ from ..errors import ParallelSafetyWarning
 #from numba.targets import csa
 #from numba.targets.registry import csa_target
 #from numba.npyufunc import csa
-
-import pdb
 
 #multi_tile = True
 multi_tile = False
@@ -80,6 +80,13 @@ class openmp_tag(object):
             decl = "i32 " + str(self.arg)
         return '"' + self.name + '"(' + decl + ')'
 
+    def replace_vars_inner(self, var_dict):
+        if isinstance(self.arg, ir.Var):
+            self.arg = replace_vars_inner(self.arg, var_dict)
+
+    def __str__(self):
+        return "openmp_tag(" + str(self.name) + "," + str(self.arg) + ")"
+
 def openmp_tag_list_to_str(tag_list, lowerer):
     tag_strs = [x.lower(lowerer) for x in tag_list]
     return '[ ' + ", ".join(tag_strs) + ' ]'
@@ -103,6 +110,9 @@ class openmp_region_start(ir.Stmt):
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.entry', (), fnty)
         self.omp_region_var = builder.call(pre_fn, [], tail=False, tags=openmp_tag_list_to_str(self.tags, lowerer))
 
+    def __str__(self):
+        return "openmp_region_start " + ", ".join([str(x) for x in self.tags])
+
 class openmp_region_end(ir.Stmt):
     def __init__(self, start_region, tags, loc):
         self.start_region = start_region
@@ -124,6 +134,9 @@ class openmp_region_end(ir.Stmt):
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.exit', (), fnty)
         builder.call(pre_fn, [self.start_region.omp_region_var], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer))
 
+    def __str__(self):
+        return "openmp_region_start " + ", ".join([str(x) for x in self.tags])
+
 def openmp_region_start_infer(prs, typeinferer):
     pass
 
@@ -141,6 +154,22 @@ def _lower_openmp_region_end(lowerer, pre):
 
 lowering.lower_extensions[openmp_region_start] = _lower_openmp_region_start
 lowering.lower_extensions[openmp_region_end] = _lower_openmp_region_end
+
+def apply_copies_openmp_region(region, var_dict, name_var_table, typemap, calltypes, save_copies):
+    for i in range(len(region.tags)):
+        region.tags[i].replace_vars_inner(var_dict)
+
+apply_copy_propagate_extensions[openmp_region_start] = apply_copies_openmp_region
+apply_copy_propagate_extensions[openmp_region_end] = apply_copies_openmp_region
+
+def visit_vars_openmp_region(region, callback, cbdata):
+    for i in range(len(region.tags)):
+        #print("visit_vars before", region.tags[i], type(region.tags[i].arg))
+        region.tags[i].arg = visit_vars_inner(region.tags[i].arg, callback, cbdata)
+        #print("visit_vars after", region.tags[i])
+
+visit_vars_extensions[openmp_region_start] = visit_vars_openmp_region
+visit_vars_extensions[openmp_region_end] = visit_vars_openmp_region
 
 #----------------------------------------------------------------------------------------------
 
