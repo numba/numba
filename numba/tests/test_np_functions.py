@@ -194,7 +194,7 @@ def array_repeat(a, repeats):
 
 
 def np_select(condlist, choicelist, default=0):
-    return np.select(condlist, choicelist, default=0)
+    return np.select(condlist, choicelist, default=default)
 
 
 def np_bartlett(M):
@@ -2827,6 +2827,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0,
              TypingError, "Invalid use of Function"),
+
+            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], ValueError,
+             "list of cases must be same length as list of conditions")
         ]:
             with self.assertRaises(expected_error) as e:
                 np_nbfunc(condlist, choicelist, default)

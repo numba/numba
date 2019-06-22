@@ -3542,7 +3542,7 @@ def np_extract(condition, arr):
 
     return np_extract_impl
 
-  
+
 @overload(np.select)
 def np_select(condlist, choicelist, default=0):
 
@@ -3563,10 +3563,34 @@ def np_select(condlist, choicelist, default=0):
         if condlist[0].ndim != choicelist[0].ndim:
             raise TypeError('condlist and choicelist elements must have the same number of dimensions')
 
+        if len(condlist) != len(choicelist):
+            raise ValueError('list of cases must be same length as list of conditions')
+
         if condlist[0].ndim < 1:
             raise TypeError('condlist and choicelist elements must be arrays of at least dimension 1')
         else:
             return np_select_impl
+
+
+    if not isinstance(condlist, (types.List, types.UniTuple)):
+        raise TypeError('condlist must be a List or a Tuple')
+
+    elif not isinstance(choicelist, (types.List, types.UniTuple)):
+        raise TypeError('choicelist must be a List or a Tuple')
+    ...
+    else:
+        return np_select_impl
+        and isinstance(condlist[0], types.Array)
+        and isinstance(condlist[0].dtype, types.Boolean)
+        and isinstance(default, (int, types.scalars.Number))):
+        if condlist[0].ndim != choicelist[0].ndim:
+            raise TypeError('condlist and choicelist elements must have the same number of dimensions')
+
+        if condlist[0].ndim < 1:
+            raise TypeError('condlist and choicelist elements must be arrays of at least dimension 1')
+        else:
+            return np_select_impl
+
 
 #----------------------------------------------------------------------------
 # Windowing functions
