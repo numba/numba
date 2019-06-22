@@ -2779,7 +2779,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for condlist,  choicelist, default in [
             # Each test case below is one tuple.
             # Each tuple is separated by a blank line
-            ([x < 3, x > 5], [x, x ** 2],0),
+            ([x < 3, x > 5], [x, x ** 2], 0),
 
             ((x < 3, x > 5), (x, x ** 2), 0),
 
@@ -2788,7 +2788,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
               np.array([False, False, True])],
              [np.array([1, 2, 3]),
               np.array([4, 5, 6]),
-              np.array([7, 8, 9])],15),
+              np.array([7, 8, 9])], 15),
 
             ([np.array([True]),
               np.array([False])], [np.array([1]), np.array([2])], 0),
