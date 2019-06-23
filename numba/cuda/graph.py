@@ -204,7 +204,23 @@ class MemsetNode(Node):
         return builded
 
 
-class KernelNode(Node):
+class KernelNodeMeta(type):
+    def __getitem__(self, config):
+        def makeKernelNode(kernel, args=None, deps=None, params=None):
+            if len(config) not in [2, 3]:
+                raise ValueError('must specify at least the griddim and blockdim')
+            def_pars = {
+                'gridDim': config[0],
+                'blockDim': config[1],
+                'sharedMemBytes': config[2] if len(config) > 2 else 0,
+            }
+            if params:
+                def_pars.update(params)
+            return KernelNode(kernel, args, deps, def_pars)
+        return makeKernelNode
+
+
+class KernelNode(Node, metaclass=KernelNodeMeta):
     def __init__(self, kernel, args=None, deps=None, params=None):
         self.kernel = kernel
         self.args = args or []

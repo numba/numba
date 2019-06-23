@@ -71,7 +71,19 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
 
         self.assertTrue(np.all(arr.copy_to_host() == [4, 1, 1, 5, 1, 1]))
 
+        n1 = KernelNode[4, 5](k1, [arr])
+        n1.build().launch()
+        cuda.synchronize()
+
+        self.assertTrue(np.all(arr.copy_to_host() == [4, 1, 1, 5, 1, 1]))
+
         n1 = KernelNode(k1, [arr], params={ 'gridDim': (1, 2, 3), 'blockDim': (4, 5, 6) })
+        n1.build().launch()
+        cuda.synchronize()
+
+        self.assertTrue(np.all(arr.copy_to_host() == [1, 2, 3, 4, 5, 6]))
+
+        n1 = KernelNode[(1, 2, 3), (4, 5, 6)](k1, [arr])
         n1.build().launch()
         cuda.synchronize()
 
