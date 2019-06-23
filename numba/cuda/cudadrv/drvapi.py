@@ -13,6 +13,7 @@ cu_function = c_void_p          # an opaque handle
 cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
                                 # and unsigned long long on 64-bit machine
 cu_stream = c_void_p            # an opaque handle
+cu_array = c_void_p             # an opaque handle
 cu_event = c_void_p
 cu_link_state = c_void_p
 cu_function_attribute = c_int
@@ -362,6 +363,9 @@ API_PROTOTYPES = {
                          c_void_p, c_void_p, c_void_p, c_uint, c_void_p),
 
 # CUresult cuGraphAddMemcpyNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_MEMCPY3D* copyParams, CUcontext ctx )
+
+'cuGraphAddMemcpyNode': (c_int,
+                         c_void_p, c_void_p, c_void_p, c_uint, c_void_p, cu_context),
 
 # CUresult cuGraphAddMemsetNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_MEMSET_NODE_PARAMS* memsetParams, CUcontext ctx )
 

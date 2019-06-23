@@ -1,7 +1,11 @@
-from ctypes import c_void_p, addressof, c_uint, POINTER, Structure
+from ctypes import c_void_p, addressof, c_uint, c_size_t, POINTER, Structure, byref
+from numba.cuda import current_context
 from numba.cuda.errors import normalize_kernel_dimensions
-from numba.cuda.cudadrv.driver import driver, is_device_memory, device_ctypes_pointer, byref
 from numba.cuda.compiler import AutoJitCUDAKernel, CUDAKernel
+from numba.cuda.cudadrv.enums import CU_MEMORYTYPE_DEVICE, CU_MEMORYTYPE_HOST
+from numba.cuda.cudadrv.drvapi import cu_device_ptr, cu_array
+from numba.cuda.cudadrv.driver import driver, is_device_memory, device_ctypes_pointer, \
+    host_pointer, device_pointer
 
 
 class KernelParams(Structure):
@@ -16,6 +20,38 @@ class KernelParams(Structure):
         ('sharedMemBytes', c_uint),
         ('kernelParams', POINTER(c_void_p)),
         ('extra', POINTER(c_void_p)),
+    ]
+
+
+class MemcpyParams(Structure):
+    _fields_ = [
+        ('srcXInBytes', c_size_t),
+        ('srcY', c_size_t),
+        ('srcZ', c_size_t),
+        ('srcLOD', c_size_t),
+        ('srcMemoryType', c_uint),
+        ('srcHost', c_void_p),
+        ('srcDevice', cu_device_ptr),
+        ('srcArray', cu_array),
+        ('reserved0', c_void_p),
+        ('srcPitch', c_size_t),
+        ('srcHeight', c_size_t),
+
+        ('dstXInBytes', c_size_t),
+        ('dstY', c_size_t),
+        ('dstZ', c_size_t),
+        ('dstLOD', c_size_t),
+        ('dstMemoryType', c_uint),
+        ('dstHost', c_void_p),
+        ('dstDevice', cu_device_ptr),
+        ('dstArray', cu_array),
+        ('reserved1', c_void_p),
+        ('dstPitch', c_size_t),
+        ('dstHeight', c_size_t),
+
+        ('WidthInBytes', c_size_t),
+        ('Height', c_size_t),
+        ('Depth', c_size_t),
     ]
 
 
@@ -45,12 +81,85 @@ class EmptyNode(Node):
         return builded
 
 
-class (Node):
+class MemcpyNode(Node):
+    def __init__(self, deps=None, params=None, ctx=None):
+        self.params = params or { }
+        self.ctx = ctx
+        super().__init__(deps)
+
+    def _get_params(self):
+        params = MemcpyParams()
+
+        params.srcXInBytes = self.params.get('srcXInBytes', 0)
+        params.srcY = self.params.get('srcY', 0)
+        params.srcZ = self.params.get('srcZ', 0)
+        params.srcLOD = self.params.get('srcLOD', 0)
+        params.srcMemoryType = self.params.get('srcMemoryType')
+        if not params.srcMemoryType:
+            raise Exception('params.srcMemoryType should be set')
+        srcHost = self.params.get('srcHost')
+        params.srcHost = host_pointer(srcHost) if srcHost else None
+        srcDevice = self.params.get('srcDevice')
+        params.srcDevice = device_pointer(srcDevice) if srcDevice else 0
+        params.srcArray = None # TODO
+        params.reserved0 = None
+        params.srcPitch = self.params.get('srcPitch', 0)
+        params.srcHeight = self.params.get('srcHeight', 0)
+
+        params.dstXInBytes = self.params.get('dstXInBytes', 0)
+        params.dstY = self.params.get('dstY', 0)
+        params.dstZ = self.params.get('dstZ', 0)
+        params.dstLOD = self.params.get('dstLOD', 0)
+        params.dstMemoryType = self.params.get('dstMemoryType')
+        if not params.dstMemoryType:
+            raise Exception('params.dstMemoryType should be set')
+        dstHost = self.params.get('dstHost')
+        params.dstHost = host_pointer(dstHost) if dstHost else None
+        dstDevice = self.params.get('dstDevice')
+        params.dstDevice = device_pointer(dstDevice) if dstDevice else 0
+        params.dstArray = None # TODO
+        params.reserved1 = None
+        params.dstPitch = self.params.get('dstPitch', 0)
+        params.dstHeight = self.params.get('dstHeight', 0)
+
+        params.WidthInBytes = self.params.get('WidthInBytes', 0)
+        if not params.WidthInBytes >= 0:
+            raise Exception('params.WidthInBytes should be the byte length of array')
+        params.Height = self.params.get('Height', 1)
+        params.Depth = self.params.get('Depth', 1)
+        return params
+
     def build(self, graph=None):
         builded = super().build(graph)
-        driver.cuGraphAddEmptyNode(byref(builded.handle), builded.graph.handle,
-                                   builded.deps, len(builded.deps))
+        params = self._get_params()
+        ctx = self.ctx or current_context()
+        driver.cuGraphAddMemcpyNode(byref(builded.handle), builded.graph.handle,
+                                    builded.deps, len(builded.deps), byref(params), ctx.handle)
         return builded
+
+
+class MemcpyHtoDNode(MemcpyNode):
+    def __init__(self, dst, src, size, deps=None, params=None, ctx=None):
+        def_pars = {
+            'srcHost': src, 'srcMemoryType': CU_MEMORYTYPE_HOST,
+            'dstDevice': dst, 'dstMemoryType': CU_MEMORYTYPE_DEVICE,
+            'WidthInBytes': size,
+        }
+        if params:
+            def_pars.update(params)
+        super().__init__(deps, def_pars, ctx)
+
+
+class MemcpyDtoHNode(MemcpyNode):
+    def __init__(self, dst, src, size, deps=None, params=None, ctx=None):
+        def_pars = {
+            'srcDevice': src, 'srcMemoryType': CU_MEMORYTYPE_DEVICE,
+            'dstHost': dst, 'dstMemoryType': CU_MEMORYTYPE_HOST,
+            'WidthInBytes': size,
+        }
+        if params:
+            def_pars.update(params)
+        super().__init__(deps, def_pars, ctx)
 
 
 class KernelNode(Node):

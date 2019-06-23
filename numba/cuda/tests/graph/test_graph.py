@@ -6,7 +6,7 @@ from numba import unittest_support as unittest
 from numba.cuda.testing import SerialMixin
 from numba import cuda, void, f8
 
-from numba.cuda.graph import KernelNode, EmptyNode
+from numba.cuda.graph import KernelNode, EmptyNode, MemcpyDtoHNode, MemcpyHtoDNode
 
 
 class TestCudaGraph(SerialMixin, unittest.TestCase):
@@ -95,6 +95,22 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
         cuda.synchronize()
 
         self.assertTrue(np.all(arr.copy_to_host() == [9]))
+
+    def test_memcpy_node(self):
+        harr = np.array([1.])
+        darr = cuda.device_array_like(harr)
+
+        @cuda.jit
+        def k1(a):
+            a[0] += 2
+
+        n1 = MemcpyHtoDNode(darr, harr, harr.nbytes)
+        n2 = KernelNode(k1, [darr], [n1])
+        n3 = MemcpyDtoHNode(harr, darr, harr.nbytes, [n2])
+        n3.build().launch()
+        cuda.synchronize()
+
+        self.assertTrue(np.all(harr == [3]))
 
 
 if __name__ == '__main__':
