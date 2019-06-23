@@ -382,6 +382,8 @@ API_PROTOTYPES = {
 
 # CUresult cuGraphDestroy ( CUgraph hGraph )
 
+'cuGraphDestroy': (c_int, c_void_p),
+
 # CUresult cuGraphDestroyNode ( CUgraphNode hNode )
 
 # CUresult cuGraphExecDestroy ( CUgraphExec hGraphExec )

@@ -81,6 +81,7 @@ class Node:
         args = [dep.build(graph).handle for dep in self.deps]
         deps = (c_void_p * len(self.deps))(*args)
         builded = self.builded[graph] = BuildedNode(c_void_p(), graph, deps)
+        graph.nodes.append(self)
         return builded
 
 
@@ -270,13 +271,26 @@ class BuildedNode:
     def launch(self, stream=None):
         return GraphExec(self.graph).launch(stream)
 
+    def destroy(self):
+        self.graph.destroy()
+
 
 class Graph:
     def __init__(self, flags=0):
         self.handle = c_void_p()
+        self.nodes = []
         driver.cuGraphCreate(byref(self.handle), flags)
 
+    def destroy(self):
+        for node in self.nodes:
+            del node.builded[self]
+        if self.handle is not None:
+            driver.cuGraphDestroy(self.handle)
+        self.handle = None
+
     def instantiate(self):
+        if self.handle is None:
+            raise Exception('graph already destroyed!')
         return GraphExec(self)
 
 

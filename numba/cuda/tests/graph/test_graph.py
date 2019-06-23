@@ -128,6 +128,26 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
 
         self.assertTrue(np.all(harr == [3]))
 
+    def test_graph_destroy(self):
+        arr = cuda.to_device(np.array([1.]))
+
+        @cuda.jit
+        def k1(a):
+            a[0] += 2
+
+        n1 = KernelNode(k1, [arr])
+        g = n1.build()
+        g.launch()
+        cuda.synchronize()
+
+        self.assertTrue(np.all(arr.copy_to_host() == [3]))
+
+        g.destroy()
+        with self.assertRaises(Exception) as raises:
+            g.launch()
+
+        self.assertTrue('graph already destroyed!', str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
