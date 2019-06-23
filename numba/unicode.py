@@ -1015,6 +1015,14 @@ def unicode_repeat(a, b):
         return wrap
 
 
+@overload(operator.not_)
+def unicode_not(a):
+    if isinstance(a, types.UnicodeType):
+        def impl(a):
+            return len(a) == 0
+        return impl
+
+
 @lower_builtin('getiter', types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args

@@ -593,7 +593,7 @@ def _dict_lookup(typingctx, d, key, hashval):
             ],
         )
         # Load value if output is available
-        found = builder.icmp_signed('>=', ix, ix.type(int(DKIX.EMPTY)))
+        found = builder.icmp_signed('>', ix, ix.type(int(DKIX.EMPTY)))
 
         out = context.make_optional_none(builder, td.value_type)
         pout = cgutils.alloca_once_value(builder, out)

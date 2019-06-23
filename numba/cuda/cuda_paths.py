@@ -52,8 +52,8 @@ def _get_nvvm_path_decision():
         ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
         ('System', get_system_ctk(*_nvvm_lib_dir())),
     ]
-    by, libdir = _find_valid_path(options)
-    return by, libdir
+    by, path = _find_valid_path(options)
+    return by, path
 
 
 def _get_libdevice_paths():
@@ -134,9 +134,10 @@ def get_cuda_home(*subdirs):
 
 
 def _get_nvvm_path():
-    by, libdir = _get_nvvm_path_decision()
-    candidates = find_lib('nvvm', libdir)
-    path = max(candidates) if candidates else None
+    by, path = _get_nvvm_path_decision()
+    if by != 'NUMBAPRO_NVVM':
+        candidates = find_lib('nvvm', path)
+        path = max(candidates) if candidates else None
     return _env_path_tuple(by, path)
 
 
