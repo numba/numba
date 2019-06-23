@@ -55,6 +55,17 @@ class MemcpyParams(Structure):
     ]
 
 
+class MemsetParams(Structure):
+    _fields_ = [
+        ('dst', cu_device_ptr),
+        ('pitch', c_size_t),
+        ('value', c_uint),
+        ('elementSize', c_uint),
+        ('width', c_size_t),
+        ('height', c_size_t),
+    ]
+
+
 class Node:
     def __init__(self, deps=None):
         self.deps = deps or []
@@ -98,7 +109,7 @@ class MemcpyNode(Node):
         if not params.srcMemoryType:
             raise Exception('params.srcMemoryType should be set')
         srcHost = self.params.get('srcHost')
-        params.srcHost = host_pointer(srcHost) if srcHost else None
+        params.srcHost = None if srcHost is None else host_pointer(srcHost)
         srcDevice = self.params.get('srcDevice')
         params.srcDevice = device_pointer(srcDevice) if srcDevice else 0
         params.srcArray = None # TODO
@@ -114,7 +125,7 @@ class MemcpyNode(Node):
         if not params.dstMemoryType:
             raise Exception('params.dstMemoryType should be set')
         dstHost = self.params.get('dstHost')
-        params.dstHost = host_pointer(dstHost) if dstHost else None
+        params.dstHost = None if dstHost is None else host_pointer(dstHost)
         dstDevice = self.params.get('dstDevice')
         params.dstDevice = device_pointer(dstDevice) if dstDevice else 0
         params.dstArray = None # TODO
@@ -160,6 +171,36 @@ class MemcpyDtoHNode(MemcpyNode):
         if params:
             def_pars.update(params)
         super().__init__(deps, def_pars, ctx)
+
+
+class MemsetNode(Node):
+    def __init__(self, arr, size, val, deps=None, params=None, ctx=None):
+        self.arr = arr
+        self.size = size
+        self.val = val
+        self.params = params or { }
+        self.ctx = ctx
+        super().__init__(deps)
+
+    def _get_params(self):
+        params = MemsetParams()
+        params.dst = device_pointer(self.arr)
+        params.width = self.size
+        params.value = self.val
+        params.elementSize = self.params.get('elementSize', 4)
+        if params.elementSize not in [1, 2, 4]:
+            raise Exception('only 1, 2 or 4 is allowed for elementSize')
+        params.height = self.params.get('height', 1)
+        params.pitch = self.params.get('pitch', 1)
+        return params
+
+    def build(self, graph=None):
+        builded = super().build(graph)
+        params = self._get_params()
+        ctx = self.ctx or current_context()
+        driver.cuGraphAddMemsetNode(byref(builded.handle), builded.graph.handle,
+                                    builded.deps, len(builded.deps), byref(params), ctx.handle)
+        return builded
 
 
 class KernelNode(Node):

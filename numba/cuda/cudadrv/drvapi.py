@@ -369,6 +369,9 @@ API_PROTOTYPES = {
 
 # CUresult cuGraphAddMemsetNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_MEMSET_NODE_PARAMS* memsetParams, CUcontext ctx )
 
+'cuGraphAddMemsetNode': (c_int,
+                         c_void_p, c_void_p, c_void_p, c_uint, c_void_p, cu_context),
+
 # CUresult cuGraphChildGraphNodeGetGraph ( CUgraphNode hNode, CUgraph* phGraph )
 
 # CUresult cuGraphClone ( CUgraph* phGraphClone, CUgraph originalGraph )
