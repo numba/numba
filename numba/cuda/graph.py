@@ -20,17 +20,45 @@ class KernelParams(Structure):
 
 
 class Node:
-    pass
+    def __init__(self, deps=None):
+        self.deps = deps or []
+        self.builded = { }
+
+    def build(self, graph=None):
+        if not graph:
+            graph = Graph()
+
+        if graph in self.builded:
+            return self.builded[graph]
+
+        args = [dep.build(graph).handle for dep in self.deps]
+        deps = (c_void_p * len(self.deps))(*args)
+        builded = self.builded[graph] = BuildedNode(c_void_p(), graph, deps)
+        return builded
+
+
+class EmptyNode(Node):
+    def build(self, graph=None):
+        builded = super().build(graph)
+        driver.cuGraphAddEmptyNode(byref(builded.handle), builded.graph.handle,
+                                   builded.deps, len(builded.deps))
+        return builded
+
+
+class (Node):
+    def build(self, graph=None):
+        builded = super().build(graph)
+        driver.cuGraphAddEmptyNode(byref(builded.handle), builded.graph.handle,
+                                   builded.deps, len(builded.deps))
+        return builded
 
 
 class KernelNode(Node):
     def __init__(self, kernel, args=None, deps=None, params=None):
         self.kernel = kernel
         self.args = args or []
-        self.deps = deps or []
         self.params = params or { }
-        self.builded = { }
-        super().__init__()
+        super().__init__(deps)
 
     def _get_params(self):
         params = KernelParams()
@@ -73,27 +101,18 @@ class KernelNode(Node):
         return params
 
     def build(self, graph=None):
-        if not graph:
-            graph = Graph()
-
-        if graph in self.builded:
-            return self.builded[graph]
-
-        # FIXME: it's strange but we have to build depedencies before other operations
-        dep_val = [dep.build(graph).handle for dep in self.deps]
-        dep_num = len(dep_val)
-        dep_arr = (c_void_p * dep_num)(*dep_val) if dep_num else None
-
+        builded = super().build(graph)
         params = self._get_params()
-        builded = self.builded[graph] = BuildedNode(c_void_p(), graph)
-        driver.cuGraphAddKernelNode(byref(builded.handle), graph.handle, dep_arr, dep_num, byref(params))
+        driver.cuGraphAddKernelNode(byref(builded.handle), builded.graph.handle,
+                                    builded.deps, len(builded.deps), byref(params))
         return builded
 
 
 class BuildedNode:
-    def __init__(self, handle, graph):
+    def __init__(self, handle, graph, deps):
         self.handle = handle
         self.graph = graph
+        self.deps = deps
 
     def instantiate(self):
         return GraphExec(self.graph)

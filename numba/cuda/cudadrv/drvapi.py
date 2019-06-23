@@ -351,6 +351,9 @@ API_PROTOTYPES = {
 
 # CUresult cuGraphAddEmptyNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies )
 
+'cuGraphAddEmptyNode': (c_int,
+                        c_void_p, c_void_p, c_void_p, c_uint),
+
 # CUresult cuGraphAddHostNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_HOST_NODE_PARAMS* nodeParams )
 
 # CUresult cuGraphAddKernelNode ( CUgraphNode* phGraphNode, CUgraph hGraph, const CUgraphNode* dependencies, size_t numDependencies, const CUDA_KERNEL_NODE_PARAMS* nodeParams )
