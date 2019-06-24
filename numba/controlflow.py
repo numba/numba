@@ -384,6 +384,8 @@ class CFGraph(object):
 
         for u, v in idom.items():
             # v dominates u
+            if v not in domtree:
+                domtree[v] = set()
             if u not in domtree:
                 domtree[u] = set()
 
