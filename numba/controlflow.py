@@ -168,7 +168,7 @@ class CFGraph(object):
     def dominator_tree(self):
         """
         return a dictionary of {node -> set(nodes)} mapping each node to
-        the set of nodes it dominates
+        the set of nodes it immediately dominates
 
         The domtree(B) is the closest strict set of nodes that B dominates
         """
@@ -380,15 +380,12 @@ class CFGraph(object):
 
     def _find_dominator_tree(self):
         idom = self._idom
-        domtree = {}
+        domtree = collections.defaultdict(set)
 
         for u, v in idom.items():
             # v dominates u
-            if v not in domtree:
-                domtree[v] = set()
             if u not in domtree:
                 domtree[u] = set()
-
             if u != v:
                 domtree[v].add(u)
 
