@@ -1753,25 +1753,29 @@ class TestBoxingDefaultError(unittest.TestCase):
 class TestNoRetryFailedSignature(unittest.TestCase):
     """Test that failed-to-compile signatures are not recompiled.
     """
+
+    def run_test(self, func):
+        fcom = func._compiler
+        self.assertEqual(len(fcom._failed_cache), 0)
+        # expected failure because `int` has no `__getitem__`
+        with self.assertRaises(errors.TypingError):
+            func(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry
+        with self.assertRaises(errors.TypingError):
+            func(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry with double
+        with self.assertRaises(errors.TypingError):
+            func(1.0)
+        self.assertEqual(len(fcom._failed_cache), 2)
+
     def test_direct_call(self):
         @jit(nopython=True)
         def foo(x):
             return x[0]
 
-        fcom = foo._compiler
-        self.assertEqual(len(fcom._failed_cache), 0)
-        # expected failure because `int` has no `__getitem__`
-        with self.assertRaises(errors.TypingError):
-            foo(1)
-        self.assertEqual(len(fcom._failed_cache), 1)
-        # retry
-        with self.assertRaises(errors.TypingError):
-            foo(1)
-        self.assertEqual(len(fcom._failed_cache), 1)
-        # retry with double
-        with self.assertRaises(errors.TypingError):
-            foo(1.0)
-        self.assertEqual(len(fcom._failed_cache), 2)
+        self.run_test(foo)
 
     def test_nested_call(self):
         @jit(nopython=True)
@@ -1786,30 +1790,18 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         def foo(x):
             return bar(x) + foobar(x)
 
-        fcom = foo._compiler
-        self.assertEqual(len(fcom._failed_cache), 0)
-        # expected failure because `int` has no `__getitem__`
-        with self.assertRaises(errors.TypingError):
-            foo(1)
-        self.assertEqual(len(fcom._failed_cache), 1)
-        # retry
-        with self.assertRaises(errors.TypingError):
-            foo(1)
-        self.assertEqual(len(fcom._failed_cache), 1)
-        # retry with double
-        with self.assertRaises(errors.TypingError):
-            foo(1.0)
-        self.assertEqual(len(fcom._failed_cache), 2)
+        self.run_test(foo)
 
     def test_performance(self):
 
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
             # Before the patch, the compilation time of the failing case is
-            # mush longer than of the successful case.
+            # much longer than of the successful case.
             arr = np.arange(200).reshape(100,2)
             arr_view = arr.ravel().view(dtype=[('a', 'int64'), ('b', 'int64')])
-            k = 20
+            k = 30
+
             @jit(nopython=True)
             def ident(out, x, arr):
                 pass
