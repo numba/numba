@@ -219,22 +219,27 @@ class TestParallelBackendBase(TestCase):
     Base class for testing the parallel backends
     """
 
-    all_impls = [jit_runner(nopython=True),
-                 jit_runner(nopython=True, cache=True),
-                 jit_runner(nopython=True, nogil=True),
-                 jit_runner(nopython=True, parallel=True, cache=True),
-                 linalg_runner(nopython=True),
-                 linalg_runner(nopython=True, nogil=True),
-                 linalg_runner(nopython=True, parallel=True, cache=True),
-                 vectorize_runner(nopython=True),
-                 vectorize_runner(nopython=True, target='parallel'),
-                 guvectorize_runner(nopython=True),
-                 guvectorize_runner(nopython=True, target='parallel'),
-                 ]
+    all_impls = [
+        jit_runner(nopython=True),
+        jit_runner(nopython=True, cache=True),
+        jit_runner(nopython=True, nogil=True),
+        linalg_runner(nopython=True),
+        linalg_runner(nopython=True, nogil=True),
+        vectorize_runner(nopython=True),
+        vectorize_runner(nopython=True, target='parallel'),
+        vectorize_runner(nopython=True, target='parallel', cache=True),
+        guvectorize_runner(nopython=True),
+        guvectorize_runner(nopython=True, target='parallel'),
+        guvectorize_runner(nopython=True, target='parallel', cache=True),
+    ]
 
     if not _parfors_unsupported:
-        parfor_impls = [jit_runner(nopython=True, parallel=True),
-                        linalg_runner(nopython=True, parallel=True), ]
+        parfor_impls = [
+            jit_runner(nopython=True, parallel=True),
+            jit_runner(nopython=True, parallel=True, cache=True),
+            linalg_runner(nopython=True, parallel=True),
+            linalg_runner(nopython=True, parallel=True, cache=True),
+        ]
         all_impls.extend(parfor_impls)
 
     parallelism = ['threading', 'random']
@@ -246,14 +251,18 @@ class TestParallelBackendBase(TestCase):
     else:
         parallelism.append('multiprocessing_default')
 
-    runners = {'concurrent_jit': [jit_runner(nopython=True,
-                                             parallel=(not _parfors_unsupported)
-                                             )],
-               'concurrect_vectorize':
-                   [vectorize_runner(nopython=True, target='parallel')],
-               'concurrent_guvectorize':
-                   [guvectorize_runner(nopython=True, target='parallel')],
-               'concurrent_mix_use': all_impls}
+    runners = {
+        'concurrent_jit': [
+            jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
+        ],
+        'concurrect_vectorize': [
+            vectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_guvectorize': [
+            guvectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_mix_use': all_impls,
+    }
 
     safe_backends = {'omp', 'tbb'}
 
