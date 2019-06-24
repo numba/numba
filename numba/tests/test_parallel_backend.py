@@ -10,29 +10,30 @@ import random
 import os
 import sys
 import subprocess
-import signal
-
-from numba import config, utils
-if utils.PYVERSION >= (3, 0):
-    import queue as t_queue
-    import faulthandler
-else:
-    import Queue as t_queue
 
 import numpy as np
 
+from numba import config, utils
+
 from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize, njit
+from numba import jit, vectorize, guvectorize
 
 from .support import temp_directory, override_config, TestCase, tag
 
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
+
+if utils.PYVERSION >= (3, 0):
+    import queue as t_queue
+    import faulthandler
+else:
+    import Queue as t_queue
+
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool
+    from numba.npyufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
@@ -44,7 +45,7 @@ except ImportError:
     _HAVE_OMP_POOL = False
 
 try:
-    import scipy.linalg.cython_lapack
+    import scipy.linalg.cython_lapack    # noqa: F401
     _HAVE_LAPACK = True
 except ImportError:
     _HAVE_LAPACK = False
