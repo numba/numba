@@ -501,33 +501,88 @@ def find_setupwiths(blocks):
 
 def ssa_transformation(func_ir):
 
-    def create_phi_node(var, dest_block, incoming_blocks):
-        # This will first create the PHI node and add it to the top of the dest_block
+    def create_phi_node(var, incoming_blocks):
+        """ Create the PHI node
+        """
         blocks = func_ir.blocks
         name = var.name
         incoming_vars = []
 
         for block_num in incoming_blocks:
             defvar = blocks[block_num].find_variable_assignment(name)
-            incoming_vars += [(defvar.target, block_num)]
+            incoming_vars += [(defvar.target.name, block_num)]
 
-        phi = ir.Assign(ir.PHI(incoming_vars, var.loc), var, var.loc)
+        phi = ir.PHI(var, incoming_vars, var.loc)
+        print(phi)
         return phi
 
     def attach_phi_node(phi, dest_block):
+        """Attach the PHI node to the basic block
+        """
+        return
         block = func_ir.blocks[dest_block]
         block.prepend(phi)
 
-    # Compute the PHI nodes for a given variable var
+    def get_rhs_vars(inst):
+        """Return all the variables in the RHS of a stmt
+        """
+        v = inst.list_vars()
+        if isinstance(inst, (ir.Assign, ir.PHI)):
+            v.remove(inst.target)
+        return v
+
+    def rename_var(stack, counter, var):
+        # var is a reference to the original Var. Any change
+        # here will reflect into the original object
+        assert (var.name in stack) and (len(stack[var.name]) > 0)
+        i = stack[var.name][0]
+        print('--> var: {} | i: {}'.format(var, i))
+        var.name = var.name + '_%s' % (i) 
+
+    def rename_basic_block(stack, counter, block):
+        for inst in block.body:
+            print('    %-40s %s / %s' % (inst, inst.list_vars(), get_rhs_vars(inst)))
+            if not isinstance(inst, ir.PHI):
+                rhs_vars = get_rhs_vars(inst)
+                for var in rhs_vars:
+                    rename_var(stack, counter, var)
+            if isinstance(inst, ir.Assign):
+                target = inst.target
+                counter[target.name] += 1 
+                stack[target.name].append(counter[target.name])
+                rename_var(stack, counter, target)
+            print()
+        print()
+
+    def rename(stack, counter, domtree, blocks, offset):
+
+        print('-----')
+        # rename_basic_block(stack, counter, blocks[offset])
+
+        # rename child basic blocks
+        src = offset
+        for dest in domtree[src]:
+            rename(stack, counter, domtree, blocks, src)
+            print('offset:', dest)
+
+
+        # pop definitions
+        # for inst in block.body:
+        #     if isinstance(inst, (ir.Assign, ir.PHI)):
+        #         target = inst.target
+        #         stack[target.name].pop()
+
     def compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier):
-        # phis is a dict of {Node (Basic Block) -> list of PHI variables defined at it}
+        """ Compute the PHI vars for a given var
+        """
+        # phis is a dict of {Basic Block -> list of PHI variables defined at it}
         while len(worklist) > 0:
             N = worklist.pop() # grab a basic block N
             # for each node Y in the dominance frontier of N
             for Y in dominance_frontier[N]: 
                 if var not in phis[Y]:
                     # insert PHI
-                    phi = create_phi_node(var, Y, defsites[var])
+                    phi = create_phi_node(var, defsites[var])
                     attach_phi_node(phi, Y)
 
                     phis[Y].append(var)
@@ -539,7 +594,7 @@ def ssa_transformation(func_ir):
 
     def get_defsites(blocks):
         # defsites is a map of {var -> [Blocks]} and it records
-        # the sites where a variable was defined
+        # the definition sites where a variable was defined
         defsites = {}
 
         for offset, block in blocks.items():
@@ -547,8 +602,8 @@ def ssa_transformation(func_ir):
             for inst in body:
                 if isinstance(inst, ir.Assign):
                     if inst.target not in defsites:
-                        defsites[inst.target] = []
-                    defsites[inst.target].append(offset)
+                        defsites[inst.target] = set()
+                    defsites[inst.target].add(offset)
 
         return defsites
 
@@ -557,6 +612,9 @@ def ssa_transformation(func_ir):
 
     vlt = func_ir.variable_lifetime
     dominance_frontier = vlt.cfg.dominance_frontier()
+    idom = vlt.cfg.immediate_dominators()
+    entry_point = vlt.cfg.entry_point()
+
 
     # defs are all the definition sites of var
     phis = defaultdict(list) 
@@ -566,25 +624,8 @@ def ssa_transformation(func_ir):
             worklist = list(defs)
             compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier)
 
-    # for node, phi in phis.items():
-    #     print (node, phi)
-    # print(phis)
+    print(idom)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    stack = defaultdict(list)  # default to []
+    counter = defaultdict(int) # default to 0
+    # rename(stack, counter, domtree, blocks, entry_point)
