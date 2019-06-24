@@ -155,7 +155,7 @@ class ConstraintNetwork(object):
                 except Exception as e:
                     _logger.debug("captured error", exc_info=e)
                     msg = ("Internal error at {con}.\n"
-                           "{err}\nEnable logging for details.")
+                           "{err}\nEnable logging at debug level for details.")
                     e = TypingError(
                         msg.format(con=constraint, err=str(e)),
                         loc=constraint.loc,
