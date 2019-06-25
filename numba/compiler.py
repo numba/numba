@@ -432,7 +432,8 @@ class BasePipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               outer_flags, self.locals,
-                              lifted=tuple(loops), lifted_from=None)
+                              lifted=tuple(loops), lifted_from=None,
+                              is_lifted_loop=True)
             return cres
 
     def stage_frontend_withlift(self):
