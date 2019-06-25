@@ -567,8 +567,6 @@ def impl_getitem(l, index):
             status, item = _list_getitem(l, castedindex)
             if status == ListStatus.LIST_OK:
                 return _nonoptional(item)
-            elif status == ListStatus.LIST_ERR_INDEX:
-                raise IndexError("list index out of range")
             else:
                 raise AssertionError("internal list error during getitem")
 
@@ -637,9 +635,7 @@ def impl_setitem(l, index, item):
             casteditem = _cast(item, itemty)
             status = _list_setitem(l, castedindex, casteditem)
             if status == ListStatus.LIST_OK:
-                pass
-            elif status == ListStatus.LIST_ERR_INDEX:
-                raise IndexError("list index out of range from c")
+                return
             else:
                 raise AssertionError("internal list error during settitem")
 
