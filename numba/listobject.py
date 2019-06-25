@@ -806,8 +806,6 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    itemty = l.item_type
-
     if index in types.signed_domain:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
@@ -828,7 +826,7 @@ def impl_insert(l, index, item):
                     l[i] = l[i - 1]
                     i -= 1
                 # finally, insert the item
-                l[index] = _cast(item, itemty)
+                l[index] = item
 
         return impl
     else:
