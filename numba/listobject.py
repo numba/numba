@@ -643,7 +643,8 @@ def impl_setitem(l, index, item):
 
     elif isinstance(index, types.SliceType):
         if not isinstance(item, types.IterableType):
-            raise TypingError("can only assign an iterable")
+            raise TypingError("can only assign an iterable when using a slice "
+                              "with assignment/setitem")
 
         def impl_slice(l, index, item):
             # special case "a[i:j] = a", need to copy first

@@ -504,7 +504,8 @@ class TestSetitem(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "can only assign an iterable",
+            "can only assign an iterable when using a slice "
+            "with assignment/setitem",
             str(raises.exception),
         )
 
