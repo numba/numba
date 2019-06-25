@@ -30,8 +30,13 @@ from numba.types import (
 from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
 from numba import typing
-# FIXME: shared by list and dict, remain in dictobject.py for now
-from numba.dictobject import _as_bytes, _cast, _nonoptional
+from numba.typedobjectutils import (_as_bytes,
+                                    _cast,
+                                    _nonoptional,
+                                    _get_incref_decref,
+                                    _get_equal,
+                                    _container_get_data,
+                                    )
 
 
 ll_list_type = cgutils.voidptr_t
@@ -143,92 +148,6 @@ def _from_meminfo(typingctx, mi, listtyperef):
     return sig, codegen
 
 
-def _list_get_data(context, builder, list_ty, l):
-    """Helper to get the C list pointer in a numba list.
-    """
-    ctor = cgutils.create_struct_proxy(list_ty)
-    lstruct = ctor(context, builder, value=l)
-    return lstruct.data
-
-
-# FIXME: copied from dictobject.py with minimal changes
-def _get_incref_decref(context, module, datamodel):
-    assert datamodel.contains_nrt_meminfo()
-
-    fe_type = datamodel.fe_type
-    data_ptr_ty = datamodel.get_data_type().as_pointer()
-    refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
-    incref_fn = module.get_or_insert_function(
-        refct_fnty,
-        name='.numba_list_incref${}'.format(fe_type),
-    )
-    builder = ir.IRBuilder(incref_fn.append_basic_block())
-    context.nrt.incref(builder, fe_type, builder.load(incref_fn.args[0]))
-    builder.ret_void()
-
-    decref_fn = module.get_or_insert_function(
-        refct_fnty,
-        name='.numba_list_decref${}'.format(fe_type),
-    )
-    builder = ir.IRBuilder(decref_fn.append_basic_block())
-    context.nrt.decref(builder, fe_type, builder.load(decref_fn.args[0]))
-    builder.ret_void()
-
-    return incref_fn, decref_fn
-
-
-# FIXME: copied from dictobject.py with minimal changes
-def _get_equal(context, module, datamodel):
-    assert datamodel.contains_nrt_meminfo()
-
-    fe_type = datamodel.fe_type
-    data_ptr_ty = datamodel.get_data_type().as_pointer()
-
-    wrapfnty = context.call_conv.get_function_type(types.int32, [fe_type, fe_type])
-    argtypes = [fe_type, fe_type]
-
-    def build_wrapper(fn):
-        builder = ir.IRBuilder(fn.append_basic_block())
-        args = context.call_conv.decode_arguments(builder, argtypes, fn)
-
-        sig = typing.signature(types.boolean, fe_type, fe_type)
-        op = operator.eq
-        fnop = context.typing_context.resolve_value_type(op)
-        fnop.get_call_type(context.typing_context, sig.args, {})
-        eqfn = context.get_function(fnop, sig)
-        res = eqfn(builder, args)
-        intres = context.cast(builder, res, types.boolean, types.int32)
-        context.call_conv.return_value(builder, intres)
-
-    wrapfn = module.get_or_insert_function(
-        wrapfnty,
-        name='.numba_list_item_equal.wrap${}'.format(fe_type)
-    )
-    build_wrapper(wrapfn)
-
-    equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
-    equal_fn = module.get_or_insert_function(
-        equal_fnty,
-        name='.numba_list_item_equal${}'.format(fe_type),
-    )
-    builder = ir.IRBuilder(equal_fn.append_basic_block())
-    lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
-    rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
-
-    status, retval = context.call_conv.call_function(
-        builder, wrapfn, types.boolean, argtypes, [lhs, rhs],
-    )
-    with builder.if_then(status.is_ok, likely=True):
-        with builder.if_then(status.is_none):
-            builder.ret(context.get_constant(types.int32, 0))
-        retval = context.cast(builder, retval, types.boolean, types.int32)
-        builder.ret(retval)
-    # Error out
-    builder.ret(context.get_constant(types.int32, -1))
-
-    return equal_fn
-
-
 @intrinsic
 def _list_set_method_table(typingctx, lp, itemty):
     """Wrap numba_list_set_method_table
@@ -261,9 +180,9 @@ def _list_set_method_table(typingctx, lp, itemty):
 
         dm_item = context.data_model_manager[itemty.instance_type]
         if dm_item.contains_nrt_meminfo():
-            equal = _get_equal(context, builder.module, dm_item)
+            equal = _get_equal(context, builder.module, dm_item, 'list')
             item_incref, item_decref = _get_incref_decref(
-                context, builder.module, dm_item,
+                context, builder.module, dm_item, "list"
             )
             builder.store(
                 builder.bitcast(equal, item_equal_ptr.type.pointee),
@@ -460,7 +379,7 @@ def _list_length(typingctx, l):
         fn = builder.module.get_or_insert_function(fnty, name='numba_list_length')
         [l] = args
         [tl] = sig.args
-        lp = _list_get_data(context, builder, tl, l)
+        lp = _container_get_data(context, builder, tl, l)
         n = builder.call(fn, [lp])
         return n
 
@@ -489,7 +408,7 @@ def _list_append(typingctx, l, item):
 
         ptr_item = cgutils.alloca_once_value(builder, data_item)
 
-        lp = _list_get_data(context, builder, tl, l)
+        lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
             fn,
             [
@@ -608,7 +527,7 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         ll_item = context.get_data_type(tl.item_type)
         ptr_item = cgutils.alloca_once(builder, ll_item)
 
-        lp = _list_get_data(context, builder, tl, l)
+        lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
             fn,
             [
@@ -691,7 +610,7 @@ def _list_setitem(typingctx, l, index, item):
         data_item = dm_item.as_data(builder, item)
         ptr_item = cgutils.alloca_once_value(builder, data_item)
 
-        lp = _list_get_data(context, builder, tl, l)
+        lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
             fn,
             [
@@ -1005,7 +924,7 @@ def impl_list_getiter(context, builder, sig, args):
     it.state = _as_bytes(builder, pstate)
     it.parent = l
 
-    dp = _list_get_data(context, builder, iterablety.parent, args[0])
+    dp = _container_get_data(context, builder, iterablety.parent, args[0])
     builder.call(fn, [it.state, dp])
     return impl_ret_borrowed(
         context,
