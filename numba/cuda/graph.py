@@ -1,5 +1,6 @@
 from ctypes import addressof, byref, cast, POINTER, Structure, c_void_p, c_uint, c_size_t
 from numba.cuda import current_context
+from numba.cuda.decorators import jit
 from numba.cuda.errors import normalize_kernel_dimensions
 from numba.cuda.compiler import AutoJitCUDAKernel, CUDAKernel
 from numba.cuda.cudadrv.enums import CU_MEMORYTYPE_DEVICE, CU_MEMORYTYPE_HOST
@@ -247,12 +248,12 @@ class KernelNode(Node, metaclass=KernelNodeMeta):
         params.blockDimZ = self.params.get('blockDimZ', blockDim[2])
         params.sharedMemBytes = self.params.get('sharedMemBytes', 0)
 
-        if isinstance(self.kernel, AutoJitCUDAKernel):
-            kernel = self.kernel.specialize(*self.args)
-        elif isinstance(self.kernel, CUDAKernel):
+        if isinstance(self.kernel, CUDAKernel):
             kernel = self.kernel
+        elif isinstance(self.kernel, AutoJitCUDAKernel):
+            kernel = self.kernel.specialize(*self.args)
         else:
-            raise Exception('invalid kernel type "%s"' % type(self.kernel).__name__)
+            kernel = jit(self.kernel).specialize(*self.args)
         params.func = kernel._func.get().handle
 
         retr, kernel_args = [], []
