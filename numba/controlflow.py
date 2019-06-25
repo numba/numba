@@ -124,6 +124,7 @@ class CFGraph(object):
         self._find_post_dominators()
         self._find_immediate_dominators()
         self._find_dominance_frontier()
+        self._find_dominator_tree()
 
     def dominators(self):
         """
@@ -163,6 +164,15 @@ class CFGraph(object):
         stricly dominanted by N
         """
         return self._df
+
+    def dominator_tree(self):
+        """
+        return a dictionary of {node -> set(nodes)} mapping each node to
+        the set of nodes it immediately dominates
+
+        The domtree(B) is the closest strict set of nodes that B dominates
+        """
+        return self._domtree
 
     def descendents(self, node):
         """
@@ -394,6 +404,19 @@ class CFGraph(object):
                     changed = True
 
         self._idom = idom
+
+    def _find_dominator_tree(self):
+        idom = self._idom
+        domtree = collections.defaultdict(set)
+
+        for u, v in idom.items():
+            # v dominates u
+            if u not in domtree:
+                domtree[u] = set()
+            if u != v:
+                domtree[v].add(u)
+
+        self._domtree = domtree
 
     def _find_dominance_frontier(self):
         idom = self._idom
