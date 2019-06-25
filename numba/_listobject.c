@@ -16,10 +16,10 @@
  * Numba Runtime (NRT) is supported and incrementing and decrementing functions
  * are store as part of the struct and can be setup from the compiler level.
  *
- * Importantly, Only a very limited subset of the cpython c functions have been
+ * Importantly, only a very limited subset of the cpython c functions have been
  * ported over and the rest have been implemented (in Python) at the compiler
  * level using the c functions provided. Additionally, initialization of, and
- * iteration over a ListIter is provided
+ * iteration over, a ListIter is provided
  *
  * The following functions are implemented for the list:
  *
@@ -135,7 +135,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     }
     else {
         // be explicit
-        lp-> items = NULL;
+        lp->items = NULL;
     }
     *out = lp;
     return LIST_OK;
@@ -173,7 +173,7 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     }
     // set item at desired location
     loc = lp->items + lp-> item_size * index;
-    /* This assume there is already an element at index that will be
+    /* This assumes there is already an element at index that will be
      * overwritten and thereby have its reference decremented.
      * DO NOT use this to write to an unassigned location.
      */
@@ -206,7 +206,7 @@ numba_list_append(NB_List *lp, const char *item) {
         return result;
     }
     // insert item at index: original size before resize
-    loc = lp->items + lp-> item_size * (lp->size - 1);
+    loc = lp->items + lp->item_size * (lp->size - 1);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
     return LIST_OK;
@@ -226,7 +226,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     loc = lp->items + lp->item_size * index;
     copy_item(lp, out, loc);
     list_decref_item(lp, loc);
-    if (index != lp->size-1) {
+    if (index != lp->size - 1) {
         // pop from somewhere other than the end, incur the dreaded memory copy
         leftover_bytes = (lp->size - 1 - index) * lp->item_size;
         new_loc = lp->items + (lp->item_size * (index + 1));
@@ -234,7 +234,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         memmove(loc, new_loc, leftover_bytes);
     }
     // finally, shrink list by one
-    result = numba_list_resize(lp, lp->size-1);
+    result = numba_list_resize(lp, lp->size - 1);
     if(result < LIST_OK) {
          // Since we are decreasing the size, this should never happen
         return result;
@@ -439,7 +439,7 @@ numba_test_list(void) {
         CHECK(iter.pos == it_count); // check iterator position
         CHECK(it_item != NULL); // quick check item is non-null
         // go fishing in test_items_1
-        CHECK(memcmp((const char *)test_items_1 + ((it_count-1) * 4), it_item, 4) == 0);
+        CHECK(memcmp((const char *)test_items_1 + ((it_count - 1) * 4), it_item, 4) == 0);
     }
 
     CHECK(status == LIST_ERR_ITER_EXHAUSTED);

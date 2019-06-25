@@ -110,7 +110,7 @@ def _from_meminfo(typingctx, mi, listtyperef):
     """Recreate a list from a MemInfoPointer
     """
     if mi != _meminfo_listptr:
-        raise TypingError('expected a MemInfoPointer for dict.')
+        raise TypingError('expected a MemInfoPointer for list.')
     listtype = listtyperef.instance_type
     if not isinstance(listtype, ListType):
         raise TypingError('expected a {}'.format(ListType))
@@ -411,7 +411,7 @@ def _list_new(typingctx, itemty):
 @overload(new_list)
 def impl_new_list(item):
     """Creates a new list with *item* as the type
-    of the list item, respectively.
+    of the list item.
     """
     if not isinstance(item, Type):
         raise TypeError("expecting *item* to be a numba Type")
@@ -522,7 +522,7 @@ def impl_append(l, item):
     else:
         # Handle the imprecise case.
         l = l.refine(item)
-        # Re-bind the item type match the arguments.
+        # Re-bind the item type to match the arguments.
         itemty = l.item_type
         # Create the signature that we wanted this impl to have.
         sig = typing.signature(types.void, l, itemty)
@@ -584,7 +584,7 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
     Returns 2-tuple of (intp, ?item_type)
 
     This is a helper that is parametrized on the type of operation, which can
-    be either 'pop' or 'getitem'. This is because, signature wise getitem and
+    be either 'pop' or 'getitem'. This is because, signature wise, getitem and
     pop and are the same.
     """
     assert(op in ("pop", "getitem"))
@@ -738,12 +738,12 @@ def impl_setitem(l, index, item):
             if slice_range.step == 1:
                 # replace
                 if len(item) == len(slice_range):
-                    for i,j in zip(slice_range, item):
+                    for i, j in zip(slice_range, item):
                         l[i] = j
                 # replace and insert
                 if len(item) > len(slice_range):
                     # do the replaces we can
-                    for i,j in zip(slice_range, item[:len(slice_range)]):
+                    for i, j in zip(slice_range, item[:len(slice_range)]):
                         l[i] = j
                     # insert the remaining ones
                     insert_range = range(slice_range.stop,
@@ -775,7 +775,7 @@ def impl_setitem(l, index, item):
                 if len(slice_range) != len(item):
                     raise ValueError("length mismatch for extended slice and sequence")
                 # extended slice can only replace
-                for i,j in zip(slice_range, item):
+                for i, j in zip(slice_range, item):
                     l[i] = j
 
         return impl_slice
@@ -1067,7 +1067,7 @@ def impl_iterator_iternext(context, builder, sig, args, result):
     status = builder.call(iternext, (it.state, item_raw_ptr))
     # TODO: no handling of error state i.e. mutated list
     #       all errors are treated as exhausted iterator
-    is_valid = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+    is_valid = builder.icmp_signed('==', status, status.type(int(ListStatus.LIST_OK)))
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
