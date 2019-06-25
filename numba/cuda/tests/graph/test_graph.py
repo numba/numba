@@ -4,8 +4,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.cuda.testing import SerialMixin
-from numba.types import CPointer
-from numba import cuda, void, f8, cfunc
+from numba import cuda, void, f8
 
 from numba.cuda.graph import KernelNode, EmptyNode, MemcpyDtoHNode, MemcpyHtoDNode, MemsetNode, HostNode
 
