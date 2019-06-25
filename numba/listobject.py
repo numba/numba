@@ -74,6 +74,8 @@ class ListStatus(IntEnum):
     LIST_OK = 0,
     LIST_ERR_INDEX = -1
     LIST_ERR_NO_MEMORY = -2
+    LIST_ERR_MUTATED = -3
+    LIST_ERR_ITER_EXHAUSTED = -4
 
 
 def _raise_if_error(context, builder, status, msg):
