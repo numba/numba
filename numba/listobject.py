@@ -688,16 +688,8 @@ def impl_setitem(l, index, item):
                                           slice_range.start + len(item))
                     for i,j in zip(replace_range, item):
                         l[i] = j
-                    # pop the remaining ones
-                    pop_range = range(slice_range.start + len(item),
-                                      slice_range.stop)
-                    # pop will mutate the list, so we always need to pop the
-                    # same index
-                    k = slice_range.start + len(item)
-                    for _ in pop_range:
-                        # FIXME: This may be slow.  Each pop can incur a
-                        # memory copy of one or more items.
-                        l.pop(k)
+                    # delete remaining ones
+                    del l[slice_range.start + len(item):slice_range.stop]
             # Extended slices
             else:
                 if len(slice_range) != len(item):
