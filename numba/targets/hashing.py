@@ -387,11 +387,32 @@ class _Py_HashSecret_t(Union):
 
 
 # Only a few members are needed at present
-_Py_hashSecret = _Py_HashSecret_t.in_dll(pythonapi, '_Py_HashSecret')
-_Py_HashSecret_djbx33a = _Py_hashSecret.djbx33a
-_Py_HashSecret_djbx33a_suffix = _Py_hashSecret.djbx33a.suffix
-_Py_HashSecret_siphash_k0 = _Py_hashSecret.siphash.k0
-_Py_HashSecret_siphash_k1 = _Py_hashSecret.siphash.k1
+def _read_hashsecret():
+    """Read hash secret from the Python process
+    """
+    info = getattr(_read_hashsecret, 'cached', {})
+    if not info:
+        pyhashsecret = _Py_HashSecret_t.in_dll(pythonapi, '_Py_HashSecret')
+
+        def inject(name, val):
+            import ctypes
+            import llvmlite.binding as ll
+            symbol_name = "numba_hashsecret_{}".format(name)
+            val = ctypes.c_uint64(val)
+            addr = ctypes.addressof(val)
+            ll.add_symbol(symbol_name, addr)
+            info[name] = {'symbol': symbol_name, 'value': val, 'addr': addr}
+
+        inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
+        inject('siphash_k0', pyhashsecret.siphash.k0)
+        inject('siphash_k1', pyhashsecret.siphash.k1)
+        _read_hashsecret.cached = info
+    return info
+
+
+_read_hashsecret()
+
+
 # ------------------------------------------------------------------------------
 
 
@@ -545,6 +566,27 @@ else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)
 
+
+@intrinsic
+def _load_hashsecret(tyctx, name):
+    from numba.errors import TypingError
+    from numba import types
+
+    if not isinstance(name, types.StringLiteral):
+        raise TypingError("requires literal string")
+
+    info = _read_hashsecret()[name.literal_value]
+    resty = types.uint64
+    sig = resty(name)
+
+    def impl(cgctx, builder, sig, args):
+        gv = ir.GlobalVariable(builder.module, ir.IntType(64), name=info['symbol'])
+        v = builder.load(gv)
+        return v
+
+    return sig, impl
+
+
 # This is a translation of CPythons's _Py_HashBytes:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
 
@@ -562,10 +604,10 @@ def _Py_HashBytes(val, _len):
             _hash = ((_hash << 5) + _hash) + np.uint8(grab_byte(val, idx))
 
         _hash ^= _len
-        _hash ^= _Py_HashSecret_djbx33a_suffix
+        _hash ^= _load_hashsecret('djbx33a_suffix')
     else:
-        tmp = _siphash24(types.uint64(_Py_HashSecret_siphash_k0),
-                         types.uint64(_Py_HashSecret_siphash_k1),
+        tmp = _siphash24(types.uint64(_load_hashsecret('siphash_k0')),
+                         types.uint64(_load_hashsecret('siphash_k1')),
                          val, _len)
         _hash = process_return(tmp)
     return process_return(_hash)
