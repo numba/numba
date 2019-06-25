@@ -864,6 +864,20 @@ class TestInsert(MemoryLeakMixin, TestCase):
         for i in (10, 11, 12):
             self.assertEqual(foo(i), (11, 1))
 
+    def test_list_insert_typing_error(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.insert("a", 0)
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "list insert indices must be signed integers",
+            str(raises.exception),
+        )
+
 
 class TestRemove(MemoryLeakMixin, TestCase):
     """Test list remove. """

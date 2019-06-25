@@ -808,28 +808,31 @@ def impl_insert(l, index, item):
 
     itemty = l.item_type
 
-    def impl(l, index, item):
-        # If the index is larger than the size of the list or if the list is
-        # empty, just append.
-        if index >= len(l) or len(l) == 0:
-            l.append(item)
-        # Else, do the insert dance
-        else:
-            # convert negative indices
-            if index < 0:
-                # if the index is still negative after conversion, use 0
-                index = max(len(l) + index, 0)
-            # grow the list by one, make room for item to insert
-            l.append(l[0])
-            # reverse iterate over the list and shift all elements
-            i = len(l) - 1
-            while(i > index):
-                l[i] = l[i - 1]
-                i -= 1
-            # finally, insert the item
-            l[index] = _cast(item, itemty)
+    if index in types.signed_domain:
+        def impl(l, index, item):
+            # If the index is larger than the size of the list or if the list is
+            # empty, just append.
+            if index >= len(l) or len(l) == 0:
+                l.append(item)
+            # Else, do the insert dance
+            else:
+                # convert negative indices
+                if index < 0:
+                    # if the index is still negative after conversion, use 0
+                    index = max(len(l) + index, 0)
+                # grow the list by one, make room for item to insert
+                l.append(l[0])
+                # reverse iterate over the list and shift all elements
+                i = len(l) - 1
+                while(i > index):
+                    l[i] = l[i - 1]
+                    i -= 1
+                # finally, insert the item
+                l[index] = _cast(item, itemty)
 
-    return impl
+        return impl
+    else:
+        raise TypingError("list insert indices must be signed integers")
 
 
 @overload_method(types.ListType, 'remove')
