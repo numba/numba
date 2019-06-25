@@ -29,6 +29,8 @@ class List(object):
         tc : TestCase instance
         item_size : int
             byte size for the items
+        allocated : int
+            number of items to allocate for
         """
         self.tc = tc
         self.item_size = item_size
