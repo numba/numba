@@ -85,7 +85,7 @@ def compile_time_get_string_data(obj):
     length = c_ssize_t()
     kind = c_int()
     is_ascii = c_uint()
-    hashv = c_ssize_t()
+    hashv = c_ssize_t()  # this value will be ignored
     data = fn(obj, byref(length), byref(kind), byref(is_ascii), byref(hashv))
     if data is None:
         raise ValueError("cannot extract unicode data from the given string")
@@ -94,7 +94,10 @@ def compile_time_get_string_data(obj):
     is_ascii = is_ascii.value
     nbytes = (length + 1) * _kind_to_byte_width(kind)
     out = (c_ubyte * nbytes).from_address(data)
-    return bytes(out), length, kind, is_ascii, hashv.value
+    # Set hash to -1 to indicate that it should be computed.
+    # We cannot bake in the hash value because of hashseed randomization.
+    hashv = -1
+    return bytes(out), length, kind, is_ascii, hashv
 
 
 def make_string_from_constant(context, builder, typ, literal_string):
