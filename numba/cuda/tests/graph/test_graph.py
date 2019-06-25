@@ -164,15 +164,18 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
     def test_host_node(self):
         arr = np.array([1.])
 
-        @cfunc(void(CPointer(f8)))
-        def k1(a):
-            a[0] += 2
+        def k1(a, n):
+            a[0] += n
 
-        n1 = HostNode(k1, [arr])
-        n1.build().launch()
+        def k2(a, n):
+            a[0] *= n
+
+        n1 = HostNode(k1, [arr, 2])
+        n2 = HostNode(k2, [arr, 3], [n1])
+        n2.build().launch()
         cuda.synchronize()
 
-        self.assertTrue(np.all(arr == [3]))
+        self.assertTrue(np.all(arr == [9]))
 
 
 if __name__ == '__main__':

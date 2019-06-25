@@ -1,10 +1,9 @@
-from ctypes import c_void_p, addressof, c_uint, c_size_t, POINTER, Structure, byref, cast
-from numba.ccallback import CFunc
+from ctypes import addressof, byref, cast, POINTER, Structure, c_void_p, c_uint, c_size_t
 from numba.cuda import current_context
 from numba.cuda.errors import normalize_kernel_dimensions
 from numba.cuda.compiler import AutoJitCUDAKernel, CUDAKernel
 from numba.cuda.cudadrv.enums import CU_MEMORYTYPE_DEVICE, CU_MEMORYTYPE_HOST
-from numba.cuda.cudadrv.drvapi import cu_device_ptr, cu_array
+from numba.cuda.cudadrv.drvapi import cu_device_ptr, cu_array, cu_host_fn
 from numba.cuda.cudadrv.driver import driver, is_device_memory, device_ctypes_pointer, \
     host_pointer, device_pointer
 
@@ -292,13 +291,12 @@ class HostNode(Node):
 
     def _get_params(self):
         params = HostParams()
-        if not isinstance(self.func, CFunc):
-            raise Exception('the function should be decorated with @cfunc')
-        params.fn = cast(self.func._wrapper_address, c_void_p)
-        # TODO: support more arguments
-        if len(self.args) > 1:
-            raise Exception('only one argument is supported for host node yet')
-        params.userData = host_pointer(self.args[0]) if len(self.args) > 0 else None
+
+        def exec_callback(ptr):
+            self.func(*self.args)
+
+        params.fn = cast(cu_host_fn(exec_callback), c_void_p)
+        params.userData = None
         return params
 
     def build(self, graph=None):

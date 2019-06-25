@@ -20,6 +20,7 @@ cu_function_attribute = c_int
 cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
 
 cu_occupancy_b2d_size = CFUNCTYPE(c_size_t, c_int)
+cu_host_fn = CFUNCTYPE(None, c_void_p)
 
 
 API_PROTOTYPES = {
