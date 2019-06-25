@@ -12,29 +12,38 @@ typedef struct {
     list_refcount_op_t       item_decref;
 } list_type_based_methods_table;
 
+/* This is the struct for the Numba typed list. It is largely inspired by the
+ * CPython list struct in listobject.h. In essence the list is a homogeneously
+ * typed container that can grow and shrink upon insertion and deletion. This
+ * means that appending an item to, or removing an item from, the end of the
+ * list, this will have a O(1) amortized runtime. This matches the
+ * behaviour of the CPython list type and it will grow with the same
+ * increments.
+ *
+ * 'items' contains space for 'allocated' elements.  The number
+ * currently in use is 'size'. The size in bytes of the items stored in the
+ * list is given by 'item_size'.
+ *
+ * Invariants:
+ *     0 <= size <= allocated
+ *     len(list) == size
+ *     item == NULL implies size == allocated == 0
+ *
+ * FIXME: list.sort() temporarily sets allocated to -1 to detect mutations.
+ *
+ * Items must normally not be NULL, except during construction when
+ * the list is not yet visible outside the function that builds it.
+ */
 typedef struct {
-    /* Size of the list.  */
+    /* size of the list in items  */
     Py_ssize_t      size;
-    /* Size of the list items. */
+    /* size of the list items in bytes */
     Py_ssize_t      item_size;
-
-    /* items contains space for 'allocated' elements.  The number
-     * currently in use is size.
-     * Invariants:
-     *     0 <= size <= allocated
-     *     len(list) == size
-     *     item == NULL implies size == allocated == 0
-     * FIXME: list.sort() temporarily sets allocated to -1 to detect mutations.
-     *
-     * Items must normally not be NULL, except during construction when
-     * the list is not yet visible outside the function that builds it.
-     */
+    /* total allocated slots in items */
     Py_ssize_t allocated;
-
-    /* Method table for type-dependent operations. */
+    /* method table for type-dependent operations */
     list_type_based_methods_table methods;
-
-    /* Array/pointer for items. Interpretation is governed by item_size. */
+    /* array/pointer for items. Interpretation is governed by item_size */
     char  * items;
 } NB_List;
 

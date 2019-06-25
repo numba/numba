@@ -59,6 +59,8 @@
  */
 
 
+/* Return status for the list functions.
+ */
 typedef enum {
     LIST_OK = 0,
     LIST_ERR_INDEX = -1,
@@ -67,11 +69,22 @@ typedef enum {
     LIST_ERR_ITER_EXHAUSTED = -4,
 } ListStatus;
 
+/* Copy an item from a list.
+ *
+ * lp: a list
+ * dst: destination pointer
+ * src: source pointer
+ */
 static void
 copy_item(NB_List *lp, char *dst, const char *src){
     memcpy(dst, src, lp->item_size);
 }
 
+/* Increment a reference to an item in a list.
+ *
+ * lp: a list
+ * item: the item to increment the reference for
+ */
 static void
 list_incref_item(NB_List *lp, const char *item){
     if (lp->methods.item_incref) {
@@ -79,6 +92,11 @@ list_incref_item(NB_List *lp, const char *item){
     }
 }
 
+/* Decrement a reference to an item in a list.
+ *
+ * lp: a list
+ * item: the item to decrement the reference for
+ */
 static void
 list_decref_item(NB_List *lp, const char *item){
     if (lp->methods.item_decref) {
@@ -86,16 +104,31 @@ list_decref_item(NB_List *lp, const char *item){
     }
 }
 
+/* Setup the method table for a list.
+ *
+ * This function is used from the compiler level to initialize the internal
+ * method table.
+ *
+ * lp: a list
+ * methods: the methods table to set up
+ */
 void
 numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods)
 {
     memcpy(&lp->methods, methods, sizeof(list_type_based_methods_table));
 }
 
-// FIXME: need to find a way to inline this, even for Python 2.7 on Windows
+/* Check if a list index is valid.
+ *
+ * i: the index to check
+ * limit: the size of a list
+ *
+ * Adapted from CPython's valid_index().
+ *
+ * FIXME: need to find a way to inline this, even for Python 2.7 on Windows
+ */
 static int
-valid_index(Py_ssize_t i, Py_ssize_t limit)
-{
+valid_index(Py_ssize_t i, Py_ssize_t limit){
     /* The cast to size_t lets us use just a single comparison
        to check whether i is in the range: 0 <= i < limit.
 
@@ -106,6 +139,16 @@ valid_index(Py_ssize_t i, Py_ssize_t limit)
     return (size_t) i < (size_t) limit;
 }
 
+/* Initialize a new list.
+ *
+ * out: pointer to hold an initialized list
+ * item_size: the size in bytes of the items in the list
+ * allocated: preallocation of the list in items
+ *
+ * This will allocate sufficient memory to hold the list structure and any
+ * items if requested (allocated != 0). See _listobject.h for more information
+ * on the NB_List struct.
+ */
 int
 numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     NB_List *lp;
@@ -141,6 +184,10 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     return LIST_OK;
 }
 
+/* Free the memory associated with a list.
+ *
+ * lp: a list
+ */
 void
 numba_list_free(NB_List *lp) {
     // decref all items, if needed
@@ -158,11 +205,25 @@ numba_list_free(NB_List *lp) {
     free(lp);
 }
 
+/* Return the length of a list.
+ *
+ * lp: a list
+ */
 Py_ssize_t
 numba_list_length(NB_List *lp) {
     return lp->size;
 }
 
+/* Set an item in a list.
+ *
+ * lp: a list
+ * index: the index of the item to set
+ * item: the item to set
+ *
+ * This assume there is already an element at the given index that will be
+ * overwritten and thereby have its reference decremented.  DO NOT use this to
+ * write to an unassigned location.
+ */
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     char *loc;
@@ -173,16 +234,18 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     }
     // set item at desired location
     loc = lp->items + lp-> item_size * index;
-    /* This assumes there is already an element at index that will be
-     * overwritten and thereby have its reference decremented.
-     * DO NOT use this to write to an unassigned location.
-     */
     list_decref_item(lp, loc);
     copy_item(lp, loc, item);
     list_incref_item(lp, loc);
     return LIST_OK;
 }
 
+/* Get an item from a list.
+ *
+ * lp: a list
+ * index: the index of the item to get
+ * out: a pointer to hold the item
+ */
 int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
     char *loc;
@@ -197,6 +260,11 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
     return LIST_OK;
 }
 
+/* Append an item to the end of a list.
+ *
+ * lp: a list
+ * item: the item to append.
+ */
 int
 numba_list_append(NB_List *lp, const char *item) {
     char *loc;
@@ -212,6 +280,12 @@ numba_list_append(NB_List *lp, const char *item) {
     return LIST_OK;
 }
 
+/* Pop (get and delete) an item from a list at a given location.
+ *
+ * lp: a list
+ * index: the index of the item to pop
+ * out: a pointer to hold the item
+ */
 int
 numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     char *loc, *new_loc;
@@ -230,7 +304,9 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
         // pop from somewhere other than the end, incur the dreaded memory copy
         leftover_bytes = (lp->size - 1 - index) * lp->item_size;
         new_loc = lp->items + (lp->item_size * (index + 1));
-        // use memmove instead of memcpy, memcpy isn't safe on Linux
+        // use memmove instead of memcpy since we may be dealing with
+        // overlapping regions of memory and the behaviour of memcpy is
+        // undefined in such situation (C99).
         memmove(loc, new_loc, leftover_bytes);
     }
     // finally, shrink list by one
@@ -242,8 +318,19 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     return LIST_OK;
 
 }
-
-/* Ensure lp->items has room for at least newsize elements, and set
+/* Resize a list.
+ *
+ * lp: a list
+ * newsize: the desired new size of the list.
+ *
+ * This will increase or decrease the size of the list, including reallocating
+ * the required memory and increasing the total allocation (additional free
+ * space to hold new items).
+ * 
+ * 
+ * Adapted from CPython's list_resize().
+ *
+ * Ensure lp->items has room for at least newsize elements, and set
  * lp->size to newsize.  If newsize > lp->size on entry, the content
  * of the new slots at exit is undefined heap trash; it's the caller's
  * responsibility to overwrite them with sane values.
@@ -267,7 +354,7 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     if (lp->allocated >= newsize && newsize >= (lp->allocated >> 1)) {
         assert(lp->items != NULL || newsize == 0);
         lp->size = newsize;
-        return 0;
+        return LIST_OK;
     }
     /* This over-allocates proportional to the list size, making room
      * for additional growth.  The over-allocation is mild, but is
@@ -298,19 +385,31 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
 }
 
 
+/* Return the size of the list iterator (NB_ListIter) struct.
+ */
 size_t
 numba_list_iter_sizeof() {
     return sizeof(NB_ListIter);
 }
 
+/* Initialize a list iterator (NB_ListIter).
+ *
+ * it: an iterator
+ * lp: a list to iterate over
+ */
 void
-numba_list_iter(NB_ListIter *it, NB_List *l) {
+numba_list_iter(NB_ListIter *it, NB_List *lp) {
     // set members of iterator
-    it->parent = l;
-    it->size = l->size;
+    it->parent = lp;
+    it->size = lp->size;
     it->pos = 0;
 }
 
+/* Obtain the next item from a list iterator.
+ *
+ * it: an iterator
+ * item_ptr: pointer to hold the next item
+ */
 int
 numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
     NB_List *lp;
@@ -336,15 +435,17 @@ numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
     }                                                                   \
 }
 
+/* Basic C based tests for the list.
+ */
 int
 numba_test_list(void) {
-    NB_List *lp;
+    NB_List *lp = NULL;
     int status, i;
     Py_ssize_t it_count;
-    const char *it_item;
+    const char *it_item = NULL;
     NB_ListIter iter;
-    char got_item[4];
-    const char *test_items_1, *test_items_2;
+    char got_item[4] = "\x00\x00\x00\x00";
+    const char *test_items_1 = NULL, *test_items_2 = NULL;
     puts("test_list");
 
 
@@ -354,7 +455,7 @@ numba_test_list(void) {
     CHECK(lp->size == 0);
     CHECK(lp->allocated == 0);
 
-    // insert 1st item, this will cause a realloc
+    // append 1st item, this will cause a realloc
     status = numba_list_append(lp, "abc");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 1);
@@ -363,7 +464,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "abc", 4) == 0);
 
-    // insert 2nd item
+    // append 2nd item
     status = numba_list_append(lp, "def");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 2);
@@ -372,7 +473,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "def", 4) == 0);
 
-    // insert 3rd item
+    // append 3rd item
     status = numba_list_append(lp, "ghi");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 3);
@@ -381,7 +482,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "ghi", 4) == 0);
 
-    // insert 4th item
+    // append 4th item
     status = numba_list_append(lp, "jkl");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 4);
@@ -390,7 +491,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "jkl", 4) == 0);
 
-    // insert 5th item, this will cause another realloc
+    // append 5th item, this will cause another realloc
     status = numba_list_append(lp, "mno");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 5);
@@ -399,7 +500,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "mno", 4) == 0);
 
-    // Overwrite 1st item
+    // overwrite 1st item
     status = numba_list_setitem(lp, 0, "pqr");
     CHECK(status == LIST_OK);
     CHECK(lp->size == 5);
@@ -408,7 +509,7 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "pqr", 4) == 0);
 
-    // Pop 1st item, check item shift
+    // pop 1st item, check item shift
     status = numba_list_pop(lp, 0, got_item);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 4);
@@ -416,7 +517,7 @@ numba_test_list(void) {
     CHECK(memcmp(got_item, "pqr", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00mno\x00", 16) == 0);
 
-    // Pop last (4th) item, no shift since only last item affected
+    // pop last (4th) item, no shift since only last item affected
     status = numba_list_pop(lp, 3, got_item);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 3);
@@ -425,14 +526,14 @@ numba_test_list(void) {
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00", 12) == 0);
 
 
-    // Test iterator
+    // test iterator
     CHECK(lp->size > 0);
     numba_list_iter(&iter, lp);
     it_count = 0;
     CHECK(iter.parent == lp);
     CHECK(iter.pos == it_count);
 
-    // Current contents of list
+    // current contents of list
     test_items_1 = "def\x00ghi\x00jkl\x00";
     while ( (status = numba_list_iter_next(&iter, &it_item)) == OK) {
         it_count += 1;
@@ -456,7 +557,7 @@ numba_test_list(void) {
     CHECK(lp->allocated == 0);
 
     // first, grow the list
-    // Use exactly 16 elements, should go through the allocation pattern:
+    // Use exactly 17 elements, should go through the allocation pattern:
     // 0, 4, 8, 16, 25
     for (i = 0; i < 17 ; i++) {
         switch(i) {
@@ -466,13 +567,10 @@ numba_test_list(void) {
             case 8:  CHECK(lp->allocated == 8); break;
             case 16: CHECK(lp->allocated == 16); break;
         }
-        // To insert a single byte element into the list, dereference it to get
-        // the point to it's value and then cast that pointer to a
-        // (const char *) so that append will accept it.
         status = numba_list_append(lp, (const char*)&i);
         CHECK(status == LIST_OK);
         switch(i) {
-            // Check that the growth happend accordingly
+            // Check that the growth happened accordingly
             case 0:  CHECK(lp->allocated == 4); break;
             case 4:  CHECK(lp->allocated == 8); break;
             case 8:  CHECK(lp->allocated == 16); break;
@@ -501,7 +599,7 @@ numba_test_list(void) {
         status = numba_list_pop(lp, i-1, got_item);
         CHECK(status == LIST_OK);
         switch(i) {
-             // Check that the shrink happend accordingly
+             // Check that the shrink happened accordingly
              case 17:  CHECK(lp->allocated == 25); break;
              case 12:  CHECK(lp->allocated == 18); break;
              case 9:   CHECK(lp->allocated == 12); break;
