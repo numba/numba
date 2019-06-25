@@ -292,6 +292,90 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    def test_delitem_slice(self):
+        """ Test delitem using a slice.
+
+        This tests suffers from combinatorial explosion, so we parametrize it
+        and compare results agains the regular list in a quasi fuzzing approach.
+
+        """
+
+        def setup(start=10, stop=20):
+            # initialize regular list
+            rl_ = list(range(start, stop))
+            # intialize typed list
+            tl_ = List.empty_list(int32)
+            # populate typed list
+            for i in range(start, stop):
+                tl_.append(i)
+            # check they are the same
+            self.assertEqual(rl_, list(tl_))
+            return rl_, tl_
+
+        def to_tl(l):
+            tl = List.empty_list(int32)
+            for k in l:
+                tl.append(k)
+            return tl
+
+        # define the ranges
+        start_range = list(range(-20, 30))
+        stop_range = list(range(-20, 30))
+        step_range = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]
+
+        rl, tl = setup()
+        # check that they are the same initially
+        self.assertEqual(rl, list(tl))
+        # check that deletion of the whole list by slice works
+        del rl[:]
+        del tl[:]
+        self.assertEqual(rl, list(tl))
+
+        # start only
+        for sa in start_range:
+            rl, tl = setup()
+            del rl[sa:]
+            del tl[sa:]
+            self.assertEqual(rl, list(tl))
+        # stop only
+        for so in stop_range:
+            rl, tl = setup()
+            del rl[:so]
+            del tl[:so]
+            self.assertEqual(rl, list(tl))
+        # step only
+        for se in step_range:
+            rl, tl = setup()
+            del rl[::se]
+            del tl[::se]
+            self.assertEqual(rl, list(tl))
+
+        # start and stop
+        for sa, so in product(start_range, stop_range):
+            rl, tl = setup()
+            del rl[sa:so]
+            del tl[sa:so]
+            self.assertEqual(rl, list(tl))
+        # start and step
+        for sa, se in product(start_range, step_range):
+            rl, tl = setup()
+            del rl[sa::se]
+            del tl[sa::se]
+            self.assertEqual(rl, list(tl))
+        # stop and step
+        for so, se in product(stop_range, step_range):
+            rl, tl = setup()
+            del rl[:so:se]
+            del tl[:so:se]
+            self.assertEqual(rl, list(tl))
+
+        # start, stop and step
+        for sa, so, se in product(start_range, stop_range, step_range):
+            rl, tl = setup()
+            del rl[sa:so:se]
+            del tl[sa:so:se]
+            self.assertEqual(rl, list(tl))
+
 
 class TestExtend(MemoryLeakMixin, TestCase):
 

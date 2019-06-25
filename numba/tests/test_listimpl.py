@@ -54,6 +54,9 @@ class List(object):
     def __iter__(self):
         return ListIter(self)
 
+    def __delitem__(self, i):
+        self.list_delitem(i)
+
     def append(self, item):
         self.list_append(item)
 
@@ -107,6 +110,18 @@ class List(object):
         else:
             self.tc.assertEqual(status, LIST_OK)
             return item_out_buffer.raw
+
+    def list_delitem(self, i):
+        # special case slice
+        if isinstance(i, slice):
+            status = self.tc.numba_list_delete_slice(self.lp,
+                                                     i.start,
+                                                     i.stop,
+                                                     i.step)
+            self.tc.assertEqual(status, LIST_OK)
+        # must be an intger, deferr to pop
+        else:
+            self.list_pop(i)
 
     def list_iter(self, itptr):
         self.tc.numba_list_iter(itptr, self.lp)
@@ -203,6 +218,15 @@ class TestListImpl(TestCase):
             'list_pop',
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+        )
+        # numba_list_delete_slice(NB_List *l,
+        #                         Py_ssize_t start,
+        #                         Py_ssize_t stop,
+        #                         Py_ssize_t step)
+        self.numba_list_delete_slice = wrap(
+            'list_delete_slice',
+            ctypes.c_int,
+            [list_t, ctypes.c_ssize_t, ctypes.c_ssize_t, ctypes.c_ssize_t],
         )
         # numba_list_iter_sizeof()
         self.numba_list_iter_sizeof = wrap(
@@ -332,6 +356,34 @@ class TestListImpl(TestCase):
         expected = [b'bbbb', b'cccc', b'eeee', b'ffff', b'gggg']
         received = [j for j in l]
         self.assertEqual(received, expected)
+
+    def test_delete_slice(self):
+        l = List(self, 1, 0)
+        values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
+        for i in values:
+            l.append(i)
+        self.assertEqual(len(l), 8)
+
+        # delete every second item
+        # no slice default normalization here, be explict about start anb stop
+        del l[0:8:2]
+        self.assertEqual(len(l), 4)
+        self.assertEqual(list(l), values[1:8:2])
+
+        # delete first item
+        del l[0:1:1]
+        self.assertEqual(len(l), 3)
+        self.assertEqual(list(l), [b'd', b'f', b'h'])
+
+        # delete last item
+        del l[2:3:1]
+        self.assertEqual(len(l), 2)
+        self.assertEqual(list(l), [b'd', b'f'])
+
+        # delete all left items
+        del l[0:2:1]
+        self.assertEqual(len(l), 0)
+        self.assertEqual(list(l), [])
 
     def check_sizing(self, item_size, nmax):
         # Helper to verify different item_sizes

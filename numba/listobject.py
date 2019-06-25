@@ -739,6 +739,38 @@ def impl_pop(l, index=-1):
         raise TypingError("argument for pop must be a signed integer")
 
 
+@intrinsic
+def _list_delete_slice(typingctx, l, start, stop, step):
+    """Wrap numba_list_delete_slice
+    """
+    resty = types.int32
+    sig = resty(l, start, stop, step)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_ssize_t, ll_ssize_t, ll_ssize_t],
+        )
+        [l, start, stop, step] = args
+        [tl, tstart, tstop, tstep] = sig.args
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_delete_slice')
+
+        lp = _list_get_data(context, builder, tl, l)
+        status = builder.call(
+            fn,
+            [
+                lp,
+                start,
+                stop,
+                step,
+            ],
+        )
+        return status
+
+    return sig, codegen
+
+
 @overload(operator.delitem)
 def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
@@ -752,8 +784,11 @@ def impl_delitem(l, index):
 
     elif isinstance(index, types.SliceType):
         def slice_impl(l, index):
-            raise NotImplementedError
-
+            slice_range = handle_slice(l, index)
+            _list_delete_slice(l,
+                               slice_range.start,
+                               slice_range.stop,
+                               slice_range.step)
         return slice_impl
 
     else:
