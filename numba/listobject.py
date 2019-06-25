@@ -82,7 +82,8 @@ def _raise_if_error(context, builder, status, msg):
     """Raise an internal error depending on the value of *status*
     """
     ok_status = status.type(int(ListStatus.LIST_OK))
-    with builder.if_then(builder.icmp_signed('!=', status, ok_status)):
+    with builder.if_then(builder.icmp_signed('!=', status, ok_status),
+                         likely=True):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
