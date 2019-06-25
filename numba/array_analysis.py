@@ -1283,8 +1283,9 @@ class ArrayAnalysis(object):
             # Create a deepcopy of slice calltype so that when we change it below
             # the original isn't changed.  Make the types of the parts of the slice
             # intp.
-            self.calltypes[replacement_slice] = copy.deepcopy(self.calltypes[index_def])
-            self.calltypes[replacement_slice].args = (types.intp, types.intp)
+            new_arg_typs = (types.intp, types.intp)
+            rs_calltype = self.typemap[index_def.func.name].get_call_type(self.context, new_arg_typs, {})
+            self.calltypes[replacement_slice] = rs_calltype
             stmts.append(ir.Assign(value=replacement_slice, target=replacement_slice_var, loc=loc))
             # The type of the replacement slice is the same type as the original.
             self.typemap[replacement_slice_var.name] = self.typemap[index.name]
