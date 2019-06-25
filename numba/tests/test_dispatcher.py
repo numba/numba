@@ -12,7 +12,6 @@ import warnings
 import inspect
 import pickle
 import weakref
-from timeit import default_timer as timer
 
 try:
     import jinja2
@@ -1792,52 +1791,58 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 
         self.run_test(foo)
 
-    def test_performance(self):
-
+    def test_error_count(self):
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
             # Before the patch, the compilation time of the failing case is
-            # much longer than of the successful case.
-            arr = np.arange(200).reshape(100,2)
-            arr_view = arr.ravel().view(dtype=[('a', 'int64'), ('b', 'int64')])
-            k = 30
+            # much longer than of the successful case. This can be detected
+            # by the number of times `trigger()` is visited.
+            k = 10
+            counter = {'c': 0}
+
+            @generated_jit
+            def trigger(x):
+                # Keep track of every visit
+                counter['c'] += 1
+                if would_fail:
+                    raise errors.TypingError("invoke_failed")
+                return lambda x: x
 
             @jit(nopython=True)
-            def ident(out, x, arr):
+            def ident(out, x):
                 pass
 
             def chain_assign(fs, inner=ident):
                 tab_head, tab_tail = fs[-1], fs[:-1]
 
                 @jit(nopython=True)
-                def assign(out, x, arr):
-                    inner(out, x, arr)
-                    out[0] += tab_head(x, arr)
+                def assign(out, x):
+                    inner(out, x)
+                    out[0] += tab_head(x)
 
                 if tab_tail:
                     return chain_assign(tab_tail, assign)
                 else:
                     return assign
 
-            @jit(nopython=True)
-            def get_field(x, arr):
-                return arr[2][field]
-
-            chain = chain_assign((get_field,) * k)
+            chain = chain_assign((trigger,) * k)
             out = np.ones(2)
-            ts = timer()
             if would_fail:
-                with self.assertRaises(errors.TypingError):
-                    chain(out, 1, arr_view)
+                with self.assertRaises(errors.TypingError) as raises:
+                    chain(out, 1)
+                self.assertIn('invoke_failed', str(raises.exception))
             else:
-                chain(out, 1, arr_view)
-            # Returns the compilation time
-            return timer() - ts
+                chain(out, 1)
 
-        time_ok = check('a', False)
-        time_bad = check('c', True)
-        # Compiling the failing case should be shorter than the success case.
-        self.assertLessEqual(time_bad, time_ok)
+            # Returns the visit counts
+            return counter['c']
+
+        ct_ok = check('a', False)
+        ct_bad = check('c', True)
+        # `trigger()` is visited exactly once for both successful and failed
+        # compilation.
+        self.assertEqual(ct_ok, 1)
+        self.assertEqual(ct_bad, 1)
 
 
 if __name__ == '__main__':
