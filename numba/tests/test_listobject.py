@@ -591,8 +591,12 @@ class TestPop(MemoryLeakMixin, TestCase):
             l = listobject.new_list(int32)
             l.pop()
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo()
+        self.assertIn(
+            "pop from empty list",
+            str(raises.exception),
+        )
 
     def test_list_pop_empty_index_error_with_index(self):
         self.disable_leak_check()
@@ -601,14 +605,26 @@ class TestPop(MemoryLeakMixin, TestCase):
             l = listobject.new_list(int32)
             l.pop(i)
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo(-1)
+        self.assertIn(
+            "pop from empty list",
+            str(raises.exception),
+        )
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo(0)
+        self.assertIn(
+            "pop from empty list",
+            str(raises.exception),
+        )
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo(1)
+        self.assertIn(
+            "pop from empty list",
+            str(raises.exception),
+        )
 
     def test_list_pop_mutiple_index_error_with_index(self):
         self.disable_leak_check()
@@ -619,11 +635,19 @@ class TestPop(MemoryLeakMixin, TestCase):
                 l.append(j)
             l.pop(i)
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo(-4)
+        self.assertIn(
+            "list index out of range",
+            str(raises.exception),
+        )
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as raises:
             foo(3)
+        self.assertIn(
+            "list index out of range",
+            str(raises.exception),
+        )
 
     def test_list_pop_singleton_typing_error_on_index(self):
         self.disable_leak_check()

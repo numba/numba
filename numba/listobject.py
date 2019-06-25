@@ -713,13 +713,13 @@ def impl_pop(l, index=-1):
             or index in types.signed_domain
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
+            if len(l) == 0:
+                raise IndexError("pop from empty list")
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
             status, item = _list_pop(l, castedindex)
             if status == ListStatus.LIST_OK:
                 return _nonoptional(item)
-            elif status == ListStatus.LIST_ERR_INDEX:
-                raise IndexError("list index out of range")
             else:
                 raise AssertionError("internal list error during pop")
         return impl
