@@ -4,9 +4,10 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.cuda.testing import SerialMixin
-from numba import cuda, void, f8
+from numba.types import CPointer
+from numba import cuda, void, f8, cfunc
 
-from numba.cuda.graph import KernelNode, EmptyNode, MemcpyDtoHNode, MemcpyHtoDNode, MemsetNode
+from numba.cuda.graph import KernelNode, EmptyNode, MemcpyDtoHNode, MemcpyHtoDNode, MemsetNode, HostNode
 
 
 class TestCudaGraph(SerialMixin, unittest.TestCase):
@@ -159,6 +160,19 @@ class TestCudaGraph(SerialMixin, unittest.TestCase):
             g.launch()
 
         self.assertTrue('graph already destroyed!', str(raises.exception))
+
+    def test_host_node(self):
+        arr = np.array([1.])
+
+        @cfunc(void(CPointer(f8)))
+        def k1(a):
+            a[0] += 2
+
+        n1 = HostNode(k1, [arr])
+        n1.build().launch()
+        cuda.synchronize()
+
+        self.assertTrue(np.all(arr == [3]))
 
 
 if __name__ == '__main__':

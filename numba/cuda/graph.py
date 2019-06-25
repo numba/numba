@@ -1,4 +1,5 @@
-from ctypes import c_void_p, addressof, c_uint, c_size_t, POINTER, Structure, byref
+from ctypes import c_void_p, addressof, c_uint, c_size_t, POINTER, Structure, byref, cast
+from numba.ccallback import CFunc
 from numba.cuda import current_context
 from numba.cuda.errors import normalize_kernel_dimensions
 from numba.cuda.compiler import AutoJitCUDAKernel, CUDAKernel
@@ -63,6 +64,13 @@ class MemsetParams(Structure):
         ('elementSize', c_uint),
         ('width', c_size_t),
         ('height', c_size_t),
+    ]
+
+
+class HostParams(Structure):
+    _fields_ = [
+        ('fn', c_void_p),
+        ('userData', c_void_p),
     ]
 
 
@@ -272,6 +280,32 @@ class KernelNode(Node, metaclass=KernelNodeMeta):
         params = self._get_params()
         driver.cuGraphAddKernelNode(byref(builded.handle), builded.graph.handle,
                                     builded.deps, len(builded.deps), byref(params))
+        return builded
+
+
+class HostNode(Node):
+    def __init__(self, func, args=None, deps=None, params=None):
+        self.func = func
+        self.args = args or []
+        self.params = params or { }
+        super().__init__(deps)
+
+    def _get_params(self):
+        params = HostParams()
+        if not isinstance(self.func, CFunc):
+            raise Exception('the function should be decorated with @cfunc')
+        params.fn = cast(self.func._wrapper_address, c_void_p)
+        # TODO: support more arguments
+        if len(self.args) > 1:
+            raise Exception('only one argument is supported for host node yet')
+        params.userData = host_pointer(self.args[0]) if len(self.args) > 0 else None
+        return params
+
+    def build(self, graph=None):
+        builded = super().build(graph)
+        params = self._get_params()
+        driver.cuGraphAddHostNode(byref(builded.handle), builded.graph.handle,
+                                  builded.deps, len(builded.deps), byref(params))
         return builded
 
 
