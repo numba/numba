@@ -353,13 +353,11 @@ def impl_new_list(item):
 def impl_len(l):
     """len(list)
     """
-    if not isinstance(l, types.ListType):
-        return
+    if isinstance(l, types.ListType):
+        def impl(l):
+            return _list_length(l)
 
-    def impl(l):
-        return _list_length(l)
-
-    return impl
+        return impl
 
 
 @intrinsic
