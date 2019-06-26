@@ -6,13 +6,16 @@ from __future__ import print_function, absolute_import, division
 import math
 import numpy as np
 import sys
+import ctypes
+from collections import namedtuple
 
+import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba import types
+from numba import types, errors
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
@@ -386,31 +389,38 @@ class _Py_HashSecret_t(Union):
     ]
 
 
+_hashsecret_entry = namedtuple('_hashsecret_entry', ['symbol', 'value'])
+
+
 # Only a few members are needed at present
-def _read_hashsecret():
+def _build_hashsecret():
     """Read hash secret from the Python process
+
+    Returns
+    -------
+    info : dict
+        - keys are "djbx33a_suffix", "siphash_k0", siphash_k1".
+        - values are the namedtuple[symbol:str, value:int]
     """
-    info = getattr(_read_hashsecret, 'cached', {})
-    if not info:
-        pyhashsecret = _Py_HashSecret_t.in_dll(pythonapi, '_Py_HashSecret')
+    # Read hashsecret and inject it into the LLVM symbol map under the
+    # prefix `_numba_hashsecret_`.
+    pyhashsecret = _Py_HashSecret_t.in_dll(pythonapi, '_Py_HashSecret')
+    info = {}
 
-        def inject(name, val):
-            import ctypes
-            import llvmlite.binding as ll
-            symbol_name = "numba_hashsecret_{}".format(name)
-            val = ctypes.c_uint64(val)
-            addr = ctypes.addressof(val)
-            ll.add_symbol(symbol_name, addr)
-            info[name] = {'symbol': symbol_name, 'value': val, 'addr': addr}
+    def inject(name, val):
+        symbol_name = "_numba_hashsecret_{}".format(name)
+        val = ctypes.c_uint64(val)
+        addr = ctypes.addressof(val)
+        ll.add_symbol(symbol_name, addr)
+        info[name] = _hashsecret_entry(symbol=symbol_name, value=val)
 
-        inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
-        inject('siphash_k0', pyhashsecret.siphash.k0)
-        inject('siphash_k1', pyhashsecret.siphash.k1)
-        _read_hashsecret.cached = info
+    inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
+    inject('siphash_k0', pyhashsecret.siphash.k0)
+    inject('siphash_k1', pyhashsecret.siphash.k1)
     return info
 
 
-_read_hashsecret()
+_hashsecret = _build_hashsecret()
 
 
 # ------------------------------------------------------------------------------
@@ -568,23 +578,39 @@ else:
 
 
 @intrinsic
-def _load_hashsecret(tyctx, name):
-    from numba.errors import TypingError
-    from numba import types
-
+def _inject_hashsecret_read(tyctx, name):
+    """Emit code to load the hashsecret.
+    """
     if not isinstance(name, types.StringLiteral):
-        raise TypingError("requires literal string")
+        raise errors.TypingError("requires literal string")
 
-    info = _read_hashsecret()[name.literal_value]
-    resty = types.uint64
+    sym = _hashsecret[name.literal_value].symbol
+    resty = _Py_uhash_t
     sig = resty(name)
 
     def impl(cgctx, builder, sig, args):
-        gv = ir.GlobalVariable(builder.module, ir.IntType(64), name=info['symbol'])
+        mod = builder.module
+        try:
+            # Search for existing global
+            gv = mod.get_global(sym)
+        except KeyError:
+            # Inject the symbol if not already exist.
+            gv = ir.GlobalVariable(mod, ir.IntType(64), name=sym)
         v = builder.load(gv)
         return v
 
     return sig, impl
+
+
+def _load_hashsecret(name):
+    return _hashsecret[name].value
+
+
+@overload(_load_hashsecret)
+def _impl_load_hashsecret(name):
+    def imp(name):
+        return _inject_hashsecret_read(name)
+    return imp
 
 
 # This is a translation of CPythons's _Py_HashBytes:
@@ -633,3 +659,4 @@ def unicode_hash(val):
             return _Py_HashBytes(val._data, kindwidth * _len)
 
     return impl
+
