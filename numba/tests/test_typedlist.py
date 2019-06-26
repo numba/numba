@@ -88,6 +88,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # not equal
         new[-1] = 42
         self.assertNotEqual(l, new)
+        # index
+        self.assertEqual(l.index(15), 4)
 
     def test_compiled(self):
         @njit

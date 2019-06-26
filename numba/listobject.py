@@ -908,6 +908,32 @@ def impl_copy(l):
         return impl
 
 
+@overload_method(types.ListType, 'index')
+def impl_index(l, item, start=None, end=None):
+    if not isinstance(l, types.ListType):
+        return
+    itemty = l.item_type
+
+    def check_arg(arg, name):
+        if not (arg is None
+                or arg in types.signed_domain
+                or isinstance(arg, (types.Omitted, types.NoneType))):
+            raise TypingError("{} argument for index must be a signed integer"
+                              .format(name))
+    check_arg(start, "start")
+    check_arg(end, "end")
+
+    def impl(l, item, start=None, end=None):
+        casteditem = _cast(item, itemty)
+        for i in handle_slice(l, slice(start, end, 1)):
+            if l[i] == casteditem:
+                return i
+        else:
+            raise ValueError("item not in list")
+
+    return impl
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).

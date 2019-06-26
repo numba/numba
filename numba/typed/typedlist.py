@@ -104,6 +104,11 @@ def _ne(t, o):
     return t != o
 
 
+@njit
+def _index(l, item, start, end):
+    return l.index(item, start, end)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -224,6 +229,9 @@ class List(MutableSequence):
 
     def copy(self):
         return _copy(self)
+
+    def index(self, item, start=None, stop=None):
+        return _index(self, item, start, stop)
 
 
 # XXX: should we have a better way to classmethod

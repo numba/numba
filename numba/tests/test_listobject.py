@@ -1038,6 +1038,147 @@ class TestCopy(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(), (3, 3, 10, 11, 12, 10, 11, 12))
 
 
+class TestIndex(MemoryLeakMixin, TestCase):
+
+    def test_index_singleton(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(1)
+            return l.index(1)
+
+        self.assertEqual(foo(), 0)
+
+    def test_index_multiple(self):
+        @njit
+        def foo(i):
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            return l.index(i)
+
+        for i,v in zip(range(10), range(10,20)):
+            self.assertEqual(foo(v), i)
+
+    def test_index_duplicate(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for _ in range(10, 20):
+                l.append(1)
+            return l.index(1)
+
+        self.assertEqual(foo(), 0)
+
+    def test_index_duplicate_with_start(self):
+        @njit
+        def foo(start):
+            l = listobject.new_list(int32)
+            for _ in range(10, 20):
+                l.append(1)
+            return l.index(1, start)
+
+        for i in range(10):
+            self.assertEqual(foo(i), i)
+
+    def test_index_singleton_value_error(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.index(1)
+
+        with self.assertRaises(ValueError) as raises:
+            foo()
+        self.assertIn(
+            "item not in list",
+            str(raises.exception),
+        )
+
+    def test_index_multiple_value_error(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            return l.index(23)
+
+        with self.assertRaises(ValueError) as raises:
+            foo()
+        self.assertIn(
+            "item not in list",
+            str(raises.exception),
+        )
+
+    def test_index_multiple_value_error_start(self):
+        self.disable_leak_check()
+        @njit
+        def foo(start):
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            return l.index(10, start)
+
+        self.assertEqual(foo(0), 0)
+        for i in range(1,10):
+            with self.assertRaises(ValueError) as raises:
+                foo(i)
+            self.assertIn(
+                "item not in list",
+                str(raises.exception),
+            )
+
+    def test_index_multiple_value_error_end(self):
+        self.disable_leak_check()
+        @njit
+        def foo(end):
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            return l.index(19, 0, end)
+
+        self.assertEqual(foo(10), 9)
+        for i in range(0,9):
+            with self.assertRaises(ValueError) as raises:
+                foo(i)
+            self.assertIn(
+                "item not in list",
+                str(raises.exception),
+            )
+
+    def test_index_typing_error_start(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.index(0, start="a")
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "start argument for index must be a signed integer",
+            str(raises.exception),
+        )
+
+    def test_index_typing_error_end(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            return l.index(0, end="a")
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "end argument for index must be a signed integer",
+            str(raises.exception),
+        )
+
+
 class TestEqualNotEqual(MemoryLeakMixin, TestCase):
     """Test list equal and not equal. """
 
