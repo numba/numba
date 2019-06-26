@@ -147,7 +147,7 @@ def chooser(fnlist, **kwargs):
     try:
         if utils.PYVERSION >= (3, 0):
             faulthandler.enable()
-        for _ in range(10):
+        for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
     except BaseException as e:
