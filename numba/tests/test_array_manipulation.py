@@ -782,8 +782,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 2 + 1j
         # the following are not array-like, but numpy 1.15+ does not raise
         yield None
-        # string support isn't present in Numba for Python 2.7
-        if sys.version_info >= (3,):
+        if not sys.version_info < (3,):
             yield 'a_string'
 
     @unittest.skipUnless(np_version >= (1, 15),

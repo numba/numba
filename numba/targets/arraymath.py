@@ -15,7 +15,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-from numba import types, cgutils, typing, generated_jit, utils
+from numba import types, cgutils, typing, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
@@ -2410,17 +2410,12 @@ def np_flatnonzero(a):
             arr = np.asarray(a)
             return np.nonzero(np.ravel(arr))[0]
     else:
-        if utils.MACHINE_BITS == 32:
-            dtype = np.int32
-        else:
-            dtype = np.int64
-
         def impl(a):
             if a is None:
                 data = [x for x in range(0)]
             else:
                 data = [0]
-            return np.array(data, dtype=dtype)
+            return np.array(data, dtype=types.intp)
 
     return impl
 
