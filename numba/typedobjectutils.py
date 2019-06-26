@@ -89,6 +89,14 @@ def _container_get_data(context, builder, container_ty, c):
     return conatainer_struct.data
 
 
+def _container_get_meminfo(context, builder, container_ty, c):
+    """Helper to get the meminfo for a container
+    """
+    ctor = cgutils.create_struct_proxy(container_ty)
+    conatainer_struct = ctor(context, builder, value=c)
+    return conatainer_struct.meminfo
+
+
 def _get_incref_decref(context, module, datamodel, container_type):
     assert datamodel.contains_nrt_meminfo()
 

@@ -291,6 +291,52 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         )
 
 
+class TestExtend(MemoryLeakMixin, TestCase):
+
+    def test_extend_other(self):
+        @njit
+        def impl(other):
+            l = List.empty_list(types.int32)
+            for x in range(10):
+                l.append(x)
+            l.extend(other)
+            return l
+
+        other = List.empty_list(types.int32)
+        for x in range(10):
+            other.append(x)
+
+        expected = impl.py_func(other)
+        got = impl(other)
+        self.assertEqual(expected, got)
+
+    def test_extend_self(self):
+        @njit
+        def impl():
+            l = List.empty_list(types.int32)
+            for x in range(10):
+                l.append(x)
+            l.extend(l)
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
+    def test_extend_tuple(self):
+        @njit
+        def impl():
+            l = List.empty_list(types.int32)
+            for x in range(10):
+                l.append(x)
+            l.extend((100,200,300))
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
+
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2

@@ -37,6 +37,7 @@ from numba.typedobjectutils import (_as_bytes,
                                     _get_incref_decref,
                                     _get_equal,
                                     _container_get_data,
+                                    _container_get_meminfo,
                                     )
 
 
@@ -201,6 +202,15 @@ def _list_set_method_table(typingctx, lp, itemty):
         builder.call(setmethod_fn, [dp, vtable])
 
     return sig, codegen
+
+
+@lower_builtin(operator.is_, types.ListType, types.ListType)
+def list_is(context, builder, sig, args):
+    a_meminfo = _container_get_meminfo(context, builder, sig.args[0], args[0])
+    b_meminfo = _container_get_meminfo(context, builder, sig.args[1], args[1])
+    ma = builder.ptrtoint(a_meminfo, cgutils.intp_t)
+    mb = builder.ptrtoint(b_meminfo, cgutils.intp_t)
+    return builder.icmp_signed('==', ma, mb)
 
 
 def _call_list_free(context, builder, ptr):
@@ -793,13 +803,21 @@ def impl_extend(l, iterable):
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
-    itemty = l.item_type
+    if isinstance(iterable, types.ListType):
+        def impl(l, iterable):
+            # guard against l.extend(l)
+            if l is iterable:
+                iterable = iterable.copy()
+            for i in iterable:
+                l.append(i)
 
-    def impl(l, iterable):
-        for i in iterable:
-            l.append(_cast(i, itemty))
+        return impl
+    else:
+        def impl(l, iterable):
+            for i in iterable:
+                l.append(i)
 
-    return impl
+        return impl
 
 
 @overload_method(types.ListType, 'insert')

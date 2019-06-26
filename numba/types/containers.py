@@ -451,6 +451,9 @@ class SetEntry(Type):
 class ListType(IterableType):
     """List type
     """
+
+    mutable = True
+
     def __init__(self, itemty):
         assert not isinstance(itemty, TypeRef)
         itemty = unliteral(itemty)
