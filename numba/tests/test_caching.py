@@ -12,6 +12,7 @@ from .support import (
     override_env_config,
     captured_stdout,
     captured_stderr,
+    SerialMixin,
 )
 
 
@@ -41,7 +42,8 @@ def check_dict_cache():
     assert exp == got
 
 
-class TestCaching(TestCase):
+class TestCaching(SerialMixin, TestCase):
+
     def run_test(self, func):
         func()
         ctx = mp.get_context('spawn')
@@ -62,7 +64,6 @@ class TestCaching(TestCase):
                 print(stderr)
             proc.join()
             self.assertEqual(proc.exitcode, 0)
-
 
     # The following is used to auto populate test methods into this class
 
