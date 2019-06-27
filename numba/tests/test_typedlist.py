@@ -111,7 +111,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """
         # initialize regular list
         rl = list(range(10, 20))
-        # intialize typed list
+        # initialize typed list
         tl = List.empty_list(int32)
         for i in range(10, 20):
             tl.append(i)
