@@ -12,6 +12,7 @@
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
+    #define uint32_t unsigned __int32
 #else
     #include <stdint.h>
 #endif
