@@ -5,6 +5,7 @@ import ctypes
 import operator
 from enum import IntEnum
 
+import numpy as np
 from llvmlite import ir
 
 from numba import cgutils
@@ -935,18 +936,34 @@ def impl_equal(this, other):
 
     otheritemty = other.item_type
 
-    def impl_type_matched(this, other):
-        if len(this) != len(other):
-            return False
-        for i in range(len(this)):
-            this_item, other_item = this[i], other[i]
-            # Cast item from LHS to the key-type of RHS
-            this_item = _cast(this_item, otheritemty)
-            if this_item != other_item:
+    # special case: either list has array types as items
+    if (isinstance(this.item_type, types.Array) or
+            isinstance(other.item_type, types.Array)):
+        def impl_type_matched_array_item_type(this, other):
+            if len(this) != len(other):
                 return False
-        return True
-
-    return impl_type_matched
+            for i in range(len(this)):
+                this_item, other_item = this[i], other[i]
+                # Cast item from LHS to the key-type of RHS
+                this_item = _cast(this_item, otheritemty)
+                # Reduce array of booleans into single value
+                if np.any(this_item != other_item):
+                    return False
+            return True
+        return impl_type_matched_array_item_type
+    # non array type items
+    else:
+        def impl_type_matched_generic_item_type(this, other):
+            if len(this) != len(other):
+                return False
+            for i in range(len(this)):
+                this_item, other_item = this[i], other[i]
+                # Cast item from LHS to the key-type of RHS
+                this_item = _cast(this_item, otheritemty)
+                if this_item != other_item:
+                    return False
+            return True
+        return impl_type_matched_generic_item_type
 
 
 @overload(operator.ne)

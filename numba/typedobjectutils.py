@@ -3,6 +3,7 @@
 import operator
 
 from llvmlite import ir
+from llvmlite.llvmpy.core import Builder
 
 from numba import cgutils
 from numba import types
@@ -123,7 +124,7 @@ def _get_equal(context, module, datamodel, container_type):
     argtypes = [fe_type, fe_type]
 
     def build_wrapper(fn):
-        builder = ir.IRBuilder(fn.append_basic_block())
+        builder = Builder(fn.append_basic_block())
         args = context.call_conv.decode_arguments(builder, argtypes, fn)
 
         sig = typing.signature(types.boolean, fe_type, fe_type)
@@ -146,7 +147,7 @@ def _get_equal(context, module, datamodel, container_type):
         equal_fnty,
         name='.numba_{}_item_equal${}'.format(container_type, fe_type),
     )
-    builder = ir.IRBuilder(equal_fn.append_basic_block())
+    builder = Builder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
 

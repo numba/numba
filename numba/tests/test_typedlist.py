@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import, division
 
 from itertools import product
 
+import numpy as np
+
 from numba import njit
 from numba import int32, types
 from numba.typed import List, Dict
@@ -389,6 +391,21 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             lb.append(1)
             la.append(lb)
             return la
+
+        expected = foo.py_func()
+        got = foo()
+        got == expected
+        self.assertEqual(expected, got)
+
+    @skip_py2
+    def test_array_as_item_in_list(self):
+        nested_type = types.Array(types.float64, 1, 'C')
+        @njit
+        def foo():
+            l = List.empty_list(nested_type)
+            a = np.zeros((1,))
+            l.append(a)
+            return l
 
         expected = foo.py_func()
         got = foo()
