@@ -378,3 +378,19 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         c = foo()
         self.assertEqual(2, c)
+
+    @skip_py2
+    def test_list_as_item_in_list(self):
+        nested_type = types.ListType(types.int32)
+        @njit
+        def foo():
+            la = List.empty_list(nested_type)
+            lb = List.empty_list(types.int32)
+            lb.append(1)
+            la.append(lb)
+            return la
+
+        expected = foo.py_func()
+        got = foo()
+        got == expected
+        self.assertEqual(expected, got)

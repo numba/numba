@@ -938,7 +938,8 @@ def impl_equal(this, other):
     def impl_type_matched(this, other):
         if len(this) != len(other):
             return False
-        for this_item, other_item in zip(this, other):
+        for i in range(len(this)):
+            this_item, other_item = this[i], other[i]
             # Cast item from LHS to the key-type of RHS
             this_item = _cast(this_item, otheritemty)
             if this_item != other_item:
