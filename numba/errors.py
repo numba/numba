@@ -345,8 +345,9 @@ https://github.com/numba/numba/issues/new
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
+You are currently using Numba version %s.
 %s
-""" % feedback_details
+""" % (numba.__version__, feedback_details)
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
