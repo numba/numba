@@ -867,7 +867,7 @@ class TestDispatcherMethods(TestCase):
             foo.inspect_types()
         assert expected in out.getvalue()
 
-    def test_inspect_types_signature(self):
+    def test_inspect_types_with_signature(self):
         @jit
         def foo(a):
             return a + 1
@@ -884,7 +884,7 @@ class TestDispatcherMethods(TestCase):
         with captured_stdout() as second:
             foo.inspect_types(signature=foo.signatures[1])
 
-        assert total.getvalue() == first.getvalue() + second.getvalue()
+        self.assertEqual(total.getvalue(), first.getvalue() + second.getvalue())
 
     @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
     @unittest.skipIf(pygments is None, "please install the 'pygments' package")
@@ -925,7 +925,7 @@ class TestDispatcherMethods(TestCase):
         expected = dict(chain.from_iterable(foo.get_annotation_info(i).items()
                                             for i in foo.signatures))
         result = foo.get_annotation_info()
-        assert expected == result
+        self.assertEqual(expected, result)
 
     def test_issue_with_array_layout_conflict(self):
         """
