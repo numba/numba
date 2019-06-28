@@ -1,18 +1,26 @@
 from __future__ import print_function, absolute_import, division
 
 import sys
-import os
 import multiprocessing as mp
-import traceback
 
 from numba import njit
 from .support import (
+    unittest,
     TestCase,
-    temp_directory,
-    override_env_config,
-    captured_stdout,
-    captured_stderr,
     SerialMixin,
+    run_in_new_process_caching
+)
+
+
+_py34_or_later = sys.version_info[:2] >= (3, 4)
+_has_mp_get_context = hasattr(mp, 'get_context')
+_skip_no_unicode = unittest.skipUnless(
+    _py34_or_later,
+    "unicode requires py3.4+",
+)
+_skip_no_mp_spawn = unittest.skipUnless(
+    _has_mp_get_context,
+    "requires multiprocessing.get_context",
 )
 
 
@@ -43,56 +51,17 @@ def check_dict_cache():
 
 
 class TestCaching(SerialMixin, TestCase):
-
     def run_test(self, func):
         func()
-        ctx = mp.get_context('spawn')
-        qout = ctx.Queue()
-        cache_dir = temp_directory(__name__)
-        with override_env_config('NUMBA_CACHE_DIR', cache_dir):
-            proc = ctx.Process(target=_remote_runner, args=[func, qout])
-            proc.start()
-            stdout = qout.get()
-            stderr = qout.get()
-            if stdout.strip():
-                print()
-                print('STDOUT'.center(80, '-'))
-                print(stdout)
-            if stderr.strip():
-                print()
-                print('STDERR'.center(80, '-'))
-                print(stderr)
-            proc.join()
-            self.assertEqual(proc.exitcode, 0)
+        res = run_in_new_process_caching(func)
+        self.assertEqual(res['exitcode'], 0)
 
-    # The following is used to auto populate test methods into this class
+    @_skip_no_unicode
+    @_skip_no_mp_spawn
+    def test_constant_unicode_cache(self):
+        self.run_test(check_constant_unicode_cache)
 
-    def _make_test(fn):
-        def udt(self):
-            self.run_test(fn)
-        return udt
-
-    for k, v in globals().items():
-        prefix = 'check_'
-        if k.startswith(prefix):
-            locals()['test_' + k[len(prefix):]] = _make_test(v)
-
-
-def _remote_runner(fn, qout):
-    with captured_stderr() as stderr:
-        with captured_stdout() as stdout:
-            try:
-                fn()
-            except Exception:
-                print(traceback.format_exc(), file=sys.stderr)
-                exitcode = 1
-            else:
-                exitcode = 0
-        qout.put(stdout.getvalue())
-    qout.put(stderr.getvalue())
-    sys.exit(exitcode)
-
-
-def _remote_wrapper(fn):
-    _remote_wrapper()
-
+    @_skip_no_unicode
+    @_skip_no_mp_spawn
+    def test_dict_cache(self):
+        self.run_test(check_dict_cache)
