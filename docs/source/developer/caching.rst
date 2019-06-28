@@ -15,16 +15,16 @@ Caching is done by saving the compiled *object code*, the ELF object of the
 executable code.  By using the *object code*, cached functions have minimal
 overhead because no compilation is needed. The cached data is saved under the
 ``__pycache__`` directory. The index of the cache is stored in a ``.nbi``
-file, with one index per function, and it lists all the overloaded signatures compiled
-for the function. The *object code* is stored in files with an ``.nbc`` extension,
-one file per overload.
+file, with one index per function, and it lists all the overloaded signatures
+compiled for the function. The *object code* is stored in files with an
+``.nbc`` extension, one file per overload.
 
 
 Requirements for Cacheability
 -----------------------------
 
-Developers should note the requirements of a function to permit it to be cached to ensure
-that the features they are working on are compatible with caching.
+Developers should note the requirements of a function to permit it to be cached
+to ensure that the features they are working on are compatible with caching.
 
 Requirements for cacheable function:
 
