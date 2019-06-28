@@ -180,6 +180,8 @@ The following functions, attributes and methods are currently supported:
 * ``.lstrip()``
 * ``.rstrip()``
 * ``.strip()``
+* ``.isupper()``
+* ``.upper()``
 * ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
