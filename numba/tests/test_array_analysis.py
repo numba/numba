@@ -354,7 +354,7 @@ class TestArrayAnalysis(TestCase):
             c = a[1:,:]
             d = b[:-1,:]
             e = c.shape[0]
-            f = d.shape[0]
+            f = len(d)
             return e == f
         self._compile_and_test(test_12, (),
                                equivs=[self.with_equiv('e', 'f')])
