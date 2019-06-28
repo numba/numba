@@ -26,6 +26,21 @@ _Py_UCS4 = types.uint32
 
 # ------------------------------------------------------------------------------
 # Start code related to/from CPython's unicodectype impl
+#
+# NOTE: the original source at:
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c
+# contains this statement:
+#
+# /*
+#   Unicode character type helpers.
+#
+#   Written by Marc-Andre Lemburg (mal@lemburg.com).
+#   Modified for Python 2.0 by Fredrik Lundh (fredrik@pythonware.com)
+#
+#   Copyright (c) Corporation for National Research Initiatives.
+#
+# */
+
 
 # This enum contains the values defined in CPython's Objects/unicodectype.c that
 # provide masks for use against the various members of the typerecord
