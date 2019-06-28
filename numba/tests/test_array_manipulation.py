@@ -4,8 +4,10 @@ from functools import partial
 from itertools import permutations
 import numba.unittest_support as unittest
 
+import sys
 import numpy as np
 
+from numba.numpy_support import version as np_version
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, from_dtype, errors, typeof
 from numba.errors import TypingError
@@ -134,6 +136,10 @@ def numpy_fill_diagonal(arr, val, wrap=False):
 
 def numpy_shape(arr):
     return np.shape(arr)
+
+
+def numpy_flatnonzero(a):
+    return np.flatnonzero(a)
 
 
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
@@ -739,6 +745,77 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("The argument to np.shape must be array-like",
                       str(raises.exception))
+
+    def test_flatnonzero_basic(self):
+        # these tests should pass in all numpy versions
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5)
+            yield np.full(5, fill_value=0)
+            yield np.array([])
+            a = self.random.randn(100)
+            a[np.abs(a) > 0.2] = 0.0
+            yield a
+            yield a.reshape(5, 5, 4)
+            yield a.reshape(50, 2, order='F')
+            yield a.reshape(25, 4)[1::2]
+            yield a * 1j
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    @staticmethod
+    def array_like_variations():
+        yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
+        yield (0.0, 1.0, 0.0, -6.0)
+        yield ([0, 1], [2, 3])
+        yield ()
+        yield np.nan
+        yield 0
+        yield 1
+        yield False
+        yield (True, False, True)
+        yield 2 + 1j
+        # the following are not array-like, but numpy 1.15+ does not raise
+        yield None
+        if not sys.version_info < (3,):
+            yield 'a_string'
+
+    @unittest.skipUnless(np_version >= (1, 15),
+                         "flatnonzero array-like handling per 1.15+")
+    def test_flatnonzero_array_like_115_and_on(self):
+        # these tests should pass where numpy version is >= 1.15
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    @unittest.skipUnless(np_version < (1, 15),
+                         "flatnonzero array-like handling pre 1.15")
+    def test_flatnonzero_array_like_pre_115(self):
+        # these tests should pass where numpy version is < 1.15
+        pyfunc = numpy_flatnonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a in self.array_like_variations():
+            with self.assertTypingError() as e:
+                cfunc(a)
+
+            self.assertIn("Argument 'a' must be an array", str(e.exception))
+
+            # numpy raises an Attribute error with:
+            # 'xxx' object has no attribute 'ravel'
+            with self.assertRaises(AttributeError) as e:
+                pyfunc(a)
+
+            self.assertIn("object has no attribute 'ravel'", str(e.exception))
 
 
 if __name__ == '__main__':
