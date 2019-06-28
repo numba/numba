@@ -469,7 +469,7 @@ class ListType(IterableType):
         super(ListType, self).__init__(name)
 
     def is_precise(self):
-        return isinstance(self.item_type, Undefined),
+        return not isinstance(self.item_type, Undefined)
 
     @property
     def iterator_type(self):
