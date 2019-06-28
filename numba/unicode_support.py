@@ -67,7 +67,7 @@ def _gettyperecord_impl(typingctx, codepoint):
 
     def details(context, builder, signature, args):
         ll_void = context.get_value_type(types.void)
-        ll_uint64 = context.get_value_type(types.uint64)
+        ll_Py_UCS4 = context.get_value_type(_Py_UCS4)
         ll_intc = context.get_value_type(types.intc)
         ll_intc_ptr = ll_intc.as_pointer()
         ll_uchar = context.get_value_type(types.uchar)
@@ -75,13 +75,13 @@ def _gettyperecord_impl(typingctx, codepoint):
         ll_ushort = context.get_value_type(types.ushort)
         ll_ushort_ptr = ll_ushort.as_pointer()
         fnty = lc.Type.function(ll_void, [
-            ll_uint64,     # code
+            ll_Py_UCS4,    # code
             ll_intc_ptr,   # upper
             ll_intc_ptr,   # lower
             ll_intc_ptr,   # title
             ll_uchar_ptr,  # decimal
             ll_uchar_ptr,  # digit
-            ll_ushort_ptr,  # flags
+            ll_ushort_ptr, # flags
         ])
         fn = builder.module.get_or_insert_function(
             fnty, name="numba_gettyperecord")
@@ -103,7 +103,7 @@ def _gettyperecord_impl(typingctx, codepoint):
 
     tupty = types.NamedTuple([types.intc, types.intc, types.intc, types.uchar,
                               types.uchar, types.ushort], typerecord)
-    sig = tupty(types.uint64)
+    sig = tupty(_Py_UCS4)
     return sig, details
 
 
@@ -121,11 +121,11 @@ def gettyperecord_impl(a):
                 msg = "gettyperecord takes a single unicode character"
                 raise ValueError(msg)
             code_point = _get_code_point(a, 0)
-            data = _gettyperecord_impl(types.uint64(code_point))
+            data = _gettyperecord_impl(_Py_UCS4(code_point))
             return data
         return impl
     if isinstance(a, types.Integer):
-        return lambda a: _gettyperecord_impl(types.uint64(a))
+        return lambda a: _gettyperecord_impl(_Py_UCS4(a))
 
 # whilst it's possible to grab the _PyUnicode_ExtendedCase symbol as it's global
 # it is safer to use a defined api:
