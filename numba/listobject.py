@@ -158,7 +158,6 @@ def _list_set_method_table(typingctx, lp, itemty):
 
     def codegen(context, builder, sig, args):
         vtablety = ir.LiteralStructType([
-            ll_voidptr_type,  # equal
             ll_voidptr_type,  # item incref
             ll_voidptr_type,  # item decref
         ])
@@ -174,20 +173,14 @@ def _list_set_method_table(typingctx, lp, itemty):
         dp = args[0]
         vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
-        # install key incref/decref
-        item_equal_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
-        item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
-        item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 2)
+        # install item incref/decref
+        item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+        item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
 
         dm_item = context.data_model_manager[itemty.instance_type]
         if dm_item.contains_nrt_meminfo():
-            equal = _get_equal(context, builder.module, dm_item, 'list')
             item_incref, item_decref = _get_incref_decref(
                 context, builder.module, dm_item, "list"
-            )
-            builder.store(
-                builder.bitcast(equal, item_equal_ptr.type.pointee),
-                item_equal_ptr,
             )
             builder.store(
                 builder.bitcast(item_incref, item_incref_ptr.type.pointee),
