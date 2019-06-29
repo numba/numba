@@ -688,16 +688,8 @@ def impl_setitem(l, index, item):
                                           slice_range.start + len(item))
                     for i,j in zip(replace_range, item):
                         l[i] = j
-                    # pop the remaining ones
-                    pop_range = range(slice_range.start + len(item),
-                                      slice_range.stop)
-                    # pop will mutate the list, so we always need to pop the
-                    # same index
-                    k = slice_range.start + len(item)
-                    for _ in pop_range:
-                        # FIXME: This may be slow.  Each pop can incur a
-                        # memory copy of one or more items.
-                        l.pop(k)
+                    # delete remaining ones
+                    del l[slice_range.start + len(item):slice_range.stop]
             # Extended slices
             else:
                 if len(slice_range) != len(item):
@@ -739,6 +731,38 @@ def impl_pop(l, index=-1):
         raise TypingError("argument for pop must be a signed integer")
 
 
+@intrinsic
+def _list_delete_slice(typingctx, l, start, stop, step):
+    """Wrap numba_list_delete_slice
+    """
+    resty = types.int32
+    sig = resty(l, start, stop, step)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_ssize_t, ll_ssize_t, ll_ssize_t],
+        )
+        [l, start, stop, step] = args
+        [tl, tstart, tstop, tstep] = sig.args
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_delete_slice')
+
+        lp = _container_get_data(context, builder, tl, l)
+        status = builder.call(
+            fn,
+            [
+                lp,
+                start,
+                stop,
+                step,
+            ],
+        )
+        return status
+
+    return sig, codegen
+
+
 @overload(operator.delitem)
 def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
@@ -752,8 +776,11 @@ def impl_delitem(l, index):
 
     elif isinstance(index, types.SliceType):
         def slice_impl(l, index):
-            raise NotImplementedError
-
+            slice_range = handle_slice(l, index)
+            _list_delete_slice(l,
+                               slice_range.start,
+                               slice_range.stop,
+                               slice_range.step)
         return slice_impl
 
     else:

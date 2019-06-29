@@ -65,6 +65,11 @@ def _pop(l, i):
 
 
 @njit
+def _delitem(l, i):
+    del l[i]
+
+
+@njit
 def _extend(l, iterable):
     return l.extend(iterable)
 
@@ -204,7 +209,7 @@ class List(MutableSequence):
         return _contains(self, item)
 
     def __delitem__(self, i):
-        _pop(self, i)
+        _delitem(self, i)
 
     def insert(self, i, item):
         _insert(self, i, item)

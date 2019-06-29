@@ -1,10 +1,12 @@
 #include "_listobject.h"
 
 /* This implements the C component of the Numba typed list. It is loosely
- * inspired by the list implementation of the cpython list. The exact commit
- * is:
+ * inspired by the list implementation of the cpython list with some parts
+ * taken from the cpython slice implementation. The exact commit-id of the
+ * relevant files are:
  *
  * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Objects/listobject.c
+ * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Objects/sliceobject.c
  *
  * Algorithmically, this list is very similar to the cpython implementation so
  * it should have the same performance (Big-O) characteristics for accessing,
@@ -32,8 +34,9 @@
  * - Setting an item          numba_list_getitem
  * - Poping an item           numba_list_pop
  * - Resizing the list        numba_list_resize
+ * - Deleting a slice         numba_list_delete_slice
  *
- * As you can see, no functions related to slicing have been implemented. This
+ * As you can see, only a single function for slices is implemented. The rest
  * is all done entirely at the compiler level which then calls the c functions
  * to mutate the list accordingly. Since slicing allows for replace, insert and
  * delete operations over multiple items, we can simply implement those using
@@ -384,6 +387,106 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     return LIST_OK;
 }
 
+/* Delete a slice 
+ *
+ * start: the start index of ths slice
+ * stop: the stop index of the slice (not included)
+ * step: the step to take
+ *
+ * This function assumes that the start and stop were clipped appropriately.
+ * I.e. if step > 0 start >= 0 and stop <= len(l) and
+ *      if step < 0 start <= length and stop >= -1
+ *      step != 0 and no Python negative indexing allowed.
+ *
+ * This code was copied and edited from the relevant section in
+ * list_ass_subscript from the cpython implementation, see the top of this file
+ * for the exact source
+ */
+int
+numba_list_delete_slice(NB_List *lp,
+                        Py_ssize_t start, Py_ssize_t stop, Py_ssize_t step) {
+    int result, i, slicelength, new_length;
+    char *loc, *new_loc;
+    Py_ssize_t leftover_bytes, cur, lim;
+    // calculate the slicelength, taken from PySlice_AdjustIndices, see the top
+    // of this file for the exact source
+    if (step > 0) {
+        slicelength = start < stop ? (stop - start - 1) / step + 1 : 0;
+    } else {
+        slicelength = stop < start ? (start - stop - 1) / -step + 1 : 0;
+    }
+    if (slicelength <= 0){
+        return LIST_OK;
+    }
+    new_length = lp->size - slicelength;
+    // reverse step and indices
+    if (step < 0) {
+        stop = start + 1;
+        start = stop + step * (slicelength - 1) - 1;
+        step = -step;
+    }
+    if (step == 1) {
+        // decref if needed
+        if (lp->methods.item_decref) {
+            for (i = start ; i < stop ; i++){
+                loc = lp->items + lp->item_size * i;
+                lp->methods.item_decref(loc);
+            }
+        }
+        // memove items into place
+        leftover_bytes = (lp->size - stop) * lp->item_size;
+        loc = lp->items + lp->item_size * start;
+        new_loc = lp->items + lp->item_size * stop;
+        memmove(loc, new_loc, leftover_bytes);
+    }
+    else { // step != 1
+        /* drawing pictures might help understand these for
+         * loops. Basically, we memmove the parts of the
+         * list that are *not* part of the slice: step-1
+         * items for each item that is part of the slice,
+         * and then tail end of the list that was not
+         * covered by the slice
+         *
+         * */
+        for (cur = start,   // index of item to be deleted
+             i = 0;         // counter of total items deleted so far
+             cur < stop;
+             cur += step,
+             i++) {
+            lim = step - 1; // number of leftover items after deletion of item
+            // clip limit, in case we are at the end of the slice, and there
+            // are now less than step-1 items to be moved
+            if (cur + step >= lp->size) {
+                lim = lp->size - cur - 1;
+            }
+            // decref item being removed
+            loc = lp->items + lp->item_size * cur;
+            list_decref_item(lp, loc);
+            /* memmove the aforementiond step-1 (or less) items
+             * dst : index of deleted item minus total deleted sofar
+             * src : index of deleted item plus one (next item)
+             */
+            memmove(lp->items + lp->item_size * (cur - i),
+                    lp->items + lp->item_size * (cur + 1),
+                    lim * lp->item_size);
+        }
+        // memmove tail of the list
+        cur = start + slicelength * step;
+        if (cur < lp->size) {
+            memmove(lp->items + lp->item_size * (cur - slicelength),
+                    lp->items + lp->item_size * cur,
+                    (lp->size - cur) * lp->item_size);
+        }
+    }
+    // resize to correct size
+    result = numba_list_resize(lp, new_length);
+    if(result < LIST_OK) {
+        // Since we are decreasing the size, this should never happen
+        return result;
+    }
+    return LIST_OK;
+}
+
 
 /* Return the size of the list iterator (NB_ListIter) struct.
  */
@@ -446,6 +549,7 @@ numba_test_list(void) {
     NB_ListIter iter;
     char got_item[4] = "\x00\x00\x00\x00";
     const char *test_items_1 = NULL, *test_items_2 = NULL;
+    char *test_items_3 = NULL;
     puts("test_list");
 
 
@@ -610,10 +714,155 @@ numba_test_list(void) {
              case 1:   CHECK(lp->allocated == 0); break;
         }
     }
+    // free existing list
+    numba_list_free(lp);
+
+
+    // Setup list for testing delete_slice
+    status = numba_list_new(&lp, 1, 0);
+    CHECK(status == LIST_OK);
+    CHECK(lp->item_size == 1);
+    CHECK(lp->size == 0);
+    CHECK(lp->allocated == 0);
+    for (i = 0; i < 17 ; i++) {
+        status = numba_list_append(lp, (const char*)&i);
+        CHECK(status == LIST_OK);
+    }
+    CHECK(lp->size == 17);
+    test_items_3 = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+    CHECK(memcmp(lp->items, test_items_3, 17) == 0);
+
+    // delete multiple elements from the middle
+    status = numba_list_delete_slice(lp, 2, 5, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 14);
+    test_items_3  = "\x00\x01\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+    CHECK(memcmp(lp->items, test_items_3, 14) == 0);
+
+    // delete single element from start
+    status = numba_list_delete_slice(lp, 0, 1, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 13);
+    test_items_3  = "\x01\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
+    CHECK(memcmp(lp->items, test_items_3, 13) == 0);
+
+    // delete single element from end
+    status = numba_list_delete_slice(lp, 12, 13, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 12);
+    test_items_3  = "\x01\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 12) == 0);
+
+    // delete single element from middle
+    status = numba_list_delete_slice(lp, 4, 5, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 11);
+    test_items_3  = "\x01\x05\x06\x07\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 11) == 0);
+
+    // delete all elements except first and last
+    status = numba_list_delete_slice(lp, 1, 10, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 2);
+    test_items_3  = "\x01\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 2) == 0);
+
+    // delete all remaining elements
+    status = numba_list_delete_slice(lp, 0, lp->size, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 0);
+    test_items_3  = "";
+    CHECK(memcmp(lp->items, test_items_3, 0) == 0);
+
+    // free existing list
+    numba_list_free(lp);
+
+    // Setup list for testing delete_slice with non unary step
+    status = numba_list_new(&lp, 1, 0);
+    CHECK(status == LIST_OK);
+    CHECK(lp->item_size == 1);
+    CHECK(lp->size == 0);
+    CHECK(lp->allocated == 0);
+    for (i = 0; i < 17 ; i++) {
+        status = numba_list_append(lp, (const char*)&i);
+        CHECK(status == LIST_OK);
+    }
+    CHECK(lp->size == 17);
+
+    // delete all items with odd index
+    status = numba_list_delete_slice(lp, 0, 17, 2);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 8);
+    test_items_3 = "\x01\x03\x05\x07\x09\x0b\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 8) == 0);
+
+    // delete with a step of 4, starting at index 1
+    status = numba_list_delete_slice(lp, 1, 8, 4);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 6);
+    test_items_3 = "\x01\x05\x07\x09\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 6) == 0);
+
+    // delete with a step of 2, but finish before end of list
+    status = numba_list_delete_slice(lp, 0, 4, 2);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 4);
+    test_items_3 = "\x05\x09\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 4) == 0);
+
+    // no-op on empty slice
+    status = numba_list_delete_slice(lp, 0, 0, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 4);
+    test_items_3 = "\x05\x09\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 4) == 0);
+
+    // no-op on empty slice, non-zero index
+    status = numba_list_delete_slice(lp, 2, 2, 1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 4);
+    test_items_3 = "\x05\x09\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 4) == 0);
+
+    // free list and return 0
+    numba_list_free(lp);
+
+    // Setup list for testing delete_slice with negative step
+    status = numba_list_new(&lp, 1, 0);
+    CHECK(status == LIST_OK);
+    CHECK(lp->item_size == 1);
+    CHECK(lp->size == 0);
+    CHECK(lp->allocated == 0);
+    for (i = 0; i < 17 ; i++) {
+        status = numba_list_append(lp, (const char*)&i);
+        CHECK(status == LIST_OK);
+    }
+    CHECK(lp->size == 17);
+
+    // delete all items using unary negative slice
+    status = numba_list_delete_slice(lp, 16, -1, -1);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 0);
+
+    // refill list
+    for (i = 0; i < 17 ; i++) {
+        status = numba_list_append(lp, (const char*)&i);
+        CHECK(status == LIST_OK);
+    }
+
+    // delete all items using unary negative slice
+    // need to start at index of last item (16) and
+    // go beyond first item, i.e. -1 in Cd
+    status = numba_list_delete_slice(lp, 16, -1, -2);
+    CHECK(status == LIST_OK);
+    CHECK(lp->size == 8);
+    test_items_3 = "\x01\x03\x05\x07\x09\x0b\x0d\x0f";
+    CHECK(memcmp(lp->items, test_items_3, 8) == 0);
 
     // free list and return 0
     numba_list_free(lp);
     return 0;
+
 
 }
 

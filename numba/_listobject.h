@@ -85,6 +85,10 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out);
 NUMBA_EXPORT_FUNC(int)
 numba_list_resize(NB_List *lp, Py_ssize_t newsize);
 
+NUMBA_EXPORT_FUNC(int)
+numba_list_delete_slice(NB_List *lp,
+                        Py_ssize_t start, Py_ssize_t stop, Py_ssize_t step);
+
 NUMBA_EXPORT_FUNC(size_t)
 numba_list_iter_sizeof(void);
 

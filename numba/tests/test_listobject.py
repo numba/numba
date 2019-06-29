@@ -672,7 +672,77 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
     """Test list delitem.
     """
 
-    def test_list_delitem(self):
+    def test_list_singleton_delitem_index(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[0]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_defaults(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[:]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_start(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[0:]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_stop(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[:1]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_start_stop(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[0:1]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_start_step(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[0::1]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_singleton_delitem_slice_start_stop_step(self):
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.append(0)
+            del l[0:1:1]
+            return len(l)
+        self.assertEqual(foo(), 0)
+
+    def test_list_multiple_delitem(self):
 
         @njit
         def foo():
@@ -683,10 +753,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             return len(l), l[0], l[1]
         self.assertEqual(foo(), (2, 11, 12))
 
-    @unittest.expectedFailure
-    def test_list_delitem_slice(self):
-        # remove when tests no longer fails
-        self.disable_leak_check()
+    def test_list_multiple_delitem_slice(self):
 
         @njit
         def foo():
@@ -696,6 +763,22 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             del l[:]
             return len(l)
         self.assertEqual(foo(), 0)
+
+    def test_list_multiple_delitem_off_by_one(self):
+        # this was exposing a nasty off-by-one error, leaving it in to detect
+        # and regressions
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            for j in range(10, 20):
+                l.append(j)
+            k = listobject.new_list(int32)
+            for j in range(10, 20):
+                k.append(j)
+            # should be a no-op
+            del l[-9:-20]
+            return k == l
+        self.assertTrue(foo())
 
 
 class TestContains(MemoryLeakMixin, TestCase):
