@@ -748,7 +748,7 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         fn = builder.module.get_or_insert_function(fnty,
                                                    name='numba_list_delete_slice')
 
-        lp = _list_get_data(context, builder, tl, l)
+        lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
             fn,
             [
