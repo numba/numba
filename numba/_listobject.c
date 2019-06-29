@@ -1,10 +1,12 @@
 #include "_listobject.h"
 
 /* This implements the C component of the Numba typed list. It is loosely
- * inspired by the list implementation of the cpython list. The exact commit
- * is:
+ * inspired by the list implementation of the cpython list with some parts
+ * taken from the cpython slice implementation. The exact commit-id of the
+ * relevant files are:
  *
  * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Objects/listobject.c
+ * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Objects/sliceobject.c
  *
  * Algorithmically, this list is very similar to the cpython implementation so
  * it should have the same performance (Big-O) characteristics for accessing,
@@ -397,7 +399,8 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
  *      step != 0 and no Python negative indexing allowed.
  *
  * This code was copied and edited from the relevant section in
- * list_ass_subscript from the cpython implementation.
+ * list_ass_subscript from the cpython implementation, see the top of this file
+ * for the exact source
  */
 int
 numba_list_delete_slice(NB_List *lp,
@@ -405,7 +408,8 @@ numba_list_delete_slice(NB_List *lp,
     int result, i, slicelength, new_length;
     char *loc, *new_loc;
     Py_ssize_t leftover_bytes, cur, lim;
-    // calculate the slicelength, taken from PySlice_AdjustIndices
+    // calculate the slicelength, taken from PySlice_AdjustIndices, see the top
+    // of this file for the exact source
     if (step > 0) {
         slicelength = start < stop ? (stop - start - 1) / step + 1 : 0;
     } else {
