@@ -1005,9 +1005,7 @@ def impl_equal(this, other):
             return False
         return impl_type_mismatch
 
-    otheritemty = other.item_type
-
-    # special case: either list has array types as items
+    # special case: either list has items of an array type
     if (isinstance(this.item_type, types.Array) or
             isinstance(other.item_type, types.Array)):
         def impl_type_matched_array_item_type(this, other):
@@ -1015,22 +1013,18 @@ def impl_equal(this, other):
                 return False
             for i in range(len(this)):
                 this_item, other_item = this[i], other[i]
-                # Cast item from LHS to the key-type of RHS
-                this_item = _cast(this_item, otheritemty)
                 # Reduce array of booleans into single value
                 if np.any(this_item != other_item):
                     return False
             return True
         return impl_type_matched_array_item_type
-    # non array type items
+    # general case, non-array types
     else:
         def impl_type_matched_generic_item_type(this, other):
             if len(this) != len(other):
                 return False
             for i in range(len(this)):
                 this_item, other_item = this[i], other[i]
-                # Cast item from LHS to the key-type of RHS
-                this_item = _cast(this_item, otheritemty)
                 if this_item != other_item:
                     return False
             return True
