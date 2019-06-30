@@ -110,6 +110,26 @@ def _ne(t, o):
 
 
 @njit
+def _lt(t, o):
+    return t < o
+
+
+@njit
+def _le(t, o):
+    return t <= o
+
+
+@njit
+def _gt(t, o):
+    return t > o
+
+
+@njit
+def _ge(t, o):
+    return t >= o
+
+
+@njit
 def _index(l, item, start, end):
     return l.index(item, start, end)
 
@@ -184,6 +204,18 @@ class List(MutableSequence):
 
     def __ne__(self, other):
         return _ne(self, other)
+
+    def __lt__(self, other):
+        return _lt(self, other)
+
+    def __le__(self, other):
+        return _le(self, other)
+
+    def __gt__(self, other):
+        return _gt(self, other)
+
+    def __ge__(self, other):
+        return _ge(self, other)
 
     def append(self, item):
         if not self._typed:

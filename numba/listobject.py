@@ -5,7 +5,6 @@ import ctypes
 import operator
 from enum import IntEnum
 
-import numpy as np
 from llvmlite import ir
 
 from numba import cgutils
@@ -961,6 +960,65 @@ def impl_index(l, item, start=None, end=None):
     return impl
 
 
+@register_jitable
+def compare(this, other):
+    """Oldschool (python 2.x) cmp.
+
+       if this < other return -1
+       if this = other return 0
+       if this > other return 1
+    """
+    if len(this) != len(other):
+        return -1 if len(this) < len(other) else 1
+    for i in range(len(this)):
+        this_item, other_item = this[i], other[i]
+        if this_item != other_item:
+            return -1 if this_item < other_item else 1
+    else:
+        return 0
+
+
+def compare_helper(this, other, accepted):
+    if not isinstance(this, types.ListType):
+        return
+    if not isinstance(other, types.ListType):
+        raise TypingError("list can only be compared to list")
+
+    def impl(this, other):
+        return compare(this, other) in accepted
+    return impl
+
+
+@overload(operator.eq)
+def impl_equal(this, other):
+    return compare_helper(this, other, (0,))
+
+
+@overload(operator.ne)
+def impl_not_equal(this, other):
+    return compare_helper(this, other, (-1, 1))
+
+
+@overload(operator.lt)
+def impl_less_than(this, other):
+    return compare_helper(this, other, (-1, ))
+
+
+@overload(operator.le)
+def impl_less_than_or_equal(this, other):
+    return compare_helper(this, other, (-1, 0))
+
+
+@overload(operator.gt)
+def impl_greater_than(this, other):
+    return compare_helper(this, other, (1,))
+
+
+@overload(operator.ge)
+def impl_greater_than_or_equal(this, other):
+    return compare_helper(this, other, (0, 1))
+
+
 @lower_builtin('getiter', types.ListType)
 def impl_list_getiter(context, builder, sig, args):
     """Implement iter(List).
@@ -993,53 +1051,6 @@ def impl_list_getiter(context, builder, sig, args):
         sig.return_type,
         it._getvalue(),
     )
-
-
-@overload(operator.eq)
-def impl_equal(this, other):
-    if not isinstance(this, types.ListType):
-        return
-    if not isinstance(other, types.ListType):
-        # If RHS is not a list, always returns False
-        def impl_type_mismatch(this, other):
-            return False
-        return impl_type_mismatch
-
-    # special case: either list has items of an array type
-    if (isinstance(this.item_type, types.Array) or
-            isinstance(other.item_type, types.Array)):
-        def impl_type_matched_array_item_type(this, other):
-            if len(this) != len(other):
-                return False
-            for i in range(len(this)):
-                this_item, other_item = this[i], other[i]
-                # Reduce array of booleans into single value
-                if np.any(this_item != other_item):
-                    return False
-            return True
-        return impl_type_matched_array_item_type
-    # general case, non-array types
-    else:
-        def impl_type_matched_generic_item_type(this, other):
-            if len(this) != len(other):
-                return False
-            for i in range(len(this)):
-                this_item, other_item = this[i], other[i]
-                if this_item != other_item:
-                    return False
-            return True
-        return impl_type_matched_generic_item_type
-
-
-@overload(operator.ne)
-def impl_not_equal(this, other):
-    if not isinstance(this, types.ListType):
-        return
-
-    def impl(this, other):
-        return not (this == other)
-
-    return impl
 
 
 @lower_builtin('iternext', types.ListTypeIteratorType)
@@ -1081,3 +1092,4 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         else:
             # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+

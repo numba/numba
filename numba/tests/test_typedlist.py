@@ -8,11 +8,20 @@ from numba import njit
 from numba import int32, types
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
+from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+
+
+def to_tl(l):
+    """ Convert cpython list to typed-list. """
+    tl = List.empty_list(int32)
+    for k in l:
+        tl.append(k)
+    return tl
 
 
 class TestTypedList(MemoryLeakMixin, TestCase):
@@ -173,11 +182,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl_, list(tl_))
             return rl_, tl_
 
-        def to_tl(l):
-            tl = List.empty_list(int32)
-            for k in l:
-                tl.append(k)
-            return tl
 
         ### Simple slicing ###
 
@@ -312,12 +316,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl_, list(tl_))
             return rl_, tl_
 
-        def to_tl(l):
-            tl = List.empty_list(int32)
-            for k in l:
-                tl.append(k)
-            return tl
-
         # define the ranges
         start_range = list(range(-20, 30))
         stop_range = list(range(-20, 30))
@@ -423,6 +421,109 @@ class TestExtend(MemoryLeakMixin, TestCase):
         self.assertEqual(expected, got)
 
 
+@njit
+def cmp(a, b):
+    return a < b, a <= b, a == b, a != b, a >= b, a > b
+
+
+class TestComparisons(MemoryLeakMixin, TestCase):
+
+    def _cmp_dance(self, expected, pa, pb, na, nb):
+        # interpreter with regular list
+        self.assertEqual(cmp.py_func(pa, pb), expected)
+
+        # interpreter with typed-list
+        py_got = cmp.py_func(na, nb)
+        self.assertEqual(py_got, expected)
+
+        # compiled with typed-list
+        jit_got = cmp(na, nb)
+        self.assertEqual(jit_got, expected)
+
+    def test_empty_vs_empty(self):
+        pa, pb = [], []
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, True, True, False, True, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_empty_vs_singleton(self):
+        pa, pb = [], [0]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = True, True, False, True, False, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_singleton_vs_empty(self):
+        pa, pb = [0], []
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, False, False, True, True, True
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_singleton_vs_singleton_equal(self):
+        pa, pb = [0], [0]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, True, True, False, True, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_singleton_vs_singleton_less_than(self):
+        pa, pb = [0], [1]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = True, True, False, True, False, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_singleton_vs_singleton_greater_than(self):
+        pa, pb = [1], [0]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, False, False, True, True, True
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_equal(self):
+        pa, pb = [1, 2, 3], [1, 2, 3]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, True, True, False, True, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_first_shorter(self):
+        pa, pb = [1, 2], [1, 2, 3]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = True, True, False, True, False, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_second_shorter(self):
+        pa, pb = [1, 2, 3], [1, 2]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, False, False, True, True, True
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_first_less_than(self):
+        pa, pb = [1, 2, 2], [1, 2, 3]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = True, True, False, True, False, False
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_first_greater_than(self):
+        pa, pb = [1, 2, 3], [1, 2, 2]
+        na, nb = to_tl(pa), to_tl(pb)
+        expected = False, False, False, True, True, True
+        self._cmp_dance(expected, pa, pb, na, nb)
+
+    def test_typing_mimatch(self):
+        self.disable_leak_check()
+        l = to_tl([1, 2, 3])
+
+        with self.assertRaises(TypingError) as raises:
+            cmp.py_func(l, 1)
+        self.assertIn(
+            "list can only be compared to list",
+            str(raises.exception),
+        )
+        with self.assertRaises(TypingError) as raises:
+            cmp(l, 1)
+        self.assertIn(
+            "list can only be compared to list",
+            str(raises.exception),
+        )
+
+
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
@@ -526,7 +627,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         expected = foo.py_func()
         got = foo()
-        got == expected
         self.assertEqual(expected, got)
 
     @skip_py2
@@ -541,5 +641,5 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         expected = foo.py_func()
         got = foo()
-        got == expected
-        self.assertEqual(expected, got)
+        # Need to compare the nested arrays
+        self.assertTrue(np.all(expected[0] == got[0]))
