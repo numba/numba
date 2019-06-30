@@ -2778,22 +2778,30 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         np_nbfunc = njit(np_select)
         for condlist,  choicelist, default in [
             # Each test case below is one tuple.
-            # Each tuple is separated by a blank line
+            # Each tuple is separated by a description of what's being tested
+            # test with two lists
             ([x < 3, x > 5], [x, x ** 2], 0),
-
+            # test with two tuples
             ((x < 3, x > 5), (x, x ** 2), 0),
-
+            # test with one list and one tuple
+            ([x < 3, x > 5], (x, x ** 2), 0),
+            # test with one tuple and one list
+            ((x < 3, x > 5), [x, x ** 2], 0),
+            # test with arrays of length 3 instead of 2 and a different default
             ([np.array([False, False, False]),
               np.array([False, True, False]),
               np.array([False, False, True])],
              [np.array([1, 2, 3]),
               np.array([4, 5, 6]),
               np.array([7, 8, 9])], 15),
-
+            # test with arrays of length 1 instead of 2
             ([np.array([True]),
               np.array([False])], [np.array([1]), np.array([2])], 0),
+            # test with lists of length 100 of arrays of length 1
+            ([np.array([False])] * 100, [np.array([1])] * 100, 0),
+            # # test with lists of length 100 of tuples of length 1
+            # ([(False,)] * 100, [(1,)] * 100, 0),
 
-            ([np.array([False])] * 100, [np.array([1])] * 100, 0)
         ]:
             self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
                                     np_nbfunc(condlist, choicelist, default))
@@ -2803,32 +2811,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = np.arange(10)
         for condlist, choicelist, default, expected_error, expected_text in [
             # Each test case below is one tuple.
-            # Each tuple is separated by a blank line
+            # Each tuple is separated by the description of the intended error
 
+            # passing condlist of dim zero
             ([np.array(True), np.array([False, True, False])],
              [np.array(1), np.arange(12).reshape(4, 3)], 0,
-             TypingError, "condlist and choicelist elements must be arrays "
-                          "of at least dimension 1"),
-
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # condlist and choicelist with different dimensions
             ([np.array(True), np.array(False)], [np.array([1]), np.array([2])],
              0, TypingError, "condlist and choicelist elements must have the "
                              "same number of dimensions"),
-
+            # condlist and choicelist with different dimensions
+            ([np.array([True]), np.array([False])], [np.array([[1]]), np.array([[2]])], 0, TypingError,
+             "condlist and choicelist elements must have the "
+             "same number of dimensions"),
+            # passing choicelist of dim zero
             ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0,
-             TypingError, "condlist and choicelist elements must be arrays "
-                          "of at least dimension 1"),
-
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # passing an array as condlist instead of a list or tuple
             (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
              np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
-             "Invalid use of Function"),
-
+             "condlist must be a List or a Tuple"),
+            # default is a list
             ([True], [0], [0], TypingError,
-             "Invalid use of Function"),
-
+             "default must be a scalar"),
+            # condlist with ints instead of booleans
             ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0,
-             TypingError, "Invalid use of Function"),
-
-            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], ValueError,
+             TypingError, "condlist arrays must contain booleans"),
+            # condlist and choicelist of different length
+            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], 0, ValueError,
              "list of cases must be same length as list of conditions")
         ]:
             with self.assertRaises(expected_error) as e:
