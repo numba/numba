@@ -998,11 +998,13 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # that's usable from above.
         rw_cres = None
         if not flags.no_rewrites:
-            try:
-                rw_cres = compile_local(func_ir.copy(), flags)
-            except Exception:
-                pass
-
+            # Suppress warnings in compilation retry
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", errors.NumbaWarning)
+                try:
+                    rw_cres = compile_local(func_ir.copy(), flags)
+                except Exception:
+                    pass
         # if the rewrite variant of compilation worked, use it, else use
         # the norewrites backup
         if rw_cres is not None:
