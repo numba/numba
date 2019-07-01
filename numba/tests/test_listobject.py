@@ -1331,17 +1331,6 @@ class TestEqualNotEqual(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(), (False, True))
 
-    def test_list_multiple_not_equal_other_type(self):
-        @njit
-        def foo(o):
-            t = listobject.new_list(int32)
-            for i in range(10):
-                t.append(i)
-            return t == o, t != o
-
-        self.assertEqual(foo(1), (False, True))
-        self.assertEqual(foo((1,)), (False, True))
-
 
 class TestIter(MemoryLeakMixin, TestCase):
     """Test list iter. """
