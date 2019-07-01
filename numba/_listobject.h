@@ -3,11 +3,9 @@
 #ifndef NUMBA_LIST_H
 #define NUMBA_LIST_H
 
-typedef int (*list_item_comparator_t)(const char *lhs, const char *rhs);
 typedef void (*list_refcount_op_t)(const void*);
 
 typedef struct {
-    list_item_comparator_t    item_equal;
     list_refcount_op_t       item_incref;
     list_refcount_op_t       item_decref;
 } list_type_based_methods_table;
