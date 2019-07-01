@@ -5,7 +5,6 @@ import numpy as np
 from numba.compiler import compile_isolated, run_frontend
 from numba import types, rewrites, ir, jit, ir_utils, errors, njit
 from .support import TestCase, MemoryLeakMixin, SerialMixin
-from .support import TestCase, MemoryLeakMixin
 
 from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 

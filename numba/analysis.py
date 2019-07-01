@@ -477,7 +477,7 @@ def rewrite_semantic_constants(func_ir, called_args):
                                 argty = called_args[arg_def.index]
                                 if isinstance(argty, types.Array):
                                     rewrite_statement(func_ir, stmt,
-                                                    argty.ndim)
+                                                      argty.ndim)
 
                     # rewrite len(tuple) as const(len(tuple))
                     if getattr(val, 'op', None) == 'call':
@@ -491,7 +491,7 @@ def rewrite_semantic_constants(func_ir, called_args):
                                 argty = called_args[arg_def.index]
                                 if isinstance(argty, types.BaseTuple):
                                     rewrite_statement(func_ir, stmt,
-                                                    argty.count)
+                                                      argty.count)
     if DEBUG > 1:
         print("after".center(80, '*'))
         func_ir.dump()
