@@ -3548,8 +3548,11 @@ def np_extract(condition, arr):
 @overload(np.select)
 def np_select(condlist, choicelist, default=0):
 
-    def np_select_impl(condlist, choicelist, default=0):
+    def np_select_arr_impl(condlist, choicelist, default=0):
+        if len(condlist) != len(choicelist):
+            raise ValueError('list of cases must be same length as list of conditions')
         out = default * np.ones(choicelist[0].shape, choicelist[0].dtype)
+        # out = default * np.ones(shape, dtyp)
         #should use reversed+zip, but reversed is not available
         for i in range(len(condlist) - 1, -1, -1):
             cond = condlist[i]
@@ -3557,41 +3560,53 @@ def np_select(condlist, choicelist, default=0):
             out = np.where(cond, choice, out)
         return out
 
-    if ((isinstance(condlist, (types.List, types.UniTuple)))
-        and (isinstance(choicelist, (types.List, types.UniTuple)))
-        and isinstance(condlist[0], types.Array)
-        and isinstance(condlist[0].dtype, types.Boolean)
-        and isinstance(default, (int, types.scalars.Number))):
-        if condlist[0].ndim != choicelist[0].ndim:
-            raise TypeError('condlist and choicelist elements must have the same number of dimensions')
-
+    def np_select_tuple_impl(condlist, choicelist, default=0):
         if len(condlist) != len(choicelist):
             raise ValueError('list of cases must be same length as list of conditions')
+        out = default * np.ones(len(choicelist[0]))
+        # out = default * np.ones(shape, dtyp)
+        #should use reversed+zip, but reversed is not available
+        for i in range(len(condlist) - 1, -1, -1):
+            cond = condlist[i]
+            choice = choicelist[i]
+            out = np.where(cond, choice, out)
+        return out
 
-        if condlist[0].ndim < 1:
-            raise TypeError('condlist and choicelist elements must be arrays of at least dimension 1')
-        else:
-            return np_select_impl
 
-
+    # print('here' , condlist[0].dtype)
+    # first we check the types of the input parameters
     if not isinstance(condlist, (types.List, types.UniTuple)):
         raise TypeError('condlist must be a List or a Tuple')
-
-    elif not isinstance(choicelist, (types.List, types.UniTuple)):
+    if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise TypeError('choicelist must be a List or a Tuple')
-    ...
-    else:
-        return np_select_impl
-        and isinstance(condlist[0], types.Array)
-        and isinstance(condlist[0].dtype, types.Boolean)
-        and isinstance(default, (int, types.scalars.Number))):
-        if condlist[0].ndim != choicelist[0].ndim:
-            raise TypeError('condlist and choicelist elements must have the same number of dimensions')
+    if not isinstance(default, (int, types.scalars.Number)):
+        raise TypeError('default must be a scalar')
+    # the types of the parameters have been checked, now we test the types
+    # of the content of the parameters
+    if not (isinstance(condlist[0], types.Array)
+              or isinstance(condlist[0], types.UniTuple)):
+        raise TypeError('items of condlist must be arrays or tuples')
+    # the types of the parameters and their contents have been checked,
+    # now we test the dtypes of the content of parameters
+    if isinstance(condlist[0], types.Array):
+        if not isinstance(condlist[0].dtype, types.Boolean):
+            raise TypeError('condlist arrays must contain booleans')
+    if isinstance(condlist[0], types.UniTuple):
+        if not (isinstance(condlist[0], types.UniTuple)
+                and isinstance(condlist[0][0], types.Boolean)):
+            raise TypeError('condlist tuples must only contain booleans')
+    #the inputs types are correct, now we perform checks on the dimensions
+    if isinstance(condlist[0], types.Array) and condlist[0].ndim != choicelist[0].ndim:
+        raise TypeError('condlist and choicelist elements must have the '
+                        'same number of dimensions')
+    if isinstance(condlist[0], types.Array) and condlist[0].ndim < 1:
+        raise TypeError('condlist arrays must be of at least dimension 1')
 
-        if condlist[0].ndim < 1:
-            raise TypeError('condlist and choicelist elements must be arrays of at least dimension 1')
-        else:
-            return np_select_impl
+    if isinstance(condlist[0], types.Array):
+        return np_select_arr_impl
+    else:
+        print(type(condlist[0]))
+        return np_select_tuple_impl
 
 
 #----------------------------------------------------------------------------
