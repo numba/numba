@@ -585,7 +585,7 @@ def _inject_hashsecret_read(tyctx, name):
         raise errors.TypingError("requires literal string")
 
     sym = _hashsecret[name.literal_value].symbol
-    resty = _Py_uhash_t
+    resty = types.uint64
     sig = resty(name)
 
     def impl(cgctx, builder, sig, args):
