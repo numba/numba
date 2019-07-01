@@ -524,6 +524,22 @@ class TestComparisons(MemoryLeakMixin, TestCase):
         )
 
 
+class TestListInferred(TestCase):
+
+    def test_simple_refine(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            return l
+
+        expected = foo.py_func()
+        got = foo()
+        self.assertEqual(expected, got)
+        self.assertEqual(list(got), [1])
+        self.assertEqual(typeof(got).item_type, typeof(1))
+
+
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
