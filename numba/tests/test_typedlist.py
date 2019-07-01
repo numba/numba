@@ -9,6 +9,7 @@ from numba import int32, types
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
+from numba.typing.typeof import typeof
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
