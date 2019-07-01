@@ -8,6 +8,8 @@ from numba import unittest_support as unittest
 from numba import errors, utils
 import numpy as np
 
+from .support import skip_parfors_unsupported
+
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]
 _global_dict = typed.Dict.empty(int64, int64)
@@ -133,7 +135,7 @@ class TestMiscErrorHandling(unittest.TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             func()
 
-        expected = ["Writing to a", "defined in globals is not supported"]
+        expected = ["The use of a", "in globals, is not supported as globals"]
         for ex in expected:
             self.assertIn(ex, str(raises.exception))
 
@@ -151,6 +153,20 @@ class TestMiscErrorHandling(unittest.TestCase):
             _global_dict[0] = 10
 
         self.check_write_to_globals(foo)
+
+    @skip_parfors_unsupported
+    def test_handling_forgotten_numba_internal_import(self):
+        @njit(parallel=True)
+        def foo():
+            for i in prange(10): # prange is not imported
+                pass
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        expected = ("'prange' looks like a Numba internal function, "
+                    "has it been imported")
+        self.assertIn(expected, str(raises.exception))
 
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):

@@ -4,10 +4,12 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 from numba.compiler import compile_isolated, run_frontend
 from numba import types, rewrites, ir, jit, ir_utils
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, SerialMixin
 
 
 from numba.analysis import dead_branch_prune
+
+_GLOBAL = 123
 
 
 def compile_to_ir(func):
@@ -28,7 +30,7 @@ def compile_to_ir(func):
     return func_ir
 
 
-class TestBranchPrune(MemoryLeakMixin, TestCase):
+class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
     """
     Tests branch pruning
     """
@@ -81,6 +83,9 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 expect_removed.append(branch.falsebr)
             elif prune is None:
                 pass  # nothing should be removed!
+            elif prune == 'both':
+                expect_removed.append(branch.falsebr)
+                expect_removed.append(branch.truebr)
             else:
                 assert 0, "unreachable"
 
@@ -92,9 +97,9 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         try:
             self.assertEqual(new_labels, original_labels - set(expect_removed))
         except AssertionError as e:
-            print("new_labels", new_labels)
-            print("original_labels", original_labels)
-            print("expect_removed", expect_removed)
+            print("new_labels", sorted(new_labels))
+            print("original_labels", sorted(original_labels))
+            print("expect_removed", sorted(expect_removed))
             raise e
 
         cres = compile_isolated(func, args_tys)
@@ -364,7 +369,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         # from the IR mutation
 
         @jit
-        def bug(a,b):
+        def bug(a, b):
             if a.ndim == 1:
                 if b is None:
                     return 10
@@ -376,3 +381,173 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
+
+    def test_global_bake_in(self):
+
+        def impl(x):
+            if _GLOBAL == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        global _GLOBAL
+        tmp = _GLOBAL
+
+        try:
+            _GLOBAL = 5
+
+            def impl(x):
+                if _GLOBAL == 123:
+                    return x
+                else:
+                    return x + 10
+
+            self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+        finally:
+            _GLOBAL = tmp
+
+    def test_freevar_bake_in(self):
+
+        _FREEVAR = 123
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        _FREEVAR = 12
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+
+    def test_redefined_variables_are_not_considered_in_prune(self):
+        # see issue #4163, checks that if a variable that is an argument is
+        # redefined in the user code it is not considered const
+
+        def impl(array, a=None):
+            if a is None:
+                a = 0
+            if a < 0:
+                return 10
+            return 30
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'),),
+                          [None, None],
+                          np.zeros((2, 3)), None)
+
+    def test_comparison_operators(self):
+        # see issue #4163, checks that a variable that is an argument and has
+        # value None survives TypeError from invalid comparison which should be
+        # dead
+
+        def impl(array, a=None):
+            x = 0
+            if a is None:
+                return 10 # dynamic exec would return here
+            # static analysis requires that this is executed with a=None,
+            # hence TypeError
+            if a < 0:
+                return 20
+            return x
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'),),
+                          [False, 'both'],
+                          np.zeros((2, 3)), None)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64,),
+                          [None, None],
+                          np.zeros((2, 3)), 12.)
+
+    def test_redefinition_analysis_same_block(self):
+        # checks that a redefinition in a block with prunable potential doesn't
+        # break
+
+        def impl(array, x, a=None):
+            b = 0
+            if x < 4:
+                b = 12
+            if a is None:
+                a = 0
+            else:
+                b = 12
+            if a < 0:
+                return 10
+            return 30 + b + a
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none'),),
+                          [None, None, None],
+                          np.zeros((2, 3)), 1., None)
+
+    def test_redefinition_analysis_different_block_can_exec(self):
+        # checks that a redefinition in a block that may be executed prevents
+        # pruning
+
+        def impl(array, x, a=None):
+            b = 0
+            if x > 5:
+                a = 11 # a redefined, cannot tell statically if this will exec
+            if x < 4:
+                b = 12
+            if a is None: # cannot prune, cannot determine if re-defn occurred
+                b += 5
+            else:
+                b += 7
+                if a < 0:
+                    return 10
+            return 30 + b
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none'),),
+                          [None, None, None, None],
+                          np.zeros((2, 3)), 1., None)
+
+    def test_redefinition_analysis_different_block_cannot_exec(self):
+        # checks that a redefinition in a block guarded by something that
+        # has prune potential
+
+        def impl(array, x=None, a=None):
+            b = 0
+            if x is not None:
+                a = 11
+            if a is None:
+                b += 5
+            else:
+                b += 7
+            return 30 + b
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'), types.NoneType('none')),
+                          [True, None],
+                          np.zeros((2, 3)), None, None)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'), types.float64),
+                          [True, None],
+                          np.zeros((2, 3)), None, 1.2)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none')),
+                          [None, None],
+                          np.zeros((2, 3)), 1.2, None)

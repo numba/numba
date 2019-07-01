@@ -596,7 +596,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("Will hoist instruction", inst)
         hoisted.append(inst)
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
@@ -605,11 +605,11 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     else:
         if len(diff) > 0:
             not_hoisted.append((inst, "dependency"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because of a dependency.")
         else:
             not_hoisted.append((inst, "not pure"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
@@ -649,7 +649,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     continue
             elif isinstance(inst, parfor.Parfor):
                 new_init_block = []
-                if config.DEBUG_ARRAY_OPT == 1:
+                if config.DEBUG_ARRAY_OPT >= 1:
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
@@ -763,7 +763,7 @@ def _create_gufunc_for_parfor_body(
         warnings.warn(NumbaParallelSafetyWarning(msg, loc))
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
@@ -787,7 +787,7 @@ def _create_gufunc_for_parfor_body(
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("loop_body = ", loop_body, " ", type(loop_body))
@@ -796,7 +796,7 @@ def _create_gufunc_for_parfor_body(
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
     param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "param_dict = ",
             sorted(
@@ -809,7 +809,7 @@ def _create_gufunc_for_parfor_body(
     ind_dict = legalize_names_with_typemap(loop_indices, typemap)
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("ind_dict = ", sorted(ind_dict.items()), " ", type(ind_dict))
         print(
             "legal_loop_indices = ",
@@ -848,7 +848,7 @@ def _create_gufunc_for_parfor_body(
     loop_body_var_table = get_name_var_table(loop_body)
     sentinel_name = get_unused_var_name("__sentinel__", loop_body_var_table)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "legal parfor_params = ",
             parfor_params,
@@ -1451,7 +1451,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # ----------------------------------------------------------------------------
     # prepare data
-    data = builder.inttoptr(zero, byte_ptr_t)
+    data = cgutils.get_null_value(byte_ptr_t)
 
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])

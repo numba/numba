@@ -120,6 +120,7 @@ class TestParforsBase(TestCase):
         scheduler_type = kwargs.pop('scheduler_type', None)
         check_fastmath = kwargs.pop('check_fastmath', None)
         fastmath_pcres = kwargs.pop('fastmath_pcres', None)
+        check_scheduling = kwargs.pop('check_scheduling', True)
 
         def copy_args(*args):
             if not args:
@@ -150,7 +151,8 @@ class TestParforsBase(TestCase):
 
         self.assertEqual(type(njit_output), type(parfor_output))
 
-        self.check_scheduling(cpfunc, scheduler_type)
+        if check_scheduling:
+            self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
         if fastmath_pcres is not None:
@@ -1403,6 +1405,67 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_unsupported
+    def test_reshape_with_neg_one(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_reshape_with_large_neg(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1307, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_reshape_with_too_many_neg_one(self):
+        # issue3314
+        with self.assertRaises(ValueError) as raised:
+            @njit(parallel=True)
+            def test_impl(a, b):
+                rm = np.zeros((b, b, 1), dtype=np.float64)
+                sub_a = a[0:b]
+                a = sub_a.size
+                b = a / 1
+                z = sub_a.reshape(-1, -1)
+                result_data = sub_a / z
+                rm[:,:,0] = result_data
+                return rm
+
+            a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                       7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+            b = 3
+            test_impl(a, b)
+
+        msg = ("The reshape API may only include one negative argument.")
+        self.assertIn(msg, str(raised.exception))
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -2545,6 +2608,16 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.ones(10))
 
+    @skip_unsupported
+    def test_parfor_slice20(self):
+        # issues #4075, slice size
+        def test_impl():
+            a = np.ones(10)
+            c = a[1:]
+            s = len(c)
+            return s
+
+        self.check(test_impl, check_scheduling=False)
 
 class TestParforsOptions(TestParforsBase):
 

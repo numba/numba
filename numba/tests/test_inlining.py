@@ -50,6 +50,10 @@ class InlineTestPipeline(numba.compiler.BasePipeline):
                 "ensure IR is legal prior to lowering")
         self.add_lowering_stage(pm)
         self.add_cleanup_stage(pm)
+        pm.add_stage(self.stage_preserve_final_ir, "preserve IR")
+
+    def stage_preserve_final_ir(self):
+        self.metadata['final_func_ir'] = self.func_ir.copy()
 
     def stage_inline_test_pass(self):
         # assuming the function has one block with one call inside
@@ -180,6 +184,45 @@ class TestInlining(TestCase):
                         break
 
         self.assertTrue('b' in var_map)
+
+    @skip_unsupported
+    def test_inline_call_branch_pruning(self):
+        # branch pruning pass should run properly in inlining to enable
+        # functions with type checks
+        @njit
+        def foo(A=None):
+            if A is None:
+                return 2
+            else:
+                return A
+
+        def test_impl(A=None):
+            return foo(A)
+
+        class InlineTestPipelinePrune(InlineTestPipeline):
+            def stage_inline_test_pass(self):
+                # assuming the function has one block with one call inside
+                assert len(self.func_ir.blocks) == 1
+                block = list(self.func_ir.blocks.values())[0]
+                for i, stmt in enumerate(block.body):
+                    if (guard(find_callname, self.func_ir, stmt.value)
+                            is not None):
+                        inline_closure_call(self.func_ir, {}, block, i,
+                            foo.py_func, self.typingctx,
+                            (self.typemap[stmt.value.args[0].name],),
+                            self.typemap, self.calltypes)
+                        break
+
+        # make sure inline_closure_call runs in full pipeline
+        j_func = njit(pipeline_class=InlineTestPipelinePrune)(test_impl)
+        A = 3
+        self.assertEqual(test_impl(A), j_func(A))
+        self.assertEqual(test_impl(), j_func())
+
+        # make sure IR doesn't have branches
+        fir = j_func.overloads[(types.Omitted(None),)].metadata['final_func_ir']
+        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        self.assertEqual(len(fir.blocks), 1)
 
 if __name__ == '__main__':
     unittest.main()

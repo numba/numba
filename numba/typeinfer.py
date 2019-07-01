@@ -14,17 +14,20 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import logging
 import operator
 import contextlib
 import itertools
 from pprint import pprint
-import traceback
 from collections import OrderedDict
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -143,17 +146,20 @@ class ConstraintNetwork(object):
                 try:
                     constraint(typeinfer)
                 except TypingError as e:
+                    _logger.debug("captured error", exc_info=e)
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
                     errors.append(e)
-                except Exception:
-                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                    e = TypingError(msg.format(con=constraint,
-                                               err=traceback.format_exc(),
-                                               sep='--%<' + '-' * 76),
-                                    loc=constraint.loc,
-                                    highlighting=False)
+                except Exception as e:
+                    _logger.debug("captured error", exc_info=e)
+                    msg = ("Internal error at {con}.\n"
+                           "{err}\nEnable logging at debug level for details.")
+                    e = TypingError(
+                        msg.format(con=constraint, err=str(e)),
+                        loc=constraint.loc,
+                        highlighting=False,
+                    )
                     errors.append(e)
         return errors
 
@@ -1323,8 +1329,19 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
-                msg = _termcolor.errmsg("Untyped global name '%s':") + " %s"
-                e.patch_message(msg % (gvar.name, e))
+                nm = gvar.name
+                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                msg += " %s" # interps the actual error
+
+                # if the untyped global is a numba internal function then add
+                # to the error message asking if it's been imported.
+                from numba import special
+                if nm in special.__all__:
+                    tmp = ("\n'%s' looks like a Numba internal function, has "
+                           "it been imported (i.e. 'from numba import %s')?\n" %
+                           (nm, nm))
+                    msg += _termcolor.errmsg(tmp)
+                e.patch_message(msg % e)
                 raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:

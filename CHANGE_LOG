@@ -1,3 +1,13 @@
+Version 0.44.1
+--------------
+
+This patch release addresses some regressions reported in the 0.44.0 release:
+
+- PR #4165: Fix #4164 issue with NUMBAPRO_NVVM.
+- PR #4172: Abandon branch pruning if an arg name is redefined. (Fixes #4163)
+- PR #4183: Fix #4156. Problem with defining in-loop variables.
+
+
 Version 0.44.0
 --------------
 

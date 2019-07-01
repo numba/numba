@@ -87,7 +87,6 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
-    declmethod(extract_unicode);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
@@ -119,6 +118,8 @@ build_c_helpers_dict(void)
 
     /* Unicode string support */
     declmethod(extract_unicode);
+    declmethod(gettyperecord);
+    declmethod(get_PyUnicode_ExtendedCase);
 
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);

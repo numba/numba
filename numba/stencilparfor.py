@@ -130,7 +130,7 @@ class StencilPass(object):
         gen_nodes = []
         stencil_blocks = stencil_ir.blocks
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("_mk_stencil_parfor", label, in_args, out_arr, index_offsets,
                    return_type, stencil_func, stencil_blocks)
             ir_utils.dump_blocks(stencil_blocks)
@@ -147,12 +147,12 @@ class StencilPass(object):
             name_var_table,
             self.typemap,
             self.calltypes)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after copy_propagate")
             ir_utils.dump_blocks(stencil_blocks)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names, stencil_ir,
                              self.typemap)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after removing dead code")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -171,7 +171,7 @@ class StencilPass(object):
              stencil_ir, parfor_vars, in_args, index_offsets, stencil_func,
              arg_to_arr_dict)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after replace stencil accesses")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -211,7 +211,7 @@ class StencilPass(object):
             tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
             for_replacing_ret.append(tuple_assign)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after creating parfor index var")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -323,7 +323,7 @@ class StencilPass(object):
         self.replace_return_with_setitem(stencil_blocks, exit_value_var,
                                          parfor_body_exit_label)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after replacing return")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -349,7 +349,7 @@ class StencilPass(object):
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
         stencil_blocks[max(stencil_blocks.keys())].body.pop()
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after adding SetItem")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -690,7 +690,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     max_label = max(stencil_blocks.keys())
     ir_utils._max_label = max_label
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")
         ir_utils.dump_blocks(stencil_blocks)
 
@@ -702,7 +702,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         typemap[new_var.name] = typ  # add new var type for overall function
     ir_utils.replace_vars(stencil_blocks, var_dict)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("After replace_vars")
         ir_utils.dump_blocks(stencil_blocks)
 
@@ -715,13 +715,13 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     for block in stencil_blocks.values():
         for stmt in block.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
-                if config.DEBUG_ARRAY_OPT == 1:
+                if config.DEBUG_ARRAY_OPT >= 1:
                     print("input_dict", input_dict, stmt.value.index,
                                stmt.value.name, stmt.value.index in input_dict)
                 arg_to_arr_dict[stmt.value.name] = input_dict[stmt.value.index].name
                 stmt.value = input_dict[stmt.value.index]
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("arg_to_arr_dict", arg_to_arr_dict)
         print("After replace arg with arr")
         ir_utils.dump_blocks(stencil_blocks)

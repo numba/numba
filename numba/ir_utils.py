@@ -500,7 +500,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     if alias_map is None or arg_aliases is None:
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
@@ -802,7 +802,7 @@ def copy_propagate(blocks, typemap):
                                  | (in_copies[label] - kill_copies[label]))
         old_point = new_point
         new_point = copy.deepcopy(out_copies)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("copy propagate out_copies:", out_copies)
     return in_copies, out_copies
 
@@ -1002,7 +1002,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
     """Debug print function IR, with an optional blocks argument
     that may differ from the IR's original blocks.
     """
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         ir_blocks = func_ir.blocks
         func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
@@ -1057,7 +1057,7 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
         order = find_topo_order(blocks)
     else:
         order = list(blocks.keys())
-    
+
     for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
@@ -1355,7 +1355,7 @@ def simplify(func_ir, typemap, calltypes):
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after simplify")
 
 class GuardException(Exception):
@@ -1500,7 +1500,7 @@ def find_const(func_ir, var):
     """
     require(isinstance(var, ir.Var))
     var_def = get_definition(func_ir, var)
-    require(isinstance(var_def, ir.Const))
+    require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
@@ -1831,7 +1831,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
-    
+
     # issue 2195: check for excessively large tuples
     for arg_name in func_ir.arg_names:
         if arg_name in typemap and \
@@ -1918,12 +1918,13 @@ def raise_on_unsupported_feature(func_ir, typemap):
             # checks for globals that are also reflected
             if isinstance(stmt.value, ir.Global):
                 ty = typemap[stmt.target.name]
-                msg = ("Writing to a %s defined in globals is not "
-                        "supported as globals are considered compile-time "
-                        "constants.")
+                msg = ("The use of a %s type, assigned to variable '%s' in "
+                       "globals, is not supported as globals are considered "
+                       "compile-time constants and there is no known way to "
+                       "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
                     isinstance(ty, types.DictType)):
-                    raise TypingError(msg % ty, loc=stmt.loc)
+                    raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:

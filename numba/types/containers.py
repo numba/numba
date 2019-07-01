@@ -588,7 +588,7 @@ class DictItemsIterableType(SimpleIterableType):
 
 
 class DictKeysIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iteratable type for .keys()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -600,7 +600,7 @@ class DictKeysIterableType(SimpleIterableType):
 
 
 class DictValuesIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iteratable type for .values()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)

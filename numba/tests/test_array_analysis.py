@@ -337,6 +337,28 @@ class TestArrayAnalysis(TestCase):
                                asserts=[self.with_assert('A', 'B'),
                                         self.without_assert('C', 'D')])
 
+        def test_11():
+            a = np.ones(5)
+            b = np.ones(5)
+            c = a[1:]
+            d = b[:-1]
+            e = len(c)
+            f = len(d)
+            return e == f
+        self._compile_and_test(test_11, (),
+                               equivs=[self.with_equiv('e', 'f')])
+
+        def test_12():
+            a = np.ones(25).reshape((5,5))
+            b = np.ones(25).reshape((5,5))
+            c = a[1:,:]
+            d = b[:-1,:]
+            e = c.shape[0]
+            f = d.shape[0]
+            return e == f
+        self._compile_and_test(test_12, (),
+                               equivs=[self.with_equiv('e', 'f')])
+
         def test_tup_arg(T):
             T2 = T
             return T2[0]
@@ -928,6 +950,25 @@ class TestArrayAnalysisParallelRequired(TestCase):
         X2 = np.zeros(t_obj.T)
         self.assertEqual(
             njit(test_impl, parallel=True)(t_obj, X1), test_impl(t_obj, X2))
+
+    @skip_unsupported
+    def test_slice_shape_issue_3380(self):
+        # these tests shouldn't throw error in array analysis
+        def test_impl1():
+            a = slice(None, None)
+            return True
+
+        self.assertEqual(njit(test_impl1, parallel=True)(), test_impl1())
+
+        def test_impl2(A, a):
+            b = a
+            return A[b]
+
+        A = np.arange(10)
+        a = slice(None)
+        np.testing.assert_array_equal(
+            njit(test_impl2, parallel=True)(A, a), test_impl2(A, a))
+
 
 if __name__ == '__main__':
     unittest.main()

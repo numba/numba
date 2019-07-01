@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import sys
 import os
 import multiprocessing as mp
+from functools import partial
 
 from numba.config import IS_WIN32, IS_OSX
 from numba.cuda.cudadrv import nvvm
@@ -17,6 +18,7 @@ from numba.cuda.cuda_paths import (
     _get_nvvm_path_decision,
     _get_cudalib_dir_path_decision,
     get_system_ctk,
+    _get_nvvm_path,
 )
 
 
@@ -192,6 +194,21 @@ class TestNvvmLookUp(LibraryLookupBase):
     def do_set_nvvm():
         os.environ['NUMBAPRO_NVVM'] = 'nbp_nvvm'
         return True, _get_nvvm_path_decision()
+
+    def test_nvvm_issue4164(self):
+        # Make sure NUMBAPRO_NVVM can be a file.
+        nvvm_path = _get_nvvm_path().info
+        self.assertTrue(os.path.isfile(nvvm_path))
+        got = self.remote_do(
+            partial(self.do_get_nvvm_path, nvvm_path=nvvm_path),
+        )
+        self.assertEqual(got.by, 'NUMBAPRO_NVVM')
+        self.assertEqual(got.info, nvvm_path)
+
+    @staticmethod
+    def do_get_nvvm_path(nvvm_path):
+        os.environ['NUMBAPRO_NVVM'] = nvvm_path
+        return True, _get_nvvm_path()
 
 
 @skip_on_cudasim('Library detection unsupported in the simulator')

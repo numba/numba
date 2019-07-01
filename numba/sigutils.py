@@ -18,7 +18,7 @@ def _parse_signature_string(signature_str):
 
 def normalize_signature(sig):
     """
-    From *sig* (a signature specification), return a ``(return_type, args)``
+    From *sig* (a signature specification), return a ``(args, return_type)``
     tuple, where ``args`` itself is a tuple of types, and ``return_type``
     can be None if not specified.
     """

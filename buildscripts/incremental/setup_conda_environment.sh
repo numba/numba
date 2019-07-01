@@ -2,32 +2,16 @@
 
 set -v -e
 
-network_tolerant_conda() {
-    local cmd=$1
-    shift
-    local attempts=$1
-    shift
-    for i in `seq $(($attempts + 1))`; do
-        conda $cmd -q -y $*
-        if [ $? == 0 ]; then
-                break;
-        else
-            if [ $i != $(($attempts + 1)) ]; then
-                echo "Connection/conda problem... retrying (attempt $i/$attempts)"
-            else
-                msg="Unresolved connection/conda problem...
-                     exiting after $attempts additional attempts"
-                echo $msg
-                exit 1
-            fi
-        fi
-    done
-}
+# first configure conda to have more tolerance of network problems, these
+# numbers are not scientifically chosen, just merely larger than defaults
+conda config --write-default
+conda config --set remote_connect_timeout_secs 30.15
+conda config --set remote_max_retries 10
+conda config --set remote_read_timeout_secs 120.2
+conda info
+conda config --show
 
-CONDA_INSTALL="network_tolerant_conda install 3"
-CONDA_CREATE="network_tolerant_conda create 3"
-CONDA_REMOVE="network_tolerant_conda remove 3"
-CONDA_EXPORT="network_tolerant_conda export 3"
+CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
 
@@ -39,20 +23,19 @@ fi
 
 # Deactivate any environment
 source deactivate
-
 # Display root environment (for debugging)
 conda list
 # Clean up any left-over from a previous build
 # (note workaround for https://github.com/conda/conda/issues/2679:
 #  `conda env remove` issue)
-$CONDA_REMOVE --all -n $CONDA_ENV
+conda remove --all -q -y -n $CONDA_ENV
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 
-$CONDA_CREATE -n $CONDA_ENV ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
 
 # Activate first
 set +v
