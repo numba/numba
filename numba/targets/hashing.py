@@ -659,4 +659,3 @@ def unicode_hash(val):
             return _Py_HashBytes(val._data, kindwidth * _len)
 
     return impl
-
