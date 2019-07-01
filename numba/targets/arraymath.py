@@ -3560,32 +3560,22 @@ def np_select(condlist, choicelist, default=0):
             out = np.where(cond, choice, out)
         return out
 
-    def np_select_tuple_impl(condlist, choicelist, default=0):
-        if len(condlist) != len(choicelist):
-            raise ValueError('list of cases must be same length as list of conditions')
-        out = default * np.ones(len(choicelist[0]))
-        # out = default * np.ones(shape, dtyp)
-        #should use reversed+zip, but reversed is not available
-        for i in range(len(condlist) - 1, -1, -1):
-            cond = condlist[i]
-            choice = choicelist[i]
-            out = np.where(cond, choice, out)
-        return out
-
-
-    # print('here' , condlist[0].dtype)
     # first we check the types of the input parameters
     if not isinstance(condlist, (types.List, types.UniTuple)):
         raise TypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise TypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (int, types.scalars.Number)):
-        raise TypeError('default must be a scalar')
+    if not isinstance(default, (types.Number, types.Boolean)):
+        raise TypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
-    if not (isinstance(condlist[0], types.Array)
-              or isinstance(condlist[0], types.UniTuple)):
-        raise TypeError('items of condlist must be arrays or tuples')
+    # implementation note: if in the future numba's np.where accepts tuples
+    # as elements of condlist, then the check below should be extended to
+    # accept tuples
+    if not isinstance(condlist[0], types.Array):
+        raise TypeError('items of condlist must be arrays')
+    if not isinstance(choicelist[0], types.Array):
+        raise TypeError('items of choicelist must be arrays')
     # the types of the parameters and their contents have been checked,
     # now we test the dtypes of the content of parameters
     if isinstance(condlist[0], types.Array):
@@ -3602,11 +3592,8 @@ def np_select(condlist, choicelist, default=0):
     if isinstance(condlist[0], types.Array) and condlist[0].ndim < 1:
         raise TypeError('condlist arrays must be of at least dimension 1')
 
-    if isinstance(condlist[0], types.Array):
-        return np_select_arr_impl
-    else:
-        print(type(condlist[0]))
-        return np_select_tuple_impl
+    return np_select_arr_impl
+
 
 
 #----------------------------------------------------------------------------
