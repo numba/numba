@@ -472,28 +472,26 @@ def rewrite_semantic_constants(func_ir, called_args):
                     if getattr(val, 'op', None) == 'getattr':
                         # rewrite Array.ndim as const(ndim)
                         if val.attr == 'ndim':
-                            name = val.value.name
-                            if name in func_ir.arg_names:
-                                idx = func_ir.arg_names.index(name)
-                                argty = called_args[idx]
+                            arg_def = guard(get_definition, func_ir, val.value)
+                            if isinstance(arg_def, ir.Arg):
+                                argty = called_args[arg_def.index]
                                 if isinstance(argty, types.Array):
                                     rewrite_statement(func_ir, stmt,
-                                                      argty.ndim)
+                                                    argty.ndim)
 
                     # rewrite len(tuple) as const(len(tuple))
                     if getattr(val, 'op', None) == 'call':
                         func = guard(get_definition, func_ir, val.func)
                         if (func is not None and isinstance(func, ir.Global) and
-                                func.value == len):
+                                getattr(func, 'value', None) is len):
 
                             (arg,) = val.args
-                            name = arg.name
-                            if name in func_ir.arg_names:
-                                idx = func_ir.arg_names.index(name)
-                                argty = called_args[idx]
+                            arg_def = guard(get_definition, func_ir, arg)
+                            if isinstance(arg_def, ir.Arg):
+                                argty = called_args[arg_def.index]
                                 if isinstance(argty, types.BaseTuple):
                                     rewrite_statement(func_ir, stmt,
-                                                      argty.count)
+                                                    argty.count)
     if DEBUG > 1:
         print("after".center(80, '*'))
         func_ir.dump()

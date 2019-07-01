@@ -3,9 +3,9 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from numba.compiler import compile_isolated, run_frontend
-from numba import types, rewrites, ir, jit, ir_utils
+from numba import types, rewrites, ir, jit, ir_utils, errors, njit
 from .support import TestCase, MemoryLeakMixin, SerialMixin
-
+from .support import TestCase, MemoryLeakMixin
 
 from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
@@ -104,8 +104,12 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             raise e
 
         cres = compile_isolated(func, args_tys)
-        res = cres.entry_point(*args)
-        expected = func(*args)
+        if args is None:
+            res = cres.entry_point()
+            expected = func()
+        else:
+            res = cres.entry_point(*args)
+            expected = func(*args)
         self.assertEqual(res, expected)
 
 
@@ -591,3 +595,19 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         self.assert_prune(impl, (types.UniTuple(types.int64, 2),), [True,
                                                                     'both'],
                           tuple([1, 2]))
+
+    def test_attr_not_len(self):
+        # The purpose of this test is to make sure that the conditions guarding
+        # the rewrite part do not themselves raise exceptions.
+        # This produces an `ir.Expr` call node for `float.as_integer_ratio`,
+        # which is a getattr() on `float`.
+
+        @njit
+        def test():
+            float.as_integer_ratio(1.23)
+
+        # this should raise a TypingError
+        with self.assertRaises(errors.TypingError) as e:
+            test()
+
+        self.assertIn("Unknown attribute 'as_integer_ratio'", str(e.exception))
