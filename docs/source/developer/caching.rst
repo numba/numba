@@ -14,10 +14,10 @@ The Implementation
 Caching is done by saving the compiled *object code*, the ELF object of the
 executable code.  By using the *object code*, cached functions have minimal
 overhead because no compilation is needed. The cached data is saved under the
-``__pycache__`` directory. The index of the cache is stored in a ``.nbi``
-file, with one index per function, and it lists all the overloaded signatures
-compiled for the function. The *object code* is stored in files with an
-``.nbc`` extension, one file per overload.
+cache directory (see :envvar:`NUMBA_CACHE_DIR`). The index of the cache is
+stored in a ``.nbi`` file, with one index per function, and it lists all the
+overloaded signatures compiled for the function. The *object code* is stored in
+files with an ``.nbc`` extension, one file per overload.
 
 
 Requirements for Cacheability
@@ -65,3 +65,9 @@ This is a list of known limitation of the cache:
   from cache. This also affects dictionary usage (i.e. ``numba.typed.Dict``).
 - Cache invalidation fails to recognize changes in symbols defined in a
   different file.
+
+Related Environment Variables
+-----------------------------
+
+See :ref:`env-vars for caching <numba-envvars-caching>`.
+
