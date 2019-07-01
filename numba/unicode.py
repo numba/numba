@@ -381,16 +381,22 @@ def _find(substr, s):
             return i
     return -1
 
-
 @njit
-def _rfind(substr, s, begin, e):
-    if e == -1:
-        e = len(s)
-    i = e - len(substr)
-    while i >= begin:
-        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
-            return i
-        i = i - 1
+def _rfind_special_case(src, sub, beg, end, src_len):
+    if end < 0:
+        new_end = src_len + end
+        if(new_end >= src_len):
+            return 0
+        else:
+            return new_end
+    elif end > src_len:
+        if (beg > src_len):
+            return -1
+        else:
+            return src_len
+    else:
+        return end
+
     return -1
 
 
@@ -544,10 +550,71 @@ def unicode_find(a, b):
 
 
 @overload_method(types.UnicodeType, 'rfind')
-def unicode_rfind(src, sub, start=0, end=-1):
+def unicode_rfind(src, sub, start=None, end=None):
     if isinstance(sub, types.UnicodeType):
-        def rfind_impl(src, sub, begin=start, e=end):
-            return _rfind(sub, src, begin, e)
+        def rfind_impl(src, sub, start=start, e=end):
+            index = -1
+            src_len = len(src)
+            sub_len = len(sub)
+            if(sub_len == 0):
+                if start is None:
+                    return src_len
+                else:
+                    return _rfind_special_case(src, sub, start, e, src_len)
+
+            if start is None:           #This means no optional arguments are given
+                begin = 0
+                new_end = src_len
+            else:
+                begin = start
+                new_end = e
+            if (begin < 0 and new_end < 0 and begin < new_end):
+                cond_flag = 1
+                neg_idx = 1
+            else:
+                cond_flag = 0
+                neg_idx = 0
+            if (begin >= 0 or cond_flag == 1):
+                if(new_end < 0 and cond_flag == 0):
+                    new_end = src_len + new_end      # Positive end bound makes the search easier
+                    if(new_end < begin):
+                        return -1
+                if(cond_flag == 1):                  # If both bounds are negative then turn it into positive limits
+                    begin = begin + src_len
+                    new_end = new_end + src_len
+                if( (new_end - begin) == sub_len):
+                    temp_begin = begin
+                else:
+                    temp_begin = begin + sub_len - 1
+                if((new_end == begin) & sub_len == 1):        #This means only one char needs to be compared
+                    src_char = _get_code_point(src, begin)
+                    sub_char = _get_code_point(sub, 0)
+                    if(src_char == sub_char):
+                        return begin
+                    else:
+                        return -1
+                i = new_end - 1
+                while (i >= temp_begin):
+                    temp_count = 0
+                    offset = 0
+                    for j in range(sub_len-1, -1, -1):
+                        src_char = _get_code_point(src, i - offset)
+                        sub_char = _get_code_point(sub, j)
+                        if src_char != sub_char:
+                            break
+                        else:
+                            temp_count = temp_count + 1
+                            offset = offset + 1
+                    if temp_count == sub_len:
+                        if (neg_idx == 1):
+                            return (i - sub_len + 1) - src_len
+                        else:
+                            return i - sub_len + 1
+                    else:
+                        i = i - 1
+                return index
+            else:
+                return -1
         return rfind_impl
 
 
