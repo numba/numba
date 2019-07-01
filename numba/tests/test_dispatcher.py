@@ -1641,6 +1641,53 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
     q.put(r2)
 
 
+class TestCacheMultipleFilesWithSignature(unittest.TestCase):
+    # Regression test for https://github.com/numba/numba/issues/3658
+
+    _numba_parallel_test_ = False
+
+    source_text_file1 = """
+from file2 import function2
+"""
+    source_text_file2 = """
+from numba import njit
+
+@njit('float64(float64)', cache=True)
+def function1(x):
+    return x
+
+@njit('float64(float64)', cache=True)
+def function2(x):
+    return x
+"""
+
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+
+        self.file1 = os.path.join(self.tempdir, 'file1.py')
+        with open(self.file1, 'w') as fout:
+            print(self.source_text_file1, file=fout)
+
+        self.file2 = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2, 'w') as fout:
+            print(self.source_text_file2, file=fout)
+
+    def test_caching_mutliple_files_with_signature(self):
+        # Execute file1.py
+        popen = subprocess.Popen([sys.executable, self.file1],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, 0)
+
+        # Execute file2.py
+        popen = subprocess.Popen([sys.executable, self.file2],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, 0)
+
+
 class TestDispatcherFunctionBoundaries(TestCase):
     def test_pass_dispatcher_as_arg(self):
         # Test that a Dispatcher object can be pass as argument
