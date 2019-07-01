@@ -300,7 +300,7 @@ list objects.  Therefore, the nesting of list comprehension here is
 not a problem since a multi-dimensional array is being created here
 instead of a nested list.
 
-Additionally, Numba supports parallel array comphension when combined
+Additionally, Numba supports parallel array comprehension when combined
 with the :ref:`parallel_jit_option` option on CPUs.
 
 set
