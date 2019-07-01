@@ -214,6 +214,17 @@ The following operations are supported:
 list
 ----
 
+
+.. warning::
+    As of version 0.45.0 the internal implementation for the list datatype in
+    Numba is changing. Until that version, only a single implementation of the
+    list datatype was available, the so-called *reflected-list* (see below).
+    However, because of its limitations it was deprecated with version 0.44.0
+    and a new implementation, the so-called *typed-list*, is available as an
+    experimental feature as of version 0.45.0. Note however, that when using
+    `[]` or `list()` in version 0.45.0 a reflected-list will be instantiated
+    and you must explicitly import the typed-list from `numba.type` to use it.
+
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
 Numba will reject any list containing objects of different types, even if
@@ -259,6 +270,44 @@ of this limitation.
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
+
+Typed List
+''''''''''
+
+.. note::
+  ``numba.typed.List`` is an experimental feature, if you encounter any bugs in
+  functionality or suffer from unexpectedly bad performance, please report
+  this, ideally by opening an issue on the Numba issue tracker.
+
+As of version 0.45.0 a new implementation of the list datatype is available, the
+so-called *typed-list*. This is C backed, type homogeneous list datatype and is
+an improvement over the *reflected-list* mentioned above. No more reflection is
+required which should make it significantly more efficient for larger lists
+and lists can now  be arbitrarily nested. In order to use it in version 0.45.0,
+you will need to import it explicitly::
+
+    In [1]: from numba.typed import List
+
+    In [2]: from numba import njit
+
+    In [3]: @njit
+    ...: def foo(l):
+    ...:     l.append(23)
+    ...:     return l
+    ...:
+
+    In [4]: mylist = List()
+
+    In [5]: mylist.append(1)
+
+    In [6]: foo(mylist)
+    Out[6]: ListType[int64]([1, 23])
+
+
+.. note::
+    As the typed-list stabilizes it will fully replace the reflected-list and the
+    constructors `[]` and `list()` will create a typed-list instead of a
+    reflected one.
 
 .. _pysupported-comprehension:
 
