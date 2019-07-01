@@ -2809,6 +2809,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_select_exception(self):
         np_nbfunc = njit(np_select)
         x = np.arange(10)
+        self.disable_leak_check()
         for condlist, choicelist, default, expected_error, expected_text in [
             # Each test case below is one tuple.
             # Each tuple is separated by the description of the intended error
