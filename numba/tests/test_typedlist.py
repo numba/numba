@@ -553,6 +553,35 @@ class TestListInferred(TestCase):
         self.assertEqual(list(got), [1])
         self.assertEqual(typeof(got).item_type, typeof(1))
 
+    def test_refine_extend_list(self):
+        @njit
+        def foo():
+            a = List()
+            b = List()
+            for i in range(3):
+                b.append(i)
+            a.extend(b)
+            return a
+
+        expected = foo.py_func()
+        got = foo()
+        self.assertEqual(expected, got)
+        self.assertEqual(list(got), [0, 1, 2])
+        self.assertEqual(typeof(got).item_type, typeof(1))
+
+    def test_refine_extend_set(self):
+        @njit
+        def foo():
+            l = List()
+            l.extend((0, 1, 2))
+            return l
+
+        expected = foo.py_func()
+        got = foo()
+        self.assertEqual(expected, got)
+        self.assertEqual(list(got), [0, 1, 2])
+        self.assertEqual(typeof(got).item_type, typeof(1))
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 

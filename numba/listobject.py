@@ -817,25 +817,43 @@ def impl_count(l, item):
 def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
         return
-
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
-    if isinstance(iterable, types.ListType):
-        def impl(l, iterable):
-            # guard against l.extend(l)
-            if l is iterable:
-                iterable = iterable.copy()
-            for i in iterable:
-                l.append(i)
+    def select_impl():
+        if isinstance(iterable, types.ListType):
+            def impl(l, iterable):
+                # guard against l.extend(l)
+                if l is iterable:
+                    iterable = iterable.copy()
+                for i in iterable:
+                    l.append(i)
 
-        return impl
+            return impl
+        else:
+            def impl(l, iterable):
+                for i in iterable:
+                    l.append(i)
+
+            return impl
+
+    if l.is_precise():
+        # Handle the precise case.
+        return select_impl()
     else:
-        def impl(l, iterable):
-            for i in iterable:
-                l.append(i)
-
-        return impl
+        # Handle the imprecise case, try to 'guess' the underlying type of the
+        # values in the iterable.
+        if hasattr(iterable, "dtype"):  # tuples and arrays
+            ty = iterable.dtype
+        elif hasattr(iterable, "item_type"):  # lists
+            ty = iterable.item_type
+        else:
+            raise TypingError("unable to extend list, iterable is missing "
+                              "either *dtype* or *item_type*")
+        l = l.refine(ty)
+        # Create the signature that we wanted this impl to have
+        sig = typing.signature(types.void, l, iterable)
+        return sig, select_impl()
 
 
 @overload_method(types.ListType, 'insert')
