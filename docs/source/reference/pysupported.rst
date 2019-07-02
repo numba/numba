@@ -182,6 +182,8 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.islower()``
+* ``.lower()``
 * ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes

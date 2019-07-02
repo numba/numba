@@ -55,7 +55,7 @@ class TestMultiGPUContext(SerialMixin, unittest.TestCase):
                 with gpu:
                     arr = dA.copy_to_host()
 
-            except BaseException as e:
+            except Exception as e:
                 results[ridx] = e
 
             else:

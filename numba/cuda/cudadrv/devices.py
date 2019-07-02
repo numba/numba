@@ -160,6 +160,8 @@ class _Runtime(object):
                         msg = ('Numba cannot operate on non-primary'
                                ' CUDA context {:x}')
                         raise RuntimeError(msg.format(ac.context_handle.value))
+                    # Ensure the context is ready
+                    ctx.prepare_for_use()
                 return ctx
 
     def _activate_context_for(self, devnum):

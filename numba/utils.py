@@ -15,6 +15,7 @@ from types import ModuleType
 import numpy as np
 
 from .six import *
+from .errors import UnsupportedError
 try:
     # preferred over pure-python StringIO due to threadsafety
     # note: parallel write to StringIO could cause data to go missing
@@ -77,10 +78,18 @@ try:
     from inspect import Parameter as pyParameter
 except ImportError:
     try:
-        from funcsigs import signature as pysignature
+        from funcsigs import signature as _pysignature
         from funcsigs import Signature as pySignature
         from funcsigs import Parameter as pyParameter
         from funcsigs import BoundArguments
+
+        def pysignature(*args, **kwargs):
+            try:
+                return _pysignature(*args, **kwargs)
+            except ValueError as e:
+                msg = ("Cannot obtain a signature for: %s. The error message "
+                       "from funcsigs was: '%s'." % (args,  e.message))
+                raise UnsupportedError(msg)
 
         # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3
         # This patch is from https://github.com/aliles/funcsigs/pull/30/files
