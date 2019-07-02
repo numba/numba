@@ -9,7 +9,7 @@ from numba import int32, types
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
-from numba.typing.typeof import typeof
+from numba import typeof
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -527,11 +527,24 @@ class TestComparisons(MemoryLeakMixin, TestCase):
 
 class TestListInferred(TestCase):
 
-    def test_simple_refine(self):
+    def test_simple_refine_append(self):
         @njit
         def foo():
             l = List()
             l.append(1)
+            return l
+
+        expected = foo.py_func()
+        got = foo()
+        self.assertEqual(expected, got)
+        self.assertEqual(list(got), [1])
+        self.assertEqual(typeof(got).item_type, typeof(1))
+
+    def test_simple_refine_insert(self):
+        @njit
+        def foo():
+            l = List()
+            l.insert(0, 1)
             return l
 
         expected = foo.py_func()

@@ -865,7 +865,17 @@ def impl_insert(l, index, item):
                 # finally, insert the item
                 l[index] = item
 
-        return impl
+        if l.is_precise():
+            # Handle the precise case.
+            return impl
+        else:
+            # Handle the imprecise case
+            l = l.refine(item)
+            # Re-bind the item type to match the arguments.
+            itemty = l.item_type
+            # Create the signature that we wanted this impl to have.
+            sig = typing.signature(types.void, l, INDEXTY, itemty)
+            return sig, impl
     else:
         raise TypingError("list insert indices must be signed integers")
 

@@ -244,6 +244,8 @@ class List(MutableSequence):
         _delitem(self, i)
 
     def insert(self, i, item):
+        if not self._typed:
+            self._initialise_list(item)
         _insert(self, i, item)
 
     def count(self, item):
