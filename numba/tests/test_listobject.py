@@ -1353,6 +1353,22 @@ class TestIter(MemoryLeakMixin, TestCase):
             sum(items)
         )
 
+    def test_list_iter_self_mutation(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo():
+            l = listobject.new_list(int32)
+            l.extend((1, 2, 3, 4))
+            for i in l:
+                l.append(i)
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo()
+        self.assertIn(
+            'list was mutated during iteration'.format(**locals()),
+            str(raises.exception),
+        )
 
 class TestStringItem(MemoryLeakMixin, TestCase):
     """Test list can take strings as items. """

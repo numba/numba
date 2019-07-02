@@ -1062,12 +1062,21 @@ def impl_iterator_iternext(context, builder, sig, args, result):
     item_raw_ptr = cgutils.alloca_once(builder, ll_bytes)
 
     status = builder.call(iternext, (it.state, item_raw_ptr))
-    # TODO: no handling of error state i.e. mutated list
-    #       all errors are treated as exhausted iterator
-    is_valid = builder.icmp_signed('==', status, status.type(int(ListStatus.LIST_OK)))
+
+    # check for list mutation
+    mutated_status = status.type(int(ListStatus.LIST_ERR_MUTATED))
+    is_mutated = builder.icmp_signed('==', status, mutated_status)
+    with builder.if_then(is_mutated, likely=False):
+        context.call_conv.return_user_exc(
+            builder, RuntimeError, ("list was mutated during iteration",))
+
+    # if the list wasn't mutated it is either fine or the iterator was
+    # exhausted
+    ok_status = status.type(int(ListStatus.LIST_OK))
+    is_valid = builder.icmp_signed('==', status, ok_status)
     result.set_valid(is_valid)
 
-    with builder.if_then(is_valid):
+    with builder.if_then(is_valid, likely=True):
         item_ty = iter_type.parent.item_type
 
         dm_item = context.data_model_manager[item_ty]
