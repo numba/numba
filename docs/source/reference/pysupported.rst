@@ -309,6 +309,40 @@ you will need to import it explicitly::
     constructors `[]` and `list()` will create a typed-list instead of a
     reflected one.
 
+
+Here's an example using ``List()`` to create ``numba.typed.List`` inside a
+jit-compiled function and letting the compiler infer the item types:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_inferred_list_jit.begin
+   :end-before: magictoken.ex_inferred_list_jit.end
+   :dedent: 4
+   :linenos:
+
+Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
+a jit-compiled function and then using it as an argument to a jit-compiled
+function.
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_inferred_list.begin
+   :end-before: magictoken.ex_inferred_list.end
+   :dedent: 4
+   :linenos:
+
+Lastly, here's an example of using a nested typed-list:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_nested_list.begin
+   :end-before: magictoken.ex_nested_list.end
+   :dedent: 4
+   :linenos:
+
 .. _pysupported-comprehension:
 
 List comprehension
