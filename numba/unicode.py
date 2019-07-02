@@ -33,6 +33,7 @@ from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
+                              _Py_TOLOWER, _PyUnicode_ToLowerFull,
                               _PyUnicode_gettyperecord,
                               _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
@@ -1137,6 +1138,91 @@ def unicode_upper(a):
             newkind = _codepoint_to_kind(maxchar)
             ret = _empty_string(newkind, newlength,
                                 _codepoint_is_ascii(maxchar))
+            for i in range(newlength):
+                _set_code_point(ret, i, _get_code_point(tmp, i))
+            return ret
+    return impl
+
+
+@overload_method(types.UnicodeType, 'islower')
+def unicode_islower(a):
+    """
+    Implements .islower()
+    """
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    def impl(a):
+        l = len(a)
+        if l == 0:
+            return False
+        if a._is_ascii:
+            islower = True
+            for char in a:
+                data = _PyUnicode_gettyperecord(char)
+                t = data.flags & _PyUnicode_TyperecordMasks.LOWER_MASK
+                islower &= (t != 0)
+                if not islower:
+                    return False
+            return islower
+        else:
+            if l == 1:
+                return _PyUnicode_IsLowercase(a)
+            else:
+                cased = 0
+                for idx in range(l):
+                    code_point = _get_code_point(a, idx)
+                    if (_PyUnicode_IsUppercase(code_point) or _PyUnicode_IsTitlecase(code_point)):
+                        return False
+                    elif not cased and _PyUnicode_IsLowercase(code_point):
+                        cased = 1
+                return cased == 1
+    return impl
+
+
+@overload_method(types.UnicodeType, 'lower')
+def unicode_lower(a):
+    """
+    Implements .lower()
+    """
+    def impl(a):
+        # main structure is a translation of:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316
+
+        # ASCII fast path
+        l = len(a)
+        if a._is_ascii:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300
+            ret = _empty_string(a._kind, l, a._is_ascii)
+            for idx in range(l):
+                code_point = _get_code_point(a, idx)
+                _set_code_point(ret, idx, _Py_TOLOWER(code_point))
+            return ret
+        else:
+            # This part in an amalgamation of two algorithms:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805
+            #
+            # The alg walks the string and writes the lower version of the code
+            # point into a 4byte kind unicode string and at the same time
+            # tracks the maximum width "lower" character encountered, following
+            # this the 4byte kind string is reinterpreted as needed into the
+            # maximum width kind string
+            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
+            mapped = np.array((3,), dtype=_Py_UCS4)
+            maxchar = 0
+            k = 0
+            for idx in range(l):
+                mapped[:] = 0
+                code_point = _get_code_point(a, idx)
+                n_res = _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+                for j in range(n_res):
+                    maxchar = max(maxchar, mapped[j])
+                    _set_code_point(tmp, k, mapped[j])
+                    k += 1
+            newlength = k
+            newkind = _codepoint_to_kind(maxchar)
+            ret = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
