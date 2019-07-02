@@ -217,13 +217,11 @@ list
 
 .. warning::
     As of version 0.45.0 the internal implementation for the list datatype in
-    Numba is changing. Until that version, only a single implementation of the
-    list datatype was available, the so-called *reflected-list* (see below).
-    However, because of its limitations it was deprecated with version 0.44.0
-    and a new implementation, the so-called *typed-list*, is available as an
-    experimental feature as of version 0.45.0. Note however, that when using
-    `[]` or `list()` in version 0.45.0 a reflected-list will be instantiated
-    and you must explicitly import the typed-list from `numba.type` to use it.
+    Numba is changing. Until recently, only a single implementation of the list
+    datatype was available, the so-called *reflected-list* (see below).
+    However, it was deprecated from version 0.44.0 onwards due to its
+    limitations. As of version 0.45.0 a new implementation, the so-called
+    *typed-list* (see below), is available as an experimental feature.
 
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
@@ -280,11 +278,11 @@ Typed List
   this, ideally by opening an issue on the Numba issue tracker.
 
 As of version 0.45.0 a new implementation of the list datatype is available, the
-so-called *typed-list*. This is C backed, type homogeneous list datatype and is
+so-called *typed-list*. This is C backed, type-homogeneous list datatype that is
 an improvement over the *reflected-list* mentioned above. No more reflection is
-required which should make it significantly more efficient for larger lists
-and lists can now  be arbitrarily nested. In order to use it in version 0.45.0,
-you will need to import it explicitly::
+required which should make it significantly more efficient for larger lists.
+Additionally, lists can now  be arbitrarily nested. Since the implementation is
+considered experimental, you will need to import it explicitly::
 
     In [1]: from numba.typed import List
 
