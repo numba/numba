@@ -381,8 +381,15 @@ def _find(substr, s):
             return i
     return -1
 
+
 @njit
 def _rfind_special_case(src, sub, beg, end, src_len):
+    if beg > end:
+        return -1
+    elif beg < 0:
+        new_beg = beg + src_len
+        if new_beg > end:
+            return -1
     if end < 0:
         new_end = src_len + end
         if(new_end >= src_len):
@@ -595,9 +602,11 @@ def unicode_rfind(src, sub, start=None, end=None):
                         return -1
                 i = new_end - 1
                 while (i >= temp_begin):
+                    if i >= src_len:
+                        break
                     temp_count = 0
                     offset = 0
-                    for j in range(sub_len-1, -1, -1):
+                    for j in range(sub_len - 1, -1, -1):
                         src_char = _get_code_point(src, i - offset)
                         sub_char = _get_code_point(sub, j)
                         if src_char != sub_char:

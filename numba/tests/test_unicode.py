@@ -364,10 +364,11 @@ class TestUnicode(BaseTest):
             extras = ['', ' ', 'xx', s[:-2], s[3:], s]
             for sub_str in extras:
                 for begin, end in zip(range(-2,4), range(0,6)):
+                    #print("begin value is: ",begin)
+                    #print("end value is ",end)
                     self.assertEqual(pyfunc(s, sub_str, begin, end),
                                      cfunc(s, sub_str, begin, end),
                                      "'%s'.rfind_with_startend('%s')?" % (s, sub_str))
-
 
     def test_getitem(self):
         pyfunc = getitem_usecase
