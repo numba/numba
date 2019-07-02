@@ -674,6 +674,8 @@ class _OverloadAttributeTemplate(AttributeTemplate):
         Compute the actual implementation sig for the given formal argument types.
         """
         disp, sig_args = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
+        if disp is None:
+            return None
 
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
