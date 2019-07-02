@@ -34,7 +34,6 @@ from numba.typedobjectutils import (_as_bytes,
                                     _cast,
                                     _nonoptional,
                                     _get_incref_decref,
-                                    _get_equal,
                                     _container_get_data,
                                     _container_get_meminfo,
                                     )
@@ -1085,4 +1084,3 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         else:
             # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
-
