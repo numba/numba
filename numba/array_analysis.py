@@ -1727,7 +1727,7 @@ class ArrayAnalysis(object):
                 stmts.append(div_calc)
                 calc_size_var = div_calc_size_var
             # Put the calculated value back into the reshape arguments, replacing the negative.
-            args[neg_one_index] = div_calc_size_var
+            args[neg_one_index] = calc_size_var
 
         return tuple(args[1:]), stmts
 
