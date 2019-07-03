@@ -283,13 +283,14 @@ Options for the compilation cache.
 
     If not defined, Numba picks the cache directory in the following order:
 
-    1. In-tree cache. Put cache next to the corresponding source file under
+    1. In-tree cache. Put the cache next to the corresponding source file under
        a ``__pycache__`` directory following how ``.pyc`` files are stored.
-    2. User-wide cache. Put cache in the user's application directory using
+    2. User-wide cache. Put the cache in the user's application directory using
        ``appdirs.user_cache_dir`` from the
        `Appdirs package <https://github.com/ActiveState/appdirs>`_.
-    3. IPython cache. Put cache in IPython specific application directory.
-       Stores under ``numba_cache`` in the directory returned by
+    3. IPython cache. Put the cache in an IPython specific application
+       directory.
+       Stores are made under the ``numba_cache`` in the directory returned by
        ``IPython.paths.get_ipython_cache_dir()``.
 
 
