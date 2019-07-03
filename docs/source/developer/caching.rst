@@ -65,9 +65,44 @@ This is a list of known limitation of the cache:
   from cache. This also affects dictionary usage (i.e. ``numba.typed.Dict``).
 - Cache invalidation fails to recognize changes in symbols defined in a
   different file.
+- Global variables are treated as constants. The cache will remember the value
+  in the global variable used at compilation. On cache load, the cached
+  function will not rebind to the new value of the global variable.
+
+
+.. _cache-sharing:
+
+Cache Sharing
+-------------
+
+It is safe to share and reuse the contents in the cache directory in a
+different machine. The cache remembers the CPU model and the available
+CPU features during compilation. If the CPU model and the CPU features do
+not match exactly, the cache contents will not be considered.
+(Also see :envvar:`NUMBA_CPU_NAME`)
+
+If the cache directory is shared on a network filesystem, concurrent
+read/write of the cache is safe only if file replacement operation is atomic
+for the filesystem. Numba always write to a unique temporary file first. Then,
+it replaces the target cache file path with the temporary file. Numba is
+tolerant against lost cache file and lost cache entry.
+
+.. _cache-clearing:
+
+Cache Clearing
+--------------
+
+The cache is invalidated when the corresponding source file is modified.
+However, it is necessary somtimes to clear the cache directory manually.
+For instance, changes in the compiler will not be recognized because the source
+files are not modified.
+
+To clear the cache, the cache directory can be simply removed.
+
+Removing the cache directory when a Numba application is running may cause an
+``OSError`` exception to be raised at the compilation site.
 
 Related Environment Variables
 -----------------------------
 
 See :ref:`env-vars for caching <numba-envvars-caching>`.
-

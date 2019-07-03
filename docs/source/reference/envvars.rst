@@ -226,7 +226,8 @@ Compilation options
    calls the original Python function instead of a compiled version.  This
    can be useful if you want to run the Python debugger over your code.
 
-.. envvar:: NUMBA_CPU_NAME and NUMBA_CPU_FEATURES
+.. envvar:: NUMBA_CPU_NAME
+.. envvar:: NUMBA_CPU_FEATURES
 
     Override CPU and CPU features detection.
     By setting ``NUMBA_CPU_NAME=generic``, a generic CPU model is picked
@@ -292,6 +293,10 @@ Options for the compilation cache.
        directory.
        Stores are made under the ``numba_cache`` in the directory returned by
        ``IPython.paths.get_ipython_cache_dir()``.
+
+    Also see :ref:`docs on cache sharing <cache-sharing>` and
+    :ref:`docs on cache clearing <cache-clearing>`
+
 
 
 GPU support
