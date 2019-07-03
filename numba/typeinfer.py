@@ -19,7 +19,6 @@ import operator
 import contextlib
 import itertools
 from pprint import pprint
-import traceback
 from collections import OrderedDict
 
 from numba import ir, types, utils, config, typing
