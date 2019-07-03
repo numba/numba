@@ -11,6 +11,7 @@ from numba.targets.imputils import Registry
 from numba import cgutils
 from numba import six
 from numba import types
+from numba.utils import IS_PY3
 from .cudadrv import nvvm
 from . import nvvmutils, stubs
 
@@ -463,6 +464,22 @@ def ptx_min_f8(context, builder, sig, args):
     return builder.call(fn, [
         context.cast(builder, args[0], sig.args[0], types.double),
         context.cast(builder, args[1], sig.args[1], types.double),
+    ])
+
+
+@lower(round, types.f4)
+@lower(round, types.f8)
+def ptx_round(context, builder, sig, args):
+    if not IS_PY3:
+        raise NotImplementedError(
+            "round returns a float on Python 2.x")
+    fn = builder.module.get_or_insert_function(
+        lc.Type.function(
+            lc.Type.int(64),
+            (lc.Type.double(),)),
+        '__nv_llrint')
+    return builder.call(fn, [
+        context.cast(builder, args[0], sig.args[0], types.double),
     ])
 
 

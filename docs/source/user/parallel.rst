@@ -116,6 +116,71 @@ The following example demonstrates a product reduction on a two-dimensional arra
 
         return result1
 
+Care should be taken, however, when reducing into slices or elements of an array 
+if the elements specified by the slice or index are written to simultaneously by 
+multiple parallel threads. The compiler may not detect such cases and then a race condition
+would occur.
+
+The following example demonstrates such a case where a race condition in the execution of the 
+parallel for-loop results in an incorrect return value::
+
+    from numba import njit, prange
+    import numpy as np
+
+    @njit(parallel=True)
+    def prange_wrong_result(x):
+        n = x.shape[0]
+        y = np.zeros(4)
+        for i in prange(n):
+            # accumulating into the same element of `y` from different
+            # parallel iterations of the loop results in a race condition
+            y[:] += x[i]
+
+        return y
+
+as does the following example where the accumulating element is explicitly specified::
+
+    from numba import njit, prange
+    import numpy as np
+
+    @njit(parallel=True)
+    def prange_wrong_result(x):
+        n = x.shape[0]
+        y = np.zeros(4)
+        for i in prange(n):
+            # accumulating into the same element of `y` from different
+            # parallel iterations of the loop results in a race condition
+            y[i % 4] += x[i]
+
+        return y
+
+whereas performing a whole array reduction is fine::
+
+   from numba import njit, prange
+   import numpy as np
+
+   @njit(parallel=True)
+   def prange_ok_result_whole_arr(x):
+       n = x.shape[0]
+       y = np.zeros(4)
+       for i in prange(n):
+           y += x[i]
+       return y
+
+as is creating a slice reference outside of the parallel reduction loop::
+
+   from numba import njit, prange
+   import numpy as np
+
+   @njit(parallel=True)
+   def prange_ok_result_outer_slice(x):
+       n = x.shape[0]
+       y = np.zeros(4)
+       z = y[:]
+       for i in prange(n):
+           z += x[i]
+       return y
+
 Examples
 ========
 

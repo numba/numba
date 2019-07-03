@@ -520,8 +520,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         for seq in self.bincount_sequences():
             w = [math.sqrt(x) - 2 for x in seq]
-            # weights as list, then array
-            for weights in (w, np.array(w)):
+            # weights as list, then array, mixed types, check upcast is ok
+            for weights in (w, np.array(w), seq, np.array(seq)):
                 expected = pyfunc(seq, weights)
                 got = cfunc(seq, weights)
                 self.assertPreciseEqual(expected, got)

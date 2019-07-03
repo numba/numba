@@ -112,7 +112,8 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
     gil_state = pyapi.gil_ensure()
     thread_state = pyapi.save_thread()
 
-    def as_void_ptr(arg): return builder.bitcast(arg, byte_ptr_t)
+    def as_void_ptr(arg):
+        return builder.bitcast(arg, byte_ptr_t)
 
     # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
@@ -124,7 +125,10 @@ def build_gufunc_kernel(library, ctx, innerfunc, sig, inner_ndim):
 
     # Note: the runtime address is taken and used as a constant in the
     # function.
-    fnptr = ctx.get_constant(types.uintp, innerfunc).inttoptr(byte_ptr_t)
+    tmp_voidptr = ctx.add_dynamic_addr(
+        builder, innerfunc, info='parallel_gufunc_innerfunc',
+    )
+    fnptr = builder.bitcast(tmp_voidptr, byte_ptr_t)
     innerargs = [as_void_ptr(x) for x
                  in [args, dimensions, steps, data]]
     builder.call(parallel_for, [fnptr] + innerargs +

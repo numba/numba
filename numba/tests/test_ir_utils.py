@@ -7,6 +7,10 @@ from numba.targets import registry
 from numba import types, ir_utils, bytecode
 
 
+# global constant for testing find_const
+GLOBAL_B = 11
+
+
 @jitclass([('val', numba.types.List(numba.intp))])
 class Dummy(object):
     def __init__(self, val):
@@ -159,6 +163,34 @@ class TestIrUtils(TestCase):
         # check that the count of initial - removed = dce
         self.assertEqual(len(no_dce.blocks[0].body) - len(removed),
                          len(w_dce.blocks[0].body))
+
+    def test_find_const_global(self):
+        """
+        Test find_const() for values in globals (ir.Global) and freevars
+        (ir.FreeVar) that are considered constants for compilation.
+        """
+        FREEVAR_C = 12
+
+        def foo(a):
+            b = GLOBAL_B
+            c = FREEVAR_C
+            return a + b + c
+
+        f_ir = compiler.run_frontend(foo)
+        block = f_ir.blocks[0]
+        const_b = None
+        const_c = None
+
+        for inst in block.body:
+            if isinstance(inst, ir.Assign) and inst.target.name == 'b':
+                const_b = ir_utils.guard(
+                    ir_utils.find_const, f_ir, inst.target)
+            if isinstance(inst, ir.Assign) and inst.target.name == 'c':
+                const_c = ir_utils.guard(
+                    ir_utils.find_const, f_ir, inst.target)
+
+        self.assertEqual(const_b, GLOBAL_B)
+        self.assertEqual(const_c, FREEVAR_C)
 
 
 if __name__ == "__main__":

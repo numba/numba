@@ -99,7 +99,7 @@ Then create an environment with the right dependencies::
 .. note::
    This installs an environment based on Python 3.6, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and 
+   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
    ``intel-openmp``.
 
 To activate the environment for the current shell session::
@@ -183,6 +183,14 @@ following test runner options:
 
     $ python -m numba.runtests --last-failed -m -v -b
 
+When debugging, it is useful to turn on logging.  Numba logs using the
+standard ``logging`` module.  One can use the standard ways (i.e.
+``logging.basicConfig``) to configure the logging behavior.  To enable logging
+in the test runner, there is a ``--log`` flag for convenience::
+
+    $ python -m numba.runtests --log
+
+
 Development rules
 -----------------
 
@@ -225,7 +233,7 @@ Platform support
 Every commit to the master branch is automatically tested on all of the
 platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
 AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Travis CI <https://travis-ci.org/numba/numba>`_ and 
+also use `Travis CI <https://travis-ci.org/numba/numba>`_ and
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
 integration information for as many combinations as can be supported by the
 service.  Travis CI automatically tests all pull requests on OS X and Linux, as

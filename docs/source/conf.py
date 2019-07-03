@@ -44,6 +44,10 @@ extensions = [
     #'sphinx.ext.graphviz',
 ]
 
+# Adding the github files extension
+sys.path.append(os.path.abspath(os.path.join(".", "_ext")))
+extensions.append('ghfiles')
+
 todo_include_todos = True
 
 # Add any paths that contain templates here, relative to this directory.

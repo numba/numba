@@ -26,4 +26,5 @@ the :doc:`architecture document <../developer/architecture>`.
    high-level.rst
    low-level.rst
    interval-example.rst
+   overloading-guide.rst
 

@@ -364,15 +364,16 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
-    If ``zfill`` is set, also filling zeros to the memory.
+    If ``zfill`` is set, fill the memory with zeros at the current
+    use-site location.  Note that the memory is always zero-filled after the
+    ``alloca`` at init-site (the entry block).
     """
     if isinstance(size, utils.INT_TYPES):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
-        # Zero-fill at the init-site
-        if zfill:
-            builder.store(ty(None), ptr)
+        # Always zero-fill at init-site.  This is safe.
+        builder.store(ty(None), ptr)
     # Also zero-fill at the use-site
     if zfill:
         builder.store(ty(None), ptr)

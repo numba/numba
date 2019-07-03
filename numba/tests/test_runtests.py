@@ -13,7 +13,7 @@ class TestCase(unittest.TestCase):
     upstream unittest, and run the numba test suite only in a subprocess."""
 
     def get_testsuite_listing(self, args):
-        cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
+        cmd = [sys.executable, '-m', 'numba.runtests', '-l'] + list(args)
         lines = subprocess.check_output(cmd).decode('UTF-8').splitlines()
         lines = [line for line in lines if line.strip()]
         return lines

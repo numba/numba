@@ -20,7 +20,8 @@ from numba.ir_utils import (
     find_callname,
     find_build_sequence,
     find_const,
-    is_namedtuple_class)
+    is_namedtuple_class,
+    build_definitions)
 from numba.analysis import (compute_cfg_from_blocks)
 from numba.typing import npydecl, signature
 import collections
@@ -152,7 +153,7 @@ class EquivSet(object):
         internal use only.
         """
         # obj_to_ind maps object to equivalence index (sometimes also called
-        # equivalence class) is a non-nagative number that uniquely identifies
+        # equivalence class) is a non-negative number that uniquely identifies
         # a set of objects that are equivalent.
         self.obj_to_ind = obj_to_ind if obj_to_ind else {}
         # ind_to_obj maps equivalence index to a list of objects.
@@ -379,7 +380,7 @@ class ShapeEquivSet(EquivSet):
         ndims = [len(names) for names in obj_names]
         ndim = ndims[0]
         if not all(ndim == x for x in ndims):
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("is_equiv: Dimension mismatch for {}".format(objs))
             return False
         for i in range(ndim):
@@ -611,6 +612,18 @@ class SymbolicEquivSet(ShapeEquivSet):
         # currently used to remember shapes for SetItem IR node, and wrapped
         # indices for Slice objects.
         self.ext_shapes = ext_shapes if ext_shapes else {}
+        # rel_map keeps a map of relative sizes that we have seen so
+        # that if we compute the same relative sizes different times
+        # in different ways we can associate those two instances
+        # of the same relative size to the same equivalence class.
+        self.rel_map = {}
+        # wrap_index() computes the effectual index given a slice and a
+        # dimension's size.  We need to be able to know that two wrap_index
+        # calls are equivalent.  They are known to be equivalent if the slice
+        # and dimension sizes of the two wrap_index calls are equivalent.
+        # wrap_map maps from a tuple of equivalence class ids for a slice and
+        # a dimension size to some new equivalence class id for the output size.
+        self.wrap_map = {}
         super(SymbolicEquivSet, self).__init__(
             typemap, defs, ind_to_var, obj_to_ind, ind_to_obj, next_id)
 
@@ -800,15 +813,11 @@ class SymbolicEquivSet(ShapeEquivSet):
         for names in offset_dict.values():
             self._insert(names)
 
-    def set_shape(self, obj, shape):
-        """Overload set_shape to remember shapes of SetItem IR nodes.
+    def set_shape_setitem(self, obj, shape):
+        """remember shapes of SetItem IR nodes.
         """
-        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
-            self.ext_shapes[obj] = shape
-        else:
-            assert(isinstance(obj, ir.Var))
-            typ = self.typemap[obj.name]
-            super(SymbolicEquivSet, self).set_shape(obj, shape)
+        assert isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem)
+        self.ext_shapes[obj] = shape
 
     def _get_shape(self, obj):
         """Overload _get_shape to retrieve the shape of SetItem IR nodes.
@@ -824,6 +833,37 @@ class SymbolicEquivSet(ShapeEquivSet):
                 return (obj,)
             else:
                 return super(SymbolicEquivSet, self)._get_shape(obj)
+
+class WrapIndexMeta(object):
+    """
+      Array analysis should be able to analyze all the function
+      calls that it adds to the IR.  That way, array analysis can
+      be run as often as needed and you should get the same
+      equivalencies.  One modification to the IR that array analysis
+      makes is the insertion of wrap_index calls.  Thus, repeated
+      array analysis passes should be able to analyze these wrap_index
+      calls.  The difficulty of these calls is that the equivalence
+      class of the left-hand side of the assignment is not present in
+      the arguments to wrap_index in the right-hand side.  Instead,
+      the equivalence class of the wrap_index output is a combination
+      of the wrap_index args.  The important thing to
+      note is that if the equivalence classes of the slice size
+      and the dimension's size are the same for two wrap index
+      calls then we can be assured of the answer being the same.
+      So, we maintain the wrap_map dict that maps from a tuple
+      of equivalence class ids for the slice and dimension size
+      to some new equivalence class id for the output size.
+      However, when we are analyzing the first such wrap_index
+      call we don't have a variable there to associate to the
+      size since we're in the process of analyzing the instruction
+      that creates that mapping.  So, instead we return an object
+      of this special class and analyze_inst will establish the
+      connection between a tuple of the parts of this object
+      below and the left-hand side variable.
+    """
+    def __init__(self, slice_size, dim_size):
+        self.slice_size = slice_size
+        self.dim_size = dim_size
 
 class ArrayAnalysis(object):
 
@@ -861,6 +901,8 @@ class ArrayAnalysis(object):
         if blocks == None:
             blocks = self.func_ir.blocks
 
+        self.func_ir._definitions = build_definitions(self.func_ir.blocks)
+
         if equiv_set == None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
         else:
@@ -868,7 +910,7 @@ class ArrayAnalysis(object):
 
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
 
@@ -921,8 +963,10 @@ class ArrayAnalysis(object):
                     new_body.append(instr)
             block.body = new_body
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             self.dump()
+            print("variable types: ", sorted(self.typemap.items()))
+            print("call types: ", self.calltypes)
 
         dprint_func_ir(self.func_ir, "after array analysis", blocks)
 
@@ -968,6 +1012,19 @@ class ArrayAnalysis(object):
             elif (isinstance(shape, ir.Var) and
                   isinstance(self.typemap[shape.name], types.Integer)):
                 shape = (shape,)
+            elif isinstance(shape, WrapIndexMeta):
+                """ Here we've got the special WrapIndexMeta object
+                    back from analyzing a wrap_index call.  We define
+                    the lhs and then get it's equivalence class then
+                    add the mapping from the tuple of slice size and
+                    dimensional size equivalence ids to the lhs
+                    equivalence id.
+                """
+                equiv_set.define(lhs, self.func_ir, typ)
+                lhs_ind = equiv_set._get_ind(lhs.name)
+                if lhs_ind != -1:
+                    equiv_set.wrap_map[(shape.slice_size, shape.dim_size)] = lhs_ind
+                return pre, post
 
             if isinstance(typ, types.ArrayCompatible):
                 if (shape == None or isinstance(shape, tuple) or
@@ -981,10 +1038,7 @@ class ArrayAnalysis(object):
                                                          len(typ), shape)
 
             if shape != None:
-                if isinstance(typ, types.SliceType):
-                    equiv_set.set_shape(lhs, shape)
-                else:
-                    equiv_set.insert_equiv(lhs, shape)
+                equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
@@ -992,10 +1046,13 @@ class ArrayAnalysis(object):
                 scope, equiv_set, inst.target, index)
             if not result:
                 return [], []
+            if result[0] is not None:
+                inst.index_var = result[0]
+            result = result[1]
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
             if value_shape is (): # constant
-                equiv_set.set_shape(inst, target_shape)
+                equiv_set.set_shape_setitem(inst, target_shape)
                 return pre, []
             elif value_shape != None:
                 target_typ = self.typemap[inst.target.name]
@@ -1008,7 +1065,7 @@ class ArrayAnalysis(object):
                 n = len(shape)
                 # shape dimension must be within target dimension
                 assert(target_ndim >= n)
-                equiv_set.set_shape(inst, shape)
+                equiv_set.set_shape_setitem(inst, shape)
                 return pre + asserts, []
             else:
                 return pre, []
@@ -1109,11 +1166,198 @@ class ArrayAnalysis(object):
             return var, []
         return None
 
+    def gen_explicit_neg(self, arg, arg_rel, arg_typ, size_typ, loc, scope,
+                         dsize, stmts, equiv_set):
+        # Create var to hold the calculated slice size.
+        explicit_neg_var = ir.Var(scope, mk_unique_var("explicit_neg"), loc)
+        explicit_neg_val = ir.Expr.binop(operator.add, dsize, arg, loc=loc)
+        # Determine the type of that var.  Can be literal if we know the
+        # literal size of the dimension.
+        if isinstance(size_typ, int):
+            explicit_neg_typ = types.IntegerLiteral(size_typ + arg_rel)
+        else:
+            explicit_neg_typ = types.intp
+        self.calltypes[explicit_neg_val] = signature(explicit_neg_typ, size_typ, arg_typ)
+        # We'll prepend this slice size calculation to the get/setitem.
+        stmts.append(ir.Assign(value=explicit_neg_val, target=explicit_neg_var, loc=loc))
+        self._define(equiv_set, explicit_neg_var, explicit_neg_typ, explicit_neg_val)
+        return explicit_neg_var, explicit_neg_typ
+
+    def slice_size(self, index, dsize, equiv_set, scope, stmts):
+        """Reason about the size of a slice represented by the "index"
+        variable, and return a variable that has this size data, or
+        raise GuardException if it cannot reason about it.
+
+        The computation takes care of negative values used in the slice
+        with respect to the given dimensional size ("dsize").
+
+        Extra statments required to produce the result are appended
+        to parent function's stmts list.
+        """
+        loc = index.loc
+        # Get the definition of the index variable.
+        index_def = get_definition(self.func_ir, index)
+        fname, mod_name = find_callname(
+            self.func_ir, index_def, typemap=self.typemap)
+        require(fname == 'slice' and mod_name in ('__builtin__', 'builtins'))
+        require(len(index_def.args) == 2)
+        lhs = index_def.args[0]
+        rhs = index_def.args[1]
+        size_typ = self.typemap[dsize.name]
+        lhs_typ = self.typemap[lhs.name]
+        rhs_typ = self.typemap[rhs.name]
+
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("slice_size", "index", index, "dsize", dsize,
+                  "index_def", index_def, "lhs", lhs, "rhs", rhs,
+                  "size_typ", size_typ, "lhs_typ", lhs_typ, "rhs_typ", rhs_typ)
+
+        # Fill in the left side of the slice's ":" with 0 if it wasn't specified.
+        if isinstance(lhs_typ, types.NoneType):
+            zero_var = ir.Var(scope, mk_unique_var("zero"), loc)
+            zero = ir.Const(0, loc)
+            stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
+            self._define(equiv_set, zero_var, types.IntegerLiteral(0), zero)
+            lhs = zero_var
+            lhs_typ = types.IntegerLiteral(0)
+
+        # Fill in the right side of the slice's ":" with the array
+        # length if it wasn't specified.
+        if isinstance(rhs_typ, types.NoneType):
+            rhs = dsize
+            rhs_typ = size_typ
+
+        lhs_rel = equiv_set.get_rel(lhs)
+        rhs_rel = equiv_set.get_rel(rhs)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("lhs_rel", lhs_rel, "rhs_rel", rhs_rel)
+
+        # Make a deepcopy of the original slice to use as the
+        # replacement slice, which we will modify as necessary
+        # below to convert all negative constants in the slice
+        # to be relative to the dimension size.
+        replacement_slice = copy.deepcopy(index_def)
+        need_replacement = False
+
+        # If the first part of the slice is a constant N then check if N
+        # is negative.  If so, then rewrite the first part of the slice
+        # to be "dsize - N".  This is necessary because later steps will
+        # try to compute slice size with a subtraction which wouldn't work
+        # if any part of the slice was negative.
+        if isinstance(lhs_rel, int):
+            if lhs_rel < 0:
+                # Indicate we will need to replace the slice var.
+                need_replacement = True
+                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(lhs,
+                    lhs_rel, lhs_typ, size_typ, loc, scope, dsize, stmts, equiv_set)
+                replacement_slice.args = (explicit_neg_var, rhs)
+                # Update lhs information with the negative removed.
+                lhs = replacement_slice.args[0]
+                lhs_typ = explicit_neg_typ
+                lhs_rel = equiv_set.get_rel(lhs)
+
+        # If the second part of the slice is a constant N then check if N
+        # is negative.  If so, then rewrite the second part of the slice
+        # to be "dsize - N".  This is necessary because later steps will
+        # try to compute slice size with a subtraction which wouldn't work
+        # if any part of the slice was negative.
+        if isinstance(rhs_rel, int):
+            if rhs_rel < 0:
+                # Indicate we will need to replace the slice var.
+                need_replacement = True
+                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(rhs, 
+                    rhs_rel, rhs_typ, size_typ, loc, scope, dsize, stmts, equiv_set)
+                replacement_slice.args = (lhs, explicit_neg_var)
+                # Update rhs information with the negative removed.
+                rhs = replacement_slice.args[1]
+                rhs_typ = explicit_neg_typ
+                rhs_rel = equiv_set.get_rel(rhs)
+
+        # If neither of the parts of the slice were negative constants
+        # then we don't need to do slice replacement in the IR.
+        if not need_replacement:
+            replacement_slice_var = None
+        else:
+            # Create a new var for the replacement slice.
+            replacement_slice_var = ir.Var(scope, mk_unique_var("replacement_slice"), loc)
+            # Create a deepcopy of slice calltype so that when we change it below
+            # the original isn't changed.  Make the types of the parts of the slice
+            # intp.
+            self.calltypes[replacement_slice] = copy.deepcopy(self.calltypes[index_def])
+            self.calltypes[replacement_slice].args = (types.intp, types.intp)
+            stmts.append(ir.Assign(value=replacement_slice, target=replacement_slice_var, loc=loc))
+            # The type of the replacement slice is the same type as the original.
+            self.typemap[replacement_slice_var.name] = self.typemap[index.name]
+
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("after rewriting negatives", "lhs_rel", lhs_rel, "rhs_rel", rhs_rel)
+
+        if (lhs_rel == 0 and isinstance(rhs_rel, tuple) and
+            equiv_set.is_equiv(dsize, rhs_rel[0]) and
+            rhs_rel[1] == 0):
+            return dsize, None
+
+        slice_typ = types.intp
+
+        size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
+        size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
+        self.calltypes[size_val] = signature(slice_typ, rhs_typ, lhs_typ)
+        self._define(equiv_set, size_var, slice_typ, size_val)
+
+        # short cut size_val to a constant if its relation is known to be
+        # a constant
+        size_rel = equiv_set.get_rel(size_var)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("size_var", size_var, "size_val", size_val, "size_rel", size_rel)
+        if (isinstance(size_rel, int)):
+            size_val = ir.Const(size_rel, loc=loc)
+            size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
+            slice_typ = types.IntegerLiteral(size_rel)
+            self._define(equiv_set, size_var, slice_typ, size_val)
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("inferred constant size", "size_var", size_var, "size_val", size_val)
+
+        # rel_map keeps a map of relative sizes that we have seen so
+        # that if we compute the same relative sizes different times
+        # in different ways we can associate those two instances
+        # of the same relative size to the same equivalence class.
+        if isinstance(size_rel, tuple):
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("size_rel is tuple", size_rel in equiv_set.rel_map)
+            if size_rel in equiv_set.rel_map:
+                # We have seen this relative size before so establish
+                # equivalence to the previous variable.
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("establishing equivalence to", equiv_set.rel_map[size_rel])
+                equiv_set.insert_equiv(size_var, equiv_set.rel_map[size_rel])
+            else:
+                # The first time we've seen this relative size so
+                # remember the variable defining that size.
+                equiv_set.rel_map[size_rel] = size_var
+
+        wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
+        wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
+        fnty = get_global_func_typ(wrap_index)
+        sig = self.context.resolve_function_type(fnty, (slice_typ, size_typ,), {})
+        self._define(equiv_set, wrap_var, fnty, wrap_def)
+
+        var = ir.Var(scope, mk_unique_var("var"), loc)
+        value = ir.Expr.call(wrap_var, [size_var, dsize], {}, loc)
+        self._define(equiv_set, var, slice_typ, value)
+        self.calltypes[value] = sig
+
+        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
+        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+        stmts.append(ir.Assign(value=value, target=var, loc=loc))
+        return var, replacement_slice_var
+
     def _index_to_shape(self, scope, equiv_set, var, ind_var):
         """For indexing like var[index] (either write or read), see if
-        the index corresponds to a range/slice shape. Return the shape
-        (and prepending instructions) if so, or raise GuardException
-        otherwise.
+        the index corresponds to a range/slice shape.
+        Returns a 2-tuple where the first item is either None or a ir.Var
+        to be used to replace the index variable in the outer getitem or
+        setitem instruction.  The second item is also a tuple returning
+        the shape and prepending instructions.
         """
         typ = self.typemap[var.name]
         require(isinstance(typ, types.ArrayCompatible))
@@ -1130,102 +1374,74 @@ class ArrayAnalysis(object):
         require(len(ind_shape)==len(seq_typs)==len(var_shape))
         stmts = []
 
-        def slice_size(index, dsize):
-            """Reason about the size of a slice represented by the "index"
-            variable, and return a variable that has this size data, or
-            raise GuardException if it cannot reason about it.
-
-            The computation takes care of negative values used in the slice
-            with respect to the given dimensional size ("dsize").
-
-            Extra statments required to produce the result are appended
-            to parent function's stmts list.
-            """
-            loc = index.loc
-            index_def = get_definition(self.func_ir, index)
-            fname, mod_name = find_callname(
-                self.func_ir, index_def, typemap=self.typemap)
-            require(fname == 'slice' and mod_name in ('__builtin__', 'builtins'))
-            require(len(index_def.args) == 2)
-            lhs = index_def.args[0]
-            rhs = index_def.args[1]
-            size_typ = self.typemap[dsize.name]
-            lhs_typ = self.typemap[lhs.name]
-            rhs_typ = self.typemap[rhs.name]
-            zero_var = ir.Var(scope, mk_unique_var("zero"), loc)
-
-            if isinstance(lhs_typ, types.NoneType):
-                zero = ir.Const(0, loc)
-                stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
-                self._define(equiv_set, zero_var, size_typ, zero)
-                lhs = zero_var
-                lhs_typ = size_typ
-
-            if isinstance(rhs_typ, types.NoneType):
-                rhs = dsize
-                rhs_typ = size_typ
-
-            lhs_rel = equiv_set.get_rel(lhs)
-            rhs_rel = equiv_set.get_rel(rhs)
-            if (lhs_rel == 0 and isinstance(rhs_rel, tuple) and
-                equiv_set.is_equiv(dsize, rhs_rel[0]) and
-                rhs_rel[1] == 0):
-                return dsize
-
-            size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
-            size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
-            self.calltypes[size_val] = signature(size_typ, lhs_typ, rhs_typ)
-            self._define(equiv_set, size_var, size_typ, size_val)
-
-            # short cut size_val to a constant if its relation is known to be
-            # a constant or its basis matches dsize
-            size_rel = equiv_set.get_rel(size_var)
-            if (isinstance(size_rel, int) or (isinstance(size_rel, tuple) and
-                equiv_set.is_equiv(size_rel[0], dsize.name))):
-                rel = size_rel if isinstance(size_rel, int) else size_rel[1]
-                size_val = ir.Const(rel, loc=loc)
-                size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
-                self._define(equiv_set, size_var, size_typ, size_val)
-
-            wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
-            wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
-            fnty = get_global_func_typ(wrap_index)
-            sig = self.context.resolve_function_type(fnty, (size_typ, size_typ,), {})
-            self._define(equiv_set, wrap_var, fnty, wrap_def)
-
-            var = ir.Var(scope, mk_unique_var("var"), loc)
-            value = ir.Expr.call(wrap_var, [size_var, dsize], {}, loc)
-            self._define(equiv_set, var, size_typ, value)
-            self.calltypes[value] = sig
-
-            stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
-            stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
-            stmts.append(ir.Assign(value=value, target=var, loc=loc))
-            return var
-
         def to_shape(typ, index, dsize):
             if isinstance(typ, types.SliceType):
-                return slice_size(index, dsize)
+                return self.slice_size(index, dsize, equiv_set, scope, stmts)
             elif isinstance(typ, types.Number):
-                return None
+                return None, None
             else:
                 # unknown dimension size for this index,
                 # so we'll raise GuardException
                 require(False)
-        shape = tuple(to_shape(typ, size, dsize) for
-                      (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape))
+
+        shape_list = []
+        index_var_list = []
+        replace_index = False
+        for (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape):
+            # Convert the given dimension of the get/setitem index expr.
+            shape_part, index_var_part = to_shape(typ, size, dsize)
+            shape_list.append(shape_part)
+
+            # to_shape will return index_var_part as not None if a
+            # replacement of the slice is required to convert from
+            # negative indices to positive relative indices.
+            if index_var_part is not None:
+                # Remember that we need to replace the build_tuple.
+                replace_index = True
+                index_var_list.append(index_var_part)
+            else:
+                index_var_list.append(size)
+
+        # If at least one of the dimensions required a new slice variable
+        # then we'll need to replace the build_tuple for this get/setitem.
+        if replace_index:
+            # Multi-dimensional array access needs a replacement tuple built.
+            if len(index_var_list) > 1:
+                # Make a variable to hold the new build_tuple.
+                replacement_build_tuple_var = ir.Var(scope,
+                                              mk_unique_var("replacement_build_tuple"),
+                                              ind_shape[0].loc)
+                # Create the build tuple from the accumulated index vars above.
+                new_build_tuple = ir.Expr.build_tuple(index_var_list, ind_shape[0].loc)
+                stmts.append(ir.Assign(value=new_build_tuple,
+                                       target=replacement_build_tuple_var,
+                                       loc=ind_shape[0].loc))
+                # New build_tuple has same type as the original one.
+                self.typemap[replacement_build_tuple_var.name] = ind_typ
+            else:
+                replacement_build_tuple_var = index_var_list[0]
+        else:
+            replacement_build_tuple_var = None
+
+        shape = tuple(shape_list)
         require(not all(x == None for x in shape))
         shape = tuple(x for x in shape if x != None)
-        return shape, stmts
+        return (replacement_build_tuple_var, (shape, stmts))
 
     def _analyze_op_getitem(self, scope, equiv_set, expr):
-        return self._index_to_shape(scope, equiv_set, expr.value, expr.index)
+        result = self._index_to_shape(scope, equiv_set, expr.value, expr.index)
+        if result[0] is not None:
+            expr.index = result[0]
+        return result[1]
 
     def _analyze_op_static_getitem(self, scope, equiv_set, expr):
         var = expr.value
         typ = self.typemap[var.name]
         if not isinstance(typ, types.BaseTuple):
-            return self._index_to_shape(scope, equiv_set, expr.value, expr.index_var)
+            result = self._index_to_shape(scope, equiv_set, expr.value, expr.index_var)
+            if result[0] is not None:
+                expr.index_var = result[0]
+            return result[1]
         shape = equiv_set._get_shape(var)
         require(isinstance(expr.index, int) and expr.index < len(shape))
         return shape[expr.index], []
@@ -1268,12 +1484,15 @@ class ArrayAnalysis(object):
 
         fname, mod_name = find_callname(
             self.func_ir, expr, typemap=self.typemap)
+        added_mod_name = False
         # call via attribute (i.e. array.func)
         if (isinstance(mod_name, ir.Var)
                 and isinstance(self.typemap[mod_name.name],
                                 types.ArrayCompatible)):
             args = [mod_name] + expr.args
             mod_name = 'numpy'
+            # Remember that args and expr.args don't alias.
+            added_mod_name = True
         else:
             args = expr.args
         fname = "_analyze_op_call_{}_{}".format(
@@ -1285,7 +1504,14 @@ class ArrayAnalysis(object):
                 fn = getattr(self, fname)
             except AttributeError:
                 return None
-            return guard(fn, scope, equiv_set, args, dict(expr.kws))
+            result = guard(fn, scope, equiv_set, args, dict(expr.kws))
+            # We want the ability for function fn to modify arguments.
+            # If args and expr.args don't alias then we need the extra
+            # step of assigning back into expr.args from the args that
+            # was passed to fn.
+            if added_mod_name:
+                expr.args = args[1:]
+            return result
 
     def _analyze_op_call___builtin___len(self, scope, equiv_set, args, kws):
         # python 2 version of len()
@@ -1306,6 +1532,34 @@ class ArrayAnalysis(object):
                                                         equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
+
+    def _analyze_op_call_numba_array_analysis_wrap_index(self, scope,
+                                                        equiv_set, args, kws):
+        """ Analyze wrap_index calls added by a previous run of
+            Array Analysis
+        """
+        require(len(args) == 2)
+        # Two parts to wrap index, the specified slice size...
+        slice_size = args[0].name
+        # ...and the size of the dimension.
+        dim_size = args[1].name
+        # Get the equivalence class ids for both.
+        slice_eq = equiv_set._get_or_add_ind(slice_size)
+        dim_eq = equiv_set._get_or_add_ind(dim_size)
+        # See if a previous wrap_index calls we've analyzed maps from
+        # the same pair of equivalence class ids for slice and dim size.
+        if (slice_eq, dim_eq) in equiv_set.wrap_map:
+            wrap_ind = equiv_set.wrap_map[(slice_eq, dim_eq)]
+            require(wrap_ind in equiv_set.ind_to_var)
+            vs = equiv_set.ind_to_var[wrap_ind]
+            require(vs != [])
+            # Return the shape of the variable from the previous wrap_index.
+            return ((vs[0],),[])
+        else:
+            # We haven't seen this combination of slice and dim
+            # equivalence class ids so return a WrapIndexMeta so that
+            # _analyze_inst can establish the connection to the lhs var.
+            return (WrapIndexMeta(slice_eq, dim_eq),[])
 
     def _analyze_numpy_create_array(self, scope, equiv_set, args, kws):
         shape_var = None
@@ -1422,7 +1676,60 @@ class ArrayAnalysis(object):
             typ = self.typemap[args[1].name]
             if isinstance(typ, types.BaseTuple):
                 return args[1], []
-        return tuple(args[1:]), []
+
+        # Reshape is allowed to take one argument that has the value <0.
+        # This means that the size of that dimension should be inferred from
+        # the size of the array being reshaped and the other dimensions
+        # specified.  Our general approach here is to see if the reshape
+        # has any <0 arguments.  If it has more than one then throw a
+        # ValueError.  If exactly one <0 argument is found, remember its
+        # argument index.
+        stmts = []
+        neg_one_index = -1
+        for arg_index in range(1, len(args)):
+            reshape_arg = args[arg_index]
+            reshape_arg_def = guard(get_definition, self.func_ir, reshape_arg)
+            if isinstance(reshape_arg_def, ir.Const):
+                if reshape_arg_def.value < 0:
+                    if neg_one_index == -1:
+                        neg_one_index = arg_index
+                    else:
+                        msg = ("The reshape API may only include one negative"
+                               " argument. %s" % str(reshape_arg.loc))
+                        raise ValueError(msg)
+
+        if neg_one_index >= 0:
+            # If exactly one <0 argument to reshape was found, then we are
+            # going to insert code to calculate the missing dimension and then
+            # replace the negative with the calculated size.  We do this because we
+            # can't let array equivalence analysis think that some array has
+            # a negative dimension size.
+            loc = args[0].loc
+            # Create a variable to hold the size of the array being reshaped.
+            calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
+            self.typemap[calc_size_var.name] = types.intp
+            # Assign the size of the array calc_size_var.
+            init_calc_var = ir.Assign(ir.Expr.getattr(args[0], "size", loc), calc_size_var, loc)
+            stmts.append(init_calc_var)
+            # For each other dimension, divide the current size by the specified
+            # dimension size.  Once all such dimensions have been done then what is
+            # left is the size of the negative dimension.
+            for arg_index in range(1, len(args)):
+                # Skip the negative dimension.
+                if arg_index == neg_one_index:
+                    continue
+                div_calc_size_var = ir.Var(scope, mk_unique_var("calc_size_var"), loc)
+                self.typemap[div_calc_size_var.name] = types.intp
+                # Calculate the next size as current size // the current arg's dimension size.
+                new_binop = ir.Expr.binop(operator.floordiv, calc_size_var, args[arg_index], loc)
+                div_calc = ir.Assign(new_binop, div_calc_size_var, loc)
+                self.calltypes[new_binop] = signature(types.intp, types.intp, types.intp)
+                stmts.append(div_calc)
+                calc_size_var = div_calc_size_var
+            # Put the calculated value back into the reshape arguments, replacing the negative.
+            args[neg_one_index] = div_calc_size_var
+
+        return tuple(args[1:]), stmts
 
     def _analyze_op_call_numpy_transpose(self, scope, equiv_set, args, kws):
         in_arr = args[0]

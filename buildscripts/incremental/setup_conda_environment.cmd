@@ -1,3 +1,13 @@
+@rem first configure conda to have more tolerance of network problems, these
+@rem numbers are not scientifically chosen, just merely larger than defaults
+set CONDA_CONFIG=cmd /C conda config
+%CONDA_CONFIG% --write-default
+%CONDA_CONFIG% --set remote_connect_timeout_secs 30.15
+%CONDA_CONFIG% --set remote_max_retries 10
+%CONDA_CONFIG% --set remote_read_timeout_secs 120.2
+cmd /C conda info
+%CONDA_CONFIG% --show
+
 @rem The cmd /C hack circumvents a regression where conda installs a conda.bat
 @rem script in non-root environments.
 set CONDA_INSTALL=cmd /C conda install -q -y
