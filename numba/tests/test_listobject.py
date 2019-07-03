@@ -1370,6 +1370,7 @@ class TestIter(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+
 class TestStringItem(MemoryLeakMixin, TestCase):
     """Test list can take strings as items. """
 

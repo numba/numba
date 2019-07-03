@@ -183,7 +183,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl_, list(tl_))
             return rl_, tl_
 
-
         ### Simple slicing ###
 
         # assign to itself
