@@ -2799,9 +2799,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
               np.array([False])], [np.array([1]), np.array([2])], 0),
             # test with lists of length 100 of arrays of length 1
             ([np.array([False])] * 100, [np.array([1])] * 100, 0),
-            # # test with lists of length 100 of tuples of length 1
-            # ([(False,)] * 100, [(1,)] * 100, 0),
-
         ]:
             self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
                                     np_nbfunc(condlist, choicelist, default))
@@ -2841,7 +2838,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
              TypingError, "condlist arrays must contain booleans"),
             # condlist and choicelist of different length
             ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], 0, ValueError,
-             "list of cases must be same length as list of conditions")
+             "list of cases must be same length as list of conditions"),
+
+            # conlist contains tuples instead of arrays
+            # if in the future numba's np.where accepts tuples, the implementation
+            # of np.select should also accept them and the following two test cases should be
+            # normal tests instead of negative tests
+
+            # test with lists of length 100 of tuples of length 1 for condlist
+            ([(False,)] * 100, [np.array([1])] * 100, 0, TypingError,
+             'items of condlist must be arrays'),
+            # test with lists of length 100 of tuples of length 1 for choicelist
+            ([np.array([False])] * 100, [(1,)] * 100, 0, TypingError,
+             'items of choicelist must be arrays'),
         ]:
             with self.assertRaises(expected_error) as e:
                 np_nbfunc(condlist, choicelist, default)
