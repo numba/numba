@@ -54,6 +54,8 @@ test:
     - cffi
     # temporarily disable scipy testing on ARM, need to build out more packages
     - scipy                    # [not (armv6l or armv7l)]
+    - blas ==1.0=mkl           # [x86 or x86_64]
+    # avoid confusion from openblas bugs
     - ipython                  # [not (armv6l or armv7l)]
     - setuptools
     - faulthandler             # [py27 and (not (armv6l or armv7l))]
