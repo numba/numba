@@ -140,7 +140,7 @@ def check_access_is_preventable():
             ret = True
     finally:
         os.chmod(test_dir, 0o775)
-        shutil.rmtree(test_dir)
+        shutil.rmtree(tempdir)
     return ret
 
 _access_preventable = check_access_is_preventable()
@@ -934,6 +934,7 @@ class BaseCacheTest(TestCase):
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
+        shutil.rmtree(self.tempdir)
 
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
@@ -1310,9 +1311,9 @@ class TestCache(BaseCacheUsecasesTest):
         # Make it impossible to create the __pycache__ directory
         old_perms = os.stat(self.tempdir).st_mode
         os.chmod(self.tempdir, 0o500)
-        self.addCleanup(os.chmod, self.tempdir, old_perms)
 
         self._test_pycache_fallback()
+        os.chmod(self.tempdir, old_perms)
 
     @skip_bad_access
     @unittest.skipIf(os.name == "nt",
@@ -1323,9 +1324,9 @@ class TestCache(BaseCacheUsecasesTest):
         os.mkdir(pycache)
         old_perms = os.stat(pycache).st_mode
         os.chmod(pycache, 0o500)
-        self.addCleanup(os.chmod, pycache, old_perms)
 
         self._test_pycache_fallback()
+        os.chmod(pycache, old_perms)
 
     def test_ipython(self):
         # Test caching in an IPython session
@@ -1548,6 +1549,7 @@ def bar():
         sys.modules.pop(self.modname_bar1, None)
         sys.modules.pop(self.modname_bar2, None)
         sys.path.remove(self.tempdir)
+        shutil.rmtree(self.tempdir)
 
     def import_bar1(self):
         return import_dynamic(self.modname_bar1).bar
@@ -1671,6 +1673,9 @@ def function2(x):
         self.file2 = os.path.join(self.tempdir, 'file2.py')
         with open(self.file2, 'w') as fout:
             print(self.source_text_file2, file=fout)
+
+    def tearDown(self):
+        shutil.rmtree(self.tempdir)
 
     def test_caching_mutliple_files_with_signature(self):
         # Execute file1.py
