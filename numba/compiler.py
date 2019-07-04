@@ -432,7 +432,8 @@ class BasePipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               outer_flags, self.locals,
-                              lifted=tuple(loops), lifted_from=None)
+                              lifted=tuple(loops), lifted_from=None,
+                              is_lifted_loop=True)
             return cres
 
     def stage_frontend_withlift(self):
@@ -997,11 +998,13 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # that's usable from above.
         rw_cres = None
         if not flags.no_rewrites:
-            try:
-                rw_cres = compile_local(func_ir.copy(), flags)
-            except Exception:
-                pass
-
+            # Suppress warnings in compilation retry
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", errors.NumbaWarning)
+                try:
+                    rw_cres = compile_local(func_ir.copy(), flags)
+                except Exception:
+                    pass
         # if the rewrite variant of compilation worked, use it, else use
         # the norewrites backup
         if rw_cres is not None:
