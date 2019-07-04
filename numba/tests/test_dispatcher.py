@@ -12,6 +12,8 @@ import warnings
 import inspect
 import pickle
 import weakref
+import collections
+from itertools import chain
 
 try:
     import jinja2
@@ -859,6 +861,31 @@ class TestDispatcherMethods(TestCase):
         # Exercise the method
         foo.inspect_types(utils.StringIO())
 
+        # Test output
+        expected = str(foo.overloads[foo.signatures[0]].type_annotation)
+        with captured_stdout() as out:
+            foo.inspect_types()
+        assert expected in out.getvalue()
+
+    def test_inspect_types_with_signature(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.0)
+        # Inspect all signatures
+        with captured_stdout() as total:
+            foo.inspect_types()
+        # Inspect first signature
+        with captured_stdout() as first:
+            foo.inspect_types(signature=foo.signatures[0])
+        # Inspect second signature
+        with captured_stdout() as second:
+            foo.inspect_types(signature=foo.signatures[1])
+
+        self.assertEqual(total.getvalue(), first.getvalue() + second.getvalue())
+
     @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
     @unittest.skipIf(pygments is None, "please install the 'pygments' package")
     def test_inspect_types_pretty(self):
@@ -886,6 +913,19 @@ class TestDispatcherMethods(TestCase):
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
+
+    def test_get_annotation_info(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.3)
+
+        expected = dict(chain.from_iterable(foo.get_annotation_info(i).items()
+                                            for i in foo.signatures))
+        result = foo.get_annotation_info()
+        self.assertEqual(expected, result)
 
     def test_issue_with_array_layout_conflict(self):
         """
