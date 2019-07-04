@@ -235,7 +235,7 @@ Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
 floating-point and complex numbers:
 
 * :func:`numpy.dot`
-* :func:`numpy.kron`
+* :func:`numpy.kron` ('C' and 'F' order only)
 * :func:`numpy.outer`
 * :func:`numpy.trace` (only the first argument).
 * :func:`numpy.vdot`
