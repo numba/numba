@@ -2619,6 +2619,17 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, check_scheduling=False)
 
+    @skip_unsupported
+    def test_parfor_slice21(self):
+        def test_impl(x1, x2):
+            x1 = x1.reshape(x1.size, 1)
+            x2 = x2.reshape(x2.size, 1)
+            return x1 >= x2[:-1, :]
+
+        x1 = np.random.rand(5)
+        x2 = np.random.rand(6)
+        self.check(test_impl, x1, x2)
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
