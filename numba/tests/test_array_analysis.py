@@ -355,9 +355,10 @@ class TestArrayAnalysis(TestCase):
             d = b[:-1,:]
             e = c.shape[0]
             f = d.shape[0]
+            g = len(d)
             return e == f
         self._compile_and_test(test_12, (),
-                               equivs=[self.with_equiv('e', 'f')])
+                               equivs=[self.with_equiv('e', 'f', 'g')])
 
         def test_tup_arg(T):
             T2 = T

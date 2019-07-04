@@ -1265,7 +1265,7 @@ class ArrayAnalysis(object):
             if rhs_rel < 0:
                 # Indicate we will need to replace the slice var.
                 need_replacement = True
-                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(rhs, 
+                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(rhs,
                     rhs_rel, rhs_typ, size_typ, loc, scope, dsize, stmts, equiv_set)
                 replacement_slice.args = (lhs, explicit_neg_var)
                 # Update rhs information with the negative removed.
@@ -1524,10 +1524,8 @@ class ArrayAnalysis(object):
         var = args[0]
         typ = self.typemap[var.name]
         require(isinstance(typ, types.ArrayCompatible))
-        if typ.ndim == 1:
-            shape = equiv_set._get_shape(var)
-            return shape[0], [], shape[0]
-        return None
+        shape = equiv_set._get_shape(var)
+        return shape[0], [], shape[0]
 
     def _analyze_op_call_numba_array_analysis_assert_equiv(self, scope,
                                                         equiv_set, args, kws):
