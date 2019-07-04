@@ -2793,12 +2793,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
               np.array([False, False, True])],
              [np.array([1, 2, 3]),
               np.array([4, 5, 6]),
-              np.array([7, 8, 9])], 15),
+              np.array([7, 8, 9])], 15.3),
             # test with arrays of length 1 instead of 2
             ([np.array([True]),
               np.array([False])], [np.array([1]), np.array([2])], 0),
             # test with lists of length 100 of arrays of length 1
             ([np.array([False])] * 100, [np.array([1])] * 100, 0),
+            # passing arrays with NaNs
+            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))]*2, [np.array([1, 2, 3, np.nan, 5, 7])]*2, 0),
+            # passing lists with 2d arrays
+            ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2, [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
+            # passing arrays with complex numbers
+            ([np.isnan(np.array([1, 2, 3+2j, np.nan, 5, 7]))] * 2, [np.array([1, 2, 3+2j, np.nan, 5, 7])] * 2, 0),
         ]:
             self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
                                     np_nbfunc(condlist, choicelist, default))
