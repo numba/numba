@@ -415,7 +415,7 @@ typing and implementation to be specified together.
 - :ghfile:`numba/targets/cmathimpl.py` - Python complex math module
 - :ghfile:`numba/targets/optional.py` - Special type representing value or
   ``None``
-- `:ghfile:numba/targets/tupleobj.py` - Tuples (statically typed as
+- :ghfile:`numba/targets/tupleobj.py` - Tuples (statically typed as
   immutable struct)
 - :ghfile:`numba/targets/mathimpl.py` - Python ``math`` module
 - :ghfile:`numba/targets/heapq.py` - Python ``heapq`` module
