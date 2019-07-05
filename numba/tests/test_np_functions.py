@@ -2798,8 +2798,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2,
              [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
             # passing arrays with complex numbers
-            ([np.isnan(np.array([1, 2, 3+2j, np.nan, 5, 7]))] * 2,
-             [np.array([1, 2, 3+2j, np.nan, 5, 7])] * 2, 0)
+            ([np.isnan(np.array([1, 2, 3 + 2j, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3 + 2j, np.nan, 5, 7])] * 2, 0)
         ]
 
         for x in (np.arange(10), np.arange(10).reshape((5, 2))):
