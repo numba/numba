@@ -2792,8 +2792,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # test with lists of length 100 of arrays of length 1
             ([np.array([False])] * 100, [np.array([1])] * 100, 0),
             # passing arrays with NaNs
-            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))]*2,
-             [np.array([1, 2, 3, np.nan, 5, 7])]*2, 0),
+            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3, np.nan, 5, 7])] * 2, 0),
             # passing lists with 2d arrays
             ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2,
              [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
@@ -2833,7 +2833,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
              0, TypingError, "condlist and choicelist elements must have the "
                              "same number of dimensions"),
             # condlist and choicelist with different dimensions
-            ([np.array([True]), np.array([False])], [np.array([[1]]), np.array([[2]])], 0, TypingError,
+            ([np.array([True]), np.array([False])],
+             [np.array([[1]]), np.array([[2]])], 0, TypingError,
              "condlist and choicelist elements must have the "
              "same number of dimensions"),
             # passing choicelist of dim zero
@@ -2850,13 +2851,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0,
              TypingError, "condlist arrays must contain booleans"),
             # condlist and choicelist of different length
-            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], 0, ValueError,
+            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x], 0, ValueError,
              "list of cases must be same length as list of conditions"),
 
             # condlist contains tuples instead of arrays
-            # if in the future numba's np.where accepts tuples, the implementation
-            # of np.select should also accept them and the following two test cases should be
-            # normal tests instead of negative tests
+            # if in the future numba's np.where accepts tuples, the
+            # implementation of np.select should also accept them and
+            # the following two test cases should be normal tests
+            # instead of negative tests
 
             # test with lists of length 100 of tuples of length 1 for condlist
             ([(False,)] * 100, [np.array([1])] * 100, 0, TypingError,
