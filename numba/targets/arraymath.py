@@ -3552,7 +3552,6 @@ def np_select(condlist, choicelist, default=0):
         if len(condlist) != len(choicelist):
             raise ValueError('list of cases must be same length as list of conditions')
         out = default * np.ones(choicelist[0].shape, choicelist[0].dtype)
-        # out = default * np.ones(shape, dtyp)
         #should use reversed+zip, but reversed is not available
         for i in range(len(condlist) - 1, -1, -1):
             cond = condlist[i]
@@ -3585,7 +3584,7 @@ def np_select(condlist, choicelist, default=0):
         if not (isinstance(condlist[0], types.UniTuple)
                 and isinstance(condlist[0][0], types.Boolean)):
             raise TypeError('condlist tuples must only contain booleans')
-    #the inputs types are correct, now we perform checks on the dimensions
+    #the input types are correct, now we perform checks on the dimensions
     if isinstance(condlist[0], types.Array) and condlist[0].ndim != choicelist[0].ndim:
         raise TypeError('condlist and choicelist elements must have the '
                         'same number of dimensions')
@@ -3593,7 +3592,6 @@ def np_select(condlist, choicelist, default=0):
         raise TypeError('condlist arrays must be of at least dimension 1')
 
     return np_select_arr_impl
-
 
 
 #----------------------------------------------------------------------------

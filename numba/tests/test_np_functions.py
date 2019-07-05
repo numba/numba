@@ -2773,20 +2773,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     nbfunc(np.ones(1), rep)
 
     def test_select(self):
-        x = np.arange(10)
         np_pyfunc = np_select
         np_nbfunc = njit(np_select)
-        for condlist,  choicelist, default in [
+        test_cases = [
             # Each test case below is one tuple.
             # Each tuple is separated by a description of what's being tested
-            # test with two lists
-            ([x < 3, x > 5], [x, x ** 2], 0),
-            # test with two tuples
-            ((x < 3, x > 5), (x, x ** 2), 0),
-            # test with one list and one tuple
-            ([x < 3, x > 5], (x, x ** 2), 0),
-            # test with one tuple and one list
-            ((x < 3, x > 5), [x, x ** 2], 0),
+
             # test with arrays of length 3 instead of 2 and a different default
             ([np.array([False, False, False]),
               np.array([False, True, False]),
@@ -2800,12 +2792,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # test with lists of length 100 of arrays of length 1
             ([np.array([False])] * 100, [np.array([1])] * 100, 0),
             # passing arrays with NaNs
-            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))]*2, [np.array([1, 2, 3, np.nan, 5, 7])]*2, 0),
+            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))]*2,
+             [np.array([1, 2, 3, np.nan, 5, 7])]*2, 0),
             # passing lists with 2d arrays
-            ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2, [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
+            ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2,
+             [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
             # passing arrays with complex numbers
-            ([np.isnan(np.array([1, 2, 3+2j, np.nan, 5, 7]))] * 2, [np.array([1, 2, 3+2j, np.nan, 5, 7])] * 2, 0),
-        ]:
+            ([np.isnan(np.array([1, 2, 3+2j, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3+2j, np.nan, 5, 7])] * 2, 0)
+        ]
+
+        for x in (np.arange(10), np.arange(10).reshape((5, 2))):
+            # test with two lists
+            test_cases.append(([x < 3, x > 5], [x, x ** 2], 0))
+            # test with two tuples
+            test_cases.append(((x < 3, x > 5), (x, x ** 2), 0))
+            # test with one list and one tuple
+            test_cases.append(([x < 3, x > 5], (x, x ** 2), 0))
+            # test with one tuple and one list
+            test_cases.append(((x < 3, x > 5), [x, x ** 2], 0))
+
+        for condlist,  choicelist, default in test_cases:
             self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
                                     np_nbfunc(condlist, choicelist, default))
 
@@ -2846,7 +2853,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x,], 0, ValueError,
              "list of cases must be same length as list of conditions"),
 
-            # conlist contains tuples instead of arrays
+            # condlist contains tuples instead of arrays
             # if in the future numba's np.where accepts tuples, the implementation
             # of np.select should also accept them and the following two test cases should be
             # normal tests instead of negative tests
