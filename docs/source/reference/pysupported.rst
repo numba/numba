@@ -219,9 +219,10 @@ list
     As of version 0.45.x the internal implementation for the list datatype in
     Numba is changing. Until recently, only a single implementation of the list
     datatype was available, the so-called *reflected-list* (see below).
-    However, it was deprecated from version 0.44.0 onwards due to its
-    limitations. As of version 0.45.0 a new implementation, the so-called
-    *typed-list* (see below), is available as an experimental feature.
+    However, it was scheduled for deprecation from version 0.44.0 onwards due
+    to its limitations. As of version 0.45.0 a new implementation, the
+    so-called *typed-list* (see below), is available as an experimental
+    feature. For more information, please see: :ref:`deprecation`.
 
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
@@ -277,12 +278,12 @@ Typed List
   functionality or suffer from unexpectedly bad performance, please report
   this, ideally by opening an issue on the Numba issue tracker.
 
-As of version 0.45.0 a new implementation of the list data type is available, the
-so-called *typed-list*. This is compiled library backed, type-homogeneous list data type that is
-an improvement over the *reflected-list* mentioned above. No more reflection is
-required which should make it significantly more efficient for larger lists.
-Additionally, lists can now  be arbitrarily nested. Since the implementation is
-considered experimental, you will need to import it explicitly::
+As of version 0.45.0 a new implementation of the list data type is available,
+the so-called *typed-list*. This is compiled library backed, type-homogeneous
+list data type that is an improvement over the *reflected-list* mentioned
+above.  Additionally, lists can now be arbitrarily nested. Since the
+implementation is considered experimental, you will need to import it
+explicitly from the `numba.typed` module::
 
     In [1]: from numba.typed import List
 
@@ -309,7 +310,7 @@ considered experimental, you will need to import it explicitly::
 
 
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
-jit-compiled function and letting the compiler infer the item types:
+jit-compiled function and letting the compiler infer the item type:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
    :language: python
@@ -321,7 +322,7 @@ jit-compiled function and letting the compiler infer the item types:
 
 Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
 a jit-compiled function and then using it as an argument to a jit-compiled
-function.
+function:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
    :language: python
@@ -331,7 +332,7 @@ function.
    :dedent: 4
    :linenos:
 
-Finally, here's an example of using a nested typed-list:
+Finally, here's an example of using a nested `List()`:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
    :language: python
