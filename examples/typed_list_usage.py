@@ -9,9 +9,9 @@ def ex_inferred_list_jit():
 
     @njit
     def foo():
-        # Instatiate a typed-list
+        # Instantiate a typed-list
         l = List()
-        # Append a value to it, this will set the type to int32/int64
+        # Append a value to it, this will set the type to int32/int64 (depending on platform)
         l.append(42)
         # The usual list operations, getitem, pop and length are supported
         print(l[0])   # 42
@@ -38,9 +38,9 @@ def ex_inferred_list():
             mylist.append()
         return mylist
 
-    # Instatiate a typed-list, outside of a jit context
+    # Instantiate a typed-list, outside of a jit context
     l = List()
-    # Append a value to it, this will set the type to int32/int64
+    # Append a value to it, this will set the type to int32/int64 (depending on platform)
     l.append(42)
     # The usual list operations, getitem, pop and length are supported
     print(l[0])   # 42
@@ -69,7 +69,7 @@ def ex_nested_list():
         for i in range(10):
             l.append(i)
         mylist.append(l)
-    # mylist is now a 10x10 grid
+    # mylist is now a list of 10 lists, each containing 10 integers
     print(mylist)
 
     # magictoken.ex_nested_list.end

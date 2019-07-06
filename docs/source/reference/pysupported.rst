@@ -216,7 +216,7 @@ list
 
 
 .. warning::
-    As of version 0.45.0 the internal implementation for the list datatype in
+    As of version 0.45.x the internal implementation for the list datatype in
     Numba is changing. Until recently, only a single implementation of the list
     datatype was available, the so-called *reflected-list* (see below).
     However, it was deprecated from version 0.44.0 onwards due to its
@@ -277,8 +277,8 @@ Typed List
   functionality or suffer from unexpectedly bad performance, please report
   this, ideally by opening an issue on the Numba issue tracker.
 
-As of version 0.45.0 a new implementation of the list datatype is available, the
-so-called *typed-list*. This is C backed, type-homogeneous list datatype that is
+As of version 0.45.0 a new implementation of the list data type is available, the
+so-called *typed-list*. This is compiled library backed, type-homogeneous list data type that is
 an improvement over the *reflected-list* mentioned above. No more reflection is
 required which should make it significantly more efficient for larger lists.
 Additionally, lists can now  be arbitrarily nested. Since the implementation is
@@ -331,7 +331,7 @@ function.
    :dedent: 4
    :linenos:
 
-Lastly, here's an example of using a nested typed-list:
+Finally, here's an example of using a nested typed-list:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
    :language: python
