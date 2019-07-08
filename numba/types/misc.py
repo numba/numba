@@ -393,7 +393,6 @@ class ClassType(Callable, Opaque):
         self.jitmethods = jitmethods
         self.jitprops = jitprops
         self.struct = struct
-        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
                                            id(self), fielddesc)
@@ -404,6 +403,11 @@ class ClassType(Callable, Opaque):
 
     def get_call_signatures(self):
         return (), True
+
+    @property
+    def methods(self):
+        methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
+        return methods
 
     @property
     def instance_type(self):

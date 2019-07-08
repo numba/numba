@@ -30,11 +30,6 @@ def _get_meminfo(box):
     return mi
 
 
-class PickleTestSubject:
-    def __init__(self):
-        pass
-
-
 class TestJitClass(TestCase, MemoryLeakMixin):
 
     def _check_spec(self, spec):
@@ -898,9 +893,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         TruncatedLabel().meth2()
 
     def test_pickling(self):
-        wrapped = jitclass(spec=[])(PickleTestSubject)
+        @jitclass(spec=[])
+        class PickleTestSubject:
+            def __init__(self):
+                pass
 
-        inst = wrapped()
+        inst = PickleTestSubject()
         ty = typeof(inst)
         self.assertIsInstance(ty, types.ClassInstanceType)
         pickled = pickle.dumps(ty)
