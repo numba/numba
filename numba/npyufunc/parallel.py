@@ -27,9 +27,7 @@ import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, config
-
-
-_wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])
+from numba.npyufunc.wrappers import _wrapper_info
 
 
 def get_thread_count():
@@ -63,6 +61,11 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     inner_ndim
         inner dimension of the gufunc (this is len(sig.args) in the case of a
         ufunc)
+
+    Returns
+    -------
+    wrapper_info : (library, env, name)
+        The info for the gufunc wrapper.
 
     Details
     -------
@@ -235,6 +238,11 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
 # called without an enclosing instance from parfors
 
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
+    """Build gufunc wrapper for the given arguments.
+    The *is_parfors* is a boolean indicating whether the gufunc is being
+    built for use as a ParFors kernel. This changes codegen and caching
+    behavior.
+    """
     library = cres.library
     ctx = cres.target_context
     signature = cres.signature

@@ -326,9 +326,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
             cache=self.cache, is_parfors=False,
         )
 
-        wrapper_name = info.name
         env = info.env
-        ptr = info.library.get_pointer_to_function(wrapper_name)
+        ptr = info.library.get_pointer_to_function(info.name)
         # Get dtypes
         dtypenums = []
         for a in signature.args:

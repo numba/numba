@@ -23,12 +23,10 @@ from .support import temp_directory, override_config, TestCase, tag
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
+from numba.six.moves import queue as t_queue
 
 if utils.PYVERSION >= (3, 0):
-    import queue as t_queue
     import faulthandler
-else:
-    import Queue as t_queue
 
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
