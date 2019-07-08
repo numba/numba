@@ -1926,6 +1926,12 @@ def raise_on_unsupported_feature(func_ir, typemap):
                     isinstance(ty, types.DictType)):
                     raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
+            # checks for generator expressions (yield in use when func_ir has
+            # not been identified as a generator).
+            if isinstance(stmt.value, ir.Yield) and not func_ir.is_generator:
+                msg = "The use of generator expressions is unsupported."
+                raise UnsupportedError(msg, loc=stmt.loc)
+
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
         msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "

@@ -168,6 +168,16 @@ class TestMiscErrorHandling(unittest.TestCase):
                     "has it been imported")
         self.assertIn(expected, str(raises.exception))
 
+    def test_handling_unsupported_generator_expression(self):
+        def foo():
+            y = (x for x in range(10))
+
+        expected = "The use of generator expressions is unsupported."
+        for dec in jit(forceobj=True), njit:
+            with self.assertRaises(errors.UnsupportedError) as raises:
+                dec(foo)()
+            self.assertIn(expected, str(raises.exception))
+
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):
 
