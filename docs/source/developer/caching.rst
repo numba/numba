@@ -75,7 +75,7 @@ This is a list of known limitation of the cache:
 Cache Sharing
 -------------
 
-It is safe to share and reuse the contents in the cache directory in a
+It is safe to share and reuse the contents in the cache directory on a
 different machine. The cache remembers the CPU model and the available
 CPU features during compilation. If the CPU model and the CPU features do
 not match exactly, the cache contents will not be considered.
@@ -83,9 +83,9 @@ not match exactly, the cache contents will not be considered.
 
 If the cache directory is shared on a network filesystem, concurrent
 read/write of the cache is safe only if file replacement operation is atomic
-for the filesystem. Numba always write to a unique temporary file first. Then,
-it replaces the target cache file path with the temporary file. Numba is
-tolerant against lost cache file and lost cache entry.
+for the filesystem. Numba always write to a unique temporary file first, it then
+replaces the target cache file path with the temporary file. Numba is
+tolerant against lost cache files and lost cache entries.
 
 .. _cache-clearing:
 
@@ -93,7 +93,7 @@ Cache Clearing
 --------------
 
 The cache is invalidated when the corresponding source file is modified.
-However, it is necessary somtimes to clear the cache directory manually.
+However, it is necessary sometimes to clear the cache directory manually.
 For instance, changes in the compiler will not be recognized because the source
 files are not modified.
 
