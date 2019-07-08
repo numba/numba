@@ -16,7 +16,6 @@ import platform
 import warnings
 from threading import RLock as threadRLock
 from multiprocessing import RLock as procRLock
-from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np
