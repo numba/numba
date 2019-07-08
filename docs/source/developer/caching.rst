@@ -61,8 +61,6 @@ Caching Limitations
 
 This is a list of known limitation of the cache:
 
-- Functions using ``hash(str)`` will produce unexpected results when loaded
-  from cache. This also affects dictionary usage (i.e. ``numba.typed.Dict``).
 - Cache invalidation fails to recognize changes in symbols defined in a
   different file.
 - Global variables are treated as constants. The cache will remember the value
