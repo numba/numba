@@ -97,6 +97,10 @@ def typeof_type(val, c):
     if issubclass(val, Dict):
         return types.TypeRef(types.DictType)
 
+    from numba.typed import List
+    if issubclass(val, List):
+        return types.TypeRef(types.ListType)
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):

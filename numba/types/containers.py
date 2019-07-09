@@ -448,6 +448,72 @@ class SetEntry(Type):
         return self.set_type
 
 
+class ListType(IterableType):
+    """List type
+    """
+
+    mutable = True
+
+    def __init__(self, itemty):
+        assert not isinstance(itemty, TypeRef)
+        itemty = unliteral(itemty)
+        if isinstance(itemty, (Optional, NoneType)):
+            fmt = 'List.item_type cannot be of type {}'
+            raise TypingError(fmt.format(itemty))
+        # FIXME: _sentry_forbidden_types(itemty)
+        self.item_type = itemty
+        name = '{}[{}]'.format(
+            self.__class__.__name__,
+            itemty,
+        )
+        super(ListType, self).__init__(name)
+
+    def is_precise(self):
+        return not isinstance(self.item_type, Undefined)
+
+    @property
+    def iterator_type(self):
+        return ListTypeIterableType(self).iterator_type
+
+    @classmethod
+    def refine(cls, itemty):
+        """Refine to a precise list type
+        """
+        res = cls(itemty)
+        res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* list.
+        """
+        # If other is list
+        if isinstance(other, ListType):
+            if not other.is_precise():
+                return self
+
+
+class ListTypeIterableType(SimpleIterableType):
+    """List iteratable type
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, ListType)
+        self.parent = parent
+        self.yield_type = self.parent.item_type
+        name = "list[{}]".format(self.parent.name)
+        iterator_type = ListTypeIteratorType(self)
+        super(ListTypeIterableType, self).__init__(name, iterator_type)
+
+
+class ListTypeIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.yield_type
+        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        super(ListTypeIteratorType, self).__init__(name, yield_type)
+
+
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
