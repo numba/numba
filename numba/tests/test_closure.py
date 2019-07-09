@@ -435,10 +435,10 @@ class TestInlinedClosure(TestCase):
         msg = "with argument(s) of type(s): (none)"
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(UnsupportedError) as raises:
             cfunc = jit(nopython=True)(outer17)
             cfunc(var)
-        msg = "'NoneType' object has no attribute 'yield_points'"
+        msg = "The use of generator expressions is unsupported."
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
