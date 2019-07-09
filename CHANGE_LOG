@@ -1,3 +1,77 @@
+Version 0.45.0
+--------------
+
+In this release, Numba gained an experimental `numba.typed.List <pending_link>`_ container as a future replacement of the `reflected list <pending_link>`_. In addition, functions decorated with ``parallel=True`` can now be cached to reduce compilation overhead due to the auto-parallelization the function.
+
+
+Enhancements from user contributed PRs (with thanks!):
+
+James Bourbeau added Numba version in the error message in #4227, added the ``signature`` parameter to ``inspect_types`` in #4200, and
+improved the docstring of ``normalize_signature`` in #4205.
+
+Guilherme Leobas implemented the dominator tree and dominance frontier algorithms in #4216 and #4149
+
+Nick White fixed the issue with ``round`` in the CUDA target in #4137.
+
+Joshua Adelman added support for ``x in range(...)`` in #4129.
+
+
+General Enhancements:
+
+* PR #4239: Support len() of multi-dim arrays in array analysis
+* PR #4234: Raise informative error for np.kron array order
+* PR #4232: Add unicodetype db, low level str functions and examples.
+* PR #4229: Make hashing cacheable
+* PR #4227: Include numba version in reportable error message
+* PR #4216: Add dominator tree
+* PR #4200: Add signature parameter to inspect_types
+* PR #4196: Catch missing imports of internal functions.
+* PR #4180: Update use of unlowerable global message.
+* PR #4166: Add tests for PR #4149
+* PR #4157: Support for np.flatnonzero
+* PR #4149: Implement dominance frontier for SSA for the Numba IR
+* PR #4148: Call branch pruning in inline_closure_call()
+* PR #4132: Reduce usage of inttoptr
+* PR #4129: Support contains for range
+* PR #4112: better error messages for np.transpose and tuples
+* PR #4110: Add range attrs, start, stop, step
+
+Fixes:
+
+* PR #4262: Resolves #4251 - Fix bug in reshape analysis.
+* PR #4233: Fixes issue revealed by #4215
+* PR #4224: Fix #4223. Looplifting error due to StaticSetItem in objectmode
+* PR #4222: Fix bad python path.
+* PR #4178: Fix unary operator overload, check with unicode impl
+* PR #4173: Fix return type in np.bincount with weights
+* PR #4153: Fix slice shape assignment in array analysis
+* PR #4152: fix status check in dict lookup
+* PR #4145: Use callable instead of checking __module__
+* PR #4118: Fix inline assembly support on CPU.
+
+CUDA Enhancements/Fixes:
+
+* PR #4137: CUDA - Fix round Builtin
+* PR #4114: Support 3rd party activated CUDA context
+
+Documentation Updates:
+
+* PR #4253: fix typo in pysupported docs
+* PR #4252: fix typo on repomap
+* PR #4241: remove unused import
+* PR #4240: fix typo in jitclass docs
+* PR #4205: Update return value order in normalize_signature docstring
+* PR #4237: Update doc links to point to latest not dev docs.
+* PR #4197: hyperlink repomap
+* PR #4170: Clarify docs on accumulating into arrays in prange
+* PR #4147: fix docstring for DictType iterables
+
+CI Updates:
+
+* PR #4209: Revert previous network tol patch and try with conda config
+* PR #4138: Remove tbb before Azure test only on Python 3, since it was already removed for Python 2
+
+
 Version 0.44.1
 --------------
 
