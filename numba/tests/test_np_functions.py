@@ -2797,7 +2797,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = np_pyfunc(M, beta)
                 got = np_nbfunc(M, beta)
 
-                if IS_32BITS:
+                if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
                     self.assertPreciseEqual(expected, got, prec='double', ulps=2)
                 else:
                     self.assertPreciseEqual(expected, got, prec='exact')
