@@ -12,13 +12,7 @@ import textwrap
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
-from numba.config import PYVERSION
-
-
-if PYVERSION >= (3, 3):
-    from collections.abc import Mapping
-else:
-    from collections import Mapping
+from numba.six import Mapping
 
 
 class SourceLines(Mapping):
@@ -104,7 +98,8 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:
-                        atype = self.typemap[inst.target.name]
+                        # TODO: fix parfor lowering so that typemap is valid.
+                        atype = self.typemap.get(inst.target.name, "<missing>")
 
                     aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
                 elif isinstance(inst, ir.SetItem):

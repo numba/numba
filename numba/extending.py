@@ -39,7 +39,7 @@ def type_callable(func):
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)
         infer(template)
-        if hasattr(func, '__module__'):
+        if callable(func):
             infer_global(func, types.Function(template))
 
     return decorate
@@ -91,7 +91,7 @@ def overload(func, jit_options={}, strict=True):
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict)
         infer(template)
-        if hasattr(func, '__module__'):
+        if callable(func):
             infer_global(func, types.Function(template))
         return overload_func
 

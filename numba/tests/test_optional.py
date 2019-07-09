@@ -240,6 +240,27 @@ class TestOptional(TestCase):
         self.assertEqual(pyfunc(None), cfunc(None))
         self.assertEqual(pyfunc((1, 2)), cfunc((1, 2)))
 
+    def test_many_optional_none_returns(self):
+        """
+        Issue #4058
+        """
+        @njit
+        def foo(maybe):
+            lx = None
+            if maybe:
+                lx = 10
+            return 1, lx
+
+        def work():
+            tmp = []
+            for _ in range(20000):
+                maybe = False
+                _ = foo(maybe)
+
+        # this caused "Fatal Python error: deallocating None" as there was no
+        # incref being made on the returned None.
+        work()
+
 
 if __name__ == '__main__':
     unittest.main()

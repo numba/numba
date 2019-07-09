@@ -1,6 +1,7 @@
 """
 Assorted utilities for use in tests.
 """
+from __future__ import print_function
 
 import cmath
 import contextlib
@@ -16,6 +17,7 @@ import tempfile
 import time
 import io
 import ctypes
+import multiprocessing as mp
 
 import numpy as np
 
@@ -714,3 +716,57 @@ def redirect_c_stdout():
     """
     fd = sys.__stdout__.fileno()
     return redirect_fd(fd)
+
+
+def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
+    """Spawn a new process to run `func` with a temporary cache directory.
+
+    The childprocess's stdout and stderr will be captured and redirected to
+    the current process's stdout and stderr.
+
+    Returns
+    -------
+    ret : dict
+        exitcode: 0 for success. 1 for exception-raised.
+        stdout: str
+        stderr: str
+    """
+    ctx = mp.get_context('spawn')
+    qout = ctx.Queue()
+    cache_dir = temp_directory(cache_dir_prefix)
+    with override_env_config('NUMBA_CACHE_DIR', cache_dir):
+        proc = ctx.Process(target=_remote_runner, args=[func, qout])
+        proc.start()
+        proc.join()
+        stdout = qout.get_nowait()
+        stderr = qout.get_nowait()
+        if verbose and stdout.strip():
+            print()
+            print('STDOUT'.center(80, '-'))
+            print(stdout)
+        if verbose and stderr.strip():
+            print(file=sys.stderr)
+            print('STDERR'.center(80, '-'), file=sys.stderr)
+            print(stderr, file=sys.stderr)
+    return {
+        'exitcode': proc.exitcode,
+        'stdout': stdout,
+        'stderr': stderr,
+    }
+
+
+def _remote_runner(fn, qout):
+    """Used by `run_in_new_process_caching()`
+    """
+    with captured_stderr() as stderr:
+        with captured_stdout() as stdout:
+            try:
+                fn()
+            except Exception:
+                traceback.print_exc()
+                exitcode = 1
+            else:
+                exitcode = 0
+        qout.put(stdout.getvalue())
+    qout.put(stderr.getvalue())
+    sys.exit(exitcode)

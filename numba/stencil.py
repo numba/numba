@@ -16,6 +16,7 @@ from numba.targets import registry
 from numba.targets.imputils import lower_builtin
 from numba.extending import register_jitable
 from numba.six import exec_
+import numba
 
 import operator
 
@@ -45,6 +46,12 @@ def raise_if_incompatible_array_sizes(a, *args):
                 raise ValueError("Secondary stencil array has some dimension "
                                  "smaller the same dimension in the first "
                                  "stencil input.")
+
+def slice_addition(the_slice, addend):
+    """ Called by stencil in Python mode to add the loop index to a
+        user-specified slice.
+    """
+    return slice(the_slice.start + addend, the_slice.stop + addend)
 
 class StencilFunc(object):
     """
@@ -115,7 +122,7 @@ class StencilFunc(object):
         return ret_blocks
 
     def add_indices_to_kernel(self, kernel, index_names, ndim,
-                              neighborhood, standard_indexed):
+                              neighborhood, standard_indexed, typemap, calltypes):
         """
         Transforms the stencil kernel as specified by the user into one
         that includes each dimension's index variable as part of the getitem
@@ -124,7 +131,7 @@ class StencilFunc(object):
         const_dict = {}
         kernel_consts = []
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("add_indices_to_kernel", ndim, neighborhood)
             ir_utils.dump_blocks(kernel.blocks)
 
@@ -147,7 +154,7 @@ class StencilFunc(object):
             for stmt in block.body:
                 if (isinstance(stmt, ir.Assign) and
                     isinstance(stmt.value, ir.Const)):
-                    if config.DEBUG_ARRAY_OPT == 1:
+                    if config.DEBUG_ARRAY_OPT >= 1:
                         print("remembering in const_dict", stmt.target.name,
                               stmt.value.value)
                     # Remember consts for use later.
@@ -196,12 +203,30 @@ class StencilFunc(object):
                         index_var = ir.Var(scope, index_names[0], loc)
                         tmpname = ir_utils.mk_unique_var("stencil_index")
                         tmpvar  = ir.Var(scope, tmpname, loc)
-                        acc_call = ir.Expr.binop(operator.add, stmt_index_var,
-                                                 index_var, loc)
-                        new_body.append(ir.Assign(acc_call, tmpvar, loc))
-                        new_body.append(ir.Assign(
-                                       ir.Expr.getitem(stmt.value.value,tmpvar,loc),
-                                       stmt.target,loc))
+                        stmt_index_var_typ = typemap[stmt_index_var.name]
+                        # If the array is indexed with a slice then we
+                        # have to add the index value with a call to
+                        # slice_addition.
+                        if isinstance(stmt_index_var_typ, types.misc.SliceType):
+                            sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                            sa_func = numba.njit(slice_addition)
+                            sa_func_typ = types.functions.Dispatcher(sa_func)
+                            typemap[sa_var.name] = sa_func_typ
+                            g_sa = ir.Global("slice_addition", sa_func, loc)
+                            new_body.append(ir.Assign(g_sa, sa_var, loc))
+                            slice_addition_call = ir.Expr.call(sa_var, [stmt_index_var, index_var], (), loc)
+                            calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [stmt_index_var_typ, types.intp], {})
+                            new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
+                            new_body.append(ir.Assign(
+                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
+                                           stmt.target, loc))
+                        else:
+                            acc_call = ir.Expr.binop(operator.add, stmt_index_var,
+                                                     index_var, loc)
+                            new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                            new_body.append(ir.Assign(
+                                           ir.Expr.getitem(stmt.value.value, tmpvar, loc),
+                                           stmt.target, loc))
                     else:
                         index_vars = []
                         sum_results = []
@@ -210,6 +235,7 @@ class StencilFunc(object):
                         const_index_vars = []
                         ind_stencils = []
 
+                        stmt_index_var_typ = typemap[stmt_index_var.name]
                         # Same idea as above but you have to extract
                         # individual elements out of the tuple indexing
                         # expression and add the corresponding index variable
@@ -232,9 +258,25 @@ class StencilFunc(object):
                             getitemcall = ir.Expr.getitem(stmt_index_var,
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
-                            acc_call = ir.Expr.binop(operator.add, getitemvar,
-                                                     index_vars[dim], loc)
-                            new_body.append(ir.Assign(acc_call, tmpvar, loc))
+                            # Get the type of this particular part of the index tuple.
+                            one_index_typ = stmt_index_var_typ[dim]
+                            # If the array is indexed with a slice then we
+                            # have to add the index value with a call to
+                            # slice_addition.
+                            if isinstance(one_index_typ, types.misc.SliceType):
+                                sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                                sa_func = numba.njit(slice_addition)
+                                sa_func_typ = types.functions.Dispatcher(sa_func)
+                                typemap[sa_var.name] = sa_func_typ
+                                g_sa = ir.Global("slice_addition", sa_func, loc)
+                                new_body.append(ir.Assign(g_sa, sa_var, loc))
+                                slice_addition_call = ir.Expr.call(sa_var, [getitemvar, index_vars[dim]], (), loc)
+                                calltypes[slice_addition_call] = sa_func_typ.get_call_type(self._typingctx, [one_index_typ, types.intp], {})
+                                new_body.append(ir.Assign(slice_addition_call, tmpvar, loc))
+                            else:
+                                acc_call = ir.Expr.binop(operator.add, getitemvar,
+                                                         index_vars[dim], loc)
+                                new_body.append(ir.Assign(acc_call, tmpvar, loc))
 
                         tuple_call = ir.Expr.build_tuple(ind_stencils, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
@@ -282,7 +324,7 @@ class StencilFunc(object):
 
 
     def get_return_type(self, argtys):
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("get_return_type", argtys)
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
@@ -426,12 +468,12 @@ class StencilFunc(object):
             raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
         sentinel_name = ir_utils.get_unused_var_name("__sentinel__", name_var_table)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("name_var_table", name_var_table, sentinel_name)
 
         the_array = args[0]
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("_stencil_wrapper", return_type, return_type.dtype,
                                       type(return_type.dtype), args)
             ir_utils.dump_blocks(kernel_copy.blocks)
@@ -478,11 +520,11 @@ class StencilFunc(object):
         # arrays.
         kernel_size, relatively_indexed = self.add_indices_to_kernel(
                 kernel_copy, index_vars, the_array.ndim,
-                self.neighborhood, standard_indexed)
+                self.neighborhood, standard_indexed, typemap, copy_calltypes)
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("After add_indices_to_kernel")
             ir_utils.dump_blocks(kernel_copy.blocks)
 
@@ -491,7 +533,7 @@ class StencilFunc(object):
         ret_blocks = self.replace_return_with_setitem(kernel_copy.blocks,
                                                       index_vars, out_name)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("After replace_return_with_setitem", ret_blocks)
             ir_utils.dump_blocks(kernel_copy.blocks)
 
@@ -585,7 +627,7 @@ class StencilFunc(object):
         func_text += "{} = 0\n".format(sentinel_name)
         func_text += "    return {}\n".format(out_name)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("new stencil func text")
             print(func_text)
 
@@ -619,7 +661,7 @@ class StencilFunc(object):
         # Adjust ret_blocks to account for addition of the offset.
         ret_blocks = [x + stencil_stub_last_label for x in ret_blocks]
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("ret_blocks w/ offsets", ret_blocks, stencil_stub_last_label)
             print("before replace sentinel stencil_ir")
             ir_utils.dump_blocks(stencil_ir.blocks)
@@ -674,7 +716,7 @@ class StencilFunc(object):
 
         new_stencil_param_types = list(array_types)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("new_stencil_param_types", new_stencil_param_types)
             ir_utils.dump_blocks(stencil_ir.blocks)
 
@@ -711,7 +753,7 @@ class StencilFunc(object):
             array_types = tuple([typing.typeof.typeof(x) for x in args])
             array_types_full = array_types
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("__call__", array_types, args, kwargs)
 
         (real_ret, typemap, calltypes) = self.get_return_type(array_types)

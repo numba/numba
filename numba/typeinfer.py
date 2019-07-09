@@ -14,17 +14,20 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import logging
 import operator
 import contextlib
 import itertools
 from pprint import pprint
-import traceback
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -143,17 +146,20 @@ class ConstraintNetwork(object):
                 try:
                     constraint(typeinfer)
                 except TypingError as e:
+                    _logger.debug("captured error", exc_info=e)
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
                     errors.append(e)
-                except Exception:
-                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                    e = TypingError(msg.format(con=constraint,
-                                               err=traceback.format_exc(),
-                                               sep='--%<' + '-' * 76),
-                                    loc=constraint.loc,
-                                    highlighting=False)
+                except Exception as e:
+                    _logger.debug("captured error", exc_info=e)
+                    msg = ("Internal error at {con}.\n"
+                           "{err}\nEnable logging at debug level for details.")
+                    e = TypingError(
+                        msg.format(con=constraint, err=str(e)),
+                        loc=constraint.loc,
+                        highlighting=False,
+                    )
                     errors.append(e)
         return errors
 
@@ -231,7 +237,8 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of list at {0}", self.loc):
+        with new_error_context("typing of {0} at {1}",
+                               self.container_type, self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
@@ -253,6 +260,30 @@ class BuildListConstraint(_BuildContainerConstraint):
 
 class BuildSetConstraint(_BuildContainerConstraint):
     container_type = types.Set
+
+
+class BuildMapConstraint(object):
+
+    def __init__(self, target, items, loc):
+        self.target = target
+        self.items = items
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of dict at {0}", self.loc):
+            typevars = typeinfer.typevars
+            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
+                     for k, v in self.items]
+            if not tsets:
+                typeinfer.add_type(self.target,
+                                   types.DictType(types.undefined,
+                                                  types.undefined),
+                                   loc=self.loc)
+            else:
+                key_type, value_type = tsets[0]
+                typeinfer.add_type(self.target,
+                                   types.DictType(key_type, value_type),
+                                   loc=self.loc)
 
 
 class ExhaustIterConstraint(object):
@@ -284,9 +315,9 @@ class ExhaustIterConstraint(object):
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
-            else:
-                raise TypingError("failed to unpack {}".format(tp),
-                                  loc=self.loc)
+                else:
+                    raise TypingError("failed to unpack {}".format(tp),
+                                      loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -739,6 +770,9 @@ class TypeVarMap(dict):
 
 # A temporary mapping of {function name: dispatcher object}
 _temporary_dispatcher_map = {}
+# A temporary mapping of {function name: dispatcher object reference count}
+# Reference: https://github.com/numba/numba/issues/3658
+_temporary_dispatcher_map_ref_count = defaultdict(int)
 
 
 @contextlib.contextmanager
@@ -753,10 +787,13 @@ def register_dispatcher(disp):
     assert callable(disp.py_func)
     name = disp.py_func.__name__
     _temporary_dispatcher_map[name] = disp
+    _temporary_dispatcher_map_ref_count[name] += 1
     try:
         yield
     finally:
-        del _temporary_dispatcher_map[name]
+        _temporary_dispatcher_map_ref_count[name] -= 1
+        if not _temporary_dispatcher_map_ref_count[name]:
+            del _temporary_dispatcher_map[name]
 
 
 typeinfer_extensions = {}
@@ -1133,6 +1170,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_setattr(inst)
         elif isinstance(inst, ir.Print):
             self.typeof_print(inst)
+        elif isinstance(inst, ir.StoreMap):
+            self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         elif isinstance(inst, ir.StaticRaise):
@@ -1147,6 +1186,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def typeof_setitem(self, inst):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
+
+    def typeof_storemap(self, inst):
+        constraint = SetItemConstraint(target=inst.dct, index=inst.key,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
@@ -1290,8 +1335,19 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
-                msg = _termcolor.errmsg("Untyped global name '%s':") + " %s"
-                e.patch_message(msg % (gvar.name, e))
+                nm = gvar.name
+                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                msg += " %s" # interps the actual error
+
+                # if the untyped global is a numba internal function then add
+                # to the error message asking if it's been imported.
+                from numba import special
+                if nm in special.__all__:
+                    tmp = ("\n'%s' looks like a Numba internal function, has "
+                           "it been imported (i.e. 'from numba import %s')?\n" %
+                           (nm, nm))
+                    msg += _termcolor.errmsg(tmp)
+                e.patch_message(msg % e)
                 raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:
@@ -1372,6 +1428,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
         elif expr.op == 'build_set':
             constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_map':
+            constraint = BuildMapConstraint(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':

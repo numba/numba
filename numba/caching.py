@@ -290,7 +290,7 @@ class _IPythonCacheLocator(_CacheLocator):
         except ImportError:
             # older IPython version
             from IPython.utils.path import get_ipython_cache_dir
-        return os.path.join(get_ipython_cache_dir(), 'numba')
+        return os.path.join(get_ipython_cache_dir(), 'numba_cache')
 
     def get_source_stamp(self):
         return hashlib.sha256(self._bytes_source).hexdigest()

@@ -120,6 +120,7 @@ class TestParforsBase(TestCase):
         scheduler_type = kwargs.pop('scheduler_type', None)
         check_fastmath = kwargs.pop('check_fastmath', None)
         fastmath_pcres = kwargs.pop('fastmath_pcres', None)
+        check_scheduling = kwargs.pop('check_scheduling', True)
 
         def copy_args(*args):
             if not args:
@@ -150,7 +151,8 @@ class TestParforsBase(TestCase):
 
         self.assertEqual(type(njit_output), type(parfor_output))
 
-        self.check_scheduling(cpfunc, scheduler_type)
+        if check_scheduling:
+            self.check_scheduling(cpfunc, scheduler_type)
 
         # if requested check fastmath variant
         if fastmath_pcres is not None:
@@ -236,7 +238,8 @@ class TestParforsBase(TestCase):
             splitted = ir.splitlines()
             fast_inst = []
             for x in splitted:
-                if 'fast' in x:
+                m = re.search(r'\bfast\b', x)  # \b for wholeword
+                if m is not None:
                     fast_inst.append(x)
             return fast_inst
 
@@ -1403,6 +1406,67 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl)
 
+    @skip_unsupported
+    def test_reshape_with_neg_one(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_reshape_with_large_neg(self):
+        # issue3314
+        def test_impl(a, b):
+            result_matrix = np.zeros((b, b, 1), dtype=np.float64)
+            sub_a = a[0:b]
+            a = sub_a.size
+            b = a / 1
+            z = sub_a.reshape(-1307, 1)
+            result_data = sub_a / z
+            result_matrix[:,:,0] = result_data
+            return result_matrix
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+        b = 3
+
+        self.check(test_impl, a, b)
+
+    @skip_unsupported
+    def test_reshape_with_too_many_neg_one(self):
+        # issue3314
+        with self.assertRaises(ValueError) as raised:
+            @njit(parallel=True)
+            def test_impl(a, b):
+                rm = np.zeros((b, b, 1), dtype=np.float64)
+                sub_a = a[0:b]
+                a = sub_a.size
+                b = a / 1
+                z = sub_a.reshape(-1, -1)
+                result_data = sub_a / z
+                rm[:,:,0] = result_data
+                return rm
+
+            a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+                       7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+            b = 3
+            test_impl(a, b)
+
+        msg = ("The reshape API may only include one negative argument.")
+        self.assertIn(msg, str(raised.exception))
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -2174,8 +2238,8 @@ class TestParforsVectorizer(TestPrangeBase):
             if assertions:
                 schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
-                self.assertEqual(len(matches), 2) # 1x decl, 1x call
-                self.assertEqual(matches[0], matches[1])
+                self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
+                self.assertEqual(matches[0], schedule_type)
                 self.assertTrue(asm != {})
 
         return asm
@@ -2545,6 +2609,27 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.ones(10))
 
+    @skip_unsupported
+    def test_parfor_slice20(self):
+        # issues #4075, slice size
+        def test_impl():
+            a = np.ones(10)
+            c = a[1:]
+            s = len(c)
+            return s
+
+        self.check(test_impl, check_scheduling=False)
+
+    @skip_unsupported
+    def test_parfor_slice21(self):
+        def test_impl(x1, x2):
+            x1 = x1.reshape(x1.size, 1)
+            x2 = x2.reshape(x2.size, 1)
+            return x1 >= x2[:-1, :]
+
+        x1 = np.random.rand(5)
+        x2 = np.random.rand(6)
+        self.check(test_impl, x1, x2)
 
 class TestParforsOptions(TestParforsBase):
 
@@ -2665,7 +2750,7 @@ class TestParforsMisc(TestParforsBase):
     _numba_parallel_test_ = False
 
     @skip_unsupported
-    def test_warn_if_cache_set(self):
+    def test_no_warn_if_cache_set(self):
 
         def pyfunc():
             arr = np.ones(100)
@@ -2679,16 +2764,12 @@ class TestParforsMisc(TestParforsBase):
             warnings.simplefilter('always')
             cfunc()
 
-        self.assertEqual(len(raised_warnings), 1)
-        warning_obj = raised_warnings[0]
-        expected_msg = ("as it uses dynamic globals "
-                        "(such as ctypes pointers and large global arrays)")
-        self.assertIn(expected_msg, str(warning_obj.message))
+        self.assertEqual(len(raised_warnings), 0)
 
         # Make sure the dynamic globals flag is set
         has_dynamic_globals = [cres.library.has_dynamic_globals
                                for cres in cfunc.overloads.values()]
-        self.assertEqual(has_dynamic_globals, [True])
+        self.assertEqual(has_dynamic_globals, [False])
 
     @skip_unsupported
     def test_statement_reordering_respects_aliasing(self):
@@ -2750,7 +2831,7 @@ class TestParforsDiagnostics(TestParforsBase):
 
     def assert_diagnostics(self, diagnostics, parfors_count=None,
                            fusion_info=None, nested_fusion_info=None,
-                           replaced_fns=None):
+                           replaced_fns=None, hoisted_allocations=None):
         if parfors_count is not None:
             self.assertEqual(parfors_count, diagnostics.count_parfors())
         if fusion_info is not None:
@@ -2767,9 +2848,15 @@ class TestParforsDiagnostics(TestParforsBase):
                 else:
                     msg = "Replacement for %s was not found. Had %s" % (x, repl)
                     raise AssertionError(msg)
+
+        if hoisted_allocations is not None:
+            hoisted_allocs = diagnostics.hoisted_allocations()
+            self.assertEqual(hoisted_allocations, len(hoisted_allocs))
+
         # just make sure that the dump() function doesn't have an issue!
         with captured_stdout():
-            diagnostics.dump(4)
+            for x in range(1, 5):
+                diagnostics.dump(x)
 
     def test_array_expr(self):
         def test_impl():
@@ -2851,6 +2938,23 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
+
+    def test_allocation_hoisting(self):
+        def test_impl():
+            n = 10
+            m = 5
+            acc = 0
+            for i in prange(n):
+                temp = np.zeros((m,)) # the np.empty call should get hoisted
+                for j in range(m):
+                    temp[j] = i
+                acc += temp[-1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, hoisted_allocations=1)
 
 
 if __name__ == "__main__":

@@ -172,8 +172,16 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``
+* ``.center()``
+* ``.ljust()``
+* ``.rjust()``
 * ``.split()``
 * ``.join()``
+* ``.lstrip()``
+* ``.rstrip()``
+* ``.strip()``
+* ``.isupper()``
+* ``.upper()``
 * ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
@@ -205,6 +213,16 @@ The following operations are supported:
 
 list
 ----
+
+
+.. warning::
+    As of version 0.45.x the internal implementation for the list datatype in
+    Numba is changing. Until recently, only a single implementation of the list
+    datatype was available, the so-called *reflected-list* (see below).
+    However, it was scheduled for deprecation from version 0.44.0 onwards due
+    to its limitations. As of version 0.45.0 a new implementation, the
+    so-called *typed-list* (see below), is available as an experimental
+    feature. For more information, please see: :ref:`deprecation`.
 
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
@@ -252,6 +270,78 @@ of this limitation.
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+Typed List
+''''''''''
+
+.. note::
+  ``numba.typed.List`` is an experimental feature, if you encounter any bugs in
+  functionality or suffer from unexpectedly bad performance, please report
+  this, ideally by opening an issue on the Numba issue tracker.
+
+As of version 0.45.0 a new implementation of the list data type is available,
+the so-called *typed-list*. This is compiled library backed, type-homogeneous
+list data type that is an improvement over the *reflected-list* mentioned
+above.  Additionally, lists can now be arbitrarily nested. Since the
+implementation is considered experimental, you will need to import it
+explicitly from the `numba.typed` module::
+
+    In [1]: from numba.typed import List
+
+    In [2]: from numba import njit
+
+    In [3]: @njit
+    ...: def foo(l):
+    ...:     l.append(23)
+    ...:     return l
+    ...:
+
+    In [4]: mylist = List()
+
+    In [5]: mylist.append(1)
+
+    In [6]: foo(mylist)
+    Out[6]: ListType[int64]([1, 23])
+
+
+.. note::
+    As the typed-list stabilizes it will fully replace the reflected-list and the
+    constructors `[]` and `list()` will create a typed-list instead of a
+    reflected one.
+
+
+Here's an example using ``List()`` to create ``numba.typed.List`` inside a
+jit-compiled function and letting the compiler infer the item type:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_inferred_list_jit.begin
+   :end-before: magictoken.ex_inferred_list_jit.end
+   :dedent: 4
+   :linenos:
+
+Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
+a jit-compiled function and then using it as an argument to a jit-compiled
+function:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_inferred_list.begin
+   :end-before: magictoken.ex_inferred_list.end
+   :dedent: 4
+   :linenos:
+
+Finally, here's an example of using a nested `List()`:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_nested_list.begin
+   :end-before: magictoken.ex_nested_list.end
+   :dedent: 4
+   :linenos:
+
 .. _pysupported-comprehension:
 
 List comprehension
@@ -292,7 +382,7 @@ list objects.  Therefore, the nesting of list comprehension here is
 not a problem since a multi-dimensional array is being created here
 instead of a nested list.
 
-Additionally, Numba supports parallel array comphension when combined
+Additionally, Numba supports parallel array comprehension when combined
 with the :ref:`parallel_jit_option` option on CPUs.
 
 set
@@ -316,12 +406,22 @@ dict
   ``numba.typed.Dict`` is an experimental feature.  The API may change
   in the future releases.
 
-Numba does not directly support the Python ``dict`` because it is an untyped
+.. note::
+  ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
+  ``dict()`` translates to calling ``numba.typed.Dict()``.
+
+Numba only supports the use of ``dict()`` without any arguments.  Such use is
+semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
+an instance of ``numba.typed.Dict`` where the key-value types will be later
+inferred by usage.
+
+Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
 machine code, Numba needs the keys and the values of the dictionary to have
 fixed types, declared in advance. To achieve this, Numba has a typed dictionary,
-``numba.typed.Dict``, for which the user must explicitly declare the key-type
-and the value-type using the ``Dict.empty()`` constructor method.
+``numba.typed.Dict``, for which the type-inference mechanism must be able to
+infer the key-value types by use, or the user must explicitly declare the
+key-value type using the ``Dict.empty()`` constructor method.
 This typed dictionary has the same API as the Python ``dict``,  it implements
 the ``collections.MutableMapping`` interface and is usable in both interpreted
 Python code and JIT-compiled Numba functions.
@@ -335,11 +435,6 @@ An important difference of the typed dictionary in comparison to Python's
 ``dict`` is that **implicit casting** occurs when a key or value is stored.
 As a result the *setitem* operation may fail should the type-casting fail.
 
-.. note::
-  A ``numba.typed.Dict`` cannot yet be constructed with ``Dict()``, the
-  ``Dict.empty(key_type, value_type)`` class method must be used to construct a
-  typed dictionary instead.
-
 It should be noted that the Numba typed dictionary is implemented using the same
 algorithm as the CPython 3.7 dictionary. As a consequence, the typed dictionary
 is ordered and has the same collision resolution as the CPython implementation.
@@ -350,6 +445,17 @@ dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
 strings, arrays, scalars, tuples. It is expected that these limitations will
 be relaxed as Numba continues to improve.
+
+Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
+instances and letting the compiler infer the key-value types:
+
+.. literalinclude:: ../../../examples/dict_usage.py
+   :language: python
+   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :start-after: magictoken.ex_inferred_dict_njit.begin
+   :end-before: magictoken.ex_inferred_dict_njit.end
+   :dedent: 4
+   :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
@@ -373,6 +479,12 @@ using the dictionary in interpreted code:
    :dedent: 4
    :linenos:
 
+It should be noted that ``numba.typed.Dict`` is not thread-safe.
+Specifically, functions which modify a dictionary from multiple
+threads will potentially corrupt memory, causing a
+range of possible failures. However, the dictionary can be safely read from
+multiple threads as long as the contents of the dictionary do not
+change during the parallel access.
 
 None
 ----

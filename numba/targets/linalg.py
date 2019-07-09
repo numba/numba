@@ -2683,7 +2683,11 @@ else:
 def _kron_normaliser_impl(x):
     # makes x into a 2d array
     if isinstance(x, types.Array):
-        if x.ndim == 2:
+        if x.layout not in ('C', 'F'):
+            raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
+                              "input arrays. Receieved an input of "
+                              "layout '{}'.".format(x.layout))
+        elif x.ndim == 2:
             @register_jitable
             def nrm_shape(x):
                 xn = x.shape[-1]

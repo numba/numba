@@ -768,6 +768,13 @@ if sys.version_info[0:2] < (3, 4):
 else:
     wraps = functools.wraps
 
+
+if sys.version_info[:2] < (3, 3):
+    from collections import Mapping, MutableMapping, Sequence, MutableSequence
+else:
+    from collections.abc import Mapping, MutableMapping, Sequence, MutableSequence
+
+
 def with_metaclass(meta, *bases):
     """Create a base class with a metaclass."""
     # This requires a bit of explanation: the basic idea is to make a dummy

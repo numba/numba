@@ -3,11 +3,16 @@ Unspecified error handling tests
 """
 from __future__ import division
 
-from numba import jit, njit
+from numba import jit, njit, typed, int64
 from numba import unittest_support as unittest
 from numba import errors, utils
 import numpy as np
 
+from .support import skip_parfors_unsupported
+
+# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
+_global_list = [1, 2, 3, 4]
+_global_dict = typed.Dict.empty(int64, int64)
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
 
@@ -72,6 +77,26 @@ class TestMiscErrorHandling(unittest.TestCase):
         a = np.array([1.0],dtype=np.float64)
         fn(a) # should not raise
 
+    def test_commented_func_definition_is_not_a_definition(self):
+        # See issue #4056, the commented def should not be found as the
+        # definition for reporting purposes when creating the synthetic
+        # traceback because it is commented! Use of def in docstring would also
+        # cause this issue hence is tested.
+
+        def foo_commented():
+            #def commented_definition()
+            raise Exception('test_string')
+
+        def foo_docstring():
+            """ def docstring containing def might match function definition!"""
+            raise Exception('test_string')
+
+        for func in (foo_commented, foo_docstring):
+            with self.assertRaises(Exception) as raises:
+                func()
+
+            self.assertIn("test_string", str(raises.exception))
+
     def test_use_of_ir_unknown_loc(self):
         # for context see # 3390
         import numba
@@ -104,6 +129,43 @@ class TestMiscErrorHandling(unittest.TestCase):
             f(iter([1,2]))  # use a type that Numba doesn't recognize
 
         expected = 'File "unknown location", line 0:'
+        self.assertIn(expected, str(raises.exception))
+
+    def check_write_to_globals(self, func):
+        with self.assertRaises(errors.TypingError) as raises:
+            func()
+
+        expected = ["The use of a", "in globals, is not supported as globals"]
+        for ex in expected:
+            self.assertIn(ex, str(raises.exception))
+
+
+    def test_handling_of_write_to_reflected_global(self):
+        @njit
+        def foo():
+            _global_list[0] = 10
+
+        self.check_write_to_globals(foo)
+
+    def test_handling_of_write_to_typed_dict_global(self):
+        @njit
+        def foo():
+            _global_dict[0] = 10
+
+        self.check_write_to_globals(foo)
+
+    @skip_parfors_unsupported
+    def test_handling_forgotten_numba_internal_import(self):
+        @njit(parallel=True)
+        def foo():
+            for i in prange(10): # prange is not imported
+                pass
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        expected = ("'prange' looks like a Numba internal function, "
+                    "has it been imported")
         self.assertIn(expected, str(raises.exception))
 
 

@@ -359,8 +359,8 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
                 dtype = ty.dtype
             # get numpy alignment
             npalign = np.dtype(np.complex128).alignment
-            # llvm should align to wordsize
-            llalign = np.dtype(np.intp).alignment
+            # llvm should align to alignment of double.
+            llalign = np.dtype(np.double).alignment
             self.assertIn(
                 ("NumPy is using a different alignment ({}) "
                  "than Numba/LLVM ({}) for complex128. "
@@ -811,6 +811,15 @@ class TestRecordDtype(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc, (nbtype[:],))
         got = cfunc(arr.copy())
         np.testing.assert_equal(expect, got)
+
+    def test_record_dtype_with_titles_roundtrip(self):
+        recdtype = np.dtype([(("title a", 'a'), np.float), ('b', np.float)])
+        nbtype = numpy_support.from_dtype(recdtype)
+        self.assertTrue(nbtype.is_title('title a'))
+        self.assertFalse(nbtype.is_title('a'))
+        self.assertFalse(nbtype.is_title('b'))
+        got = numpy_support.as_dtype(nbtype)
+        self.assertTrue(got, recdtype)
 
 
 def _get_cfunc_nopython(pyfunc, argspec):

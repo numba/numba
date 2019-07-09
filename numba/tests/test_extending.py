@@ -411,6 +411,18 @@ def mk_func_test_impl():
     mk_func_input(lambda a: a)
 
 
+# -----------------------------------------------------------------------
+
+
+@overload(np.exp)
+def overload_np_exp(obj):
+    if isinstance(obj, MyDummyType):
+        def imp(obj):
+            # Returns a constant if a MyDummyType is seen
+            return 0xdeadbeef
+        return imp
+
+
 class TestLowLevelExtending(TestCase):
     """
     Test the low-level two-tier extension API.
@@ -962,6 +974,16 @@ class TestHighLevelExtending(TestCase):
         A = np.zeros(1)
         bar(A)
         self.assertEqual(bar(A), 0xcafe)
+
+    def test_overload_ufunc(self):
+        # Issue #4133.
+        # Use an extended type (MyDummyType) to use with a customized
+        # ufunc (np.exp).
+        @njit
+        def test():
+            return np.exp(mydummy)
+
+        self.assertEqual(test(), 0xdeadbeef)
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):

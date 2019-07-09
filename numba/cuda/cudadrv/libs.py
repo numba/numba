@@ -1,10 +1,17 @@
+"""Cudatoolkit libraries lookup utilities.
+
+Cudatoolkit libraries can be available via the `cudatoolkit` conda package,
+user supplied location from CUDA_HOME, or old deprecating NUMBAPRO_ prefixed
+environment variables.
+"""
 from __future__ import print_function
-import re
 import os
 import sys
 import ctypes
 import platform
-from numba.findlib import find_lib, find_file
+
+from numba.findlib import find_lib
+from numba.cuda.cuda_paths import get_cuda_paths
 
 if sys.platform == 'win32':
     _dllopener = ctypes.WinDLL
@@ -15,18 +22,9 @@ else:
 
 
 def get_libdevice(arch):
-    libdir = (os.environ.get('NUMBAPRO_LIBDEVICE') or
-              os.environ.get('NUMBAPRO_CUDALIB'))
-
-    pat = r'libdevice\.%s(\.\d+)*\.bc$' % arch
-    candidates = find_file(re.compile(pat), libdir)
-
-    if not candidates:
-        # CUDA 9 switches to fat library, with no arch in name
-        pat = r'libdevice(\.\d+)*\.bc$'
-        candidates = find_file(re.compile(pat), libdir)
-
-    return max(candidates) if candidates else None
+    d = get_cuda_paths()
+    paths = d['libdevice'].info
+    return paths.get(arch, paths.get(None))
 
 
 def open_libdevice(arch):
@@ -35,9 +33,11 @@ def open_libdevice(arch):
 
 
 def get_cudalib(lib, platform=None):
-    if lib == 'nvvm' and os.environ.get('NUMBAPRO_NVVM'):
-        return os.environ.get('NUMBAPRO_NVVM')
-    libdir = os.environ.get('NUMBAPRO_CUDALIB')
+    if lib == 'nvvm':
+        return get_cuda_paths()['nvvm'].info
+    else:
+        libdir = get_cuda_paths()['cudalib_dir'].info
+
     candidates = find_lib(lib, libdir, platform)
     return max(candidates) if candidates else None
 
@@ -51,12 +51,23 @@ def open_cudalib(lib, ccc=False):
     return _dllopener(path)
 
 
+def _get_source_variable(lib):
+    if lib == 'nvvm':
+        return get_cuda_paths()['nvvm'].by
+    elif lib == 'libdevice':
+        return get_cuda_paths()['libdevice'].by
+    else:
+        return get_cuda_paths()['cudalib_dir'].by
+
+
 def test(_platform=None, print_paths=True):
+    """Test library lookup.  Path info is printed to stdout.
+    """
     failed = False
     libs = 'cublas cusparse cufft curand nvvm'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
-        print('Finding', lib)
+        print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
         if path:
             if print_paths:
                 print('\tlocated at', path)
@@ -77,8 +88,10 @@ def test(_platform=None, print_paths=True):
                 failed = True if not _if_osx_10_5() else False
 
     archs = 'compute_20', 'compute_30', 'compute_35', 'compute_50'
+    where = _get_source_variable('libdevice')
+    print('Finding libdevice from', where)
     for arch in archs:
-        print('\tfinding libdevice for', arch, end='...')
+        print('\tsearching for', arch, end='...')
         path = get_libdevice(arch)
         if path:
             print('\tok')
