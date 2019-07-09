@@ -142,6 +142,7 @@ def gettyperecord_impl(a):
     if isinstance(a, types.Integer):
         return lambda a: _gettyperecord_impl(_Py_UCS4(a))
 
+
 # whilst it's possible to grab the _PyUnicode_ExtendedCase symbol as it's global
 # it is safer to use a defined api:
 @intrinsic

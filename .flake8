@@ -315,7 +315,6 @@ exclude =
     numba/tests/test_hashing.py
     numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_dispatcher.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
