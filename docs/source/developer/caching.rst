@@ -81,8 +81,8 @@ not match exactly, the cache contents will not be considered.
 
 If the cache directory is shared on a network filesystem, concurrent
 read/write of the cache is safe only if file replacement operation is atomic
-for the filesystem. Numba always write to a unique temporary file first, it then
-replaces the target cache file path with the temporary file. Numba is
+for the filesystem. Numba always writes to a unique temporary file first, it
+then replaces the target cache file path with the temporary file. Numba is
 tolerant against lost cache files and lost cache entries.
 
 .. _cache-clearing:
