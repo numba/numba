@@ -20,4 +20,5 @@ Developer Manual
    custom_pipeline.rst
    environment.rst
    hashing.rst
+   caching.rst
    roadmap.rst
