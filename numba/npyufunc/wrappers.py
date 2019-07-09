@@ -296,7 +296,7 @@ class _GufuncWrapper(object):
         The *is_parfors* argument is a boolean that indicates if the GUfunc
         being built is to be used as a ParFors kernel. If True, it disables
         the caching on the wrapper as a separate unit because it will be linked
-        into the caller function as cached along with it.
+        into the caller function and cached along with it.
         """
         self.py_func = py_func
         self.cres = cres
@@ -345,7 +345,7 @@ class _GufuncWrapper(object):
     def _build_wrapper(self, library, name):
         """
         The LLVM IRBuilder code to create the gufunc wrapper.
-        The *library* arg is the CodeLibrary for to which the wrapper should
+        The *library* arg is the CodeLibrary to which the wrapper should
         be added.  The *name* arg is the name of the wrapper function being
         created.
         """
@@ -361,7 +361,7 @@ class _GufuncWrapper(object):
         func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty, name)
         # The use of weak_odr linkage avoids the function being dropped due
-        # to the order in which the wrappers and the user function is linked.
+        # to the order in which the wrappers and the user function are linked.
         wrapper.linkage = 'weak_odr'
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
