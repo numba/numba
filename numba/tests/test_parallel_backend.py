@@ -10,29 +10,28 @@ import random
 import os
 import sys
 import subprocess
-import signal
-
-from numba import config, utils
-if utils.PYVERSION >= (3, 0):
-    import queue as t_queue
-    import faulthandler
-else:
-    import Queue as t_queue
 
 import numpy as np
 
+from numba import config, utils
+
 from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize, njit
+from numba import jit, vectorize, guvectorize
 
 from .support import temp_directory, override_config, TestCase, tag
 
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
+from numba.six.moves import queue as t_queue
+
+if utils.PYVERSION >= (3, 0):
+    import faulthandler
+
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool
+    from numba.npyufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
@@ -44,7 +43,7 @@ except ImportError:
     _HAVE_OMP_POOL = False
 
 try:
-    import scipy.linalg.cython_lapack
+    import scipy.linalg.cython_lapack    # noqa: F401
     _HAVE_LAPACK = True
 except ImportError:
     _HAVE_LAPACK = False
@@ -146,7 +145,7 @@ def chooser(fnlist, **kwargs):
     try:
         if utils.PYVERSION >= (3, 0):
             faulthandler.enable()
-        for _ in range(10):
+        for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
     except BaseException as e:
@@ -218,20 +217,27 @@ class TestParallelBackendBase(TestCase):
     Base class for testing the parallel backends
     """
 
-    all_impls = [jit_runner(nopython=True),
-                 jit_runner(nopython=True, cache=True),
-                 jit_runner(nopython=True, nogil=True),
-                 linalg_runner(nopython=True),
-                 linalg_runner(nopython=True, nogil=True),
-                 vectorize_runner(nopython=True),
-                 vectorize_runner(nopython=True, target='parallel'),
-                 guvectorize_runner(nopython=True),
-                 guvectorize_runner(nopython=True, target='parallel'),
-                 ]
+    all_impls = [
+        jit_runner(nopython=True),
+        jit_runner(nopython=True, cache=True),
+        jit_runner(nopython=True, nogil=True),
+        linalg_runner(nopython=True),
+        linalg_runner(nopython=True, nogil=True),
+        vectorize_runner(nopython=True),
+        vectorize_runner(nopython=True, target='parallel'),
+        vectorize_runner(nopython=True, target='parallel', cache=True),
+        guvectorize_runner(nopython=True),
+        guvectorize_runner(nopython=True, target='parallel'),
+        guvectorize_runner(nopython=True, target='parallel', cache=True),
+    ]
 
     if not _parfors_unsupported:
-        parfor_impls = [jit_runner(nopython=True, parallel=True),
-                        linalg_runner(nopython=True, parallel=True), ]
+        parfor_impls = [
+            jit_runner(nopython=True, parallel=True),
+            jit_runner(nopython=True, parallel=True, cache=True),
+            linalg_runner(nopython=True, parallel=True),
+            linalg_runner(nopython=True, parallel=True, cache=True),
+        ]
         all_impls.extend(parfor_impls)
 
     parallelism = ['threading', 'random']
@@ -243,14 +249,18 @@ class TestParallelBackendBase(TestCase):
     else:
         parallelism.append('multiprocessing_default')
 
-    runners = {'concurrent_jit': [jit_runner(nopython=True,
-                                             parallel=(not _parfors_unsupported)
-                                             )],
-               'concurrect_vectorize':
-                   [vectorize_runner(nopython=True, target='parallel')],
-               'concurrent_guvectorize':
-                   [guvectorize_runner(nopython=True, target='parallel')],
-               'concurrent_mix_use': all_impls}
+    runners = {
+        'concurrent_jit': [
+            jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
+        ],
+        'concurrect_vectorize': [
+            vectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_guvectorize': [
+            guvectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_mix_use': all_impls,
+    }
 
     safe_backends = {'omp', 'tbb'}
 
