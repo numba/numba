@@ -894,7 +894,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_pickling(self):
         @jitclass(spec=[])
-        class PickleTestSubject:
+        class PickleTestSubject(object):
             def __init__(self):
                 pass
 
