@@ -699,7 +699,10 @@ class TestLiftObj(MemoryLeak, TestCase):
             with objmode_context(k='int64'):
                 print(x)
                 spx = sp.csr_matrix(x)
-                k = spx[0, 0]
+                # the np.int64 call is pointless, works around:
+                # https://github.com/scipy/scipy/issues/10206
+                # which hit the SciPy 1.3 release.
+                k = np.int64(spx[0, 0])
             return k
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
