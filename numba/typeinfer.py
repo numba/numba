@@ -19,7 +19,7 @@ import operator
 import contextlib
 import itertools
 from pprint import pprint
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
@@ -315,9 +315,9 @@ class ExhaustIterConstraint(object):
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
-            else:
-                raise TypingError("failed to unpack {}".format(tp),
-                                  loc=self.loc)
+                else:
+                    raise TypingError("failed to unpack {}".format(tp),
+                                      loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -770,6 +770,9 @@ class TypeVarMap(dict):
 
 # A temporary mapping of {function name: dispatcher object}
 _temporary_dispatcher_map = {}
+# A temporary mapping of {function name: dispatcher object reference count}
+# Reference: https://github.com/numba/numba/issues/3658
+_temporary_dispatcher_map_ref_count = defaultdict(int)
 
 
 @contextlib.contextmanager
@@ -784,10 +787,13 @@ def register_dispatcher(disp):
     assert callable(disp.py_func)
     name = disp.py_func.__name__
     _temporary_dispatcher_map[name] = disp
+    _temporary_dispatcher_map_ref_count[name] += 1
     try:
         yield
     finally:
-        del _temporary_dispatcher_map[name]
+        _temporary_dispatcher_map_ref_count[name] -= 1
+        if not _temporary_dispatcher_map_ref_count[name]:
+            del _temporary_dispatcher_map[name]
 
 
 typeinfer_extensions = {}

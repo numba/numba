@@ -120,7 +120,7 @@ class DeviceNDArrayBase(object):
             'strides': tuple(self.strides),
             'data': (self.device_ctypes_pointer.value, False),
             'typestr': self.dtype.str,
-            'version': 0,
+            'version': 1,
         }
 
     def bind(self, stream=0):

@@ -78,7 +78,7 @@ def _specialize_box(typ):
         return _cache_specialized_box[typ]
     dct = {'__slots__': (),
            '_numba_type_': typ,
-           '__doc__': typ.class_type.class_def.__doc__,
+           '__doc__': typ.class_type.class_doc,
            }
     # Inject attributes as class properties
     for field in typ.struct:

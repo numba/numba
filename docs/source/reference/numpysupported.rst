@@ -358,6 +358,9 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
+* :func:`numpy.select` (only using homogeneous lists or tuples for the first
+  two arguments, condlist and choicelist). Additionally, these two arguments
+  can only contain arrays (unlike Numpy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)

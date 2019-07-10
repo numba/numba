@@ -219,7 +219,6 @@ exclude =
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
     numba/tests/test_return_values.py
-    numba/tests/test_parallel_backend.py
     numba/tests/test_mangling.py
     numba/tests/test_npdatetime.py
     numba/tests/test_fancy_indexing.py
@@ -304,7 +303,6 @@ exclude =
     numba/tests/test_array_analysis.py
     numba/tests/test_serialize.py
     numba/tests/test_iteration.py
-    numba/tests/threading_backend_usecases.py
     numba/tests/test_runtests.py
     numba/tests/test_recarray_usecases.py
     numba/tests/test_target_overloadselector.py
@@ -317,7 +315,6 @@ exclude =
     numba/tests/test_hashing.py
     numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_dispatcher.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
@@ -406,8 +403,6 @@ exclude =
     numba/npyufunc/sigparse.py
     numba/npyufunc/parfor.py
     numba/npyufunc/array_exprs.py
-    numba/npyufunc/wrappers.py
-    numba/npyufunc/parallel.py
     numba/npyufunc/decorators.py
     numba/servicelib/service.py
     numba/datamodel/models.py

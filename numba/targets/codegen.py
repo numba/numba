@@ -71,7 +71,7 @@ class CodeLibrary(object):
     def __init__(self, codegen, name):
         self._codegen = codegen
         self._name = name
-        self._linking_libraries = set()
+        self._linking_libraries = []   # maintain insertion order
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = cgutils.normalize_ir_text(self._name)
@@ -173,7 +173,7 @@ class CodeLibrary(object):
         the original library.
         """
         library._ensure_finalized()
-        self._linking_libraries.add(library)
+        self._linking_libraries.append(library)
 
     def add_ir_module(self, ir_module):
         """
@@ -210,9 +210,13 @@ class CodeLibrary(object):
             dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         # Link libraries for shared code
+        seen = set()
         for library in self._linking_libraries:
-            self._final_module.link_in(
-                library._get_module_for_linking(), preserve=True)
+            if library not in seen:
+                seen.add(library)
+                self._final_module.link_in(
+                    library._get_module_for_linking(), preserve=True,
+                )
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.

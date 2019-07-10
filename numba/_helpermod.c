@@ -140,6 +140,21 @@ build_c_helpers_dict(void)
     declmethod(dict_iter_next);
     declmethod(dict_dump);
 
+    /* for list support */
+    declmethod(test_list);
+    declmethod(list_new);
+    declmethod(list_set_method_table);
+    declmethod(list_free);
+    declmethod(list_length);
+    declmethod(list_setitem);
+    declmethod(list_getitem);
+    declmethod(list_append);
+    declmethod(list_pop);
+    declmethod(list_delete_slice);
+    declmethod(list_iter_sizeof);
+    declmethod(list_iter);
+    declmethod(list_iter_next);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"

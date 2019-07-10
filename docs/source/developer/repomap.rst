@@ -298,9 +298,14 @@ Core Python Data Types
 - :ghfile:`numba/_dictobject.{h,c}` - C level implementation of typed
   dictionary
 - :ghfile:`numba/dictobject.py` - Nopython mode wrapper for typed dictionary
+- :ghfile:`numba/_listobject.{h,c}` - C level implementation of typed list
+- :ghfile:`numba/listobject.py` - Nopython mode wrapper for typed list
+- :ghfile:`numba/typedobjectutils.py` - Common utilities for typed dictionary
+  and list
 - :ghfile:`numba/unicode.py` - Unicode strings (Python 3.5 and later)
 - :ghfile:`numba/typed` - Python interfaces to statically typed containers
 - :ghfile:`numba/typed/typeddict.py` - Python interface to typed dictionary
+- :ghfile:`numba/typed/typedlist.py` - Python interface to typed list
 - :ghfile:`numba/jitclass` - Implementation of JIT compilation of Python
   classes
 - :ghfile:`numba/generators.py` - Support for lowering Python generators

@@ -1212,3 +1212,8 @@ numba_gdb_breakpoint(void) {
  * Dictionary support
  */
  #include "_dictobject.c"
+
+/*
+ * List support
+ */
+ #include "_listobject.c"
