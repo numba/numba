@@ -62,6 +62,7 @@ General Enhancements:
 
 Fixes:
 
+* PR #4303: Work around scipy bug 10206
 * PR #4302: Fix flake8 issue on master
 * PR #4301: Fix integer literal bug in np.select impl
 * PR #4291: Fix pickling of jitclass type
