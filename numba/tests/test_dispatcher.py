@@ -12,7 +12,6 @@ import warnings
 import inspect
 import pickle
 import weakref
-import collections
 from itertools import chain
 
 try:
