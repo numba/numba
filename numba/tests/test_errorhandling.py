@@ -172,7 +172,12 @@ class TestMiscErrorHandling(unittest.TestCase):
         def foo():
             y = (x for x in range(10))
 
-        expected = "The use of generator expressions is unsupported."
+        if utils.IS_PY3:
+            expected = "The use of generator expressions is unsupported."
+        else:
+            # funcsigs falls over on py27
+            expected = "Cannot obtain a signature for"
+
         for dec in jit(forceobj=True), njit:
             with self.assertRaises(errors.UnsupportedError) as raises:
                 dec(foo)()
