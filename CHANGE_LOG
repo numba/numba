@@ -1,20 +1,22 @@
 Version 0.45.0
 --------------
 
-In this release, Numba gained an experimental `numba.typed.List <pending_link>`_ container as a future replacement of the `reflected list <pending_link>`_. In addition, functions decorated with ``parallel=True`` can now be cached to reduce compilation overhead due to the auto-parallelization the function.
+In this release, Numba gained an experimental `numba.typed.List <pending_link>`_ container as a future replacement of the `reflected list <pending_link>`_. In addition, functions decorated with ``parallel=True`` can now be cached to reduce compilation overhead associated with the auto-parallelization.
 
 
 Enhancements from user contributed PRs (with thanks!):
 
-James Bourbeau added Numba version in the error message in #4227, added the ``signature`` parameter to ``inspect_types`` in #4200, and
-improved the docstring of ``normalize_signature`` in #4205.
+* James Bourbeau added the Numba version to reportable error messages in #4227, added the ``signature`` parameter to ``inspect_types`` in #4200, and improved the docstring of ``normalize_signature`` in #4205.
 
-Guilherme Leobas implemented the dominator tree and dominance frontier algorithms in #4216 and #4149
+* Guilherme Leobas implemented the dominator tree and dominance frontier algorithms in #4216 and #4149, respectively.
 
-Nick White fixed the issue with ``round`` in the CUDA target in #4137.
+* Nick White fixed the issue with ``round`` in the CUDA target in #4137.
 
-Joshua Adelman added support for ``x in range(...)`` in #4129.
+* Joshua Adelman added support for determining if a value is in a `range` (i.e.  ``x in range(...)``) in #4129, and added windowing functions (``np.bartlett``, ``np.hamming``, ``np.blackman``, ``np.hanning``, ``np.kaiser``) from NumPy in #4076
 
+* Lucio Fernandez-Arjona added support for ``np.select`` in #4077
+
+* Rob Ennis added support for ``np.flatnonzero`` in #4157
 
 General Enhancements:
 
@@ -35,6 +37,11 @@ General Enhancements:
 * PR #4129: Support contains for range
 * PR #4112: better error messages for np.transpose and tuples
 * PR #4110: Add range attrs, start, stop, step
+* PR #3691: Make TypingError abort compiling earlier
+* PR #3646: Log internal errors encountered in typeinfer
+* PR #4077: Add np select
+* PR #4076: Add numpy windowing functions support (np.bartlett, np.hamming, np.blackman, np.hanning, np.kaiser)
+* PR #4095: Support ir.Global/FreeVar in find_const()
 
 Fixes:
 
@@ -48,6 +55,8 @@ Fixes:
 * PR #4152: fix status check in dict lookup
 * PR #4145: Use callable instead of checking __module__
 * PR #4118: Fix inline assembly support on CPU.
+* PR #4088: Resolves #4075 - parfors array_analysis bug.
+* PR #4085: Resolves #3314 - parfors array_analysis bug with reshape.
 
 CUDA Enhancements/Fixes:
 
@@ -65,6 +74,7 @@ Documentation Updates:
 * PR #4197: hyperlink repomap
 * PR #4170: Clarify docs on accumulating into arrays in prange
 * PR #4147: fix docstring for DictType iterables
+* PR #3951: A guide to overloading
 
 CI Updates:
 
