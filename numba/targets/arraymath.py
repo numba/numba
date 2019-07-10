@@ -3587,7 +3587,7 @@ def np_select(condlist, choicelist, default=0):
         raise TypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise TypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (types.Number, types.Boolean)):
+    if not isinstance(default, (int, types.Number, types.Boolean)):
         raise TypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
