@@ -62,6 +62,8 @@ General Enhancements:
 
 Fixes:
 
+* PR #4302: Fix flake8 issue on master
+* PR #4301: Fix integer literal bug in np.select impl
 * PR #4291: Fix pickling of jitclass type
 * PR #4262: Resolves #4251 - Fix bug in reshape analysis.
 * PR #4233: Fixes issue revealed by #4215
@@ -97,9 +99,9 @@ Documentation Updates:
 * PR #4147: fix docstring for DictType iterables
 * PR #3951: A guide to overloading
 
-
 CI Updates:
 
+* PR #4300: AArch64 has no faulthandler package
 * PR #4273: pin to MKL BLAS for testing to get consistent results
 * PR #4209: Revert previous network tol patch and try with conda config
 * PR #4138: Remove tbb before Azure test only on Python 3, since it was already
