@@ -1,3 +1,129 @@
+Version 0.45.0
+--------------
+
+In this release, Numba gained an experimental :ref:`numba.typed.List
+<feature-typed-list>` container as a future replacement of the :ref:`reflected
+list <feature-reflected-list>`. In addition, functions decorated with
+``parallel=True`` can now be cached to reduce compilation overhead associated
+with the auto-parallelization.
+
+
+Enhancements from user contributed PRs (with thanks!):
+
+* James Bourbeau added the Numba version to reportable error messages in #4227,
+  added the ``signature`` parameter to ``inspect_types`` in #4200, improved the
+  docstring of ``normalize_signature`` in #4205, and fixed #3658 by adding
+  reference counting to ``register_dispatcher`` in #4254
+
+* Guilherme Leobas implemented the dominator tree and dominance frontier
+  algorithms in #4216 and #4149, respectively.
+
+* Nick White fixed the issue with ``round`` in the CUDA target in #4137.
+
+* Joshua Adelman added support for determining if a value is in a `range`
+  (i.e.  ``x in range(...)``) in #4129, and added windowing functions
+  (``np.bartlett``, ``np.hamming``, ``np.blackman``, ``np.hanning``,
+  ``np.kaiser``) from NumPy in #4076.
+
+* Lucio Fernandez-Arjona added support for ``np.select`` in #4077
+
+* Rob Ennis added support for ``np.flatnonzero`` in #4157
+
+* Keith Kraus extended the ``__cuda_array_interface__`` with an optional mask
+  attribute in #4199.
+
+General Enhancements:
+
+* PR #4296: Slacken window function testing tol on ppc64le
+* PR #4254: Add reference counting to register_dispatcher
+* PR #4239: Support len() of multi-dim arrays in array analysis
+* PR #4234: Raise informative error for np.kron array order
+* PR #4232: Add unicodetype db, low level str functions and examples.
+* PR #4229: Make hashing cacheable
+* PR #4227: Include numba version in reportable error message
+* PR #4216: Add dominator tree
+* PR #4200: Add signature parameter to inspect_types
+* PR #4196: Catch missing imports of internal functions.
+* PR #4180: Update use of unlowerable global message.
+* PR #4166: Add tests for PR #4149
+* PR #4157: Support for np.flatnonzero
+* PR #4149: Implement dominance frontier for SSA for the Numba IR
+* PR #4148: Call branch pruning in inline_closure_call()
+* PR #4132: Reduce usage of inttoptr
+* PR #4129: Support contains for range
+* PR #4112: better error messages for np.transpose and tuples
+* PR #4110: Add range attrs, start, stop, step
+* PR #4077: Add np select
+* PR #4076: Add numpy windowing functions support (np.bartlett, np.hamming,
+  np.blackman, np.hanning, np.kaiser)
+* PR #4095: Support ir.Global/FreeVar in find_const()
+* PR #3691: Make TypingError abort compiling earlier
+* PR #3646: Log internal errors encountered in typeinfer
+
+Fixes:
+
+* PR #4303: Work around scipy bug 10206
+* PR #4302: Fix flake8 issue on master
+* PR #4301: Fix integer literal bug in np.select impl
+* PR #4291: Fix pickling of jitclass type
+* PR #4262: Resolves #4251 - Fix bug in reshape analysis.
+* PR #4233: Fixes issue revealed by #4215
+* PR #4224: Fix #4223. Looplifting error due to StaticSetItem in objectmode
+* PR #4222: Fix bad python path.
+* PR #4178: Fix unary operator overload, check with unicode impl
+* PR #4173: Fix return type in np.bincount with weights
+* PR #4153: Fix slice shape assignment in array analysis
+* PR #4152: fix status check in dict lookup
+* PR #4145: Use callable instead of checking __module__
+* PR #4118: Fix inline assembly support on CPU.
+* PR #4088: Resolves #4075 - parfors array_analysis bug.
+* PR #4085: Resolves #3314 - parfors array_analysis bug with reshape.
+
+CUDA Enhancements/Fixes:
+
+* PR #4199: Extend `__cuda_array_interface__` with optional mask attribute,
+  bump version to 1
+* PR #4137: CUDA - Fix round Builtin
+* PR #4114: Support 3rd party activated CUDA context
+
+Documentation Updates:
+
+* PR #4295: Alter deprecation schedules
+* PR #4253: fix typo in pysupported docs
+* PR #4252: fix typo on repomap
+* PR #4241: remove unused import
+* PR #4240: fix typo in jitclass docs
+* PR #4205: Update return value order in normalize_signature docstring
+* PR #4237: Update doc links to point to latest not dev docs.
+* PR #4197: hyperlink repomap
+* PR #4170: Clarify docs on accumulating into arrays in prange
+* PR #4147: fix docstring for DictType iterables
+* PR #3951: A guide to overloading
+
+CI Updates:
+
+* PR #4300: AArch64 has no faulthandler package
+* PR #4273: pin to MKL BLAS for testing to get consistent results
+* PR #4209: Revert previous network tol patch and try with conda config
+* PR #4138: Remove tbb before Azure test only on Python 3, since it was already
+  removed for Python 2
+
+Contributors:
+
+Ehsan Totoni (core dev)
+Guilherme Leobas
+James Bourbeau
+Joshua L. Adelman
+Keith Kraus
+Lucio Fernandez-Arjona
+Nick White
+Rob Ennis
+Siu Kwan Lam (core dev)
+Stan Seibert (core dev)
+Stuart Archibald (core dev)
+Todd A. Anderson (core dev)
+Valentin Haenel (core dev)
+
 Version 0.44.1
 --------------
 
