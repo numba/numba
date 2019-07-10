@@ -1939,6 +1939,18 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, A, scheduler_type='signed',
                            check_fastmath=True, check_fastmath_result=True)
 
+    @skip_unsupported
+    def test_prange25(self):
+        def test_impl(A):
+            n = len(x)
+            buf = [np.zeros_like(x) for _ in range(n)]
+            for i in prange(n):
+                buf[i] = x + i
+            return buf
+        A = np.ones((10,))
+        self.prange_tester(test_impl, A, scheduler_type='unsigned',
+                           check_fastmath=True, check_fastmath_result=True)
+
     # should this work?
     @skip_unsupported
     def test_prange25(self):
