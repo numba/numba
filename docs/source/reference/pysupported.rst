@@ -248,6 +248,8 @@ For example, to create a list of arrays::
   Out[4]: [array([], dtype=int64), array([0]), array([0, 1]), array([0, 1, 2])]
 
 
+.. _feature-reflected-list:
+
 List Reflection
 '''''''''''''''
 
@@ -269,6 +271,9 @@ of this limitation.
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
+
+
+.. _feature-typed-list:
 
 Typed List
 ''''''''''
