@@ -5,6 +5,7 @@ Implement transformation on Numba IR
 from __future__ import absolute_import, print_function
 
 from collections import namedtuple, defaultdict
+from copy import deepcopy
 
 from numba.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba import ir, errors, ir_utils
@@ -501,7 +502,7 @@ def find_setupwiths(blocks):
 
 def ssa_transformation(func_ir):
 
-    def create_phi_node(var, incoming_blocks):
+    def create_phi_node(var, incoming_blocks, block_id):
         """ Create the PHI node
         """
         blocks = func_ir.blocks
@@ -510,67 +511,19 @@ def ssa_transformation(func_ir):
 
         for block_num in incoming_blocks:
             defvar = blocks[block_num].find_variable_assignment(name)
-            incoming_vars += [(defvar.target.name, block_num)]
+            incoming_vars += [(defvar.target, block_num)]
 
-        phi = ir.PHI(var, incoming_vars, var.loc)
-        print(phi)
+        lhs = deepcopy(var)
+        lhs.name += '.phi%d' % (block_id)
+        phi = ir.PHI(lhs, incoming_vars, var.loc)
+
         return phi
 
     def attach_phi_node(phi, dest_block):
         """Attach the PHI node to the basic block
         """
-        return
         block = func_ir.blocks[dest_block]
         block.prepend(phi)
-
-    def get_rhs_vars(inst):
-        """Return all the variables in the RHS of a stmt
-        """
-        v = inst.list_vars()
-        if isinstance(inst, (ir.Assign, ir.PHI)):
-            v.remove(inst.target)
-        return v
-
-    def rename_var(stack, counter, var):
-        # var is a reference to the original Var. Any change
-        # here will reflect into the original object
-        assert (var.name in stack) and (len(stack[var.name]) > 0)
-        i = stack[var.name][0]
-        print('--> var: {} | i: {}'.format(var, i))
-        var.name = var.name + '_%s' % (i) 
-
-    def rename_basic_block(stack, counter, block):
-        for inst in block.body:
-            print('    %-40s %s / %s' % (inst, inst.list_vars(), get_rhs_vars(inst)))
-            if not isinstance(inst, ir.PHI):
-                rhs_vars = get_rhs_vars(inst)
-                for var in rhs_vars:
-                    rename_var(stack, counter, var)
-            if isinstance(inst, ir.Assign):
-                target = inst.target
-                counter[target.name] += 1 
-                stack[target.name].append(counter[target.name])
-                rename_var(stack, counter, target)
-            print()
-        print()
-
-    def rename(stack, counter, domtree, blocks, offset):
-
-        print('-----')
-        # rename_basic_block(stack, counter, blocks[offset])
-
-        # rename child basic blocks
-        src = offset
-        for dest in domtree[src]:
-            rename(stack, counter, domtree, blocks, src)
-            print('offset:', dest)
-
-
-        # pop definitions
-        # for inst in block.body:
-        #     if isinstance(inst, (ir.Assign, ir.PHI)):
-        #         target = inst.target
-        #         stack[target.name].pop()
 
     def compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier):
         """ Compute the PHI vars for a given var
@@ -582,15 +535,13 @@ def ssa_transformation(func_ir):
             for Y in dominance_frontier[N]: 
                 if var not in phis[Y]:
                     # insert PHI
-                    phi = create_phi_node(var, defsites[var])
+                    phi = create_phi_node(var, defsites[var], Y)
                     attach_phi_node(phi, Y)
 
                     phis[Y].append(var)
 
                     if Y in defsites and var not in defsites[Y]:
                         worklist.append(Y)
-
-        return phis
 
     def get_defsites(blocks):
         # defsites is a map of {var -> [Blocks]} and it records
@@ -612,7 +563,7 @@ def ssa_transformation(func_ir):
 
     vlt = func_ir.variable_lifetime
     dominance_frontier = vlt.cfg.dominance_frontier()
-    idom = vlt.cfg.immediate_dominators()
+    domtree = vlt.cfg.dominator_tree()
     entry_point = vlt.cfg.entry_point()
 
 
@@ -623,9 +574,3 @@ def ssa_transformation(func_ir):
         if len(defs) > 1:
             worklist = list(defs)
             compute_phi_nodes(phis, defsites, var, worklist, dominance_frontier)
-
-    print(idom)
-
-    stack = defaultdict(list)  # default to []
-    counter = defaultdict(int) # default to 0
-    # rename(stack, counter, domtree, blocks, entry_point)

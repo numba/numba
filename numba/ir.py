@@ -701,14 +701,18 @@ class PHI(Stmt):
         assert isinstance(loc, Loc)
         assert isinstance(incoming_vars, list)
         self.target = target
-        self.num_vars = len(incoming_vars)
         self.incoming_vars = incoming_vars
         self.loc = loc
 
-    def get_incoming_var(self, i):
-        if i < self.num_vars:
-            raise KeyError("No incoming var for value %d" % (i))
-        return self.incoming_vars[i]
+    def get_incoming_var_for_block(self, block_id):
+        # return the associated var for the given block id
+        for iv in self.incoming_vars:
+            if iv[1] == block_id:
+                return iv[0]
+        raise KeyError("No incoming var for label %d" % (block_id))
+
+    def get_incoming_vars(self):
+        return list(map(lambda iv: iv[0], self.incoming_vars))
 
     def __repr__(self):
         return "%s = PHI %s" % (self.target, self.incoming_vars)
