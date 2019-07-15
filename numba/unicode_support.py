@@ -251,7 +251,6 @@ def _PyUnicode_ToLowercase(ch):
 
 @register_jitable
 def _PyUnicode_ToLowerFull(ch, res):
-    #raise NotImplementedError
     ctype = _PyUnicode_gettyperecord(ch)
     if (ctype.flags & _PyUnicode_TyperecordMasks.EXTENDED_CASE_MASK):
         index = ctype.lower & 0xFFFF
