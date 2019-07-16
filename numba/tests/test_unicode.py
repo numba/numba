@@ -84,8 +84,12 @@ def rfind_usecase(x, y):
     return x.rfind(y)
 
 
-def rfind_with_startend_usecase(x, y, start, end):
+def rfind_with_start_end_usecase(x, y, start, end):
     return x.rfind(y, start, end)
+
+
+def rfind_with_start_only_usecase(x, y, start):
+    return x.rfind(y, start)
 
 
 def startswith_usecase(x, y):
@@ -356,18 +360,28 @@ class TestUnicode(BaseTest):
                                  cfunc(s, sub_str),
                                  "'%s'.rfind('%s')?" % (s, sub_str))
 
-    def test_rfind_with_startend(self):
-        pyfunc = rfind_with_startend_usecase
+    def test_rfind_with_start_end(self):
+        pyfunc = rfind_with_start_end_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
             extras = ['', ' ', 'xx', s[:-2], s[3:], s]
             for sub_str in extras:
                 for begin, end in zip(range(-2,4), range(0,6)):
-                    #print("begin value is: ",begin)
-                    #print("end value is ",end)
                     self.assertEqual(pyfunc(s, sub_str, begin, end),
                                      cfunc(s, sub_str, begin, end),
+                                     "'%s'.rfind_with_startend('%s')?" % (s, sub_str))
+
+    def test_rfind_with_start_only(self):
+        pyfunc = rfind_with_start_only_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            extras = ['', ' ', 'xx', s[:-2], s[3:], s]
+            for sub_str in extras:
+                for begin in range(-2,4):
+                    self.assertEqual(pyfunc(s, sub_str, begin),
+                                     cfunc(s, sub_str, begin),
                                      "'%s'.rfind_with_startend('%s')?" % (s, sub_str))
 
     def test_getitem(self):

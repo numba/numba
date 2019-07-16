@@ -382,8 +382,9 @@ def _find(substr, s):
     return -1
 
 
+#The following function handles special case for rfind where substring is empty
 @njit
-def _rfind_special_case(src, sub, beg, end, src_len):
+def _rfind_special_case(beg, end, src_len):
     if beg > end:
         return -1
     elif beg < 0:
@@ -558,46 +559,63 @@ def unicode_find(a, b):
 
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(src, sub, start=None, end=None):
+
+    if not (start is None or isinstance(start, (types.Omitted, types.Integer, types.Optional))):
+        raise TypingError("Start arg must be of type Integer or None")
+
+    if not (end is None or isinstance(end, (types.Omitted, types.Integer, types.Optional))):
+        raise TypingError("End arg must be of type Integer or None")
+
     if isinstance(sub, types.UnicodeType):
-        def rfind_impl(src, sub, start=start, e=end):
+        def rfind_impl(src, sub, start=start, end=end):
             index = -1
             src_len = len(src)
             sub_len = len(sub)
-            if(sub_len == 0):
-                if start is None:
-                    return src_len
-                else:
-                    return _rfind_special_case(src, sub, start, e, src_len)
 
-            if start is None:           #This means no optional arguments are given
-                begin = 0
+            if start is None:           #no optional arguments given
+                new_start = 0
+                if sub_len == 0:
+                    return src_len
+            else:
+                new_start = start
+
+            if end is None:
                 new_end = src_len
             else:
-                begin = start
-                new_end = e
-            if (begin < 0 and new_end < 0 and begin < new_end):
+                new_end = end
+
+            if sub_len == 0:
+                return _rfind_special_case(new_start, new_end, src_len)
+
+            if (new_start > new_end and new_start > 0 and new_end < 0):
                 cond_flag = 1
-                neg_idx = 1
             else:
                 cond_flag = 0
-                neg_idx = 0
-            if (begin >= 0 or cond_flag == 1):
-                if(new_end < 0 and cond_flag == 0):
-                    new_end = src_len + new_end      # Positive end bound makes the search easier
-                    if(new_end < begin):
-                        return -1
-                if(cond_flag == 1):                  # If both bounds are negative then turn it into positive limits
-                    begin = begin + src_len
+            neg_idx = 0
+            if (new_start < new_end or cond_flag == 1):
+                if(cond_flag == 1):
                     new_end = new_end + src_len
-                if( (new_end - begin) == sub_len):
-                    temp_begin = begin
+                    if new_start > new_end:
+                        return 0
+                if (new_start < 0):
+                    new_start = src_len + new_start
+                    if(new_end > 0 and new_start >= new_end):
+                        return -1
+                    if(new_end < 0):
+                        neg_idx = 1
+                if (new_end < 0):
+                    new_end = src_len + new_end
+                    if(new_end <= new_start):
+                        return -1
+                if( (new_end - new_start) == sub_len):
+                    temp_begin = new_start
                 else:
-                    temp_begin = begin + sub_len - 1
-                if((new_end == begin) & sub_len == 1):        #This means only one char needs to be compared
-                    src_char = _get_code_point(src, begin)
+                    temp_begin = new_start + sub_len - 1
+                if((new_end == new_start) & sub_len == 1):        #This means only one char needs to be compared
+                    src_char = _get_code_point(src, new_start)
                     sub_char = _get_code_point(sub, 0)
                     if(src_char == sub_char):
-                        return begin
+                        return new_start
                     else:
                         return -1
                 i = new_end - 1
@@ -614,6 +632,8 @@ def unicode_rfind(src, sub, start=None, end=None):
                         else:
                             temp_count = temp_count + 1
                             offset = offset + 1
+                        if (i - offset) < new_start:
+                            break
                     if temp_count == sub_len:
                         if (neg_idx == 1):
                             return (i - sub_len + 1) - src_len
