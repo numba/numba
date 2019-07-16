@@ -17,6 +17,7 @@ Our supported platforms are:
 * NVIDIA GPUs of compute capability 2.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
+* ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms,
 and is not supported in Python 2.7 on Windows.
@@ -96,6 +97,8 @@ See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
 sample notebooks.
 
 
+.. _numba-install-armv7:
+
 Installing on Linux ARMv7 Platforms
 -----------------------------------
 
@@ -112,24 +115,32 @@ Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
 not been tested.
 
 
-.. Hide this until we have the conda packages available
-    Installing on Linux ARMv8 (AArch64) Platforms
-    ---------------------------------------------
+Installing on Linux ARMv8 (AArch64) Platforms
+---------------------------------------------
 
-    Although many ARMv8 platforms are likely to require building Numba from
-    source, we do build and test conda packages on the `NVIDIA Jetson TX2
-    <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_.
-    These packages rely on an infrequently updated port of Berryconda to ARMv8
-    called `Jetconda <https://github.com/seibert/jetconda/releases>`_.  Jetconda
-    is built on Ubuntu 16.04 running on the Jetson TX2, although the packages may
-    work on other ARMv8 systems running Ubuntu 16.04.  Once Jetconda is installed,
-    Numba can be installed from the ``numba`` channel::
+We build and test conda packages on the `NVIDIA Jetson TX2
+<https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
+but they are likely to work for other AArch64 platforms.  (Note that while the
+Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
+:ref:`numba-install-armv7` instead.)
 
-        $ conda install -c numba numba
+Conda-forge support for AArch64 is still quite experimental and packages are limited,
+but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-    To enable CUDA support on the TX2, set the ``NUMBAPRO`` environment variables
-    as described above.
+* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+  This will create a minimal conda environment.
+* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
+  configuration::
 
+    $ conda config --add channels c4aarch64
+    $ conda config --add channels conda-forge
+
+* Then you can install Numba from the ``numba`` channel::
+
+    $ conda install -c numba numba
+
+On CUDA-enabled systems, like the Jetson, the CUDA toolkit should be
+automatically detected in the environment.
 
 .. _numba-source-install-instructions:
 
