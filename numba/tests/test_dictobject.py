@@ -8,6 +8,7 @@ in test_dictimpl.py.
 from __future__ import print_function, absolute_import, division
 
 import sys
+import warnings
 
 import numpy as np
 
@@ -1349,7 +1350,12 @@ class TestDictInferred(TestCase):
         k2 = (np.int32(1), np.int32(2))
         v1 = np.intp(123)
 
-        d, dk2 = foo(k1, v1, k2)
+        with warnings.catch_warnings(record=True) as w:
+            d, dk2 = foo(k1, v1, k2)
+        self.assertEqual(len(w), 1)
+        # Make sure the warning is about unsafe cast
+        self.assertIn('unsafe cast from tuple(int32 x 2) to tuple(int8 x 2)',
+                      str(w[0]))
 
         keys = list(d.keys())
         self.assertEqual(keys[0], (1, 2))
