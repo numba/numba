@@ -72,7 +72,7 @@ def create_events(fname, spec, args, kwds):
     leave = ['<< ', tls.indent * ' ', fname]
     return enter, leave
 
-    
+
 def dotrace(*args, **kwds):
     """Function decorator to trace a function's entry and exit.
 
@@ -97,7 +97,7 @@ def dotrace(*args, **kwds):
                 return func(*args, **kwds)
 
             fname, ftype = find_function_info(func, spec, args)
-            
+
             try:
                 tls.tracing = True
                 enter, leave = create_events(fname, spec, args, kwds)
@@ -153,9 +153,12 @@ def dotrace(*args, **kwds):
         elif type(func) == property:
             raise NotImplementedError
 
-        spec = inspect.getargspec(func)
+        if config.PYVERSION >= (3, 0):
+            spec = inspect.getfullargspec(func)
+        else:
+            spec = inspect.getargspec(func)
         return rewrap(wraps(func)(wrapper))
-    
+
     arg0 = len(args) and args[0] or None
     # not supported yet...
     if recursive:
@@ -169,7 +172,7 @@ def dotrace(*args, **kwds):
             for n, f in inspect.getmembers(arg0, lambda x: (inspect.isfunction(x) or
                                                             inspect.ismethod(x))):
                 setattr(arg0, n, decorator(f))
-                
+
 
     if callable(arg0) or type(arg0) in (classmethod, staticmethod):
         return decorator(arg0)
@@ -184,7 +187,7 @@ def dotrace(*args, **kwds):
         if arg0.fdel:
             pdel = decorator(arg0.fdel)
         return property(pget, pset, pdel)
-        
+
     else:
         return decorator
 
