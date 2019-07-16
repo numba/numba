@@ -1336,6 +1336,25 @@ class TestDictInferred(TestCase):
             str(raises.exception),
         )
 
+    def test_conflict_key_type_non_number(self):
+        # Allow non-number types to cast unsafely
+        @njit
+        def foo(k1, v1, k2):
+            d = Dict()
+            d[k1] = v1
+            return d, d[k2]
+
+        # k2 will unsafetly downcast typeof(k1)
+        k1 = (np.int8(1), np.int8(2))
+        k2 = (np.int32(1), np.int32(2))
+        v1 = np.intp(123)
+
+        d, dk2 = foo(k1, v1, k2)
+
+        keys = list(d.keys())
+        self.assertEqual(keys[0], (1, 2))
+        self.assertEqual(dk2, d[(np.int32(1), np.int32(2))])
+
     def test_ifelse_filled_both_branches(self):
         @njit
         def foo(k, v):

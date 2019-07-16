@@ -40,7 +40,8 @@ def _sentry_safe_cast(fromty, toty):
     """
     tyctxt = cpu_target.typing_context
     by = tyctxt.can_convert(fromty, toty)
-    if by is None or by > Conversion.safe:
+    # Only check against numeric types.
+    if isinstance(toty, types.Number) and by is None or by > Conversion.safe:
         if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
             # Accept if both types are ints
             return
@@ -50,7 +51,8 @@ def _sentry_safe_cast(fromty, toty):
         if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
             # Accept if floats to floats
             return
-        raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
+        m = 'cannot safely cast {} to {}. Please cast explicitly.'
+        raise TypingError(m.format(fromty, toty))
 
 
 def _sentry_safe_cast_default(default, valty):
