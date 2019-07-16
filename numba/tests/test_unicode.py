@@ -84,8 +84,12 @@ def count_usecase(x, y):
     return x.count(y)
 
 
-def count_with_startend_usecase(x,y,start,end):
+def count_with_start_end_usecase(x,y,start,end):
     return x.count(y, start, end)
+
+
+def count_with_start_only_usecase(x,y,start):
+    return x.count(y, start)
 
 
 def startswith_usecase(x, y):
@@ -350,22 +354,35 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            extras = [' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
             for sub in [x for x in extras]:
                 self.assertEqual(pyfunc(sub, s),
                                  cfunc(sub, s),
                                  "'%s' in '%s'?" % (sub, s))
 
-    def test_count_with_startend(self):
-        pyfunc = count_with_startend_usecase
+    def test_count_with_start_end(self):
+        pyfunc = count_with_start_end_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            extras = [' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
             for sub in [x for x in extras]:
                 for i , j in zip(range(-2,4), (0,6)):
-                    self.assertEqual(pyfunc(sub, s, 2, -1),
-                                     cfunc(sub, s, 2, -1),
+                    self.assertEqual(pyfunc(sub, s, i, j),
+                                     cfunc(sub, s, i, j),
+                                     "'%s' in '%s'?" % (sub, s))
+
+    def test_count_with_start_only(self):
+        pyfunc = count_with_start_only_usecase
+        cfunc = njit(pyfunc)
+
+        for s in UNICODE_EXAMPLES:
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+            for sub in [x for x in extras]:
+                for i in range(-2, 3):
+                    #print("i value is :", i)
+                    self.assertEqual(pyfunc(sub, s, i),
+                                     cfunc(sub, s, i),
                                      "'%s' in '%s'?" % (sub, s))
 
     def test_getitem(self):

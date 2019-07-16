@@ -381,6 +381,27 @@ def _find(substr, s):
             return i
     return -1
 
+# The following funciton handles special case for count method where substring is empty
+@njit(_nrt=False)
+def _count_special_case(start, end, src_len):
+    if start < 0 and end < 0:
+        if start < end:
+            new_st = start + src_len
+            new_end = end + src_len
+            return new_end - new_st + 1
+        else:
+            return 0
+    if start < 0:
+        start = start + src_len
+    if end < 0:
+        end = end + src_len
+    if start < end:
+        if (end - start) <= src_len:
+            return (end - start) + 1
+        else:
+            return src_len - start + 1
+    return 0
+
 
 @njit
 def _is_whitespace(code_point):
@@ -535,34 +556,51 @@ def unicode_find(a, b):
 def unicode_count(src, sub, start=None, end=None):
 
     if not (start is None or isinstance(start, (types.Omitted, types.Integer, types.Optional))):
-        raise TypingError("Start arg must be of type Integer, Omitted or Optional")
+        raise TypingError("Start arg must be of type Integer or None")
 
     if isinstance(sub, types.UnicodeType):
-        def count_impl(src, sub, start=start, e=end):
+        def count_impl(src, sub, start=start, end=end):
             count = 0
             src_len = len(src)
             sub_len = len(sub)
 
-            if start is None:           #This means no optional arguments are given
-                begin = 0
-                new_end = src_len
+            if start is None:                                               # In case start is not given
+                new_start = 0
+                if sub_len == 0:
+                    return src_len + 1
             else:
-                begin = start
-                new_end = e
-            if (begin < 0 and new_end < 0 and begin < new_end):
+                new_start = start
+
+            if end is None:                                                 # In case end is not given
+                new_end = src_len
+                if sub_len == 0:
+                    return src_len - new_start + 1
+            else:
+                new_end = end
+
+            if(sub_len == 0):
+                return _count_special_case(new_start, new_end, src_len)
+
+            #corner case where end limit needs to be converted to positive index first
+            if (new_start > new_end and new_start > 0 and new_end < 0):
                 cond_flag = 1
             else:
                 cond_flag = 0
-            if (begin >= 0 or cond_flag == 1):
-                if(new_end < 0 and cond_flag == 0):
-                    new_end = src_len + new_end      # Positive end bound makes the search easier
-                    if(new_end < begin):
-                        return 0
-                if(cond_flag == 1):                  # If both bounds are negative then turn it into positive limits
-                    begin = begin + src_len
+            if (new_start < new_end or cond_flag == 1):
+                if(cond_flag == 1):
                     new_end = new_end + src_len
-                i = begin
-                if( (new_end - begin) == sub_len):
+                    if new_start > new_end:
+                        return 0
+                if(new_start < 0):
+                    new_start = src_len + new_start
+                    if(new_end > 0 and new_start >= new_end):
+                        return 0
+                if(new_end < 0):
+                    new_end = src_len + new_end
+                    if(new_end <= new_start):
+                        return 0
+                i = new_start
+                if( (new_end - new_start) == sub_len):
                     temp_end = new_end
                 else:
                     temp_end = new_end - sub_len + 1
