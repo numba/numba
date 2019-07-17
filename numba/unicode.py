@@ -33,6 +33,8 @@ from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
+                              _PyUnicode_ToLowerFull,
+                              _PyUnicode_ToTitleFull, _PyUnicode_IsCased,
                               _PyUnicode_gettyperecord,
                               _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
@@ -1140,6 +1142,44 @@ def unicode_upper(a):
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
+    return impl
+
+
+@overload_method(types.UnicodeType, 'title')
+def unicode_title(a):
+    """
+    Implements .title()
+    """
+    def impl(a):
+        # this algorithm is amalgamation of two parts:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9908-L9933
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9935-L9980
+
+        l = len(a)
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
+        mapped = np.array((3,), dtype=_Py_UCS4)
+        maxchar = 0
+        k = 0
+        previous_cased = 0
+        for idx in range(l):
+            mapped[:] = 0
+            code_point = _get_code_point(a, idx)
+            if previous_cased == 1:
+                n_res = _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+            else:
+                n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
+            for j in range(n_res):
+                maxchar = max(maxchar, mapped[j])
+                _set_code_point(tmp, k, mapped[j])
+                k += 1
+            previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
+        newlength = k
+        newkind = _codepoint_to_kind(maxchar)
+        ret = _empty_string(newkind, newlength,
+                            _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(ret, i, _get_code_point(tmp, i))
+        return ret
     return impl
 
 
