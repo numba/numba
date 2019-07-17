@@ -411,6 +411,13 @@ class Expr(Inst):
         return cls(op=op, value=value, loc=loc)
 
     @classmethod
+    def make_phi(cls, incoming_vars, loc):
+        assert isinstance(loc, Loc)
+        assert isinstance(incoming_vars, list)
+        op = 'phi'
+        return cls(op=op, incoming_vars=incoming_vars, loc=loc)
+
+    @classmethod
     def make_function(cls, name, code, closure, defaults, loc):
         """
         A node for making a function object.
@@ -433,6 +440,9 @@ class Expr(Inst):
                 lhs, rhs = rhs, lhs
             fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
             return '%s %s %s' % (lhs, fn, rhs)
+        elif self.op == 'phi':
+            ivs = self.incoming_vars
+            return 'PHI %s' % (ivs)
         else:
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
             args = ('%s=%s' % (k, v) for k, v in pres_order)
@@ -689,33 +699,6 @@ class Print(Stmt):
 
     def __str__(self):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
-
-
-class PHI(Stmt):
-    """
-    PHI instruction.
-    """
-
-    def __init__(self, target, incoming_vars, loc):
-        assert isinstance(target, Var)
-        assert isinstance(loc, Loc)
-        assert isinstance(incoming_vars, list)
-        self.target = target
-        self.incoming_vars = incoming_vars
-        self.loc = loc
-
-    def get_incoming_var_for_block(self, block_id):
-        # return the associated var for the given block id
-        for iv in self.incoming_vars:
-            if iv[1] == block_id:
-                return iv[0]
-        raise KeyError("No incoming var for label %d" % (block_id))
-
-    def get_incoming_vars(self):
-        return list(map(lambda iv: iv[0], self.incoming_vars))
-
-    def __repr__(self):
-        return "%s = PHI %s" % (self.target, self.incoming_vars)
 
 
 class Yield(Inst):

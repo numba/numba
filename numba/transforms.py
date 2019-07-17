@@ -513,9 +513,9 @@ def ssa_transformation(func_ir):
             defvar = blocks[block_num].find_variable_assignment(name)
             incoming_vars += [(defvar.target, block_num)]
 
-        lhs = deepcopy(var)
-        lhs.name += '.phi%d' % (block_id)
-        phi = ir.PHI(lhs, incoming_vars, var.loc)
+        target = deepcopy(var)
+        target.name += '.phi%d' % (block_id)
+        phi = ir.Assign(ir.Expr.make_phi(incoming_vars, var.loc), target, var.loc)
 
         return phi
 
