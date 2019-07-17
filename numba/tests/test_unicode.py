@@ -1160,6 +1160,7 @@ class TestUnicode(BaseTest):
         for s in UNICODE_EXAMPLES + [''] + cpython:
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
+
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
 class TestUnicodeInTuple(BaseTest):
