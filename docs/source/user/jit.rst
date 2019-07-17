@@ -197,3 +197,25 @@ passing ``parallel=True`` and must be used in conjunction with
        return x + y
 
 .. seealso:: :ref:`numba-parallel`
+
+
+.. _recurse_jit_option:
+
+``recurse``
+------------
+
+Enables automatic recursive jitting of function calls. Numba will optionally
+attempt to replace all function calls within a jitted function with ``jit``-wrapped
+versions of those functions. This feature is enabled by passing ``recurse=True``.
+In the following example, ``inc`` will be replaced with ``jit(inc)``::
+
+   def inc(x):
+      return x + 1
+
+   @jit(recurse=True)
+   def f(x):
+      y = inc(x)
+      return x + y
+
+Note that all ``jit`` options (e.g. ``nopython``, ``cache``, etc.) are passed
+through the recursive jitting process.

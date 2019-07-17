@@ -85,6 +85,14 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 raises exception.  The 'numpy' model sets the result to
                 *+/-inf* or *nan*. Default value is 'python'.
 
+            recurse: bool
+                Set to True to enable automatic recursive jitting of function
+                calls. This allows fewer applications of the jit decorator
+                which can be useful when the function being jitted internally
+                calls many other functions. Note that all options
+                (e.g. ``nopython``, ``cache``, etc.) are passed through
+                the recursive jitting process. Default value is False.
+
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
