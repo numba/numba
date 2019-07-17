@@ -53,7 +53,9 @@ class NRTContext(object):
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [size])
+        mi = builder.call(fn, [size])
+        self.meminfo_set_debug(builder, mi, "meminfo_alloc")
+        return mi
 
     def meminfo_alloc_dtor(self, builder, size, dtor):
         self._require_nrt()
@@ -64,8 +66,10 @@ class NRTContext(object):
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_dtor_safe")
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [size,
-                                 builder.bitcast(dtor, cgutils.voidptr_t)])
+        mi =  builder.call(fn, [size,
+                                builder.bitcast(dtor, cgutils.voidptr_t)])
+        self.meminfo_set_debug(builder, mi, "meminfo_alloc_dtor")
+        return mi
 
     def meminfo_alloc_aligned(self, builder, size, align):
         """
@@ -87,7 +91,12 @@ class NRTContext(object):
             align = self._context.get_constant(types.uint32, align)
         else:
             assert align.type == u32, "align must be a uint32"
-        return builder.call(fn, [size, align])
+        mi = builder.call(fn, [size, align])
+
+        import traceback
+        tb = ''.join(traceback.format_stack())
+        self.meminfo_set_debug(builder, mi, "meminfo_alloc_aligned:\n{}".format(tb))
+        return mi
 
     def meminfo_new_varsize(self, builder, size):
         """
@@ -103,7 +112,9 @@ class NRTContext(object):
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_new_varsize")
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [size])
+        mi = builder.call(fn, [size])
+        self.meminfo_set_debug(builder, mi, "meminfo_new_varsize")
+        return mi
 
     def meminfo_new_varsize_dtor(self, builder, size, dtor):
         """
@@ -117,7 +128,9 @@ class NRTContext(object):
                                [cgutils.intp_t, cgutils.voidptr_t])
         fn = mod.get_or_insert_function(
             fnty, name="NRT_MemInfo_new_varsize_dtor")
-        return builder.call(fn, [size, dtor])
+        mi = builder.call(fn, [size, dtor])
+        self.meminfo_set_debug(builder, mi, "meminfo_new_varsize_dtor")
+        return mi
 
     def meminfo_varsize_alloc(self, builder, meminfo, size):
         """
@@ -163,6 +176,16 @@ class NRTContext(object):
         fn = mod.get_or_insert_function(fnty, name=funcname)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
+
+    def meminfo_set_debug(self, builder, meminfo, debug_text):
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = ir.FunctionType(ir.VoidType(),
+                               [cgutils.voidptr_t, cgutils.voidptr_t])
+        textptr = self._context.insert_const_string(mod, debug_text)
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_set_debug")
+        return builder.call(fn, (meminfo, textptr))
 
     def meminfo_data(self, builder, meminfo):
         """

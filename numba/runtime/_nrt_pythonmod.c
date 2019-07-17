@@ -9,6 +9,12 @@ memsys_shutdown(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject*
+memsys_dump(PyObject *self, PyObject *args) {
+    NRT_MemSys_dump();
+    Py_RETURN_NONE;
+}
+
 static PyObject *
 memsys_use_cpython_allocator(PyObject *self, PyObject *args) {
     NRT_MemSys_set_allocator(PyMem_RawMalloc,
@@ -119,6 +125,7 @@ static PyMethodDef ext_methods[] = {
 #define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
     declmethod_noargs(memsys_use_cpython_allocator),
     declmethod_noargs(memsys_shutdown),
+    declmethod_noargs(memsys_dump),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
     declmethod_noargs(memsys_get_stats_alloc),
@@ -159,6 +166,8 @@ declmethod(adapt_buffer_from_python);
 declmethod(meminfo_new_from_pyobject);
 declmethod(meminfo_as_pyobject);
 declmethod(meminfo_from_pyobject);
+declmethod(MemInfo_set_debug);
+declmethod(MemInfo_get_debug);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);

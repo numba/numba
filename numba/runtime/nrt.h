@@ -42,6 +42,9 @@ void NRT_MemSys_init(void);
 VISIBILITY_HIDDEN
 void NRT_MemSys_shutdown(void);
 
+VISIBILITY_HIDDEN
+void NRT_MemSys_dump(void);
+
 /*
  * Register the system allocation functions
  */
@@ -107,6 +110,19 @@ void NRT_MemInfo_init(NRT_MemInfo *mi, void *data, size_t size,
  */
 VISIBILITY_HIDDEN
 size_t NRT_MemInfo_refcount(NRT_MemInfo *mi);
+
+
+/*
+ * Set debugging info on a MemInfo.
+ */
+VISIBILITY_HIDDEN
+void NRT_MemInfo_set_debug(NRT_MemInfo *mi, char *debug_data);
+
+/*
+ * Get debugging info on a MemInfo.
+ */
+VISIBILITY_HIDDEN
+char* NRT_MemInfo_get_debug(NRT_MemInfo *mi);
 
 /*
  * Allocate memory of `size` bytes and return a pointer to a MemInfo structure

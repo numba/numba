@@ -19,6 +19,9 @@ struct MemInfo {
     void              *dtor_info;
     void              *data;
     size_t            size;    /* only used for NRT allocated memory */
+    /*  additional data for debugging */
+    char              *debug_data;
+    struct MemInfo    *gc_next, *gc_prev;
 };
 
 
@@ -56,6 +59,9 @@ struct MemSys {
         NRT_realloc_func realloc;
         NRT_free_func free;
     } allocator;
+    /* Debugging */
+    void* volatile gc_lock;
+    NRT_MemInfo gc_heap;
 };
 
 /* The Memory System object */
@@ -165,6 +171,36 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
 }
 
 
+void nrt_memsys_lock() {
+    void *unlocked = (void*)0;
+    void *locked = (void*)1;
+    void *old;
+    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock, unlocked, locked, &old) );
+}
+
+
+void nrt_memsys_unlock() {
+    void *unlocked = (void*)0;
+    void *locked = (void*)1;
+    void *old;
+    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock, locked, unlocked, &old) );
+}
+
+
+void NRT_MemSys_dump(void) {
+    NRT_MemInfo *mi;
+    nrt_memsys_lock();
+    fprintf(stderr, "=== BEGIN:NRT_MemSys_dump\n");
+    fprintf(stderr, "heap root: %p -> %p\n", &TheMSys.gc_heap, TheMSys.gc_heap.gc_next);
+    for (mi = TheMSys.gc_heap.gc_next; mi; mi = mi->gc_next) {
+        NRT_MemInfo_dump(mi, stderr);
+    }
+    fprintf(stderr, "=== END:NRT_MemSys_dump\n");
+    nrt_memsys_unlock();
+
+}
+
+
 /*
  * The MemInfo structure.
  */
@@ -177,8 +213,20 @@ void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
     mi->dtor_info = dtor_info;
     mi->data = data;
     mi->size = size;
+
+    mi->debug_data = NULL;
+    mi->gc_next = mi->gc_prev = NULL;
     /* Update stats */
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
+
+    nrt_memsys_lock();
+    mi->gc_next = TheMSys.gc_heap.gc_next;
+    TheMSys.gc_heap.gc_next = mi;
+    mi->gc_prev = &TheMSys.gc_heap;
+    if (mi->gc_next) {
+        mi->gc_next->gc_prev = mi;
+    }
+    nrt_memsys_unlock();
 }
 
 NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
@@ -225,6 +273,14 @@ void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
     }
 
     nrt_internal_dtor_safe(ptr, size, NULL);
+}
+
+void NRT_MemInfo_set_debug(NRT_MemInfo *mi, char *debug_data){
+    mi->debug_data = debug_data;
+}
+
+char* NRT_MemInfo_get_debug(NRT_MemInfo *mi){
+    return mi->debug_data;
 }
 
 
@@ -289,9 +345,23 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
     return mi;
 }
 
+void _nrt_meminfo_gc_unlink(NRT_MemInfo *mi) {
+    NRT_MemInfo *prev, *next;
+    nrt_memsys_lock();
+    prev = mi->gc_prev;
+    next = mi->gc_next;
+    prev->gc_next = next;
+    if ( next ){
+        next->gc_prev = prev;
+    }
+    nrt_memsys_unlock();
+}
+
 void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
+    _nrt_meminfo_gc_unlink(mi);
     NRT_Free(mi);
     TheMSys.atomic_inc(&TheMSys.stats_mi_free);
+
 }
 
 void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
@@ -328,9 +398,14 @@ size_t NRT_MemInfo_size(NRT_MemInfo* mi) {
     return mi->size;
 }
 
-
 void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
-    fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->refct);
+    fprintf(out, "MemInfo %p refcount %zu %p -> x -> %p, debug_data=%p\n",
+            mi, mi->refct,
+            mi->gc_prev, mi->gc_next,
+            mi->debug_data);
+    if ( mi->debug_data ) {
+        fprintf(out, "  debug: %s\n", mi->debug_data);
+    }
 }
 
 /*
