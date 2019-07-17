@@ -5,8 +5,10 @@ Usually due to invalid type conversion between function boundaries.
 
 from __future__ import print_function, division, absolute_import
 
+import unittest
+
 from numba import int32, int64
-from numba import jit, generated_jit, types
+from numba import jit, generated_jit, types, dispatcher
 from numba import unittest_support as unittest
 from .support import TestCase, tag
 
@@ -145,6 +147,28 @@ class TestNestedCall(TestCase):
         cfunc = jit(nopython=True)(call_generated)
         self.assertPreciseEqual(cfunc(1, 2), (-4, 2))
         self.assertPreciseEqual(cfunc(1j, 2), (1j + 5, 2))
+
+
+def inc(x):
+    return x + 1
+
+def add(x, y):
+    return x + y
+
+class TestJitRecurse(unittest.TestCase):
+
+    def test_recurse(self):
+
+        @jit(nopython=True, recurse=True)
+        def inc_add(x):
+            y = inc(x)
+            return add(x, y)
+
+        result = inc_add(1)
+
+        self.assertEqual(result, 3)
+        self.assertTrue(isinstance(inc, dispatcher.Dispatcher))
+        self.assertTrue(isinstance(add, dispatcher.Dispatcher))
 
 
 if __name__ == '__main__':

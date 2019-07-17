@@ -44,6 +44,8 @@ class Flags(utils.ConfigOptions):
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        # Enable automatic recursive jitting
+        'recurse': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
         # a dictionary of sub-options instead of a boolean, see parfor.py for
         # detail.

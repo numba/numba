@@ -6,8 +6,9 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import warnings
+import types
 
-from . import config, sigutils
+from . import config, sigutils, bytecode
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
@@ -172,6 +173,21 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return func
+
+        # Optionally replace all function calls with JIT-wrapped versions
+        if targetoptions.get('recurse', False):
+            func_id = bytecode.FunctionIdentity.from_function(func)
+            bc = bytecode.ByteCode(func_id)
+            globs = bc.get_used_globals()
+            for k, v in globs.items():
+                if isinstance(v, types.FunctionType):
+                    func.__globals__[k] = jit(v,
+                                              locals=locals,
+                                              target=target,
+                                              cache=cache,
+                                              pipeline_class=dispatcher_args.get('pipeline_class'),
+                                              **targetoptions)
+
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)

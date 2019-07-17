@@ -275,6 +275,7 @@ class CPUTargetOptions(TargetOptions):
         "fastmath": FastMathOptions,
         "error_model": str,
         "parallel": ParallelOptions,
+        "recurse": bool,
     }
 
 
