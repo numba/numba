@@ -1140,6 +1140,15 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_title(self):
+        def pyfunc(x):
+            return x.title()
+
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + [""]:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
 
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
