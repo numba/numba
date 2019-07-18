@@ -1056,6 +1056,40 @@ def unicode_not(a):
         return impl
 
 
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istilte(a):
+    """
+    Implements .istitle()
+    """
+
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11892-L11948
+    def impl(a):
+        l = len(a)
+        if l == 0:
+            return False
+        if l == 1:
+            return (_PyUnicode_IsTitlecase(a) or _PyUnicode_IsUppercase(a))
+        cased = 0
+        previous_is_cased = 0    # To track previous letter's case
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if(_PyUnicode_IsUppercase(code_point) or _PyUnicode_IsTitlecase(code_point)):
+                if previous_is_cased == 1:
+                    return False
+                previous_is_cased = 1
+                cased = 1
+            elif (_PyUnicode_IsLowercase(code_point)):
+                if not previous_is_cased:
+                    return False
+                previous_is_cased = 1
+                cased = 1
+            else:
+                previous_is_cased = 0
+        return cased == 1
+    return impl
+
+
 @overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """

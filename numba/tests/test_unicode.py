@@ -914,6 +914,25 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_istitle(self):
+        def pyfunc(x):
+            return x.istitle()
+
+        cfunc = njit(pyfunc)
+        titles = [x.title() for x in UNICODE_EXAMPLES]
+        specials = [
+            'A123',
+            'A12Bcd',
+            '1',
+            '+abA',
+            '12Abc',
+        ]
+
+        for a in UNICODE_EXAMPLES + titles + specials + [""]:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
+
     def test_upper(self):
         def pyfunc(x):
             return x.upper()
