@@ -32,8 +32,13 @@ Enhancements from user contributed PRs (with thanks!):
 * Keith Kraus extended the ``__cuda_array_interface__`` with an optional mask
   attribute in #4199.
 
+* Gregory R. Lee replaced deprecated use of ``inspect.getargspec`` in #4311.
+
+
 General Enhancements:
 
+* PR #4328: Replace GC macro with function call
+* PR #4311: Avoid deprecated use of inspect.getargspec
 * PR #4296: Slacken window function testing tol on ppc64le
 * PR #4254: Add reference counting to register_dispatcher
 * PR #4239: Support len() of multi-dim arrays in array analysis
@@ -88,6 +93,8 @@ CUDA Enhancements/Fixes:
 
 Documentation Updates:
 
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs. Closes #4316
 * PR #4295: Alter deprecation schedules
 * PR #4253: fix typo in pysupported docs
 * PR #4252: fix typo on repomap
@@ -111,6 +118,7 @@ CI Updates:
 Contributors:
 
 Ehsan Totoni (core dev)
+Gregory R. Lee
 Guilherme Leobas
 James Bourbeau
 Joshua L. Adelman
