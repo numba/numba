@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+from .abstract import ConstSized, Container, Hashable, MutableSequence, Sequence, Type, TypeRef
+from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError

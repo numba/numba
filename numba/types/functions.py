@@ -4,8 +4,8 @@ import traceback
 import inspect
 import sys
 
-from .abstract import *
-from .common import *
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .common import Opaque
 from .misc import unliteral
 from numba.ir import Loc
 from numba import errors
