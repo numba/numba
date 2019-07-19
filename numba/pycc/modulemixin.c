@@ -65,7 +65,7 @@ VISIBILITY_HIDDEN void **PYCC(_unused_) = {
 };
 
 /* The LLVM-generated functions for atomic refcounting */
-extern void *nrt_atomic_add, *nrt_atomic_sub;
+extern void *nrt_atomic_add, *nrt_atomic_sub, *nrt_atomic_cas;
 
 /* The structure type constructed by PythonAPI.serialize_uncached() */
 typedef struct {
@@ -139,6 +139,7 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
     NRT_MemSys_init();
     NRT_MemSys_set_atomic_inc_dec((NRT_atomic_inc_dec_func) &nrt_atomic_add,
                                   (NRT_atomic_inc_dec_func) &nrt_atomic_sub);
+    NRT_MemSys_set_atomic_cas(&nrt_atomic_cas);
     if (init_nrt_python_module(module)) {
         goto error;
     }
