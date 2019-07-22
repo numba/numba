@@ -19,6 +19,14 @@ class TestResetDevice(CUDATestCase):
                 for _ in range(2):
                     for d in devices:
                         cuda.select_device(d)
+
+                        # Exercise cuda module creation and deletion
+                        @cuda.jit
+                        def foo():
+                            pass
+                        foo()
+                        del foo
+
                         cuda.close()
             except Exception as e:
                 exception_queue.put(e)

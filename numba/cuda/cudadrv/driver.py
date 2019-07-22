@@ -1034,7 +1034,13 @@ def _module_finalizer(context, handle):
             assert shutting_down() or handle.value not in modules
             driver.cuModuleUnload(handle)
 
-        dealloc.add_item(module_unload, handle)
+        if dealloc is not None:
+            dealloc.add_item(module_unload, handle)
+        else:
+            # Check the impossible case.
+            assert shutting_down(), (
+                "dealloc is None but interpreter is not being shutdown!"
+            )
 
     return core
 
