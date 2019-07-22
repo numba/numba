@@ -5,11 +5,11 @@ from itertools import product
 import numpy as np
 
 from numba import njit
-from numba import int32, types
+from numba import int32, float32, types
+from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
-from numba import typeof
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -701,3 +701,44 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         got = foo()
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
+
+    @skip_py2
+    def test_jitclass_as_item_in_list(self):
+
+        spec = [
+            ('value', int32),               # a simple scalar field
+            ('array', float32[:]),          # an array field
+        ]
+
+        @jitclass(spec)
+        class Bag(object):
+            def __init__(self, value):
+                self.value = value
+                self.array = np.zeros(value, dtype=np.float32)
+
+            @property
+            def size(self):
+                return self.array.size
+
+            def increment(self, val):
+                for i in range(self.size):
+                    self.array[i] += val
+                return self.array
+
+            def __eq__(self, other):
+                return self.value == other.value and all(self == other)
+
+            def __ne__(self, other):
+                return not self == other
+
+        @njit
+        def foo():
+            l = List()
+            l.append(Bag(21))
+            l.append(Bag(22))
+            l.append(Bag(23))
+            return l
+
+        expected = foo.py_func()
+        got = foo()
+        self.assertEqual(expected, got)
