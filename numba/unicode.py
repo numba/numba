@@ -384,22 +384,13 @@ def _find(substr, s):
 # The following funciton handles special case for count method where substring is empty
 @njit(_nrt=False)
 def _count_special_case(start, end, src_len):
-    if start < 0 and end < 0:
-        if start < end:
-            new_st = start + src_len
-            new_end = end + src_len
-            return new_end - new_st + 1
-        else:
-            return 0
-    if start < 0:
-        start = start + src_len
-    if end < 0:
-        end = end + src_len
     if start < end:
-        if (end - start) <= src_len:
-            return (end - start) + 1
+        if (end - start <= src_len):
+            return end - start + 1
         else:
             return src_len - start + 1
+    elif start == end :
+        return 1
     return 0
 
 
@@ -463,7 +454,17 @@ def _codepoint_is_ascii(ch):
     return ch < 128
 
 
+@register_jitable
+def normalize_slice_arg(arg, slice_len, default):
+    if arg is None:
+        return default
+    elif arg < 0:
+        return max( arg + slice_len, default)
+    else:
+        return min(slice_len, arg)
+
 # PUBLIC API
+
 
 @overload(len)
 def unicode_len(s):
@@ -564,69 +565,21 @@ def unicode_count(src, sub, start=None, end=None):
             src_len = len(src)
             sub_len = len(sub)
 
-            if start is None:                                               # In case start is not given
-                new_start = 0
-                if sub_len == 0:
-                    return src_len + 1
-            else:
-                new_start = start
+            # normalize start and end indexes to define search range
+            start = normalize_slice_arg(start, src_len, 0)
+            end = normalize_slice_arg(end, src_len, src_len)
 
-            if end is None:                                                 # In case end is not given
-                new_end = src_len
-                if sub_len == 0:
-                    return src_len - new_start + 1
-            else:
-                new_end = end
+            if (sub_len == 0):       #special case when substring is empty
+                return _count_special_case(start, end, src_len)
 
-            if(sub_len == 0):
-                return _count_special_case(new_start, new_end, src_len)
-
-            #corner case where end limit needs to be converted to positive index first
-            if (new_start > new_end and new_start > 0 and new_end < 0):
-                cond_flag = 1
-            else:
-                cond_flag = 0
-            if (new_start < new_end or cond_flag == 1):
-                if(cond_flag == 1):
-                    new_end = new_end + src_len
-                    if new_start > new_end:
-                        return 0
-                if(new_start < 0):
-                    new_start = src_len + new_start
-                    if(new_end > 0 and new_start >= new_end):
-                        return 0
-                if(new_end < 0):
-                    new_end = src_len + new_end
-                    if(new_end <= new_start):
-                        return 0
-                i = new_start
-                if( (new_end - new_start) == sub_len):
-                    temp_end = new_end
+            i = start
+            while( i + sub_len <= end):
+                if src[ i : i + sub_len ] == sub:
+                    count += 1
+                    i += sub_len
                 else:
-                    temp_end = new_end - sub_len + 1
-                while (i < temp_end):
-                    temp_count = 0
-                    offset = 0
-                    for j in range(sub_len):
-                        src_char = _get_code_point(src, i + offset)
-                        sub_char = _get_code_point(sub, j)
-                        if src_char != sub_char:
-                            break
-                        else:
-                            temp_count = temp_count + 1
-                            offset = offset + 1
-                        if (i + offset) > new_end:
-                            break
-                    if temp_count == sub_len:
-                        count = count + 1
-                        i = i + sub_len
-                    else:
-                        i = i + 1
-                    if i == 0:
-                        break
-                return count
-            else:
-                return 0
+                    i += 1
+            return count
         return count_impl
 
 

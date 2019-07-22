@@ -353,11 +353,11 @@ class TestUnicode(BaseTest):
         pyfunc = count_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+        for s in UNICODE_EXAMPLES + ['aaaa']:
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s, 'aa']
             for sub in [x for x in extras]:
-                self.assertEqual(pyfunc(sub, s),
-                                 cfunc(sub, s),
+                self.assertEqual(pyfunc(s, sub),
+                                 cfunc(s, sub),
                                  "'%s' in '%s'?" % (sub, s))
 
     def test_count_with_start_end(self):
@@ -368,8 +368,8 @@ class TestUnicode(BaseTest):
             extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
             for sub in [x for x in extras]:
                 for i , j in zip(range(-2,4), (0,6)):
-                    self.assertEqual(pyfunc(sub, s, i, j),
-                                     cfunc(sub, s, i, j),
+                    self.assertEqual(pyfunc(s, sub, i, j),
+                                     cfunc(s, sub, i, j),
                                      "'%s' in '%s'?" % (sub, s))
 
     def test_count_with_start_only(self):
@@ -380,9 +380,8 @@ class TestUnicode(BaseTest):
             extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
             for sub in [x for x in extras]:
                 for i in range(-2, 3):
-                    #print("i value is :", i)
-                    self.assertEqual(pyfunc(sub, s, i),
-                                     cfunc(sub, s, i),
+                    self.assertEqual(pyfunc(s, sub, i),
+                                     cfunc(s, sub, i),
                                      "'%s' in '%s'?" % (sub, s))
 
     def test_getitem(self):
