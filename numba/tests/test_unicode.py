@@ -16,7 +16,8 @@ from numba.errors import TypingError
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 
-def isascii(s): return all(ord(c) < 128 for c in s)
+def isascii(s):
+    return all(ord(c) < 128 for c in s)
 
 
 def literal_usecase():

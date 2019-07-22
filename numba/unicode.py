@@ -33,8 +33,6 @@ from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
-                              _PyUnicode_gettyperecord,
-                              _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
