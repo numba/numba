@@ -725,12 +725,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
                     self.array[i] += val
                 return self.array
 
-            def __eq__(self, other):
-                return self.value == other.value and all(self == other)
-
-            def __ne__(self, other):
-                return not self == other
-
         @njit
         def foo():
             l = List()
@@ -741,4 +735,8 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         expected = foo.py_func()
         got = foo()
-        self.assertEqual(expected, got)
+
+        def bag_equal(one, two):
+            # jitclasses couldn't override __eq__ at time of writing
+            return one.value == two.value and all(one.array == two.array)
+        self.assertTrue([bag_equal(a,b) for a,b in zip(expected, got)])
