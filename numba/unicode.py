@@ -37,7 +37,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
                               _PyUnicode_gettyperecord,
                               _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase)
+                              _PyUnicode_IsTitlecase,
+                              _Py_ISLOWER, _Py_ISUPPER)
 
 # DATA MODEL
 
@@ -818,6 +819,37 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
+def _is_lower(is_lower, is_upper, is_title):
+    #impl is an approximate translation of
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11845
+    #mixed with
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-242
+
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return is_lower(_get_code_point(a, 0))
+        if l == 0:
+            return False
+
+        cased = False
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if (is_upper(code_point) or is_title(code_point)):
+                return False
+            elif (not cased and is_lower(code_point)):
+                cased = True
+        return cased
+    return impl
+
+
+_always_false = register_jitable(lambda x:False)
+_ascii_is_lower = register_jitable(_is_lower(_Py_ISLOWER, _Py_ISUPPER, _always_false))
+_unicode_is_lower = register_jitable(_is_lower(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
 @overload_method(types.UnicodeType, 'lstrip')
 def unicode_lstrip(string, chars=None):
     unicode_strip_types_check(chars)
@@ -1149,33 +1181,12 @@ def unicode_islower(a):
     """
     Implements .islower()
     """
-    # impl is an approximate translation of:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+
     def impl(a):
-        l = len(a)
-        if l == 0:
-            return False
         if a._is_ascii:
-            islower = True
-            for char in a:
-                data = _PyUnicode_gettyperecord(char)
-                t = data.flags & _PyUnicode_TyperecordMasks.LOWER_MASK
-                islower &= (t != 0)
-                if not islower:
-                    return False
-            return islower
+            return _ascii_is_lower(a)
         else:
-            if l == 1:
-                return _PyUnicode_IsLowercase(a)
-            else:
-                cased = 0
-                for idx in range(l):
-                    code_point = _get_code_point(a, idx)
-                    if (_PyUnicode_IsUppercase(code_point) or _PyUnicode_IsTitlecase(code_point)):
-                        return False
-                    elif not cased and _PyUnicode_IsLowercase(code_point):
-                        cased = 1
-                return cased == 1
+            return _unicode_is_lower(a)
     return impl
 
 
