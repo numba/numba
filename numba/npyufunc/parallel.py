@@ -13,6 +13,7 @@ from __future__ import print_function, absolute_import
 
 import os
 import platform
+import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
@@ -259,11 +260,15 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
 
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _nop():
     yield
 
+
 _backend_init_thread_lock = threadRLock()
+
+
 try:
     if utils.PY3:
         # Force the use of an RLock in the case a fork was used to start the
