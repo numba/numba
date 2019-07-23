@@ -47,7 +47,7 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             branches.extend(tmp)
         return branches
 
-    def assert_prune(self, func, args_tys, prune, *args, flags=None):
+    def assert_prune(self, func, args_tys, prune, *args, **kwargs):
         # This checks that the expected pruned branches have indeed been pruned.
         # func is a python function to assess
         # args_tys is the numba types arguments tuple
@@ -58,8 +58,9 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
         # None: under no circumstances should this branch be pruned
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
-        # flags: compiler.Flags instance to pass to `compile_isolated`, permits
-        #        use of e.g. object mode
+        # **kwargs:
+        #        - flags: compiler.Flags instance to pass to `compile_isolated`,
+        #          permits use of e.g. object mode
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -108,8 +109,9 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             print("expect_removed", sorted(expect_removed))
             raise e
 
-        kwargs = {'flags': flags} if flags is not None else {}
-        cres = compile_isolated(func, args_tys, **kwargs)
+        supplied_flags = kwargs.pop('flags', False)
+        compiler_kws = {'flags': supplied_flags} if supplied_flags else {}
+        cres = compile_isolated(func, args_tys, **compiler_kws)
         if args is None:
             res = cres.entry_point()
             expected = func()
