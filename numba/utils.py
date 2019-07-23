@@ -86,8 +86,9 @@ except ImportError:
         def pysignature(*args, **kwargs):
             try:
                 return _pysignature(*args, **kwargs)
-            except ValueError:
-                msg = ("Cannot obtain a signature for:", args)
+            except ValueError as e:
+                msg = ("Cannot obtain a signature for: %s. The error message "
+                       "from funcsigs was: '%s'." % (args,  e.message))
                 raise UnsupportedError(msg)
 
         # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3

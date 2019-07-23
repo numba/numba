@@ -1,7 +1,8 @@
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba
-from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba import (config, ir, ir_utils, utils, prange, rewrites, types, typing,
+                   errors)
 from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
@@ -52,9 +53,21 @@ class InlineClosureCallPass(object):
         self._processed_stencils = []
         self.typed = typed
 
+    def check_ir_is_supported(self):
+        """Checks the IR is supported for inlining
+        """
+        for blk in self.func_ir.blocks.values():
+            for stmt in blk.find_insts(ir.Assign):
+                if isinstance(stmt.value, ir.Yield):
+                    msg = "The use of yield in a closure is unsupported."
+                    raise errors.UnsupportedError(msg, loc=stmt.loc)
+
     def run(self):
         """Run inline closure call pass.
         """
+        # first check IR
+        self.check_ir_is_supported()
+
         modified = False
         work_list = list(self.func_ir.blocks.items())
         debug_print = _make_debug_print("InlineClosureCallPass")
