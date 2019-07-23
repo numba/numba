@@ -261,15 +261,14 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
 # ---------------------------------------------------------------------------
 
 
-@contextmanager
-def _nop():
-    yield
-
-
 _backend_init_thread_lock = threadRLock()
 
 
 try:
+    @contextmanager
+    def _nop():
+        yield
+
     if utils.PY3:
         # Force the use of an RLock in the case a fork was used to start the
         # process and thereby the init sequence, some of the threading backend
@@ -285,6 +284,12 @@ try:
         else:
             _backend_init_process_lock = multiprocessing.RLock()
 except OSError as e:
+
+    # this is defined twice, windows problems if it is in globals
+    @contextmanager
+    def _nop():
+        yield
+
     # probably lack of /dev/shm for semaphore writes, warn the user
     msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
            "A likely cause of this problem is '/dev/shm' is missing or"
