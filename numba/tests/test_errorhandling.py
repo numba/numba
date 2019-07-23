@@ -173,7 +173,7 @@ class TestMiscErrorHandling(unittest.TestCase):
             y = (x for x in range(10))
 
         if utils.IS_PY3:
-            expected = "The use of generator expressions is unsupported."
+            expected = "The use of yield in a closure is unsupported."
         else:
             # funcsigs falls over on py27
             expected = "Cannot obtain a signature for"
