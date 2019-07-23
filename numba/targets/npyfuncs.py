@@ -1696,6 +1696,11 @@ def np_complex_fmin_impl(context, builder, sig, args):
 ########################################################################
 # NumPy floating point misc
 
+def np_int_isnan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.false_bit
+
+
 def np_real_isnan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return mathimpl.is_nan(builder, args[0])
@@ -1710,6 +1715,11 @@ def np_complex_isnan_impl(context, builder, sig, args):
     return cmathimpl.is_nan(builder, complex_val)
 
 
+def np_int_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.true_bit
+
+
 def np_real_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return mathimpl.is_finite(builder, args[0])
@@ -1721,6 +1731,11 @@ def np_complex_isfinite_impl(context, builder, sig, args):
     ty, = sig.args
     complex_val = context.make_complex(builder, ty, value=x)
     return cmathimpl.is_finite(builder, complex_val)
+
+
+def np_int_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.false_bit
 
 
 def np_real_isinf_impl(context, builder, sig, args):
