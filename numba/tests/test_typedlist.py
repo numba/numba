@@ -738,5 +738,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         def bag_equal(one, two):
             # jitclasses couldn't override __eq__ at time of writing
-            return one.value == two.value and all(one.array == two.array)
-        self.assertTrue(all([bag_equal(a,b) for a,b in zip(expected, got)]))
+            self.assertEqual(one.value, two.value)
+            np.testing.assert_allclose(one.array, two.array)
+
+        [bag_equal(a, b) for a, b in zip(expected, got)]
