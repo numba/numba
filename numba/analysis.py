@@ -463,35 +463,39 @@ def rewrite_semantic_constants(func_ir, called_args):
         repl_idx = defns.index(val)
         defns[repl_idx] = stmt.value
 
+    def rewrite_array_ndim(val, func_ir, called_args):
+        # rewrite Array.ndim as const(ndim)
+        if getattr(val, 'op', None) == 'getattr':
+            if val.attr == 'ndim':
+                arg_def = guard(get_definition, func_ir, val.value)
+                if isinstance(arg_def, ir.Arg):
+                    argty = called_args[arg_def.index]
+                    if isinstance(argty, types.Array):
+                        rewrite_statement(func_ir, stmt, argty.ndim)
+
+    def rewrite_tuple_len(val, func_ir, called_args):
+        # rewrite len(tuple) as const(len(tuple))
+        if getattr(val, 'op', None) == 'call':
+            func = guard(get_definition, func_ir, val.func)
+            if (func is not None and isinstance(func, ir.Global) and
+                    getattr(func, 'value', None) is len):
+
+                (arg,) = val.args
+                arg_def = guard(get_definition, func_ir, arg)
+                if isinstance(arg_def, ir.Arg):
+                    argty = called_args[arg_def.index]
+                    if isinstance(argty, types.BaseTuple):
+                        rewrite_statement(func_ir, stmt, argty.count)
+
     from .ir_utils import get_definition, guard
     for blk in func_ir.blocks.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign):
                 val = stmt.value
                 if isinstance(val, ir.Expr):
-                    if getattr(val, 'op', None) == 'getattr':
-                        # rewrite Array.ndim as const(ndim)
-                        if val.attr == 'ndim':
-                            arg_def = guard(get_definition, func_ir, val.value)
-                            if isinstance(arg_def, ir.Arg):
-                                argty = called_args[arg_def.index]
-                                if isinstance(argty, types.Array):
-                                    rewrite_statement(func_ir, stmt,
-                                                      argty.ndim)
+                    rewrite_array_ndim(val, func_ir, called_args)
+                    rewrite_tuple_len(val, func_ir, called_args)
 
-                    # rewrite len(tuple) as const(len(tuple))
-                    if getattr(val, 'op', None) == 'call':
-                        func = guard(get_definition, func_ir, val.func)
-                        if (func is not None and isinstance(func, ir.Global) and
-                                getattr(func, 'value', None) is len):
-
-                            (arg,) = val.args
-                            arg_def = guard(get_definition, func_ir, arg)
-                            if isinstance(arg_def, ir.Arg):
-                                argty = called_args[arg_def.index]
-                                if isinstance(argty, types.BaseTuple):
-                                    rewrite_statement(func_ir, stmt,
-                                                      argty.count)
     if DEBUG > 1:
         print("after".center(80, '*'))
         func_ir.dump()

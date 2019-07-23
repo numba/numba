@@ -1,14 +1,18 @@
 # Tests numba.analysis functions
 from __future__ import print_function, absolute_import, division
+import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend
+from numba.compiler import compile_isolated, run_frontend, Flags
 from numba import types, rewrites, ir, jit, ir_utils, errors, njit
 from .support import TestCase, MemoryLeakMixin, SerialMixin
 
 from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
+
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
 
 
 def compile_to_ir(func):
@@ -43,7 +47,7 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             branches.extend(tmp)
         return branches
 
-    def assert_prune(self, func, args_tys, prune, *args):
+    def assert_prune(self, func, args_tys, prune, *args, flags=None):
         # This checks that the expected pruned branches have indeed been pruned.
         # func is a python function to assess
         # args_tys is the numba types arguments tuple
@@ -54,6 +58,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
         # None: under no circumstances should this branch be pruned
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
+        # flags: compiler.Flags instance to pass to `compile_isolated`, permits
+        #        use of e.g. object mode
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -102,7 +108,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             print("expect_removed", sorted(expect_removed))
             raise e
 
-        cres = compile_isolated(func, args_tys)
+        kwargs = {'flags': flags} if flags is not None else {}
+        cres = compile_isolated(func, args_tys, **kwargs)
         if args is None:
             res = cres.entry_point()
             expected = func()
@@ -610,3 +617,23 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
             test()
 
         self.assertIn("Unknown attribute 'as_integer_ratio'", str(e.exception))
+
+    def test_ndim_not_on_array(self):
+
+        FakeArray = collections.namedtuple('FakeArray', ['ndim'])
+        fa = FakeArray(ndim=2)
+
+        def impl(fa):
+            if fa.ndim == 2:
+                return fa.ndim
+            else:
+                object()
+
+        # check prune works for array ndim
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False],
+                          np.zeros((2, 3)))
+
+        # check prune fails for something with `ndim` attr that is not array
+        FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
+        self.assert_prune(impl, (FakeArrayType,), [None], fa,
+                          flags=enable_pyobj_flags)
