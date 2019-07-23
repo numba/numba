@@ -803,6 +803,8 @@ def _fill_ufunc_db(ufunc_db):
         # intp
         'q->?': npyfuncs.np_int_isnan_impl,
         'Q->?': npyfuncs.np_int_isnan_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isnan_impl,
     }
 
     ufunc_db[np.isinf] = {
@@ -825,6 +827,8 @@ def _fill_ufunc_db(ufunc_db):
         # intp
         'q->?': npyfuncs.np_int_isinf_impl,
         'Q->?': npyfuncs.np_int_isinf_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isinf_impl,
     }
 
     ufunc_db[np.isfinite] = {
@@ -847,6 +851,8 @@ def _fill_ufunc_db(ufunc_db):
         # intp
         'q->?': npyfuncs.np_int_isfinite_impl,
         'Q->?': npyfuncs.np_int_isfinite_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isfinite_impl,
     }
 
     ufunc_db[np.signbit] = {
