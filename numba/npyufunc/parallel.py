@@ -263,32 +263,28 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
 
 _backend_init_thread_lock = threadRLock()
 
+_windows = sys.platform.startswith('win32')
+
+
+@contextmanager
+def _nop():
+    yield
+
 
 try:
-    @contextmanager
-    def _nop():
-        yield
-
     if utils.PY3:
         # Force the use of an RLock in the case a fork was used to start the
         # process and thereby the init sequence, some of the threading backend
-        # init sequences are not fork safe.
-        if "fork" in multiprocessing.get_start_method():
+        # init sequences are not fork safe. Also, windows global mp locks seem
+        # to be fine.
+        if "fork" in multiprocessing.get_start_method() or _windows:
             _backend_init_process_lock = multiprocessing.get_context().RLock()
         else:
             _backend_init_process_lock = _nop()
     else:
-        # windows uses spawn
-        if sys.platform.startswith('win32'):
-            _backend_init_process_lock = _nop()
-        else:
-            _backend_init_process_lock = multiprocessing.RLock()
+        # windows uses spawn so is fine, linux uses fork has the lock
+        _backend_init_process_lock = multiprocessing.RLock()
 except OSError as e:
-
-    # this is defined twice, windows problems if it is in globals
-    @contextmanager
-    def _nop():
-        yield
 
     # probably lack of /dev/shm for semaphore writes, warn the user
     msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
