@@ -11,7 +11,7 @@ import math
 from llvmlite.llvmpy import core as lc
 
 from .. import cgutils, typing, types, lowering, errors
-from . import cmathimpl, mathimpl, numbers
+from . import cmathimpl, mathimpl, numbers, npdatetime
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -1718,6 +1718,11 @@ def np_complex_isnan_impl(context, builder, sig, args):
 def np_int_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return cgutils.true_bit
+
+
+def np_datetime_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
 
 
 def np_real_isfinite_impl(context, builder, sig, args):

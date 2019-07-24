@@ -853,6 +853,9 @@ def _fill_ufunc_db(ufunc_db):
         'Q->?': npyfuncs.np_int_isfinite_impl,
         # boolean
         '?->?': npyfuncs.np_int_isfinite_impl,
+        # datetime & timedelta
+        'M->?': npyfuncs.np_datetime_isfinite_impl,
+        'm->?': npyfuncs.np_datetime_isfinite_impl,
     }
 
     ufunc_db[np.signbit] = {
