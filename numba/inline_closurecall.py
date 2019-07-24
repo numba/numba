@@ -232,7 +232,7 @@ def check_reduce_func(func_ir, func_var):
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None):
+                        work_list=None, replace_freevars=True):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -256,7 +256,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
-    callee_ir = get_ir_of_code(glbls, callee_code)
+    if isinstance(callee, pytypes.FunctionType):
+        from numba import compiler
+        callee_ir = compiler.run_frontend(callee)
+    else:
+        callee_ir = get_ir_of_code(glbls, callee_code)
+
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
@@ -306,7 +311,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 4. replace freevar with actual closure var
-    if callee_closure:
+    if callee_closure and replace_freevars:
         closure = func_ir.get_definition(callee_closure)
         debug_print("callee's closure = ", closure)
         if isinstance(closure, tuple):

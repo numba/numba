@@ -2020,13 +2020,43 @@ class InlineInlinables(object):
         # do not handle closure inlining here, another pass deals with that.
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
-        try:
-            val = getattr(to_inline, 'value', False)
-        except KeyError:
+
+        def resolve_func_from_module(node):
+            getattr_chain = []
+            def resolve_mod(mod):
+                if getattr(mod, 'op', False) == 'getattr':
+                    getattr_chain.insert(0, mod.attr)
+                    mod = self.func_ir.get_definition(mod.value)
+                    return resolve_mod(mod)
+                elif isinstance(mod, ir.Global):
+                    if isinstance(mod.value, pytypes.ModuleType):
+                        return mod
+                return None
+
+            mod = resolve_mod(node)
+            if mod is not None:
+                defn = mod.value
+                for x in getattr_chain:
+                    defn = getattr(defn, x, False)
+                    if not defn:
+                        break
+                else:
+                    return defn
+            else:
+                return None
+
+
+        if getattr(to_inline, 'op', False) == 'getattr':
+            val = resolve_func_from_module(to_inline)
+        else:
             try:
-                val = getattr(to_inline, 'func', False)
-            except  KeyError:
-                raise GuardException
+                val = getattr(to_inline, 'value', False)
+            except KeyError:
+                try:
+                    val = getattr(to_inline, 'func', False)
+                    val = getattr(val, 'value', False)
+                except  KeyError:
+                    raise GuardException
 
         if val:
             topt = getattr(val, 'targetoptions', False)
@@ -2036,7 +2066,7 @@ class InlineInlinables(object):
                     _check_inline_options(inline_type)
                     if inline_type != 'never':
                         do_inline = True
-                        pyfunc = to_inline.value.py_func
+                        pyfunc = val.py_func
                         if inline_type != 'always':
                             # must be a function, run the function
                             do_inline = inline_type(self.func_ir, pyfunc)
@@ -2149,7 +2179,8 @@ class InlineOverloads(object):
             inline_closure_call(self.func_ir, impl.__globals__,
                                 block, i, impl, typingctx=self.tyctx,
                                 arg_typs=arg_typs, typemap=self.typemap,
-                                calltypes=self.calltypes, work_list=work_list)
+                                calltypes=self.calltypes, work_list=work_list,
+                                replace_freevars=False)
             return True
         else:
             return False

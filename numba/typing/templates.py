@@ -437,10 +437,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if self._inline != 'never':
             # need to run the compiler front end up to type inference to compute
             # a signature
-            from numba.ir_utils import compile_to_numba_ir, get_ir_of_code
             from numba import compiler
-            ir = get_ir_of_code(self._overload_func(*args, **kws).__globals__,
-                                disp_type.dispatcher.__code__)
+            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
             typemap, return_type, calltypes = compiler.type_inference_stage(
                                               self.context, ir, args, None)
             sig = Signature(return_type, args, None)
