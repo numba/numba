@@ -220,6 +220,7 @@ def random_impl(context, builder, sig, args):
 
 @lower("np.random.random")
 @lower("np.random.random_sample")
+@lower("np.random.sample")
 @lower("np.random.ranf")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
