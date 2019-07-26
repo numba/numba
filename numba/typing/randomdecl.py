@@ -98,6 +98,8 @@ class Random_getrandbits(ConcreteTemplate):
 
 @infer_global(random.random, typing_key="random.random")
 @infer_global(np.random.random, typing_key="np.random.random")
+@infer_global(np.random.random_sample, typing_key="np.random.random_sample")
+@infer_global(np.random.ranf, typing_key="np.random.ranf")
 class Random_random(ConcreteRandomTemplate):
     cases = [signature(types.float64)]
 
