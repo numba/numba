@@ -150,7 +150,7 @@ class CmdLine(object):
             else:
                 msg = 'Command line tooling does not support "amdgcn" target'
                 raise HsaSupportError(msg)
-        except BaseException as e:
+        except Exception as e:
             raise
 
     def verify(self, ipath, opath):

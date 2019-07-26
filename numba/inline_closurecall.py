@@ -331,7 +331,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         try:
             f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
-        except BaseException:
+        except Exception:
             f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
             pass

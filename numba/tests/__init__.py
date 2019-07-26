@@ -20,7 +20,7 @@ else:
     try:
         # May fail in IPython Notebook with UnsupportedOperation
         faulthandler.enable()
-    except BaseException as e:
+    except Exception as e:
         msg = "Failed to enable faulthandler due to:\n{err}"
         warnings.warn(msg.format(err=e))
 

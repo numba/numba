@@ -134,17 +134,17 @@ class TestRaising(TestCase):
         # location info should ensure this
         if exec_mode is no_pyobj_flags:
 
-            # we only care about the bottom two frames, the error and the 
+            # we only care about the bottom two frames, the error and the
             # location it was raised.
             try:
                 pyfunc(*args)
-            except BaseException as e:
+            except Exception as e:
                 py_frames = traceback.format_exception(*sys.exc_info())
                 expected_frames = py_frames[-2:]
 
             try:
                 cfunc(*args)
-            except BaseException as e:
+            except Exception as e:
                 c_frames = traceback.format_exception(*sys.exc_info())
                 got_frames = c_frames[-2:]
 
