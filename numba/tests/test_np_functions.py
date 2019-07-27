@@ -33,6 +33,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def alen(arr):
+    return np.alen(arr)
+
+
 def delete(arr, obj):
     return np.delete(arr, obj)
 
@@ -374,6 +378,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_alen(self):
+        def arrays():
+            yield np.array([])
+            yield np.array([[1, 2], [3, 4]])
+            yield np.arange(10)
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+
+        pyfunc = alen
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr in arrays():
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
     @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")

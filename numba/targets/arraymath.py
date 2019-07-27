@@ -2867,6 +2867,17 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.alen)
+def np_alen(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.shape must be array-like")
+
+    def impl(a):
+        return np.asarray(a).shape[0]
+    return impl
+
+
+
 np_delete_handler_isslice = register_jitable(lambda x : x)
 np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
