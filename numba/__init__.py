@@ -102,6 +102,11 @@ def _ensure_llvm():
                "Please update llvmlite." %
                (_min_llvm_version + llvm_version_info))
         raise ImportError(msg)
+    
+    try:
+        llvmlite.binding.set_option("tmp", "-non-global-value-max-name-size=4294967295")
+    except:
+        pass
 
     check_jit_execution()
 
