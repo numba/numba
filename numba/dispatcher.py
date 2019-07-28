@@ -417,6 +417,21 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
 
     def inspect_asm(self, signature=None):
+        """Get the generated human-readable native assembler code.
+
+        Parameters
+        ----------
+        signature : tuple of numba types, optional
+            Specify a signature for which to obtain the assembler code. If
+            None, the code is returned for all available signatures.
+
+        Returns
+        -------
+        asm : dict[signature, str] or str
+            Either the assembler for the specified signature, or, if no
+            signature was given, a dictionary mapping signatures to assembler
+            code.
+        """
         if signature is not None:
             lib = self.overloads[signature].library
             return lib.get_asm_str()
