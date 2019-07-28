@@ -19,6 +19,7 @@ from numba import types, cgutils, typing, utils, extending, pndindex, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import type_can_asarray
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
@@ -1492,6 +1493,8 @@ def array_transpose_vararg(context, builder, sig, args):
 
 @overload(np.transpose)
 def numpy_transpose(a, axes=None):
+    if isinstance(a, types.BaseTuple):
+        raise errors.UnsupportedError("np.transpose does not accept tuples")
 
     if axes is None:
         def np_transpose_impl(a, axes=None):
@@ -1832,6 +1835,18 @@ def _change_dtype(context, builder, oldty, newty, ary):
     update_array_info(newty, ary)
     res = impl_ret_borrowed(context, builder, sig.return_type, res)
     return res
+
+
+@overload(np.shape)
+def np_shape(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.shape must be array-like")
+
+    def impl(a):
+        return np.asarray(a).shape
+    return impl
+
+#-------------------------------------------------------------------------------
 
 
 @overload(np.unique)
@@ -2251,10 +2266,9 @@ def array_record_getattr(context, builder, typ, value, attr):
 
     constoffset = context.get_constant(types.intp, offset)
 
-    llintp = context.get_value_type(types.intp)
-    newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
-    newdataptr = builder.inttoptr(newdata, rary.data.type)
-
+    newdataptr = cgutils.pointer_add(
+        builder, array.data, constoffset,  return_type=rary.data.type,
+    )
     datasize = context.get_abi_sizeof(context.get_data_type(dtype))
     populate_array(rary,
                    data=newdataptr,
@@ -3695,6 +3709,7 @@ def numpy_arange_3(context, builder, sig, args):
 
     res = context.compile_internal(builder, arange, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.arange, types.Number, types.Number,
                types.Number, types.DTypeSpec)

@@ -8,6 +8,10 @@ import re
 import sys
 import warnings
 
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
+
 from . import config, errors, _runtests as runtests, types
 
 # Re-export typeof
@@ -174,7 +178,3 @@ import llvmlite
 Is set to True if Intel SVML is in use.
 """
 config.USING_SVML = _try_enable_svml()
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions

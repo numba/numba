@@ -30,7 +30,7 @@ from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
 
 import warnings
-from ..errors import ParallelSafetyWarning
+from ..errors import NumbaParallelSafetyWarning
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -596,7 +596,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("Will hoist instruction", inst)
         hoisted.append(inst)
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
@@ -605,11 +605,11 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     else:
         if len(diff) > 0:
             not_hoisted.append((inst, "dependency"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because of a dependency.")
         else:
             not_hoisted.append((inst, "not pure"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
@@ -649,7 +649,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     continue
             elif isinstance(inst, parfor.Parfor):
                 new_init_block = []
-                if config.DEBUG_ARRAY_OPT == 1:
+                if config.DEBUG_ARRAY_OPT >= 1:
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
@@ -757,15 +757,13 @@ def _create_gufunc_for_parfor_body(
 
     races = races.difference(set(parfor_redvars))
     for race in races:
-        warnings.warn_explicit("Variable %s used in parallel loop may be written "
-                      "to simultaneously by multiple workers and may result "
-                      "in non-deterministic or unintended results." % race,
-                      ParallelSafetyWarning,
-                      loc.filename,
-                      loc.line)
+        msg = ("Variable %s used in parallel loop may be written "
+               "to simultaneously by multiple workers and may result "
+               "in non-deterministic or unintended results." % race)
+        warnings.warn(NumbaParallelSafetyWarning(msg, loc))
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
@@ -789,7 +787,7 @@ def _create_gufunc_for_parfor_body(
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("loop_body = ", loop_body, " ", type(loop_body))
@@ -798,7 +796,7 @@ def _create_gufunc_for_parfor_body(
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
     param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "param_dict = ",
             sorted(
@@ -811,7 +809,7 @@ def _create_gufunc_for_parfor_body(
     ind_dict = legalize_names_with_typemap(loop_indices, typemap)
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("ind_dict = ", sorted(ind_dict.items()), " ", type(ind_dict))
         print(
             "legal_loop_indices = ",
@@ -850,7 +848,7 @@ def _create_gufunc_for_parfor_body(
     loop_body_var_table = get_name_var_table(loop_body)
     sentinel_name = get_unused_var_name("__sentinel__", loop_body_var_table)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "legal parfor_params = ",
             parfor_params,
@@ -1149,10 +1147,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     '''
     context = lowerer.context
     builder = lowerer.builder
-    library = lowerer.library
 
-    from .parallel import (ParallelGUFuncBuilder, build_gufunc_wrapper,
-                           get_thread_count, _launch_threads)
+    from .parallel import (build_gufunc_wrapper,
+                           get_thread_count,
+                           _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
@@ -1172,8 +1170,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
 
-    wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin,
-                                                          sout, {})
+    info = build_gufunc_wrapper(llvm_func, cres, sin, sout,
+                                cache=False, is_parfors=True)
+    wrapper_name = info.name
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
@@ -1215,8 +1214,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
     # Prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
-    sched_name = expr_args.pop(0)
-    sched_typ = outer_sig.args[0]
+    expr_args.pop(0)
     sched_sig = sin.pop(0)
 
     if config.DEBUG_ARRAY_OPT:
@@ -1436,7 +1434,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             sizeof = context.get_abi_sizeof(typ)
             # Set stepsize to the size of that dtype.
             stepsize = context.get_constant(types.intp, sizeof)
-            if red_stride != None:
+            if red_stride is not None:
                 for rs in red_stride:
                     stepsize = builder.mul(stepsize, rs)
         else:
@@ -1453,22 +1451,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # ----------------------------------------------------------------------------
     # prepare data
-    data = builder.inttoptr(zero, byte_ptr_t)
+    data = cgutils.get_null_value(byte_ptr_t)
 
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
-    # Use the dynamic address of the kernel so the backend knows this module
-    # cannot be cached.
-    fnptr = cres.target_context.add_dynamic_addr(
-        builder,
-        wrapper_ptr,
-        info="parallel gufunc kernel",
-        )
-    fn = builder.bitcast(fnptr, fnty.as_pointer())
+
+    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "before calling kernel %p\n", fn)
-    result = builder.call(fn, [args, shapes, steps, data])
+    builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
@@ -1477,5 +1470,4 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
 
-    scope = init_block.scope
-    loc = init_block.loc
+    context.active_code_library.add_linking_library(cres.library)

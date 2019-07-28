@@ -770,9 +770,9 @@ else:
 
 
 if sys.version_info[:2] < (3, 3):
-    from collections import Mapping, MutableMapping, Sequence
+    from collections import Mapping, MutableMapping, Sequence, MutableSequence
 else:
-    from collections.abc import Mapping, MutableMapping, Sequence
+    from collections.abc import Mapping, MutableMapping, Sequence, MutableSequence
 
 
 def with_metaclass(meta, *bases):

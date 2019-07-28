@@ -69,10 +69,10 @@ class TestProduct(TestCase):
         Check performance warning(s) for non-contiguity.
         """
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', errors.PerformanceWarning)
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
             yield
         self.assertGreaterEqual(len(w), 1)
-        self.assertIs(w[0].category, errors.PerformanceWarning)
+        self.assertIs(w[0].category, errors.NumbaPerformanceWarning)
         self.assertIn("faster on contiguous arrays", str(w[0].message))
         self.assertEqual(w[0].filename, pyfunc.__code__.co_filename)
         # This works because our functions are one-liners
@@ -2447,6 +2447,10 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             check(a, b)
 
         self._assert_wrong_dim("kron", cfunc)
+
+        args = (np.empty(10)[::2], np.empty(10)[::2])
+        msg = "only supports 'C' or 'F' layout"
+        self.assert_error(cfunc, args, msg, err=errors.TypingError)
 
 
 if __name__ == '__main__':

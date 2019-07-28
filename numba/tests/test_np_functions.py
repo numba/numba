@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import itertools
 import math
+import platform
 from functools import partial
 
 import numpy as np
@@ -192,6 +193,34 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_select(condlist, choicelist, default=0):
+    return np.select(condlist, choicelist, default=default)
+
+
+def np_select_defaults(condlist, choicelist):
+    return np.select(condlist, choicelist)
+
+
+def np_bartlett(M):
+    return np.bartlett(M)
+
+
+def np_blackman(M):
+    return np.blackman(M)
+
+
+def np_hamming(M):
+    return np.hamming(M)
+
+
+def np_hanning(M):
+    return np.hanning(M)
+
+
+def np_kaiser(M, beta):
+    return np.kaiser(M, beta)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -346,6 +375,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
+    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
+    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
     def test_delete(self):
 
         def arrays():
@@ -497,8 +528,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         for seq in self.bincount_sequences():
             w = [math.sqrt(x) - 2 for x in seq]
-            # weights as list, then array
-            for weights in (w, np.array(w)):
+            # weights as list, then array, mixed types, check upcast is ok
+            for weights in (w, np.array(w), seq, np.array(seq)):
                 expected = pyfunc(seq, weights)
                 got = cfunc(seq, weights)
                 self.assertPreciseEqual(expected, got)
@@ -2744,6 +2775,156 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for rep in [True, "a", "1"]:
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
+
+    def test_select(self):
+        np_pyfunc = np_select
+        np_nbfunc = njit(np_select)
+
+        test_cases = [
+            # Each test case below is one tuple.
+            # Each tuple is separated by a description of what's being tested
+
+            # test with arrays of length 3 instead of 2 and a different default
+            ([np.array([False, False, False]),
+              np.array([False, True, False]),
+              np.array([False, False, True])],
+             [np.array([1, 2, 3]),
+              np.array([4, 5, 6]),
+              np.array([7, 8, 9])], 15.3),
+            # test with arrays of length 1 instead of 2
+            ([np.array([True]),
+              np.array([False])], [np.array([1]), np.array([2])], 0),
+            # test with lists of length 100 of arrays of length 1
+            ([np.array([False])] * 100, [np.array([1])] * 100, 0),
+            # passing arrays with NaNs
+            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3, np.nan, 5, 7])] * 2, 0),
+            # passing lists with 2d arrays
+            ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2,
+             [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
+            # passing arrays with complex numbers
+            ([np.isnan(np.array([1, 2, 3 + 2j, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3 + 2j, np.nan, 5, 7])] * 2, 0)
+        ]
+
+        for x in (np.arange(10), np.arange(10).reshape((5, 2))):
+            # test with two lists
+            test_cases.append(([x < 3, x > 5], [x, x ** 2], 0))
+            # test with two tuples
+            test_cases.append(((x < 3, x > 5), (x, x ** 2), 0))
+            # test with one list and one tuple
+            test_cases.append(([x < 3, x > 5], (x, x ** 2), 0))
+            # test with one tuple and one list
+            test_cases.append(((x < 3, x > 5), [x, x ** 2], 0))
+
+        for condlist,  choicelist, default in test_cases:
+            self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
+                                    np_nbfunc(condlist, choicelist, default))
+
+        np_pyfunc_defaults = np_select_defaults
+        np_nbfunc_defaults = njit(np_select_defaults)
+        # check the defaults work, using whatever the last input was
+        self.assertPreciseEqual(np_pyfunc_defaults(condlist, choicelist),
+                                np_nbfunc_defaults(condlist, choicelist))
+
+    def test_select_exception(self):
+        np_nbfunc = njit(np_select)
+        x = np.arange(10)
+        self.disable_leak_check()
+        for condlist, choicelist, default, expected_error, expected_text in [
+            # Each test case below is one tuple.
+            # Each tuple is separated by the description of the intended error
+
+            # passing condlist of dim zero
+            ([np.array(True), np.array([False, True, False])],
+             [np.array(1), np.arange(12).reshape(4, 3)], 0,
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # condlist and choicelist with different dimensions
+            ([np.array(True), np.array(False)], [np.array([1]), np.array([2])],
+             0, TypingError, "condlist and choicelist elements must have the "
+                             "same number of dimensions"),
+            # condlist and choicelist with different dimensions
+            ([np.array([True]), np.array([False])],
+             [np.array([[1]]), np.array([[2]])], 0, TypingError,
+             "condlist and choicelist elements must have the "
+             "same number of dimensions"),
+            # passing choicelist of dim zero
+            ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0,
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # passing an array as condlist instead of a list or tuple
+            (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
+             np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
+             "condlist must be a List or a Tuple"),
+            # default is a list
+            ([True], [0], [0], TypingError,
+             "default must be a scalar"),
+            # condlist with ints instead of booleans
+            ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0,
+             TypingError, "condlist arrays must contain booleans"),
+            # condlist and choicelist of different length
+            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x], 0, ValueError,
+             "list of cases must be same length as list of conditions"),
+
+            # condlist contains tuples instead of arrays
+            # if in the future numba's np.where accepts tuples, the
+            # implementation of np.select should also accept them and
+            # the following two test cases should be normal tests
+            # instead of negative tests
+
+            # test with lists of length 100 of tuples of length 1 for condlist
+            ([(False,)] * 100, [np.array([1])] * 100, 0, TypingError,
+             'items of condlist must be arrays'),
+            # test with lists of length 100 of tuples of length 1 for choicelist
+            ([np.array([False])] * 100, [(1,)] * 100, 0, TypingError,
+             'items of choicelist must be arrays'),
+        ]:
+            with self.assertRaises(expected_error) as e:
+                np_nbfunc(condlist, choicelist, default)
+            self.assertIn(expected_text, str(e.exception))
+
+    def test_windowing(self):
+        def check_window(func):
+            np_pyfunc = func
+            np_nbfunc = njit(func)
+
+            for M in [0, 1, 5, 12]:
+                expected = np_pyfunc(M)
+                got = np_nbfunc(M)
+                self.assertPreciseEqual(expected, got)
+
+            for M in ['a', 1.1, 1j]:
+                with self.assertRaises(TypingError) as raises:
+                    np_nbfunc(1.1)
+                self.assertIn("M must be an integer", str(raises.exception))
+
+        check_window(np_bartlett)
+        check_window(np_blackman)
+        check_window(np_hamming)
+        check_window(np_hanning)
+
+        # Test np.kaiser separately
+        np_pyfunc = np_kaiser
+        np_nbfunc = njit(np_kaiser)
+
+        for M in [0, 1, 5, 12]:
+            for beta in [0.0, 5.0, 14.0]:
+                expected = np_pyfunc(M, beta)
+                got = np_nbfunc(M, beta)
+
+                if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
+                    self.assertPreciseEqual(expected, got, prec='double', ulps=2)
+                else:
+                    self.assertPreciseEqual(expected, got, prec='exact')
+
+        for M in ['a', 1.1, 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(M, 1.0)
+            self.assertIn("M must be an integer", str(raises.exception))
+
+        for beta in ['a', 1j]:
+            with self.assertRaises(TypingError) as raises:
+                np_nbfunc(5, beta)
+            self.assertIn("beta must be an integer or float", str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

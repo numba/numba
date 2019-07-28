@@ -38,7 +38,6 @@ class OmittedArg(object):
 
 
 class _FunctionCompiler(object):
-
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
         self.py_func = py_func
@@ -47,6 +46,10 @@ class _FunctionCompiler(object):
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
         self.pipeline_class = pipeline_class
+        # Remember key=(args, return_type) combinations that will fail
+        # compilation to avoid compilation attempt on them.  The values are
+        # the exceptions.
+        self._failed_cache = {}
 
     def fold_argument_types(self, args, kws):
         """
@@ -70,6 +73,28 @@ class _FunctionCompiler(object):
         return self.pysig, args
 
     def compile(self, args, return_type):
+        status, retval = self._compile_cached(args, return_type)
+        if status:
+            return retval
+        else:
+            raise retval
+
+    def _compile_cached(self, args, return_type):
+        key = tuple(args), return_type
+        try:
+            return False, self._failed_cache[key]
+        except KeyError:
+            pass
+
+        try:
+            retval = self._compile_core(args, return_type)
+        except errors.TypingError as e:
+            self._failed_cache[key] = e
+            return False, e
+        else:
+            return True, retval
+
+    def _compile_core(self, args, return_type):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
@@ -383,7 +408,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None, **kwargs):
+    def inspect_types(self, file=None, signature=None, **kwargs):
         """
         print or return annotated source with Numba intermediate IR
 
@@ -394,11 +419,15 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         pretty = kwargs.get('pretty', False)
         style = kwargs.get('style', 'default')
 
+        overloads = self.overloads
+        if signature is not None:
+            overloads = {signature: self.overloads[signature]}
+
         if not pretty:
             if file is None:
                 file = sys.stdout
 
-            for ver, res in utils.iteritems(self.overloads):
+            for ver, res in utils.iteritems(overloads):
                 print("%s %s" % (self.py_func.__name__, ver), file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)
@@ -407,7 +436,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if file is not None:
                 raise ValueError("`file` must be None if `pretty=True`")
             from .pretty_annotate import Annotate
-            return Annotate(self, style=style)
+            return Annotate(self, signature=signature, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None):
         """
@@ -437,10 +466,15 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         signature. If no signature is supplied a dictionary of signature to
         annotation information is returned.
         """
-        if signature is not None:
-            cres = self.overloads[signature]
-            return cres.type_annotation.annotate_raw()
-        return dict((sig, self.annotate(sig)) for sig in self.signatures)
+        signatures = self.signatures if signature is None else [signature]
+        out = collections.OrderedDict()
+        for sig in signatures:
+            cres = self.overloads[sig]
+            ta = cres.type_annotation
+            key = (ta.func_id.filename + ':' + str(ta.func_id.firstlineno + 1),
+                   ta.signature)
+            out[key] = ta.annotate_raw()[key]
+        return out
 
     def _explain_ambiguous(self, *args, **kws):
         """

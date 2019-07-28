@@ -125,11 +125,6 @@ class _EnvReloader(object):
         def optional_str(x):
             return str(x) if x is not None else None
 
-        # Print warnings to screen about function compilation
-        #   0 = Numba warnings suppressed (default)
-        #   1 = All Numba warnings shown
-        WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
-
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
@@ -331,17 +326,6 @@ class _EnvReloader(object):
         for name, value in locals().copy().items():
             if name.isupper():
                 globals()[name] = value
-
-        # delay this until now, let the globals for the module be updated
-        # prior to loading numba.errors as it needs to use the config
-        if WARNINGS == 0:
-            from numba.errors import NumbaWarning
-            warnings.simplefilter('ignore', NumbaWarning)
-        if not _os_supports_avx():
-            from numba.errors import PerformanceWarning
-            warnings.warn("your operating system doesn't support "
-                          "AVX, this may degrade performance on "
-                          "some numerical code", PerformanceWarning)
 
 
 _env_reloader = _EnvReloader()

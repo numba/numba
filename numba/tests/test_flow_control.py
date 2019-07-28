@@ -3,9 +3,11 @@ from __future__ import print_function
 import itertools
 
 import numba.unittest_support as unittest
-from numba.controlflow import CFGraph
+from numba.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
 from numba import types, errors
+from numba.bytecode import FunctionIdentity, ByteCode
+from numba.utils import IS_PY3
 from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
@@ -818,6 +820,77 @@ class TestCFGraph(TestCase):
                                16: [16],
                                })
 
+    def test_dominator_tree(self):
+        def check(graph, expected):
+            domtree = graph.dominator_tree()
+            self.assertEqual(domtree, expected)
+
+        check(self.loopless1(),
+              {0: {12, 18, 21}, 12: set(), 18: set(), 21: set()})
+        check(self.loopless2(),
+              {12: set(), 18: set(), 21: {34, 42}, 34: set(), 42: set(),
+               99: {18, 12, 21}})
+        check(self.loopless1_dead_nodes(),
+              {0: {12, 18, 21}, 12: set(), 18: set(), 21: set()})
+        check(self.multiple_loops(),
+              {0: {7}, 7: {10, 60}, 60: {61}, 61: {68}, 68: {71, 87},
+               87: {88}, 88: set(), 71: {80}, 80: set(), 10: {13},
+               13: {20}, 20: {56, 23}, 23: {32, 44}, 44: set(),
+               32: set(), 56: {57}, 57: set()})
+        check(self.multiple_exits(),
+              {0: {7}, 7: {10, 36, 37}, 36: set(), 10: {19, 23},
+               23: {29}, 29: set(), 37: set(), 19: set()})
+        check(self.infinite_loop1(),
+              {0: {10, 6}, 6: set(), 10: {13}, 13: {26, 19}, 19: set(),
+               26: set()})
+        check(self.infinite_loop2(),
+              {0: {3}, 3: {16, 9}, 9: set(), 16: set()})
+
+    def test_immediate_dominators(self):
+        def check(graph, expected):
+            idoms = graph.immediate_dominators()
+            self.assertEqual(idoms, expected)
+
+        check(self.loopless1(),
+              {0: 0, 12: 0, 18: 0, 21: 0})
+        check(self.loopless2(),
+              {18: 99, 12: 99, 21: 99, 42: 21, 34: 21, 99: 99})
+        check(self.loopless1_dead_nodes(),
+              {0: 0, 12: 0, 18: 0, 21: 0})
+        check(self.multiple_loops(),
+              {0: 0, 7: 0, 10: 7, 13: 10, 20: 13, 23: 20,
+               32: 23, 44: 23, 56: 20, 57: 56, 60: 7, 61: 60,
+               68: 61, 71: 68, 80: 71, 87: 68, 88: 87})
+        check(self.multiple_exits(),
+              {0:0, 7: 0, 10: 7, 19: 10, 23: 10, 29: 23, 36: 7, 37: 7})
+        check(self.infinite_loop1(),
+              {0: 0, 6: 0, 10: 0, 13: 10, 19: 13, 26: 13})
+        check(self.infinite_loop2(),
+              {0: 0, 3: 0, 9: 3, 16: 3})
+
+    def test_dominance_frontier(self):
+        def check(graph, expected):
+            df = graph.dominance_frontier()
+            self.assertEqual(df, expected)
+
+        check(self.loopless1(),
+              {0: set(), 12: {21}, 18: {21}, 21: set()})
+        check(self.loopless2(),
+              {18: {21}, 12: {21}, 21: set(), 42: set(), 34: set(), 99: set()})
+        check(self.loopless1_dead_nodes(),
+              {0: set(), 12: {21}, 18: {21}, 21: set()})
+        check(self.multiple_loops(),
+              {0: set(), 7: {7}, 10: {7}, 13: {7}, 20: {20, 7}, 23: {20},
+               32: {20}, 44: {20}, 56: {7}, 57: {7}, 60: set(), 61: set(),
+               68: {68}, 71: {68}, 80: set(), 87: set(), 88: set()})
+        check(self.multiple_exits(),
+              {0: set(), 7: {7}, 10: {37, 7}, 19: set(),
+               23: {37, 7}, 29: {37}, 36: {37}, 37: set()})
+        check(self.infinite_loop1(),
+              {0: set(), 6: set(), 10: set(), 13: {13}, 19: {13}, 26: {13}})
+        check(self.infinite_loop2(),
+              {0: set(), 3: {3}, 9: {3}, 16: {3}})
+
     def test_backbone_loopless(self):
         for g in [self.loopless1(), self.loopless1_dead_nodes()]:
             self.assertEqual(sorted(g.backbone()), [0, 21])
@@ -903,6 +976,233 @@ class TestCFGraph(TestCase):
             self.assertEqual(g.in_loops(node), [])
         for node in [7, 10, 23]:
             self.assertEqual(g.in_loops(node), [loop])
+
+
+class TestRealCodeDomFront(TestCase):
+    """Test IDOM and DOMFRONT computation on real python bytecode.
+    Note: there will be less testing on IDOM (esp in loop) because of
+    the extra blocks inserted by the interpreter.  But, testing on DOMFRONT
+    (which depends on IDOM) is easier.
+
+    Testing is done by associating names to basicblock by using globals of
+    the pattern "SET_BLOCK_<name>", which are scanned by
+    `.get_cfa_and_namedblocks` into *namedblocks* dictionary.  That way, we
+    can check that a block of a certain name is a IDOM or DOMFRONT of another
+    named block.
+    """
+    def cfa(self, bc):
+        cfa = ControlFlowAnalysis(bc)
+        cfa.run()
+        return cfa
+
+    def get_cfa_and_namedblocks(self, fn):
+        fid = FunctionIdentity.from_function(fn)
+        bc = ByteCode(func_id=fid)
+        cfa = self.cfa(bc)
+        namedblocks = self._scan_namedblocks(bc, cfa)
+
+        #### To debug, uncomment below
+        # print(bc.dump())
+        # print("IDOMS")
+        # for k, v in sorted(cfa.graph.immediate_dominators().items()):
+        #     print('{} -> {}'.format(k, v))
+        # print("DOMFRONT")
+        # for k, vs in sorted(cfa.graph.dominance_frontier().items()):
+        #     print('{} -> {}'.format(k, vs))
+        # print(namedblocks)
+        # cfa.graph.render_dot().view()
+
+        return cfa, namedblocks
+
+    def _scan_namedblocks(self, bc, cfa):
+        """Scan namedblocks as denoted by a LOAD_GLOBAL bytecode referring
+        to global variables with the pattern "SET_BLOCK_<name>", where "<name>"
+        would be the name for the current block.
+        """
+        namedblocks = {}
+        blocks = sorted([x.offset for x in cfa.iterblocks()])
+        prefix = 'SET_BLOCK_'
+
+        for inst in bc:
+            # Find LOAD_GLOBAL that refers to "SET_BLOCK_<name>"
+            if inst.opname == 'LOAD_GLOBAL':
+                gv = bc.co_names[inst.arg]
+                if gv.startswith(prefix):
+                    name = gv[len(prefix):]
+                    # Find the block where this instruction resides
+                    for s, e in zip(blocks, blocks[1:] + [blocks[-1] + 1]):
+                        if s <= inst.offset < e:
+                            break
+                    else:
+                        raise AssertionError('unreachable loop')
+                    blkno = s
+                    namedblocks[name] = blkno
+        return namedblocks
+
+    def test_loop(self):
+        def foo(n):
+            c = 0
+            SET_BLOCK_A                     # noqa: F821
+            i = 0
+            while SET_BLOCK_B0:             # noqa: F821
+                SET_BLOCK_B1                # noqa: F821
+                c += 1
+                i += 1
+            SET_BLOCK_C                     # noqa: F821
+            return c
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+        idoms = cfa.graph.immediate_dominators()
+
+        self.assertEqual(blkpts['B0'], idoms[blkpts['B1']])
+
+        domfront = cfa.graph.dominance_frontier()
+        self.assertFalse(domfront[blkpts['A']])
+        self.assertFalse(domfront[blkpts['C']])
+        self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
+
+    def test_loop_nested_and_break(self):
+        def foo(n):
+            SET_BLOCK_A                     # noqa: F821
+            while SET_BLOCK_B0:             # noqa: F821
+                SET_BLOCK_B1                # noqa: F821
+                while SET_BLOCK_C0:         # noqa: F821
+                    SET_BLOCK_C1            # noqa: F821
+                    if SET_BLOCK_D0:        # noqa: F821
+                        SET_BLOCK_D1        # noqa: F821
+                        break
+                    elif n:
+                        SET_BLOCK_D2        # noqa: F821
+                    SET_BLOCK_E             # noqa: F821
+                SET_BLOCK_F                 # noqa: F821
+            SET_BLOCK_G                     # noqa: F821
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+        idoms = cfa.graph.immediate_dominators()
+        self.assertEqual(blkpts['D0'], blkpts['C1'])
+        self.assertEqual(blkpts['C0'], idoms[blkpts['C1']])
+
+        domfront = cfa.graph.dominance_frontier()
+        self.assertFalse(domfront[blkpts['A']])
+        self.assertFalse(domfront[blkpts['G']])
+        self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
+        # 2 domfront members for C1
+        # C0 because of the loop; F because of the break.
+        self.assertEqual({blkpts['C0'], blkpts['F']}, domfront[blkpts['C1']])
+        self.assertEqual({blkpts['F']}, domfront[blkpts['D1']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['D2']])
+        self.assertEqual({blkpts['C0']}, domfront[blkpts['E']])
+        self.assertEqual({blkpts['B0']}, domfront[blkpts['F']])
+        self.assertEqual({blkpts['B0']}, domfront[blkpts['B0']])
+
+    def test_if_else(self):
+        def foo(a, b):
+            c = 0
+            SET_BLOCK_A           # noqa: F821
+            if a < b:
+                SET_BLOCK_B       # noqa: F821
+                c = 1
+            elif SET_BLOCK_C0:    # noqa: F821
+                SET_BLOCK_C1      # noqa: F821
+                c = 2
+            else:
+                SET_BLOCK_D       # noqa: F821
+                c = 3
+
+            SET_BLOCK_E           # noqa: F821
+            if a % b == 0:
+                SET_BLOCK_F       # noqa: F821
+                c += 1
+            SET_BLOCK_G           # noqa: F821
+            return c
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+
+        idoms = cfa.graph.immediate_dominators()
+        self.assertEqual(blkpts['A'], idoms[blkpts['B']])
+        self.assertEqual(blkpts['A'], idoms[blkpts['C0']])
+        self.assertEqual(blkpts['C0'], idoms[blkpts['C1']])
+        self.assertEqual(blkpts['C0'], idoms[blkpts['D']])
+        self.assertEqual(blkpts['A'], idoms[blkpts['E']])
+        self.assertEqual(blkpts['E'], idoms[blkpts['F']])
+        self.assertEqual(blkpts['E'], idoms[blkpts['G']])
+
+        domfront = cfa.graph.dominance_frontier()
+        self.assertFalse(domfront[blkpts['A']])
+        self.assertFalse(domfront[blkpts['E']])
+        self.assertFalse(domfront[blkpts['G']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['B']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['C0']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['C1']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['D']])
+        self.assertEqual({blkpts['G']}, domfront[blkpts['F']])
+
+    def test_if_else_nested(self):
+        def foo():
+            if SET_BLOCK_A0:                # noqa: F821
+                SET_BLOCK_A1                # noqa: F821
+                if SET_BLOCK_B0:            # noqa: F821
+                    SET_BLOCK_B1            # noqa: F821
+                    a = 0
+                else:
+                    if SET_BLOCK_C0:        # noqa: F821
+                        SET_BLOCK_C1        # noqa: F821
+                        a = 1
+                    else:
+                        SET_BLOCK_C2        # noqa: F821
+                        a = 2
+                    SET_BLOCK_D             # noqa: F821
+                SET_BLOCK_E                 # noqa: F821
+            SET_BLOCK_F                     # noqa: F821
+            return a
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+
+        idoms = cfa.graph.immediate_dominators()
+        self.assertEqual(blkpts['A0'], idoms[blkpts['A1']])
+        self.assertEqual(blkpts['A1'], idoms[blkpts['B1']])
+        self.assertEqual(blkpts['A1'], idoms[blkpts['C0']])
+        self.assertEqual(blkpts['C0'], idoms[blkpts['D']])
+        self.assertEqual(blkpts['A1'], idoms[blkpts['E']])
+        self.assertEqual(blkpts['A0'], idoms[blkpts['F']])
+
+        domfront = cfa.graph.dominance_frontier()
+        self.assertFalse(domfront[blkpts['A0']])
+        self.assertFalse(domfront[blkpts['F']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['B1']])
+        self.assertEqual({blkpts['D']}, domfront[blkpts['C1']])
+        self.assertEqual({blkpts['E']}, domfront[blkpts['D']])
+        self.assertEqual({blkpts['F']}, domfront[blkpts['E']])
+
+    def test_infinite_loop(self):
+        def foo():
+            SET_BLOCK_A                     # noqa: F821
+            while True:  # infinite loop
+                if SET_BLOCK_B:             # noqa: F821
+                    SET_BLOCK_C             # noqa: F821
+                    return
+                SET_BLOCK_D                 # noqa: F821
+            SET_BLOCK_E                     # noqa: F821
+
+        # Whether infinite loop (i.g. while True) are optimized out.
+        infinite_loop_opt_out = bool(IS_PY3)
+
+        cfa, blkpts = self.get_cfa_and_namedblocks(foo)
+
+        idoms = cfa.graph.immediate_dominators()
+        if infinite_loop_opt_out:
+            self.assertNotIn(blkpts['E'], idoms)
+        self.assertEqual(blkpts['B'], idoms[blkpts['C']])
+        self.assertEqual(blkpts['B'], idoms[blkpts['D']])
+
+        domfront = cfa.graph.dominance_frontier()
+        if infinite_loop_opt_out:
+            self.assertNotIn(blkpts['E'], domfront)
+        self.assertFalse(domfront[blkpts['A']])
+        self.assertFalse(domfront[blkpts['C']])
+        if infinite_loop_opt_out:
+            self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
+            self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
 
 
 if __name__ == '__main__':

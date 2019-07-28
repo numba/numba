@@ -25,15 +25,41 @@ class NumbaWarning(Warning):
     Base category for all Numba compiler warnings.
     """
 
+    def __init__(self, msg, loc=None, highlighting=True, ):
+        self.msg = msg
+        self.loc = loc
+        if highlighting:
+            highlight = termcolor().errmsg
+        else:
+            def highlight(x):
+                return x
+        if loc:
+            super(NumbaWarning, self).__init__(
+                highlight("%s\n%s\n" % (msg, loc.strformat())))
+        else:
+            super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
-class PerformanceWarning(NumbaWarning):
+
+class NumbaPerformanceWarning(NumbaWarning):
     """
     Warning category for when an operation might not be
     as fast as expected.
     """
 
 
-class ParallelSafetyWarning(RuntimeWarning):
+class NumbaDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a deprecated feature.
+    """
+
+
+class NumbaPendingDeprecationWarning(NumbaWarning):
+    """
+    Warning category for use of a feature that is pending deprecation.
+    """
+
+
+class NumbaParallelSafetyWarning(NumbaWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.
@@ -280,9 +306,9 @@ If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -304,9 +330,9 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
 http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
@@ -319,8 +345,9 @@ https://github.com/numba/numba/issues/new
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
+You are currently using Numba version %s.
 %s
-""" % feedback_details
+""" % (numba.__version__, feedback_details)
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
@@ -397,7 +424,15 @@ class WarningsFixer(object):
         """
         Emit all stored warnings.
         """
-        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+        def key(arg):
+            # It is possible through codegen to create entirely identical
+            # warnings, this leads to comparing types when sorting which breaks
+            # on Python 3. Key as str() and if the worse happens then `id`
+            # creates some uniqueness
+            return str(arg) + str(id(arg))
+
+        for (filename, lineno, category), messages in sorted(
+                self._warnings.items(), key=key):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()

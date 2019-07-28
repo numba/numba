@@ -9,6 +9,7 @@ from numba.tests.support import (
     SerialMixin,
     redirect_c_stdout,
 )
+from numba.cuda.cuda_paths import get_conda_ctk
 
 
 class CUDATestCase(SerialMixin, unittest.TestCase):
@@ -24,6 +25,10 @@ def skip_on_cudasim(reason):
 
 def skip_unless_cudasim(reason):
     return unittest.skipUnless(config.ENABLE_CUDASIM, reason)
+
+
+def skip_unless_conda_cudatoolkit(reason):
+    return unittest.skipUnless(get_conda_ctk() is not None, reason)
 
 
 class CUDATextCapture(object):
