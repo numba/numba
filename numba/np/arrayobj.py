@@ -31,6 +31,8 @@ from numba.core.extending import register_jitable, overload, overload_method
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
+from . import quicksort, mergesort, slicing
+
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
@@ -4876,6 +4878,7 @@ def array_dot(arr, other):
 
 @overload(np.fliplr)
 def np_flip_lr(a):
+
     if len(a.shape) < 2:
         raise ValueError('Input must be >= 2-d.')
 
