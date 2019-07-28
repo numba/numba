@@ -399,7 +399,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         Parameters
         ----------
-        signature : tuple of numba types
+        signature : tuple of numba types, optional
             Specify a signature for which to obtain the LLVM IR. If None, the
             IR is returned for all available signatures.
 
