@@ -438,17 +438,32 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None, signature=None, **kwargs):
-        """
-        print or return annotated source with Numba intermediate IR
+    def inspect_types(self, file=None, signature=None, *,
+                      pretty=False, style='default', **kwargs):
+        """Print/return code annotated with Numba intermediate representation.
 
-        Pass `pretty=True` to attempt color highlighting, and HTML rendering in
-        Jupyter and IPython by returning an Annotate Object. `file` must be
-        None if used in conjunction with `pretty=True`.
-        """
-        pretty = kwargs.get('pretty', False)
-        style = kwargs.get('style', 'default')
+        Parameters
+        ----------
+        file : file-like object, optional
+            File to which to print. Defaults to sys.stdout if None. Must be
+            None if ``pretty=True``.
+        signature : tuple of numba types, optional
+            Print/return intermediate representation for only the given
+            signature. If None, the IR is printed for all available signatures.
+        pretty : bool, optional
+            If True, an Annotate object will be returned that can render the
+            IR with color highlighting in Jupyter and IPython. ``file`` must
+            be None if ``pretty`` is True.
+        style : str, optional
+            Choose a style for rendering.
 
+        Returns
+        -------
+        annotated : Annotate object, optional
+            Only returned if ``pretty=True``, otherwise this function is only
+            used for its printing side effect. If ``pretty=True``, an Annotate
+            object is returned that can render itself in Jupyter and IPython.
+        """
         overloads = self.overloads
         if signature is not None:
             overloads = {signature: self.overloads[signature]}
