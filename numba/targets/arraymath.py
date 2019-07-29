@@ -1946,7 +1946,7 @@ def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
                         imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
                         slope = real + 1j * imag
 
-                    # The following branches is to mimick the behavior of
+                    # The following branches mimic the behavior of
                     # different numpy version with regard to handling NaNs.
                     if np117_nan_handling:
                         # Numpy 1.17 handles NaN correctly
