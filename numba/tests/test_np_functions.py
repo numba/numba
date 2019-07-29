@@ -385,6 +385,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([[1, 2], [3, 4]])
             yield np.arange(10)
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5)
+            yield "abcd"
+            yield ""
 
         pyfunc = alen
         cfunc = jit(nopython=True)(pyfunc)
