@@ -98,7 +98,6 @@ exclude =
     numba/targets/removerefctpass.py
     numba/targets/boxing.py
     numba/targets/cffiimpl.py
-    numba/targets/arraymath.py
     numba/targets/linalg.py
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
