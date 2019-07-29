@@ -788,6 +788,23 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isnan_impl,
         'F->?': npyfuncs.np_complex_isnan_impl,
         'D->?': npyfuncs.np_complex_isnan_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isnan_impl,
+        'B->?': npyfuncs.np_int_isnan_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isnan_impl,
+        'H->?': npyfuncs.np_int_isnan_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isnan_impl,
+        'I->?': npyfuncs.np_int_isnan_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isnan_impl,
+        'L->?': npyfuncs.np_int_isnan_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isnan_impl,
+        'Q->?': npyfuncs.np_int_isnan_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isnan_impl,
     }
 
     ufunc_db[np.isinf] = {
@@ -795,6 +812,23 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isinf_impl,
         'F->?': npyfuncs.np_complex_isinf_impl,
         'D->?': npyfuncs.np_complex_isinf_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isinf_impl,
+        'B->?': npyfuncs.np_int_isinf_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isinf_impl,
+        'H->?': npyfuncs.np_int_isinf_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isinf_impl,
+        'I->?': npyfuncs.np_int_isinf_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isinf_impl,
+        'L->?': npyfuncs.np_int_isinf_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isinf_impl,
+        'Q->?': npyfuncs.np_int_isinf_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isinf_impl,
     }
 
     ufunc_db[np.isfinite] = {
@@ -802,6 +836,26 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isfinite_impl,
         'F->?': npyfuncs.np_complex_isfinite_impl,
         'D->?': npyfuncs.np_complex_isfinite_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isfinite_impl,
+        'B->?': npyfuncs.np_int_isfinite_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isfinite_impl,
+        'H->?': npyfuncs.np_int_isfinite_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isfinite_impl,
+        'I->?': npyfuncs.np_int_isfinite_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isfinite_impl,
+        'L->?': npyfuncs.np_int_isfinite_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isfinite_impl,
+        'Q->?': npyfuncs.np_int_isfinite_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isfinite_impl,
+        # datetime & timedelta
+        'M->?': npyfuncs.np_datetime_isfinite_impl,
+        'm->?': npyfuncs.np_datetime_isfinite_impl,
     }
 
     ufunc_db[np.signbit] = {

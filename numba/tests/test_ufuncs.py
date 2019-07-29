@@ -139,6 +139,11 @@ class BaseUFuncTest(MemoryLeakMixin):
             (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
+
+            (np.array([0,1], dtype=np.int8), types.Array(types.int8, 1, 'C')),
+            (np.array([0,1], dtype=np.int16), types.Array(types.int16, 1, 'C')),
+            (np.array([0,1], dtype=np.uint8), types.Array(types.uint8, 1, 'C')),
+            (np.array([0,1], dtype=np.uint16), types.Array(types.uint16, 1, 'C')),
             ]
         self.cache = CompilationCache()
 
@@ -609,17 +614,33 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     ############################################################################
     # Floating functions
+
+    def bool_additional_inputs(self):
+        return [
+            (np.array([True, False], dtype=np.bool_),
+             types.Array(types.bool_, 1, 'C')),
+            ]
+
     @tag('important')
     def test_isfinite_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isfinite, flags=flags)
+        self.unary_ufunc_test(
+            np.isfinite, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_isinf_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isinf, flags=flags)
+        self.unary_ufunc_test(
+            np.isinf, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_isnan_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isnan, flags=flags)
+        self.unary_ufunc_test(
+            np.isnan, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_signbit_ufunc(self, flags=no_pyobj_flags):
