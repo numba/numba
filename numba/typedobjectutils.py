@@ -44,7 +44,7 @@ def _sentry_safe_cast(fromty, toty):
     by = tyctxt.can_convert(fromty, toty)
 
     def warn():
-        m = 'unsafe cast from {} to {}. Precision maybe lost.'
+        m = 'unsafe cast from {} to {}. Precision may be lost.'
         warnings.warn(m.format(fromty, toty),
                       category=NumbaTypeSafetyWarning)
 

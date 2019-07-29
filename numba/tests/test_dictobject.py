@@ -1345,7 +1345,7 @@ class TestDictInferred(TestCase):
             d[k1] = v1
             return d, d[k2]
 
-        # k2 will unsafetly downcast typeof(k1)
+        # k2 will unsafely downcast typeof(k1)
         k1 = (np.int8(1), np.int8(2))
         k2 = (np.int32(1), np.int32(2))
         v1 = np.intp(123)
