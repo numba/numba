@@ -2073,7 +2073,6 @@ def np_interp_impl_inner(x, xp, fp, dtype):
 
 
 def np_interp_impl_inner_factory(np117_nan_handling):
-    @register_jitable
     def impl(x, xp, fp, dtype):
         # NOTE: Do not refactor... see note in np_interp function impl below
         # this is a facsimile of arr_interp post 1.16:
@@ -2165,6 +2164,20 @@ def np_interp_impl_inner_factory(np117_nan_handling):
 
 
 if numpy_version >= (1, 10):
+    np_interp_impl_inner_post_np117 = register_jitable(
+        np_interp_impl_inner_factory(np117_nan_handling=True)
+    )
+    np_interp_impl_complex_inner_post_np117 = register_jitable(
+        np_interp_impl_complex_fp_inner_factory(np117_nan_handling=True)
+    )
+    np_interp_impl_inner_pre_np117 = register_jitable(
+        np_interp_impl_inner_factory(np117_nan_handling=False)
+    )
+    np_interp_impl_complex_inner_pre_np117 = register_jitable(
+        np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
+    )
+
+
     # replicate behaviour change of 1.10+
     @overload(np.interp)
     def np_interp(x, xp, fp):
@@ -2204,11 +2217,11 @@ if numpy_version >= (1, 10):
                 raise TypingError(complex_dtype_msg)
 
         if numpy_version >= (1, 17):
-            impl = np_interp_impl_inner_factory(np117_nan_handling=True)
-            impl_complex = np_interp_impl_complex_fp_inner_factory(np117_nan_handling=True)
+            impl = np_interp_impl_inner_post_np117
+            impl_complex = np_interp_impl_complex_inner_post_np117
         elif numpy_version >= (1, 16):
-            impl = np_interp_impl_inner_factory(np117_nan_handling=False)
-            impl_complex = np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
+            impl = np_interp_impl_inner_pre_np117
+            impl_complex = np_interp_impl_complex_inner_pre_np117
         else:
             impl = np_interp_impl_inner
             impl_complex = np_interp_impl_complex_fp_inner
