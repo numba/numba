@@ -2872,14 +2872,9 @@ def np_alen(a):
     if not isinstance(a, (types.Array, types.UnicodeType)):
         raise TypingError("The argument to np.alen must be array-like or a string")
 
-    if isinstance(a, types.Array):
-        def impl_arr(a):
-            return np.asarray(a).shape[0]
-        return impl_arr
-    else:
-        def impl_str(a):
-            return len(a)
-        return impl_str
+    def impl(a):
+        return len(a)
+    return impl
 
 
 np_delete_handler_isslice = register_jitable(lambda x : x)
