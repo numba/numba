@@ -811,5 +811,47 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
 
+@parfors_skip_unsupported
+class TestInitSafetyIssues(TestCase):
+
+    _DEBUG = False
+
+    @linux_only # only linux can leak semaphores
+    @skip_unless_py3 # need multiprocessing.get_context to obtain spawn on linux
+    def test_orphaned_semaphore(self):
+        # sys path injection and separate usecase module to make sure everything
+        # is importable by children of multiprocessing
+
+        def run_cmd(cmdline):
+            popen = subprocess.Popen(cmdline,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,)
+            # finish in 5 minutes or kill it
+            timeout = threading.Timer(5 * 60., popen.kill)
+            try:
+                timeout.start()
+                out, err = popen.communicate()
+                if popen.returncode != 0:
+                    raise AssertionError(
+                        "process failed with code %s: stderr follows\n%s\n" %
+                        (popen.returncode, err.decode()))
+            finally:
+                timeout.cancel()
+            return out.decode(), err.decode()
+
+        test_file = os.path.join(os.path.dirname(__file__),
+                                 "orphaned_semaphore_usecase.py")
+
+        cmdline = [sys.executable, test_file]
+        out, err = run_cmd(cmdline)
+
+        # assert no semaphore leaks reported on stderr
+        self.assertNotIn("leaked semaphore", err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+
 if __name__ == '__main__':
     unittest.main()
