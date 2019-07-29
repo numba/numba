@@ -2177,7 +2177,6 @@ if numpy_version >= (1, 10):
         np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
     )
 
-
     # replicate behaviour change of 1.10+
     @overload(np.interp)
     def np_interp(x, xp, fp):
