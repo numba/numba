@@ -381,6 +381,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
 
+        # Cleanup reduction variable
+        for v in redarrs.values():
+            lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap

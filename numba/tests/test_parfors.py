@@ -20,7 +20,7 @@ from collections import defaultdict
 
 import numba
 from numba import unittest_support as unittest
-from .support import TestCase, captured_stdout
+from .support import TestCase, captured_stdout, MemoryLeakMixin
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing, errors
 from numba.targets import cpu
@@ -1466,6 +1466,36 @@ class TestParfors(TestParforsBase):
 
         msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
+
+
+class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
+    @skip_unsupported
+    def test_reduction(self):
+        # issue4299
+        @njit(parallel=True)
+        def test_impl(arr):
+            return arr.sum()
+
+        arr = np.arange(10).astype(np.float64)
+        self.check(test_impl, arr)
+
+    @skip_unsupported
+    def test_multiple_reduction_vars(self):
+        @njit(parallel=True)
+        def test_impl(arr):
+            a = 0.
+            b = 1.
+            for i in prange(arr.size):
+                a += arr[i]
+                b += 1. / (arr[i] + 1)
+            return a * b
+        arr = np.arange(10).astype(np.float64)
+        self.check(test_impl, arr)
+
 
 class TestPrangeBase(TestParforsBase):
 
