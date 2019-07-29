@@ -438,7 +438,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None, signature=None, *,
+    def inspect_types(self, file=None, signature=None,
                       pretty=False, style='default', **kwargs):
         """Print/return code annotated with Numba intermediate representation.
 
