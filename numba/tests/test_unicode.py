@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import sys
 from itertools import permutations
+from itertools import product
 
 from numba import njit, types
 import numba.unittest_support as unittest
@@ -84,11 +85,11 @@ def count_usecase(x, y):
     return x.count(y)
 
 
-def count_with_start_end_usecase(x,y,start,end):
+def count_with_start_end_usecase(x, y, start, end):
     return x.count(y, start, end)
 
 
-def count_with_start_only_usecase(x,y,start):
+def count_with_start_only_usecase(x, y, start):
     return x.count(y, start)
 
 
@@ -364,10 +365,12 @@ class TestUnicode(BaseTest):
         pyfunc = count_with_start_end_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+        cpython = ['aaaa', '\u0102', '\U00100304', '\U00100304' + 'a_' * 10]
+        for s in UNICODE_EXAMPLES + cpython:
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s, 'a', 'a_',
+                      '\u0102', 'a\u0102', 'a\U00100304', '\u0102_', '\u0102\U00100304']
             for sub in [x for x in extras]:
-                for i , j in zip(range(-2,4), (0,6)):
+                for i , j in product(range(-10,10), (0,20)):
                     self.assertEqual(pyfunc(s, sub, i, j),
                                      cfunc(s, sub, i, j),
                                      "'%s' in '%s'?" % (sub, s))
@@ -376,13 +379,24 @@ class TestUnicode(BaseTest):
         pyfunc = count_with_start_only_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s]
+        cpython = ['aaaa', '\u0102', '\U00100304', '\U00100304' + 'a_' * 10]
+        for s in UNICODE_EXAMPLES + cpython:
+            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s, 'a', 'a_',
+                      '\u0102', 'a\u0102', 'a\U00100304', '\u0102_', '\u0102\U00100304']
             for sub in [x for x in extras]:
-                for i in range(-2, 3):
+                for i in range(-10, 10):
                     self.assertEqual(pyfunc(s, sub, i),
                                      cfunc(s, sub, i),
                                      "'%s' in '%s'?" % (sub, s))
+
+    def test_count_arg_type_check(self):
+        cfunc = njit(count_with_start_end_usecase)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ascii', 'c', 1, 0.5)
+        self.assertIn('arg must be of type None or Integer', str(raises.exception))
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abcde', 's', 1.2, 7)
+        self.assertIn('arg must be of type None or Integer', str(raises.exception))
 
     def test_getitem(self):
         pyfunc = getitem_usecase

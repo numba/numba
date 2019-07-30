@@ -381,18 +381,6 @@ def _find(substr, s):
             return i
     return -1
 
-# The following funciton handles special case for count method where substring is empty
-@njit(_nrt=False)
-def _count_special_case(start, end, src_len):
-    if start < end:
-        if (end - start <= src_len):
-            return end - start + 1
-        else:
-            return src_len - start + 1
-    elif start == end :
-        return 1
-    return 0
-
 
 @njit
 def _is_whitespace(code_point):
@@ -459,9 +447,9 @@ def normalize_slice_arg(arg, slice_len, default):
     if arg is None:
         return default
     elif arg < 0:
-        return max( arg + slice_len, default)
+        return max(arg + slice_len, default)
     else:
-        return min(slice_len, arg)
+        return arg
 
 # PUBLIC API
 
@@ -556,8 +544,8 @@ def unicode_find(a, b):
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
-    if not (start is None or isinstance(start, (types.Omitted, types.Integer, types.Optional))):
-        raise TypingError("Start arg must be of type Integer or None")
+    args_types_check(start)
+    args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
         def count_impl(src, sub, start=start, end=end):
@@ -570,7 +558,22 @@ def unicode_count(src, sub, start=None, end=None):
             end = normalize_slice_arg(end, src_len, src_len)
 
             if (sub_len == 0):       #special case when substring is empty
-                return _count_special_case(start, end, src_len)
+                if start > src_len:
+                    return 0
+                elif start == src_len:
+                    if end >= start:
+                        return 1
+                    else:
+                        return 0
+                elif start < end:
+                    if (end - start <= src_len):
+                        return end - start + 1
+                    else:
+                        return src_len - start + 1
+                elif start == end :
+                    return 1
+                else:
+                    return 0
 
             i = start
             while( i + sub_len <= end):
@@ -867,6 +870,13 @@ def unicode_strip_types_check(chars):
                                                 types.UnicodeType,
                                                 types.NoneType))):
         raise TypingError('The arg must be a UnicodeType or None')
+
+
+def args_types_check(arg):
+    if not (arg is None or isinstance(arg, (types.Omitted,
+                                            types.Optional,
+                                            types.Integer))):
+        raise TypingError("arg must be of type None or Integer")
 
 
 @overload_method(types.UnicodeType, 'lstrip')
