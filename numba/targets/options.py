@@ -63,9 +63,6 @@ class TargetOptions(object):
         if kws.pop('no_cpython_wrapper', False):
             flags.set('no_cpython_wrapper')
 
-        if kws.pop('recurse', False):
-            flags.set('recurse')
-
         if 'parallel' in kws:
             flags.set('auto_parallel', kws.pop('parallel'))
 

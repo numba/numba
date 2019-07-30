@@ -6,9 +6,10 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import warnings
-import types
+import inspect
+import importlib
 
-from . import config, sigutils, bytecode
+from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
@@ -84,14 +85,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 Valid values are 'python' and 'numpy'. The 'python' model
                 raises exception.  The 'numpy' model sets the result to
                 *+/-inf* or *nan*. Default value is 'python'.
-
-            recurse: bool
-                Set to True to enable automatic recursive jitting of function
-                calls. This allows fewer applications of the jit decorator
-                which can be useful when the function being jitted internally
-                calls many other functions. Note that all options
-                (e.g. ``nopython``, ``cache``, etc.) are passed through
-                the recursive jitting process. Default value is False.
 
     Returns
     --------
@@ -181,21 +174,6 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return func
-
-        # Optionally replace all function calls with JIT-wrapped versions
-        if targetoptions.get('recurse', False):
-            func_id = bytecode.FunctionIdentity.from_function(func)
-            bc = bytecode.ByteCode(func_id)
-            globs = bc.get_used_globals()
-            for k, v in globs.items():
-                if isinstance(v, types.FunctionType):
-                    func.__globals__[k] = jit(v,
-                                              locals=locals,
-                                              target=target,
-                                              cache=cache,
-                                              pipeline_class=dispatcher_args.get('pipeline_class'),
-                                              **targetoptions)
-
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)
@@ -270,3 +248,23 @@ def cfunc(sig, locals={}, cache=False, **options):
         return res
 
     return wrapper
+
+
+def jit_module(module_name, **kwargs):
+    """ Automatically jits functions defined in a specified Python module
+
+    Parameters
+    ----------
+    module_name : str
+        Name of module to target for automatic function jitting.
+    kwargs : optional
+        Keyword arguments to pass to ``jit`` such as ``nopython`` or ``error_model``.
+
+    """
+    try:
+        module = sys.modules[module_name]
+    except KeyError:
+        raise ModuleNotFoundError("No module named '{}'".format(module_name))
+    for name, obj in module.__dict__.items():
+        if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
+            module.__dict__[name] = jit(obj, **kwargs)
