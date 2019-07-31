@@ -756,3 +756,11 @@ class finalize:
 # dummy invocation to force _at_shutdown() to be registered
 finalize(lambda: None, lambda: None)
 assert finalize._registered_with_atexit
+
+
+def chain_exception(new_exc, old_exc):
+    """Set the __cause__ attribute on *new_exc* for explicit exception
+    chaining.  Returns the inplace modified *new_exc*.
+    """
+    new_exc.__cause__ = old_exc
+    return new_exc
