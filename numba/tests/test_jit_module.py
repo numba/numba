@@ -83,5 +83,5 @@ jit_module({name}, {jit_options})
             self.assertTrue(test_module.inc.targetoptions == jit_options)
 
     def test_jit_module_raises_nonexistent_module(self):
-        with self.assertRaises(ModuleNotFoundError):
+        with self.assertRaises(ImportError):
             jit_module('this_module_should_not_exit')

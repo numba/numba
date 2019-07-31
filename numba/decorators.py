@@ -264,7 +264,7 @@ def jit_module(module_name, **kwargs):
     try:
         module = sys.modules[module_name]
     except KeyError:
-        raise ModuleNotFoundError("No module named '{}'".format(module_name))
+        raise ImportError("No module named '{}'".format(module_name))
     for name, obj in module.__dict__.items():
         if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
             module.__dict__[name] = jit(obj, **kwargs)
