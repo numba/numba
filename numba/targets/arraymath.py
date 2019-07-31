@@ -2870,7 +2870,7 @@ def np_imag(a):
 @overload(np.count_nonzero)
 def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
-        raise errors.TypingError("The argument to np.shape must be array-like")
+        raise errors.TypingError("The argument to np.count_nonzero must be array-like")
 
     if axis in (None, types.none):
         def impl(arr, axis=None):
