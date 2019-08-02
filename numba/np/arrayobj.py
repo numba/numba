@@ -4878,6 +4878,8 @@ def array_dot(arr, other):
 
 @overload(np.fliplr)
 def np_flip_lr(a):
+    if not isinstance(a, types.Array):
+        a = np.array(a)
 
     if len(a.shape) < 2:
         raise ValueError('Input must be >= 2-d.')
@@ -4889,6 +4891,9 @@ def np_flip_lr(a):
 
 @overload(np.flipud)
 def np_flip_ud(a):
+    if not isinstance(a, types.Array):
+        a = np.array(a)
+
     def impl(a):
         return a[::-1, ...]
     return impl
@@ -4924,6 +4929,8 @@ def _build_slice_tuple(tyctx, sz):
 
 @overload(np.flip)
 def np_flip(a):
+    if not isinstance(a, types.Array):
+        a = np.array(a)
     ndim = a.ndim
 
     def impl(a):
