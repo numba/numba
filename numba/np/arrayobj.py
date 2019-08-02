@@ -4876,6 +4876,9 @@ def array_dot(arr, other):
 
 @overload(np.fliplr)
 def np_flip_lr(a):
+    if len(a.shape) < 2:
+        raise ValueError('Input must be >= 2-d.')
+
     def impl(a):
         return a[::, ::-1, ...]
     return impl
