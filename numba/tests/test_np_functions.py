@@ -104,6 +104,18 @@ def finfo_machar(*args):
     return np.finfo(*args).machar
 
 
+def fliplr(a):
+    return np.fliplr(a)
+
+
+def flipud(a):
+    return np.flipud(a)
+
+
+def flip(a):
+    return np.flip(a)
+
+
 def correlate(a, v):
     return np.correlate(a, v)
 
@@ -286,6 +298,14 @@ def np_kaiser(M, beta):
 
 def np_cross(a, b):
     return np.cross(a, b)
+
+
+def flip_lr(a):
+    return np.fliplr(a)
+
+
+def flip_ud(a):
+    return np.flipud(a)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -2059,6 +2079,62 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
+
+    def test_fliplr_basic(self):
+        pyfunc = fliplr
+        cfunc = jit(nopython=True)(pyfunc)
+        
+        def a_variations():
+            yield np.arange(10).reshape(5,2)
+            yield np.arange(20).reshape(5, 2, 2)
+        
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_fliplr_exception(self):
+        pyfunc = fliplr
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc([1,2])
+
+        self.assertIn("Input must be >= 2-d.", str(raises.exception))
+
+
+    def test_flipud_basic(self):
+        pyfunc = flipud
+        cfunc = jit(nopython=True)(pyfunc)
+        
+        def a_variations():
+            yield [1]
+            yield np.arange(10)
+            yield np.arange(10).reshape(5,2)
+            yield np.arange(20).reshape(5, 2, 2)
+        
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+    def test_flip_basic(self):
+        pyfunc = flip
+        cfunc = jit(nopython=True)(pyfunc)
+        
+        def a_variations():
+            yield [1]
+            yield np.arange(10)
+            yield np.arange(10).reshape(5,2)
+            yield np.arange(20).reshape(5, 2, 2)
+        
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
 
     def test_roll_basic(self):
         pyfunc = roll
