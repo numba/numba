@@ -57,7 +57,7 @@ class TestTypedObjectUtils(TestCase):
             # float to complex cases
             (types.float32, types.complex128),
             (types.float64, types.complex128),
-            # tuple-of-ints to tuple-of-floats,
+            # tuple-of-ints to tuple-of-ints,
             (types.Tuple([types.int32]), types.Tuple([types.int64])),
         ]
 
