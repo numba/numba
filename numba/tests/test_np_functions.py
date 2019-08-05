@@ -33,7 +33,7 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
-def count_nonzero(arr, axis=None):
+def count_nonzero(arr, axis):
     return np.count_nonzero(arr, axis)
 
 
