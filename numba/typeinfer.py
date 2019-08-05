@@ -1320,6 +1320,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
             sig = typing.signature(return_type, *args)
             sig.pysig = pysig
+            # Keep track of unique return_type
+            frame.add_return_type(return_type)
             return sig
         else:
             # Normal non-recursive call
