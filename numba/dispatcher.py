@@ -417,19 +417,19 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
 
     def inspect_asm(self, signature=None):
-        """Get the generated human-readable native assembler code.
+        """Get the generated assembly code.
 
         Parameters
         ----------
         signature : tuple of numba types, optional
-            Specify a signature for which to obtain the assembler code. If
-            None, the code is returned for all available signatures.
+            Specify a signature for which to obtain the assembly code. If
+            None, the assembly code is returned for all available signatures.
 
         Returns
         -------
         asm : dict[signature, str] or str
-            Either the assembler for the specified signature, or, if no
-            signature was given, a dictionary mapping signatures to assembler
+            Either the assembly code for the specified signature, or, if no
+            signature was given, a dictionary mapping signatures to assembly
             code.
         """
         if signature is not None:
@@ -440,7 +440,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     def inspect_types(self, file=None, signature=None,
                       pretty=False, style='default', **kwargs):
-        """Print/return code annotated with Numba intermediate representation.
+        """Print/return code annotated with Numba intermediate representation (IR).
 
         Parameters
         ----------
@@ -448,7 +448,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             File to which to print. Defaults to sys.stdout if None. Must be
             None if ``pretty=True``.
         signature : tuple of numba types, optional
-            Print/return intermediate representation for only the given
+            Print/return the intermediate representation for only the given
             signature. If None, the IR is printed for all available signatures.
         pretty : bool, optional
             If True, an Annotate object will be returned that can render the
