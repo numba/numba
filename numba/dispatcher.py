@@ -440,7 +440,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     def inspect_types(self, file=None, signature=None,
                       pretty=False, style='default', **kwargs):
-        """Print/return code annotated with Numba intermediate representation (IR).
+        """Print/return Numba intermediate representation (IR)-annotated code.
 
         Parameters
         ----------
