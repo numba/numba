@@ -138,19 +138,19 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DUMP_LLVM
 
-   Dump the unoptimized LLVM assembler source of compiled functions.
+   Dump the unoptimized LLVM assembly source of compiled functions.
    Unoptimized code is usually very verbose; therefore,
    :envvar:`NUMBA_DUMP_OPTIMIZED` is recommended instead.
 
 .. envvar:: NUMBA_DUMP_FUNC_OPT
 
-   Dump the LLVM assembler source after the LLVM "function optimization"
+   Dump the LLVM assembly source after the LLVM "function optimization"
    pass, but before the "module optimization" pass.  This is useful mostly
    when developing Numba itself, otherwise use :envvar:`NUMBA_DUMP_OPTIMIZED`.
 
 .. envvar:: NUMBA_DUMP_OPTIMIZED
 
-   Dump the LLVM assembler source of compiled functions after all
+   Dump the LLVM assembly source of compiled functions after all
    optimization passes.  The output includes the raw function as well as
    its CPython-compatible wrapper (whose name begins with ``wrapper.``).
    Note that the function is often inlined inside the wrapper, as well.
@@ -179,7 +179,7 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
-   Dump the native assembler code of compiled functions.
+   Dump the native assembly code of compiled functions.
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
