@@ -168,6 +168,21 @@ class TestMiscErrorHandling(unittest.TestCase):
                     "has it been imported")
         self.assertIn(expected, str(raises.exception))
 
+    def test_handling_unsupported_generator_expression(self):
+        def foo():
+            y = (x for x in range(10))
+
+        if utils.IS_PY3:
+            expected = "The use of yield in a closure is unsupported."
+        else:
+            # funcsigs falls over on py27
+            expected = "Cannot obtain a signature for"
+
+        for dec in jit(forceobj=True), njit:
+            with self.assertRaises(errors.UnsupportedError) as raises:
+                dec(foo)()
+            self.assertIn(expected, str(raises.exception))
+
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):
 

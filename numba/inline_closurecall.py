@@ -1,7 +1,8 @@
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba
-from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba import (config, ir, ir_utils, utils, prange, rewrites, types, typing,
+                   errors)
 from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
@@ -39,6 +40,17 @@ import operator
 Variable enable_inline_arraycall is only used for testing purpose.
 """
 enable_inline_arraycall = True
+
+
+def callee_ir_validator(func_ir):
+    """Checks the IR of a callee is supported for inlining
+    """
+    for blk in func_ir.blocks.values():
+        for stmt in blk.find_insts(ir.Assign):
+            if isinstance(stmt.value, ir.Yield):
+                msg = "The use of yield in a closure is unsupported."
+                raise errors.UnsupportedError(msg, loc=stmt.loc)
+
 
 class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct calls to locally defined
@@ -132,7 +144,8 @@ class InlineClosureCallPass(object):
             return s
         inline_closure_call(self.func_ir,
                         self.func_ir.func_id.func.__globals__,
-                        block, i, reduce_func, work_list=work_list)
+                        block, i, reduce_func, work_list=work_list,
+                        callee_validator=callee_ir_validator)
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
@@ -212,7 +225,8 @@ class InlineClosureCallPass(object):
                 func_def.op == "make_function")
         inline_closure_call(self.func_ir,
                             self.func_ir.func_id.func.__globals__,
-                            block, i, func_def, work_list=work_list)
+                            block, i, func_def, work_list=work_list,
+                            callee_validator=callee_ir_validator)
         return True
 
 def check_reduce_func(func_ir, func_var):
@@ -232,7 +246,7 @@ def check_reduce_func(func_ir, func_var):
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None):
+                        work_list=None, callee_validator=None):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -242,6 +256,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     make_function node. `typingctx`, `typemap` and `calltypes` are typing
     data structures of the caller, available if we are in a typed pass.
     `arg_typs` includes the types of the arguments at the callsite.
+    `callee_validator` is an optional callable which can be used to validate the
+    IR of the callee to ensure that it contains IR supported for inlining, it
+    takes one argument, the func_ir of the callee
 
     Returns IR blocks of the callee and the variable renaming dictionary used
     for them to facilitate further processing of new blocks.
@@ -257,6 +274,11 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
     callee_ir = get_ir_of_code(glbls, callee_code)
+    # check that the contents of the callee IR is something that can be inlined
+    # if a validator is supplied
+    if callee_validator is not None:
+        callee_validator(callee_ir)
+
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
