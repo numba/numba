@@ -1970,9 +1970,27 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, A, scheduler_type='signed',
                            check_fastmath=True, check_fastmath_result=True)
 
-    # should this work?
     @skip_unsupported
     def test_prange25(self):
+        def test_impl(A):
+            n = len(A)
+            buf = [np.zeros_like(A) for _ in range(n)]
+            for i in range(n):
+                buf[i] = A + i
+            return buf
+        A = np.ones((10,))
+        self.prange_tester(test_impl, A,  patch_instance=[1],
+                           scheduler_type='unsigned', check_fastmath=True,
+                           check_fastmath_result=True)
+
+        cpfunc = self.compile_parallel(test_impl, (numba.typeof(A),))
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        hoisted_allocs = diagnostics.hoisted_allocations()
+        self.assertEqual(len(hoisted_allocs), 0)
+
+    # should this work?
+    @skip_unsupported
+    def test_prange26(self):
         def test_impl(A):
             B = A[::3]
             for i in range(len(B)):
