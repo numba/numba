@@ -148,7 +148,7 @@ def chooser(fnlist, **kwargs):
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
-    except BaseException as e:
+    except Exception as e:
         q.put(e)
 
 

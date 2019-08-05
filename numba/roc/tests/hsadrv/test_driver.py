@@ -82,7 +82,7 @@ def get_brig_file():
 def _check_example_file():
     try:
         get_brig_file()
-    except BaseException:
+    except Exception:
         return False
     return True
 

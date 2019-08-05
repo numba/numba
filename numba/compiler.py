@@ -257,7 +257,7 @@ class _PipelineManager(object):
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
-                except BaseException as e:
+                except Exception as e:
                     msg = "Failed in %s mode pipeline (step: %s)" % \
                         (pipeline_name, stage_name)
                     patched_exception = self._patch_error(msg, e)
@@ -322,7 +322,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_fallback:
                 raise
             else:
@@ -348,7 +348,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_giveup:
                 raise
             else:
@@ -377,7 +377,7 @@ class BasePipeline(object):
 
         try:
             bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
+        except Exception as e:
             if self.status.can_giveup:
                 self.stage_compile_interp_mode()
                 return self.cr

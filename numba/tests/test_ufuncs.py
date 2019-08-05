@@ -1882,7 +1882,7 @@ class TestUFuncCompilationThreadSafety(TestCase):
                 a = np.ones((10,), dtype = np.float64)
                 expected = np.ones((10,), dtype = np.float64) + 1.
                 np.testing.assert_array_equal(foo(a), expected)
-            except BaseException as e:
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=wrapper) for i in range(16)]
