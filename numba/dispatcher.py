@@ -453,9 +453,13 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         pretty : bool, optional
             If True, an Annotate object will be returned that can render the
             IR with color highlighting in Jupyter and IPython. ``file`` must
-            be None if ``pretty`` is True.
+            be None if ``pretty`` is True. Additionally, the ``pygments``
+            library must be installed for ``pretty=True``.
         style : str, optional
-            Choose a style for rendering.
+            Choose a style for rendering. Ignored if ``pretty`` is ``False``.
+            This is directly consumed by ``pygments`` formatters. To see a
+            list of available styles, import ``pygments`` and run
+            ``list(pygments.styles.get_all_styles())``.
 
         Returns
         -------
