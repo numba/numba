@@ -8,7 +8,7 @@ import contextlib
 import operator
 
 import numba
-from numba import types, errors, config
+from numba import types, errors
 from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose

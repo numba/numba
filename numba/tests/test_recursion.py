@@ -64,6 +64,7 @@ class TestSelfRecursion(TestCase):
             str(raises.exception),
         )
 
+
 class TestMutualRecursion(TestCase):
 
     def setUp(self):
