@@ -388,7 +388,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), None
             yield np.arange(3 * 4).reshape(3, 4), 0
             yield np.arange(3 * 4).reshape(3, 4), 1
-            # yield np.arange(3 * 4 * 5).reshape((3, 4, 5)), (0, 1)
 
         pyfunc = count_nonzero
         cfunc = jit(nopython=True)(pyfunc)
