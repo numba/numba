@@ -253,12 +253,9 @@ def cfunc(sig, locals={}, cache=False, **options):
 def jit_module(module_name, **kwargs):
     """ Automatically jits functions defined in a specified Python module
 
-    Parameters
-    ----------
-    module_name : str
-        Name of module to target for automatic function jitting.
-    kwargs : optional
-        Keyword arguments to pass to ``jit`` such as ``nopython`` or ``error_model``.
+    :param module_name: Name of module to target for automatic function jitting
+    :type module_name: str
+    :param kwargs: Keyword arguments to pass to ``jit`` such as ``nopython`` or ``error_model``.
 
     """
     try:
