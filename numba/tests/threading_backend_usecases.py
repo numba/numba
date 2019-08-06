@@ -24,6 +24,6 @@ def busy_func(a, b, q=None):
         sys.stdout.flush()
         sys.stderr.flush()
         return z
-    except BaseException as e:
+    except Exception as e:
         if q is not None:
             q.put(e)

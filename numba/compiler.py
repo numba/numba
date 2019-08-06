@@ -18,7 +18,7 @@ from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import raise_on_unsupported_feature, warn_deprecated
 from numba.compiler_lock import global_compiler_lock
-from numba.analysis import dead_branch_prune
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -257,7 +257,7 @@ class _PipelineManager(object):
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
-                except BaseException as e:
+                except Exception as e:
                     msg = "Failed in %s mode pipeline (step: %s)" % \
                         (pipeline_name, stage_name)
                     patched_exception = self._patch_error(msg, e)
@@ -322,7 +322,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_fallback:
                 raise
             else:
@@ -348,7 +348,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_giveup:
                 raise
             else:
@@ -377,7 +377,7 @@ class BasePipeline(object):
 
         try:
             bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
+        except Exception as e:
             if self.status.can_giveup:
                 self.stage_compile_interp_mode()
                 return self.cr
@@ -493,6 +493,7 @@ class BasePipeline(object):
                'pass encountered during compilation of '
                'function "%s"' % (self.func_id.func_name,))
         with self.fallback_context(msg):
+            rewrite_semantic_constants(self.func_ir, self.args)
             dead_branch_prune(self.func_ir, self.args)
 
         if config.DEBUG or config.DUMP_IR:
