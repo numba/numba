@@ -34,6 +34,7 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
                               _Py_TOLOWER, _PyUnicode_ToLowerFull,
+                              _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_gettyperecord,
                               _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
@@ -819,35 +820,28 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
-def _is_lower(is_lower, is_upper, is_title):
-    #impl is an approximate translation of
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11845
-    #mixed with
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-242
+@register_jitable
+def _handle_capital_sigma(s, l, idx):
+    #This algorithm is an approximate translation of:
+    #https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9857-L9883
 
-    def impl(a):
-        l = len(a)
-        if l == 1:
-            return is_lower(_get_code_point(a, 0))
-        if l == 0:
-            return False
-
-        cased = False
-        for idx in range(l):
-            code_point = _get_code_point(a, idx)
-            if (is_upper(code_point) or is_title(code_point)):
-                return False
-            elif (not cased and is_lower(code_point)):
-                cased = True
-        return cased
-    return impl
-
-
-_always_false = register_jitable(lambda x:False)
-_ascii_is_lower = register_jitable(_is_lower(_Py_ISLOWER, _Py_ISUPPER, _always_false))
-_unicode_is_lower = register_jitable(_is_lower(_PyUnicode_IsLowercase,
-                                               _PyUnicode_IsUppercase,
-                                               _PyUnicode_IsTitlecase))
+    x = idx - 1
+    for j in range(idx - 1, -1, -1):
+        c = _get_code_point(s, j)
+        if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+            break
+        x -= 1
+    final_sigma = (x >= 0 and _PyUnicode_IsCased(_Py_UCS4(c)))
+    if final_sigma == 1:
+        x = idx + 1
+        for j in range(idx + 1, l):
+            c = _get_code_point(s, j)
+            if(not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c))):
+                break
+            x += 1
+        final_sigma = (x == l or (not _PyUnicode_IsCased(_Py_UCS4(c))))
+    ret = 0x3c2 if final_sigma == 1 else 0x3c3
+    return ret
 
 
 @overload_method(types.UnicodeType, 'lstrip')
@@ -1176,12 +1170,42 @@ def unicode_upper(a):
     return impl
 
 
+def _is_lower(is_lower, is_upper, is_title):
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/master/Objects/unicodeobject.c#L11812-L11845
+    # mixed with:
+    # https://github.com/python/cpython/blob/master/Objects/bytes_methods.c#L184-L208
+
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return is_lower(_get_code_point(a, 0))
+        if l == 0:
+            return False
+
+        cased = False
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if (is_upper(code_point) or is_title(code_point)):
+                return False
+            elif (not cased and is_lower(code_point)):
+                cased = True
+        return cased
+    return impl
+
+
+_always_false = register_jitable(lambda x:False)
+_ascii_is_lower = register_jitable(_is_lower(_Py_ISLOWER, _Py_ISUPPER, _always_false))
+_unicode_is_lower = register_jitable(_is_lower(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
 @overload_method(types.UnicodeType, 'islower')
 def unicode_islower(a):
     """
     Implements .islower()
     """
-
     def impl(a):
         if a._is_ascii:
             return _ascii_is_lower(a)
@@ -1197,28 +1221,24 @@ def unicode_lower(a):
     """
     def impl(a):
         # main structure is a translation of:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316
+        # https://github.com/python/cpython/blob/master/Objects/unicodeobject.c#L123396-L12347
 
         # ASCII fast path
         l = len(a)
         if a._is_ascii:
             # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300
+            # https://github.com/python/cpython/blob/master/Objects/bytes_methods.c#L300-307
             ret = _empty_string(a._kind, l, a._is_ascii)
             for idx in range(l):
                 code_point = _get_code_point(a, idx)
                 _set_code_point(ret, idx, _Py_TOLOWER(code_point))
             return ret
         else:
-            # This part in an amalgamation of two algorithms:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805
-            #
-            # The alg walks the string and writes the lower version of the code
-            # point into a 4byte kind unicode string and at the same time
-            # tracks the maximum width "lower" character encountered, following
-            # this the 4byte kind string is reinterpreted as needed into the
-            # maximum width kind string
+            # This part in an amalgamation of three algorithms:
+            # https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10024-L10069
+            # https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9947-L9965
+            # https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9886-L9919
+
             tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
             mapped = np.array((3,), dtype=_Py_UCS4)
             maxchar = 0
@@ -1226,7 +1246,12 @@ def unicode_lower(a):
             for idx in range(l):
                 mapped[:] = 0
                 code_point = _get_code_point(a, idx)
-                n_res = _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+                if code_point == 0x3A3:
+                    new_code_point = _handle_capital_sigma(a, l, idx)
+                    mapped[0] = new_code_point
+                    n_res = 1
+                else:
+                    n_res = _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
                 for j in range(n_res):
                     maxchar = max(maxchar, mapped[j])
                     _set_code_point(tmp, k, mapped[j])

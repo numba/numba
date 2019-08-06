@@ -15,9 +15,7 @@ from numba.errors import TypingError
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
-
-def isascii(s):
-    return all(ord(c) < 128 for c in s)
+isascii = lambda s: all(ord(c) < 128 for c in s)
 
 
 def literal_usecase():
@@ -934,7 +932,7 @@ class TestUnicode(BaseTest):
         extras = ["AA12A", "aa12a", "大AA12A", "大aa12a", "AAAǄA", "A 1 1 大"]
 
         # Samples taken from CPython testing:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L585-L599
+        # https://github.com/python/cpython/blob/3.6/Lib/test/test_unicode.py#L571-L584
         cpython = ['\u2167', '\u2177', '\U00010401', '\U00010427', '\U00010429',
                    '\U0001044E', '\U0001F40D', '\U0001F46F']
         fourxcpy = [x * 4 for x in cpython]
@@ -949,7 +947,17 @@ class TestUnicode(BaseTest):
             return x.lower()
 
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES + [""]:
+        extras = ["AA12A", "aa12a", "大AA12A", "大aa12a", "AAAǄA", "A 1 1 大"]
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/3.6/Lib/test/test_unicode.py#L748-L758
+        cpython = ['\U00010401', '\U00010427', '\U0001044E', '\U0001F46F', '\U00010427\U00010427',
+                   '\U00010427\U0001044F', 'X\U00010427x\U0001044F', '\u0130']
+
+        # special cases for sigma from CPython testing:
+        # https://github.com/python/cpython/blob/3.6/Lib/test/test_unicode.py#L759-L768
+        sigma = ['\u03a3', '\u0345\u03a3', 'A\u0345\u03a3', 'A\u0345\u03a3a', '\u03a3\u0345 ', '\U0008fffe', '\u2177']
+        for a in UNICODE_EXAMPLES + [""] + extras + cpython + sigma:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))

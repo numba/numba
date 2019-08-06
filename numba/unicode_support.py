@@ -225,7 +225,7 @@ def _PyUnicode_IsPrintable(ch):
     raise NotImplementedError
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L170-L175
+# From: https://github.com/python/cpython/blob/master/Objects/unicodectype.c#L170-L175
 @register_jitable
 def _PyUnicode_IsLowercase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -249,6 +249,7 @@ def _PyUnicode_ToLowercase(ch):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/master/Objects/unicodectype.c#L211-L225
 @register_jitable
 def _PyUnicode_ToLowerFull(ch, res):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -286,14 +287,17 @@ def _PyUnicode_ToFoldedFull(ch, res):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/master/Objects/unicodectype.c#L274-L279
 @register_jitable
 def _PyUnicode_IsCased(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.CASED_MASK != 0
 
-
+# From: https://github.com/python/cpython/blob/master/Objects/unicodectype.c#L281-L286
 @register_jitable
 def _PyUnicode_IsCaseIgnorable(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.CASE_IGNORABLE_MASK != 0
 
 
 @register_jitable
