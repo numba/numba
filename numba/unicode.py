@@ -32,6 +32,9 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
+from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
+                              _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
 # DATA MODEL
 
@@ -111,7 +114,9 @@ def make_string_from_constant(context, builder, typ, literal_string):
     uni_str.length = uni_str.length.type(length)
     uni_str.kind = uni_str.kind.type(kind)
     uni_str.is_ascii = uni_str.is_ascii.type(is_ascii)
-    uni_str.hash = uni_str.hash.type(hashv)
+    # Set hash to -1 to indicate that it should be computed.
+    # We cannot bake in the hash value because of hashseed randomization.
+    uni_str.hash = uni_str.hash.type(-1)
     return uni_str._getvalue()
 
 
@@ -407,6 +412,32 @@ def _is_whitespace(code_point):
         or code_point == 0x202F \
         or code_point == 0x205F \
         or code_point == 0x3000
+
+
+@register_jitable
+def _codepoint_to_kind(cp):
+    """
+    Compute the minimum unicode kind needed to hold a given codepoint
+    """
+    if cp < 256:
+        return PY_UNICODE_1BYTE_KIND
+    elif cp < 65536:
+        return PY_UNICODE_2BYTE_KIND
+    else:
+        # Maximum code point of Unicode 6.0: 0x10ffff (1,114,111)
+        MAX_UNICODE = 0x10ffff
+        if cp > MAX_UNICODE:
+            msg = "Invalid codepoint. Found value greater than Unicode maximum"
+            raise ValueError(msg)
+        return PY_UNICODE_4BYTE_KIND
+
+
+@register_jitable
+def _codepoint_is_ascii(ch):
+    """
+    Returns true if a codepoint is in the ASCII range
+    """
+    return ch < 128
 
 
 # PUBLIC API
@@ -777,7 +808,7 @@ def unicode_strip_right_bound(string, chars):
 
 def unicode_strip_types_check(chars):
     if isinstance(chars, types.Optional):
-        chars = chars.type # catch optional type with invalid non-None type
+        chars = chars.type  # catch optional type with invalid non-None type
     if not (chars is None or isinstance(chars, (types.Omitted,
                                                 types.UnicodeType,
                                                 types.NoneType))):
@@ -1021,6 +1052,100 @@ def unicode_not(a):
         def impl(a):
             return len(a) == 0
         return impl
+
+
+def _is_upper(is_lower, is_upper, is_title):
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    # mixed with:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return is_upper(_get_code_point(a, 0))
+        if l == 0:
+            return False
+        cased = False
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if is_lower(code_point) or is_title(code_point):
+                return False
+            elif(not cased and is_upper(code_point)):
+                cased = True
+        return cased
+    return impl
+
+
+_always_false = register_jitable(lambda x: False)
+_ascii_is_upper = register_jitable(_is_upper(_Py_ISLOWER, _Py_ISUPPER,
+                                             _always_false))
+_unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
+@overload_method(types.UnicodeType, 'isupper')
+def unicode_isupper(a):
+    """
+    Implements .isupper()
+    """
+    def impl(a):
+        if a._is_ascii:
+            return _ascii_is_upper(a)
+        else:
+            return _unicode_is_upper(a)
+    return impl
+
+
+@overload_method(types.UnicodeType, 'upper')
+def unicode_upper(a):
+    """
+    Implements .upper()
+    """
+    def impl(a):
+        # main structure is a translation of:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316
+
+        # ASCII fast path
+        l = len(a)
+        if a._is_ascii:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300
+            ret = _empty_string(a._kind, l, a._is_ascii)
+            for idx in range(l):
+                code_point = _get_code_point(a, idx)
+                _set_code_point(ret, idx, _Py_TOUPPER(code_point))
+            return ret
+        else:
+            # This part in an amalgamation of two algorithms:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805
+            #
+            # The alg walks the string and writes the upper version of the code
+            # point into a 4byte kind unicode string and at the same time
+            # tracks the maximum width "upper" character encountered, following
+            # this the 4byte kind string is reinterpreted as needed into the
+            # maximum width kind string
+            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
+            mapped = np.array((3,), dtype=_Py_UCS4)
+            maxchar = 0
+            k = 0
+            for idx in range(l):
+                mapped[:] = 0
+                code_point = _get_code_point(a, idx)
+                n_res = _PyUnicode_ToUpperFull(_Py_UCS4(code_point), mapped)
+                for j in range(n_res):
+                    maxchar = max(maxchar, mapped[j])
+                    _set_code_point(tmp, k, mapped[j])
+                    k += 1
+            newlength = k
+            newkind = _codepoint_to_kind(maxchar)
+            ret = _empty_string(newkind, newlength,
+                                _codepoint_is_ascii(maxchar))
+            for i in range(newlength):
+                _set_code_point(ret, i, _get_code_point(tmp, i))
+            return ret
+    return impl
 
 
 @lower_builtin('getiter', types.UnicodeType)

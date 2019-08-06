@@ -47,7 +47,7 @@ must contain the following entries:
 - **version**: `integer`
 
     An integer for the version of the interface being exported.
-    The current version is *0* since it is still experimental.
+    The current version is *1*.
 
 
 The following are optional entries:
@@ -63,6 +63,19 @@ The following are optional entries:
     This is for describing more complicated types.  This follows the same
     specification as in the `numpy array interface`_.
 
+- **mask**: ``None`` or object exposing the ``__cuda_array_interface__``
+
+    If ``None`` then all values in **data** are valid. All elements of the mask
+    array should be interpreted only as true or not true indicating which
+    elements of this array are valid. This has the same definition as *mask*
+    in the `numpy array interface`_.
+
+    .. note:: Numba does not currently support working with masked CUDA arrays
+              and will raise a `NotImplementedError` exception if one is passed
+              to a GPU function.
+
+
+
 
 Additional information about the data pointer can be retrieved using
 ``cuPointerGetAttribute`` or ``cudaPointerGetAttributes``.  Such information
@@ -74,3 +87,10 @@ include:
 
 
 .. _numpy array interface: https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html#__array_interface__
+
+
+Differences with CUDA Array Interface (Version 0) 
+-------------------------------------------------
+
+The version 0 CUDA Array Interface did not have the optional **mask**
+attribute to support masked arrays.

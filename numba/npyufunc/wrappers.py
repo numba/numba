@@ -1,11 +1,17 @@
 from __future__ import print_function, division, absolute_import
+
+from collections import namedtuple
+
 import numpy as np
 
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
-from numba import types, cgutils, compiler
+from numba import types, cgutils
 from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
+
+
+_wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -133,6 +139,10 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
 def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     """
     Wrap the scalar function with a loop that iterates over the arguments
+
+    Returns
+    -------
+    (library, env, name)
     """
     assert isinstance(fname, str)
     byte_t = Type.int(8)
@@ -202,10 +212,10 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
         # General loop
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
-            slowloop = build_obj_loop_body(context, func, builder,
-                                           arrays, out, offsets,
-                                           store_offset, signature,
-                                           pyapi, envptr, env)
+            build_obj_loop_body(
+                context, func, builder, arrays, out, offsets,
+                store_offset, signature, pyapi, envptr, env,
+            )
         pyapi.gil_release(gil)
         builder.ret_void()
 
@@ -213,19 +223,20 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
         with builder.if_else(unit_strided) as (is_unit_strided, is_strided):
             with is_unit_strided:
                 with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
-                    fastloop = build_fast_loop_body(context, func, builder,
-                                                    arrays, out, offsets,
-                                                    store_offset, signature,
-                                                    loop.index, pyapi,
-                                                    env=envptr)
+                    build_fast_loop_body(
+                        context, func, builder, arrays, out, offsets,
+                        store_offset, signature, loop.index, pyapi,
+                        env=envptr,
+                    )
 
             with is_strided:
                 # General loop
                 with cgutils.for_range(builder, loopcount, intp=intp_t):
-                    slowloop = build_slow_loop_body(context, func, builder,
-                                                    arrays, out, offsets,
-                                                    store_offset, signature,
-                                                    pyapi, env=envptr)
+                    build_slow_loop_body(
+                        context, func, builder, arrays, out, offsets,
+                        store_offset, signature, pyapi,
+                        env=envptr,
+                    )
 
         builder.ret_void()
     del builder
@@ -233,7 +244,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     # Link and finalize
     wrapperlib.add_ir_module(wrapper_module)
     wrapperlib.add_linking_library(library)
-    return wrapperlib.get_pointer_to_function(wrapper.name)
+    return _wrapper_info(library=wrapperlib, env=env, name=wrapper.name)
 
 
 class UArrayArg(object):
@@ -280,7 +291,13 @@ GufWrapperCache = make_library_cache('guf')
 
 
 class _GufuncWrapper(object):
-    def __init__(self, py_func, cres, sin, sout, cache):
+    def __init__(self, py_func, cres, sin, sout, cache, is_parfors):
+        """
+        The *is_parfors* argument is a boolean that indicates if the GUfunc
+        being built is to be used as a ParFors kernel. If True, it disables
+        the caching on the wrapper as a separate unit because it will be linked
+        into the caller function and cached along with it.
+        """
         self.py_func = py_func
         self.cres = cres
         self.sin = sin
@@ -288,6 +305,7 @@ class _GufuncWrapper(object):
         self.is_objectmode = self.signature.return_type == types.pyobject
         self.cache = (GufWrapperCache(py_func=self.py_func)
                       if cache else NullCache())
+        self.is_parfors = bool(is_parfors)
 
     @property
     def library(self):
@@ -313,13 +331,7 @@ class _GufuncWrapper(object):
     def env(self):
         return self.cres.environment
 
-    def _build_wrapper(self, library, name):
-        """
-        The LLVM IRBuilder code to create the gufunc wrapper.
-        The *library* arg is the CodeLibrary for which the wrapper should
-        be added to.  The *name* arg is the name of the wrapper function being
-        created.
-        """
+    def _wrapper_function_type(self):
         byte_t = Type.int(8)
         byte_ptr_t = Type.pointer(byte_t)
         byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -328,6 +340,17 @@ class _GufuncWrapper(object):
 
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
+        return fnty
+
+    def _build_wrapper(self, library, name):
+        """
+        The LLVM IRBuilder code to create the gufunc wrapper.
+        The *library* arg is the CodeLibrary to which the wrapper should
+        be added.  The *name* arg is the name of the wrapper function being
+        created.
+        """
+        intp_t = self.context.get_value_type(types.intp)
+        fnty = self._wrapper_function_type()
 
         wrapper_module = library.create_ir_module('_gufunc_wrapper')
         func_type = self.call_conv.get_function_type(self.fndesc.restype,
@@ -337,6 +360,9 @@ class _GufuncWrapper(object):
 
         func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty, name)
+        # The use of weak_odr linkage avoids the function being dropped due
+        # to the order in which the wrappers and the user function are linked.
+        wrapper.linkage = 'weak_odr'
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
@@ -400,23 +426,37 @@ class _GufuncWrapper(object):
         library.add_ir_module(wrapper_module)
         library.add_linking_library(self.library)
 
-    @global_compiler_lock
-    def build(self):
-        # Use cache and compiler in a critical section
-        wrapperlib = self.cache.load_overload(self.cres.signature, self.cres.target_context)
-        wrapper_name = "__gufunc__." + self.fndesc.mangled_name
-
-        if wrapperlib is None:
-            # Create library and enable caching
+    def _compile_wrapper(self, wrapper_name):
+        # Gufunc created by Parfors?
+        if self.is_parfors:
+            # No wrapper caching for parfors
             wrapperlib = self.context.codegen().create_library(str(self))
-            wrapperlib.enable_object_caching()
             # Build wrapper
             self._build_wrapper(wrapperlib, wrapper_name)
-            # Cache
-            self.cache.save_overload(self.cres.signature, wrapperlib)
-        # Finalize and get function pointer
-        ptr = wrapperlib.get_pointer_to_function(wrapper_name)
-        return ptr, self.env, wrapper_name
+        # Non-parfors?
+        else:
+            # Use cache and compiler in a critical section
+            wrapperlib = self.cache.load_overload(
+                self.cres.signature, self.cres.target_context,
+            )
+            if wrapperlib is None:
+                # Create library and enable caching
+                wrapperlib = self.context.codegen().create_library(str(self))
+                wrapperlib.enable_object_caching()
+                # Build wrapper
+                self._build_wrapper(wrapperlib, wrapper_name)
+                # Cache
+                self.cache.save_overload(self.cres.signature, wrapperlib)
+
+        return wrapperlib
+
+    @global_compiler_lock
+    def build(self):
+        wrapper_name = "__gufunc__." + self.fndesc.mangled_name
+        wrapperlib = self._compile_wrapper(wrapper_name)
+        return _wrapper_info(
+            library=wrapperlib, env=self.env, name=wrapper_name,
+        )
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(
@@ -454,12 +494,14 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(py_func, cres, sin, sout, cache):
+def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     signature = cres.signature
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(py_func, cres, sin, sout, cache).build()
+    return wrapcls(
+        py_func, cres, sin, sout, cache, is_parfors=is_parfors,
+    ).build()
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,

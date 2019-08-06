@@ -19,6 +19,7 @@ from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
 from numba.compiler_lock import global_compiler_lock
+from numba.config import PYVERSION
 
 
 class UFuncTargetOptions(TargetOptions):
@@ -154,9 +155,9 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     fname = cres.fndesc.llvm_func_name
 
     with global_compiler_lock:
-        ptr = build_ufunc_wrapper(library, ctx, fname, signature,
-                                  cres.objectmode, cres)
-
+        info = build_ufunc_wrapper(library, ctx, fname, signature,
+                                   cres.objectmode, cres)
+        ptr = info.library.get_pointer_to_function(info.name)
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
     dtypenums.append(as_dtype(signature.return_type).num)
@@ -240,7 +241,10 @@ class UFuncBuilder(_BaseUFuncBuilder):
             datlist = [None] * len(ptrlist)
 
             if cres is None:
-                argspec = inspect.getargspec(self.py_func)
+                if PYVERSION >= (3, 0):
+                    argspec = inspect.getfullargspec(self.py_func)
+                else:
+                    argspec = inspect.getargspec(self.py_func)
                 inct = len(argspec.args)
             else:
                 inct = len(cres.signature.args)
@@ -321,10 +325,13 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres,
-                                                      self.sin, self.sout,
-                                                      cache=self.cache)
+        info = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout,
+            cache=self.cache, is_parfors=False,
+        )
 
+        env = info.env
+        ptr = info.library.get_pointer_to_function(info.name)
         # Get dtypes
         dtypenums = []
         for a in signature.args:

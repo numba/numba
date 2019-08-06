@@ -87,7 +87,6 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
-    declmethod(extract_unicode);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
@@ -119,6 +118,8 @@ build_c_helpers_dict(void)
 
     /* Unicode string support */
     declmethod(extract_unicode);
+    declmethod(gettyperecord);
+    declmethod(get_PyUnicode_ExtendedCase);
 
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);
@@ -138,6 +139,21 @@ build_c_helpers_dict(void)
     declmethod(dict_iter);
     declmethod(dict_iter_next);
     declmethod(dict_dump);
+
+    /* for list support */
+    declmethod(test_list);
+    declmethod(list_new);
+    declmethod(list_set_method_table);
+    declmethod(list_free);
+    declmethod(list_length);
+    declmethod(list_setitem);
+    declmethod(list_getitem);
+    declmethod(list_append);
+    declmethod(list_pop);
+    declmethod(list_delete_slice);
+    declmethod(list_iter_sizeof);
+    declmethod(list_iter);
+    declmethod(list_iter_next);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);

@@ -813,15 +813,11 @@ class SymbolicEquivSet(ShapeEquivSet):
         for names in offset_dict.values():
             self._insert(names)
 
-    def set_shape(self, obj, shape):
-        """Overload set_shape to remember shapes of SetItem IR nodes.
+    def set_shape_setitem(self, obj, shape):
+        """remember shapes of SetItem IR nodes.
         """
-        if isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem):
-            self.ext_shapes[obj] = shape
-        else:
-            assert(isinstance(obj, ir.Var))
-            typ = self.typemap[obj.name]
-            super(SymbolicEquivSet, self).set_shape(obj, shape)
+        assert isinstance(obj, ir.StaticSetItem) or isinstance(obj, ir.SetItem)
+        self.ext_shapes[obj] = shape
 
     def _get_shape(self, obj):
         """Overload _get_shape to retrieve the shape of SetItem IR nodes.
@@ -1042,10 +1038,7 @@ class ArrayAnalysis(object):
                                                          len(typ), shape)
 
             if shape != None:
-                if isinstance(typ, types.SliceType):
-                    equiv_set.set_shape(lhs, shape)
-                else:
-                    equiv_set.insert_equiv(lhs, shape)
+                equiv_set.insert_equiv(lhs, shape)
             equiv_set.define(lhs, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
@@ -1059,7 +1052,7 @@ class ArrayAnalysis(object):
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
             if value_shape is (): # constant
-                equiv_set.set_shape(inst, target_shape)
+                equiv_set.set_shape_setitem(inst, target_shape)
                 return pre, []
             elif value_shape != None:
                 target_typ = self.typemap[inst.target.name]
@@ -1072,7 +1065,7 @@ class ArrayAnalysis(object):
                 n = len(shape)
                 # shape dimension must be within target dimension
                 assert(target_ndim >= n)
-                equiv_set.set_shape(inst, shape)
+                equiv_set.set_shape_setitem(inst, shape)
                 return pre + asserts, []
             else:
                 return pre, []
@@ -1272,7 +1265,7 @@ class ArrayAnalysis(object):
             if rhs_rel < 0:
                 # Indicate we will need to replace the slice var.
                 need_replacement = True
-                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(rhs, 
+                explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(rhs,
                     rhs_rel, rhs_typ, size_typ, loc, scope, dsize, stmts, equiv_set)
                 replacement_slice.args = (lhs, explicit_neg_var)
                 # Update rhs information with the negative removed.
@@ -1290,8 +1283,9 @@ class ArrayAnalysis(object):
             # Create a deepcopy of slice calltype so that when we change it below
             # the original isn't changed.  Make the types of the parts of the slice
             # intp.
-            self.calltypes[replacement_slice] = copy.deepcopy(self.calltypes[index_def])
-            self.calltypes[replacement_slice].args = (types.intp, types.intp)
+            new_arg_typs = (types.intp, types.intp)
+            rs_calltype = self.typemap[index_def.func.name].get_call_type(self.context, new_arg_typs, {})
+            self.calltypes[replacement_slice] = rs_calltype
             stmts.append(ir.Assign(value=replacement_slice, target=replacement_slice_var, loc=loc))
             # The type of the replacement slice is the same type as the original.
             self.typemap[replacement_slice_var.name] = self.typemap[index.name]
@@ -1530,10 +1524,8 @@ class ArrayAnalysis(object):
         var = args[0]
         typ = self.typemap[var.name]
         require(isinstance(typ, types.ArrayCompatible))
-        if typ.ndim == 1:
-            shape = equiv_set._get_shape(var)
-            return shape[0], [], shape[0]
-        return None
+        shape = equiv_set._get_shape(var)
+        return shape[0], [], shape[0]
 
     def _analyze_op_call_numba_array_analysis_assert_equiv(self, scope,
                                                         equiv_set, args, kws):
@@ -1734,7 +1726,7 @@ class ArrayAnalysis(object):
                 stmts.append(div_calc)
                 calc_size_var = div_calc_size_var
             # Put the calculated value back into the reshape arguments, replacing the negative.
-            args[neg_one_index] = div_calc_size_var
+            args[neg_one_index] = calc_size_var
 
         return tuple(args[1:]), stmts
 

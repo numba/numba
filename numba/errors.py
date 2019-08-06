@@ -306,9 +306,9 @@ If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -330,9 +330,9 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
 http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
@@ -345,8 +345,9 @@ https://github.com/numba/numba/issues/new
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
+You are currently using Numba version %s.
 %s
-""" % feedback_details
+""" % (numba.__version__, feedback_details)
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info

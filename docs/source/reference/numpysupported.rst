@@ -235,7 +235,7 @@ Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
 floating-point and complex numbers:
 
 * :func:`numpy.dot`
-* :func:`numpy.kron`
+* :func:`numpy.kron` ('C' and 'F' order only)
 * :func:`numpy.outer`
 * :func:`numpy.trace` (only the first argument).
 * :func:`numpy.vdot`
@@ -331,6 +331,7 @@ The following top-level functions are supported:
 * :func:`numpy.eye`
 * :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
+* :func:`numpy.flatnonzero`
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
@@ -357,6 +358,9 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
+* :func:`numpy.select` (only using homogeneous lists or tuples for the first
+  two arguments, condlist and choicelist). Additionally, these two arguments
+  can only contain arrays (unlike Numpy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)

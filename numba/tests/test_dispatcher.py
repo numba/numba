@@ -12,6 +12,7 @@ import warnings
 import inspect
 import pickle
 import weakref
+from itertools import chain
 
 try:
     import jinja2
@@ -26,7 +27,7 @@ except ImportError:
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof
+from numba import utils, jit, generated_jit, types, typeof, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
@@ -43,6 +44,7 @@ from .support import skip_parfors_unsupported
 import llvmlite.binding as ll
 
 _is_armv7l = platform.machine() == 'armv7l'
+
 
 def dummy(x):
     return x
@@ -111,6 +113,7 @@ class BaseTest(TestCase):
         f = jit(**self.jit_args)(pyfunc)
         return f, check
 
+
 def check_access_is_preventable():
     # This exists to check whether it is possible to prevent access to
     # a file/directory through the use of `chmod 500`. If a user has
@@ -142,6 +145,7 @@ def check_access_is_preventable():
         os.chmod(test_dir, 0o775)
         shutil.rmtree(test_dir)
     return ret
+
 
 _access_preventable = check_access_is_preventable()
 _access_msg = "Cannot create a directory to which writes are preventable"
@@ -221,7 +225,7 @@ class TestDispatcher(BaseTest):
         def wrapper():
             try:
                 self.assertEqual(foo(1), 2)
-            except BaseException as e:
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=wrapper) for i in range(16)]
@@ -264,7 +268,7 @@ class TestDispatcher(BaseTest):
             r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
             r"\(float64, float32\) -> float64"
-            )
+        )
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
 
@@ -408,7 +412,7 @@ class TestDispatcher(BaseTest):
         self.assertEqual(memo_size, len(memo))
 
         # show that deserializing creates a new object
-        newer_foo = pickle.loads(serialized_foo)
+        pickle.loads(serialized_foo)
         self.assertIs(ref(), None)
 
     @needs_lapack
@@ -571,6 +575,7 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
+
 class TestSignatureHandling(BaseTest):
     """
     Test support for various parameter passing styles.
@@ -673,7 +678,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j), 5 + 1j)
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
-
 
     @tag('important')
     def test_generated_dtype(self):
@@ -859,6 +863,31 @@ class TestDispatcherMethods(TestCase):
         # Exercise the method
         foo.inspect_types(utils.StringIO())
 
+        # Test output
+        expected = str(foo.overloads[foo.signatures[0]].type_annotation)
+        with captured_stdout() as out:
+            foo.inspect_types()
+        assert expected in out.getvalue()
+
+    def test_inspect_types_with_signature(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.0)
+        # Inspect all signatures
+        with captured_stdout() as total:
+            foo.inspect_types()
+        # Inspect first signature
+        with captured_stdout() as first:
+            foo.inspect_types(signature=foo.signatures[0])
+        # Inspect second signature
+        with captured_stdout() as second:
+            foo.inspect_types(signature=foo.signatures[1])
+
+        self.assertEqual(total.getvalue(), first.getvalue() + second.getvalue())
+
     @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
     @unittest.skipIf(pygments is None, "please install the 'pygments' package")
     def test_inspect_types_pretty(self):
@@ -886,6 +915,19 @@ class TestDispatcherMethods(TestCase):
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
+
+    def test_get_annotation_info(self):
+        @jit
+        def foo(a):
+            return a + 1
+
+        foo(1)
+        foo(1.3)
+
+        expected = dict(chain.from_iterable(foo.get_annotation_info(i).items()
+                                            for i in foo.signatures))
+        result = foo.get_annotation_info()
+        self.assertEqual(expected, result)
 
     def test_issue_with_array_layout_conflict(self):
         """
@@ -1165,7 +1207,7 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertIn(
                 'Cannot cache compiled function "{}"'.format(f.__name__),
                 str(w[0].message),
-                )
+            )
 
     def test_closure(self):
         mod = self.import_module()
@@ -1641,6 +1683,56 @@ def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
     q.put(r2)
 
 
+class TestCacheMultipleFilesWithSignature(unittest.TestCase):
+    # Regression test for https://github.com/numba/numba/issues/3658
+
+    _numba_parallel_test_ = False
+
+    source_text_file1 = """
+from file2 import function2
+"""
+    source_text_file2 = """
+from numba import njit
+
+@njit('float64(float64)', cache=True)
+def function1(x):
+    return x
+
+@njit('float64(float64)', cache=True)
+def function2(x):
+    return x
+"""
+
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+
+        self.file1 = os.path.join(self.tempdir, 'file1.py')
+        with open(self.file1, 'w') as fout:
+            print(self.source_text_file1, file=fout)
+
+        self.file2 = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2, 'w') as fout:
+            print(self.source_text_file2, file=fout)
+
+    def tearDown(self):
+        shutil.rmtree(self.tempdir)
+
+    def test_caching_mutliple_files_with_signature(self):
+        # Execute file1.py
+        popen = subprocess.Popen([sys.executable, self.file1],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, 0)
+
+        # Execute file2.py
+        popen = subprocess.Popen([sys.executable, self.file2],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, 0)
+
+
 class TestDispatcherFunctionBoundaries(TestCase):
     def test_pass_dispatcher_as_arg(self):
         # Test that a Dispatcher object can be pass as argument
@@ -1744,6 +1836,102 @@ class TestBoxingDefaultError(unittest.TestCase):
             cres.entry_point()
         pat = "cannot convert native Module.* to Python object"
         self.assertRegexpMatches(str(raises.exception), pat)
+
+
+class TestNoRetryFailedSignature(unittest.TestCase):
+    """Test that failed-to-compile signatures are not recompiled.
+    """
+
+    def run_test(self, func):
+        fcom = func._compiler
+        self.assertEqual(len(fcom._failed_cache), 0)
+        # expected failure because `int` has no `__getitem__`
+        with self.assertRaises(errors.TypingError):
+            func(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry
+        with self.assertRaises(errors.TypingError):
+            func(1)
+        self.assertEqual(len(fcom._failed_cache), 1)
+        # retry with double
+        with self.assertRaises(errors.TypingError):
+            func(1.0)
+        self.assertEqual(len(fcom._failed_cache), 2)
+
+    def test_direct_call(self):
+        @jit(nopython=True)
+        def foo(x):
+            return x[0]
+
+        self.run_test(foo)
+
+    def test_nested_call(self):
+        @jit(nopython=True)
+        def bar(x):
+            return x[0]
+
+        @jit(nopython=True)
+        def foobar(x):
+            bar(x)
+
+        @jit(nopython=True)
+        def foo(x):
+            return bar(x) + foobar(x)
+
+        self.run_test(foo)
+
+    def test_error_count(self):
+        def check(field, would_fail):
+            # Slightly modified from the reproducer in issue #4117.
+            # Before the patch, the compilation time of the failing case is
+            # much longer than of the successful case. This can be detected
+            # by the number of times `trigger()` is visited.
+            k = 10
+            counter = {'c': 0}
+
+            @generated_jit
+            def trigger(x):
+                # Keep track of every visit
+                counter['c'] += 1
+                if would_fail:
+                    raise errors.TypingError("invoke_failed")
+                return lambda x: x
+
+            @jit(nopython=True)
+            def ident(out, x):
+                pass
+
+            def chain_assign(fs, inner=ident):
+                tab_head, tab_tail = fs[-1], fs[:-1]
+
+                @jit(nopython=True)
+                def assign(out, x):
+                    inner(out, x)
+                    out[0] += tab_head(x)
+
+                if tab_tail:
+                    return chain_assign(tab_tail, assign)
+                else:
+                    return assign
+
+            chain = chain_assign((trigger,) * k)
+            out = np.ones(2)
+            if would_fail:
+                with self.assertRaises(errors.TypingError) as raises:
+                    chain(out, 1)
+                self.assertIn('invoke_failed', str(raises.exception))
+            else:
+                chain(out, 1)
+
+            # Returns the visit counts
+            return counter['c']
+
+        ct_ok = check('a', False)
+        ct_bad = check('c', True)
+        # `trigger()` is visited exactly once for both successful and failed
+        # compilation.
+        self.assertEqual(ct_ok, 1)
+        self.assertEqual(ct_bad, 1)
 
 
 if __name__ == '__main__':

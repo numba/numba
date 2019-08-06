@@ -14,17 +14,20 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import logging
 import operator
 import contextlib
 import itertools
 from pprint import pprint
-import traceback
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -143,17 +146,20 @@ class ConstraintNetwork(object):
                 try:
                     constraint(typeinfer)
                 except TypingError as e:
+                    _logger.debug("captured error", exc_info=e)
                     e = TypingError(str(e),
                                     loc=constraint.loc,
                                     highlighting=False)
                     errors.append(e)
-                except Exception:
-                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                    e = TypingError(msg.format(con=constraint,
-                                               err=traceback.format_exc(),
-                                               sep='--%<' + '-' * 76),
-                                    loc=constraint.loc,
-                                    highlighting=False)
+                except Exception as e:
+                    _logger.debug("captured error", exc_info=e)
+                    msg = ("Internal error at {con}.\n"
+                           "{err}\nEnable logging at debug level for details.")
+                    e = TypingError(
+                        msg.format(con=constraint, err=str(e)),
+                        loc=constraint.loc,
+                        highlighting=False,
+                    )
                     errors.append(e)
         return errors
 
@@ -309,9 +315,9 @@ class ExhaustIterConstraint(object):
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
-            else:
-                raise TypingError("failed to unpack {}".format(tp),
-                                  loc=self.loc)
+                else:
+                    raise TypingError("failed to unpack {}".format(tp),
+                                      loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -764,6 +770,9 @@ class TypeVarMap(dict):
 
 # A temporary mapping of {function name: dispatcher object}
 _temporary_dispatcher_map = {}
+# A temporary mapping of {function name: dispatcher object reference count}
+# Reference: https://github.com/numba/numba/issues/3658
+_temporary_dispatcher_map_ref_count = defaultdict(int)
 
 
 @contextlib.contextmanager
@@ -778,10 +787,13 @@ def register_dispatcher(disp):
     assert callable(disp.py_func)
     name = disp.py_func.__name__
     _temporary_dispatcher_map[name] = disp
+    _temporary_dispatcher_map_ref_count[name] += 1
     try:
         yield
     finally:
-        del _temporary_dispatcher_map[name]
+        _temporary_dispatcher_map_ref_count[name] -= 1
+        if not _temporary_dispatcher_map_ref_count[name]:
+            del _temporary_dispatcher_map[name]
 
 
 typeinfer_extensions = {}

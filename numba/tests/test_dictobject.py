@@ -11,10 +11,11 @@ import sys
 
 import numpy as np
 
-from numba import njit, utils
+from numba import njit, utils, jitclass
 from numba import int32, int64, float32, float64, types
 from numba import dictobject, typeof
 from numba.typed import Dict
+from numba.typedobjectutils import _sentry_safe_cast
 from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
@@ -896,11 +897,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
-        dictobject._sentry_safe_cast(fromty, toty)
+        _sentry_safe_cast(fromty, toty)
 
     def check_bad(self, fromty, toty):
         with self.assertRaises(TypingError) as raises:
-            dictobject._sentry_safe_cast(fromty, toty)
+            _sentry_safe_cast(fromty, toty)
         self.assertIn(
             'cannot safely cast {fromty} to {toty}'.format(**locals()),
             str(raises.exception),
@@ -1499,3 +1500,26 @@ class TestNonCompiledInfer(TestCase):
         # It's typed now
         self.assertTrue(d._typed)
         self.assertEqual(d[1], 2)
+
+
+@jitclass(spec=[('a', types.intp)])
+class Bag(object):
+    def __init__(self, a):
+        self.a = a
+
+    def __hash__(self):
+        return hash(self.a)
+
+
+class TestDictWithJitclass(TestCase):
+    def test_jitclass_as_value(self):
+        @njit
+        def foo(x):
+            d = Dict()
+            d[0] = x
+            d[1] = Bag(101)
+            return d
+
+        d = foo(Bag(a=100))
+        self.assertEqual(d[0].a, 100)
+        self.assertEqual(d[1].a, 101)

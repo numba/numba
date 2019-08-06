@@ -107,11 +107,6 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out debugging information about type inference.
 
-.. envvar:: NUMBA_DEBUG_CACHE
-
-   If set to non-zero, print out information about operation of the
-   :ref:`JIT compilation cache <jit-cache>`.
-
 .. envvar:: NUMBA_ENABLE_PROFILING
 
    Enables JIT events of LLVM in order to support profiling of jitted functions.
@@ -231,7 +226,8 @@ Compilation options
    calls the original Python function instead of a compiled version.  This
    can be useful if you want to run the Python debugger over your code.
 
-.. envvar:: NUMBA_CPU_NAME and NUMBA_CPU_FEATURES
+.. envvar:: NUMBA_CPU_NAME
+.. envvar:: NUMBA_CPU_FEATURES
 
     Override CPU and CPU features detection.
     By setting ``NUMBA_CPU_NAME=generic``, a generic CPU model is picked
@@ -264,7 +260,43 @@ Compilation options
     not a true LRU, but the large size of the cache should be sufficient for
     most situations.
 
+    Note: this is unrelated to the compilation cache.
+
     *Default value:* 128
+
+
+.. _numba-envvars-caching:
+
+Caching options
+---------------
+
+Options for the compilation cache.
+
+.. envvar:: NUMBA_DEBUG_CACHE
+
+   If set to non-zero, print out information about operation of the
+   :ref:`JIT compilation cache <jit-cache>`.
+
+.. envvar:: NUMBA_CACHE_DIR
+
+    Override the location of the cache directory. If defined, this should be
+    a valid directory path.
+
+    If not defined, Numba picks the cache directory in the following order:
+
+    1. In-tree cache. Put the cache next to the corresponding source file under
+       a ``__pycache__`` directory following how ``.pyc`` files are stored.
+    2. User-wide cache. Put the cache in the user's application directory using
+       ``appdirs.user_cache_dir`` from the
+       `Appdirs package <https://github.com/ActiveState/appdirs>`_.
+    3. IPython cache. Put the cache in an IPython specific application
+       directory.
+       Stores are made under the ``numba_cache`` in the directory returned by
+       ``IPython.paths.get_ipython_cache_dir()``.
+
+    Also see :ref:`docs on cache sharing <cache-sharing>` and
+    :ref:`docs on cache clearing <cache-clearing>`
+
 
 
 GPU support
@@ -299,8 +331,8 @@ Threading Control
 .. envvar:: NUMBA_THREADING_LAYER
 
    This environment variable controls the library used for concurrent execution
-   for the CPU parallel targets (``@vectorize(target='parallel')``, 
-   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The 
+   for the CPU parallel targets (``@vectorize(target='parallel')``,
+   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The
    variable type is string and by default is ``default`` which will select a
    threading layer based on what is available in the runtime. The valid values
    are (for more information about these see

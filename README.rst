@@ -28,6 +28,22 @@ Dependencies
 * NumPy (version 1.9 or higher)
 * funcsigs (for Python 2)
 
+Supported Platforms
+===================
+
+* Operating systems and CPU:
+
+  - Linux: x86 (32-bit), x86_64, ppc64le (POWER8 and 9), ARMv7 (32-bit),
+    ARMv8 (64-bit)
+  - Windows: x86, x86_64
+  - macOS: x86_64
+  
+* Python versions: 2.7, 3.5-3.7
+* NumPy: >= 1.11
+* NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
+  macOS (< 10.14)
+* AMD GPUs via ROCm driver on Linux
+
 
 Installing
 ==========

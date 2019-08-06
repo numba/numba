@@ -357,7 +357,7 @@ class ClassInstanceType(Type):
 
     @property
     def classname(self):
-        return self.class_type.class_def.__name__
+        return self.class_type.class_name
 
     @property
     def jitprops(self):
@@ -387,23 +387,35 @@ class ClassType(Callable, Opaque):
 
     def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
                  jitprops):
-        self.class_def = class_def
-        self.ctor_template = self._specialize_template(ctor_template_cls)
+        self.class_name = class_def.__name__
+        self.class_doc = class_def.__doc__
+        self._ctor_template_class = ctor_template_cls
         self.jitmethods = jitmethods
         self.jitprops = jitprops
         self.struct = struct
-        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, class_def.__name__,
-                                           id(class_def), fielddesc)
+        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
+                                           id(self), fielddesc)
         super(ClassType, self).__init__(name)
-        self.instance_type = self.instance_type_class(self)
 
     def get_call_type(self, context, args, kws):
         return self.ctor_template(context).apply(args, kws)
 
     def get_call_signatures(self):
         return (), True
+
+    @property
+    def methods(self):
+        methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
+        return methods
+
+    @property
+    def instance_type(self):
+        return ClassInstanceType(self)
+
+    @property
+    def ctor_template(self):
+        return self._specialize_template(self._ctor_template_class)
 
     def _specialize_template(self, basecls):
         return type(basecls.__name__, (basecls,), dict(key=self))

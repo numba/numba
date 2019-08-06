@@ -19,7 +19,7 @@ from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                             InlineInlinables, InlineOverloads)
 from numba.compiler_lock import global_compiler_lock
-from numba.analysis import dead_branch_prune
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -75,7 +75,11 @@ CR_FIELDS = ["typing_context",
              "library",
              "call_helper",
              "environment",
-             "metadata",]
+             "metadata",
+             # List of functions to call to initialize on unserialization
+             # (i.e cache load).
+             "reload_init",
+            ]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
@@ -93,11 +97,18 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc.typemap = fndesc.calltypes = None
 
         return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.interpmode, self.lifted, typeann)
+                self.objectmode, self.interpmode, self.lifted, typeann,
+                self.reload_init)
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, interpmode, lifted, typeann):
+                 signature, objectmode, interpmode, lifted, typeann,
+                 reload_init):
+        if reload_init:
+            # Re-run all
+            for fn in reload_init:
+                fn()
+
         library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
         cr = cls(target_context=target_context,
@@ -114,6 +125,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  typing_error=None,
                  call_helper=None,
                  metadata=None, # Do not store, arbitrary and potentially large!
+                 reload_init=reload_init,
                  )
         return cr
 
@@ -247,7 +259,7 @@ class _PipelineManager(object):
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
-                except BaseException as e:
+                except Exception as e:
                     msg = "Failed in %s mode pipeline (step: %s)" % \
                         (pipeline_name, stage_name)
                     patched_exception = self._patch_error(msg, e)
@@ -294,6 +306,7 @@ class BasePipeline(object):
         self.calltypes = None
         self.type_annotation = None
         self.metadata = {} # holds arbitrary inter-pipeline stage meta data
+        self.reload_init = []
 
         # parfor diagnostics info, add to metadata
         self.parfor_diagnostics = ParforDiagnostics()
@@ -311,7 +324,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_fallback:
                 raise
             else:
@@ -337,7 +350,7 @@ class BasePipeline(object):
         """
         try:
             yield
-        except BaseException as e:
+        except Exception as e:
             if not self.status.can_giveup:
                 raise
             else:
@@ -366,7 +379,7 @@ class BasePipeline(object):
 
         try:
             bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
+        except Exception as e:
             if self.status.can_giveup:
                 self.stage_compile_interp_mode()
                 return self.cr
@@ -434,7 +447,8 @@ class BasePipeline(object):
             cres = compile_ir(self.typingctx, self.targetctx, main,
                               self.args, self.return_type,
                               outer_flags, self.locals,
-                              lifted=tuple(loops), lifted_from=None)
+                              lifted=tuple(loops), lifted_from=None,
+                              is_lifted_loop=True)
             return cres
 
     def stage_frontend_withlift(self):
@@ -481,6 +495,7 @@ class BasePipeline(object):
                'pass encountered during compilation of '
                'function "%s"' % (self.func_id.func_name,))
         with self.fallback_context(msg):
+            rewrite_semantic_constants(self.func_ir, self.args)
             dead_branch_prune(self.func_ir, self.args)
 
         if config.DEBUG or config.DUMP_IR:
@@ -598,6 +613,8 @@ class BasePipeline(object):
                        "diagnostics, see %s for help." % url)
                 warnings.warn(errors.NumbaPerformanceWarning(msg,
                                                              self.func_ir.loc))
+        # Add reload function to initialize the parallel backend.
+        self.reload_init.append(_reload_parfors)
 
     def stage_inline_pass(self):
         """
@@ -713,6 +730,7 @@ class BasePipeline(object):
             fndesc=lowered.fndesc,
             environment=lowered.env,
             metadata=self.metadata,
+            reload_init=self.reload_init,
             )
 
     def stage_objectmode_backend(self):
@@ -1011,11 +1029,13 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # that's usable from above.
         rw_cres = None
         if not flags.no_rewrites:
-            try:
-                rw_cres = compile_local(func_ir.copy(), flags)
-            except Exception:
-                pass
-
+            # Suppress warnings in compilation retry
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", errors.NumbaWarning)
+                try:
+                    rw_cres = compile_local(func_ir.copy(), flags)
+                except Exception:
+                    pass
         # if the rewrite variant of compilation worked, use it, else use
         # the norewrites backup
         if rw_cres is not None:
@@ -1172,3 +1192,11 @@ def py_lowering_stage(targetctx, library, interp, flags):
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
+
+
+def _reload_parfors():
+    """Reloader for cached parfors
+    """
+    # Re-initialize the parallel backend when load from cache.
+    from numba.npyufunc.parallel import _launch_threads
+    _launch_threads()

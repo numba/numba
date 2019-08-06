@@ -165,7 +165,11 @@ _get_nin(PyObject * py_func_obj)
 
     inspect = PyImport_ImportModule("inspect");
     if (!inspect) goto _get_nin_cleanup;
+#if PY_MAJOR_VERSION >= 3
+    getargspec = PyObject_GetAttrString(inspect, "getfullargspec");
+#else
     getargspec = PyObject_GetAttrString(inspect, "getargspec");
+#endif
     if (!getargspec) goto _get_nin_cleanup;
     argspec = PyObject_CallFunctionObjArgs(getargspec, py_func_obj, NULL);
     if (!argspec) goto _get_nin_cleanup;

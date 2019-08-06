@@ -193,6 +193,14 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_select(condlist, choicelist, default=0):
+    return np.select(condlist, choicelist, default=default)
+
+
+def np_select_defaults(condlist, choicelist):
+    return np.select(condlist, choicelist)
+
+
 def np_bartlett(M):
     return np.bartlett(M)
 
@@ -2768,6 +2776,112 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
 
+    def test_select(self):
+        np_pyfunc = np_select
+        np_nbfunc = njit(np_select)
+
+        test_cases = [
+            # Each test case below is one tuple.
+            # Each tuple is separated by a description of what's being tested
+
+            # test with arrays of length 3 instead of 2 and a different default
+            ([np.array([False, False, False]),
+              np.array([False, True, False]),
+              np.array([False, False, True])],
+             [np.array([1, 2, 3]),
+              np.array([4, 5, 6]),
+              np.array([7, 8, 9])], 15.3),
+            # test with arrays of length 1 instead of 2
+            ([np.array([True]),
+              np.array([False])], [np.array([1]), np.array([2])], 0),
+            # test with lists of length 100 of arrays of length 1
+            ([np.array([False])] * 100, [np.array([1])] * 100, 0),
+            # passing arrays with NaNs
+            ([np.isnan(np.array([1, 2, 3, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3, np.nan, 5, 7])] * 2, 0),
+            # passing lists with 2d arrays
+            ([np.isnan(np.array([[1, 2, 3, np.nan, 5, 7]]))] * 2,
+             [np.array([[1, 2, 3, np.nan, 5, 7]])] * 2, 0),
+            # passing arrays with complex numbers
+            ([np.isnan(np.array([1, 2, 3 + 2j, np.nan, 5, 7]))] * 2,
+             [np.array([1, 2, 3 + 2j, np.nan, 5, 7])] * 2, 0)
+        ]
+
+        for x in (np.arange(10), np.arange(10).reshape((5, 2))):
+            # test with two lists
+            test_cases.append(([x < 3, x > 5], [x, x ** 2], 0))
+            # test with two tuples
+            test_cases.append(((x < 3, x > 5), (x, x ** 2), 0))
+            # test with one list and one tuple
+            test_cases.append(([x < 3, x > 5], (x, x ** 2), 0))
+            # test with one tuple and one list
+            test_cases.append(((x < 3, x > 5), [x, x ** 2], 0))
+
+        for condlist,  choicelist, default in test_cases:
+            self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
+                                    np_nbfunc(condlist, choicelist, default))
+
+        np_pyfunc_defaults = np_select_defaults
+        np_nbfunc_defaults = njit(np_select_defaults)
+        # check the defaults work, using whatever the last input was
+        self.assertPreciseEqual(np_pyfunc_defaults(condlist, choicelist),
+                                np_nbfunc_defaults(condlist, choicelist))
+
+    def test_select_exception(self):
+        np_nbfunc = njit(np_select)
+        x = np.arange(10)
+        self.disable_leak_check()
+        for condlist, choicelist, default, expected_error, expected_text in [
+            # Each test case below is one tuple.
+            # Each tuple is separated by the description of the intended error
+
+            # passing condlist of dim zero
+            ([np.array(True), np.array([False, True, False])],
+             [np.array(1), np.arange(12).reshape(4, 3)], 0,
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # condlist and choicelist with different dimensions
+            ([np.array(True), np.array(False)], [np.array([1]), np.array([2])],
+             0, TypingError, "condlist and choicelist elements must have the "
+                             "same number of dimensions"),
+            # condlist and choicelist with different dimensions
+            ([np.array([True]), np.array([False])],
+             [np.array([[1]]), np.array([[2]])], 0, TypingError,
+             "condlist and choicelist elements must have the "
+             "same number of dimensions"),
+            # passing choicelist of dim zero
+            ([np.array(True), np.array(False)], [np.array(1), np.array(2)], 0,
+             TypingError, "condlist arrays must be of at least dimension 1"),
+            # passing an array as condlist instead of a list or tuple
+            (np.isnan(np.array([1, 2, 3, np.nan, 5, 7])),
+             np.array([1, 2, 3, np.nan, 5, 7]), 0, TypingError,
+             "condlist must be a List or a Tuple"),
+            # default is a list
+            ([True], [0], [0], TypingError,
+             "default must be a scalar"),
+            # condlist with ints instead of booleans
+            ([(x < 3).astype(int), (x > 5).astype(int)], [x, x ** 2], 0,
+             TypingError, "condlist arrays must contain booleans"),
+            # condlist and choicelist of different length
+            ([x > 9, x > 8, x > 7, x > 6], [x, x**2, x], 0, ValueError,
+             "list of cases must be same length as list of conditions"),
+
+            # condlist contains tuples instead of arrays
+            # if in the future numba's np.where accepts tuples, the
+            # implementation of np.select should also accept them and
+            # the following two test cases should be normal tests
+            # instead of negative tests
+
+            # test with lists of length 100 of tuples of length 1 for condlist
+            ([(False,)] * 100, [np.array([1])] * 100, 0, TypingError,
+             'items of condlist must be arrays'),
+            # test with lists of length 100 of tuples of length 1 for choicelist
+            ([np.array([False])] * 100, [(1,)] * 100, 0, TypingError,
+             'items of choicelist must be arrays'),
+        ]:
+            with self.assertRaises(expected_error) as e:
+                np_nbfunc(condlist, choicelist, default)
+            self.assertIn(expected_text, str(e.exception))
+
     def test_windowing(self):
         def check_window(func):
             np_pyfunc = func
@@ -2797,7 +2911,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = np_pyfunc(M, beta)
                 got = np_nbfunc(M, beta)
 
-                if IS_32BITS:
+                if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
                     self.assertPreciseEqual(expected, got, prec='double', ulps=2)
                 else:
                     self.assertPreciseEqual(expected, got, prec='exact')

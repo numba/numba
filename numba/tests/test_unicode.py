@@ -16,7 +16,8 @@ from numba.errors import TypingError
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 
-isascii = lambda s: all(ord(c) < 128 for c in s)
+def isascii(s):
+    return all(ord(c) < 128 for c in s)
 
 
 def literal_usecase():
@@ -896,6 +897,35 @@ class TestUnicode(BaseTest):
     def test_not(self):
         def pyfunc(x):
             return not x
+
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + [""]:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
+
+    def test_isupper(self):
+        def pyfunc(x):
+            return x.isupper()
+
+        cfunc = njit(pyfunc)
+        uppers = [x.upper() for x in UNICODE_EXAMPLES]
+        extras = ["AA12A", "aa12a", "大AA12A", "大aa12a", "AAAǄA", "A 1 1 大"]
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L585-L599
+        cpython = ['\u2167', '\u2177', '\U00010401', '\U00010427', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F']
+        fourxcpy = [x * 4 for x in cpython]
+
+        for a in UNICODE_EXAMPLES + uppers + [""] + extras + cpython + fourxcpy:
+            args = [a]
+            self.assertEqual(pyfunc(*args), cfunc(*args),
+                             msg='failed on {}'.format(args))
+
+    def test_upper(self):
+        def pyfunc(x):
+            return x.upper()
 
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES + [""]:

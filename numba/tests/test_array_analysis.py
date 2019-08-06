@@ -96,7 +96,7 @@ class ArrayAnalysisTester(Pipeline):
 
         try:
             bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
+        except Exception as e:
             raise e
 
         self.bc = bc
@@ -355,9 +355,10 @@ class TestArrayAnalysis(TestCase):
             d = b[:-1,:]
             e = c.shape[0]
             f = d.shape[0]
+            g = len(d)
             return e == f
         self._compile_and_test(test_12, (),
-                               equivs=[self.with_equiv('e', 'f')])
+                               equivs=[self.with_equiv('e', 'f', 'g')])
 
         def test_tup_arg(T):
             T2 = T
@@ -950,6 +951,25 @@ class TestArrayAnalysisParallelRequired(TestCase):
         X2 = np.zeros(t_obj.T)
         self.assertEqual(
             njit(test_impl, parallel=True)(t_obj, X1), test_impl(t_obj, X2))
+
+    @skip_unsupported
+    def test_slice_shape_issue_3380(self):
+        # these tests shouldn't throw error in array analysis
+        def test_impl1():
+            a = slice(None, None)
+            return True
+
+        self.assertEqual(njit(test_impl1, parallel=True)(), test_impl1())
+
+        def test_impl2(A, a):
+            b = a
+            return A[b]
+
+        A = np.arange(10)
+        a = slice(None)
+        np.testing.assert_array_equal(
+            njit(test_impl2, parallel=True)(A, a), test_impl2(A, a))
+
 
 if __name__ == '__main__':
     unittest.main()

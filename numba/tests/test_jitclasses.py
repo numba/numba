@@ -4,6 +4,7 @@ from collections import OrderedDict
 import ctypes
 import random
 import sys
+import pickle
 
 import numpy as np
 
@@ -890,6 +891,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         # unpatched LLVMs will raise here...
         TruncatedLabel().meth2()
+
+    def test_pickling(self):
+        @jitclass(spec=[])
+        class PickleTestSubject(object):
+            def __init__(self):
+                pass
+
+        inst = PickleTestSubject()
+        ty = typeof(inst)
+        self.assertIsInstance(ty, types.ClassInstanceType)
+        pickled = pickle.dumps(ty)
+        self.assertIs(pickle.loads(pickled), ty)
 
 
 if __name__ == '__main__':
