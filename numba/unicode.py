@@ -35,8 +35,6 @@ from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
                               _Py_TOLOWER, _PyUnicode_ToLowerFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
-                              _PyUnicode_gettyperecord,
-                              _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase,
                               _Py_ISLOWER, _Py_ISUPPER)
@@ -64,7 +62,7 @@ make_attribute_wrapper(types.UnicodeType, 'data', '_data')
 make_attribute_wrapper(types.UnicodeType, 'length', '_length')
 make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
 make_attribute_wrapper(types.UnicodeType, 'is_ascii', '_is_ascii')
-make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')    
+make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
 
 
 @register_default(types.UnicodeIteratorType)
