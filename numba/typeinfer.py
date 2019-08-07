@@ -1237,6 +1237,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_expr(inst, inst.target, value)
         elif isinstance(value, ir.Yield):
             self.typeof_yield(inst, inst.target, value)
+        elif isinstance(value, ir.Uninit):
+            pass
         else:
             msg = ("Unsupported assignment encountered: %s %s" %
                    (type(value), str(value)))

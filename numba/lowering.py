@@ -488,6 +488,10 @@ class Lower(BaseLower):
             self.incref(ty, res)
             return res
 
+        elif isinstance(value, ir.Uninit):
+            res = self.context.get_constant_null(ty)
+            return res
+
         raise NotImplementedError(type(value), value)
 
     def lower_yield(self, retty, inst):
@@ -1121,6 +1125,10 @@ class Lower(BaseLower):
         """
         Load the given variable's value.
         """
+        # fetype = self.typeof(name)
+        # Define if not already
+        # self._alloca_var(name, fetype)
+
         ptr = self.getvar(name)
         return self.builder.load(ptr)
 

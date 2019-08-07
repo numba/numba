@@ -1,14 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
 import collections
-from pprint import pprint
+from pprint import pprint, pformat
 import sys
 import warnings
+import logging
+from copy import deepcopy
 
 from numba import utils
 from .errors import UnsupportedError
 from .ir import Loc
 
+
+_logger = logging.getLogger(__name__)
 
 class DataFlowAnalysis(object):
     """
@@ -25,9 +29,122 @@ class DataFlowAnalysis(object):
         self.infos = {}
         self.edge_process = {}
 
+        # State for tracking variable definitions
+        self.phis = collections.defaultdict(
+            lambda: collections.defaultdict(set),
+        )
+        self.defsites = collections.defaultdict(set)
+        self.usesites = collections.defaultdict(set)
+        self.intern_use = collections.defaultdict(set)
+
     def run(self):
         for blk in self.cfa.iterliveblocks():
             self.infos[blk.offset] = self.run_on_block(blk)
+        _logger.debug("DEFSITES:\n%s", pformat(self.defsites))
+        self._phi_placement()
+
+    def _phi_placement(self):
+        domfront = self.cfa.graph.dominance_frontier()
+        phisite = collections.defaultdict(set)
+        for var in self.defsites.keys():
+            defsites = self.defsites[var]
+            w = set(defsites)
+            while w:
+                n = w.pop()
+                for y in domfront[n]:
+                    if y not in phisite[var]:
+                        phisite[var].add(y)
+                        if var not in self.defsites.get(y, ()):
+                            w.add(y)
+
+        _logger.debug("PHISITE:\n%s", pformat(phisite))
+
+        # Find unused phis
+
+        idoms = self.cfa.graph.immediate_dominators()
+
+        def search_def(var, blk):
+            defblk = idoms[blk]
+            if defblk in phisite[var]:
+                return defblk
+            elif defblk in self.defsites[var]:
+                return None
+            else:
+                return search_def(var, defblk)
+
+        _logger.debug("pruned PHISITE:\n%s", pformat(phisite))
+
+
+        # COMPUTE VARIBLE VERSIONS
+        var_versions = tuple({var: None for var in self.defsites}.items())
+        # var_versions = ()
+        worklist = [(self.cfa.graph.entry_point(), var_versions)]
+        var_map = collections.defaultdict(lambda: collections.defaultdict(set))
+        worked = set()
+        while worklist:
+            curblk, cur_vars = worklist.pop()
+
+            cur_vars = dict(cur_vars)
+
+            for k, defblk in cur_vars.items():
+                var_map[curblk][k].add(defblk)
+            for var, defs in phisite.items():
+                if curblk in defs:
+                    cur_vars[var] = curblk
+            for var, defs in self.defsites.items():
+                if curblk in defs:
+                    cur_vars[var] = curblk
+
+            if curblk not in worked:
+                worked.add(curblk)
+                for outgoing, _ in self.cfa.graph.successors(curblk):
+                    worklist.append((outgoing, tuple(cur_vars.items())))
+        _logger.debug("VARMAP:\n%s", pformat(var_map))
+
+        # USED PHIS
+        used_phis = set()
+        _logger.debug('self.usesites\n%s', pformat(self.usesites))
+
+        for defbkl, blkinfo in var_map.items():
+            for var, blks in blkinfo.items():
+                for blk in blks:
+                    used_phis.add((blk, var))
+
+        _logger.debug('used_phis\n%s', pformat(used_phis))
+        unused_phis = set()
+        for var, phiblks in phisite.items():
+            for blk in phiblks:
+                pair = (blk, var)
+                if pair not in used_phis:
+                    if var not in self.usesites[blk]:
+                        unused_phis.add(pair)
+
+        _logger.debug('unused_phis\n%s', pformat(unused_phis))
+        # PRUNE PHIS
+        for blk, var in unused_phis:
+            phisite[var].discard(blk)
+        # phisite = {k: v for k, v in phisite.items() if v}
+
+
+        for var, blks in phisite.items():
+            for blk in blks:
+                self.phis[blk][var] = var_map[blk][var]
+
+        _logger.debug("PHIS:\n%s", pformat(self.phis))
+        _logger.debug("USE:\n%s", pformat(self.usesites))
+
+        self.use_from = {}
+
+        for blk, vars in self.usesites.items():
+            blkinfo = {}
+            for var in vars:
+                defs = var_map[blk][var]
+                if len(defs) == 1 and blk not in phisite.get(var, ()):
+                    [defblk] = defs
+                    blkinfo[var] = defblk
+            self.use_from[blk] = blkinfo
+
+        _logger.debug('USE FROM\n%s', pformat(self.use_from))
 
     def run_on_block(self, blk):
         incoming_blocks = []
@@ -229,7 +346,9 @@ class DataFlowAnalysis(object):
 
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
+        varname = self.bytecode.co_varnames[inst.arg]
         info.append(inst, value=value)
+        self.defsites[varname].add(info.offset)
 
     def op_STORE_MAP(self, info, inst):
         key = info.pop()
@@ -246,6 +365,9 @@ class DataFlowAnalysis(object):
         res = info.make_temp(name)
         info.append(inst, res=res)
         info.push(res)
+        if info.offset not in self.defsites[name]:
+            # not internal use
+            self.usesites[info.offset].add(name)
 
     def op_LOAD_CONST(self, info, inst):
         res = info.make_temp('const')
@@ -914,3 +1036,4 @@ class BlockInfo(object):
     @terminator.setter
     def terminator(self, inst):
         self._term = inst
+

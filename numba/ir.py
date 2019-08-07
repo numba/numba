@@ -224,6 +224,15 @@ class AbstractRHS(object):
     """
 
 
+class Uninit(AbstractRHS):
+    def __init__(self, loc):
+        self.loc = loc
+
+    def __repr__(self):
+        return "(Uninitialized)"
+
+
+
 class Inst(AbstractRHS):
     """
     Base class for all IR instructions.
@@ -1260,3 +1269,5 @@ class UndefinedType(object):
         return "Undefined"
 
 UNDEFINED = UndefinedType()
+
+

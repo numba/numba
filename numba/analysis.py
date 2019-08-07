@@ -41,7 +41,7 @@ def compute_use_defs(blocks):
                 elif isinstance(stmt.value, ir.Var):
                     rhs_set = set([stmt.value.name])
                 elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
-                                             ir.FreeVar)):
+                                             ir.FreeVar, ir.Uninit)):
                     rhs_set = ()
                 else:
                     raise AssertionError('unreachable', type(stmt.value))

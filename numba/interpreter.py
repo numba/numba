@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 import collections
 import dis
 import operator
+import logging
+from pprint import pformat
 
 from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
@@ -14,57 +16,7 @@ from .utils import (
     OPERATORS_TO_BUILTINS,
     )
 
-
-class Assigner(object):
-    """
-    This object keeps track of potential assignment simplifications
-    inside a code block.
-    For example `$O.1 = x` followed by `y = $0.1` can be simplified
-    into `y = x`, but it's not possible anymore if we have `x = z`
-    in-between those two instructions.
-
-    NOTE: this is not only an optimization, but is actually necessary
-    due to certain limitations of Numba - such as only accepting the
-    returning of an array passed as function argument.
-    """
-
-    def __init__(self):
-        # { destination variable name -> source Var object }
-        self.dest_to_src = {}
-        # Basically a reverse mapping of dest_to_src:
-        # { source variable name -> all destination names in dest_to_src }
-        self.src_invalidate = collections.defaultdict(list)
-        self.unused_dests = set()
-
-    def assign(self, srcvar, destvar):
-        """
-        Assign *srcvar* to *destvar*. Return either *srcvar* or a possible
-        simplified assignment source (earlier assigned to *srcvar*).
-        """
-        srcname = srcvar.name
-        destname = destvar.name
-        if destname in self.src_invalidate:
-            # destvar will change, invalidate all previously known simplifications
-            for d in self.src_invalidate.pop(destname):
-                self.dest_to_src.pop(d)
-        if srcname in self.dest_to_src:
-            srcvar = self.dest_to_src[srcname]
-        if destvar.is_temp:
-            self.dest_to_src[destname] = srcvar
-            self.src_invalidate[srcname].append(destname)
-            self.unused_dests.add(destname)
-        return srcvar
-
-    def get_assignment_source(self, destname):
-        """
-        Get a possible assignment source (a ir.Var instance) to replace
-        *destname*, otherwise None.
-        """
-        if destname in self.dest_to_src:
-            return self.dest_to_src[destname]
-        self.unused_dests.discard(destname)
-        return None
-
+_logger = logging.getLogger(__name__)
 
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
@@ -81,6 +33,8 @@ class Interpreter(object):
         self.blocks = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
+        self.block_definitions = collections.defaultdict(dict)
+        self.block_phi = collections.defaultdict(dict)
 
     def interpret(self, bytecode):
         """
@@ -98,8 +52,11 @@ class Interpreter(object):
         if config.DUMP_CFG:
             self.cfa.dump()
 
+        self.cfa.graph.render_dot().render()
         # Data flow analysis
         self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        for k in self.arg_names:
+            self.dfa.defsites[k].add(0)
         self.dfa.run()
 
         # Temp states during interpretation
@@ -113,6 +70,38 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
+
+        # # Fix up phi forwardings
+        _logger.debug("FORWARD PHIS")
+        # _logger.debug(pformat(self.block_definitions))
+        for dest, phi_info in self.dfa.phis.items():
+            for varname, incoming_blks in phi_info.items():
+                _logger.debug("--> %s %s %s", dest, phi_info[varname], varname)
+                for inc_blk in incoming_blks:
+                    if inc_blk is not None:
+                        inc_name = self.block_definitions[inc_blk][varname]
+                        # _logger.debug("    %s %s -> %s", varname, inc_blk, inc_name)
+                        block = self.blocks[inc_blk]
+                        target = self.block_phi[dest][varname]
+                        stmt = ir.Assign(
+                            value=self.current_scope.get_exact(inc_name),
+                            target=self.current_scope.get_exact(target),
+                            loc=block.loc
+                        )
+                        # _logger.debug(" at %s: %s", inc_blk, stmt)
+                        block.insert_before_terminator(stmt)
+                    else:
+                        block = self.blocks[0]
+                        assert 0 not in self.dfa.defsites[varname]
+                        target = self.block_phi[dest][varname]
+                        stmt = ir.Assign(
+                            value=ir.Uninit(loc=block.loc),
+                            target=self.current_scope.get_exact(target),
+                            loc=block.loc
+                        )
+                        # _logger.debug(" at %s: %s", 0, stmt)
+                        # block.body.insert(0, stmt)
+                        block.insert_before_terminator(stmt)
 
         return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
@@ -147,13 +136,21 @@ class Interpreter(object):
             oldblock.append(jmp)
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
-        self.assigner = Assigner()
         # Check out-of-scope syntactic-block
         while self.syntax_blocks:
             if inst.offset >= self.syntax_blocks[-1].exit:
                 self.syntax_blocks.pop()
             else:
                 break
+        # Insert PHI
+        phi_vars = self.dfa.phis[self.current_block_offset]
+        if phi_vars:
+            _logger.debug('insert phi: %s %s', self.current_block_offset, phi_vars)
+            for var in phi_vars:
+                target = self.current_scope.redefine(var, loc=self.loc)
+                _logger.debug('   %s %s', var, target.name)
+                self.block_definitions[self.current_block_offset][var] = target.name
+                self.block_phi[self.current_block_offset][var] = target.name
 
     def _end_current_block(self):
         self._remove_unused_temporaries()
@@ -166,10 +163,6 @@ class Interpreter(object):
         """
         new_body = []
         for inst in self.current_block.body:
-            if (isinstance(inst, ir.Assign)
-                and inst.target.is_temp
-                and inst.target.name in self.assigner.unused_dests):
-                continue
             new_body.append(inst)
         self.current_block.body = new_body
 
@@ -264,16 +257,13 @@ class Interpreter(object):
         Store *value* (a Expr or Var instance) into the variable named *name*
         (a str object).
         """
-        if redefine or self.current_block_offset in self.cfa.backbone:
-            rename = not (name in self.code_cellvars)
-            target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
-        else:
-            target = self.current_scope.get_or_define(name, loc=self.loc)
-        if isinstance(value, ir.Var):
-            value = self.assigner.assign(value, target)
+        rename = not (name in self.code_cellvars)
+        target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
+
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
         self.definitions[target.name].append(value)
+        self.block_definitions[self.current_block_offset][name] = target.name
 
     def get(self, name):
         """
@@ -284,10 +274,14 @@ class Interpreter(object):
         if name[0] == '.' and name[1:].isdigit():
             name = 'implicit{}'.format(name[1:])
 
-        # Try to simplify the variable lookup by returning an earlier
-        # variable assigned to *name*.
-        var = self.assigner.get_assignment_source(name)
-        if var is None:
+        not_redefined = name not in self.block_definitions[self.current_block_offset]
+        block_use_from = self.dfa.use_from.get(self.current_block_offset, {})
+        def_block = block_use_from.get(name)
+        block_defs = self.block_definitions.get(def_block, {})
+        regname = block_defs.get(name)
+        if not_redefined and regname:
+            var = self.current_scope.get_exact(regname)
+        else:
             var = self.current_scope.get(name)
         return var
 
