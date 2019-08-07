@@ -79,7 +79,7 @@ tasks:
     id: parfors_clean_up
     description: |
       General clean up and refactoring of parfors ahead of any additional work
-  
+
   - label: Mode based pipeline
     id: mode_based_pipeline
     description: |
@@ -97,11 +97,63 @@ tasks:
     description: |
       MCJIT has been deprecated for some time.  Need to switch to the newer ORC JIT class.
 
-  - label: Line profiling 
+  - label: Performance analysis suite
+    id: perform_analysis_suite
+    description: |
+      Meta task for all performance analysis related functionality
+    depends_on:
+        - line_profiling
+        - assembly_analysis_tooling
+        - vectorisation_analysis
+
+  - label: Vectorisation analysis
+    id: vectorisation_analysis
+    description: |
+      Obtain LLVMs vectorisation reports and present these in a user friendly manner
+
+  - label: Line profiling
     id: line_profiling
     description: |
       Support collection of profiling statistics from compiled machine code and map back to
       lines of Python.
     depends_on:
         - orc_jit
+        - assembly_analysis_tooling
+
+  - label: Assembly analysis tooling
+    id: assembly_analysis_tooling
+    description: |
+      Tie generated assembly back to python lines and annotate instruction quality
+    depends_on:
+        - capstone
+
+  - label: Build capstone against llvmdev
+    id: capstone
+    description: |
+      Build capstone against llvmdev and create conda packages/wheels
+
+  - label: Increase JIT class method performance
+    id: jit_class_method_performance
+    description: |
+      Increase the performance of jitclass methods
+    depends_on:
+        - llvm_ref_count_pruning
+        - new_licm_pass
+
+  - label: LLVM level ref count pruning
+    id: llvm_ref_count_pruning
+    description: |
+      Add a LLVM compiler pass to prune refcounts across entire functions
+
+  - label: JITted coverage information
+    id: jitted_coverage_info
+    description: |
+      Work out how to leverage gcov support in LLVM to enable coverage information
+    depends_on:
+        - compiler_rt
+
+  - label: LLVM compiler_rt support
+    id: compiler_rt
+    description: |
+      Work out how to build compiler_rt into LLVM and how to use it in Numba
 
