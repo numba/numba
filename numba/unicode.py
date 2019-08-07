@@ -447,9 +447,12 @@ def normalize_slice_arg(arg, slice_len, default):
     if arg is None:
         return default
     elif arg < 0:
-        return max(arg + slice_len, default)
+        if slice_len + arg < 0:
+            return default
+        else:
+            return slice_len + arg
     else:
-        return arg
+        return min(slice_len, arg)
 
 # PUBLIC API
 
@@ -544,8 +547,8 @@ def unicode_find(a, b):
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
-    args_types_check(start)
-    args_types_check(end)
+    _count_args_types_check(start)
+    _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
         def count_impl(src, sub, start=start, end=end):
@@ -554,29 +557,75 @@ def unicode_count(src, sub, start=None, end=None):
             sub_len = len(sub)
 
             # normalize start and end indexes to define search range
-            start = normalize_slice_arg(start, src_len, 0)
-            end = normalize_slice_arg(end, src_len, src_len)
+            new_start = normalize_slice_arg(start, src_len, 0)
+            new_end = normalize_slice_arg(end, src_len, src_len)
 
-            if (sub_len == 0):       #special case when substring is empty
-                if start > src_len:
-                    return 0
-                elif start == src_len:
-                    if end >= start:
-                        return 1
+            if (sub_len == 0):  #special case for empty sub_string
+                if start is None or end is None:
+                    if start is None:
+                        if end is not None:
+                            tmp_end = end
+                            if tmp_end < 0:
+                                if tmp_end + src_len < 0:
+                                    return 1
+                                else:
+                                    return (tmp_end + src_len + 1)
+                            elif tmp_end >= src_len:
+                                return src_len + 1
+                            else:
+                                return tmp_end + 1
+                        return src_len + 1
+                    elif end is None:
+                        tmp_start = start
+                        if tmp_start < 0:
+                            tmp_start = tmp_start + src_len
+                            if tmp_start <= 0:
+                                return src_len + 1
+                            else:
+                                return (start * (-1)) + 1
+                        return 0 if tmp_start > src_len else (src_len - start + 1)
+                tmp_start = start
+                tmp_end = end
+                if (tmp_start < 0):
+                    tmp_start = src_len + tmp_start
+                if (tmp_end < 0):
+                    tmp_end = src_len + tmp_end
+                if tmp_start < 0 and tmp_end < 0:
+                    return 1
+                if (tmp_start <= tmp_end):
+                    if tmp_start < 0:
+                        if tmp_start == tmp_end:
+                            return 1
+                        elif tmp_end <= src_len:
+                            return tmp_end + 1
+                        else:
+                            return src_len + 1
+                    if tmp_end < src_len:
+                        return tmp_end - tmp_start + 1
+                    elif tmp_start <= src_len:
+                        return src_len - tmp_start + 1
                     else:
                         return 0
-                elif start < end:
-                    if (end - start <= src_len):
-                        return end - start + 1
-                    else:
-                        return src_len - start + 1
-                elif start == end :
+                elif tmp_start == 0 and tmp_end < 0:
                     return 1
-                else:
-                    return 0
+                elif tmp_start == tmp_end:
+                    return 1
+                return 0
 
-            i = start
-            while( i + sub_len <= end):
+            if start is not None and end is not None:  #special case for some negative indices
+                tmp_start = start if start >= 0 else (src_len + start)
+                tmp_end = end if end >= 0 else (end + src_len)
+                if tmp_end < 0:
+                    return 0
+                elif tmp_start >= tmp_end:
+                    return 0
+            elif start is None and end is not None:
+                if end < 0:
+                    if src_len + end < 0:
+                        return 0
+
+            i = new_start
+            while( i + sub_len <= new_end):
                 if src[ i : i + sub_len ] == sub:
                     count += 1
                     i += sub_len
@@ -872,11 +921,15 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
-def args_types_check(arg):
+def _count_args_types_check(arg):
     if not (arg is None or isinstance(arg, (types.Omitted,
                                             types.Optional,
-                                            types.Integer))):
-        raise TypingError("arg must be of type None or Integer")
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError("slice index must be of type None or Integer")
+    if isinstance(arg, types.Optional):
+        if not isinstance(arg.type, types.Integer):
+            raise TypingError("slice index of Optional type should have Integer type")
 
 
 @overload_method(types.UnicodeType, 'lstrip')

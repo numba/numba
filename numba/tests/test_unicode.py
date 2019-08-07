@@ -370,9 +370,13 @@ class TestUnicode(BaseTest):
             extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s, 'a', 'a_',
                       '\u0102', 'a\u0102', 'a\U00100304', '\u0102_', '\u0102\U00100304']
             for sub in [x for x in extras]:
-                for i , j in product(range(-10,10), (0,20)):
+                for i , j in product(range(-10,10), (-10,10)):
                     self.assertEqual(pyfunc(s, sub, i, j),
                                      cfunc(s, sub, i, j),
+                                     "'%s' in '%s'?" % (sub, s))
+                for j in range(-10, 10):
+                    self.assertEqual(pyfunc(s, sub, None, j),
+                                     cfunc(s, sub, None, j),
                                      "'%s' in '%s'?" % (sub, s))
 
     def test_count_with_start_only(self):
@@ -388,6 +392,9 @@ class TestUnicode(BaseTest):
                     self.assertEqual(pyfunc(s, sub, i),
                                      cfunc(s, sub, i),
                                      "'%s' in '%s'?" % (sub, s))
+                self.assertEqual(pyfunc(s, sub, None),
+                                 cfunc(s, sub, None),
+                                 "'%s' in '%s'?" % (sub, s))
 
     def test_count_arg_type_check(self):
         cfunc = njit(count_with_start_end_usecase)
