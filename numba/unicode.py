@@ -1084,7 +1084,7 @@ _unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
                                                _PyUnicode_IsTitlecase))
 
 
-@overload_method(types.UnicodeType, 'isupper')
+overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """
     Implements .isupper()
