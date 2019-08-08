@@ -263,7 +263,7 @@ represents the function's start, ``generator_resume1`` (resp.
 ``generator_resume2``) is the resumption point after the first
 (resp. second) yield point.
 
-After generation by LLVM, the whole native assembler code for this function
+After generation by LLVM, the whole native assembly code for this function
 may look like this (on x86-64):
 
 .. code-block:: asm
