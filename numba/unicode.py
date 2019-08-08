@@ -926,7 +926,7 @@ def _count_args_types_check(arg):
                                             types.Optional,
                                             types.Integer,
                                             types.NoneType))):
-        raise TypingError("slice index must be of type None or Integer")
+        raise TypingError("slice index must be of type None or Integer or Optional")
     if isinstance(arg, types.Optional):
         if not isinstance(arg.type, types.Integer):
             raise TypingError("slice index of Optional type should have Integer type")

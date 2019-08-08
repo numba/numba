@@ -400,10 +400,10 @@ class TestUnicode(BaseTest):
         cfunc = njit(count_with_start_end_usecase)
         with self.assertRaises(TypingError) as raises:
             cfunc('ascii', 'c', 1, 0.5)
-        self.assertIn('arg must be of type None or Integer', str(raises.exception))
+        self.assertIn('slice index must be of type None or Integer or Optional', str(raises.exception))
         with self.assertRaises(TypingError) as raises:
             cfunc('abcde', 's', 1.2, 7)
-        self.assertIn('arg must be of type None or Integer', str(raises.exception))
+        self.assertIn('slice index must be of type None or Integer or Optional', str(raises.exception))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
