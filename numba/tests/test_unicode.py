@@ -935,12 +935,17 @@ class TestUnicode(BaseTest):
             '1',
             '+abA',
             '12Abc',
+            'A12abc',
         ]
 
-        for a in UNICODE_EXAMPLES + titles + specials + [""]:
-            args = [a]
-            self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+        # Sample taken from CPython testing:
+        # https://github.com/python/cpython/blob/master/Lib/test/test_unicode.py#L603-L613
+        cpython = ['\U00010401\U00010429', '\U00010427\U0001044E', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F']
+
+        for a in UNICODE_EXAMPLES + titles + specials + cpython + [""]:
+            self.assertEqual(pyfunc(a), cfunc(a),
+                             msg='failed on {}'.format(a))
 
     def test_upper(self):
         def pyfunc(x):
