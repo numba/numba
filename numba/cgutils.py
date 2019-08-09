@@ -656,16 +656,16 @@ def unpack_tuple(builder, tup, count=None):
     return vals
 
 
-def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False):
+def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, boundscheck=True):
     shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
     strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
     return get_item_pointer2(context, builder, data=ary.data, shape=shapes,
                              strides=strides, layout=aryty.layout, inds=inds,
-                             wraparound=wraparound)
+                             wraparound=wraparound, boundscheck=boundscheck)
 
 
-def get_item_pointer2(builder, data, shape, strides, layout, inds,
-                      wraparound=False):
+def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
+                      wraparound=False, boundscheck=True):
     if wraparound:
         # Wraparound
         indices = []
@@ -676,6 +676,16 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             indices.append(selected)
     else:
         indices = inds
+    if boundscheck:
+        for ind, dimlen in zip(indices, shape):
+            msg = "index is out of bounds"
+            out_of_bounds_upper = builder.icmp_signed('>=', ind, dimlen)
+            with if_unlikely(builder, out_of_bounds_upper):
+                context.call_conv.return_user_exc(builder, IndexError, (msg,))
+            out_of_bounds_lower = builder.icmp_signed('<', ind, ind.type(0))
+            with if_unlikely(builder, out_of_bounds_lower):
+                context.call_conv.return_user_exc(builder, IndexError, (msg,))
+
     if not indices:
         # Indexing with empty tuple
         return builder.gep(data, [int32_t(0)])
