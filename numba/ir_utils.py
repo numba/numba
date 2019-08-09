@@ -1982,13 +1982,15 @@ def _check_inline_options(inline_arg):
 
 class InlineInlinables(object):
 
+    _DEBUG = False
+
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
     def run(self):
         """Run inlining of inlinables
         """
-        if config.DEBUG:
+        if config.DEBUG or self._DEBUG:
             print('before inline'.center(80, '-'))
             print(self.func_ir.dump())
             print(''.center(80, '-'))
@@ -2009,7 +2011,7 @@ class InlineInlinables(object):
             # functions introducing blocks
             simplify_CFG(self.func_ir.blocks)
 
-        if config.DEBUG:
+        if config.DEBUG or self._DEBUG:
             print('after inline'.center(80, '-'))
             print(self.func_ir.dump())
             print(''.center(80, '-'))
@@ -2022,6 +2024,8 @@ class InlineInlinables(object):
         try:
             to_inline = self.func_ir.get_definition(expr.func)
         except Exception as e:
+            if self._DEBUG:
+                print("Cannot find definition for %s" % expr.func)
             return False
         # do not handle closure inlining here, another pass deals with that.
         if getattr(to_inline, 'op', False) == 'make_function':
@@ -2081,7 +2085,7 @@ class InlineInlinables(object):
                                                 pyfunc.__globals__,
                                                 block, i, pyfunc,
                                                 work_list=work_list)
-                    return True
+                            return True
         return False
 
 
