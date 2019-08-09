@@ -1015,7 +1015,7 @@ def fancy_getitem(context, builder, sig, args,
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
-    ptr = cgutils.get_item_pointer(context, builder, data, shapes, strides,
+    ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                     aryty.layout, indices, wraparound=False)
     val = load_item(context, builder, aryty, ptr)
 
@@ -1150,10 +1150,10 @@ def maybe_copy_source(context, builder, use_copy,
         intp_t = context.get_value_type(types.intp)
 
         with cgutils.loop_nest(builder, src_shapes, intp_t) as indices:
-            src_ptr = cgutils.get_item_pointer(context, builder, src_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                                 src_shapes, src_strides,
                                                 srcty.layout, indices)
-            dest_ptr = cgutils.get_item_pointer(context, builder, data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, data,
                                                  copy_shapes, copy_strides,
                                                  copy_layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
@@ -1164,14 +1164,14 @@ def maybe_copy_source(context, builder, use_copy,
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
                 builder.store(
-                    cgutils.get_item_pointer(context, builder, builder.load(copy_data),
+                    cgutils.get_item_pointer2(context, builder, builder.load(copy_data),
                                               copy_shapes, copy_strides,
                                               copy_layout, source_indices,
                                               wraparound=False),
                     src_ptr)
             with otherwise:
                 builder.store(
-                    cgutils.get_item_pointer(context, builder, src_data,
+                    cgutils.get_item_pointer2(context, builder, src_data,
                                               src_shapes, src_strides,
                                               srcty.layout, source_indices,
                                               wraparound=False),
@@ -1374,7 +1374,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
-    dest_ptr = cgutils.get_item_pointer(context, builder, dest_data,
+    dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
                                          wraparound=False)
@@ -3044,7 +3044,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     index = builder.udiv(index, shapes[dim])
                 indices.reverse()
 
-                ptr = cgutils.get_item_pointer(context, builder, arr.data, shapes,
+                ptr = cgutils.get_item_pointer2(context, builder, arr.data, shapes,
                                                 strides, arrty.layout, indices)
                 return ptr
 
@@ -3804,10 +3804,10 @@ def _array_copy(context, builder, sig, args):
         intp_t = context.get_value_type(types.intp)
 
         with cgutils.loop_nest(builder, shapes, intp_t) as indices:
-            src_ptr = cgutils.get_item_pointer(context, builder, src_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                                 shapes, src_strides,
                                                 arytype.layout, indices)
-            dest_ptr = cgutils.get_item_pointer(context, builder, dest_data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                                  shapes, dest_strides,
                                                  rettype.layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
@@ -3913,10 +3913,10 @@ def array_astype(context, builder, sig, args):
     intp_t = context.get_value_type(types.intp)
 
     with cgutils.loop_nest(builder, shapes, intp_t) as indices:
-        src_ptr = cgutils.get_item_pointer(context, builder, src_data,
+        src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                             shapes, src_strides,
                                             arytype.layout, indices)
-        dest_ptr = cgutils.get_item_pointer(context, builder, dest_data,
+        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                              shapes, dest_strides,
                                              rettype.layout, indices)
         item = load_item(context, builder, arytype, src_ptr)
@@ -4127,7 +4127,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
     """
 
     def assign_item(indices, valty, val):
-        ptr = cgutils.get_item_pointer(context, builder, data, shapes, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                         arrty.layout, indices, wraparound=False)
         val = context.cast(builder, val, valty, arrty.dtype)
         store_item(context, builder, arrty, val, ptr)
@@ -4403,12 +4403,12 @@ def _do_concatenate(context, builder, axis,
                                       order=retty.layout)
 
         with loop_nest as indices:
-            src_ptr = cgutils.get_item_pointer(context, builder, arr_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, arr_data,
                                                 arr_sh, arr_st,
                                                 arrty.layout, indices)
             val = load_item(context, builder, arrty, src_ptr)
             val = context.cast(builder, val, arrty.dtype, retty.dtype)
-            dest_ptr = cgutils.get_item_pointer(context, builder, ret_data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, ret_data,
                                                  ret_shapes, ret_strides,
                                                  retty.layout, indices)
             store_item(context, builder, retty, val, dest_ptr)
