@@ -7,7 +7,6 @@ from __future__ import print_function, division, absolute_import
 import sys
 import warnings
 import inspect
-import importlib
 
 from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
@@ -250,18 +249,21 @@ def cfunc(sig, locals={}, cache=False, **options):
     return wrapper
 
 
-def jit_module(module_name, **kwargs):
-    """ Automatically jits functions defined in a specified Python module
+def jit_module(**kwargs):
+    """ Automatically ``jit``-wraps functions defined in a Python module
 
-    :param module_name: Name of module to target for automatic function jitting
-    :type module_name: str
-    :param kwargs: Keyword arguments to pass to ``jit`` such as ``nopython`` or ``error_model``.
+    Note that ``jit_module`` should only be called at the end of the module to
+    be jitted. In addition, only functions which are defined in the module 
+    ``jit_module`` is called from will be automatically jitted.
+
+    :param kwargs: Keyword arguments to pass to ``jit`` such as ``nopython``
+                   or ``error_model``.
 
     """
-    try:
-        module = sys.modules[module_name]
-    except KeyError:
-        raise ImportError("No module named '{}'".format(module_name))
+    # Get the module jit_module is being called from
+    frame = inspect.stack()[1]
+    module = inspect.getmodule(frame[0])
+    # Replace functions in module with jit-wrapped versions
     for name, obj in module.__dict__.items():
         if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
             module.__dict__[name] = jit(obj, **kwargs)
