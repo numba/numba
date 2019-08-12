@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 
-import numpy as np
-
 from llvmlite import ir
 
 from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type

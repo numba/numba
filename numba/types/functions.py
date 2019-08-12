@@ -1,13 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import traceback
-import inspect
-import sys
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
-from numba.ir import Loc
 from numba import errors
 
 # terminal color markup
@@ -205,7 +202,7 @@ class BoundFunction(Callable, Opaque):
         # Try with Literal
         try:
             out = template.apply(args, kws)
-        except Exception as e:
+        except Exception:
             out = None
         # If that doesn't work, remove literals
         if out is None:
