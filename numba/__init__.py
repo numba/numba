@@ -44,6 +44,9 @@ from numba.withcontexts import objmode_context as objmode
 # Initialize typed containers
 import numba.typed
 
+# Enable bytes/unicode array support
+import numba.charseq
+
 # Keep this for backward compatibility.
 test = runtests.main
 
