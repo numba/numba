@@ -3,7 +3,7 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba import njit, types, cgutils
+from numba import njit, types, cgutils, unicode
 from numba.extending import overload, intrinsic
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
@@ -98,6 +98,27 @@ def unicode_charseq_get_value(a, i):
     # Return numpy equivalent of `chr(code)`
     return np.array(code, unicode_uint).view(u1_dtype)[()]
 
+
+@njit
+def unicode_get_code(a, i):
+    return unicode._get_code_point(a, i)
+
+
+@njit
+def bytes_get_code(a, i):
+    return a[i]
+
+
+def _get_code_impl(a):
+    if isinstance(a, types.CharSeq):
+        return charseq_get_code
+    elif isinstance(a, types.Bytes):
+        return bytes_get_code
+    elif isinstance(a, types.UnicodeCharSeq):
+        return unicode_charseq_get_code
+    elif isinstance(a, types.UnicodeType):
+        return unicode_get_code
+
 #
 #   Operators on bytes/unicode array items
 #
@@ -105,15 +126,13 @@ def unicode_charseq_get_value(a, i):
 
 @overload(operator.getitem)
 def charseq_getitem(s, i):
-    return_impl = False
+    get_value = None
     if isinstance(i, types.Integer):
         if isinstance(s, types.CharSeq):
-            return_impl = True
             get_value = charseq_get_value
         if isinstance(s, types.UnicodeCharSeq):
-            return_impl = True
             get_value = unicode_charseq_get_value
-    if return_impl:
+    if get_value is not None:
         max_i = s.count
         msg = 'index out of range [0, %s]' % (max_i - 1)
 
@@ -126,18 +145,13 @@ def charseq_getitem(s, i):
 
 @overload(len)
 def charseq_len(s):
-    return_impl = False
-    if isinstance(s, types.CharSeq):
-        return_impl = True
-        get_code = charseq_get_code
-    if isinstance(s, types.UnicodeCharSeq):
-        return_impl = True
-        get_code = unicode_charseq_get_code
-    if return_impl:
+    if isinstance(s, (types.CharSeq, types.UnicodeCharSeq)):
+        get_code = _get_code_impl(s)
         n = s.count
         if n == 0:
             def len_impl(s):
                 return 0
+
         else:
             def len_impl(s):
                 # return the index of the last non-null value (numpy
@@ -148,21 +162,15 @@ def charseq_len(s):
                     i = i - 1
                     code = get_code(s, i)
                 return i + 1
+
         return len_impl
 
 
 @overload(operator.eq)
 def charseq_eq(a, b):
-    return_impl = False
-    if isinstance(a, types.CharSeq) and isinstance(b, types.CharSeq):
-        return_impl = True
-        left_code = charseq_get_code
-        right_code = charseq_get_code
-    if isinstance(a, types.UnicodeCharSeq) and isinstance(b, types.UnicodeCharSeq):
-        return_impl = True
-        left_code = unicode_charseq_get_code
-        right_code = unicode_charseq_get_code
-    if return_impl:
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
         def eq_impl(a, b):
             n = len(a)
             if n != len(b):
@@ -176,9 +184,9 @@ def charseq_eq(a, b):
 
 @overload(operator.ne)
 def charseq_ne(a, b):
-    if ((isinstance(a, types.CharSeq) and isinstance(b, types.CharSeq))
-        or (isinstance(a, types.UnicodeCharSeq)
-            and isinstance(b, types.UnicodeCharSeq))):
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
         def ne_impl(a, b):
             return not (a == b)
         return ne_impl

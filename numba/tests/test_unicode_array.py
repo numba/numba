@@ -1,6 +1,5 @@
 from __future__ import print_function, unicode_literals
 
-import unittest
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -31,6 +30,22 @@ def equal_getitem(x, i, j):
 
 def notequal_getitem(x, i, j):
     return x[i] != x[j]
+
+
+def equal_getitem_value(x, i, v):
+    r1 = x[i] == v
+    r2 = v == x[i]
+    if r1 == r2:
+        return r1
+    raise ValueError('x[i] == v and v == x[i] are unequal')
+
+
+def notequal_getitem_value(x, i, v):
+    r1 = x[i] != v
+    r2 = v != x[i]
+    if r1 == r2:
+        return r1
+    raise ValueError('x[i] != v and v != x[i] are unequal')
 
 
 class TestUnicodeArray(TestCase):
@@ -116,6 +131,25 @@ class TestUnicodeArray(TestCase):
 
     def test_notequal_getitem(self):
         self._test_op_getitem(notequal_getitem)
+
+    def _test_op_getitem_value(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array([1, 2]), 0, 1)
+        self._test(pyfunc, cfunc, '12', 0, '1')
+        self._test(pyfunc, cfunc, '12', 1, '3')
+        self._test(pyfunc, cfunc, np.array('1234'), (), '1234')
+        self._test(pyfunc, cfunc, np.array(['1234']), 0, '1234')
+        self._test(pyfunc, cfunc, np.array(['1234']), 0, 'abc')
+        #self._test(pyfunc, cfunc, b'12', 0, b'1')  # fails: No conversion from array(bool, 1d, C) to bool
+        self._test(pyfunc, cfunc, np.array(b'12'), (), b'12')
+        self._test(pyfunc, cfunc, np.array([b'12']), 0, b'12')
+        self._test(pyfunc, cfunc, np.array([b'12']), 0, b'a')
+
+    def test_equal_getitem_value(self):
+        self._test_op_getitem_value(equal_getitem_value)
+
+    def test_notequal_getitem_value(self):
+        self._test_op_getitem_value(notequal_getitem_value)
 
 
 if __name__ == '__main__':
