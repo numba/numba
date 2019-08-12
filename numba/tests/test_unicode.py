@@ -933,6 +933,29 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_istitle(self):
+        def pyfunc(x):
+            return x.istitle()
+
+        cfunc = njit(pyfunc)
+        titles = [x.title() for x in UNICODE_EXAMPLES]
+        specials = [
+            'A123',
+            'A12Bcd', 
+            '1', 
+            '+abA', 
+            '12Abc', 
+            'A12abc',
+        ]
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/master/Lib/test/test_unicode.py#L603-L613
+        cpython = ['\U00010401\U00010429', '\U00010427\U0001044E', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F']
+
+        for a in UNICODE_EXAMPLES + titles + [""] + specials + cpython:
+            self.assertEqual(pyfunc(a), cfunc(a),
+                             msg='failed on {}'.format(a))
 
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')

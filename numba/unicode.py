@@ -1148,6 +1148,56 @@ def unicode_upper(a):
     return impl
 
 
+def _is_title(is_lower, is_upper, is_title):
+    # This algorithm is an amalgamation of:
+    # https://github.com/python/cpython/blob/master/Objects/unicodeobject.c#L11902-L11948
+    # https://github.com/python/cpython/blob/master/Objects/bytes_methods.c#L254-L291
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return (is_upper(_get_code_point(a, 0)) or is_title(_get_code_point(a, 0)))
+        if l == 0:
+            return False
+        cased = 0
+        previous_is_cased = 0    # To track previous letter's case
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if(is_upper(code_point)):
+                if previous_is_cased == 1:
+                    return False
+                previous_is_cased = 1
+                cased = 1
+            elif (is_lower(code_point)):
+                if not previous_is_cased:
+                    return False
+                previous_is_cased = 1
+                cased = 1
+            else:
+                previous_is_cased = 0
+        return cased == 1
+    return impl
+
+
+_ascii_is_title = register_jitable(_is_title(_Py_ISLOWER, _Py_ISUPPER,
+                                             _always_false))
+_unicode_is_title = register_jitable(_is_title(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(a):
+    """
+    Implements .istitle()
+    """
+    def impl(a):
+        if a._is_ascii:
+            return _ascii_is_title(a)
+        else:
+            return _unicode_is_title(a)
+    return impl
+
+
 @lower_builtin('getiter', types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args
