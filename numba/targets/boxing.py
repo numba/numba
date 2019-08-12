@@ -168,6 +168,7 @@ def box_enum(typ, val, c):
     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
     return c.pyapi.call_function_objargs(cls_obj, (valobj,))
 
+
 @unbox(types.EnumMember)
 def unbox_enum(typ, obj, c):
     """
@@ -175,7 +176,6 @@ def unbox_enum(typ, obj, c):
     """
     valobj = c.pyapi.object_getattr_string(obj, "value")
     return c.unbox(typ.dtype, valobj)
-
 
 #
 # Composite types
@@ -189,6 +189,7 @@ def box_record(typ, val, c):
     ptr = c.builder.bitcast(val, ir.PointerType(ir.IntType(8)))
     return c.pyapi.recreate_record(ptr, size, typ.dtype, c.env_manager)
 
+
 @unbox(types.Record)
 def unbox_record(typ, obj, c):
     buf = c.pyapi.alloca_buffer()
@@ -201,7 +202,6 @@ def unbox_record(typ, obj, c):
     def cleanup():
         c.pyapi.release_buffer(buf)
     return NativeValue(val, cleanup=cleanup, is_error=is_error)
-
 
 
 @box(types.UnicodeCharSeq)
@@ -229,6 +229,37 @@ def box_unicodecharseq(typ, val, c):
     strlen = c.builder.load(count)
     return c.pyapi.string_from_kind_and_data(kind, strptr, strlen)
 
+
+@unbox(types.UnicodeCharSeq)
+def unbox_unicodecharseq(typ, obj, c):
+    lty = c.context.get_value_type(typ)
+
+    ok, buffer, size, kind, is_ascii, hashv = \
+        c.pyapi.string_as_string_size_and_kind(obj)
+
+    # If conversion is ok, copy the buffer to the output storage.
+    with cgutils.if_likely(c.builder, ok):
+        # Check if the returned string size fits in the charseq
+        storage_size = ir.Constant(size.type, typ.count)
+        size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
+
+        # Allow truncation of string
+        size = c.builder.select(size_fits, size, storage_size)
+
+        # Initialize output to zero bytes
+        null_string = ir.Constant(lty, None)
+        outspace  = cgutils.alloca_once_value(c.builder, null_string)
+
+        # We don't need to set the NULL-terminator because the storage
+        # is already zero-filled.
+        cgutils.memcpy(c.builder,
+                       c.builder.bitcast(outspace, buffer.type),
+                       buffer, size)
+
+    ret = c.builder.load(outspace)
+    return NativeValue(ret, is_error=c.builder.not_(ok))
+
+
 @box(types.CharSeq)
 def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
@@ -250,6 +281,7 @@ def box_charseq(typ, val, c):
 
     strlen = c.builder.load(count)
     return c.pyapi.bytes_from_string_and_size(strptr, strlen)
+
 
 @unbox(types.CharSeq)
 def unbox_charseq(typ, obj, c):
