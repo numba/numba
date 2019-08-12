@@ -192,9 +192,6 @@ class PyLower(BaseLower):
             return self.lower_global(value.name, value.value)
         elif isinstance(value, ir.Yield):
             return self.lower_yield(value)
-        elif isinstance(value, ir.Uninit):
-            ltype = self.context.get_value_type(types.pyobject)
-            return cgutils.get_null_value(ltype)
         elif isinstance(value, ir.Arg):
             obj = self.fnargs[value.index]
             # When an argument is omitted, the dispatcher hands it as
@@ -407,6 +404,9 @@ class PyLower(BaseLower):
             self.incref(val)
             return val
 
+        elif expr.op == 'uninitialized':
+            ltype = self.context.get_value_type(types.pyobject)
+            return cgutils.get_null_value(ltype)
         else:
             raise NotImplementedError(expr)
 

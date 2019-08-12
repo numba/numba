@@ -224,15 +224,6 @@ class AbstractRHS(object):
     """
 
 
-class Uninit(AbstractRHS):
-    def __init__(self, loc):
-        self.loc = loc
-
-    def __repr__(self):
-        return "(Uninitialized)"
-
-
-
 class Inst(AbstractRHS):
     """
     Base class for all IR instructions.
@@ -320,6 +311,12 @@ class Expr(Inst):
             self.__dict__[name] = value
         else:
             self._kws[name] = value
+
+    @classmethod
+    def uninitialized(cls, loc):
+        assert isinstance(loc, Loc)
+        op = 'uninitialized'
+        return cls(op=op, loc=loc)
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):

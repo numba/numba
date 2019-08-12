@@ -1237,8 +1237,6 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_expr(inst, inst.target, value)
         elif isinstance(value, ir.Yield):
             self.typeof_yield(inst, inst.target, value)
-        elif isinstance(value, ir.Uninit):
-            pass
         else:
             msg = ("Unsupported assignment encountered: %s %s" %
                    (type(value), str(value)))
@@ -1443,6 +1441,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+        elif expr.op == 'uninitialized':
+            pass
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

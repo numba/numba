@@ -125,9 +125,14 @@ class Interpreter(object):
         # # Fix up phi forwardings
         _logger.debug("FORWARD PHIS")
         # _logger.debug(pformat(self.block_definitions))
+        doms = self.cfa.graph.dominators()
         for dest, phi_info in self.dfa.phis.items():
             for varname, incoming_blks in phi_info.items():
                 _logger.debug("--> %s %s %s", dest, phi_info[varname], varname)
+                _logger.debug("   incoming %s", incoming_blks)
+                # if not any(x in doms[dest] for x in incoming_blks):
+                #     incoming_blks = incoming_blks | {None}
+                #     print("!!!!", varname, (doms[dest], dest))
                 for inc_blk in incoming_blks:
                     if inc_blk is not None:
                         inc_name = self.block_definitions[inc_blk][varname]
@@ -142,11 +147,12 @@ class Interpreter(object):
                         # _logger.debug(" at %s: %s", inc_blk, stmt)
                         block.insert_before_terminator(stmt)
                     else:
-                        block = self.blocks[0]
+                        idom = self.cfa.graph.immediate_dominators()[dest]
+                        block = self.blocks[idom]
                         assert 0 not in self.dfa.defsites[varname]
                         target = self.block_phi[dest][varname]
                         stmt = ir.Assign(
-                            value=ir.Uninit(loc=block.loc),
+                            value=ir.Expr.uninitialized(loc=self.loc),
                             target=self.current_scope.get_exact(target),
                             loc=block.loc
                         )

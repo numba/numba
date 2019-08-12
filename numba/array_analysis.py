@@ -2089,7 +2089,9 @@ class ArrayAnalysis(object):
         if len(args) < 2:
             return []
 
-        msg = "Sizes of {} do not match on {}".format(', '.join(arg_names), loc)
+        def _strip(x):
+            return x.split('.')[0]
+        msg = "Sizes of {} do not match on {}".format(', '.join(map(_strip, arg_names)), loc)
         msg_val = ir.Const(msg, loc)
         msg_typ = types.StringLiteral(msg)
         msg_var = ir.Var(scope, mk_unique_var("msg"), loc)

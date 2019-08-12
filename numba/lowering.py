@@ -488,10 +488,6 @@ class Lower(BaseLower):
             self.incref(ty, res)
             return res
 
-        elif isinstance(value, ir.Uninit):
-            res = self.context.get_constant_null(ty)
-            return res
-
         raise NotImplementedError(type(value), value)
 
     def lower_yield(self, retty, inst):
@@ -895,7 +891,9 @@ class Lower(BaseLower):
         return res
 
     def lower_expr(self, resty, expr):
-        if expr.op == 'binop':
+        if expr.op == 'uninitialized':
+             return self.context.get_constant_null(resty)
+        elif expr.op == 'binop':
             return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'inplace_binop':
             lty = self.typeof(expr.lhs.name)

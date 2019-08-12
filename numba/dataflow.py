@@ -47,6 +47,12 @@ class DataFlowAnalysis(object):
         domfront = self.cfa.graph.dominance_frontier()
         phisite = collections.defaultdict(set)
         for var in self.defsites.keys():
+            if var.startswith('__sentinel__') or var.startswith('parfor__'):
+                continue
+            if len(self.defsites[var]) == 1:
+                # Skip if it's only defined once
+                continue
+
             defsites = self.defsites[var]
             w = set(defsites)
             while w:
