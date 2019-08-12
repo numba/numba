@@ -175,9 +175,6 @@ class _HomogeneousTuple(Sequence, BaseTuple):
     def iterator_type(self):
         return UniTupleIter(self)
 
-    def getitem(self, ind):
-        return self.dtype, intp
-
     def __getitem__(self, i):
         """
         Return element at position i

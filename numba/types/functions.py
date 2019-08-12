@@ -87,7 +87,7 @@ class BaseFunction(Callable):
             keys = set(temp.key for temp in self.templates)
             if len(keys) != 1:
                 raise ValueError("incompatible templates: keys = %s"
-                                 % (this,))
+                                 % (keys,))
             self.typing_key, = keys
         else:
             self.templates = (template,)
