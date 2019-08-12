@@ -1118,8 +1118,11 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
             infer.seed_return(return_type)
 
         # Seed local types
-        for k, v in locals.items():
-            infer.seed_type(k, v)
+        # XXX hackie fix for locals X SSA
+        for var in interp._definitions:
+            ty = locals.get(var.split('.')[0])
+            if ty is not None:
+                infer.seed_type(var, ty)
 
         infer.build_constraint()
         infer.propagate()
