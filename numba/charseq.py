@@ -4,7 +4,7 @@ import numpy as np
 from llvmlite import ir
 
 from numba import njit, types, cgutils, unicode
-from numba.extending import overload, intrinsic
+from numba.extending import overload, intrinsic, overload_method
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
@@ -19,6 +19,8 @@ assert s1_dtype.itemsize == 1
 u1_dtype = np.dtype('U1')
 unicode_byte_width = u1_dtype.itemsize
 unicode_uint = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unicode_byte_width]
+unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND, 2: unicode.PY_UNICODE_2BYTE_KIND,
+                4: unicode.PY_UNICODE_4BYTE_KIND}[unicode_byte_width]
 
 
 # this is modified version of numba.unicode.make_deref_codegen
@@ -190,3 +192,38 @@ def charseq_ne(a, b):
         def ne_impl(a, b):
             return not (a == b)
         return ne_impl
+
+
+@overload_method(types.UnicodeCharSeq, 'isascii')
+def charseq_isascii(s):
+    get_code = _get_code_impl(s)
+
+    def impl(s):
+        for i in range(len(s)):
+            if get_code(s, i) > 127:
+                return False
+        return True
+    return impl
+
+
+@overload(str)
+def charseq_str(s):
+    if isinstance(s, types.UnicodeCharSeq):
+        get_code = _get_code_impl(s)
+
+        def str_impl(s):
+            n = len(s)
+            is_ascii = s.isascii()
+            result = unicode._empty_string(unicode_kind, n, is_ascii)
+            for i in range(n):
+                code = get_code(s, i)
+                unicode._set_code_point(result, i, code)
+            return result
+        return str_impl
+
+
+@overload_method(types.UnicodeCharSeq, '__hash__')
+def unicode_charseq_hash(s):
+    def impl(s):
+        return hash(str(s))
+    return impl

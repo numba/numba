@@ -6,10 +6,7 @@ import numba.unittest_support as unittest
 from numba import jit, utils
 from numba.tests.support import TestCase
 
-if not utils.IS_PY3:
-    raise unittest.SkipTest(
-        "Operations on arrays with unicode/bytes items are implemented for"
-        " Python 3 only")
+skip_py2 = unittest.skipIf(not utils.IS_PY3, "not supported in Python 2")
 
 
 def getitem(x, i):
@@ -48,6 +45,19 @@ def notequal_getitem_value(x, i, v):
     raise ValueError('x[i] != v and v != x[i] are unequal')
 
 
+def return_isascii(x, i):
+    return x[i].isascii()
+
+
+def return_str(x, i):
+    return str(x[i])
+
+
+def return_hash(x, i):
+    return hash(x[i])
+
+
+@skip_py2
 class TestUnicodeArray(TestCase):
 
     def _test(self, pyfunc, cfunc, *args, **kwargs):
@@ -150,6 +160,26 @@ class TestUnicodeArray(TestCase):
 
     def test_notequal_getitem_value(self):
         self._test_op_getitem_value(notequal_getitem_value)
+
+    def test_return_isascii(self):
+        pyfunc = return_isascii
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array('1234'), ())
+        self._test(pyfunc, cfunc, np.array(['1234']), 0)
+        self._test(pyfunc, cfunc, np.array('1234\u00e9'), ())
+        self._test(pyfunc, cfunc, np.array(['1234\u00e9']), 0)
+
+    def test_return_str(self):
+        pyfunc = return_str
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array('1234'), ())
+        self._test(pyfunc, cfunc, np.array(['1234']), 0)
+
+    def test_hash(self):
+        pyfunc = return_str
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array('1234\u00e9'), ())
+        self._test(pyfunc, cfunc, np.array(['1234']), 0)
 
 
 if __name__ == '__main__':
