@@ -1,5 +1,4 @@
-""" Implements support for bytes and str (unicode) arrays.
-"""
+"""Implements operations on bytes and str (unicode) array items."""
 import operator
 import numpy as np
 from llvmlite import ir
@@ -10,7 +9,9 @@ from numba.extending import overload, intrinsic
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
 # UnicodeCharSeq definitions.  The corresponding data models are
-# defined in numpy/datamodel/models.py
+# defined in numpy/datamodel/models.py. Boxing/unboxing of item types
+# are defined in numpy/targets/boxing.py, see box_unicodecharseq,
+# unbox_unicodecharseq, box_charseq, unbox_charseq.
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1

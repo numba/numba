@@ -1,10 +1,16 @@
 from __future__ import print_function, unicode_literals
 
+import unittest
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import jit
+from numba import jit, utils
 from numba.tests.support import TestCase
+
+if not utils.IS_PY3:
+    raise unittest.SkipTest(
+        "Operations on arrays with unicode/bytes items are implemented for"
+        " Python 3 only")
 
 
 def getitem(x, i):

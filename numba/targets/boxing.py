@@ -203,61 +203,62 @@ def unbox_record(typ, obj, c):
         c.pyapi.release_buffer(buf)
     return NativeValue(val, cleanup=cleanup, is_error=is_error)
 
+if IS_PY3:
 
-@box(types.UnicodeCharSeq)
-def box_unicodecharseq(typ, val, c):
-    # XXX could kind be determined from strptr?
-    unicode_kind = {
-        1: c.pyapi.py_unicode_1byte_kind,
-        2: c.pyapi.py_unicode_2byte_kind,
-        4: c.pyapi.py_unicode_4byte_kind}[numpy_support.sizeof_unicode_char]
-    kind = c.context.get_constant(types.int32, unicode_kind)
-    rawptr = cgutils.alloca_once_value(c.builder, value=val)
-    strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
+    @box(types.UnicodeCharSeq)
+    def box_unicodecharseq(typ, val, c):
+        # XXX could kind be determined from strptr?
+        unicode_kind = {
+            1: c.pyapi.py_unicode_1byte_kind,
+            2: c.pyapi.py_unicode_2byte_kind,
+            4: c.pyapi.py_unicode_4byte_kind}[numpy_support.sizeof_unicode_char]
+        kind = c.context.get_constant(types.int32, unicode_kind)
+        rawptr = cgutils.alloca_once_value(c.builder, value=val)
+        strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
 
-    fullsize = c.context.get_constant(types.intp, typ.count)
-    zero = fullsize.type(0)
-    one = fullsize.type(1)
-    step = fullsize.type(numpy_support.sizeof_unicode_char)
-    count = cgutils.alloca_once_value(c.builder, zero)
-    with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
-        # Get char at idx
-        ch = c.builder.load(c.builder.gep(strptr, [c.builder.mul(idx, step)]))
-        # If the char is a non-null-byte, store the next index as count
-        with c.builder.if_then(cgutils.is_not_null(c.builder, ch)):
-            c.builder.store(c.builder.add(idx, one), count)
-    strlen = c.builder.load(count)
-    return c.pyapi.string_from_kind_and_data(kind, strptr, strlen)
+        fullsize = c.context.get_constant(types.intp, typ.count)
+        zero = fullsize.type(0)
+        one = fullsize.type(1)
+        step = fullsize.type(numpy_support.sizeof_unicode_char)
+        count = cgutils.alloca_once_value(c.builder, zero)
+        with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
+            # Get char at idx
+            ch = c.builder.load(c.builder.gep(strptr, [c.builder.mul(idx, step)]))
+            # If the char is a non-null-byte, store the next index as count
+            with c.builder.if_then(cgutils.is_not_null(c.builder, ch)):
+                c.builder.store(c.builder.add(idx, one), count)
+        strlen = c.builder.load(count)
+        return c.pyapi.string_from_kind_and_data(kind, strptr, strlen)
 
 
-@unbox(types.UnicodeCharSeq)
-def unbox_unicodecharseq(typ, obj, c):
-    lty = c.context.get_value_type(typ)
+    @unbox(types.UnicodeCharSeq)
+    def unbox_unicodecharseq(typ, obj, c):
+        lty = c.context.get_value_type(typ)
 
-    ok, buffer, size, kind, is_ascii, hashv = \
-        c.pyapi.string_as_string_size_and_kind(obj)
+        ok, buffer, size, kind, is_ascii, hashv = \
+            c.pyapi.string_as_string_size_and_kind(obj)
 
-    # If conversion is ok, copy the buffer to the output storage.
-    with cgutils.if_likely(c.builder, ok):
-        # Check if the returned string size fits in the charseq
-        storage_size = ir.Constant(size.type, typ.count)
-        size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
+        # If conversion is ok, copy the buffer to the output storage.
+        with cgutils.if_likely(c.builder, ok):
+            # Check if the returned string size fits in the charseq
+            storage_size = ir.Constant(size.type, typ.count)
+            size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
 
-        # Allow truncation of string
-        size = c.builder.select(size_fits, size, storage_size)
+            # Allow truncation of string
+            size = c.builder.select(size_fits, size, storage_size)
 
-        # Initialize output to zero bytes
-        null_string = ir.Constant(lty, None)
-        outspace  = cgutils.alloca_once_value(c.builder, null_string)
+            # Initialize output to zero bytes
+            null_string = ir.Constant(lty, None)
+            outspace  = cgutils.alloca_once_value(c.builder, null_string)
 
-        # We don't need to set the NULL-terminator because the storage
-        # is already zero-filled.
-        cgutils.memcpy(c.builder,
-                       c.builder.bitcast(outspace, buffer.type),
-                       buffer, size)
+            # We don't need to set the NULL-terminator because the storage
+            # is already zero-filled.
+            cgutils.memcpy(c.builder,
+                           c.builder.bitcast(outspace, buffer.type),
+                           buffer, size)
 
-    ret = c.builder.load(outspace)
-    return NativeValue(ret, is_error=c.builder.not_(ok))
+        ret = c.builder.load(outspace)
+        return NativeValue(ret, is_error=c.builder.not_(ok))
 
 
 @box(types.CharSeq)
