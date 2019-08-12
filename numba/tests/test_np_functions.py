@@ -34,7 +34,7 @@ def angle2(x, deg):
 
 
 def count_nonzero(arr, axis):
-    return np.count_nonzero(arr, axis)
+    return np.count_nonzero(arr, axis=axis)
 
 
 def delete(arr, obj):
