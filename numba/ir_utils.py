@@ -1985,7 +1985,10 @@ def resolve_func_from_module(func_ir, node):
     def resolve_mod(mod):
         if getattr(mod, 'op', False) == 'getattr':
             getattr_chain.insert(0, mod.attr)
-            mod = func_ir.get_definition(mod.value)
+            try:
+                mod = func_ir.get_definition(mod.value)
+            except KeyError: # multiple definitions
+                return None
             return resolve_mod(mod)
         elif isinstance(mod, (ir.Global, ir.FreeVar)):
             if isinstance(mod.value, pytypes.ModuleType):
