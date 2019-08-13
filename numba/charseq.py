@@ -4,7 +4,7 @@ import numpy as np
 from llvmlite import ir
 
 from numba import njit, types, cgutils, unicode
-from numba.extending import overload, intrinsic, overload_method
+from numba.extending import overload, intrinsic, overload_method, lower_cast
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
@@ -120,6 +120,56 @@ def _get_code_impl(a):
         return unicode_charseq_get_code
     elif isinstance(a, types.UnicodeType):
         return unicode_get_code
+
+
+@lower_cast(types.UnicodeType, types.UnicodeCharSeq)
+def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
+    uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
+    src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
+    src2 = builder.bitcast(uni_str.data, ir.IntType(16).as_pointer())
+    src4 = builder.bitcast(uni_str.data, ir.IntType(32).as_pointer())
+    kind1 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
+    kind2 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 2))
+    kind4 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 4))
+
+    # with builder.if_then(builder.icmp_unsigned(
+    #        '>', uni_str.kind,
+    #        ir.Constant(uni_str.kind.type, unicode_byte_width))):
+    #    raise RuntimeError('Expected unicode_type.kind <= unicode_byte_width')
+
+    lty = context.get_value_type(toty)
+    dstint_t = ir.IntType(8 * unicode_byte_width)
+    dst_ptr = builder.alloca(lty)
+    dst = builder.bitcast(dst_ptr, dstint_t.as_pointer())
+
+    dst_length = ir.Constant(uni_str.length.type, toty.count)
+    is_shorter_value = builder.icmp_unsigned('<', uni_str.length, dst_length)
+    count = builder.select(is_shorter_value, uni_str.length, dst_length)
+    with builder.if_then(is_shorter_value):
+        cgutils.memset(builder,
+                       dst,
+                       ir.Constant(uni_str.length.type,
+                                   toty.count * unicode_byte_width), 0)
+
+    with builder.if_then(kind1):
+        with cgutils.for_range(builder, count) as loop:
+            in_ptr = builder.gep(src1, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    with builder.if_then(kind2):
+        with cgutils.for_range(builder, count) as loop:
+            in_ptr = builder.gep(src2, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    with builder.if_then(kind4):
+        with cgutils.for_range(builder, count) as loop:
+            in_ptr = builder.gep(src4, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    return builder.load(dst_ptr)
 
 #
 #   Operators on bytes/unicode array items

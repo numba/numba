@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
+from .npytypes import UnicodeCharSeq
 from ..typeconv import Conversion
 from ..errors import TypingError, LiteralTypingError
 
@@ -499,6 +500,12 @@ class UnicodeType(IterableType):
     def iterator_type(self):
         return UnicodeIteratorType(self)
 
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeCharSeq):
+            # Assuming that unicode_type itemsize is not greater than
+            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
+            # on.
+            return Conversion.safe
 
 class UnicodeIteratorType(SimpleIteratorType):
 
