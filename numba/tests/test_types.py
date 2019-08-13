@@ -21,7 +21,7 @@ from numba.types.abstract import _typecache
 from numba import jit, numpy_support, typeof
 from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
-from .enum_usecases import *
+from .enum_usecases import Color, Shake, Shape
 
 
 Point = namedtuple('Point', ('x', 'y'))
