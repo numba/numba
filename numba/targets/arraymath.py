@@ -28,7 +28,6 @@ from .linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireLiteralValue, TypingError
-import warnings
 
 def _check_blas():
     # Checks if a BLAS is available so e.g. dot will work
@@ -2874,10 +2873,10 @@ def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
         raise errors.TypingError("The argument to np.count_nonzero must be array-like")
     
-    if (NumpyVersion(np.__version__) < '1.12.0') and (axis in (None, types.none)):
-        warnings.warn("axis is not supported on Numpy versions < '1.12.0'")
+    if (NumpyVersion(np.__version__) < '1.12.0'):
+        raise TypingError("axis is not supported on Numpy versions < 1.12.0")
 
-    if (axis in (None, types.none)) or (NumpyVersion(np.__version__) < '1.12.0'):
+    if (axis in (None, types.none)):
         def impl(arr, axis=None):
             arr2 = np.ravel(arr)
             return np.sum(arr2 != 0)
