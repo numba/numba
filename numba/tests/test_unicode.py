@@ -941,10 +941,10 @@ class TestUnicode(BaseTest):
         titles = [x.title() for x in UNICODE_EXAMPLES]
         specials = [
             'A123',
-            'A12Bcd', 
-            '1', 
-            '+abA', 
-            '12Abc', 
+            'A12Bcd',
+            '1',
+            '+abA',
+            '12Abc',
             'A12abc',
         ]
 
