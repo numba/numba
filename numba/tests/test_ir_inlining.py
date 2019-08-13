@@ -1,6 +1,6 @@
 """
 This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
-LLVM or low level inlining"
+LLVM or low level inlining.
 """
 
 from __future__ import print_function, absolute_import
@@ -8,7 +8,8 @@ from __future__ import print_function, absolute_import
 from .support import TestCase, unittest
 import numba
 from numba import njit, ir
-from numba.ir_utils import dead_code_elimination
+from numba.extending import overload
+from numba.ir_utils import dead_code_elimination, resolve_func_from_module
 from itertools import product, combinations
 
 
@@ -41,10 +42,18 @@ class InlineTestPipeline(numba.compiler.BasePipeline):
 _GLOBAL1 = -50
 
 
-class TestFunctionInlining(TestCase):
+class InliningBase(TestCase):
+
+    _DEBUG = False
+
+    inline_opt_as_bool = {'always': True, 'never': False}
 
     def check(self, test_impl, *args, inline_expect=None):
         assert inline_expect
+        for k, v in inline_expect.items():
+            assert isinstance(k, str)
+            assert isinstance(v, bool)
+
         j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
 
         # check they produce the same answer first!
@@ -53,7 +62,9 @@ class TestFunctionInlining(TestCase):
         # make sure IR doesn't have branches
         fir = j_func.overloads[j_func.signatures[0]].metadata['final_func_ir']
         fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
-        fir.dump()
+        if self._DEBUG:
+            print("FIR".center(80, "-"))
+            fir.dump()
         self.assertEqual(len(fir.blocks), 1)
         block = next(iter(fir.blocks.values()))
 
@@ -67,17 +78,14 @@ class TestFunctionInlining(TestCase):
                 if getattr(expr, 'op', False) == 'call':
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
-            self.assertFalse(found == v)
+            try:
+                self.assertFalse(found == v)
+            except:
+                breakpoint()
+                pass
 
-    # check the options
 
-    # check the cost model behaves
-
-    # check that functions inline from:
-    # * module level
-    # * another module
-    # * another module's submodule
-    # * a factory
+class TestFunctionInlining(InliningBase):
 
     def test_basic_inline_never(self):
         @njit(inline='never')
@@ -121,8 +129,9 @@ class TestFunctionInlining(TestCase):
             def baz():
                 return
 
-            inline_expect = {'foo': inline_foo, 'bar': inline_bar,
-                             'baz': inline_baz}
+            inline_expect = {'foo': self.inline_opt_as_bool[inline_foo],
+                             'bar': self.inline_opt_as_bool[inline_bar],
+                             'baz': self.inline_opt_as_bool[inline_baz]}
             self.check(impl, inline_expect=inline_expect)
 
     @unittest.skip("Need to work out how to prevent this")
@@ -149,9 +158,9 @@ class TestFunctionInlining(TestCase):
 
     def test_freevar_bindings(self):
 
-        def factory(x, y):
+        def factory(inline, x, y):
             z = x + 12
-            @njit
+            @njit(inline=inline)
             def func():
                 return (x, y + 3, z)
             return func
@@ -166,12 +175,13 @@ class TestFunctionInlining(TestCase):
 
         for inline_foo, inline_bar, inline_baz in product(opts, opts, opts):
 
-            foo = factory(10, 20)
-            bar = factory(30, 40)
-            baz = factory(50, 60)
+            foo = factory(inline_foo, 10, 20)
+            bar = factory(inline_bar, 30, 40)
+            baz = factory(inline_baz, 50, 60)
 
-            inline_expect = {'foo': inline_foo, 'bar': inline_bar,
-                             'baz': inline_baz}
+            inline_expect = {'foo': self.inline_opt_as_bool[inline_foo],
+                             'bar': self.inline_opt_as_bool[inline_bar],
+                             'baz': self.inline_opt_as_bool[inline_baz]}
             self.check(impl, inline_expect=inline_expect)
 
     def test_inline_from_another_module(self):
@@ -181,6 +191,44 @@ class TestFunctionInlining(TestCase):
         def impl():
             z = _GLOBAL1 + 2
             return bar(), z
+
+        self.check(impl, inline_expect={'bar': True})
+
+    def test_inline_from_another_module_w_getattr(self):
+
+        import numba.tests.inlining_usecases as iuc
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return iuc.bar(), z
+
+        self.check(impl, inline_expect={'bar': True})
+
+    def test_inline_from_another_module_w_2_getattr(self):
+
+        import numba.tests.inlining_usecases  # forces registration
+        import numba.tests as nt
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return nt.inlining_usecases.bar(), z
+
+        self.check(impl, inline_expect={'bar': True})
+
+    def test_inline_from_another_module_as_freevar(self):
+
+        def factory():
+            from .inlining_usecases import bar
+            @njit(inline='always')
+            def tmp():
+                return bar()
+            return tmp
+
+        baz = factory()
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return baz(), z
 
         self.check(impl, inline_expect={'bar': True})
 
@@ -226,3 +274,251 @@ class TestFunctionInlining(TestCase):
                 return y + 3, x
 
             self.check(impl, 10, inline_expect={'foo': ret == 17})
+
+
+class TestOverloadInlining(InliningBase):
+
+    def test_basic_inline_never(self):
+        def foo():
+            pass
+
+        @overload(foo, inline='never')
+        def foo_overload():
+            def foo_impl():
+                pass
+            return foo_impl
+
+        def impl():
+            return foo()
+
+        self.check(impl, inline_expect={'foo': False})
+
+    def test_basic_inline_always(self):
+
+        def foo():
+            pass
+
+        @overload(foo, inline='always')
+        def foo_overload():
+            def impl():
+                pass
+            return impl
+
+        def impl():
+            return foo()
+
+        self.check(impl, inline_expect={'foo': True})
+
+    def test_basic_inline_combos(self):
+
+        def impl():
+            x = foo()
+            y = bar()
+            z = baz()
+            return x, y, z
+
+        opts = (('always'), ('never'))
+
+        for inline_foo, inline_bar, inline_baz in product(opts, opts, opts):
+
+            def foo():
+                pass
+
+            def bar():
+                pass
+
+            def baz():
+                pass
+
+            @overload(foo, inline=inline_foo)
+            def foo_overload():
+                def impl():
+                    return
+                return impl
+
+            @overload(bar, inline=inline_bar)
+            def bar_overload():
+                def impl():
+                    return
+                return impl
+
+            @overload(baz, inline=inline_baz)
+            def baz_overload():
+                def impl():
+                    return
+                return impl
+
+            inline_expect = {'foo': self.inline_opt_as_bool[inline_foo],
+                             'bar': self.inline_opt_as_bool[inline_bar],
+                             'baz': self.inline_opt_as_bool[inline_baz]}
+            self.check(impl, inline_expect=inline_expect)
+
+    def test_freevar_bindings(self):
+
+        def impl():
+            x = foo()
+            y = bar()
+            z = baz()
+            return x, y, z
+
+        opts = (('always'), ('never'))
+
+        for inline_foo, inline_bar, inline_baz in product(opts, opts, opts):
+            # need to repeatedly clobber definitions of foo, bar, baz so
+            # @overload binds to the right instance WRT inlining
+
+            def foo():
+                x = 10
+                y = 20
+                z = x + 12
+                return (x, y + 3, z)
+
+            def bar():
+                x = 30
+                y = 40
+                z = x + 12
+                return (x, y + 3, z)
+
+            def baz():
+                x = 60
+                y = 80
+                z = x + 12
+                return (x, y + 3, z)
+
+            def factory(target, x, y, inline=None):
+                z = x + 12
+                @overload(target, inline=inline)
+                def func():
+                    def impl():
+                        return (x, y + 3, z)
+                    return impl
+
+            factory(foo, 10, 20, inline=inline_foo)
+            factory(bar, 30, 40, inline=inline_bar)
+            factory(baz, 60, 80, inline=inline_baz)
+
+            inline_expect = {'foo': self.inline_opt_as_bool[inline_foo],
+                             'bar': self.inline_opt_as_bool[inline_bar],
+                             'baz': self.inline_opt_as_bool[inline_baz]}
+
+            self.check(impl, inline_expect=inline_expect)
+
+    def test_inline_from_another_module(self):
+
+        from .inlining_usecases import baz
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return baz(), z
+
+        self.check(impl, inline_expect={'baz': True})
+
+    def test_inline_from_another_module_w_getattr(self):
+
+        import numba.tests.inlining_usecases as iuc
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return iuc.baz(), z
+
+        self.check(impl, inline_expect={'baz': True})
+
+    def test_inline_from_another_module_w_2_getattr(self):
+
+        import numba.tests.inlining_usecases  # forces registration
+        import numba.tests as nt
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return nt.inlining_usecases.baz(), z
+
+        self.check(impl, inline_expect={'baz': True})
+
+    def test_inline_from_another_module_as_freevar(self):
+
+        def factory():
+            from .inlining_usecases import baz
+            @njit(inline='always')
+            def tmp():
+                return baz()
+            return tmp
+
+        bop = factory()
+
+        def impl():
+            z = _GLOBAL1 + 2
+            return bop(), z
+
+        self.check(impl, inline_expect={'baz': True})
+
+    def test_inline_w_freevar_from_another_module(self):
+
+        from .inlining_usecases import bop_factory
+
+        def gen(a, b):
+            bar = bop_factory(a)
+
+            def impl():
+                z = _GLOBAL1 + a * b
+                return bar(), z, a
+            return impl
+
+        impl = gen(10, 20)
+        self.check(impl, inline_expect={'bar': True})
+
+    def test_inlining_models(self):
+
+        def sentinel_17_cost_model(func_ir):
+            # sentinel 17 cost model, this is a fake cost model that will return
+            # True (i.e. inline) if the ir.FreeVar(17) is found in the func_ir,
+            for blk in func_ir.blocks.values():
+                for stmt in blk.body:
+                    if isinstance(stmt, ir.Assign):
+                        if isinstance(stmt.value, ir.FreeVar):
+                            if stmt.value.value == 17:
+                                return True
+            return False
+
+        def s17_caller_model(caller_info, callee_info):
+            return sentinel_17_cost_model(caller_info.func_ir)
+
+        def s17_callee_model(caller_info, callee_info):
+            return sentinel_17_cost_model(callee_info.func_ir)
+
+        # caller has sentinel
+        for caller, callee in ((10, 11), (17, 11)):
+
+            def foo():
+                return callee
+
+            @overload(foo, inline=s17_caller_model)
+            def foo_ol():
+                def impl():
+                    return callee
+                return impl
+
+            def impl(z):
+                x = z + caller
+                y = foo()
+                return y + 3, x
+
+            self.check(impl, 10, inline_expect={'foo': caller == 17})
+
+        # callee has sentinel
+        for caller, callee in ((11, 17), (11, 10)):
+
+            def foo():
+                return callee
+
+            @overload(foo, inline=s17_callee_model)
+            def foo_ol():
+                def impl():
+                    return callee
+                return impl
+
+            def impl(z):
+                x = z + caller
+                y = foo()
+                return y + 3, x
+
+            self.check(impl, 10, inline_expect={'foo': callee == 17})

@@ -1980,6 +1980,31 @@ def _check_inline_options(inline_arg):
         raise ValueError(msg)
 
 
+def resolve_func_from_module(func_ir, node):
+    getattr_chain = []
+    def resolve_mod(mod):
+        if getattr(mod, 'op', False) == 'getattr':
+            getattr_chain.insert(0, mod.attr)
+            mod = func_ir.get_definition(mod.value)
+            return resolve_mod(mod)
+        elif isinstance(mod, (ir.Global, ir.FreeVar)):
+            if isinstance(mod.value, pytypes.ModuleType):
+                return mod
+        return None
+
+    mod = resolve_mod(node)
+    if mod is not None:
+        defn = mod.value
+        for x in getattr_chain:
+            defn = getattr(defn, x, False)
+            if not defn:
+                break
+        else:
+            return defn
+    else:
+        return None
+
+
 class InlineInlinables(object):
 
     _DEBUG = False
@@ -2031,33 +2056,8 @@ class InlineInlinables(object):
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
 
-        def resolve_func_from_module(node):
-            getattr_chain = []
-            def resolve_mod(mod):
-                if getattr(mod, 'op', False) == 'getattr':
-                    getattr_chain.insert(0, mod.attr)
-                    mod = self.func_ir.get_definition(mod.value)
-                    return resolve_mod(mod)
-                elif isinstance(mod, ir.Global):
-                    if isinstance(mod.value, pytypes.ModuleType):
-                        return mod
-                return None
-
-            mod = resolve_mod(node)
-            if mod is not None:
-                defn = mod.value
-                for x in getattr_chain:
-                    defn = getattr(defn, x, False)
-                    if not defn:
-                        break
-                else:
-                    return defn
-            else:
-                return None
-
-
         if getattr(to_inline, 'op', False) == 'getattr':
-            val = resolve_func_from_module(to_inline)
+            val = resolve_func_from_module(self.func_ir, to_inline)
         else:
             try:
                 val = getattr(to_inline, 'value', False)
@@ -2066,7 +2066,10 @@ class InlineInlinables(object):
                     val = getattr(to_inline, 'func', False)
                     val = getattr(val, 'value', False)
                 except  KeyError:
-                    raise GuardException
+                    try: # FreeVar
+                        val = to_inline.value
+                    except Exception:
+                        raise GuardException
 
         if val:
             topt = getattr(val, 'targetoptions', False)
@@ -2163,7 +2166,7 @@ class InlineOverloads(object):
             inline_type = getattr(template, '_inline', 'never')
             if inline_type != 'never':
                 try:
-                    impl = template._overload_func(sig)
+                    impl = template._overload_func(*sig.args)
                     break
                 except Exception:
                     continue
