@@ -18,6 +18,7 @@ from numba import unittest_support as unittest
 from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
+from numba.typing.templates import make_overload_template
 from numba import jit, numpy_support, typeof
 from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
@@ -217,6 +218,22 @@ class TestTypes(TestCase):
             self.assertTrue(isinstance(l_int, types.List))
             self.assertTrue(isinstance(l_int[0], type(listty)))
 
+    def test_function_incompatible_templates(self):
+        # issue 4345
+        def func_stub():
+            pass
+
+        def func_stub2():
+            pass
+
+        def ol():
+            pass
+
+        template1 = make_overload_template(func_stub, ol, {}, True)
+        template2 = make_overload_template(func_stub2, ol, {}, True)
+
+        with self.assertRaises(ValueError):
+            types.Function((template1, template2))
 
 class TestNumbers(TestCase):
     """
