@@ -117,7 +117,7 @@ optimizations. This can be done by supplying a set of `LLVM fast-math flags
 Parallel=True
 -------------
 If code contains operations that are parallelisable (:ref:`and supported
-<numba-parallel-supported>`) Numba can compile a version which will run in
+<numba-parallel-supported>`) Numba can compile a version that will run in
 parallel on multiple native threads (no GIL!). This parallelisation is performed
 automatically and is enabled by simply adding the ``parallel`` keyword
 argument::
