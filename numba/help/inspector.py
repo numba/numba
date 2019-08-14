@@ -8,24 +8,53 @@ module or a Python package.
 
 from __future__ import print_function
 
-import sys
-from functools import partial
+import argparse
 import pkgutil
 import types as pytypes
-import textwrap
 from collections import defaultdict
 import html
 
+
+from numba._version import get_versions
 from numba.targets.registry import cpu_target
 from numba.tests.support import captured_stdout
 
 
-def inspect_module(module, target=None):
+commit = get_versions()['full'].split('.')[0]
+github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'
+
+
+def inspect_function(function, target=None):
     target = target or cpu_target
     tyct = target.typing_context
     # Make sure we have loaded all extensions
     tyct.refresh()
     target.target_context.refresh()
+
+    info = {}
+    # Try getting the function type
+    source_infos = {}
+    try:
+        nbty = tyct.resolve_value_type(function)
+    except ValueError:
+        nbty = None
+        explained = 'not supported'
+    else:
+        # Make a longer explanation of the type
+        explained = tyct.explain_function_type(nbty)
+        for temp in nbty.templates:
+            try:
+                source_infos[temp] = temp.get_source_info()
+            except AttributeError:
+                source_infos[temp] = None
+
+    info['numba_type'] = nbty
+    info['explained'] = explained
+    info['source_infos'] = source_infos
+    return info
+
+
+def inspect_module(module, target=None):
     # Walk the module
     for name in dir(module):
         if name.startswith('_'):
@@ -35,25 +64,7 @@ def inspect_module(module, target=None):
         info = dict(module=module, name=name, obj=obj)
         supported_types = (pytypes.FunctionType, pytypes.BuiltinFunctionType)
         if isinstance(obj, supported_types):
-            # Try getting the function type
-            source_infos = {}
-            try:
-                nbty = tyct.resolve_value_type(obj)
-            except ValueError:
-                nbty = None
-                explained = 'not supported'
-            else:
-                # Make a longer explanation of the type
-                explained = tyct.explain_function_type(nbty)
-                for temp in nbty.templates:
-                    try:
-                        source_infos[temp] = temp.get_source_info()
-                    except AttributeError:
-                        source_infos[temp] = None
-
-            info['numba_type'] = nbty
-            info['explained'] = explained
-            info['source_infos'] = source_infos
+            info.update(inspect_function(obj, target=target))
             yield info
 
 
@@ -73,6 +84,8 @@ class _Stat(object):
         return ratio
 
     def describe(self):
+        if self.total == 0:
+            return "empty"
         return "supported = {supported} / {total} = {ratio:.2f}%".format(
             supported=self.supported,
             total=self.total,
@@ -96,7 +109,7 @@ def list_modules_in_package(package):
         onerror=onerror_ignore,
     )
     for pkginfo in package_walker:
-        modname = pkginfo.name
+        modname = pkginfo[1]
 
         # Suppress private module '_'?
         if any(x.startswith('_') for x in modname.split('.')):
@@ -127,70 +140,164 @@ def list_modules_in_package(package):
         yield mod
 
 
-def print_module_info(mod_sequence, target=None, print=print):
-    stats = defaultdict(_Stat)
-    for mod in mod_sequence:
-        modname = mod.__name__
-        print(modname.center(80, '='))
-        for info in inspect_module(mod, target=target):
-            print('-', info['module'].__name__, info['obj'].__name__)
-            nbtype = info['numba_type']
-            indent = '    '
-            if nbtype is not None:
-                print('{}{}'.format(indent, nbtype))
-                stats[modname].supported += 1
+class Formatter(object):
+    def __init__(self, fileobj):
+        self._fileobj = fileobj
+
+    def print(self, *args, **kwargs):
+        print(*args, **kwargs, file=self._fileobj)
+
+
+class HTMLFormatter(Formatter):
+
+    def escape(self, text):
+        return html.escape(text)
+
+    def title(self, text):
+        self.print('<h1>', text, '</h2>')
+
+    def begin_module_section(self, modname):
+        self.print('<h2>', modname, '</h2>')
+        self.print('<ul>')
+
+    def end_module_section(self):
+        self.print('</ul>')
+
+    def write_supported_item(self, modname, itemname, typename, explained, sources):
+        self.print('<li>')
+        self.print('{}.<b>{}</b>'.format(
+            modname,
+            itemname,
+        ))
+        self.print(': <b>{}</b>'.format(typename))
+        self.print('<div><pre>', explained, '</pre></div>')
+
+        self.print("<ul>")
+        for tcls, source in sources.items():
+            if source:
+                self.print("<li>")
+                impl = source['name']
+                filename = source['filename']
+                lines = source['lines']
+                self.print(
+                    "<p>defined by <b>{}</b> at {}:{}-{}</p>".format(
+                        self.escape(impl), self.escape(filename), *lines,
+                    ),
+                )
+                self.print('<p>{}</p>'.format(
+                    self.escape(source['docstring'] or '')
+                ))
             else:
-                stats[modname].unsupported += 1
-            explained = info['explained']
-            print(textwrap.indent(explained, prefix=indent))
-    print('=' * 80)
-    print('Stats:')
-    for k, v in stats.items():
-        print(' - {} : {}'.format(k, v.describe()))
+                self.print("<li>{}".format(self.escape(str(tcls))))
+            self.print("</li>")
+        self.print("</ul>")
+        self.print('</li>')
+
+    def write_unsupported_item(self, modname, itemname):
+        self.print('<li>')
+        self.print('{}.<b>{}</b>: UNSUPPORTED'.format(
+            modname,
+            itemname,
+        ))
+        self.print('</li>')
+
+    def write_statistic(self, stats):
+        self.print('<p>{}</p>'.format(stats.describe()))
 
 
-def print_module_info_html(mod_sequence, target=None, print=print):
-    print('<h1>', 'Numba Support Inspector', '</h1>')
-    stats = defaultdict(_Stat)
-    quote = html.escape
+class ReSTFormatter(Formatter):
+
+    def escape(self, text):
+        return text
+
+    def title(self, text):
+        self.print(text)
+        self.print('=' * len(text))
+        self.print()
+
+    def begin_module_section(self, modname):
+        self.print(modname)
+        self.print('-' * len(modname))
+        self.print()
+
+    def end_module_section(self):
+        self.print()
+
+    def write_supported_item(self, modname, itemname, typename, explained, sources):
+        self.print('.. function:: {}.{}'.format(modname, itemname))
+        self.print()
+        # if explained:
+        #     self.print('   .. code-block:: text')
+        #     self.print()
+        #     self.print('      {}'.format('\n      '.join(explained.splitlines())))
+        #     self.print()
+        for tcls, source in sources.items():
+            if source:
+                impl = source['name']
+                filename = source['filename']
+                lines = source['lines']
+                source_link = github_url.format(
+                    commit=commit,
+                    path=filename,
+                    firstline=lines[0],
+                    lastline=lines[1],
+                )
+                self.print(
+                    "   - defined by ``{}`` at `{}:{}-{} <{}>`_".format(
+                        impl, filename, lines[0], lines[1], source_link,
+                    ),
+                )
+
+            else:
+                self.print("   - defined by ``{}``".format(str(tcls)))
+        self.print()
+
+    def write_unsupported_item(self, modname, itemname):
+        pass
+        # self.print('.. function:: {}.{}'.format(modname, itemname))
+        # self.print()
+        # self.print('   unsupported')
+        # self.print()
+
+    def write_statistic(self, stat):
+        if stat.supported == 0:
+            self.print("this module is not supported")
+        else:
+            msg = "Not showing {} unsupported functions."
+            self.print(msg.format(stat.unsupported))
+            self.print()
+            self.print(stat.describe())
+        self.print()
+
+
+def print_module_info(formatter, mod_sequence, target=None):
+    formatter.title('Numba Support Inspector')
     for mod in mod_sequence:
+        stat = _Stat()
         modname = mod.__name__
-        print('<h2>', quote(modname), '</h2>')
-        print('<ul>')
+        formatter.begin_module_section(formatter.escape(modname))
         for info in inspect_module(mod, target=target):
-            print('<li>')
-            print('{}.<b>{}</b>'.format(
-                quote(info['module'].__name__),
-                quote(info['obj'].__name__),
-            ))
             nbtype = info['numba_type']
             if nbtype is not None:
-                print(' : <b>{}</b>'.format(quote(str(nbtype))))
-                stats[modname].supported += 1
+                stat.supported += 1
+                formatter.write_supported_item(
+                    modname=formatter.escape(info['module'].__name__),
+                    itemname=formatter.escape(info['obj'].__name__),
+                    typename=formatter.escape(str(nbtype)),
+                    explained=formatter.escape(info['explained']),
+                    sources=info['source_infos'],
+                )
+
             else:
-                stats[modname].unsupported += 1
-            explained = info['explained']
-            print('<div><pre>', quote(explained), '</pre></div>')
-            for tempcls, source in info['source_infos'].items():
-                if source:
-                    impl = source['name']
-                    filename = source['filename']
-                    lines = source['lines']
-                    print(
-                        "<p>defined by <b>{}</b> at {}:{}-{}</p>".format(
-                            impl, filename, *lines,
-                        ),
-                    )
-                    print('<p>{}</p>'.format(source['docstring']) or '')
+                stat.unsupported += 1
+                formatter.write_unsupported_item(
+                    modname=formatter.escape(info['module'].__name__),
+                    itemname=formatter.escape(info['obj'].__name__),
+                )
 
-            print('</li>')
-        print('</ul>')
+        formatter.write_statistic(stat)
+        formatter.end_module_section()
 
-    print('<h2>', 'Stats', '</h2>')
-    print('<ul>')
-    for k, v in stats.items():
-        print('<li>{} : {}</li>'.format(quote(k), quote(v.describe())))
-    print('</ul>')
 
 
 def print_help(programname):
@@ -204,21 +311,43 @@ Usage:
     """.format(programname=programname))
 
 
+program_description = """
+Inspect Numba support for a given top-level package.
+""".strip()
+
+
 def main():
-    try:
-        [_, package_name] = sys.argv
-    except ValueError:
-        print_help(sys.argv[0])
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description=program_description)
+    parser.add_argument(
+        'package', metavar='package', type=str,
+        help='Package to inspect',
+    )
+    parser.add_argument(
+        '--format', dest='format', default='html',
+        help='Output format; i.e. "html", "rst"',
+    )
+
+    args = parser.parse_args()
+    package_name = args.package
+    output_format = args.format
+    package = __import__(package_name)
+    if hasattr(package, '__path__'):
+        mods = list_modules_in_package(package)
     else:
-        package = __import__(package_name)
-        if hasattr(package, '__path__'):
-            mods = list_modules_in_package(package)
-        else:
-            mods = [package]
+        mods = [package]
+
+    if output_format == 'html':
         filename = '{}.numba_support.html'.format(package_name)
         with open(filename, 'w') as fout:
-            print_module_info_html(mods, print=partial(print, file=fout))
+            fmtr = HTMLFormatter(fileobj=fout)
+            print_module_info(fmtr, mods)
+    elif output_format == 'rst':
+        filename = 'docs/source/developer/autogen_{}_listing.rst'.format(package_name)
+        with open(filename, 'w') as fout:
+            fmtr = ReSTFormatter(fileobj=fout)
+            print_module_info(fmtr, mods)
+    else:
+        raise ValueError("{} is not supported".format(output_format))
 
 
 if __name__ == '__main__':
