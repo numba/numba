@@ -5,6 +5,7 @@
 from __future__ import print_function, absolute_import
 
 import numpy
+import math
 
 import types as pytypes
 import collections
@@ -612,7 +613,10 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
-            call_list == [numba.array_analysis.wrap_index]):
+            call_list == [numba.array_analysis.wrap_index] or
+            call_list == ['ceil', math] or
+            call_list == [max] or
+            call_list == [int]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -652,7 +656,10 @@ def is_pure(rhs, lives, call_table):
             call_list = call_table[func_name]
             if (call_list == [slice] or
                 call_list == ['log', numpy] or
-                call_list == ['empty', numpy]):
+                call_list == ['empty', numpy] or
+                call_list == ['ceil', math] or
+                call_list == [max] or
+                call_list == [int]):
                 return True
             for f in is_pure_extensions:
                 if f(rhs, lives, call_list):
