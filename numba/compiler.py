@@ -17,7 +17,9 @@ from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
-                            InlineInlinables, InlineOverloads)
+                            check_and_legalize_ir, InlineInlinables,
+                            InlineOverloads)
+
 from numba.compiler_lock import global_compiler_lock
 from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
@@ -796,6 +798,8 @@ class BasePipeline(object):
     def stage_ir_legalization(self):
         raise_on_unsupported_feature(self.func_ir, self.typemap)
         warn_deprecated(self.func_ir, self.typemap)
+        # NOTE: this function call must go last, it checks and fixes invalid IR!
+        check_and_legalize_ir(self.func_ir)
 
     def stage_cleanup(self):
         """
