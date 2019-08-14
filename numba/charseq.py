@@ -122,6 +122,33 @@ def _get_code_impl(a):
         return unicode_get_code
 
 
+@lower_cast(types.Bytes, types.CharSeq)
+def bytes_to_charseq(context, builder, fromty, toty, val):
+    barr = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
+    src = builder.bitcast(barr.data, ir.IntType(8).as_pointer())
+    src_length = barr.nitems
+
+    lty = context.get_value_type(toty)
+    dstint_t = ir.IntType(8)
+    dst_ptr = builder.alloca(lty)
+    dst = builder.bitcast(dst_ptr, dstint_t.as_pointer())
+
+    dst_length = ir.Constant(src_length.type, toty.count)
+    is_shorter_value = builder.icmp_unsigned('<', src_length, dst_length)
+    count = builder.select(is_shorter_value, src_length, dst_length)
+    with builder.if_then(is_shorter_value):
+        cgutils.memset(builder,
+                       dst,
+                       ir.Constant(src_length.type,
+                                   toty.count), 0)
+    with cgutils.for_range(builder, count) as loop:
+        in_ptr = builder.gep(src, [loop.index])
+        in_val = builder.zext(builder.load(in_ptr), dstint_t)
+        builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    return builder.load(dst_ptr)
+
+
 @lower_cast(types.UnicodeType, types.UnicodeCharSeq)
 def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
@@ -131,6 +158,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     kind1 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
     kind2 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 2))
     kind4 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 4))
+    src_length = uni_str.length
 
     # with builder.if_then(builder.icmp_unsigned(
     #        '>', uni_str.kind,
@@ -142,13 +170,13 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     dst_ptr = builder.alloca(lty)
     dst = builder.bitcast(dst_ptr, dstint_t.as_pointer())
 
-    dst_length = ir.Constant(uni_str.length.type, toty.count)
-    is_shorter_value = builder.icmp_unsigned('<', uni_str.length, dst_length)
-    count = builder.select(is_shorter_value, uni_str.length, dst_length)
+    dst_length = ir.Constant(src_length.type, toty.count)
+    is_shorter_value = builder.icmp_unsigned('<', src_length, dst_length)
+    count = builder.select(is_shorter_value, src_length, dst_length)
     with builder.if_then(is_shorter_value):
         cgutils.memset(builder,
                        dst,
-                       ir.Constant(uni_str.length.type,
+                       ir.Constant(src_length.type,
                                    toty.count * unicode_byte_width), 0)
 
     with builder.if_then(kind1):

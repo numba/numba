@@ -140,10 +140,18 @@ class TestUnicodeArray(TestCase):
     def test_setitem2(self):
         pyfunc = setitem2
         cfunc = jit(nopython=True)(pyfunc)
+
         x1 = np.array(['123', 'ABC'])
         x2 = np.array(['123', 'ABC'])
         y1 = pyfunc(x1, 0, x1, 1)
-        y2 = cfunc(x2, 0, x1, 1)
+        y2 = cfunc(x2, 0, x2, 1)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
+        x1 = np.array([b'123', b'ABC'])
+        x2 = np.array([b'123', b'ABC'])
+        y1 = pyfunc(x1, 0, x1, 1)
+        y2 = cfunc(x2, 0, x2, 1)
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
@@ -152,7 +160,7 @@ class TestUnicodeArray(TestCase):
         z1 = np.array('ABC')
         z2 = np.array('ABC')
         y1 = pyfunc(x1, (), z1, ())
-        y2 = cfunc(x2, (), z1, ())
+        y2 = cfunc(x2, (), z2, ())
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
@@ -165,13 +173,23 @@ class TestUnicodeArray(TestCase):
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
+        # bytes
+        x1 = np.array(b'123')
+        x2 = np.array(b'123')
+        z1 = b'ABC',
+        z2 = b'ABC',
+        y1 = pyfunc(x1, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
         # UTF-8
         x1 = np.array('123')
         x2 = np.array('123')
         z1 = 'ABC',
         z2 = 'ABC',
         y1 = pyfunc(x1, (), z1, 0)
-        y2 = cfunc(x2, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
@@ -195,23 +213,43 @@ class TestUnicodeArray(TestCase):
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
-        # assign longer value
+        # UTF-8, assign longer value (truncates as in numpy)
         x1 = np.array('123')
         x2 = np.array('123')
         z1 = 'ABCD',
         z2 = 'ABCD',
         y1 = pyfunc(x1, (), z1, 0)
-        y2 = cfunc(x2, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
-        # assign shorter value
+        # UTF-8, assign shorter value
         x1 = np.array('123')
         x2 = np.array('123')
         z1 = 'AB',
         z2 = 'AB',
         y1 = pyfunc(x1, (), z1, 0)
-        y2 = cfunc(x2, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
+        # bytes, assign longer value (truncates as in numpy)
+        x1 = np.array(b'123')
+        x2 = np.array(b'123')
+        z1 = b'ABCD',
+        z2 = b'ABCD',
+        y1 = pyfunc(x1, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
+        # bytes, assign shorter value
+        x1 = np.array(b'123')
+        x2 = np.array(b'123')
+        z1 = b'AB',
+        z2 = b'AB',
+        y1 = pyfunc(x1, (), z1, 0)
+        y2 = cfunc(x2, (), z2, 0)
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
