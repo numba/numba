@@ -58,7 +58,20 @@ if [[ "$archstr" == 'ppc64le' ]]; then
 fi
 
 # First check that the test discovery works
-python -m numba.tests.test_runtests
+
+
+# IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT
+# IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT
+
+# REEANBLE Test discovery check
+
+export NUMBA_SHOW_HINTS=1
+
+# IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT
+# IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT:IMPORTANT
+
+
+# python -m numba.tests.test_runtests
 # Now run the Numba test suite
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
