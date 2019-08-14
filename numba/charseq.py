@@ -160,11 +160,6 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     kind4 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 4))
     src_length = uni_str.length
 
-    # with builder.if_then(builder.icmp_unsigned(
-    #        '>', uni_str.kind,
-    #        ir.Constant(uni_str.kind.type, unicode_byte_width))):
-    #    raise RuntimeError('Expected unicode_type.kind <= unicode_byte_width')
-
     lty = context.get_value_type(toty)
     dstint_t = ir.IntType(8 * unicode_byte_width)
     dst_ptr = builder.alloca(lty)
@@ -186,16 +181,28 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
             builder.store(in_val, builder.gep(dst, [loop.index]))
 
     with builder.if_then(kind2):
-        with cgutils.for_range(builder, count) as loop:
-            in_ptr = builder.gep(src2, [loop.index])
-            in_val = builder.zext(builder.load(in_ptr), dstint_t)
-            builder.store(in_val, builder.gep(dst, [loop.index]))
+        if unicode_byte_width >= 2:
+            with cgutils.for_range(builder, count) as loop:
+                in_ptr = builder.gep(src2, [loop.index])
+                in_val = builder.zext(builder.load(in_ptr), dstint_t)
+                builder.store(in_val, builder.gep(dst, [loop.index]))
+        else:
+            context.call_conv.return_user_exc(
+                builder, RuntimeError,
+                ("cannot cast 16-bit unicode_type to %s-bit %s"
+                 % (unicode_byte_width * 8, toty)))
 
     with builder.if_then(kind4):
-        with cgutils.for_range(builder, count) as loop:
-            in_ptr = builder.gep(src4, [loop.index])
-            in_val = builder.zext(builder.load(in_ptr), dstint_t)
-            builder.store(in_val, builder.gep(dst, [loop.index]))
+        if unicode_byte_width >= 4:
+            with cgutils.for_range(builder, count) as loop:
+                in_ptr = builder.gep(src4, [loop.index])
+                in_val = builder.zext(builder.load(in_ptr), dstint_t)
+                builder.store(in_val, builder.gep(dst, [loop.index]))
+        else:
+            context.call_conv.return_user_exc(
+                builder, RuntimeError,
+                ("cannot cast 32-bit unicode_type to %s-bit %s"
+                 % (unicode_byte_width * 8, toty)))
 
     return builder.load(dst_ptr)
 
