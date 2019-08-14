@@ -293,6 +293,7 @@ If more help is needed please feel free to speak to the Numba core developers
 directly at: https://gitter.im/numba/numba
 
 Thanks in advance for your help in improving Numba!
+
 """
 
 unsupported_error_info = """
@@ -300,6 +301,7 @@ Unsupported functionality was found in the code Numba was trying to compile.
 
 If this functionality is important to you please file a feature request at:
 https://github.com/numba/numba/issues/new
+
 """
 
 interpreter_error_info = """
@@ -315,6 +317,7 @@ To see Python/NumPy features supported by the latest release of Numba visit:
 http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
 http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+
 """
 
 constant_inference_info = """
@@ -346,6 +349,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-
 If you think your code should work with Numba, please report the error message
 and traceback, along with a minimal reproducer at:
 https://github.com/numba/numba/issues/new
+
 """
 
 reportable_issue_info = """
@@ -353,6 +357,7 @@ reportable_issue_info = """
 This should not have happened, a problem has occurred in Numba's internals.
 You are currently using Numba version %s.
 %s
+
 """ % (numba.__version__, feedback_details)
 
 error_extras = dict()

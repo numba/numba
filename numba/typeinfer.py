@@ -1504,8 +1504,23 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
                 nm = gvar.name
-                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
-                msg += " %s" # interps the actual error
+                if config.DEVELOPER_MODE:
+                    msg = _termcolor.errmsg("Untyped global name '%s': " % nm)
+                else:
+                    msg = ""
+                msg += "%s" # interps the actual error
+
+                import numpy as np
+                if getattr(np, nm, False) == gvar.value:
+                    tmp = ("\n'%s' looks like a NumPy function. If so, the function is unsupported.\n" %
+                           (nm,))
+                    msg += _termcolor.errmsg(tmp)
+
+                if nm in ('np', 'numpy'):
+                    # maybe forgot to import NumPy?
+                    tmp = ("\n'%s' looks like it might be referring to NumPy, is NumPy imported?\n" %
+                           (nm,))
+                    msg += _termcolor.errmsg(tmp)
 
                 # if the untyped global is a numba internal function then add
                 # to the error message asking if it's been imported.
@@ -1515,6 +1530,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                            "it been imported (i.e. 'from numba import %s')?\n" %
                            (nm, nm))
                     msg += _termcolor.errmsg(tmp)
+
                 e.patch_message(msg % e)
                 raise
 

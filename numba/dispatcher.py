@@ -336,7 +336,13 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             """
             if config.SHOW_HELP:
                 help_msg = errors.error_extras[issue_type]
-                e.patch_message(''.join(e.args) + help_msg)
+            else:
+                help_msg = """
+
+Set the environment variable NUMBA_SHOW_HELP=1 for help.
+
+"""
+            e.patch_message(help_msg + ''.join(e.args))
             if config.FULL_TRACEBACKS:
                 raise e
             else:
@@ -387,7 +393,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             # or isn't supported as a constant
             error_rewrite(e, 'constant_inference')
         except Exception as e:
-            if config.SHOW_HELP:
+            if not config.DEVELOPER_MODE:
                 if hasattr(e, 'patch_message'):
                     help_msg = errors.error_extras['reportable']
                     e.patch_message(''.join(e.args) + help_msg)
