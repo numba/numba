@@ -5,8 +5,11 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import inspect
+import os.path
 from types import MethodType, FunctionType
 
+import numba
 from .. import types, utils
 from ..errors import TypingError, InternalError
 
@@ -509,6 +512,24 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         signature on the target context.
         """
         return self._compiled_overloads[sig.args]
+
+    @classmethod
+    def get_source_info(cls):
+        """Return a dictionary with information about the source code  of the
+        implementation.
+        """
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = cls._overload_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
 
 
 def make_overload_template(func, overload_func, jit_options, strict):

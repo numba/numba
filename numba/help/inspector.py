@@ -36,6 +36,7 @@ def inspect_module(module, target=None):
         supported_types = (pytypes.FunctionType, pytypes.BuiltinFunctionType)
         if isinstance(obj, supported_types):
             # Try getting the function type
+            source_infos = {}
             try:
                 nbty = tyct.resolve_value_type(obj)
             except ValueError:
@@ -44,9 +45,15 @@ def inspect_module(module, target=None):
             else:
                 # Make a longer explanation of the type
                 explained = tyct.explain_function_type(nbty)
+                for temp in nbty.templates:
+                    try:
+                        source_infos[temp] = temp.get_source_info()
+                    except AttributeError:
+                        source_infos[temp] = None
 
             info['numba_type'] = nbty
             info['explained'] = explained
+            info['source_infos'] = source_infos
             yield info
 
 
@@ -164,6 +171,18 @@ def print_module_info_html(mod_sequence, target=None, print=print):
                 stats[modname].unsupported += 1
             explained = info['explained']
             print('<div><pre>', quote(explained), '</pre></div>')
+            for tempcls, source in info['source_infos'].items():
+                if source:
+                    impl = source['name']
+                    filename = source['filename']
+                    lines = source['lines']
+                    print(
+                        "<p>defined by <b>{}</b> at {}:{}-{}</p>".format(
+                            impl, filename, *lines,
+                        ),
+                    )
+                    print('<p>{}</p>'.format(source['docstring']) or '')
+
             print('</li>')
         print('</ul>')
 
