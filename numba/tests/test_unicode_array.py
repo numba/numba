@@ -3,7 +3,8 @@ from __future__ import print_function, unicode_literals
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import jit, utils
+from numba import jit, utils, from_dtype, types
+from numba.typed import Dict
 from numba.tests.support import TestCase
 
 skip_py2 = unittest.skipIf(not utils.IS_PY3, "not supported in Python 2")
@@ -26,6 +27,10 @@ def setitem(x, i, v):
 def setitem2(x, i, y, j):
     x[i] = y[j]
     return x
+
+
+def getitem_key(x, y, j):
+    x[y[j]] = 123
 
 
 def return_len(x, i):
@@ -115,6 +120,24 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(['12', '3']), 0)
         self._test(pyfunc, cfunc, np.array(['12', '3']), 1)
 
+    def test_getitem_key(self):
+        pyfunc = getitem_key
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for x, i in [
+                (np.array('123'), ()),
+                (np.array(['123']), 0),
+                (np.array(b'123'), ()),
+                (np.array([b'123']), 0)
+        ]:
+            d1 = {}
+            d2 = Dict.empty(from_dtype(x.dtype), types.int64)
+            pyfunc(d1, x, i)
+            cfunc(d2, x, i)
+            self.assertEqual(d1, d2)
+            # check for charseq to str conversion:
+            str(d2)
+
     def test_setitem(self):
         pyfunc = setitem
         cfunc = jit(nopython=True)(pyfunc)
@@ -122,13 +145,12 @@ class TestUnicodeArray(TestCase):
         x = np.array(12)
         self._test(pyfunc, cfunc, x, (), 34)
 
-        if 0:
-            x1 = np.array(b'123')
-            x2 = np.array(b'123')
-            y1 = pyfunc(x1, (), b'34')
-            y2 = cfunc(x2, (), b'34')
-            self.assertPreciseEqual(x1, x2)
-            self.assertPreciseEqual(y1, y2)
+        x1 = np.array(b'123')
+        x2 = np.array(b'123')
+        y1 = pyfunc(x1, (), b'34')
+        y2 = cfunc(x2, (), b'34')
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
 
         x1 = np.array(['123'])
         x2 = np.array(['123'])
@@ -326,10 +348,22 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(['1234']), 0)
 
     def test_hash(self):
-        pyfunc = return_str
+        pyfunc = return_hash
         cfunc = jit(nopython=True)(pyfunc)
-        self._test(pyfunc, cfunc, np.array('1234\u00e9'), ())
+
+        assert pyfunc(np.array('123'), ()) == hash('123') == hash(np.array('123')[()])
+
+        self._test(pyfunc, cfunc, np.array('1234'), ())
         self._test(pyfunc, cfunc, np.array(['1234']), 0)
+
+        self._test(pyfunc, cfunc, np.array('1234\u00e9'), ())
+        self._test(pyfunc, cfunc, np.array(['1234u00e9']), 0)
+
+        self._test(pyfunc, cfunc, np.array('1234\U00108a0e'), ())
+        self._test(pyfunc, cfunc, np.array(['1234\U00108a0e']), 0)
+
+        self._test(pyfunc, cfunc, np.array(b'1234'), ())
+        self._test(pyfunc, cfunc, np.array([b'1234']), 0)
 
 
 if __name__ == '__main__':

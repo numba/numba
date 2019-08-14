@@ -273,6 +273,7 @@ def charseq_ne(a, b):
 
 
 @overload_method(types.UnicodeCharSeq, 'isascii')
+@overload_method(types.CharSeq, 'isascii')
 def charseq_isascii(s):
     get_code = _get_code_impl(s)
 
@@ -284,6 +285,25 @@ def charseq_isascii(s):
     return impl
 
 
+@overload_method(types.UnicodeCharSeq, '_get_kind')
+@overload_method(types.CharSeq, '_get_kind')
+def charseq_get_kind(s):
+    get_code = _get_code_impl(s)
+
+    def impl(s):
+        max_code = 0
+        for i in range(len(s)):
+            code = get_code(s, i)
+            if code > max_code:
+                max_code = code
+        if max_code > 0xffff:
+            return unicode.PY_UNICODE_4BYTE_KIND
+        if max_code > 0xff:
+            return unicode.PY_UNICODE_2BYTE_KIND
+        return unicode.PY_UNICODE_1BYTE_KIND
+    return impl
+
+
 @overload(str)
 def charseq_str(s):
     if isinstance(s, types.UnicodeCharSeq):
@@ -291,13 +311,36 @@ def charseq_str(s):
 
         def str_impl(s):
             n = len(s)
-            is_ascii = s.isascii()
-            result = unicode._empty_string(unicode_kind, n, is_ascii)
+            kind = s._get_kind()
+            is_ascii = kind == 1 and s.isascii()
+            result = unicode._empty_string(kind, n, is_ascii)
             for i in range(n):
                 code = get_code(s, i)
                 unicode._set_code_point(result, i, code)
             return result
         return str_impl
+
+    if isinstance(s, types.CharSeq):
+        get_code = _get_code_impl(s)
+
+        def str_impl(s):
+            n = len(s)
+            is_ascii = s.isascii()
+            result = unicode._empty_string(
+                unicode.PY_UNICODE_1BYTE_KIND, n, is_ascii)
+            for i in range(n):
+                code = get_code(s, i)
+                unicode._set_code_point(result, i, code)
+            return result
+        return str_impl
+
+
+@overload_method(types.CharSeq, '__hash__')
+def charseq_hash(s):
+    def impl(s):
+        # Assuming hash(bytes(s)) == hash(s)
+        return hash(str(s))
+    return impl
 
 
 @overload_method(types.UnicodeCharSeq, '__hash__')
