@@ -1,10 +1,10 @@
 from __future__ import print_function
 
-import builtins
 import types as pytypes
 
 import numpy as np
 
+from numba.six.moves import builtins
 from numba import types
 from .support import TestCase
 from numba.help.inspector import inspect_function, inspect_module

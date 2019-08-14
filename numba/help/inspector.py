@@ -4,15 +4,11 @@ This file contains `__main__` so that it can be run as a commandline tool.
 This file contains function to inspect Numba's support for a given Python
 module or a Python package.
 """
-
-
 from __future__ import print_function
 
 import argparse
 import pkgutil
 import types as pytypes
-import html
-
 
 from numba._version import get_versions
 from numba.targets.registry import cpu_target
@@ -167,7 +163,8 @@ class Formatter(object):
         self._fileobj = fileobj
 
     def print(self, *args, **kwargs):
-        print(*args, **kwargs, file=self._fileobj)
+        kwargs.setdefault('file', self._fileobj)
+        print(*args, **kwargs)
 
 
 class HTMLFormatter(Formatter):
@@ -175,6 +172,7 @@ class HTMLFormatter(Formatter):
     """
 
     def escape(self, text):
+        import html
         return html.escape(text)
 
     def title(self, text):
@@ -207,7 +205,7 @@ class HTMLFormatter(Formatter):
                 self.print(
                     "<p>defined by <b>{}</b>{} at {}:{}-{}</p>".format(
                         self.escape(impl), self.escape(sig),
-                        self.escape(filename), *lines,
+                        self.escape(filename), lines[0], lines[1],
                     ),
                 )
                 self.print('<p>{}</p>'.format(
