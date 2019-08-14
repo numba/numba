@@ -339,7 +339,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             else:
                 help_msg = """
 
-Set the environment variable NUMBA_SHOW_HELP=1 for help.
+Set the environment variable NUMBA_SHOW_HELP=1 for to see documentation.
+Set the environment variable NUMBA_SHOW_HINTS=1 for hints (experimental).
 
 """
             e.patch_message(help_msg + ''.join(e.args))

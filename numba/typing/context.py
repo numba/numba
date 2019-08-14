@@ -13,7 +13,7 @@ from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
 
-from numba import utils
+from numba import utils, config
 from numba.six import Sequence
 
 
@@ -179,19 +179,22 @@ class BaseContext(object):
             msg = "No type info available for {func!r} as a callable."
             desc.append(msg.format(func=func))
 
-        if defns:
-            desc = ['Known concrete type signatures:']
-            for sig in defns:
-                desc.append(' * {0}'.format(sig))
+        if config.DEVELOPER_MODE:
+            if defns:
+                desc = ['Known concrete type signatures:']
+                for sig in defns:
+                    desc.append(' * {0}'.format(sig))
+            else:
+                desc.append('\nNo concrete type signatures were found.')
+
+            if param:
+                msg = ('\nIn addition, undetermined parameterised signatures were '
+                    'found.')
+                desc.append(msg)
+
+            return '\n'.join(desc)
         else:
-            desc.append('\nNo concrete type signatures were found.')
-
-        if param:
-            msg = ('\nIn addition, undetermined parameterised signatures were '
-                   'found.')
-            desc.append(msg)
-
-        return '\n'.join(desc)
+            return ""
 
     def resolve_function_type(self, func, args, kws):
         """

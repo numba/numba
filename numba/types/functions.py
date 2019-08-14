@@ -9,7 +9,7 @@ from .abstract import *
 from .common import *
 from .misc import unliteral
 from numba.ir import Loc
-from numba import errors
+from numba import errors, config
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -52,15 +52,19 @@ class _ResolutionFailures(object):
         msgbuf = [headtmp.format(self._function_type, sigargs)]
 
         for k, v in self._failures.items():
+            if not config.DEVELOPER_MODE and "All templates rejected" in k:
+                continue
             fmt = "There were {} definitions(s) that responded with:\n"
             msgbuf.append(_termcolor.errmsg(fmt.format(len(v))))
             msgbuf.append(_termcolor.highlight("{}{}\n".format(indent, k)))
 
         explain = self._context.explain_function_type(self._function_type)
-        msgbuf.append(_termcolor.errmsg(explain))
-        msgbuf.append("")
+        if explain:
+            msgbuf.append(_termcolor.errmsg(explain))
+            msgbuf.append("")
 
-        explain_known = create_hint(self._function_type.key[0], sigargs)
+        explain_known = create_hint(self._function_type.key[0], sigargs,
+                                    self._args, self._kwargs)
 
         likely_cause = ("This error is usually caused by passing an argument "
                         "of a type that is unsupported by the named function.")

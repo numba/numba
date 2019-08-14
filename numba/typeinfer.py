@@ -446,7 +446,7 @@ def types2usersig(in_args, in_kwargs):
     args += ["%s=%s" % (k, v) for k, v in sorted(in_kwargs.items())]
     return ', '.join(args)
 
-def create_hint(key, args, bound=False):
+def create_hint(key, strargs, fn_args, fn_kwargs, bound=False):
     """
     key - the offending typing key
     args - the offending arguments as a list of already formatted strings
@@ -520,7 +520,7 @@ def create_hint(key, args, bound=False):
 
         hintmsg = ("\nHINT: Given argument type(s) were ({}) and the {} '{}' is "
                    "supported for the following argument type(s):\n")
-        userargs = args
+        userargs = strargs
 
         def format_signature(sig):
             def fmt(c):
@@ -580,8 +580,20 @@ def create_hint(key, args, bound=False):
         explain_known.append(_termcolor.indicate(msg))
 
         lim = 1 if strip else 0 # strip off first arg if asked
+
+        max_sig_len = max([len(format_signature(x[lim:])) for x in known_sigs]) + 4
+
         for x in known_sigs:
-            msg = " * {}{}{}".format(prefix, name, format_signature(x[lim:]))
+            for presented, known in zip(fn_args, x[bound:]):
+                if isinstance(known, types.Type):
+                    known = type(known)
+                if isinstance(presented, known):
+                    close = "<--- Close match"
+                    break
+            else:
+                close = ""
+            msg = " * {0}{1}{2: <{max_sig_len}}{3}".format(prefix, name, format_signature(x[lim:]),
+                                    close, max_sig_len=max_sig_len)
             explain_known.append(_termcolor.indicate(msg))
 
         explain_known.append("\n")
@@ -594,8 +606,8 @@ def create_hint(key, args, bound=False):
         explain_known.append(_termcolor.indicate(experimental))
         explain_known.append("\n")
 
-
     except Exception as e:
+        print(e)
         pass # can't provide a hint, this is ok, it's just a hint
     return explain_known
 
@@ -653,7 +665,8 @@ class CallConstraint(object):
             head = headtemp.format(fnty, args)
             desc = context.explain_function_type(fnty)
             key = fnty.key[0]
-            explain_known = list(create_hint(key, args, bound=is_boundfunc_ty))
+            explain_known = list(create_hint(key, args, pos_args, kw_args,
+                                             bound=is_boundfunc_ty))
             msg = '\n'.join([head, desc] + explain_known)
             raise TypingError(msg)
 
