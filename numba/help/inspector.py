@@ -24,6 +24,19 @@ github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L
 
 
 def inspect_function(function, target=None):
+    """Return information about the support of a function.
+
+    Returns
+    -------
+    info : dict
+        Defined keys:
+        - "numba_type": str or None
+            The numba type object of the function if supported.
+        - "explained": str
+            A textual descrption of the support.
+        - "source_infos": dict
+            A dictionary containing the source location of each definition.
+    """
     target = target or cpu_target
     tyct = target.typing_context
     # Make sure we have loaded all extensions
@@ -54,6 +67,9 @@ def inspect_function(function, target=None):
 
 
 def inspect_module(module, target=None):
+    """Inspect a module object and yielding results from `inspect_function()`
+    for each function object in the module.
+    """
     # Walk the module
     for name in dir(module):
         if name.startswith('_'):
@@ -68,6 +84,7 @@ def inspect_module(module, target=None):
 
 
 class _Stat(object):
+    """For gathering simple statistic of (un)supported functions"""
     def __init__(self):
         self.supported = 0
         self.unsupported = 0
@@ -99,6 +116,10 @@ class _Stat(object):
 
 
 def list_modules_in_package(package):
+    """Yield all modules in a given package.
+
+    Recursively walks the package tree.
+    """
     onerror_ignore = lambda _: None
 
     prefix = package.__name__ + "."
@@ -140,6 +161,8 @@ def list_modules_in_package(package):
 
 
 class Formatter(object):
+    """Base class for formatters.
+    """
     def __init__(self, fileobj):
         self._fileobj = fileobj
 
@@ -148,6 +171,8 @@ class Formatter(object):
 
 
 class HTMLFormatter(Formatter):
+    """Formatter that outputs HTML
+    """
 
     def escape(self, text):
         return html.escape(text)
@@ -205,7 +230,8 @@ class HTMLFormatter(Formatter):
 
 
 class ReSTFormatter(Formatter):
-
+    """Formatter that output ReSTructured text format for Sphinx docs.
+    """
     def escape(self, text):
         return text
 
@@ -269,7 +295,9 @@ class ReSTFormatter(Formatter):
         self.print()
 
 
-def print_module_info(formatter, package_name, mod_sequence, target=None):
+def _format_module_infos(formatter, package_name, mod_sequence, target=None):
+    """Format modules.
+    """
     formatter.title('Listings for {}'.format(package_name))
     for mod in mod_sequence:
         stat = _Stat()
@@ -298,15 +326,34 @@ def print_module_info(formatter, package_name, mod_sequence, target=None):
         formatter.end_module_section()
 
 
-def print_help(programname):
-    print("""
-Inspect Numba support for a given top-level package.
+def write_listings(package_name, filename, output_format):
+    """Write listing information into a file.
 
-Usage:
-    {programname} <package>
+    Parameters
+    ----------
+    package_name : str
+        Name of the package to inspect.
+    filename : str
+        Output filename. Always overwrite.
+    output_format : str
+        Support formats are "html" and "rst".
+    """
+    package = __import__(package_name)
+    if hasattr(package, '__path__'):
+        mods = list_modules_in_package(package)
+    else:
+        mods = [package]
 
-    `package`: is a top level package name.
-    """.format(programname=programname))
+    if output_format == 'html':
+        with open(filename + '.html', 'w') as fout:
+            fmtr = HTMLFormatter(fileobj=fout)
+            _format_module_infos(fmtr, package_name, mods)
+    elif output_format == 'rst':
+        with open(filename + '.rst', 'w') as fout:
+            fmtr = ReSTFormatter(fileobj=fout)
+            _format_module_infos(fmtr, package_name, mods)
+    else:
+        raise ValueError("{} is not supported".format(output_format))
 
 
 program_description = """
@@ -333,26 +380,7 @@ def main():
     package_name = args.package
     output_format = args.format
     filename = args.file
-    run_inspector(package_name, filename, output_format)
-
-
-def run_inspector(package_name, filename, output_format):
-    package = __import__(package_name)
-    if hasattr(package, '__path__'):
-        mods = list_modules_in_package(package)
-    else:
-        mods = [package]
-
-    if output_format == 'html':
-        with open(filename + '.html', 'w') as fout:
-            fmtr = HTMLFormatter(fileobj=fout)
-            print_module_info(fmtr, package_name, mods)
-    elif output_format == 'rst':
-        with open(filename + '.rst', 'w') as fout:
-            fmtr = ReSTFormatter(fileobj=fout)
-            print_module_info(fmtr, package_name, mods)
-    else:
-        raise ValueError("{} is not supported".format(output_format))
+    write_listings(package_name, filename, output_format)
 
 
 if __name__ == '__main__':
