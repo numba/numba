@@ -201,11 +201,13 @@ class HTMLFormatter(Formatter):
             if source:
                 self.print("<li>")
                 impl = source['name']
+                sig = source['sig']
                 filename = source['filename']
                 lines = source['lines']
                 self.print(
-                    "<p>defined by <b>{}</b> at {}:{}-{}</p>".format(
-                        self.escape(impl), self.escape(filename), *lines,
+                    "<p>defined by <b>{}</b>{} at {}:{}-{}</p>".format(
+                        self.escape(impl), self.escape(sig),
+                        self.escape(filename), *lines,
                     ),
                 )
                 self.print('<p>{}</p>'.format(
@@ -259,6 +261,7 @@ class ReSTFormatter(Formatter):
         for tcls, source in sources.items():
             if source:
                 impl = source['name']
+                sig = source['sig']
                 filename = source['filename']
                 lines = source['lines']
                 source_link = github_url.format(
@@ -268,8 +271,8 @@ class ReSTFormatter(Formatter):
                     lastline=lines[1],
                 )
                 self.print(
-                    "   - defined by ``{}`` at `{}:{}-{} <{}>`_".format(
-                        impl, filename, lines[0], lines[1], source_link,
+                    "   - defined by ``{}{}`` at `{}:{}-{} <{}>`_".format(
+                        impl, sig, filename, lines[0], lines[1], source_link,
                     ),
                 )
 
