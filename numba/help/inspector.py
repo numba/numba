@@ -11,7 +11,6 @@ from __future__ import print_function
 import argparse
 import pkgutil
 import types as pytypes
-from collections import defaultdict
 import html
 
 
@@ -270,8 +269,8 @@ class ReSTFormatter(Formatter):
         self.print()
 
 
-def print_module_info(formatter, mod_sequence, target=None):
-    formatter.title('Numba Support Inspector')
+def print_module_info(formatter, package_name, mod_sequence, target=None):
+    formatter.title('Listings for {}'.format(package_name))
     for mod in mod_sequence:
         stat = _Stat()
         modname = mod.__name__
@@ -297,7 +296,6 @@ def print_module_info(formatter, mod_sequence, target=None):
 
         formatter.write_statistic(stat)
         formatter.end_module_section()
-
 
 
 def print_help(programname):
@@ -326,10 +324,19 @@ def main():
         '--format', dest='format', default='html',
         help='Output format; i.e. "html", "rst"',
     )
+    parser.add_argument(
+        '--file', dest='file', default='inspector_output',
+        help='Output filename. Defaults to "inspector_output"',
+    )
 
     args = parser.parse_args()
     package_name = args.package
     output_format = args.format
+    filename = args.file
+    run_inspector(package_name, filename, output_format)
+
+
+def run_inspector(package_name, filename, output_format):
     package = __import__(package_name)
     if hasattr(package, '__path__'):
         mods = list_modules_in_package(package)
@@ -337,15 +344,13 @@ def main():
         mods = [package]
 
     if output_format == 'html':
-        filename = '{}.numba_support.html'.format(package_name)
-        with open(filename, 'w') as fout:
+        with open(filename + '.html', 'w') as fout:
             fmtr = HTMLFormatter(fileobj=fout)
-            print_module_info(fmtr, mods)
+            print_module_info(fmtr, package_name, mods)
     elif output_format == 'rst':
-        filename = 'docs/source/developer/autogen_{}_listing.rst'.format(package_name)
-        with open(filename, 'w') as fout:
+        with open(filename + '.rst', 'w') as fout:
             fmtr = ReSTFormatter(fileobj=fout)
-            print_module_info(fmtr, mods)
+            print_module_info(fmtr, package_name, mods)
     else:
         raise ValueError("{} is not supported".format(output_format))
 

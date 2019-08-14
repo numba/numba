@@ -295,10 +295,31 @@ intersphinx_mapping = {
 
 def _autogenerate():
     from numba.scripts.generate_lower_listing import gen_lower_listing
+    from numba.help.inspector import run_inspector
 
     basedir = os.path.dirname(__file__)
     gen_lower_listing(os.path.join(basedir,
                                    'developer/autogen_lower_listing.rst'))
+
+    # Run inspector on numpy
+    run_inspector(
+        package_name='builtins',
+        filename=os.path.join(basedir, 'developer/autogen_builtins_listing'),
+        output_format='rst',
+    )
+
+    run_inspector(
+        package_name='math',
+        filename=os.path.join(basedir, 'developer/autogen_math_listing'),
+        output_format='rst',
+    )
+
+    # Run inspector on numpy
+    run_inspector(
+        package_name='numpy',
+        filename=os.path.join(basedir, 'developer/autogen_numpy_listing'),
+        output_format='rst',
+    )
 
 
 _autogenerate()
