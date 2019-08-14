@@ -65,6 +65,10 @@ def return_isascii(x, i):
     return x[i].isascii()
 
 
+def return_isupper(x, i):
+    return x[i].isupper()
+
+
 def return_str(x, i):
     return str(x[i])
 
@@ -340,6 +344,12 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(['1234']), 0)
         self._test(pyfunc, cfunc, np.array('1234\u00e9'), ())
         self._test(pyfunc, cfunc, np.array(['1234\u00e9']), 0)
+
+    def test_return_isupper(self):
+        pyfunc = return_isupper
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array('abc'), ())
+        self._test(pyfunc, cfunc, np.array(['abc']), 0)
 
     def test_return_str(self):
         pyfunc = return_str

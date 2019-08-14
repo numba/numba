@@ -188,7 +188,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
                 builder.store(in_val, builder.gep(dst, [loop.index]))
         else:
             context.call_conv.return_user_exc(
-                builder, RuntimeError,
+                builder, ValueError,
                 ("cannot cast 16-bit unicode_type to %s-bit %s"
                  % (unicode_byte_width * 8, toty)))
 
@@ -200,7 +200,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
                 builder.store(in_val, builder.gep(dst, [loop.index]))
         else:
             context.call_conv.return_user_exc(
-                builder, RuntimeError,
+                builder, ValueError,
                 ("cannot cast 32-bit unicode_type to %s-bit %s"
                  % (unicode_byte_width * 8, toty)))
 
@@ -342,16 +342,18 @@ def charseq_str(s):
         return str_impl
 
 
+@overload_method(types.UnicodeCharSeq, '__hash__')
 @overload_method(types.CharSeq, '__hash__')
 def charseq_hash(s):
     def impl(s):
-        # Assuming hash(bytes(s)) == hash(s)
+        # note that hash(bytes(s)) == hash(s)
         return hash(str(s))
     return impl
 
 
-@overload_method(types.UnicodeCharSeq, '__hash__')
-def unicode_charseq_hash(s):
+@overload_method(types.UnicodeCharSeq, 'isupper')
+def unicode_charseq_isupper(s):
     def impl(s):
-        return hash(str(s))
+        # workaround unicode_type.isupper bug: it returns int value
+        return not not str(s).isupper()
     return impl
