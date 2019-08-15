@@ -65,6 +65,12 @@ class NumbaParallelSafetyWarning(NumbaWarning):
     might not have parallel semantics.
     """
 
+
+class NumbaTypeSafetyWarning(NumbaWarning):
+    """
+    Warning category for unsafe casting operations.
+    """
+
 # These are needed in the color formatting of errors setup
 
 

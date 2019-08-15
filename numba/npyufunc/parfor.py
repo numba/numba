@@ -381,6 +381,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
 
+        # Cleanup reduction variable
+        for v in redarrs.values():
+            lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
@@ -591,13 +594,21 @@ def find_vars(var, varset):
     return var
 
 def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
-                    typemap):
+                    typemap, stored_arrays):
+    if inst.target.name in stored_arrays:
+        not_hoisted.append((inst, "stored array"))
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("Instruction", inst, " could not be hoisted because the created array is stored.")
+        return False
+
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("Will hoist instruction", inst)
+            print("Will hoist instruction", inst, typemap[inst.target.name])
         hoisted.append(inst)
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
             dep_on_param += [inst.target.name]
@@ -613,17 +624,28 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
                 print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
-def find_setitems_block(setitems, block):
+def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
         if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             setitems.add(inst.target.name)
+            # If we store a non-mutable object into an array then that is safe to hoist.
+            # If the stored object is mutable and you hoist then multiple entries in the
+            # outer array could reference the same object and changing one index would then
+            # change other indices.
+            if getattr(typemap[inst.value.name], "mutable", False):
+                itemsset.add(inst.value.name)
         elif isinstance(inst, parfor.Parfor):
-            find_setitems_block(setitems, inst.init_block)
-            find_setitems_body(setitems, inst.loop_body)
+            find_setitems_block(setitems, itemsset, inst.init_block, typemap)
+            find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
 
-def find_setitems_body(setitems, loop_body):
+def find_setitems_body(setitems, itemsset, loop_body, typemap):
+    """
+      Find the arrays that are written into (goes into setitems) and the
+      mutable objects (mostly arrays) that are written into other arrays
+      (goes into itemsset).
+    """
     for label, block in loop_body.items():
-        find_setitems_block(setitems, block)
+        find_setitems_block(setitems, itemsset, block, typemap)
 
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
@@ -635,15 +657,18 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
-    find_setitems_body(setitems, loop_body)
+    itemsset = set()
+    find_setitems_body(setitems, itemsset, loop_body, typemap)
     dep_on_param = list(set(dep_on_param).difference(setitems))
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
 
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, not_hoisted, typemap):
+                                   hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
                     # hoisted
                     continue
@@ -656,7 +681,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     if (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap):
+                                           hoisted, not_hoisted, typemap, itemsset):
                             # don't add this instuction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)

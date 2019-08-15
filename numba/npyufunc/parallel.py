@@ -13,9 +13,10 @@ from __future__ import print_function, absolute_import
 
 import os
 import platform
+import sys
 import warnings
 from threading import RLock as threadRLock
-from multiprocessing import RLock as procRLock
+import multiprocessing
 from contextlib import contextmanager
 
 import numpy as np
@@ -25,7 +26,7 @@ import llvmlite.binding as ll
 
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
-from numba import types, config
+from numba import types, config, utils
 from numba.npyufunc.wrappers import _wrapper_info
 
 
@@ -261,9 +262,30 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
 
 
 _backend_init_thread_lock = threadRLock()
+
+_windows = sys.platform.startswith('win32')
+
+
+@contextmanager
+def _nop():
+    yield
+
+
 try:
-    _backend_init_process_lock = procRLock()
+    if utils.PY3:
+        # Force the use of an RLock in the case a fork was used to start the
+        # process and thereby the init sequence, some of the threading backend
+        # init sequences are not fork safe. Also, windows global mp locks seem
+        # to be fine.
+        if "fork" in multiprocessing.get_start_method() or _windows:
+            _backend_init_process_lock = multiprocessing.get_context().RLock()
+        else:
+            _backend_init_process_lock = _nop()
+    else:
+        # windows uses spawn so is fine, linux uses fork has the lock
+        _backend_init_process_lock = multiprocessing.RLock()
 except OSError as e:
+
     # probably lack of /dev/shm for semaphore writes, warn the user
     msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
            "A likely cause of this problem is '/dev/shm' is missing or"
@@ -273,11 +295,7 @@ except OSError as e:
            "***\n")
     warnings.warn(msg % str(e))
 
-    @contextmanager
-    def nop():
-        yield
-
-    _backend_init_process_lock = nop()
+    _backend_init_process_lock = _nop()
 
 _is_initialized = False
 
