@@ -1,7 +1,7 @@
 """
 This file contains `__main__` so that it can be run as a commandline tool.
 
-This file contains function to inspect Numba's support for a given Python
+This file contains functions to inspect Numba's support for a given Python
 module or a Python package.
 """
 from __future__ import print_function
@@ -287,7 +287,7 @@ class ReSTFormatter(Formatter):
 
     def write_statistic(self, stat):
         if stat.supported == 0:
-            self.print("this module is not supported")
+            self.print("This module is not supported.")
         else:
             msg = "Not showing {} unsupported functions."
             self.print(msg.format(stat.unsupported))
@@ -374,7 +374,7 @@ def main():
     )
     parser.add_argument(
         '--file', dest='file', default='inspector_output',
-        help='Output filename. Defaults to "inspector_output"',
+        help='Output filename. Defaults to "inspector_output.<format>"',
     )
 
     args = parser.parse_args()
