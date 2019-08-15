@@ -15,9 +15,10 @@ def init_all():
     if _already_initialized:
         return
 
+    # Must put this here to avoid extensions re-triggering initialization
+    _already_initialized = True
+
     for entry_point in iter_entry_points('numba_extensions', 'init'):
         logger.debug('Loading extension:', entry_point)
         func = entry_point.load()
         func()
-
-    _already_initialized = True

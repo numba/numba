@@ -15,8 +15,9 @@ to be installed into the Python environment.
 Numba discovers extensions with the `entry points
 <https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins>`_
 feature of ``setuptools``.  This allows a Python package to register an
-initializer function that will be called when the ``numba`` module is
-imported.
+initializer function that will be called before ``numba`` compiles for the
+first time.  The delay ensures that the cost of importing extensions is
+deferred until it is necessary.
 
 
 Adding Support for the "Init" Entry Point

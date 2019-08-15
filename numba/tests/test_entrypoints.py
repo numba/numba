@@ -40,6 +40,7 @@ class TestEntrypoints(TestCase):
 
         import numba.entrypoints
         numba.entrypoints._already_initialized = False  # Allow reinitialization
+
         numba.entrypoints.init_all()
 
         # was our init function called?

@@ -11,7 +11,6 @@ from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
-import numba.entrypoints
 
 
 # -----------------------------------------------------------------------------
@@ -164,9 +163,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
 
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
-    # Ensure extensions have been loaded
-    numba.entrypoints.init_all()
-
     dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
