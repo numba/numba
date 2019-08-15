@@ -345,15 +345,17 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices, boundsche
             output_indices.append(slice.start)
             sh = slicing.get_slice_length(builder, slice)
             st = slicing.fix_stride(builder, slice, strides[ax])
-            nonzero_dim_p = builder.icmp_signed('!=', shapes[ax], shapes[ax].type(0))
-            with cgutils.if_likely(builder, nonzero_dim_p):
-                cgutils.boundscheck(context, builder, slice.start, shapes[ax])
+            if boundscheck:
+                nonzero_dim_p = builder.icmp_signed('!=', shapes[ax], shapes[ax].type(0))
+                with cgutils.if_likely(builder, nonzero_dim_p):
+                    cgutils.boundscheck(context, builder, slice.start, shapes[ax])
             output_shapes.append(sh)
             output_strides.append(st)
         elif isinstance(idxty, types.Integer):
             ind = fix_integer_index(context, builder, idxty, indexval,
                                     shapes[ax])
-            cgutils.boundscheck(context, builder, ind, shapes[ax])
+            if boundscheck:
+                cgutils.boundscheck(context, builder, ind, shapes[ax])
             output_indices.append(ind)
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
