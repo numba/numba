@@ -527,6 +527,10 @@ def unicode_find(a, b):
         def find_impl(a, b):
             return _find(substr=b, s=a)
         return find_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def find_impl(a, b):
+            return a.find(str(b))
+        return find_impl
 
 
 @overload_method(types.UnicodeType, 'startswith')
@@ -534,6 +538,10 @@ def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
         def startswith_impl(a, b):
             return _cmp_region(a, 0, b, 0, len(b)) == 0
+        return startswith_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def startswith_impl(a, b):
+            return a.startswith(str(b))
         return startswith_impl
 
 
@@ -546,6 +554,10 @@ def unicode_endswith(a, b):
                 return False
             return _cmp_region(a, a_offset, b, 0, len(b)) == 0
         return endswith_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def endswith_impl(a, b):
+            return a.endswith(str(b))
+        return endswith_impl
 
 
 @overload_method(types.UnicodeType, 'split')
@@ -554,6 +566,11 @@ def unicode_split(a, sep=None, maxsplit=-1):
             isinstance(maxsplit, (types.Omitted, types.Integer,
                                   types.IntegerLiteral))):
         return None  # fail typing if maxsplit is not an integer
+
+    if isinstance(sep, types.UnicodeCharSeq):
+        def split_impl(a, sep, maxsplit=1):
+            return a.split(str(sep), maxsplit=maxsplit)
+        return split_impl
 
     if isinstance(sep, types.UnicodeType):
         def split_impl(a, sep, maxsplit=-1):
@@ -632,6 +649,12 @@ def unicode_split(a, sep=None, maxsplit=-1):
 def unicode_center(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def center_impl(string, width, fillchar):
+            return string.center(width, str(fillchar))
+        return center_impl
+
     if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
@@ -662,7 +685,14 @@ def unicode_center(string, width, fillchar=' '):
 def unicode_ljust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def ljust_impl(string, width, fillchar):
+            return string.ljust(width, str(fillchar))
+        return ljust_impl
+
+    if not (fillchar == ' ' or isinstance(
+            fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def ljust_impl(string, width, fillchar=' '):
@@ -685,6 +715,12 @@ def unicode_ljust(string, width, fillchar=' '):
 def unicode_rjust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def rjust_impl(string, width, fillchar):
+            return string.rjust(width, str(fillchar))
+        return rjust_impl
+
     if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
@@ -738,10 +774,16 @@ def join_list(sep, parts):
 
 @overload_method(types.UnicodeType, 'join')
 def unicode_join(sep, parts):
+
     if isinstance(parts, types.List):
         if isinstance(parts.dtype, types.UnicodeType):
             def join_list_impl(sep, parts):
                 return join_list(sep, parts)
+            return join_list_impl
+        elif isinstance(parts.dtype, types.UnicodeCharSeq):
+            def join_list_impl(sep, parts):
+                _parts = [str(p) for p in parts]
+                return join_list(sep, _parts)
             return join_list_impl
         else:
             pass  # lists of any other type not supported
@@ -817,6 +859,12 @@ def unicode_strip_types_check(chars):
 
 @overload_method(types.UnicodeType, 'lstrip')
 def unicode_lstrip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def lstrip_impl(string, chars):
+            return string.lstrip(str(chars))
+        return lstrip_impl
+
     unicode_strip_types_check(chars)
 
     def lstrip_impl(string, chars=None):
@@ -826,6 +874,12 @@ def unicode_lstrip(string, chars=None):
 
 @overload_method(types.UnicodeType, 'rstrip')
 def unicode_rstrip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def rstrip_impl(string, chars):
+            return string.rstrip(str(chars))
+        return rstrip_impl
+
     unicode_strip_types_check(chars)
 
     def rstrip_impl(string, chars=None):
@@ -835,6 +889,12 @@ def unicode_rstrip(string, chars=None):
 
 @overload_method(types.UnicodeType, 'strip')
 def unicode_strip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def strip_impl(string, chars):
+            return string.strip(str(chars))
+        return strip_impl
+
     unicode_strip_types_check(chars)
 
     def strip_impl(string, chars=None):
@@ -1004,6 +1064,11 @@ def unicode_concat(a, b):
             for j in range(len(b)):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
+        return concat_impl
+
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeCharSeq):
+        def concat_impl(a, b):
+            return a + str(b)
         return concat_impl
 
 
