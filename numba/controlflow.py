@@ -279,14 +279,7 @@ class CFGraph(object):
         g : graphviz.Digraph
             Use `g.view()` to open the graph in the default PDF application.
         """
-
-        try:
-            import graphviz as gv
-        except ImportError:
-            raise ImportError(
-                "The feature requires `graphviz` but it is not available. "
-                "Please install with `pip install graphviz`"
-            )
+        gv = utils.import_graphviz()
         g = gv.Digraph(filename=filename)
         # Populate the nodes
         for n in self._nodes:

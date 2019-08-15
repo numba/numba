@@ -14,6 +14,7 @@ from functools import total_ordering
 
 from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
+from .utils import import_graphviz
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
 from .six import StringIO
@@ -1387,6 +1388,20 @@ class FunctionIR(object):
             print("yield point #%d: live variables = %s, weak live variables = %s"
                   % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
+
+    def visualize_cfg(self, filename):
+        gv = import_graphviz()
+        g = gv.Digraph(filename=filename)
+        for label, block in self.blocks.items():
+            with StringIO() as buf:
+                block.dump(file=buf)
+                body = ''.join(['{}\l'.format(ln)
+                                for ln in buf.getvalue().split('\n')])
+            g.node(str(label), label=body, shape='rect')
+        for label, block in self.blocks.items():
+            for target in block.terminator.get_targets():
+                g.edge(str(label), str(target))
+        return g
 
 
 # A stub for undefined global reference

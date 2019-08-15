@@ -185,6 +185,9 @@ class _EnvReloader(object):
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
+        # Force dump of Numba IR CFG in PDF
+        VISUALIZE_IR_CFG = _readenv("NUMBA_VISUALIZE_IR_CFG", int, 0)
+
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
 

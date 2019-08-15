@@ -765,3 +765,16 @@ class finalize:
 # dummy invocation to force _at_shutdown() to be registered
 finalize(lambda: None, lambda: None)
 assert finalize._registered_with_atexit
+
+
+def import_graphviz():
+    """Tries to import the optional dependency "graphviz"
+    """
+    try:
+        import graphviz as gv
+    except ImportError:
+        raise ImportError(
+            "The feature requires `graphviz` but it is not available. "
+            "Please install with `pip install graphviz`"
+        )
+    return gv

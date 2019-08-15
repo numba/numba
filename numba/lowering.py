@@ -85,6 +85,9 @@ class BaseLower(object):
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
         self.func_ir = func_ir
+        if config.VISUALIZE_IR_CFG:
+            filename = 'prelower.{}'.format(fndesc.llvm_func_name)
+            self.func_ir.visualize_cfg(filename=filename).render(cleanup=True)
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
         self.metadata = metadata
