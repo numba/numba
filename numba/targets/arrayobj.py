@@ -311,7 +311,7 @@ def iternext_array(context, builder, sig, args, result):
 #-------------------------------------------------------------------------------
 # Basic indexing (with integers and slices only)
 
-def basic_indexing(context, builder, aryty, ary, index_types, indices):
+def basic_indexing(context, builder, aryty, ary, index_types, indices, boundscheck=True):
     """
     Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
@@ -345,11 +345,15 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
             output_indices.append(slice.start)
             sh = slicing.get_slice_length(builder, slice)
             st = slicing.fix_stride(builder, slice, strides[ax])
+            nonzero_dim_p = builder.icmp_signed('!=', shapes[ax], shapes[ax].type(0))
+            with cgutils.if_likely(builder, nonzero_dim_p):
+                cgutils.boundscheck(context, builder, slice.start, shapes[ax])
             output_shapes.append(sh)
             output_strides.append(st)
         elif isinstance(idxty, types.Integer):
             ind = fix_integer_index(context, builder, idxty, indexval,
                                     shapes[ax])
+            cgutils.boundscheck(context, builder, ind, shapes[ax])
             output_indices.append(ind)
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
@@ -366,7 +370,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
     # fixed in the loop above.
     dataptr = cgutils.get_item_pointer(context, builder, aryty, ary,
                                        output_indices,
-                                       wraparound=False)
+                                       wraparound=False, boundscheck=False)
     return (dataptr, output_shapes, output_strides)
 
 
