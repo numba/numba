@@ -29,6 +29,11 @@ def setitem2(x, i, y, j):
     return x
 
 
+def setitem_literal(x, i):
+    x[i] = '123'
+    return x
+
+
 def getitem_key(x, y, j):
     x[y[j]] = 123
 
@@ -43,6 +48,26 @@ def equal_getitem(x, i, j):
 
 def notequal_getitem(x, i, j):
     return x[i] != x[j]
+
+
+def lessthan_getitem(x, i, j):
+    return x[i] < x[j]
+
+
+def greaterthan_getitem(x, i, j):
+    return x[i] > x[j]
+
+
+def lessequal_getitem(x, i, j):
+    return x[i] <= x[j]
+
+
+def greaterequal_getitem(x, i, j):
+    return x[i] >= x[j]
+
+
+def contains_getitem2(x, i, y, j):
+    return x[i] in y[j]
 
 
 def equal_getitem_value(x, i, v):
@@ -69,8 +94,16 @@ def return_isupper(x, i):
     return x[i].isupper()
 
 
+def return_upper(x, i):
+    return x[i].upper()
+
+
 def return_str(x, i):
     return str(x[i])
+
+
+def return_bytes(x, i):
+    return bytes(x[i])
 
 
 def return_hash(x, i):
@@ -279,6 +312,31 @@ class TestUnicodeArray(TestCase):
         self.assertPreciseEqual(x1, x2)
         self.assertPreciseEqual(y1, y2)
 
+    def test_setitem_literal(self):
+        pyfunc = setitem_literal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x1 = np.array('ABC')
+        x2 = np.array('ABC')
+        y1 = pyfunc(x1, ())
+        y2 = cfunc(x2, ())
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
+        x1 = np.array(['ABC', '5678'])
+        x2 = np.array(['ABC', '5678'])
+        y1 = pyfunc(x1, 0)
+        y2 = cfunc(x2, 0)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
+        x1 = np.array(['ABC', '5678'])
+        x2 = np.array(['ABC', '5678'])
+        y1 = pyfunc(x1, 1)
+        y2 = cfunc(x2, 1)
+        self.assertPreciseEqual(x1, x2)
+        self.assertPreciseEqual(y1, y2)
+
     def test_return_len(self):
         pyfunc = return_len
         cfunc = jit(nopython=True)(pyfunc)
@@ -317,6 +375,18 @@ class TestUnicodeArray(TestCase):
     def test_notequal_getitem(self):
         self._test_op_getitem(notequal_getitem)
 
+    def test_lessthan_getitem(self):
+        self._test_op_getitem(lessthan_getitem)
+
+    def test_greaterthan_getitem(self):
+        self._test_op_getitem(greaterthan_getitem)
+
+    def test_lessequal_getitem(self):
+        self._test_op_getitem(lessequal_getitem)
+
+    def test_greaterequal_getitem(self):
+        self._test_op_getitem(greaterequal_getitem)
+
     def _test_op_getitem_value(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         self._test(pyfunc, cfunc, np.array([1, 2]), 0, 1)
@@ -336,6 +406,20 @@ class TestUnicodeArray(TestCase):
     def test_notequal_getitem_value(self):
         self._test_op_getitem_value(notequal_getitem_value)
 
+    def test_contains_getitem2(self):
+        pyfunc = contains_getitem2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array('123')
+        y = np.array('12345')
+        self._test(pyfunc, cfunc, x, (), y, ())
+        self._test(pyfunc, cfunc, y, (), x, ())
+
+        x = np.array(b'123')
+        y = np.array(b'12345')
+        self._test(pyfunc, cfunc, x, (), y, ())
+        self._test(pyfunc, cfunc, y, (), x, ())
+
     @require_py37
     def test_return_isascii(self):
         pyfunc = return_isascii
@@ -351,11 +435,29 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array('abc'), ())
         self._test(pyfunc, cfunc, np.array(['abc']), 0)
 
+        self._test(pyfunc, cfunc, np.array(b'abc'), ())
+        self._test(pyfunc, cfunc, np.array([b'abc']), 0)
+
     def test_return_str(self):
         pyfunc = return_str
         cfunc = jit(nopython=True)(pyfunc)
         self._test(pyfunc, cfunc, np.array('1234'), ())
         self._test(pyfunc, cfunc, np.array(['1234']), 0)
+
+    def test_return_bytes(self):
+        pyfunc = return_bytes
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array(b'1234'), ())
+        self._test(pyfunc, cfunc, np.array([b'1234']), 0)
+
+    def test_return_upper(self):
+        pyfunc = return_upper
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array('abc'), ())
+        self._test(pyfunc, cfunc, np.array(['abc']), 0)
+
+        self._test(pyfunc, cfunc, np.array(b'abc'), ())
+        self._test(pyfunc, cfunc, np.array([b'abc']), 0)
 
     def test_hash(self):
         pyfunc = return_hash

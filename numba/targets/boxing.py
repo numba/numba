@@ -261,6 +261,12 @@ if IS_PY3:
         return NativeValue(ret, is_error=c.builder.not_(ok))
 
 
+    @box(types.Bytes)
+    def box_bytes(typ, val, c):
+        obj = c.context.make_helper(c.builder, typ, val)
+        return c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
+
+
 @box(types.CharSeq)
 def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)

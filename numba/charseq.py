@@ -15,7 +15,12 @@ from numba.extending import overload, intrinsic, overload_method, lower_cast
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1
+bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
 
+# Currently, NumPy supports only UTF-32 arrays but this may change in
+# future and the approach used here for supporting str arrays may need
+# a revision depending on how NumPy will support UTF-8 and UTF-16
+# arrays.
 u1_dtype = np.dtype('U1')
 unicode_byte_width = u1_dtype.itemsize
 unicode_uint = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unicode_byte_width]
@@ -27,8 +32,6 @@ unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND, 2: unicode.PY_UNICODE_2BYTE_KI
 def make_deref_codegen(bitsize):
     def codegen(context, builder, signature, args):
         data, idx = args
-        # XXX how to access data (of type CharSeq/UnicodeCharSeq)
-        # without alloca?
         rawptr = cgutils.alloca_once_value(builder, value=data)
         ptr = builder.bitcast(rawptr, ir.IntType(bitsize).as_pointer())
         ch = builder.load(builder.gep(ptr, [idx]))
@@ -56,14 +59,14 @@ def deref_uint32(typingctx, data, offset):
 
 @njit(_nrt=False)
 def charseq_get_code(a, i):
-    """Access i-th item of CharSeq instance via code value
+    """Access i-th item of CharSeq object via code value
     """
     return deref_uint8(a, i)
 
 
 @njit
 def charseq_get_value(a, i):
-    """Access i-th item of CharSeq instance via code value.
+    """Access i-th item of CharSeq object via code value.
 
     null code is interpreted as IndexError
     """
@@ -75,7 +78,7 @@ def charseq_get_value(a, i):
 
 @njit(_nrt=False)
 def unicode_charseq_get_code(a, i):
-    """Access i-th item of UnicodeCharSeq instance via code value
+    """Access i-th item of UnicodeCharSeq object via code value
     """
     if unicode_byte_width == 4:
         return deref_uint32(a, i)
@@ -89,25 +92,16 @@ def unicode_charseq_get_code(a, i):
 
 
 @njit
-def unicode_charseq_get_value(a, i):
-    """Access i-th item of UnicodeCharSeq instance via unicode value
-
-    null code is interpreted as IndexError
-    """
-    code = unicode_charseq_get_code(a, i)
-    if code == 0:
-        raise IndexError('index out of range')
-    # Return numpy equivalent of `chr(code)`
-    return np.array(code, unicode_uint).view(u1_dtype)[()]
-
-
-@njit
 def unicode_get_code(a, i):
+    """Access i-th item of UnicodeType object.
+    """
     return unicode._get_code_point(a, i)
 
 
 @njit
 def bytes_get_code(a, i):
+    """Access i-th item of Bytes object.
+        """
     return a[i]
 
 
@@ -121,6 +115,44 @@ def _get_code_impl(a):
     elif isinstance(a, types.UnicodeType):
         return unicode_get_code
 
+
+def _same_kind(a, b):
+    for t in [(types.CharSeq, types.Bytes),
+              (types.UnicodeCharSeq, types.UnicodeType)]:
+        if isinstance(a, t) and isinstance(b, t):
+            return True
+    return False
+
+
+def _is_bytes(a):
+    return isinstance(a, (types.CharSeq, types.Bytes))
+
+
+@njit
+def unicode_charseq_get_value(a, i):
+    """Access i-th item of UnicodeCharSeq object via unicode value
+
+    null code is interpreted as IndexError
+    """
+    code = unicode_charseq_get_code(a, i)
+    if code == 0:
+        raise IndexError('index out of range')
+    # Return numpy equivalent of `chr(code)`
+    return np.array(code, unicode_uint).view(u1_dtype)[()]
+
+
+#
+# CAST
+#
+# Currently, the following casting operations are supported:
+#   Bytes -> CharSeq                 (ex: a=np.array(b'abc'); a[()] = b'123')
+#   UnicodeType -> UnicodeCharSeq    (ex: a=np.array('abc'); a[()] = '123')
+#   CharSeq -> Bytes                 (ex: a=np.array(b'abc'); b = bytes(a[()]))
+#
+# The following casting operations can be implemented when required:
+#   Bytes -> UnicodeCharSeq   (ex: a=np.array('abc'); a[()] = b'123')
+#   UnicodeType -> CharSeq    (ex: a=np.array(b'abc'); a[()] = '123')
+#   UnicodeType -> Bytes      (ex: bytes('123', 'utf8'))
 
 @lower_cast(types.Bytes, types.CharSeq)
 def bytes_to_charseq(context, builder, fromty, toty, val):
@@ -147,6 +179,61 @@ def bytes_to_charseq(context, builder, fromty, toty, val):
         builder.store(in_val, builder.gep(dst, [loop.index]))
 
     return builder.load(dst_ptr)
+
+
+def _make_constant_bytes(context, builder, nbytes):
+    bstr_ctor = cgutils.create_struct_proxy(bytes_type)
+    bstr = bstr_ctor(context, builder)
+
+    if isinstance(nbytes, int):
+        nbytes = ir.Constant(bstr.nitems.type, nbytes)
+
+    bstr.meminfo = context.nrt.meminfo_alloc(builder, nbytes)
+    bstr.nitems = nbytes
+    bstr.itemsize = ir.Constant(bstr.itemsize.type, 1)
+    bstr.data = context.nrt.meminfo_data(builder, bstr.meminfo)
+    bstr.parent = cgutils.get_null_value(bstr.parent.type)
+    # bstr.shapes = ?
+    # bstr.strides = ?
+    return bstr
+
+
+@lower_cast(types.CharSeq, types.Bytes)
+def charseq_to_bytes(context, builder, fromty, toty, val):
+    bstr = _make_constant_bytes(context, builder, val.type.count)
+    rawptr = cgutils.alloca_once_value(builder, value=val)
+    ptr = builder.bitcast(rawptr, bstr.data.type)
+    cgutils.memcpy(builder, bstr.data, ptr, bstr.nitems)
+    return bstr
+
+
+@lower_cast(types.UnicodeType, types.Bytes)
+def unicode_to_bytes_cast(context, builder, fromty, toty, val):
+    uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
+    src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
+    notkind1 = builder.icmp_unsigned('!=', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
+    src_length = uni_str.length
+
+    with builder.if_then(notkind1):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("cannot cast higher than 8-bit unicode_type to bytes",))
+
+    bstr = _make_constant_bytes(context, builder, src_length)
+    cgutils.memcpy(builder, bstr.data, src1, bstr.nitems)
+    return bstr
+
+
+@intrinsic
+def _unicode_to_bytes(typingctx, s):
+    # used in _to_bytes method
+    assert s == types.unicode_type
+    sig = bytes_type(s)
+
+    def codegen(context, builder, signature, args):
+        return unicode_to_bytes_cast(
+            context, builder, s, bytes_type, args[0])._getvalue()
+    return sig, codegen
 
 
 @lower_cast(types.UnicodeType, types.UnicodeCharSeq)
@@ -207,7 +294,19 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     return builder.load(dst_ptr)
 
 #
-#   Operators on bytes/unicode array items
+#   Operations on bytes/str array items
+#
+# Implementation note: while some operations need
+# CharSeq/UnicodeCharSeq specific implementations (getitem, len, str,
+# etc), many operations can be supported by casting
+# CharSeq/UnicodeCharSeq objects to Bytes/UnicodeType objects and
+# re-use existing operations.
+#
+# However, in numba more operations are implemented for UnicodeType
+# than for Bytes objects, hence the support for operations with bytes
+# array items will be less complete than for str arrays. Although, in
+# some cases (hash, contains, etc) the UnicodeType implementations can
+# be reused for Bytes objects via using `_to_str` method.
 #
 
 
@@ -255,6 +354,8 @@ def charseq_len(s):
 
 @overload(operator.eq)
 def charseq_eq(a, b):
+    if not _same_kind(a, b):
+        return
     left_code = _get_code_impl(a)
     right_code = _get_code_impl(b)
     if left_code is not None and right_code is not None:
@@ -271,12 +372,89 @@ def charseq_eq(a, b):
 
 @overload(operator.ne)
 def charseq_ne(a, b):
+    if not _same_kind(a, b):
+        return
     left_code = _get_code_impl(a)
     right_code = _get_code_impl(b)
     if left_code is not None and right_code is not None:
         def ne_impl(a, b):
             return not (a == b)
         return ne_impl
+
+
+@overload(operator.lt)
+def charseq_lt(a, b):
+    if not _same_kind(a, b):
+        return
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
+        def lt_impl(a, b):
+            na = len(a)
+            nb = len(b)
+            n = min(na, nb)
+            for i in range(n):
+                ca, cb = left_code(a, i), right_code(b, i)
+                if ca != cb:
+                    return ca < cb
+            return na < nb
+        return lt_impl
+
+
+@overload(operator.gt)
+def charseq_gt(a, b):
+    if not _same_kind(a, b):
+        return
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
+        def gt_impl(a, b):
+            return b < a
+        return gt_impl
+
+
+@overload(operator.le)
+def charseq_le(a, b):
+    if not _same_kind(a, b):
+        return
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
+        def le_impl(a, b):
+            return not (a > b)
+        return le_impl
+
+
+@overload(operator.ge)
+def charseq_ge(a, b):
+    if not _same_kind(a, b):
+        return
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
+        def ge_impl(a, b):
+            return not (a < b)
+        return ge_impl
+
+
+@overload(operator.contains)
+def charseq_contains(a, b):
+    if not _same_kind(a, b):
+        return
+    left_code = _get_code_impl(a)
+    right_code = _get_code_impl(b)
+    if left_code is not None and right_code is not None:
+        if _is_bytes(a):
+            def contains_impl(a, b):
+                # Ideally, `return bytes(b) in bytes(a)` would be used
+                # here, but numba Bytes does not implement
+                # contains. So, using `unicode_type` implementation
+                # here:
+                return b._to_str() in a._to_str()
+        else:
+            def contains_impl(a, b):
+                return str(b) in str(a)
+        return contains_impl
 
 
 @overload_method(types.UnicodeCharSeq, 'isascii')
@@ -311,6 +489,41 @@ def charseq_get_kind(s):
     return impl
 
 
+@overload_method(types.UnicodeType, '_to_bytes')
+def unicode_to_bytes_mth(s):
+    """Convert unicode_type object to Bytes object.
+
+    Note: The usage of _to_bytes method can be eliminated once all
+    Python bytes operations are implemented for numba Bytes objects.
+
+    """
+    def impl(s):
+        return _unicode_to_bytes(s)
+    return impl
+
+
+@overload_method(types.CharSeq, '_to_str')
+@overload_method(types.Bytes, '_to_str')
+def charseq_to_str_mth(s):
+    """Convert bytes array item or bytes instance to UTF-8 str.
+
+    Note: The usage of _to_str method can be eliminated once all
+    Python bytes operations are implemented for numba Bytes objects.
+    """
+    get_code = _get_code_impl(s)
+
+    def tostr_impl(s):
+        n = len(s)
+        is_ascii = s.isascii()
+        result = unicode._empty_string(
+            unicode.PY_UNICODE_1BYTE_KIND, n, is_ascii)
+        for i in range(n):
+            code = get_code(s, i)
+            unicode._set_code_point(result, i, code)
+        return result
+    return tostr_impl
+
+
 @overload(str)
 def charseq_str(s):
     if isinstance(s, types.UnicodeCharSeq):
@@ -327,27 +540,31 @@ def charseq_str(s):
             return result
         return str_impl
 
-    if isinstance(s, types.CharSeq):
-        get_code = _get_code_impl(s)
 
-        def str_impl(s):
-            n = len(s)
-            is_ascii = s.isascii()
-            result = unicode._empty_string(
-                unicode.PY_UNICODE_1BYTE_KIND, n, is_ascii)
-            for i in range(n):
-                code = get_code(s, i)
-                unicode._set_code_point(result, i, code)
-            return result
-        return str_impl
+@overload(bytes)
+def charseq_bytes(s):
+    if isinstance(s, types.CharSeq):
+        def bytes_impl(s):
+            return s
+        return bytes_impl
 
 
 @overload_method(types.UnicodeCharSeq, '__hash__')
+def unicode_charseq_hash(s):
+    def impl(s):
+        return hash(str(s))
+    return impl
+
+
 @overload_method(types.CharSeq, '__hash__')
 def charseq_hash(s):
     def impl(s):
-        # note that hash(bytes(s)) == hash(s)
-        return hash(str(s))
+        # Ideally, `return hash(bytes(s))` would be used here but
+        # numba Bytes does not implement hash (yet). However, for a
+        # UTF-8 string `s`, we have hash(bytes(s)) == hash(s), hence,
+        # we can convert CharSeq object to unicode_type and reuse its
+        # hash implementation:
+        return hash(s._to_str())
     return impl
 
 
@@ -357,3 +574,36 @@ def unicode_charseq_isupper(s):
         # workaround unicode_type.isupper bug: it returns int value
         return not not str(s).isupper()
     return impl
+
+
+@overload_method(types.CharSeq, 'isupper')
+def charseq_isupper(s):
+    def impl(s):
+        # return bytes(s).isupper()  # TODO: implement isupper for Bytes
+        return not not s._to_str().isupper()
+    return impl
+
+
+@overload_method(types.UnicodeCharSeq, 'upper')
+def unicode_charseq_upper(s):
+    def impl(s):
+        return str(s).upper()
+    return impl
+
+
+@overload_method(types.CharSeq, 'upper')
+def charseq_upper(s):
+    def impl(s):
+        # return bytes(s).upper()  # TODO: implement upper for Bytes
+        return s._to_str().upper()._to_bytes()
+    return impl
+
+
+@overload_method(types.UnicodeCharSeq, 'find')
+def unicode_charseq_find(a, b):
+    if not _same_kind(a, b):
+        return
+
+    def find_impl(a, b):
+        return str(a).find(str(b))
+    return find_impl
