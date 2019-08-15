@@ -1397,7 +1397,8 @@ class FunctionIR(object):
                 block.dump(file=buf)
                 body = ''.join(['{}\l'.format(ln)
                                 for ln in buf.getvalue().split('\n')])
-            g.node(str(label), label=body, shape='rect')
+            g.node(str(label), label='block {}:\n{}'.format(label, body),
+                   shape='rect', fontname="monospace")
         for label, block in self.blocks.items():
             for target in block.terminator.get_targets():
                 g.edge(str(label), str(target))
