@@ -186,7 +186,12 @@ class _EnvReloader(object):
                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # Force dump of Numba IR CFG in PDF
-        VISUALIZE_IR_CFG = _readenv("NUMBA_VISUALIZE_IR_CFG", int, 0)
+        # Available options are:
+        # - postbytecode: post bytecode analysis
+        # - prelower: pre-lowering
+        # - all: all of the above.
+        # Multiple options can be set using comma (,) as the separator.
+        VISUALIZE_IR_CFG = _readenv("NUMBA_VISUALIZE_IR_CFG", str, "")
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)

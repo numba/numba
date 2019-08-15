@@ -404,6 +404,7 @@ class BasePipeline(object):
         """
         func_ir = translate_stage(self.func_id, self.bc)
         self._set_and_check_ir(func_ir)
+        debug_ir_cfg(func_ir, "postbytecode")
 
     def _set_and_check_ir(self, func_ir):
         self.func_ir = func_ir
@@ -695,6 +696,7 @@ class BasePipeline(object):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
+        debug_ir_cfg(self.func_ir, 'prelower')
         if self.library is None:
             codegen = self.targetctx.codegen()
             self.library = codegen.create_library(self.func_id.func_qualname)
@@ -912,6 +914,19 @@ class BasePipeline(object):
         """
         assert self.func_ir is not None
         return self._compile_core()
+
+
+def debug_ir_cfg(func_ir, level):
+    """Render IR CFG into a PDF file. if *level* is set
+
+    Writes to file ``<level>.<func_ir.unique_name>.pdf``.
+    See ``numba.config.VISUALIZE_IR_CFG``
+    """
+    options = set(config.VISUALIZE_IR_CFG.split(','))
+    if 'all' in options or level in options :
+        func_ir.visualize_cfg(
+            filename="{}.{}".format(level, func_ir.func_id.unique_name),
+        ).render(cleanup=True)
 
 
 class Pipeline(BasePipeline):
