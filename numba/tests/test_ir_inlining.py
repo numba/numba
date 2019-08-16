@@ -8,10 +8,10 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 import numba
-from numba import njit, ir, objmode
+from numba import njit, ir
 from numba.extending import overload
-from numba.ir_utils import dead_code_elimination, resolve_func_from_module
-from itertools import product, combinations
+from numba.ir_utils import dead_code_elimination
+from itertools import product
 from .support import TestCase, unittest
 
 
@@ -50,7 +50,7 @@ class InliningBase(TestCase):
 
     inline_opt_as_bool = {'always': True, 'never': False}
 
-    #---------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Example cost model
 
     def sentinel_17_cost_model(self, func_ir):
@@ -64,13 +64,7 @@ class InliningBase(TestCase):
                             return True
         return False
 
-    def s17_caller_model(self, caller_info, callee_info):
-        return self.sentinel_17_cost_model(caller_info)
-
-    def s17_callee_model(self, caller_info, callee_info):
-        return self.sentinel_17_cost_model(callee_info)
-
-    #---------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def check(self, test_impl, *args, **kwargs):
         inline_expect = kwargs.pop('inline_expect', None)
@@ -105,11 +99,7 @@ class InliningBase(TestCase):
                 if getattr(expr, 'op', False) == 'call':
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
-            try:
-                self.assertFalse(found == v)
-            except:
-                breakpoint()
-                pass
+            self.assertFalse(found == v)
 
 
 # used in _gen_involved
@@ -128,7 +118,7 @@ def _gen_involved():
         if np.abs(i) > 0:
             k = h / i
             l = np.arange(1, c + 1)
-            m = np.sqrt(l - g) + e  * k
+            m = np.sqrt(l - g) + e * k
             if np.abs(m[0]) < 1:
                 n = 0
                 for o in range(a):
@@ -273,7 +263,7 @@ class TestFunctionInlining(InliningBase):
 
     def test_inline_from_another_module_w_2_getattr(self):
 
-        import numba.tests.inlining_usecases  # forces registration
+        import numba.tests.inlining_usecases  # noqa forces registration
         import numba.tests as nt
 
         def impl():
@@ -316,10 +306,16 @@ class TestFunctionInlining(InliningBase):
 
     def test_inlining_models(self):
 
-        # caller has sentinel
-        for caller, callee in ((10, 11), (17, 11)):
+        def s17_caller_model(caller_info, callee_info):
+            return self.sentinel_17_cost_model(caller_info)
 
-            @njit(inline=self.s17_caller_model)
+        def s17_callee_model(caller_info, callee_info):
+            return self.sentinel_17_cost_model(callee_info)
+
+        # caller has sentinel
+        for caller, callee in ((11, 17), (17, 11)):
+
+            @njit(inline=s17_caller_model)
             def foo():
                 return callee
 
@@ -331,18 +327,18 @@ class TestFunctionInlining(InliningBase):
             self.check(impl, 10, inline_expect={'foo': caller == 17})
 
         # callee has sentinel
-        for caller, callee in ((11, 17), (11, 10)):
+        for caller, callee in ((11, 17), (17, 11)):
 
-            @njit(inline=self.s17_callee_model)
-            def foo():
+            @njit(inline=s17_callee_model)
+            def bar():
                 return callee
 
             def impl(z):
                 x = z + caller
-                y = foo()
+                y = bar()
                 return y + 3, x
 
-            self.check(impl, 10, inline_expect={'foo': callee == 17})
+            self.check(impl, 10, inline_expect={'bar': callee == 17})
 
     def test_inline_inside_loop(self):
         @njit(inline='always')
@@ -381,12 +377,12 @@ class TestFunctionInlining(InliningBase):
 
         def impl():
             z = 9
+
             def bar(x):
                 return foo(z) + 7 + x
             return bar(z + 2)
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
-
 
     def test_inline_involved(self):
 
@@ -395,6 +391,7 @@ class TestFunctionInlining(InliningBase):
         @njit(inline='always')
         def boz(j):
             acc = 0
+
             def biz(t):
                 return t + acc
             for x in range(j):
@@ -406,6 +403,7 @@ class TestFunctionInlining(InliningBase):
             acc = 0
             for p in range(12):
                 tmp = fortran(1, 1, 1, 1, 1)
+
                 def baz(x):
                     return 12 + a + x + tmp
                 acc += baz(p) + 8 + boz(p) + tmp
@@ -413,6 +411,7 @@ class TestFunctionInlining(InliningBase):
 
         def impl():
             z = 9
+
             def bar(x):
                 return foo(z) + 7 + x
             return bar(z + 2)
@@ -570,7 +569,7 @@ class TestOverloadInlining(InliningBase):
 
     def test_inline_from_another_module_w_2_getattr(self):
 
-        import numba.tests.inlining_usecases  # forces registration
+        import numba.tests.inlining_usecases  # noqa forces registration
         import numba.tests as nt
 
         def impl():
@@ -613,13 +612,19 @@ class TestOverloadInlining(InliningBase):
 
     def test_inlining_models(self):
 
+        def s17_caller_model(caller_info, callee_info):
+            return self.sentinel_17_cost_model(caller_info.func_ir)
+
+        def s17_callee_model(caller_info, callee_info):
+            return self.sentinel_17_cost_model(callee_info.func_ir)
+
         # caller has sentinel
         for caller, callee in ((10, 11), (17, 11)):
 
             def foo():
                 return callee
 
-            @overload(foo, inline=self.s17_caller_model)
+            @overload(foo, inline=s17_caller_model)
             def foo_ol():
                 def impl():
                     return callee
@@ -635,18 +640,18 @@ class TestOverloadInlining(InliningBase):
         # callee has sentinel
         for caller, callee in ((11, 17), (11, 10)):
 
-            def foo():
+            def bar():
                 return callee
 
-            @overload(foo, inline=self.s17_callee_model)
-            def foo_ol():
+            @overload(bar, inline=s17_callee_model)
+            def bar_ol():
                 def impl():
                     return callee
                 return impl
 
             def impl(z):
                 x = z + caller
-                y = foo()
+                y = bar()
                 return y + 3, x
 
-            self.check(impl, 10, inline_expect={'foo': callee == 17})
+            self.check(impl, 10, inline_expect={'bar': callee == 17})
