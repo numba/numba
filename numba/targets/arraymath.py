@@ -2872,7 +2872,7 @@ def np_imag(a):
 def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
         raise TypingError("The argument to np.count_nonzero must be array-like")
-    
+
     if (NumpyVersion(np.__version__) < '1.12.0'):
         raise TypingError("axis is not supported on Numpy versions < 1.12.0")
 
