@@ -823,12 +823,21 @@ class BasePipeline(object):
         """Add any stages that go before type-inference.
         The current stages contain type-agnostic rewrite passes.
         """
-        pm.add_stage(self.stage_inline_inlinables_pass, "inline inlinables")
         if not self.flags.no_rewrites:
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
+
+        # run closure inlining
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
+
+        # inline functions that have been determined as inlinable and rerun
+        # branch pruning this needs to be run after closures are inlined as
+        # the IR repr of a closure masks call sites if an inlinable is called
+        # inside a closure
+        pm.add_stage(self.stage_inline_inlinables_pass, "inline inlinables")
+        if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
 
     def add_typing_stage(self, pm):
         """Add the type-inference stage necessary for nopython mode.

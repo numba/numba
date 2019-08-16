@@ -2038,7 +2038,7 @@ class InlineInlinables(object):
         if modified:
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
-            simplify_CFG(self.func_ir.blocks)
+            self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
 
         if config.DEBUG or self._DEBUG:
             print('after inline'.center(80, '-'))
@@ -2131,8 +2131,7 @@ class InlineOverloads(object):
             dead_code_elimination(self.func_ir, typemap=self.typemap)
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
-            simplify_CFG(self.func_ir.blocks)
-
+            self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
 
         if config.DEBUG or self._DEBUG:
             print('after overload inline'.center(80, '-'))

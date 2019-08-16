@@ -48,7 +48,7 @@ class InliningBase(TestCase):
 
     inline_opt_as_bool = {'always': True, 'never': False}
 
-    def check(self, test_impl, *args, inline_expect=None):
+    def check(self, test_impl, *args, inline_expect=None, block_count=1):
         assert inline_expect
         for k, v in inline_expect.items():
             assert isinstance(k, str)
@@ -65,7 +65,7 @@ class InliningBase(TestCase):
         if self._DEBUG:
             print("FIR".center(80, "-"))
             fir.dump()
-        self.assertEqual(len(fir.blocks), 1)
+        self.assertEqual(len(fir.blocks), block_count)
         block = next(iter(fir.blocks.values()))
 
         # if we don't expect the function to be inlined then make sure there is
@@ -274,6 +274,50 @@ class TestFunctionInlining(InliningBase):
                 return y + 3, x
 
             self.check(impl, 10, inline_expect={'foo': ret == 17})
+
+    def test_inline_inside_loop(self):
+        @njit(inline='always')
+        def foo():
+            return 12
+
+        def impl():
+            acc = 0.0
+            for i in range(5):
+                acc += foo()
+            return acc
+
+        self.check(impl, inline_expect={'foo': True}, block_count=4)
+
+    def test_inline_inside_closure_inside_loop(self):
+        @njit(inline='always')
+        def foo():
+            return 12
+
+        def impl():
+            acc = 0.0
+            for i in range(5):
+                def bar():
+                    return foo() + 7
+                acc += bar()
+            return acc
+
+        self.check(impl, inline_expect={'foo': True}, block_count=4)
+
+    @unittest.skip("Need to work out how to inline closures in inlines")
+    def test_inline_closure_inside_inlinable_inside_closure(self):
+        @njit(inline='always')
+        def foo(a):
+            def baz():
+                return 12 + a
+            return baz() + 8
+
+        def impl():
+            z = 9
+            def bar(x):
+                return foo(z) + 7 + x
+            return bar(z + 2)
+
+        self.check(impl, inline_expect={'foo': True}, block_count=4)
 
 
 class TestOverloadInlining(InliningBase):
