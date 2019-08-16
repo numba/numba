@@ -2064,17 +2064,8 @@ class InlineInlinables(object):
         if getattr(to_inline, 'op', False) == 'getattr':
             val = resolve_func_from_module(self.func_ir, to_inline)
         else:
-            try:
-                val = getattr(to_inline, 'value', False)
-            except KeyError:
-                try:
-                    val = getattr(to_inline, 'func', False)
-                    val = getattr(val, 'value', False)
-                except  KeyError:
-                    try: # FreeVar
-                        val = to_inline.value
-                    except Exception:
-                        raise GuardException
+            val = getattr(to_inline, 'value', False)
+
 
         if val:
             topt = getattr(val, 'targetoptions', False)
