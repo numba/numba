@@ -72,8 +72,11 @@ class InliningBase(TestCase):
 
     #---------------------------------------------------------------------------
 
-    def check(self, test_impl, *args, inline_expect=None, block_count=1):
+    def check(self, test_impl, *args, **kwargs):
+        inline_expect = kwargs.pop('inline_expect', None)
         assert inline_expect
+        block_count = kwargs.pop('block_count', 1)
+        assert not kwargs
         for k, v in inline_expect.items():
             assert isinstance(k, str)
             assert isinstance(v, bool)
