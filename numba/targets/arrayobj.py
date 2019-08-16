@@ -3769,6 +3769,8 @@ def numpy_linspace_3(context, builder, sig, args):
 
     def linspace(start, stop, num):
         arr = np.empty(num, dtype)
+        if num == 0:
+            return arr
         div = num - 1
         delta = stop - start
         arr[0] = start
