@@ -617,8 +617,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
                 if isinstance(func_def, ir.Expr) and func_def.op == 'getattr' \
                   and func_def.attr == 'append':
                     list_def = get_definition(func_ir, func_def.value)
-                    debug_print("list_def = ", list_def, list_def == list_var_def)
-                    if list_def == list_var_def:
+                    debug_print("list_def = ", list_def, list_def is list_var_def)
+                    if list_def is list_var_def:
                         # found matching append call
                         list_append_stmts.append((label, block, stmt))
 
@@ -673,7 +673,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Skip list construction and skip terminator, add the rest to stmts
     for i in range(len(loop_entry.body) - 1):
         stmt = loop_entry.body[i]
-        if isinstance(stmt, ir.Assign) and (stmt.value == list_def or is_removed(stmt.value, removed)):
+        if isinstance(stmt, ir.Assign) and (stmt.value is list_def or is_removed(stmt.value, removed)):
             removed.append(stmt.target)
         else:
             stmts.append(stmt)
@@ -795,7 +795,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
 
     # In append_block, change list_append into array assign
     for i in range(len(append_block.body)):
-        if append_block.body[i] == append_stmt:
+        if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
             append_block.body[i] = ir.SetItem(target=array_var, index=index_var,
                                               value=append_stmt.value.args[0], loc=append_stmt.loc)
@@ -858,7 +858,7 @@ def _fix_nested_array(func_ir):
                 inst = body[i]
                 if isinstance(inst, ir.Assign):
                     defined.add(inst.target.name)
-                    if inst.value == expr:
+                    if inst.value is expr:
                         new_varlist = []
                         for var in varlist:
                             # var must be defined before this inst, or live

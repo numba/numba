@@ -50,6 +50,8 @@ class Environment(_dynfunc.Environment):
             return
         if _keepalive is None:
             return
+        if time is None or time.time is None:
+            return
         _keepalive.append((time.time(), self))
         if len(_keepalive) > 10:
             cur = time.time()
