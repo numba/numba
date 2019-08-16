@@ -630,6 +630,16 @@ class RequireLiteralValue(TypingError):
     pass
 
 
+class ForceLiteralArg(NumbaError):
+    """TODO
+    """
+    def __init__(self, new_args):
+        super(ForceLiteralArg, self).__init__(
+            "Pseudo-exception to force literal arguments from the dispatcher",
+        )
+        self.requested_args = new_args
+
+
 class LiteralTypingError(TypingError):
     """
     Failure in typing a Literal type

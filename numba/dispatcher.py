@@ -342,14 +342,22 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             else:
                 reraise(type(e), e, None)
 
+        print("_compile_for_args", args)
         argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
                 argtypes.append(types.Omitted(a.value))
             else:
                 argtypes.append(self.typeof_pyval(a))
+
         try:
             return self.compile(tuple(argtypes))
+        except errors.ForceLiteralArg as e:
+            # for ty in e.requested_args:
+            print('e.requested_args', e.requested_args)
+            args = [types.literal(args[0])]
+            return self._compile_for_args(*args)
+
         except errors.TypingError as e:
             # Intercept typing error that may be due to an argument
             # that failed inferencing as a Numba type

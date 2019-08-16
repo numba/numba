@@ -19,7 +19,7 @@ from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                             check_and_legalize_ir)
 from numba.compiler_lock import global_compiler_lock
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants, literal_arg_rewrite
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -484,6 +484,17 @@ class BasePipeline(object):
         self.calltypes = defaultdict(lambda: types.pyobject)
         self.return_type = types.pyobject
 
+    def stage_literal_arg(self):
+        """
+        Rewrite to move annotation about literals argument.
+        """
+        assert self.func_ir
+        # XXX machete
+        print('self.args', self.args, isinstance(self.args[0], types.Literal))
+        if not isinstance(self.args[0], types.Literal):
+            print("raising")
+            raise errors.ForceLiteralArg([types.ForceLiteral(self.args[0])])
+
     def stage_dead_branch_prune(self):
         """
         This prunes dead branches, a dead branch is one which is derivable as
@@ -811,6 +822,7 @@ class BasePipeline(object):
         The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_literal_arg, "literal args rewrites")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
