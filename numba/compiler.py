@@ -173,16 +173,22 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                             flags, locals)
 
 
-def run_frontend(func):
+def run_frontend(func, inline_closures=False):
     """
     Run the compiler frontend over the given Python function, and return
     the function's canonical Numba IR.
+
+    If inline_closures is Truthy then closure inlining will be run
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
     interp = interpreter.Interpreter(func_id)
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
+    if inline_closures:
+        inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
+                                            {}, False)
+        inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     return func_ir

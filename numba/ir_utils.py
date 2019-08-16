@@ -2047,6 +2047,7 @@ class InlineInlinables(object):
 
     def _do_work(self, work_list, block, i, expr):
         from numba.inline_closurecall import inline_closure_call
+        from numba.compiler import run_frontend
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
         to_inline = None
@@ -2086,7 +2087,8 @@ class InlineInlinables(object):
                         pyfunc = val.py_func
                         if inline_type != 'always':
                             # must be a function, run the function
-                            do_inline = inline_type(self.func_ir, pyfunc)
+                            py_func_ir = run_frontend(pyfunc)
+                            do_inline = inline_type(self.func_ir, py_func_ir)
                         if do_inline:
                             inline_closure_call(self.func_ir,
                                                 pyfunc.__globals__,

@@ -5,12 +5,14 @@ LLVM or low level inlining.
 
 from __future__ import print_function, absolute_import
 
-from .support import TestCase, unittest
+import numpy as np
+
 import numba
-from numba import njit, ir
+from numba import njit, ir, objmode
 from numba.extending import overload
 from numba.ir_utils import dead_code_elimination, resolve_func_from_module
 from itertools import product, combinations
+from .support import TestCase, unittest
 
 
 class InlineTestPipeline(numba.compiler.BasePipeline):
@@ -48,6 +50,28 @@ class InliningBase(TestCase):
 
     inline_opt_as_bool = {'always': True, 'never': False}
 
+    #---------------------------------------------------------------------------
+    # Example cost model
+
+    def sentinel_17_cost_model(self, func_ir):
+        # sentinel 17 cost model, this is a fake cost model that will return
+        # True (i.e. inline) if the ir.FreeVar(17) is found in the func_ir,
+        for blk in func_ir.blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.FreeVar):
+                        if stmt.value.value == 17:
+                            return True
+        return False
+
+    def s17_caller_model(self, caller_info, callee_info):
+        return self.sentinel_17_cost_model(caller_info)
+
+    def s17_callee_model(self, caller_info, callee_info):
+        return self.sentinel_17_cost_model(callee_info)
+
+    #---------------------------------------------------------------------------
+
     def check(self, test_impl, *args, inline_expect=None, block_count=1):
         assert inline_expect
         for k, v in inline_expect.items():
@@ -83,6 +107,46 @@ class InliningBase(TestCase):
             except:
                 breakpoint()
                 pass
+
+
+# used in _gen_involved
+_GLOBAL = 1234
+
+
+def _gen_involved():
+    _FREEVAR = 0xCAFE
+
+    def foo(a, b, c=12, d=1j, e=None):
+        f = a + b
+        a += _FREEVAR
+        g = np.zeros(c, dtype=np.complex64)
+        h = f + g
+        i = 1j / d
+        if np.abs(i) > 0:
+            k = h / i
+            l = np.arange(1, c + 1)
+            m = np.sqrt(l - g) + e  * k
+            if np.abs(m[0]) < 1:
+                n = 0
+                for o in range(a):
+                    n += 0
+                    if np.abs(n) < 3:
+                        break
+                n += m[2]
+            p = g / l
+            q = []
+            for r in range(len(p)):
+                q.append(p[r])
+                if r > 4 + 1:
+                    s = 123
+                    t = 5
+                    if s > 122 - c:
+                        t += s
+                t += q[0] + _GLOBAL
+
+        return f + o + r + t + r + a + n
+
+    return foo
 
 
 class TestFunctionInlining(InliningBase):
@@ -249,31 +313,33 @@ class TestFunctionInlining(InliningBase):
 
     def test_inlining_models(self):
 
-        def sentinel_17_cost_model(caller_inline_info, callee_inline_info):
-            # sentinel 17 cost model, this is a fake cost model that will return
-            # True (i.e. inline) if the ir.Const(17) is found in the caller IR,
-            # and the callee when executed returns 17. It's contrived and for
-            # testing purposes only but is designed run both args.
-            if callee_inline_info() == 17:
-                for blk in caller_inline_info.blocks.values():
-                    for stmt in blk.body:
-                        if isinstance(stmt, ir.Assign):
-                            if isinstance(stmt.value, ir.Const):
-                                if stmt.value.value == 17:
-                                    return True
-            return False
+        # caller has sentinel
+        for caller, callee in ((10, 11), (17, 11)):
 
-        for ret in (10, 17):
-            @njit(inline=sentinel_17_cost_model)
+            @njit(inline=self.s17_caller_model)
             def foo():
-                return ret
+                return callee
 
             def impl(z):
-                x = z + 17  # const 17 in caller
+                x = z + caller
                 y = foo()
                 return y + 3, x
 
-            self.check(impl, 10, inline_expect={'foo': ret == 17})
+            self.check(impl, 10, inline_expect={'foo': caller == 17})
+
+        # callee has sentinel
+        for caller, callee in ((11, 17), (11, 10)):
+
+            @njit(inline=self.s17_callee_model)
+            def foo():
+                return callee
+
+            def impl(z):
+                x = z + caller
+                y = foo()
+                return y + 3, x
+
+            self.check(impl, 10, inline_expect={'foo': callee == 17})
 
     def test_inline_inside_loop(self):
         @njit(inline='always')
@@ -303,7 +369,6 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=4)
 
-    @unittest.skip("Need to work out how to inline closures in inlines")
     def test_inline_closure_inside_inlinable_inside_closure(self):
         @njit(inline='always')
         def foo(a):
@@ -317,7 +382,40 @@ class TestFunctionInlining(InliningBase):
                 return foo(z) + 7 + x
             return bar(z + 2)
 
-        self.check(impl, inline_expect={'foo': True}, block_count=4)
+        self.check(impl, inline_expect={'foo': True}, block_count=1)
+
+
+    def test_inline_involved(self):
+
+        fortran = njit(inline='always')(_gen_involved())
+
+        @njit(inline='always')
+        def boz(j):
+            acc = 0
+            def biz(t):
+                return t + acc
+            for x in range(j):
+                acc += biz(8 + acc) + fortran(2., acc, 1, 12j, biz(acc))
+            return acc
+
+        @njit(inline='always')
+        def foo(a):
+            acc = 0
+            for p in range(12):
+                tmp = fortran(1, 1, 1, 1, 1)
+                def baz(x):
+                    return 12 + a + x + tmp
+                acc += baz(p) + 8 + boz(p) + tmp
+            return acc + baz(2)
+
+        def impl():
+            z = 9
+            def bar(x):
+                return foo(z) + 7 + x
+            return bar(z + 2)
+
+        self.check(impl, inline_expect={'foo': True, 'boz': True,
+                                        'fortran': True}, block_count=37)
 
 
 class TestOverloadInlining(InliningBase):
@@ -512,30 +610,13 @@ class TestOverloadInlining(InliningBase):
 
     def test_inlining_models(self):
 
-        def sentinel_17_cost_model(func_ir):
-            # sentinel 17 cost model, this is a fake cost model that will return
-            # True (i.e. inline) if the ir.FreeVar(17) is found in the func_ir,
-            for blk in func_ir.blocks.values():
-                for stmt in blk.body:
-                    if isinstance(stmt, ir.Assign):
-                        if isinstance(stmt.value, ir.FreeVar):
-                            if stmt.value.value == 17:
-                                return True
-            return False
-
-        def s17_caller_model(caller_info, callee_info):
-            return sentinel_17_cost_model(caller_info.func_ir)
-
-        def s17_callee_model(caller_info, callee_info):
-            return sentinel_17_cost_model(callee_info.func_ir)
-
         # caller has sentinel
         for caller, callee in ((10, 11), (17, 11)):
 
             def foo():
                 return callee
 
-            @overload(foo, inline=s17_caller_model)
+            @overload(foo, inline=self.s17_caller_model)
             def foo_ol():
                 def impl():
                     return callee
@@ -554,7 +635,7 @@ class TestOverloadInlining(InliningBase):
             def foo():
                 return callee
 
-            @overload(foo, inline=s17_callee_model)
+            @overload(foo, inline=self.s17_callee_model)
             def foo_ol():
                 def impl():
                     return callee

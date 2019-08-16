@@ -443,6 +443,45 @@ class TestIRNodes(CheckEquality):
 _GLOBAL = 1234
 
 
+def _gen_involved():
+    _FREEVAR = 0xCAFE
+
+    def foo(a, b, c=12, d=1j, e=None):
+        f = a + b
+        a += _FREEVAR
+        g = np.zeros(c, dtype=np.complex64)
+        h = f + g
+        i = 1j / d
+        if np.abs(i) > 0:
+            k = h / i
+            l = np.arange(1, c + 1)
+            with objmode():
+                print(e, k)
+            m = np.sqrt(l - g)
+            if np.abs(m[0]) < 1:
+                n = 0
+                for o in range(a):
+                    n += 0
+                    if np.abs(n) < 3:
+                        break
+                n += m[2]
+            p = g / l
+            q = []
+            for r in range(len(p)):
+                q.append(p[r])
+                if r > 4 + 1:
+                    with objmode(s='intp', t='complex128'):
+                        s = 123
+                        t = 5
+                    if s > 122:
+                        t += s
+                t += q[0] + _GLOBAL
+
+        return f + o + r + t + r + a + n
+
+    return foo
+
+
 class TestIRCompounds(CheckEquality):
     """
     Tests IR concepts that have state
@@ -486,46 +525,9 @@ class TestIRCompounds(CheckEquality):
         # function IR to check the IR is the same invariant of objects, and then
         # a tiny mutation is made to the IR in the second function and detection
         # of this change is checked.
-        def gen():
-            _FREEVAR = 0xCAFE
 
-            def foo(a, b, c=12, d=1j, e=None):
-                f = a + b
-                a += _FREEVAR
-                g = np.zeros(c, dtype=np.complex64)
-                h = f + g
-                i = 1j / d
-                if np.abs(i) > 0:
-                    k = h / i
-                    l = np.arange(1, c + 1)
-                    with objmode():
-                        print(e, k)
-                    m = np.sqrt(l - g)
-                    if np.abs(m[0]) < 1:
-                        n = 0
-                        for o in range(a):
-                            n += 0
-                            if np.abs(n) < 3:
-                                break
-                        n += m[2]
-                    p = g / l
-                    q = []
-                    for r in range(len(p)):
-                        q.append(p[r])
-                        if r > 4 + 1:
-                            with objmode(s='intp', t='complex128'):
-                                s = 123
-                                t = 5
-                            if s > 122:
-                                t += s
-                        t += q[0] + _GLOBAL
-
-                return f + o + r + t + r + a + n
-
-            return foo
-
-        x = gen()
-        y = gen()
+        x = _gen_involved()
+        y = _gen_involved()
         x_ir = compiler.run_frontend(x)
         y_ir = compiler.run_frontend(y)
         self.assertTrue(x_ir.equal_ir(y_ir))

@@ -89,8 +89,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 at into its caller if called. String options are 'never'
                 (default) which will never inline, and 'always', which will
                 always inline. If a callable is provided it will be called with
-                the caller's IR and the callee Python function and is expected
-                to return True/False as to whether to inline.
+                the caller's IR and callee's IR is expected to return True/False
+                as to whether to inline.
 
     Returns
     --------
