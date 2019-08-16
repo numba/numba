@@ -663,13 +663,27 @@ def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, bound
                              strides=strides, layout=aryty.layout, inds=inds,
                              wraparound=wraparound, boundscheck=boundscheck)
 
-def boundscheck(context, builder, ind, dimlen):
+def boundscheck(context, builder, ind, dimlen, axis=None):
+    # breakpoint()
+    def _dbg():
+        # Remove this when we figure out how to include this information
+        # in the error message.
+        if axis is not None:
+            if isinstance(axis, int):
+                printf(builder, "debug: IndexError: index %d is out of bounds for axis {} with size %d\n".format(axis), ind, dimlen)
+            else:
+                printf(builder, "debug: IndexError: index %d is out of bounds for axis %d with size %d\n".format(axis), ind, axis, dimlen)
+        else:
+            printf(builder, "debug: IndexError: index %d is out of bounds for size %d\n", ind, dimlen)
+
     msg = "index is out of bounds"
     out_of_bounds_upper = builder.icmp_signed('>=', ind, dimlen)
     with if_unlikely(builder, out_of_bounds_upper):
+        if config.FULL_TRACEBACKS: _dbg()
         context.call_conv.return_user_exc(builder, IndexError, (msg,))
     out_of_bounds_lower = builder.icmp_signed('<', ind, ind.type(0))
     with if_unlikely(builder, out_of_bounds_lower):
+        if config.FULL_TRACEBACKS: _dbg()
         context.call_conv.return_user_exc(builder, IndexError, (msg,))
 
 def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
@@ -685,8 +699,8 @@ def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
     else:
         indices = inds
     if boundscheck:
-        for ind, dimlen in zip(indices, shape):
-            boundscheck(context, builder, ind, dimlen)
+        for axis, (ind, dimlen) in enumerate(zip(indices, shape)):
+            boundscheck(context, builder, ind, dimlen, axis)
 
     if not indices:
         # Indexing with empty tuple
