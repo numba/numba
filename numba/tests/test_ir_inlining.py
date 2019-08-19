@@ -44,6 +44,21 @@ class InlineTestPipeline(numba.compiler.BasePipeline):
 _GLOBAL1 = -50
 
 
+@njit(inline='always')
+def _global_func(x):
+    return x + 1
+
+
+# to be overloaded
+def _global_defn(x):
+    return x + 1
+
+
+@overload(_global_defn, inline='always')
+def _global_overload(x):
+    return _global_defn
+
+
 class InliningBase(TestCase):
 
     _DEBUG = False
@@ -240,6 +255,14 @@ class TestFunctionInlining(InliningBase):
                              'bar': self.inline_opt_as_bool[inline_bar],
                              'baz': self.inline_opt_as_bool[inline_baz]}
             self.check(impl, inline_expect=inline_expect)
+
+    def test_global_binding(self):
+
+        def impl():
+            x = 19
+            return _global_func(x)
+
+        self.check(impl, inline_expect={'_global_func': True})
 
     def test_inline_from_another_module(self):
 
@@ -546,6 +569,14 @@ class TestOverloadInlining(InliningBase):
                              'baz': self.inline_opt_as_bool[inline_baz]}
 
             self.check(impl, inline_expect=inline_expect)
+
+    def test_global_overload_binding(self):
+
+        def impl():
+            z = 19
+            return _global_defn(z)
+
+        self.check(impl, inline_expect={'_global_defn': True})
 
     def test_inline_from_another_module(self):
 
