@@ -342,7 +342,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             else:
                 reraise(type(e), e, None)
 
-        print("_compile_for_args", args)
         argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
@@ -353,11 +352,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             return self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
-            print('e.requested_args', e.requested_args)
             args = [types.literal(args[i])
                     if isinstance(ty, types.ForceLiteral) else args[i]
                     for i, ty in enumerate(e.requested_args)]
-            print("new args", args)
             return self._compile_for_args(*args)
 
         except errors.TypingError as e:

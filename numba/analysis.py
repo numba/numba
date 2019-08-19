@@ -7,7 +7,7 @@ from collections import namedtuple, defaultdict
 
 from numba import ir, errors
 from numba.controlflow import CFGraph
-from numba import types, consts
+from numba import types, consts, special
 
 #
 # Analysis related to variable lifetime
@@ -264,8 +264,8 @@ def find_top_level_loops(cfg):
 
 
 def literal_arg_rewrite(func_ir, called_args):
-    print(func_ir, called_args)
     raise ValueError
+
 
 # Functions to manipulate IR
 def dead_branch_prune(func_ir, called_args):
@@ -512,12 +512,13 @@ def find_literal_calls(func_ir, argtypes):
     for blk in func_ir.blocks.values():
         for assign in blk.find_exprs(op='call'):
             gv = func_ir.get_definition(assign.func)
-            if gv.value.__name__ == 'literally':
-                # Found
-                [arg] = assign.args
-                defarg = func_ir.get_definition(arg)
-                if isinstance(defarg, ir.Arg):
-                    marked_args.add(defarg.index)
+            if isinstance(gv, (ir.Global, ir.FreeVar)):
+                if gv.value is special.literally:
+                    # Found
+                    [arg] = assign.args
+                    defarg = func_ir.get_definition(arg)
+                    if isinstance(defarg, ir.Arg):
+                        marked_args.add(defarg.index)
     # Signal the dispatcher to force literal typing
     if marked_args:
         new_args = list(argtypes)
@@ -528,5 +529,4 @@ def find_literal_calls(func_ir, argtypes):
                 new_args[pos] = types.ForceLiteral(arg)
                 ct += 1
         if ct:
-            print("NEW_ARGS", new_args)
             raise errors.ForceLiteralArg(new_args)
