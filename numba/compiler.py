@@ -12,6 +12,7 @@ from numba import (bytecode, interpreter, funcdesc, postproc,
                    typing, typeinfer, lowering, pylowering, utils, config,
                    errors, types, ir, rewrites, transforms)
 from numba.targets import cpu, callconv
+
 from numba.annotations import type_annotations
 from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
@@ -19,7 +20,12 @@ from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                             check_and_legalize_ir)
 from numba.compiler_lock import global_compiler_lock
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants, literal_arg_rewrite
+from numba.analysis import (
+    dead_branch_prune,
+    rewrite_semantic_constants,
+    literal_arg_rewrite,
+    find_literal_calls,
+)
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -489,11 +495,7 @@ class BasePipeline(object):
         Rewrite to move annotation about literals argument.
         """
         assert self.func_ir
-        # XXX machete
-        print('self.args', self.args, isinstance(self.args[0], types.Literal))
-        if not isinstance(self.args[0], types.Literal):
-            print("raising")
-            raise errors.ForceLiteralArg([types.ForceLiteral(self.args[0])])
+        find_literal_calls(func_ir=self.func_ir, argtypes=self.args)
 
     def stage_dead_branch_prune(self):
         """

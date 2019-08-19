@@ -5,7 +5,7 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir
+from numba import ir, errors
 from numba.controlflow import CFGraph
 from numba import types, consts
 
@@ -504,3 +504,28 @@ def rewrite_semantic_constants(func_ir, called_args):
         print("after".center(80, '*'))
         func_ir.dump()
         print('-' * 80)
+
+
+def find_literal_calls(func_ir, argtypes):
+    marked_args = set()
+    # Scan for literally calls
+    for blk in func_ir.blocks.values():
+        for assign in blk.find_exprs(op='call'):
+            gv = func_ir.get_definition(assign.func)
+            if gv.value.__name__ == 'literally':
+                # Found
+                [arg] = assign.args
+                defarg = func_ir.get_definition(arg)
+                if isinstance(defarg, ir.Arg):
+                    marked_args.add(defarg.index)
+    # Signal the dispatcher to force literal typing
+    if marked_args:
+        new_args = list(argtypes)
+        ct = 0
+        for pos, arg in enumerate(argtypes):
+            # Check if the type is already a literal type
+            if not isinstance(arg, types.Literal):
+                new_args[pos] = types.ForceLiteral(arg)
+                ct += 1
+        if ct:
+            raise errors.ForceLiteralArg(new_args)
