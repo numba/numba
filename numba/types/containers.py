@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import Iterable
+
 from .abstract import *
 from .common import *
 from .misc import Undefined, unliteral, Optional, NoneType
@@ -308,6 +310,10 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
 
     def __init__(self, types, cls):
+
+        if not isinstance(types, Iterable):
+            raise TypingError("'{}' type is not iterable".format(type(types)))
+
         self.types = tuple(types)
         self.count = len(self.types)
         self.fields = tuple(cls._fields)
