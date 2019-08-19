@@ -56,7 +56,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
-    pipeline_class: type numba.compiler.BasePipeline
+    pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
 
     options:

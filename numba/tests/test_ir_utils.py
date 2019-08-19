@@ -2,7 +2,7 @@ import numba
 from .support import TestCase, unittest
 from numba import compiler, jitclass, ir
 from numba.targets.registry import cpu_target
-from numba.compiler import Pipeline, Flags, _PipelineManager
+from numba.compiler import Pipeline, Flags, PassManager
 from numba.targets import registry
 from numba import types, ir_utils, bytecode
 
@@ -70,13 +70,13 @@ class TestIrUtils(TestCase):
                 self.bc = self.extract_bytecode(self.func_id)
                 self.lifted = []
 
-                pm = _PipelineManager()
+                pm = PassManager()
                 pm.create_pipeline("pipeline")
                 self.add_preprocessing_stage(pm)
                 self.add_pre_typing_stage(pm)
                 self.add_typing_stage(pm)
                 if DCE is True:
-                    pm.add_stage(self.rm_dead_stage, "DCE after typing")
+                    pm.add_pass(self.rm_dead_stage, "DCE after typing")
                 pm.finalize()
                 pm.run(self.status)
                 return self.func_ir
