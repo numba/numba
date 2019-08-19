@@ -23,7 +23,7 @@ from collections import OrderedDict, defaultdict
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
-                     termcolor, UnsupportedError)
+                     termcolor, UnsupportedError, ForceLiteralArg)
 from .funcdesc import qualifying_prefix
 
 
@@ -145,6 +145,8 @@ class ConstraintNetwork(object):
                                                    lineno=loc.line):
                 try:
                     constraint(typeinfer)
+                except ForceLiteralArg as e:
+                    errors.append(e)
                 except TypingError as e:
                     _logger.debug("captured error", exc_info=e)
                     new_exc = TypingError(
@@ -478,7 +480,19 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
-        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        try:
+            sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        except ForceLiteralArg as e:
+            # XXX What about vararg?
+            folded = e.fold_arguments(self.args, self.kws)
+            argtypes = typeinfer.get_argument_types()
+            for idx, req in enumerate(e.requested_args):
+                if isinstance(req, types.ForceLiteral):
+                    maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
+                    if isinstance(maybe_arg, ir.Arg):
+                        argtypes[idx] = types.ForceLiteral(argtypes[idx])
+
+            raise ForceLiteralArg(argtypes)
 
         if sig is None:
             # Note: duplicated error checking.
@@ -862,6 +876,9 @@ class TypeInferer(object):
                 rets.append(inst.value)
         return rets
 
+    def get_argument_types(self):
+        return [self.typevars[k].getone() for k in self.arg_names.values()]
+
     def seed_argument(self, name, index, typ):
         name = self._mangle_arg_name(name)
         self.seed_type(name, typ)
@@ -925,7 +942,16 @@ class TypeInferer(object):
             self.debug.propagate_finished()
         if errors:
             if raise_errors:
-                raise errors[0]
+                force_lit_args = [e for e in errors
+                                  if isinstance(e, ForceLiteralArg)]
+                if not force_lit_args:
+                    raise errors[0]
+                else:
+                    head = force_lit_args[0]
+                    tail = force_lit_args[1:]
+                    for e in tail:
+                        head = head.combine(e)
+                    raise head
             else:
                 return errors
 

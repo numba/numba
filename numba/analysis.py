@@ -528,4 +528,5 @@ def find_literal_calls(func_ir, argtypes):
                 new_args[pos] = types.ForceLiteral(arg)
                 ct += 1
         if ct:
+            print("NEW_ARGS", new_args)
             raise errors.ForceLiteralArg(new_args)

@@ -353,9 +353,11 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             return self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
-            # for ty in e.requested_args:
             print('e.requested_args', e.requested_args)
-            args = [types.literal(args[0])]
+            args = [types.literal(args[i])
+                    if isinstance(ty, types.ForceLiteral) else ty
+                    for i, ty in enumerate(e.requested_args)]
+            print("new args", args)
             return self._compile_for_args(*args)
 
         except errors.TypingError as e:
@@ -747,7 +749,11 @@ class Dispatcher(_DispatcherBase):
                 return cres.entry_point
 
             self._cache_misses[sig] += 1
-            cres = self._compiler.compile(args, return_type)
+            try:
+                cres = self._compiler.compile(args, return_type)
+            except errors.ForceLiteralArg as e:
+                e.fold_arguments = lambda args, kws: self._compiler.fold_argument_types(args, kws)[1]
+                raise
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point
