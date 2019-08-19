@@ -355,7 +355,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         except errors.ForceLiteralArg as e:
             print('e.requested_args', e.requested_args)
             args = [types.literal(args[i])
-                    if isinstance(ty, types.ForceLiteral) else ty
+                    if isinstance(ty, types.ForceLiteral) else args[i]
                     for i, ty in enumerate(e.requested_args)]
             print("new args", args)
             return self._compile_for_args(*args)

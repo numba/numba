@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-from .typing.typeof import typeof
 import numpy as np
+
+from .typing.typeof import typeof
+
 
 def pndindex(*args):
     """ Provides an n-dimensional parallel iterator that generates index tuples
@@ -9,12 +11,14 @@ def pndindex(*args):
     """
     return np.ndindex(*args)
 
+
 class prange(object):
     """ Provides a 1D parallel iterator that generates a sequence of integers.
     In non-parallel contexts, prange is identical to range.
     """
     def __new__(cls, *args):
         return range(*args)
+
 
 def _gdb_python_call_gen(func_name, *args):
     # generates a call to a function containing a compiled in gdb command,
@@ -27,6 +31,7 @@ def _gdb_python_call_gen(func_name, *args):
     l = {}
     numba.six.exec_(defn, {func_name: fn}, l)
     return numba.njit(l['_gdb_func_injection'])
+
 
 def gdb(*args):
     """
@@ -57,4 +62,21 @@ def gdb_init(*args):
     _gdb_python_call_gen('gdb_init', *args)()
 
 
-__all__ = ['typeof', 'prange', 'pndindex', 'gdb', 'gdb_breakpoint', 'gdb_init']
+def literally(obj):
+    """Forces numba to take *obj* as an Literal value.
+
+    This functions is intercepted by the compiler to alter its behavior to
+    consider related function parameter as a literal type.
+    """
+    return obj
+
+
+__all__ = [
+    'typeof',
+    'prange',
+    'pndindex',
+    'gdb',
+    'gdb_breakpoint',
+    'gdb_init',
+    'literally',
+]
