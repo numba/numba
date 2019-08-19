@@ -336,7 +336,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             """
             if config.SHOW_HELP:
                 help_msg = errors.error_extras[issue_type]
-                e.patch_message('\n'.join((str(e), help_msg)))
+                e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             if config.FULL_TRACEBACKS:
                 raise e
             else:
@@ -390,7 +390,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if config.SHOW_HELP:
                 if hasattr(e, 'patch_message'):
                     help_msg = errors.error_extras['reportable']
-                    e.patch_message('\n'.join((str(e), help_msg)))
+                    e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
 
