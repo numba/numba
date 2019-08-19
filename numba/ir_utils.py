@@ -2064,7 +2064,12 @@ class InlineInlinables(object):
         if getattr(to_inline, 'op', False) == 'getattr':
             val = resolve_func_from_module(self.func_ir, to_inline)
         else:
-            val = getattr(to_inline, 'value', False)
+            # getattr 'value' on a call may fail if it's an ir.Expr as getattr
+            # is overloaded to look in _kws.
+            try:
+                val = getattr(to_inline, 'value', False)
+            except Exception:
+                raise GuardException
 
 
         if val:

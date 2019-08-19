@@ -440,7 +440,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             from numba import compiler
             ir = compiler.run_frontend(disp_type.dispatcher.py_func)
             typemap, return_type, calltypes = compiler.type_inference_stage(
-                                              self.context, ir, args, None)
+                self.context, ir, args, None)
             sig = Signature(return_type, args, None)
             # this stores a load of info for the cost model function if supplied
             # it by default is None
@@ -556,7 +556,8 @@ def make_overload_template(func, overload_func, jit_options, strict,
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict, _inline=inline, _inline_overloads={})
+               _strict=strict, _inline=staticmethod(inline),
+               _inline_overloads={})
     return type(base)(name, (base,), dct)
 
 
