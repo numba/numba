@@ -213,7 +213,7 @@ class NumbaTestProgram(unittest.main):
                         #try and parse the next arg as an int
                         try:
                             nprocs = int(m_option)
-                        except BaseException:
+                        except Exception:
                             msg = ('Expected an integer argument to '
                                 'option `-m`, found "%s"')
                             raise ValueError(msg % m_option)

@@ -824,10 +824,12 @@ class ParforDiagnostics(object):
         if level in (2, 3, 4):
             print_pre_optimised = True
 
+        if level in (3, 4):
+            print_allocation_hoist = True
+
         if level == 3:
             print_fusion_summary = True
             print_loopnest_rewrite = True
-            print_allocation_hoist = True
 
         if level == 4:
             print_fusion_search = True

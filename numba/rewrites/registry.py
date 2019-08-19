@@ -85,6 +85,16 @@ class RewriteRegistry(object):
             if block != old_blocks[key]:
                 block.verify()
 
+        # Some passes, e.g. _inline_const_arraycall are known to occasionally
+        # do invalid things WRT ir.Del, others, e.g. RewriteArrayExprs do valid
+        # things with ir.Del, but the placement is not optimal. The lines below
+        # fix-up the IR so that ref counts are valid and optimally placed,
+        # see #4093 for context. This has to be run here opposed to in
+        # apply() as the CFG needs computing so full IR is needed.
+        from numba import postproc
+        post_proc = postproc.PostProcessor(func_ir)
+        post_proc.run()
+
 
 rewrite_registry = RewriteRegistry()
 register_rewrite = rewrite_registry.register

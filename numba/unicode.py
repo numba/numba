@@ -33,10 +33,8 @@ from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
-                              _PyUnicode_gettyperecord,
-                              _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
 # DATA MODEL
 
@@ -810,7 +808,7 @@ def unicode_strip_right_bound(string, chars):
 
 def unicode_strip_types_check(chars):
     if isinstance(chars, types.Optional):
-        chars = chars.type # catch optional type with invalid non-None type
+        chars = chars.type  # catch optional type with invalid non-None type
     if not (chars is None or isinstance(chars, (types.Omitted,
                                                 types.UnicodeType,
                                                 types.NoneType))):
@@ -1056,39 +1054,46 @@ def unicode_not(a):
         return impl
 
 
+def _is_upper(is_lower, is_upper, is_title):
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    # mixed with:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return is_upper(_get_code_point(a, 0))
+        if l == 0:
+            return False
+        cased = False
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if is_lower(code_point) or is_title(code_point):
+                return False
+            elif(not cased and is_upper(code_point)):
+                cased = True
+        return cased
+    return impl
+
+
+_always_false = register_jitable(lambda x: False)
+_ascii_is_upper = register_jitable(_is_upper(_Py_ISLOWER, _Py_ISUPPER,
+                                             _always_false))
+_unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
 @overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """
     Implements .isupper()
     """
-    # impl is an approximate translation of:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
     def impl(a):
-        l = len(a)
-        if l == 0: # empty string
-            return False
         if a._is_ascii:
-            isupper = True
-            for char in a:
-                data = _PyUnicode_gettyperecord(char)
-                t = data.flags & _PyUnicode_TyperecordMasks.UPPER_MASK
-                isupper &= (t != 0)
-                if not isupper:
-                    return False
-            return isupper
+            return _ascii_is_upper(a)
         else:
-            if l == 1: # single char string
-                return _PyUnicode_IsUppercase(a)
-            else:
-                cased = 0
-                for idx in range(l):
-                    code_point = _get_code_point(a, idx)
-                    if (_PyUnicode_IsLowercase(code_point) or
-                            _PyUnicode_IsTitlecase(code_point)):
-                        return False
-                    elif not cased and _PyUnicode_IsUppercase(code_point):
-                        cased = 1
-                return cased == 1
+            return _unicode_is_upper(a)
     return impl
 
 

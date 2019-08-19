@@ -110,9 +110,22 @@ class CallFrame(object):
         self.typeinfer = typeinfer
         self.func_id = func_id
         self.args = args
+        self._inferred_retty = set()
 
     def __repr__(self):
         return "CallFrame({}, {})".format(self.func_id, self.args)
+
+    def add_return_type(self, return_type):
+        """Add *return_type* to the list of inferred return-types.
+        If there are too many, raise `TypingError`.
+        """
+        # The maximum limit is picked arbitrarily.
+        # Don't think that this needs to be user configurable.
+        RETTY_LIMIT = 16
+        self._inferred_retty.add(return_type)
+        if len(self._inferred_retty) >= RETTY_LIMIT:
+            m = "Return type of recursive function does not converge"
+            raise errors.TypingError(m)
 
 
 class BaseContext(object):

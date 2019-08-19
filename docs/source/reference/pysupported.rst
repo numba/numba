@@ -248,6 +248,8 @@ For example, to create a list of arrays::
   Out[4]: [array([], dtype=int64), array([0]), array([0, 1]), array([0, 1, 2])]
 
 
+.. _feature-reflected-list:
+
 List Reflection
 '''''''''''''''
 
@@ -269,6 +271,9 @@ of this limitation.
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
+
+
+.. _feature-typed-list:
 
 Typed List
 ''''''''''
@@ -443,8 +448,8 @@ Further to the above in relation to type specification, there are limitations
 placed on the types that can be used as keys and/or values in the typed
 dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
-strings, arrays, scalars, tuples. It is expected that these limitations will
-be relaxed as Numba continues to improve.
+strings, arrays (value only), scalars, tuples. It is expected that these 
+limitations will be relaxed as Numba continues to improve.
 
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:

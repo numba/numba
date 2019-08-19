@@ -96,7 +96,7 @@ class ArrayAnalysisTester(Pipeline):
 
         try:
             bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
+        except Exception as e:
             raise e
 
         self.bc = bc

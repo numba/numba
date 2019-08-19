@@ -12,7 +12,6 @@ import warnings
 import inspect
 import pickle
 import weakref
-import collections
 from itertools import chain
 
 try:
@@ -226,7 +225,7 @@ class TestDispatcher(BaseTest):
         def wrapper():
             try:
                 self.assertEqual(foo(1), 2)
-            except BaseException as e:
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=wrapper) for i in range(16)]

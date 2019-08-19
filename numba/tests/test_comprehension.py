@@ -207,7 +207,7 @@ class TestListComprehension(TestCase):
             except ValueError:  # likely np array returned
                 try:
                     np.testing.assert_allclose(cfunc(var), ref(var))
-                except BaseException:
+                except Exception:
                     raise
 
         # test functions that are expected to fail

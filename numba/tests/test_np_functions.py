@@ -197,6 +197,10 @@ def np_select(condlist, choicelist, default=0):
     return np.select(condlist, choicelist, default=default)
 
 
+def np_select_defaults(condlist, choicelist):
+    return np.select(condlist, choicelist)
+
+
 def np_bartlett(M):
     return np.bartlett(M)
 
@@ -2775,6 +2779,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_select(self):
         np_pyfunc = np_select
         np_nbfunc = njit(np_select)
+
         test_cases = [
             # Each test case below is one tuple.
             # Each tuple is separated by a description of what's being tested
@@ -2815,6 +2820,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for condlist,  choicelist, default in test_cases:
             self.assertPreciseEqual(np_pyfunc(condlist, choicelist, default),
                                     np_nbfunc(condlist, choicelist, default))
+
+        np_pyfunc_defaults = np_select_defaults
+        np_nbfunc_defaults = njit(np_select_defaults)
+        # check the defaults work, using whatever the last input was
+        self.assertPreciseEqual(np_pyfunc_defaults(condlist, choicelist),
+                                np_nbfunc_defaults(condlist, choicelist))
 
     def test_select_exception(self):
         np_nbfunc = njit(np_select)

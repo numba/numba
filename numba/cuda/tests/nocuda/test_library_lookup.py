@@ -72,14 +72,14 @@ def check_lib_lookup(qout, qin):
     while status:
         try:
             action = qin.get()
-        except BaseException as e:
+        except Exception as e:
             qout.put(e)
             status = False
         else:
             try:
                 status, result = action()
                 qout.put(result)
-            except BaseException as e:
+            except Exception as e:
                 qout.put(e)
                 status = False
 
