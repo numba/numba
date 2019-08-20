@@ -301,7 +301,7 @@ def _autogenerate():
     gen_lower_listing(os.path.join(basedir,
                                    'developer/autogen_lower_listing.rst'))
 
-    # Run inspector on numpy
+    # Run inspector on supported packages
     for package in ['builtins', 'math', 'cmath', 'numpy']:
         write_listings(
             package_name=package,
