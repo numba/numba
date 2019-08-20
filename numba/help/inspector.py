@@ -75,21 +75,30 @@ def inspect_function(function, target=None):
     return info
 
 
-def inspect_module(module, target=None):
+def inspect_module(module, target=None, alias=None):
     """Inspect a module object and yielding results from `inspect_function()`
     for each function object in the module.
     """
+    alias = {} if alias is None else alias
     # Walk the module
     for name in dir(module):
         if name.startswith('_'):
             # Skip
             continue
         obj = getattr(module, name)
-        info = dict(module=module, name=name, obj=obj)
         supported_types = (pytypes.FunctionType, pytypes.BuiltinFunctionType)
-        if isinstance(obj, supported_types):
-            info.update(inspect_function(obj, target=target))
-            yield info
+
+        if not isinstance(obj, supported_types):
+            # Skip if it's not a function
+            continue
+
+        info = dict(module=module, name=name, obj=obj)
+        if obj in alias:
+            info['alias'] = alias[obj]
+        else:
+            alias[obj] = "{module}.{name}".format(module=module.__name__, name=name)
+        info.update(inspect_function(obj, target=target))
+        yield info
 
 
 class _Stat(object):
@@ -124,7 +133,21 @@ class _Stat(object):
         )
 
 
-def list_modules_in_package(package):
+def filter_private_module(module_components):
+    return not any(x.startswith('_') for x in module_components)
+
+
+def filter_tests_module(module_components):
+    return not any(x == 'tests' for x in module_components)
+
+
+_default_module_filters = (
+    filter_private_module,
+    filter_tests_module,
+)
+
+
+def list_modules_in_package(package, module_filters=_default_module_filters):
     """Yield all modules in a given package.
 
     Recursively walks the package tree.
@@ -137,13 +160,20 @@ def list_modules_in_package(package):
         prefix,
         onerror=onerror_ignore,
     )
+
+    def check_filter(modname):
+        module_components = modname.split('.')
+        return any(not filter_fn(module_components)
+                   for filter_fn in module_filters)
+
+    modname = package.__name__
+    if not check_filter(modname):
+        yield package
+
     for pkginfo in package_walker:
         modname = pkginfo[1]
-
-        # Suppress private module '_'?
-        if any(x.startswith('_') for x in modname.split('.')):
+        if check_filter(modname):
             continue
-
         # In case importing of the module print to stdout
         with captured_stdout():
             try:
@@ -198,7 +228,7 @@ class HTMLFormatter(Formatter):
     def end_module_section(self):
         self.print('</ul>')
 
-    def write_supported_item(self, modname, itemname, typename, explained, sources):
+    def write_supported_item(self, modname, itemname, typename, explained, sources, alias):
         self.print('<li>')
         self.print('{}.<b>{}</b>'.format(
             modname,
@@ -261,7 +291,7 @@ class ReSTFormatter(Formatter):
     def end_module_section(self):
         self.print()
 
-    def write_supported_item(self, modname, itemname, typename, explained, sources):
+    def write_supported_item(self, modname, itemname, typename, explained, sources, alias):
         self.print('.. function:: {}.{}'.format(modname, itemname))
         self.print()
 
@@ -287,6 +317,10 @@ class ReSTFormatter(Formatter):
                 self.print("   - defined by ``{}``".format(str(tcls)))
         self.print()
 
+        if alias:
+            self.print("   alias to: ``{}``".format(alias))
+        self.print()
+
     def write_unsupported_item(self, modname, itemname):
         pass
 
@@ -305,11 +339,12 @@ def _format_module_infos(formatter, package_name, mod_sequence, target=None):
     """Format modules.
     """
     formatter.title('Listings for {}'.format(package_name))
+    alias_map = {}  # remember object seen to track alias
     for mod in mod_sequence:
         stat = _Stat()
         modname = mod.__name__
         formatter.begin_module_section(formatter.escape(modname))
-        for info in inspect_module(mod, target=target):
+        for info in inspect_module(mod, target=target, alias=alias_map):
             nbtype = info['numba_type']
             if nbtype is not None:
                 stat.supported += 1
@@ -319,6 +354,7 @@ def _format_module_infos(formatter, package_name, mod_sequence, target=None):
                     typename=formatter.escape(str(nbtype)),
                     explained=formatter.escape(info['explained']),
                     sources=info['source_infos'],
+                    alias=info.get('alias'),
                 )
 
             else:
