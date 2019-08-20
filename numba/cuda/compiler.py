@@ -301,8 +301,8 @@ class CUDAKernelBase(object):
     """
 
     def __init__(self):
-        self.griddim = (1, 1)
-        self.blockdim = (1, 1, 1)
+        self.griddim = None
+        self.blockdim = None
         self.sharedmem = 0
         self.stream = 0
 
