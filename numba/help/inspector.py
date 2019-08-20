@@ -264,11 +264,7 @@ class ReSTFormatter(Formatter):
     def write_supported_item(self, modname, itemname, typename, explained, sources):
         self.print('.. function:: {}.{}'.format(modname, itemname))
         self.print()
-        # if explained:
-        #     self.print('   .. code-block:: text')
-        #     self.print()
-        #     self.print('      {}'.format('\n      '.join(explained.splitlines())))
-        #     self.print()
+
         for tcls, source in sources.items():
             if source:
                 impl = source['name']
@@ -293,10 +289,6 @@ class ReSTFormatter(Formatter):
 
     def write_unsupported_item(self, modname, itemname):
         pass
-        # self.print('.. function:: {}.{}'.format(modname, itemname))
-        # self.print()
-        # self.print('   unsupported')
-        # self.print()
 
     def write_statistic(self, stat):
         if stat.supported == 0:
