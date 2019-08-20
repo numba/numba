@@ -323,7 +323,7 @@ def _format_module_infos(formatter, package_name, mod_sequence, target=None):
                 stat.supported += 1
                 formatter.write_supported_item(
                     modname=formatter.escape(info['module'].__name__),
-                    itemname=formatter.escape(info['obj'].__name__),
+                    itemname=formatter.escape(info['name']),
                     typename=formatter.escape(str(nbtype)),
                     explained=formatter.escape(info['explained']),
                     sources=info['source_infos'],
@@ -333,7 +333,7 @@ def _format_module_infos(formatter, package_name, mod_sequence, target=None):
                 stat.unsupported += 1
                 formatter.write_unsupported_item(
                     modname=formatter.escape(info['module'].__name__),
-                    itemname=formatter.escape(info['obj'].__name__),
+                    itemname=formatter.escape(info['name']),
                 )
 
         formatter.write_statistic(stat)
