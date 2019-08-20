@@ -312,7 +312,7 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
     def __init__(self, types, cls):
 
         if not isinstance(types, Iterable):
-            raise TypingError("'{}' type is not iterable".format(type(types)))
+            raise TypingError("{} type is not iterable".format(type(types)))
 
         self.types = tuple(types)
         self.count = len(self.types)

@@ -361,6 +361,18 @@ class TestOperations(TestCase):
 
 class TestNamedTuple(TestCase, MemoryLeakMixin):
 
+    def test_exception(self):
+        pyfunc = lambda: types.NamedTuple(types.uint32, 'p')
+        self.disable_leak_check()
+
+        with self.assertRaises(errors.TypingError) as raises:
+            pyfunc()
+
+        self.assertIn(
+            "<class 'numba.types.scalars.Integer'> type is not iterable",
+            str(raises.exception)
+        )
+
     def test_unpack(self):
         def check(p):
             for pyfunc in tuple_first, tuple_second:
