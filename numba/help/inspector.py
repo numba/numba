@@ -8,14 +8,27 @@ from __future__ import print_function
 
 import argparse
 import pkgutil
+import warnings
 import types as pytypes
 
+from numba import errors
 from numba._version import get_versions
 from numba.targets.registry import cpu_target
 from numba.tests.support import captured_stdout
 
 
-commit = get_versions()['full'].split('.')[0]
+def _get_commit():
+    full = get_versions()['full'].split('.')[0]
+    if not full:
+        warnings.warn(
+            "Cannot find git commit hash. Source links could be inaccurate.",
+            category=errors.NumbaWarning,
+        )
+        return 'master'
+    return full
+
+
+commit = _get_commit()
 github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'
 
 
