@@ -2673,7 +2673,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 if dtypes:
                     for dt in dtypes:
                         params['dtype'] = dt
-                        pass_through = not expect_copy and (dt is None or dt==x.dtype)
+                        pass_through = not expect_copy and (dt is None or dt == x.dtype)
                         check_pass_through(cfunc, pass_through, params)
                 else:
                     pass_through = not expect_copy
