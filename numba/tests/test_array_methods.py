@@ -148,8 +148,11 @@ def array_itemset(a, v):
 def array_sum(a, *args):
     return a.sum(*args)
 
-def array_sum_kws(a, axis):
+def array_sum_axis_kws(a, axis):
     return a.sum(axis=axis)
+
+def array_sum_dtype_kws(a, dtype):
+    return a.sum(dtype=dtype)
 
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
@@ -779,8 +782,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
-    def test_sum_kws(self):
-        pyfunc = array_sum_kws
+    def test_sum_axis_kws(self):
+        pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
         # OK
         a = np.ones((7, 6, 5, 4, 3))
@@ -788,9 +791,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
 
+    def test_sum_dtype_kws(self):
+        pyfunc = array_sum_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        dtype = np.float64
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, dtype=dtype), cfunc(a, dtype=dtype))
+
+
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
-        pyfunc = array_sum_kws
+        pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
         a = np.arange(10.)
         self.assertPreciseEqual(pyfunc(a, axis=0), cfunc(a, axis=0))

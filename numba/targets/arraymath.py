@@ -177,6 +177,30 @@ def _array_sum_axis_nop(arr, v):
     return arr
 
 
+# @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
+# @lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
+# @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
+# @lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
+
+@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
+@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.DTypeSpec)
+def array_sum_axis(context, builder, sig, args):
+    zero = sig.return_type(0)
+
+    def array_sum_impl(arr):
+        c = zero
+        for v in np.nditer(arr):
+            c += v.item()
+        return c
+
+    res = context.compile_internal(builder, array_sum_impl, sig, args,
+                                   locals=dict(c=sig.return_type))
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+
 @lower_builtin(np.sum, types.Array, types.intp)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
