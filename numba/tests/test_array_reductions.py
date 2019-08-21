@@ -47,9 +47,6 @@ def array_sum(arr):
 def array_sum_global(arr):
     return np.sum(arr)
 
-def array_sum_global_dtype(arr, dtype):
-    return np.sum(arr)
-
 def array_prod(arr):
     return arr.prod()
 
@@ -579,22 +576,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = cres.entry_point
 
         self.assertEqual(np.sum(arr), cfunc(arr))
-
-    def test_array_sum_global_dtype(self):
-        arr = np.arange(10, dtype=np.int32)
-        arrty = typeof(arr)
-        dtype = np.float64
-        dtypety = typeof(dtype)
-
-        self.assertEqual(arrty.ndim, 1)
-        self.assertEqual(arrty.layout, 'C')
-
-        cres = compile_isolated(array_sum_global_dtype, [arrty, dtypety])
-        cfunc = cres.entry_point
-
-        self.assertEqual(type(np.sum(arr, dtype=dtype)),
-                          type(cfunc(arr, dtype)))
-        self.assertEqual(np.sum(arr, dtype=dtype), cfunc(arr, dtype))
 
     def test_array_prod_int_1d(self):
         arr = np.arange(10, dtype=np.int32) + 1

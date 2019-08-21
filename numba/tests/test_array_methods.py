@@ -807,7 +807,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((7, 6, 5, 4, 3))
         self.assertFalse(type(pyfunc(a, dtype=np.int32))==cfunc(a, dtype=dtype))
 
-
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
         pyfunc = array_sum_axis_kws
