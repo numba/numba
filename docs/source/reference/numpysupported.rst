@@ -302,7 +302,7 @@ The following top-level functions are supported:
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
-* :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.array` (only the 3 first arguments)
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`

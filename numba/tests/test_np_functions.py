@@ -153,11 +153,27 @@ def roll(a, shift):
     return np.roll(a, shift)
 
 
+def array(a):
+    return np.array(a)
+
+
+def array_dtype(a, dtype):
+    return np.array(a, dtype=dtype)
+
+
+def array_copy(a, copy):
+    return np.array(a, copy=copy)
+
+
+def array_dtype_copy(a, dtype, copy):
+    return np.array(a, dtype=dtype, copy=copy)
+
+
 def asarray(a):
     return np.asarray(a)
 
 
-def asarray_kws(a, dtype):
+def asarray_dtype(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
@@ -755,10 +771,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
-    def _check_output(self, pyfunc, cfunc, params, abs_tol=None):
+    def _check_output(self, pyfunc, cfunc, params, abs_tol=None, may_share_memory=True):
         expected = pyfunc(**params)
         got = cfunc(**params)
         self.assertPreciseEqual(expected, got, abs_tol=abs_tol)
+        if not may_share_memory:
+            self.assertTrue(not np.shares_memory(expected, got))
 
     def test_vander_basic(self):
         pyfunc = vander
@@ -2583,9 +2601,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y0 = x0 + (1 + x0) * 1.0j
         np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
 
-    def test_asarray(self):
+    def test_array_and_asarray(self):
 
-        def input_variations():
+        def input_variations(c_contiguous=False):
             """
             To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html
             Input data, in any form that can be converted to an array.
@@ -2609,7 +2627,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([])
             yield np.arange(4)
             yield np.arange(12).reshape(3, 4)
-            yield np.arange(12).reshape(3, 4).T
+            if not c_contiguous:
+                yield np.arange(12).reshape(3, 4).T
 
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
@@ -2622,33 +2641,43 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertTrue(returned is not params['a'])
                 # should be numerically the same, just different dtype
                 np.testing.assert_allclose(returned, params['a'])
-                self.assertTrue(returned.dtype == params['dtype'])
+                dtype = params.get('dtype', '') or params['a'].dtype  # allow params['dtype']==None
+                self.assertTrue(returned.dtype == dtype)
 
-        for pyfunc in [asarray, asarray_kws]:
+        for pyfunc in [array, array_dtype, array_copy, array_dtype_copy, asarray, asarray_dtype]:
             cfunc = jit(nopython=True)(pyfunc)
-            _check = partial(self._check_output, pyfunc, cfunc)
+            dtypes = [None, np.complex128] if 'dtype' in pyfunc.__name__ else []
+            copies = [True, False] if 'copy' in pyfunc.__name__ else [None]
+            default_copy = 'asarray' not in pyfunc.__name__
 
-            for x in input_variations():
-                params = {'a': x}
-                if 'kws' in pyfunc.__name__:
-                    for dt in [None, np.complex128]:
-                        params['dtype'] = dt
+            for copy in copies:
+                expect_copy = copy if copy is not None else default_copy
+                _check = partial(self._check_output, pyfunc, cfunc, may_share_memory=not expect_copy)
+
+                for x in input_variations(expect_copy):
+                    params = {'a': x}
+                    if copy is not None:
+                        params['copy'] = copy
+                    if dtypes:
+                        for dt in dtypes:
+                            params['dtype'] = dt
+                            _check(params)
+                    else:
                         _check(params)
-                else:
-                    _check(params)
 
                 # check the behaviour over a dtype change (or not!)
                 x = np.arange(10, dtype=np.float32)
                 params = {'a': x}
-                if 'kws' in pyfunc.__name__:
-                    params['dtype'] = None
-                    check_pass_through(cfunc, True, params)
-                    params['dtype'] = np.complex128
-                    check_pass_through(cfunc, False, params)
-                    params['dtype'] = np.float32
-                    check_pass_through(cfunc, True, params)
+                if copy is not None:
+                    params['copy'] = copy
+                if dtypes:
+                    for dt in dtypes:
+                        params['dtype'] = dt
+                        pass_through = not expect_copy and (dt is None or dt==x.dtype)
+                        check_pass_through(cfunc, pass_through, params)
                 else:
-                    check_pass_through(cfunc, True, params)
+                    pass_through = not expect_copy
+                    check_pass_through(cfunc, pass_through, params)
 
     def test_repeat(self):
         # np.repeat(a, repeats)

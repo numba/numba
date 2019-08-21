@@ -3666,6 +3666,48 @@ def _is_nonelike(ty):
     return (ty is None) or isinstance(ty, types.NoneType)
 
 
+@overload(np.array)
+def np_array(a, dtype=None, copy=True):
+
+    # developer note... keep this function (type_can_asarray) in sync with the
+    # accepted types implementations below!
+    if not type_can_asarray(a):
+        return None
+
+    impl = None
+    if isinstance(a, types.Array):
+        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+            def impl(a, dtype=None, copy=True):
+                if copy:
+                    return a.copy()
+                else:
+                    return a
+        else:
+            def impl(a, dtype=None, copy=True):
+                if copy:
+                    return a.astype(dtype).copy()
+                else:
+                    return a.astype(dtype)
+    elif isinstance(a, (types.Sequence, types.Tuple)):
+        # Nested lists cannot be unpacked, therefore only single lists are
+        # permitted and these conform to Sequence and can be unpacked along on
+        # the same path as Tuple.
+        if _is_nonelike(dtype):
+            def impl(a, dtype=None, copy=True):
+                return np.array(a)
+        else:
+            def impl(a, dtype=None, copy=True):
+                return np.array(a, dtype)
+    elif isinstance(a, (types.Number, types.Boolean)):
+        dt_conv = a if _is_nonelike(dtype) else dtype
+        ty = as_dtype(dt_conv)
+
+        def impl(a, dtype=None, copy=True):
+            return np.array(a, ty)
+
+    return impl
+
+
 @overload(np.asarray)
 def np_asarray(a, dtype=None):
 
