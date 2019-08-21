@@ -83,3 +83,10 @@ class TestInspector(TestCase):
         subprocess.check_output(cmds)
         # File should exist now
         self.assertTrue(os.path.isfile(expected_file))
+
+        # Try unsupported format
+        cmds = cmdbase + ['--file', filename, '--format', 'foo', 'math']
+        # Run CLI
+        with self.assertRaises(subprocess.CalledProcessError) as raises:
+            subprocess.check_output(cmds, stderr=subprocess.STDOUT)
+        self.assertIn("foo is not supported", str(raises.exception.stdout))
