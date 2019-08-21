@@ -799,6 +799,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((7, 6, 5, 4, 3))
         self.assertPreciseEqual(pyfunc(a, dtype=dtype), cfunc(a, dtype=dtype))
 
+    def test_sum_dtype_kws_negative(self):
+        pyfunc = array_sum_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        dtype = np.float64
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertFalse(type(pyfunc(a, dtype=np.int32))==cfunc(a, dtype=dtype))
+
 
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar

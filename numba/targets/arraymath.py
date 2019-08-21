@@ -189,7 +189,7 @@ def _array_sum_axis_nop(arr, v):
 def array_sum_axis(context, builder, sig, args):
     zero = sig.return_type(0)
 
-    def array_sum_impl(arr):
+    def array_sum_impl(arr, dtype):
         c = zero
         for v in np.nditer(arr):
             c += v.item()
