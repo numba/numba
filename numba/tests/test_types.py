@@ -20,7 +20,6 @@ from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
 from numba.typing.templates import make_overload_template
 from numba import jit, numpy_support, typeof
-from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
 from .enum_usecases import Color, Shake, Shape
 
