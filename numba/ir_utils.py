@@ -2168,6 +2168,8 @@ class InlineOverloads(object):
             if inline_type != 'never':
                 try:
                     impl = template._overload_func(*sig.args)
+                    if impl is None:
+                        raise Exception # abort for this template
                     break
                 except Exception:
                     continue

@@ -686,3 +686,22 @@ class TestOverloadInlining(InliningBase):
                 return y + 3, x
 
             self.check(impl, 10, inline_expect={'bar': callee == 17})
+
+
+class TestGeneralInlining(InliningBase):
+
+    def test_with_inlined_and_noninlined_variants(self):
+        # This test is contrived and was to demonstrate fixing a bug in the
+        # template walking logic where inlinable and non-inlinable definitions
+        # would not mix.
+
+        @overload(len, inline='always')
+        def overload_len(A):
+            if False:
+                return lambda A: 10
+
+        def impl():
+            return len([2, 3, 4])
+
+        # len(list) won't be inlined because the overload above doesn't apply
+        self.check(impl, inline_expect={'len': False})
