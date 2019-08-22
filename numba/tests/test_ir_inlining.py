@@ -705,3 +705,33 @@ class TestGeneralInlining(InliningBase):
 
         # len(list) won't be inlined because the overload above doesn't apply
         self.check(impl, inline_expect={'len': False})
+
+    def test_with_kwargs(self):
+
+        def foo(a, b=3, c=5):
+            return a + b + c
+
+
+        @overload(foo, inline='always')
+        def overload_foo(a, b=3, c=5):
+            def impl(a, b=3, c=5):
+                return a + b + c
+            return impl
+
+
+        def impl():
+            return foo(3, c=10)
+
+        self.check(impl, inline_expect={'foo': True})
+
+
+    def test_with_kwargs2(self):
+
+        @njit(inline='always')
+        def bar(a, b=12, c=9):
+            return a + b
+
+        def impl(a, b=7, c=5):
+            return bar(a + b, c=19)
+
+        self.check(impl, 3, 4, inline_expect={'bar': True})

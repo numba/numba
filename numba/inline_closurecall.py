@@ -322,7 +322,16 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if callee_defaults:
         debug_print("defaults = ", callee_defaults)
         if isinstance(callee_defaults, tuple): # Python 3.5
-            args = args + list(callee_defaults)
+            defaults_list = []
+            for x in callee_defaults:
+                if isinstance(x, ir.Var):
+                    defaults_list.append(x)
+                else:
+                    # this branch is predominantly for kwargs from inlinable
+                    # functions
+                    loc = block.body[i].loc
+                    defaults_list.append(ir.Const(value=x, loc=loc))
+            args = args + defaults_list
         elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
             defaults = func_ir.get_definition(callee_defaults)
             assert(isinstance(defaults, ir.Const))

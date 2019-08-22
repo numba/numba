@@ -267,7 +267,7 @@ class InlineOptions(object):
             if value in ('always', 'never'):
                 ok = True
         else:
-            ok = getattr(value, '__call__', False)
+            ok = hasattr(value, '__call__')
 
         if ok:
             self.inline = value

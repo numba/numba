@@ -1982,6 +1982,14 @@ def _check_inline_options(inline_arg):
 
 
 def resolve_func_from_module(func_ir, node):
+    """
+    This returns the python function that is being getattr'd from a module in
+    some IR, it resolves import chains/submodules recursively. Should it not be
+    possible to find the python function being called None will be returned.
+
+    func_ir - the FunctionIR object
+    node - the IR node from which to start resolving (should be a `getattr`).
+    """
     getattr_chain = []
     def resolve_mod(mod):
         if getattr(mod, 'op', False) == 'getattr':
@@ -2010,6 +2018,13 @@ def resolve_func_from_module(func_ir, node):
 
 
 class InlineInlinables(object):
+    """
+    This pass will inline a function wrapped by the numba.jit decorator directly
+    into the site of its call depending on the value set in the 'inline' kwarg
+    to the decorator.
+
+    This is an untyped pass.
+    """
 
     _DEBUG = False
 
@@ -2046,7 +2061,8 @@ class InlineInlinables(object):
             print(''.center(80, '-'))
 
     def _do_work(self, work_list, block, i, expr):
-        from numba.inline_closurecall import inline_closure_call
+        from numba.inline_closurecall import (inline_closure_call,
+                                              callee_ir_validator)
         from numba.compiler import run_frontend
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
@@ -2089,12 +2105,21 @@ class InlineInlinables(object):
                             inline_closure_call(self.func_ir,
                                                 pyfunc.__globals__,
                                                 block, i, pyfunc,
-                                                work_list=work_list)
+                                                work_list=work_list,
+                                                callee_validator=\
+                                                callee_ir_validator)
                             return True
         return False
 
 
 class InlineOverloads(object):
+    """
+    This pass will inline a function wrapped by the numba.extending.overload
+    decorator directly into the site of its call depending on the value set in
+    the 'inline' kwarg to the decorator.
+
+    This is a typed pass that performs CFG simplification and DCE on completion.
+    """
 
     _DEBUG = False
 
@@ -2125,6 +2150,11 @@ class InlineOverloads(object):
                             modified = True
                             break # because block structure changed
 
+        if config.DEBUG or self._DEBUG:
+            print('after overload inline'.center(80, '-'))
+            print(self.func_ir.dump())
+            print(''.center(80, '-'))
+
         if modified:
             dead_code_elimination(self.func_ir, typemap=self.typemap)
             # clean up unconditional branches that appear due to inlined
@@ -2132,12 +2162,13 @@ class InlineOverloads(object):
             self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
 
         if config.DEBUG or self._DEBUG:
-            print('after overload inline'.center(80, '-'))
+            print('after overload inline DCE'.center(80, '-'))
             print(self.func_ir.dump())
             print(''.center(80, '-'))
 
     def _do_work(self, work_list, block, i, expr):
-        from numba.inline_closurecall import inline_closure_call
+        from numba.inline_closurecall import (inline_closure_call,
+                                              callee_ir_validator)
 
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
@@ -2186,17 +2217,18 @@ class InlineOverloads(object):
                                               self.calltypes, sig)
 
             # must be a function, run the function
-            do_inline = inline_type(caller_inline_info,
-                                    template._inline_overloads[sig.args])
+            iinfo = template._inline_overloads[sig.args]['iinfo']
+            do_inline = inline_type(caller_inline_info, iinfo)
 
         if do_inline:
-            arg_typs = tuple([self.typemap[x.name] for x in expr.args])
+            arg_typs=template._inline_overloads[sig.args]['folded_args']
             # pass is typed so use the callee globals
             inline_closure_call(self.func_ir, impl.__globals__,
                                 block, i, impl, typingctx=self.tyctx,
                                 arg_typs=arg_typs, typemap=self.typemap,
                                 calltypes=self.calltypes, work_list=work_list,
-                                replace_freevars=False)
+                                replace_freevars=False,
+                                callee_validator=callee_ir_validator)
             return True
         else:
             return False

@@ -426,7 +426,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        disp, args = self._get_impl(args, kws)
+        disp, new_args = self._get_impl(args, kws)
         if disp is None:
             return
         # Compile and type it for the given types
@@ -439,12 +439,15 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # a signature
             from numba import compiler
             ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            resolve = disp_type.dispatcher.get_call_template
+            template, pysig, folded_args, kws = resolve(new_args, kws)
+
             typemap, return_type, calltypes = compiler.type_inference_stage(
-                self.context, ir, args, None)
-            sig = Signature(return_type, args, None)
+                self.context, ir, folded_args, None)
+            sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied
             # it by default is None
-            self._inline_overloads[sig.args] = None
+            self._inline_overloads[sig.args] = {'folded_args': folded_args}
             # this stores the compiled overloads, if there's no compiled
             # overload available i.e. function is always inlined, the key still
             # needs to exist for type resolution
@@ -454,14 +457,15 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 # determine whether to inline or not. As a result both compiled
                 # function and inliner info needed, delaying the computation of
                 # this leads to an internal state mess at present. TODO: Fix!
-                sig = disp_type.get_call_type(self.context, args, kws)
+                sig = disp_type.get_call_type(self.context, new_args, kws)
                 self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
                 # store the inliner information, it's used later in the cost
                 # model function call
                 iinfo = _inline_info(ir, typemap, calltypes, sig)
-                self._inline_overloads[sig.args] = iinfo
+                self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                    'iinfo': iinfo}
         else:
-            sig = disp_type.get_call_type(self.context, args, kws)
+            sig = disp_type.get_call_type(self.context, new_args, kws)
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
