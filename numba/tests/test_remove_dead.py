@@ -213,6 +213,7 @@ class TestRemoveDead(unittest.TestCase):
             # recover global state
             numba.ir_utils.alias_func_extensions = old_ext_handlers
 
+    @skip_parfors_unsupported
     def test_alias_parfor_extension(self):
         """Make sure aliases are considered in remove dead extension for
         parfors.
