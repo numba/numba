@@ -232,8 +232,9 @@ class TestTypes(TestCase):
         template1 = make_overload_template(func_stub, ol, {}, True)
         template2 = make_overload_template(func_stub2, ol, {}, True)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             types.Function((template1, template2))
+        self.assertIn("incompatible templates:", str(raises.exception))
 
 class TestNumbers(TestCase):
     """
