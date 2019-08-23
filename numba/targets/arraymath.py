@@ -177,16 +177,109 @@ def _array_sum_axis_nop(arr, v):
     return arr
 
 
-# @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
-# @lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
-# @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
-# @lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
+def array_sum_axis_dtype(context, builder, sig, args):
+    """
+    The third parameter to gen_index_tuple that generates the indexing
+    tuples has to be a const so we can't just pass "axis" through since
+    that isn't const.  We can check for specific values and have
+    different instances that do take consts.  Supporting axis summation
+    only up to the fourth dimension for now.
+    """
+    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
+    # It is one dimension less than the input array.
+
+    retty = sig.return_type
+    zero = getattr(retty, 'dtype', retty)(0)
+    # if the return is scalar in type then "take" the 0th element of the
+    # 0d array accumulator as the return value
+    if getattr(retty, 'ndim', None) is None:
+        op = np.take
+    else:
+        op = _array_sum_axis_nop
+    [ty_array, ty_axis, ty_dtype] = sig.args
+    is_axis_const = False
+    const_axis_val = 0
+    if isinstance(ty_axis, types.Literal):
+        # this special-cases for constant axis
+        const_axis_val = ty_axis.literal_value
+        # fix negative axis
+        if const_axis_val < 0:
+            const_axis_val = ty_array.ndim + const_axis_val
+        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
+            raise ValueError("'axis' entry is out of bounds")
+
+        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
+        axis_val = context.get_constant(ty_axis, const_axis_val)
+        # rewrite arguments
+        args = args[0], axis_val, args[2]
+        # rewrite sig
+        sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
+        is_axis_const = True
+
+    def array_sum_impl_axis(arr, axis, dtype):
+        ndim = arr.ndim
+
+        if not is_axis_const:
+            # Catch where axis is negative or greater than 3.
+            if axis < 0 or axis > 3:
+                raise ValueError("Numba does not support sum with axis "
+                                 "parameter outside the range 0 to 3.")
+
+        # Catch the case where the user misspecifies the axis to be
+        # more than the number of the array's dimensions.
+        if axis >= ndim:
+            raise ValueError("axis is out of bounds for array")
+
+        # Convert the shape of the input array to a list.
+        ashape = list(arr.shape)
+        # Get the length of the axis dimension.
+        axis_len = ashape[axis]
+        # Remove the axis dimension from the list of dimensional lengths.
+        ashape.pop(axis)
+        # Convert this shape list back to a tuple using above intrinsic.
+        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
+        # Tuple needed here to create output array with correct size.
+        result = np.full(ashape_without_axis, zero, type(zero))
+
+        # Iterate through the axis dimension.
+        for axis_index in range(axis_len):
+            if is_axis_const:
+                # constant specialized version works for any valid axis value
+                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
+                                                       const_axis_val)
+                result += arr[index_tuple_generic]
+            else:
+                # Generate a tuple used to index the input array.
+                # The tuple is ":" in all dimensions except the axis
+                # dimension where it is "axis_index".
+                if axis == 0:
+                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
+                    result += arr[index_tuple1]
+                elif axis == 1:
+                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
+                    result += arr[index_tuple2]
+                elif axis == 2:
+                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
+                    result += arr[index_tuple3]
+                elif axis == 3:
+                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
+                    result += arr[index_tuple4]
+
+        return op(result, 0)
+
+    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.sum, types.Array,  types.DTypeSpec)
 @lower_builtin(np.sum, types.Array,  types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
-def array_sum_axis(context, builder, sig, args):
+def array_sum_dtype(context, builder, sig, args):
     zero = sig.return_type(0)
 
     def array_sum_impl(arr, dtype):
@@ -352,24 +445,34 @@ def array_cumprod(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+@register_jitable
+def sum_array(arr, dtype):
+    return np.sum(arr, dtype=dtype)
 
-@lower_builtin(np.mean, types.Array)
-@lower_builtin("array.mean", types.Array)
-def array_mean(context, builder, sig, args):
-    zero = sig.return_type(0)
+@register_jitable
+def sum_array_axis(arr, axis, dtype):
+    return np.sum(arr, axis=axis, dtype=dtype)
 
-    def array_mean_impl(arr):
-        # Can't use the naive `arr.sum() / arr.size`, as it would return
-        # a wrong result on integer sum overflow.
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c / arr.size
-
-    res = context.compile_internal(builder, array_mean_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
+@overload(np.mean)
+@overload_method(types.Array, 'mean')
+def array_mean(arr, axis=None):
+    if isinstance(arr, types.Array):
+        if axis is None:
+            def mean_impl(arr, axis=None):
+                return sum_array(arr, dtype=np.float64)/arr.size
+            return mean_impl
+        elif isinstance(axis, types.Integer):
+            def mean_impl(arr, axis=None):
+                if axis >= arr.ndim:
+                    raise ValueError("'axis' entry is out of bounds")
+                return sum_array_axis(arr, axis=axis, dtype=np.float64)/arr.shape[axis]
+            return mean_impl
+        elif isinstance(axis, types.IntegerLiteral):
+            if axis.literal_value >= arr.ndim:
+                raise ValueError("'axis' entry is out of bounds")
+            def mean_impl(arr, axis=None):
+                return sum_array_axis(arr, axis=axis, dtype=np.float64)/arr.shape[axis]
+            return mean_impl
 
 @lower_builtin(np.var, types.Array)
 @lower_builtin("array.var", types.Array)

@@ -627,8 +627,17 @@ def sum_expand(self, args, kws):
         # rewrite args
         args = list(args) + [kws['dtype']]
         # kws = None
+
+    if 'dtype' in kws and 'axis' in kws:
+        def sum_stub(axis, dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis'], kws['dtype']]
+        # kws = None
+
     args_len = len(args)
-    assert args_len <= 1
+    assert args_len <= 2
     if args_len == 0:
         # No axis or dtype parameter so the return type of the summation is a scalar
         # of the type of the array.
@@ -652,6 +661,19 @@ def sum_expand(self, args, kws):
         dtype, = args
         dtype = _parse_dtype(dtype)
         out = signature(_expand_integer(dtype), *args, recvr=self.this)
+
+    elif args_len == 2:
+        # There is an axis and dtype parameter, either arg or kwarg
+        from .npydecl import _parse_dtype
+        dtype = _parse_dtype(args[1])
+        return_type = _expand_integer(dtype)
+        if self.this.ndim != 1:
+            # 1d reduces to a scalar, 2d and above reduce dim by 1
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=return_type,
+                                    ndim=self.this.ndim-1, layout='C')
+        out = signature(return_type, *args, recvr=self.this)
     else:
         pass
     return out.replace(pysig=pysig)
@@ -706,8 +728,8 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
+# for fName in ["mean"]:
+#     install_array_method(fName, generic_hetero_real)
 
 # var and std by definition return in real space and int arrays
 # get promoted to float64 return

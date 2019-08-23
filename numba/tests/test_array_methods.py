@@ -154,6 +154,9 @@ def array_sum_axis_kws(a, axis):
 def array_sum_dtype_kws(a, dtype):
     return a.sum(dtype=dtype)
 
+def array_sum_axis_dtype_kws(a, axis, dtype):
+    return a.sum(axis=axis, dtype=dtype)
+
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
     # for internal compile cache to see if constant-specialization is
@@ -172,6 +175,12 @@ def array_sum_const_axis_neg_one(a, axis):
     # use .sum with -1 axis, this is for use with 1D arrays where the above
     # "const_multi" variant would raise errors
     return a.sum(axis=-1)
+
+def array_mean(a):
+    return a.mean()
+
+def array_mean_axis(a, axis):
+    return a.mean(axis)
 
 def array_cumsum(a, *args):
     return a.cumsum(*args)
@@ -807,6 +816,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((7, 6, 5, 4, 3))
         self.assertFalse(type(pyfunc(a, dtype=np.int32))==cfunc(a, dtype=dtype))
 
+    def test_sum_axis_dtype_kws(self):
+        pyfunc = array_sum_axis_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        dtype = np.float64
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, axis=1, dtype=dtype),
+                                cfunc(a,  axis=1, dtype=dtype))
+
+        self.assertPreciseEqual(pyfunc(a, axis=2, dtype=dtype),
+                                cfunc(a, axis=2, dtype=dtype))
+
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
         pyfunc = array_sum_axis_kws
@@ -871,6 +892,27 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # Numpy 1.13 has a different error message than prior numpy
         # Just check for the "out of bounds" phrase in it.
         self.assertIn("out of bounds", str(raises.exception))
+
+    def test_mean(self):
+        pyfunc = array_mean
+        cfunc = jit(nopython=True)(pyfunc)
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_mean_axis(self):
+        pyfunc = array_mean_axis
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+        axis = 1
+        self.assertPreciseEqual(pyfunc(a, axis), cfunc(a, axis))
+        axis = 2
+        self.assertPreciseEqual(pyfunc(a, axis), cfunc(a, axis))
+        # axis -1 is only supported for IntegerLiterals
+        pyfunc = lambda x: x.mean(axis=-1)
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
