@@ -442,6 +442,13 @@ def _codepoint_is_ascii(ch):
 
 # PUBLIC API
 
+
+@overload(str)
+def unicode_str(s):
+    if isinstance(s, types.UnicodeType):
+        return lambda s: s
+
+
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):

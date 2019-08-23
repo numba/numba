@@ -600,9 +600,7 @@ def charseq_str(s):
 @overload(bytes)
 def charseq_bytes(s):
     if isinstance(s, types.CharSeq):
-        def bytes_impl(s):
-            return s
-        return bytes_impl
+        return lambda s: s
 
 
 @overload_method(types.UnicodeCharSeq, '__hash__')

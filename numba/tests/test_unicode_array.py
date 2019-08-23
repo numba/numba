@@ -522,6 +522,16 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, x, (), y, ())
         self._test(pyfunc, cfunc, y, (), x, ())
 
+        x = ('123',)
+        y = np.array('12345')
+        self._test(pyfunc, cfunc, x, 0, y, ())
+        self._test(pyfunc, cfunc, y, (), x, 0)
+
+        x = (b'123',)
+        y = np.array(b'12345')
+        self._test(pyfunc, cfunc, x, 0, y, ())
+        self._test(pyfunc, cfunc, y, (), x, 0)
+
     @require_py37
     def test_return_isascii(self):
         pyfunc = return_isascii
