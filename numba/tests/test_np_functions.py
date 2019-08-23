@@ -771,12 +771,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
+    def _shares_memory(self, array1, array2):
+        # This is needed because shares_memory was introduced in numpy
+        # 1.11; for earlier versions we fall back to a less-definitive
+        # test, but one that should still be correct for the simple cases
+        # seen here.
+        try:
+            from numpy import shares_memory
+        except ImportError:
+            from numpy import may_share_memory as shares_memory
+        return shares_memory(array1, array2)
+
     def _check_output(self, pyfunc, cfunc, params, abs_tol=None, may_share_memory=True):
         expected = pyfunc(**params)
         got = cfunc(**params)
         self.assertPreciseEqual(expected, got, abs_tol=abs_tol)
         if not may_share_memory:
-            self.assertTrue(not np.shares_memory(expected, got))
+            self.assertTrue(not self._shares_memory(expected, got))
 
     def test_vander_basic(self):
         pyfunc = vander
