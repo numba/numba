@@ -7,12 +7,16 @@ from __future__ import print_function, division, absolute_import
 import sys
 import warnings
 import inspect
+import logging
 
 from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
 
+
+_logger = logging.getLogger(__name__)
+_logger.handlers = [logging.StreamHandler()]
 
 
 # -----------------------------------------------------------------------------
@@ -266,4 +270,6 @@ def jit_module(**kwargs):
     # Replace functions in module with jit-wrapped versions
     for name, obj in module.__dict__.items():
         if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
+            _logger.debug("Auto decorating function {} from module {} with jit "
+                          "and options: {}".format(obj, module.__name__, kwargs))
             module.__dict__[name] = jit(obj, **kwargs)

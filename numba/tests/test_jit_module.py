@@ -7,13 +7,42 @@ import importlib
 import contextlib
 import uuid
 import numpy as np
+import logging
 
 import numba.unittest_support as unittest
 from numba import dispatcher
+from numba.utils import StringIO
 from numba.tests.support import temp_directory
+
+logger = logging.getLogger('numba.decorators')
+
+
+class CapturedLog:
+    """Capture the log temporarily for validation."""
+
+    def __init__(self):
+        self.buffer = StringIO()
+        self.handler = logging.StreamHandler(self.buffer)
+
+    def __enter__(self):
+        self._handlers = logger.handlers
+        self.buffer = StringIO()
+        logger.handlers = [logging.StreamHandler(self.buffer)]
+
+    def __exit__(self, type, value, traceback):
+        logger.handlers = self._handlers
+
+    def getvalue(self):
+        return self.buffer.getvalue()
 
 
 class TestJitModule(unittest.TestCase):
+
+    def setUp(self):
+        self.capture = CapturedLog()
+
+    def tearDown(self):
+        del self.capture
 
     source_lines = """
 from numba import jit_module
@@ -78,9 +107,9 @@ jit_module({jit_options})
 
             # Test output of jitted functions is as expected
             x, y = 1.7, 2.3
-            self.assertEqual(test_module.inc(x), x + 1)
-            self.assertEqual(test_module.add(x, y), x + y)
-            self.assertEqual(test_module.inc_add(x), (x + 1) + x)
+            self.assertEqual(test_module.inc(x), test_module.inc.py_func(x))
+            self.assertEqual(test_module.add(x, y), test_module.add.py_func(x, y))
+            self.assertEqual(test_module.inc_add(x), test_module.inc_add.py_func(x))
 
     def test_jit_module_jit_options(self):
         jit_options = {"nopython": True,
@@ -110,3 +139,17 @@ jit_module({jit_options})
             self.assertTrue(test_module.add.targetoptions == jit_options)
             # Test that manual jit-wrapping overrides jit_module options
             self.assertTrue(test_module.inc.targetoptions == {'nogil': True, 'forceobj': False})
+
+    def test_jit_module_logging(self):
+        logger = logging.getLogger('numba.decorators')
+        logger.setLevel(logging.DEBUG)
+        jit_options = {"nopython": True,
+                       "error_model": "numpy",
+                       }
+        with self.capture:
+            with self.create_temp_jitted_module(**jit_options) as test_module:
+                logs = self.capture.getvalue()
+                expected = ["Auto decorating function",
+                            "from module {}".format(test_module.__name__),
+                            "with jit and options: {}".format(jit_options)]
+                assert all(i in logs for i in expected)
