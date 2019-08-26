@@ -4,16 +4,29 @@
 Automatic module jitting with ``jit_module``
 ============================================
 
-Numba provides a :func:`numba.jit` decorator for compiling functions to machine
-code. A common usage pattern is to have an entire module containing user-defined
+A common usage pattern is to have an entire module containing user-defined
 functions that all need to be jitted. One option to accomplish this is to
 manually apply the ``@jit`` decorator to each function definition. This approach
 works and is great in many cases. However, for large modules with many functions,
 manually ``jit``-wrapping each function definition can be tedious. For these
 situations, Numba provides another option, the ``jit_module`` function, to
-automatically replace all functions defined in a module with their ``jit``-wrapped
-equivalents. Note that if a function has already been decorated with ``jit``,
-then ``jit_module`` will have no impact on the function.
+automatically replace functions declared in a module with their ``jit``-wrapped
+equivalents.
+
+It's important to note the contexts under which ``jit_module`` will *not*
+impact a function:
+
+1. Functions which have already been wrapped with a Numba decorator (e.g.
+   ``jit``, ``vectorize``, ``cfunc``, etc.) are not impacted by ``jit_module``.
+
+2. Functions which are declared outside the module from which ``jit_module``
+   is called are not automatically ``jit``-wrapped.
+
+3. Function declarations which occur logically prior to calling ``jit_module``
+   are not impacted.
+
+All other functions in a module will have the ``@jit`` decorator automatically
+applied to them. See the following section for an example use case.
 
 .. note:: This feature is for use by module authors. ``jit_module`` should not
     be called outside the context of a module containing functions to be jitted.
@@ -46,27 +59,29 @@ all the functions which are defined in ``mymodule.py`` jitted using
    # Use NumPy's mean function
    mean = np.mean
    
-   @jit(nogil=True)  # Overrides the module level options specified below
+   @jit(nogil=True)
    def mul(a, b):
       return a * b
    
    jit_module(nopython=True, error_model="numpy")
 
-There are several things to note in the above example:
+   def div(a, b):
+       return a / b
 
-- ``jit_module`` is called at the bottom of the module to be jitted (in this
-  case, at the bottom of ``mymodule.py``).
+There are several things to note in the above example:
 
 - Both the ``inc`` and ``add`` functions will be replaced with their
   ``jit``-wrapped equivalents with :ref:`compilation options <jit-options>`
   ``nopython=True`` and ``error_model="numpy"``.
 
-- The ``mean`` function, because it defined *outside* of ``mymodule.py`` in
+- The ``mean`` function, because it's defined *outside* of ``mymodule.py`` in
   NumPy, will not be modified.
 
-- The ``mul`` function will not be modified because it has been manually
-  decorated with ``jit``, which takes priority over the module-level ``jit``
-  options specified in the ``jit_module`` call.
+- ``mul`` will not be modified because it has been manually decorated with
+  ``jit``.
+
+- ``div`` will not be automatically ``jit``-wrapped because it is declared
+  after ``jit_module`` is called.
 
 When the above module is imported, we have:
 
