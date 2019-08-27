@@ -84,11 +84,19 @@ def overload(func, jit_options={}, strict=True, inline='never'):
     function as in the simple case.
 
     If the kwarg inline determines whether the overload is inlined in the
-    calling function and can be one of three things:
+    calling function and can be one of three values:
     * 'never' (default) - the overload is never inlined.
     * 'always' - the overload is always inlined.
-    * a function that takes the IR and returns True/False to determine whether
-      to inline, this essentially permitting custom inlining rules.
+    * a function that takes two arguments, both of which are instances of a
+      namedtuple with fields:
+        * func_ir
+        * typemap
+        * calltypes
+        * signature
+      The first argument holds the information from the caller, the second
+      holds the information from the callee. The function should return Truthy
+      to determine whether to inline, this essentially permitting custom
+      inlining rules (typical use might be cost models).
     """
     from .typing.templates import make_overload_template, infer_global
 
