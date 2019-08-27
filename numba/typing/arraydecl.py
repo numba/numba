@@ -627,8 +627,16 @@ def sum_expand(self, args, kws):
         # rewrite args
         args = list(args) + [kws['dtype']]
         # kws = None
+
+    if 'dtype' in kws and 'axis' in kws:
+        def sum_stub(axis, dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis'], kws['dtype']]
+
     args_len = len(args)
-    assert args_len <= 1
+    assert args_len <= 2
     if args_len == 0:
         # No axis or dtype parameter so the return type of the summation is a scalar
         # of the type of the array.
