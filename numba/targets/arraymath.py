@@ -4089,7 +4089,6 @@ def np_cross(a, b):
 
             return cp
 
-
         if a.ndim > 1 and b.ndim > 1:
             return np_cross_impl_ndim
         elif a.ndim == 1 and b.ndim == 1:
@@ -4099,4 +4098,3 @@ def np_cross(a, b):
                 return np_cross_impl_mixdim
             else:
                 return lambda x, y: np_cross_impl_mixdim(y, x)
-
