@@ -3977,10 +3977,16 @@ def np_cross(a, b):
                     cp = np.empty(shape_ + (3,), dtype)
                     a0 = a[..., 0]
                     a1 = a[..., 1]
-                    a2 = a[..., 2]
+                    if a.shape[-1] == 3:
+                        a2 = a[..., 2]
+                    else:
+                        a2 = np.zeros_like(a1)
                     b0 = b[..., 0]
                     b1 = b[..., 1]
-                    b2 = b[..., 2]
+                    if b.shape[-1] == 3:
+                        b2 = b[..., 2]
+                    else:
+                        b2 = np.zeros_like(b1)
 
                     cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
                     cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
