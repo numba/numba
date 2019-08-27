@@ -8,7 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 import numba
-from numba import njit, ir
+from numba import njit, ir, types
 from numba.extending import overload
 from numba.ir_utils import dead_code_elimination
 from numba.targets.cpu import InlineOptions
@@ -116,6 +116,8 @@ class InliningBase(TestCase):
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
             self.assertFalse(found == v)
+
+        return fir  # for use in further analysis
 
 
 # used in _gen_involved
@@ -688,6 +690,61 @@ class TestOverloadInlining(InliningBase):
 
             self.check(impl, 10, inline_expect={'bar': callee == 17})
 
+    def test_multiple_overloads_with_different_inline_characteristics(self):
+        # check that having different inlining options for different overloads
+        # of the same function works ok
+
+        # this is the Python equiv of the overloads below
+        def bar(x):
+            if isinstance(numba.typeof(x), types.Float):
+                return x + 1234
+            else:
+                return x + 1
+
+        @overload(bar, inline='always')
+        def bar_int_ol(x):
+            if isinstance(x, types.Integer):
+                def impl(x):
+                    return x + 1
+                return impl
+
+        @overload(bar, inline='never')
+        def bar_float_ol(x):
+            if isinstance(x, types.Float):
+                def impl(x):
+                    return x + 1234
+                return impl
+
+        def always_inline_cost_model(*args):
+            return True
+
+        @overload(bar, inline=always_inline_cost_model)
+        def bar_complex_ol(x):
+            if isinstance(x, types.Complex):
+                def impl(x):
+                    return x + 1
+                return impl
+
+        def impl():
+            a = bar(1)  # integer literal, should inline
+            b = bar(2.3)  # float literal, should not inline
+            c = bar(3j)  # complex literal, should inline by virtue of cost model
+            return a + b + c
+
+        # there should still be a `bar` not inlined
+        fir = self.check(impl, inline_expect={'bar': False}, block_count=1)
+
+        # check there is one call left in the IR
+        block = next(iter(fir.blocks.items()))[1]
+        calls = [x for x in block.find_exprs(op='call')]
+        self.assertTrue(len(calls) == 1)
+
+        # check that the constant "1234" is not in the IR
+        consts = [x.value for x in block.find_insts(ir.Assign)
+                  if isinstance(getattr(x, 'value', None), ir.Const)]
+        for val in consts:
+            self.assertNotEqual(val.value, 1234)
+
 
 class TestGeneralInlining(InliningBase):
 
@@ -712,19 +769,16 @@ class TestGeneralInlining(InliningBase):
         def foo(a, b=3, c=5):
             return a + b + c
 
-
         @overload(foo, inline='always')
         def overload_foo(a, b=3, c=5):
             def impl(a, b=3, c=5):
                 return a + b + c
             return impl
 
-
         def impl():
             return foo(3, c=10)
 
         self.check(impl, inline_expect={'foo': True})
-
 
     def test_with_kwargs2(self):
 
@@ -753,7 +807,8 @@ class TestInlineOptions(TestCase):
         self.assertFalse(never.has_cost_model)
         self.assertEqual(never.value, 'never')
 
-        cost_model = lambda x : x
+        def cost_model(x):
+            return x
         model = InlineOptions(cost_model)
         self.assertFalse(model.is_always_inline)
         self.assertFalse(model.is_never_inline)
