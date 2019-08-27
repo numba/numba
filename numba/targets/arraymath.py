@@ -3956,51 +3956,74 @@ def np_cross(a, b):
 
         dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
 
-        def np_cross_impl(a, b):
+        def np_cross_impl_ndim(a, b):
             if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
                 raise ValueError('dimension must be 2 or 3')
 
-
-            # Create the output array
-
             if a.shape[-1] == 3 or b.shape[-1] == 3:
-                # Case: last output dim has 3 elements
-                if a.ndim == 1 and b.ndim == 1:
-                    # Case: inputs are 1D arrays
-                    cp = np.empty((3,), dtype)
+                # we can't use np.broadcast; use np.add
+                # since we only need the broadcast shape
+                shape_ = np.add(a[..., 0], b[..., 0]).shape
+                cp = np.empty(shape_ + (3,), dtype)
+                a0 = a[..., 0]
+                a1 = a[..., 1]
+                if a.shape[-1] == 3:
+                    a2 = a[..., 2]
                 else:
-                    # Case: inputs are ND arrays
+                    a2 = np.zeros_like(a1)
+                b0 = b[..., 0]
+                b1 = b[..., 1]
+                if b.shape[-1] == 3:
+                    b2 = b[..., 2]
+                else:
+                    b2 = np.zeros_like(b1)
 
-                    # we can't use np.broadcast; use np.add
-                    # since we only need the broadcast shape
-                    shape_ = np.add(a[..., 0], b[..., 0]).shape
-                    cp = np.empty(shape_ + (3,), dtype)
-                    a0 = a[..., 0]
-                    a1 = a[..., 1]
-                    if a.shape[-1] == 3:
-                        a2 = a[..., 2]
-                    else:
-                        a2 = np.zeros_like(a1)
-                    b0 = b[..., 0]
-                    b1 = b[..., 1]
-                    if b.shape[-1] == 3:
-                        b2 = b[..., 2]
-                    else:
-                        b2 = np.zeros_like(b1)
+                cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+                cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+                cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
 
-                    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
-                    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
-                    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
-
-                    cp[..., 0] = cp0
-                    cp[..., 1] = cp1
-                    cp[..., 2] = cp2
+                cp[..., 0] = cp0
+                cp[..., 1] = cp1
+                cp[..., 2] = cp2
             else:
                 raise ValueError('You must use numba.cross2d.')
 
-            # TODO: populate cp values
+            return cp
+
+        def np_cross_impl_1dim(a, b):
+            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
+                raise ValueError('dimension must be 2 or 3')
+
+            if a.shape[-1] == 3 or b.shape[-1] == 3:
+                cp = np.empty((3,), dtype)
+                a0 = a[0]
+                a1 = a[1]
+                if a.shape[-1] == 3:
+                    a2 = a[2]
+                else:
+                    a2 = 0
+                b0 = b[0]
+                b1 = b[1]
+                if b.shape[-1] == 3:
+                    b2 = b[2]
+                else:
+                    b2 = 0
+
+                cp0 = a1 * b2 - a2 * b1
+                cp1 = a2 * b0 - a0 * b2
+                cp2 = a0 * b1 - a1 * b0
+
+                cp[0] = cp0
+                cp[1] = cp1
+                cp[2] = cp2
+            else:
+                raise ValueError('You must use numba.cross2d.')
 
             return cp
 
-        return np_cross_impl
+
+        if a.ndim > 1 and b.ndim > 1:
+            return np_cross_impl_ndim
+        elif a.ndim == 1 and b.ndim == 1:
+            return np_cross_impl_1dim
 
