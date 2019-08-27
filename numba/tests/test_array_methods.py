@@ -154,6 +154,9 @@ def array_sum_axis_kws(a, axis):
 def array_sum_dtype_kws(a, dtype):
     return a.sum(dtype=dtype)
 
+def array_sum_axis_dtype_kws(a, dtype, axis):
+    return a.sum(axis=axis, dtype=dtype)
+
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
     # for internal compile cache to see if constant-specialization is
@@ -806,6 +809,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         a = np.ones((7, 6, 5, 4, 3))
         self.assertFalse(type(pyfunc(a, dtype=np.int32))==cfunc(a, dtype=dtype))
+
+    def test_sum_axis_dtype_kws(self):
+        pyfunc = array_sum_axis_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        dtype = np.float64
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, axis=1, dtype=dtype),
+                                cfunc(a,  axis=1, dtype=dtype))
+
+        self.assertPreciseEqual(pyfunc(a, axis=2, dtype=dtype),
+                                cfunc(a, axis=2, dtype=dtype))
 
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
