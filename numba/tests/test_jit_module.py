@@ -12,7 +12,7 @@ import logging
 import numba.unittest_support as unittest
 from numba import dispatcher
 from numba.utils import StringIO
-from numba.tests.support import temp_directory
+from numba.tests.support import temp_directory, SerialMixin
 
 logger = logging.getLogger('numba.decorators')
 
@@ -36,7 +36,7 @@ class CapturedLog:
         return self.buffer.getvalue()
 
 
-class TestJitModule(unittest.TestCase):
+class TestJitModule(SerialMixin, unittest.TestCase):
 
     def setUp(self):
         self.capture = CapturedLog()
@@ -123,7 +123,7 @@ jit_module({jit_options})
         source_lines = """
 from numba import jit, jit_module
 
-@jit(nogil=True, forceobj=False)
+@jit(nogil=True, forceobj=True)
 def inc(x):
     return x + 1
 
@@ -138,7 +138,7 @@ jit_module({jit_options})
         with self.create_temp_jitted_module(source_lines=source_lines, **jit_options) as test_module:
             self.assertTrue(test_module.add.targetoptions == jit_options)
             # Test that manual jit-wrapping overrides jit_module options
-            self.assertTrue(test_module.inc.targetoptions == {'nogil': True, 'forceobj': False})
+            self.assertTrue(test_module.inc.targetoptions == {'nogil': True, 'forceobj': True})
 
     def test_jit_module_logging(self):
         logger = logging.getLogger('numba.decorators')
@@ -152,4 +152,4 @@ jit_module({jit_options})
                 expected = ["Auto decorating function",
                             "from module {}".format(test_module.__name__),
                             "with jit and options: {}".format(jit_options)]
-                assert all(i in logs for i in expected)
+                self.assertTrue(all(i in logs for i in expected))

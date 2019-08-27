@@ -13,7 +13,7 @@ situations, Numba provides another option, the ``jit_module`` function, to
 automatically replace functions declared in a module with their ``jit``-wrapped
 equivalents.
 
-It's important to note the contexts under which ``jit_module`` will *not*
+It's important to note the conditions under which ``jit_module`` will *not*
 impact a function:
 
 1. Functions which have already been wrapped with a Numba decorator (e.g.
@@ -22,7 +22,7 @@ impact a function:
 2. Functions which are declared outside the module from which ``jit_module``
    is called are not automatically ``jit``-wrapped.
 
-3. Function declarations which occur logically prior to calling ``jit_module``
+3. Function declarations which occur logically after calling ``jit_module``
    are not impacted.
 
 All other functions in a module will have the ``@jit`` decorator automatically
