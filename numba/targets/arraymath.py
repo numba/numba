@@ -3975,13 +3975,26 @@ def np_cross(a, b):
                     # since we only need the broadcast shape
                     shape_ = np.add(a[..., 0], b[..., 0]).shape
                     cp = np.empty(shape_ + (3,), dtype)
+                    a0 = a[..., 0]
+                    a1 = a[..., 1]
+                    a2 = a[..., 2]
+                    b0 = b[..., 0]
+                    b1 = b[..., 1]
+                    b2 = b[..., 2]
+
+                    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+                    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+                    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+                    cp[..., 0] = cp0
+                    cp[..., 1] = cp1
+                    cp[..., 2] = cp2
             else:
-                # Case: last output dim is scalar
-                # TODO
-                pass
+                raise ValueError('You must use numba.cross2d.')
 
             # TODO: populate cp values
 
             return cp
 
         return np_cross_impl
+
