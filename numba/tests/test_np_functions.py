@@ -2942,21 +2942,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([[4, 5], [1, 2]])
             ),
-            (np.array([1, 2, 3]), np.array([4, 5, 6])),
-            (np.array([1, 2]), np.array([4, 5, 6])),
+            (
+                np.array([1, 2, 3]),
+                np.array([4, 5, 6])
+            ),
+            (
+                np.array([1, 2]),
+                np.array([4, 5, 6])
+            ),
             (
                 np.array([1, 2, 3]),
                 np.array([[4, 5, 6], [1, 2, 3]])
             )
-            #(np.array([1, 2]), np.array([4, 5])),
-
         ]
+
         for x, y in pairs:
             expected = pyfunc(x, y)
             got = cfunc(x, y)
             self.assertPreciseEqual(expected, got)
-
-    # TODO check exceptions for np.cross
 
 
 class TestNPMachineParameters(TestCase):

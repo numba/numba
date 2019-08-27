@@ -3955,16 +3955,32 @@ def np_cross(a, b):
     if isinstance(a, types.Array) and isinstance(b, types.Array):
 
         dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+        wrong_dim_msg = (
+            "incompatible dimensions for cross product\n"
+            "(dimension must be 2 or 3)"
+        )
+        cross2d_msg = (
+            "dimensions for both inputs is 2.\n"
+            "Please use numba.cross2d"
+        )
 
         def np_cross_impl_ndim(a, b):
+            """
+            np.cross implementation for the case where both
+            a.ndim > 1 and b.ndim > 1.
+            """
+
             if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError('dimension must be 2 or 3')
+                raise ValueError(wrong_dim_msg)
 
             if a.shape[-1] == 3 or b.shape[-1] == 3:
+
                 # we can't use np.broadcast; use np.add
                 # since we only need the broadcast shape
+                # to create a container for cp
                 shape_ = np.add(a[..., 0], b[..., 0]).shape
                 cp = np.empty(shape_ + (3,), dtype)
+
                 a0 = a[..., 0]
                 a1 = a[..., 1]
                 if a.shape[-1] == 3:
@@ -3985,17 +4001,24 @@ def np_cross(a, b):
                 cp[..., 0] = cp0
                 cp[..., 1] = cp1
                 cp[..., 2] = cp2
+
             else:
-                raise ValueError('You must use numba.cross2d.')
+                raise ValueError(cross2d_msg)
 
             return cp
 
         def np_cross_impl_1dim(a, b):
+            """
+            np.cross implementation for the case where both
+            a.ndim == 1 and `b.ndim == 1.
+            """
+
             if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError('dimension must be 2 or 3')
+                raise ValueError(wrong_dim_msg)
 
             if a.shape[-1] == 3 or b.shape[-1] == 3:
                 cp = np.empty((3,), dtype)
+
                 a0 = a[0]
                 a1 = a[1]
                 if a.shape[-1] == 3:
@@ -4016,21 +4039,30 @@ def np_cross(a, b):
                 cp[0] = cp0
                 cp[1] = cp1
                 cp[2] = cp2
+
             else:
-                raise ValueError('You must use numba.cross2d.')
+                raise ValueError(cross2d_msg)
 
             return cp
 
         def np_cross_impl_mixdim(a, b):
-            # assume a.ndim == 1 and b.ndim > 1
+            """
+            np.cross implementation for the case where a.ndim == 1
+            and b.ndim >= 1. We can assume it's `a` the 1-dim input
+            without loosing generality since we can reverse the
+            position of the arguments with the use of a lambda
+            function.
+            """
+
             if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError('dimension must be 2 or 3')
+                raise ValueError(wrong_dim_msg)
 
             if a.shape[-1] == 3 or b.shape[-1] == 3:
                 # we can't use np.broadcast; use np.add
                 # since we only need the broadcast shape
                 shape_ = np.add(a[..., 0], b[..., 0]).shape
                 cp = np.empty(shape_ + (3,), dtype)
+
                 a0 = a[0]
                 a1 = a[1]
                 if a.shape[-1] == 3:
@@ -4051,8 +4083,9 @@ def np_cross(a, b):
                 cp[..., 0] = cp0
                 cp[..., 1] = cp1
                 cp[..., 2] = cp2
+
             else:
-                raise ValueError('You must use numba.cross2d.')
+                raise ValueError(cross2d_msg)
 
             return cp
 
