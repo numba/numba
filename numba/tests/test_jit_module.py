@@ -97,6 +97,15 @@ jit_module({jit_options})
         sys.path.remove(tempdir)
         shutil.rmtree(tempdir)
 
+    def test_create_temp_jitted_module(self):
+        sys_path_original = list(sys.path)
+        with self.create_temp_jitted_module() as test_module:
+            temp_module_dir = os.path.dirname(test_module.__file__)
+            self.assertTrue(temp_module_dir == sys.path[0])
+            self.assertTrue(sys.path[1:] == sys_path_original)
+        # Make sure modifications to sys.path are reverted by context manager
+        self.assertTrue(sys.path == sys_path_original)
+
     def test_jit_module(self):
         with self.create_temp_jitted_module() as test_module:
             self.assertTrue(isinstance(test_module.inc, dispatcher.Dispatcher))
