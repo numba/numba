@@ -11,6 +11,7 @@ import numba
 from numba import njit, ir
 from numba.extending import overload
 from numba.ir_utils import dead_code_elimination
+from numba.targets.cpu import InlineOptions
 from itertools import product
 from .support import TestCase, unittest
 
@@ -735,3 +736,26 @@ class TestGeneralInlining(InliningBase):
             return bar(a + b, c=19)
 
         self.check(impl, 3, 4, inline_expect={'bar': True})
+
+
+class TestInlineOptions(TestCase):
+
+    def test_basic(self):
+        always = InlineOptions('always')
+        self.assertTrue(always.is_always_inline)
+        self.assertFalse(always.is_never_inline)
+        self.assertFalse(always.has_cost_model)
+        self.assertEqual(always.value, 'always')
+
+        never = InlineOptions('never')
+        self.assertFalse(never.is_always_inline)
+        self.assertTrue(never.is_never_inline)
+        self.assertFalse(never.has_cost_model)
+        self.assertEqual(never.value, 'never')
+
+        cost_model = lambda x : x
+        model = InlineOptions(cost_model)
+        self.assertFalse(model.is_always_inline)
+        self.assertFalse(model.is_never_inline)
+        self.assertTrue(model.has_cost_model)
+        self.assertIs(model.value, cost_model)

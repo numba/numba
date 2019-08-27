@@ -10,6 +10,7 @@ from types import MethodType, FunctionType
 
 from .. import types, utils
 from ..errors import TypingError, InternalError
+from ..targets.cpu_options import InlineOptions
 
 _IS_PY3 = sys.version_info >= (3,)
 
@@ -434,7 +435,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Store the compiled overload for use in the lowering phase if there's
         # no inlining required (else functions are being compiled which will
         # never be used as they are inlined)
-        if self._inline != 'never':
+        if not self._inline.is_never_inline:
             # need to run the compiler front end up to type inference to compute
             # a signature
             from numba import compiler
@@ -452,7 +453,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # overload available i.e. function is always inlined, the key still
             # needs to exist for type resolution
             self._compiled_overloads[sig.args] = None
-            if self._inline != "always":
+            if not self._inline.is_always_inline:
                 # this branch is here because a user has supplied a function to
                 # determine whether to inline or not. As a result both compiled
                 # function and inliner info needed, delaying the computation of
@@ -560,7 +561,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict, _inline=staticmethod(inline),
+               _strict=strict, _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={})
     return type(base)(name, (base,), dct)
 

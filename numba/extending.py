@@ -15,7 +15,7 @@ from .targets.imputils import (
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
 from ._helperlib import _import_cython_function
-from .ir_utils import _check_inline_options
+
 
 def type_callable(func):
     """
@@ -96,7 +96,6 @@ def overload(func, jit_options={}, strict=True, inline='never'):
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
-    _check_inline_options(inline)
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,

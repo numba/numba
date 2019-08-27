@@ -23,6 +23,7 @@ from numba.analysis import (compute_live_map, compute_use_defs,
 from numba.errors import (TypingError, UnsupportedError,
                           NumbaPendingDeprecationWarning, NumbaWarning,
                           feedback_details)
+
 import copy
 
 _unique_var_count = 0
@@ -1967,20 +1968,6 @@ def warn_deprecated(func_ir, typemap):
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
 
 
-def _check_inline_options(inline_arg):
-    ok = False
-    if isinstance(inline_arg, str):
-        if inline_arg in ('always', 'never'):
-            ok = True
-    else:
-        ok = getattr(inline_arg, '__call__', False)
-    if not ok:
-        msg = ("Keyword argument 'inline' must be one of the strings 'always' "
-               "or 'never', or it can be a callable the returns True/False. "
-                "Found value '%s'." % inline_arg)
-        raise ValueError(msg)
-
-
 def resolve_func_from_module(func_ir, node):
     """
     This returns the python function that is being getattr'd from a module in
@@ -2023,7 +2010,9 @@ class InlineInlinables(object):
     into the site of its call depending on the value set in the 'inline' kwarg
     to the decorator.
 
-    This is an untyped pass.
+    This is an untyped pass. CFG simplification is performed at the end of the
+    pass but no block level clean up is performed on the mutated IR (typing
+    information is not available to do so).
     """
 
     _DEBUG = False
@@ -2039,6 +2028,8 @@ class InlineInlinables(object):
             print(self.func_ir.dump())
             print(''.center(80, '-'))
         modified = False
+        # use a work list, look for call sites via `ir.Expr.op == call` and
+        # then pass these to `self._do_work` to make decisions about inlining.
         work_list = list(self.func_ir.blocks.items())
         while work_list:
             label, block = work_list.pop()
@@ -2064,6 +2055,8 @@ class InlineInlinables(object):
         from numba.inline_closurecall import (inline_closure_call,
                                               callee_ir_validator)
         from numba.compiler import run_frontend
+        from numba.targets.cpu import InlineOptions
+
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
         to_inline = None
@@ -2077,30 +2070,44 @@ class InlineInlinables(object):
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
 
+        # see if the definition is a "getattr", in which case walk the IR to
+        # try and find the python function via the module from which it's
+        # imported, this should all be encoded in the IR.
         if getattr(to_inline, 'op', False) == 'getattr':
             val = resolve_func_from_module(self.func_ir, to_inline)
         else:
-            # getattr 'value' on a call may fail if it's an ir.Expr as getattr
-            # is overloaded to look in _kws.
+            # This is likely a freevar or global
+            #
+            # NOTE: getattr 'value' on a call may fail if it's an ir.Expr as
+            # getattr is overloaded to look in _kws.
             try:
                 val = getattr(to_inline, 'value', False)
             except Exception:
                 raise GuardException
 
-
+        # if something was found...
         if val:
+            # check it's dispatcher-like, the targetoptions attr holds the
+            # kwargs supplied in the jit decorator and is where 'inline' will
+            # be if it is present.
             topt = getattr(val, 'targetoptions', False)
             if topt:
                 inline_type = topt.get('inline', None)
+                # has 'inline' been specified?
                 if inline_type is not None:
-                    _check_inline_options(inline_type)
-                    if inline_type != 'never':
+                    inline_opt = InlineOptions(inline_type)
+                    # Could this be inlinable?
+                    if not inline_opt.is_never_inline:
+                        # yes, it could be inlinable
                         do_inline = True
                         pyfunc = val.py_func
-                        if inline_type != 'always':
-                            # must be a function, run the function
+                        # Has it got an associated cost model?
+                        if inline_opt.has_cost_model:
+                            # yes, it has a cost model, use it to determine
+                            # whether to do the inline
                             py_func_ir = run_frontend(pyfunc)
                             do_inline = inline_type(self.func_ir, py_func_ir)
+                        # if do_inline is True then inline!
                         if do_inline:
                             inline_closure_call(self.func_ir,
                                                 pyfunc.__globals__,
@@ -2118,7 +2125,8 @@ class InlineOverloads(object):
     decorator directly into the site of its call depending on the value set in
     the 'inline' kwarg to the decorator.
 
-    This is a typed pass that performs CFG simplification and DCE on completion.
+    This is a typed pass. CFG simplification and DCE are performed on
+    completion.
     """
 
     _DEBUG = False
@@ -2140,6 +2148,8 @@ class InlineOverloads(object):
             print(''.center(80, '-'))
         modified = False
         work_list = list(self.func_ir.blocks.items())
+        # use a work list, look for call sites via `ir.Expr.op == call` and
+        # then pass these to `self._do_work` to make decisions about inlining.
         while work_list:
             label, block = work_list.pop()
             for i, instr in enumerate(block.body):
@@ -2156,6 +2166,7 @@ class InlineOverloads(object):
             print(''.center(80, '-'))
 
         if modified:
+            # clean up blocks
             dead_code_elimination(self.func_ir, typemap=self.typemap)
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
@@ -2182,11 +2193,13 @@ class InlineOverloads(object):
         if getattr(to_inline, 'op', False) == 'make_function':
             return False
 
+        # check this is a known and typed function
         func_ty = self.typemap[expr.func.name]
         if not hasattr(func_ty, 'get_call_type'):
             return False
 
 
+        # search the templates for this overload looking for "inline"
         templates = getattr(func_ty, 'templates', None)
         if templates is None:
             return False
@@ -2195,8 +2208,11 @@ class InlineOverloads(object):
 
         impl = None
         for template in templates:
-            inline_type = getattr(template, '_inline', 'never')
-            if inline_type != 'never':
+            inline_type = getattr(template, '_inline', None)
+            if inline_type is None:
+                # inline not defined
+                continue
+            if not inline_type.is_never_inline:
                 try:
                     impl = template._overload_func(*sig.args)
                     if impl is None:
@@ -2211,14 +2227,17 @@ class InlineOverloads(object):
         # definitely something that could be inlined.
 
         do_inline = True
-        if inline_type != 'always':
+        if not inline_type.is_always_inline:
             from numba.typing.templates import _inline_info
             caller_inline_info = _inline_info(self.func_ir, self.typemap,
                                               self.calltypes, sig)
 
-            # must be a function, run the function
+            # must be a cost-model function, run the function
             iinfo = template._inline_overloads[sig.args]['iinfo']
-            do_inline = inline_type(caller_inline_info, iinfo)
+            if inline_type.has_cost_model:
+                do_inline = inline_type.value(caller_inline_info, iinfo)
+            else:
+                assert 'unreachable'
 
         if do_inline:
             arg_typs=template._inline_overloads[sig.args]['folded_args']
