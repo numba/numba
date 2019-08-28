@@ -257,8 +257,10 @@ def jit_module(**kwargs):
     """ Automatically ``jit``-wraps functions defined in a Python module
 
     Note that ``jit_module`` should only be called at the end of the module to
-    be jitted. In addition, only functions which are defined in the module 
-    ``jit_module`` is called from will be automatically jitted.
+    be jitted. In addition, only functions which are defined in the module
+    ``jit_module`` is called from are considered for automatic jit-wrapping.
+    See the Numba documentation for more information about what can/cannot be
+    jitted.
 
     :param kwargs: Keyword arguments to pass to ``jit`` such as ``nopython``
                    or ``error_model``.
