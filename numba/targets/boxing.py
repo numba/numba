@@ -34,6 +34,12 @@ def box_literal_integer(typ, val, c):
     return c.box(typ.literal_type, val)
 
 
+@unbox(types.IntegerLiteral)
+def unbox_literal_integer(typ, val, c):
+    cval = c.context.get_constant(typ.literal_type, typ.literal_value)
+    return NativeValue(cval)
+
+
 @box(types.Integer)
 def box_integer(typ, val, c):
     if typ.signed:

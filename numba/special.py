@@ -68,7 +68,8 @@ def literally(obj):
     This functions is intercepted by the compiler to alter its behavior to
     consider related function parameter as a literal type.
     """
-    return obj
+    from numba import types
+    return types.literal(obj)
 
 
 __all__ = [
