@@ -824,11 +824,11 @@ class BasePipeline(object):
         The current stages contain type-agnostic rewrite passes.
         """
         if not self.flags.no_rewrites:
-            pm.add_stage(self.stage_literal_arg, "literal args rewrites")
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
+        pm.add_stage(self.stage_literal_arg, "literal args rewrites")
 
     def add_typing_stage(self, pm):
         """Add the type-inference stage necessary for nopython mode.

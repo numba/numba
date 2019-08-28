@@ -89,6 +89,29 @@ class TestLiteralDispatcher(TestCase):
         self.assertIsInstance(type_c, types.Literal)
         self.assertEqual(type_c.literal_value, 3)
 
+    def test_aliased_variable(self):
+        @njit
+        def foo(a, b, c):
+            def closure(d):
+                return literally(d) + 10 * inner(a, b)
+            # The inlining of the closure will create an alias to c
+            return closure(c)
+
+        @njit
+        def inner(x, y):
+            return x + literally(y)
+
+        kwargs = dict(a=1, b=2, c=3)
+        got = foo(**kwargs)
+        expect = (lambda a, b, c: c + 10 * (a + b))(**kwargs)
+        self.assertEqual(got, expect)
+        [(type_a, type_b, type_c)] = foo.signatures
+        self.assertNotIsInstance(type_a, types.Literal)
+        self.assertIsInstance(type_b, types.Literal)
+        self.assertEqual(type_b.literal_value, 2)
+        self.assertIsInstance(type_c, types.Literal)
+        self.assertEqual(type_c.literal_value, 3)
+
 
 if __name__ == '__main__':
     unittest.main()
