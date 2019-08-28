@@ -16,7 +16,7 @@ from .stencil import stencil
 
 
 _logger = logging.getLogger(__name__)
-_logger.handlers = [logging.StreamHandler()]
+# _logger.handlers = [logging.StreamHandler()]
 
 
 # -----------------------------------------------------------------------------

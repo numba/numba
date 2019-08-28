@@ -14,35 +14,19 @@ from numba import dispatcher
 from numba.utils import StringIO
 from numba.tests.support import temp_directory, SerialMixin
 
-logger = logging.getLogger('numba.decorators')
 
-
-class CapturedLog:
-    """Capture the log temporarily for validation."""
-
-    def __init__(self):
-        self.buffer = StringIO()
-        self.handler = logging.StreamHandler(self.buffer)
-
-    def __enter__(self):
-        self._handlers = logger.handlers
-        self.buffer = StringIO()
-        logger.handlers = [logging.StreamHandler(self.buffer)]
-
-    def __exit__(self, type, value, traceback):
-        logger.handlers = self._handlers
-
-    def getvalue(self):
-        return self.buffer.getvalue()
+@contextlib.contextmanager
+def captured_logs(l):
+    try:
+        buffer = StringIO()
+        handler = logging.StreamHandler(buffer)
+        l.addHandler(handler)
+        yield buffer
+    finally:
+        l.removeHandler(handler)
 
 
 class TestJitModule(SerialMixin, unittest.TestCase):
-
-    def setUp(self):
-        self.capture = CapturedLog()
-
-    def tearDown(self):
-        del self.capture
 
     source_lines = """
 from numba import jit_module
@@ -105,12 +89,12 @@ jit_module({jit_options})
         sys_modules_original = dict(sys.modules)
         with self.create_temp_jitted_module() as test_module:
             temp_module_dir = os.path.dirname(test_module.__file__)
-            self.assertTrue(temp_module_dir == sys.path[0])
-            self.assertTrue(sys.path[1:] == sys_path_original)
+            self.assertEqual(temp_module_dir, sys.path[0])
+            self.assertEqual(sys.path[1:], sys_path_original)
             self.assertTrue(test_module.__name__ in sys.modules)
         # Test that modifications to sys.path / sys.modules are reverted
-        self.assertTrue(sys.path == sys_path_original)
-        self.assertTrue(sys.modules == sys_modules_original)
+        self.assertEqual(sys.path, sys_path_original)
+        self.assertEqual(sys.modules, sys_modules_original)
 
     def test_create_temp_jitted_module_with_exception(self):
         try:
@@ -120,14 +104,14 @@ jit_module({jit_options})
                 raise ValueError("Something went wrong!")
         except ValueError:
             # Test that modifications to sys.path / sys.modules are reverted
-            self.assertTrue(sys.path == sys_path_original)
-            self.assertTrue(sys.modules == sys_modules_original)
+            self.assertEqual(sys.path, sys_path_original)
+            self.assertEqual(sys.modules, sys_modules_original)
 
     def test_jit_module(self):
         with self.create_temp_jitted_module() as test_module:
-            self.assertTrue(isinstance(test_module.inc, dispatcher.Dispatcher))
-            self.assertTrue(isinstance(test_module.add, dispatcher.Dispatcher))
-            self.assertTrue(isinstance(test_module.inc_add, dispatcher.Dispatcher))
+            self.assertIsInstance(test_module.inc, dispatcher.Dispatcher)
+            self.assertIsInstance(test_module.add, dispatcher.Dispatcher)
+            self.assertIsInstance(test_module.inc_add, dispatcher.Dispatcher)
             self.assertTrue(test_module.mean is np.mean)
             self.assertTrue(inspect.isclass(test_module.Foo))
 
@@ -143,7 +127,7 @@ jit_module({jit_options})
                        "error_model": "numpy",
                        }
         with self.create_temp_jitted_module(**jit_options) as test_module:
-            self.assertTrue(test_module.inc.targetoptions == jit_options)
+            self.assertEqual(test_module.inc.targetoptions, jit_options)
 
     def test_jit_module_jit_options_override(self):
         source_lines = """
@@ -162,20 +146,28 @@ jit_module({jit_options})
                        "error_model": "numpy",
                        }
         with self.create_temp_jitted_module(source_lines=source_lines, **jit_options) as test_module:
-            self.assertTrue(test_module.add.targetoptions == jit_options)
+            self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options
-            self.assertTrue(test_module.inc.targetoptions == {'nogil': True, 'forceobj': True})
+            self.assertEqual(test_module.inc.targetoptions, {'nogil': True, 'forceobj': True})
 
-    def test_jit_module_logging(self):
+    def test_jit_module_logging_output(self):
         logger = logging.getLogger('numba.decorators')
         logger.setLevel(logging.DEBUG)
         jit_options = {"nopython": True,
                        "error_model": "numpy",
                        }
-        with self.capture:
+        with captured_logs(logger) as logs:
             with self.create_temp_jitted_module(**jit_options) as test_module:
-                logs = self.capture.getvalue()
+                logs = logs.getvalue()
                 expected = ["Auto decorating function",
                             "from module {}".format(test_module.__name__),
                             "with jit and options: {}".format(jit_options)]
                 self.assertTrue(all(i in logs for i in expected))
+
+    def test_jit_module_logging_level(self):
+        logger = logging.getLogger('numba.decorators')
+        # Test there's no logging for INFO level
+        logger.setLevel(logging.INFO)
+        with captured_logs(logger) as logs:
+            with self.create_temp_jitted_module():
+                self.assertEqual(logs.getvalue(), '')
