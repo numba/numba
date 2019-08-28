@@ -165,7 +165,7 @@ def bytes_to_charseq(context, builder, fromty, toty, val):
 
     lty = context.get_value_type(toty)
     dstint_t = ir.IntType(8)
-    dst_ptr = builder.alloca(lty)
+    dst_ptr = cgutils.alloca_once(builder, lty)
     dst = builder.bitcast(dst_ptr, dstint_t.as_pointer())
 
     dst_length = ir.Constant(src_length.type, toty.count)
@@ -196,8 +196,9 @@ def _make_constant_bytes(context, builder, nbytes):
     bstr.itemsize = ir.Constant(bstr.itemsize.type, 1)
     bstr.data = context.nrt.meminfo_data(builder, bstr.meminfo)
     bstr.parent = cgutils.get_null_value(bstr.parent.type)
-    # bstr.shapes = ?
-    # bstr.strides = ?
+    # bstr.shape and bstr.strides are not used
+    bstr.shape = cgutils.get_null_value(bstr.shape.type)
+    bstr.strides = cgutils.get_null_value(bstr.strides.type)
     return bstr
 
 
@@ -252,7 +253,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
 
     lty = context.get_value_type(toty)
     dstint_t = ir.IntType(8 * unicode_byte_width)
-    dst_ptr = builder.alloca(lty)
+    dst_ptr = cgutils.alloca_once(builder, lty)
     dst = builder.bitcast(dst_ptr, dstint_t.as_pointer())
 
     dst_length = ir.Constant(src_length.type, toty.count)
