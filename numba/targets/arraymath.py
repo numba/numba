@@ -3952,18 +3952,20 @@ def np_kaiser(M, beta):
 
 @register_jitable
 def cross_operation(a, b, cp):
+    dta = a.dtype
     a0 = a[..., 0]
     a1 = a[..., 1]
     if a.shape[-1] == 3:
         a2 = a[..., 2]
     else:
-        a2 = np.multiply(0, a0)
+        a2 = np.multiply(dta.type(0), a0)
+    dtb = b.dtype
     b0 = b[..., 0]
     b1 = b[..., 1]
     if b.shape[-1] == 3:
         b2 = b[..., 2]
     else:
-        b2 = np.multiply(0, b0)
+        b2 = np.multiply(dtb.type(0), b0)
 
     cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
     cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
