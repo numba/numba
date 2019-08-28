@@ -206,7 +206,8 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     # Incompatible scalar type
                     return
-        elif not isinstance(val, types.Array):
+        elif not isinstance(val, types.Array) or \
+            (isinstance(val, types.Array) and (val.ndim == 0)) :
             # Single item assignment
             if not self.context.can_convert(val, res):
                 # if the array dtype is not yet defined
