@@ -379,7 +379,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
-    @unittest.skipIf(np_version < (1, 12), "Numpy Unsupported")
+    @unittest.skipIf(np_version < (1, 12), "NumPy Unsupported")
     def test_count_nonzero(self):
 
         def arrays():
@@ -398,7 +398,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, axis)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipUnless(np_version < (1, 12), "Numpy Unsupported")
+    @unittest.skipUnless(np_version < (1, 12), "NumPy Unsupported")
     def test_count_nonzero_exception(self):
         pyfunc = count_nonzero
         cfunc = jit(nopython=True)(pyfunc)
@@ -406,7 +406,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.arange(3 * 4).reshape(3, 4), 0)
         self.assertIn(
-            "axis is not supported on Numpy versions < 1.12.0",
+            "axis is not supported on NumPy versions < 1.12.0",
             str(raises.exception)
         )
 
