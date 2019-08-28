@@ -2934,26 +2934,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_cross
         cfunc = jit(nopython=True)(pyfunc)
         pairs = [
+            # 3x3 (n-dims)
             (
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([[4, 5, 6], [1, 2, 3]])
             ),
+            # 2x3 (n-dims)
             (
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([[4, 5], [1, 2]])
             ),
+            # 3x3 (1-dim)
             (
                 np.array([1, 2, 3]),
                 np.array([4, 5, 6])
             ),
+            # 2x3 (1-dim)
             (
                 np.array([1, 2]),
                 np.array([4, 5, 6])
             ),
+            # 3x3 (with broadcasting 1d x 2d)
             (
                 np.array([1, 2, 3]),
                 np.array([[4, 5, 6], [1, 2, 3]])
             ),
+            # 3x3 (with broadcasting 2d x 1d)
             (
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([1, 2, 3])
