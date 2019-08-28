@@ -7,7 +7,6 @@ import platform
 from functools import partial
 
 import numpy as np
-from numpy.lib import NumpyVersion
 
 from numba import unittest_support as unittest
 from numba.compiler import Flags
@@ -380,7 +379,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
-    @unittest.skipIf(NumpyVersion(np.__version__) < '1.12.0', "Numpy bug")
+    @unittest.skipIf(np_version < (1, 12), "Numpy Unsupported")
     def test_count_nonzero(self):
 
         def arrays():
@@ -399,11 +398,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, axis)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipUnless(NumpyVersion(np.__version__) < '1.12.0', "Numpy bug")
+    @unittest.skipUnless(np_version < (1, 12), "Numpy Unsupported")
     def test_count_nonzero_exception(self):
         pyfunc = count_nonzero
         cfunc = jit(nopython=True)(pyfunc)
-        self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.arange(3 * 4).reshape(3, 4), 0)

@@ -10,7 +10,6 @@ from enum import IntEnum
 from functools import partial
 
 import numpy as np
-from numpy.lib import NumpyVersion
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
@@ -2873,10 +2872,10 @@ def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
         raise TypingError("The argument to np.count_nonzero must be array-like")
 
-    if (NumpyVersion(np.__version__) < '1.12.0'):
-        raise TypingError("axis is not supported on Numpy versions < 1.12.0")
+    if (numpy_version < (1, 12)):
+        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
 
-    if (axis in (None, types.none)):
+    if _is_nonelike(axis):
         def impl(arr, axis=None):
             arr2 = np.ravel(arr)
             return np.sum(arr2 != 0)

@@ -317,7 +317,7 @@ The following top-level functions are supported:
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires NumPy >= 1.10 and
   SciPy >= 0.16; extreme value handling per NumPy 1.11+)
 * :func:`numpy.correlate` (only the 2 first arguments)
-* :func:`numpy.count_nonzero` (axis only support scalar values)
+* :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
