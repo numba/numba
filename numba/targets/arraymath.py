@@ -3986,13 +3986,13 @@ def np_cross(a, b):
                 if a.shape[-1] == 3:
                     a2 = a[..., 2]
                 else:
-                    a2 = np.zeros_like(a1)
+                    a2 = np.multiply(0, a0)
                 b0 = b[..., 0]
                 b1 = b[..., 1]
                 if b.shape[-1] == 3:
                     b2 = b[..., 2]
                 else:
-                    b2 = np.zeros_like(b1)
+                    b2 = np.multiply(0, b0)
 
                 cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
                 cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
@@ -4045,94 +4045,7 @@ def np_cross(a, b):
 
             return cp
 
-        def np_cross_impl_mixdim_a(a, b):
-            """
-            np.cross implementation for the case where a.ndim == 1
-            and b.ndim > 1.
-            """
-
-            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError(wrong_dim_msg)
-
-            if a.shape[-1] == 3 or b.shape[-1] == 3:
-                # we can't use np.broadcast; use np.add
-                # since we only need the broadcast shape
-                shape_ = np.add(a[..., 0], b[..., 0]).shape
-                cp = np.empty(shape_ + (3,), dtype)
-
-                a0 = a[0]
-                a1 = a[1]
-                if a.shape[-1] == 3:
-                    a2 = a[2]
-                else:
-                    a2 = 0
-                b0 = b[..., 0]
-                b1 = b[..., 1]
-                if b.shape[-1] == 3:
-                    b2 = b[..., 2]
-                else:
-                    b2 = np.zeros_like(b1)
-
-                cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
-                cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
-                cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
-
-                cp[..., 0] = cp0
-                cp[..., 1] = cp1
-                cp[..., 2] = cp2
-
-            else:
-                raise ValueError(cross2d_msg)
-
-            return cp
-
-        def np_cross_impl_mixdim_b(a, b):
-            """
-            np.cross implementation for the case where a.ndim > 1
-            and b.ndim == 1.
-            """
-
-            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError(wrong_dim_msg)
-
-            if a.shape[-1] == 3 or b.shape[-1] == 3:
-                # we can't use np.broadcast; use np.add
-                # since we only need the broadcast shape
-                shape_ = np.add(a[..., 0], b[..., 0]).shape
-                cp = np.empty(shape_ + (3,), dtype)
-
-                a0 = a[..., 0]
-                a1 = a[..., 1]
-                if a.shape[-1] == 3:
-                    a2 = a[..., 2]
-                else:
-                    a2 = np.zeros_like(a1)
-                b0 = b[0]
-                b1 = b[1]
-                if b.shape[-1] == 3:
-                    b2 = b[2]
-                else:
-                    b2 = 0
-
-                cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
-                cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
-                cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
-
-                cp[..., 0] = cp0
-                cp[..., 1] = cp1
-                cp[..., 2] = cp2
-
-            else:
-                raise ValueError(cross2d_msg)
-
-            return cp
-
-        if a.ndim > 1 and b.ndim > 1:
-            return np_cross_impl_ndim
-        elif a.ndim == 1 and b.ndim == 1:
+        if a.ndim == 1 and b.ndim == 1:
             return np_cross_impl_1dim
         else:
-            if a.ndim == 1:
-                return np_cross_impl_mixdim_a
-            else:
-                return np_cross_impl_mixdim_b
+            return np_cross_impl_ndim
