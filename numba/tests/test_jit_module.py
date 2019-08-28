@@ -78,33 +78,50 @@ jit_module({jit_options})
 
     @contextlib.contextmanager
     def create_temp_jitted_module(self, source_lines=None, **jit_options):
-        if source_lines is None:
-            source_lines = self.source_lines
-        tempdir = temp_directory('test_jit_module')
-        # Generate random module name
-        temp_module_name = 'test_module_' + str(uuid.uuid4()).replace('-', '_')
-        temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
+        # Use try/finally so cleanup happens even when an exception is raised
+        try:
+            if source_lines is None:
+                source_lines = self.source_lines
+            tempdir = temp_directory('test_jit_module')
+            # Generate random module name
+            temp_module_name = 'test_module_' + str(uuid.uuid4()).replace('-', '_')
+            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
 
-        jit_options = self._format_jit_options(**jit_options)
-        with open(temp_module_path, 'w') as f:
-            lines = source_lines.format(jit_options=jit_options)
-            f.write(lines)
-        # Add test_module to sys.path so it can be imported
-        sys.path.insert(0, tempdir)
-        test_module = importlib.import_module(temp_module_name)
-        yield test_module
-        sys.modules.pop(temp_module_name, None)
-        sys.path.remove(tempdir)
-        shutil.rmtree(tempdir)
+            jit_options = self._format_jit_options(**jit_options)
+            with open(temp_module_path, 'w') as f:
+                lines = source_lines.format(jit_options=jit_options)
+                f.write(lines)
+            # Add test_module to sys.path so it can be imported
+            sys.path.insert(0, tempdir)
+            test_module = importlib.import_module(temp_module_name)
+            yield test_module
+        finally:
+            sys.modules.pop(temp_module_name, None)
+            sys.path.remove(tempdir)
+            shutil.rmtree(tempdir)
 
     def test_create_temp_jitted_module(self):
         sys_path_original = list(sys.path)
+        sys_modules_original = dict(sys.modules)
         with self.create_temp_jitted_module() as test_module:
             temp_module_dir = os.path.dirname(test_module.__file__)
             self.assertTrue(temp_module_dir == sys.path[0])
             self.assertTrue(sys.path[1:] == sys_path_original)
-        # Make sure modifications to sys.path are reverted by context manager
+            self.assertTrue(test_module.__name__ in sys.modules)
+        # Test that modifications to sys.path / sys.modules are reverted
         self.assertTrue(sys.path == sys_path_original)
+        self.assertTrue(sys.modules == sys_modules_original)
+
+    def test_create_temp_jitted_module_with_exception(self):
+        try:
+            sys_path_original = list(sys.path)
+            sys_modules_original = dict(sys.modules)
+            with self.create_temp_jitted_module():
+                raise ValueError("Something went wrong!")
+        except ValueError:
+            # Test that modifications to sys.path / sys.modules are reverted
+            self.assertTrue(sys.path == sys_path_original)
+            self.assertTrue(sys.modules == sys_modules_original)
 
     def test_jit_module(self):
         with self.create_temp_jitted_module() as test_module:
