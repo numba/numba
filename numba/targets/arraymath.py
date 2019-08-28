@@ -3949,6 +3949,29 @@ def np_kaiser(M, beta):
 
     return np_kaiser_impl
 
+@register_jitable
+def cross_operation(a, b, cp):
+    a0 = a[..., 0]
+    a1 = a[..., 1]
+    if a.shape[-1] == 3:
+        a2 = a[..., 2]
+    else:
+        a2 = np.multiply(0, a0)
+    b0 = b[..., 0]
+    b1 = b[..., 1]
+    if b.shape[-1] == 3:
+        b2 = b[..., 2]
+    else:
+        b2 = np.multiply(0, b0)
+
+    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+    cp[..., 0] = cp0
+    cp[..., 1] = cp1
+    cp[..., 2] = cp2
+
 
 @overload(np.cross)
 def np_cross(a, b):
@@ -3980,27 +4003,7 @@ def np_cross(a, b):
                 # to create a container for cp
                 shape_ = np.add(a[..., 0], b[..., 0]).shape
                 cp = np.empty(shape_ + (3,), dtype)
-
-                a0 = a[..., 0]
-                a1 = a[..., 1]
-                if a.shape[-1] == 3:
-                    a2 = a[..., 2]
-                else:
-                    a2 = np.multiply(0, a0)
-                b0 = b[..., 0]
-                b1 = b[..., 1]
-                if b.shape[-1] == 3:
-                    b2 = b[..., 2]
-                else:
-                    b2 = np.multiply(0, b0)
-
-                cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
-                cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
-                cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
-
-                cp[..., 0] = cp0
-                cp[..., 1] = cp1
-                cp[..., 2] = cp2
+                cross_operation(a, b, cp)
 
             else:
                 raise ValueError(cross2d_msg)
@@ -4018,28 +4021,7 @@ def np_cross(a, b):
 
             if a.shape[-1] == 3 or b.shape[-1] == 3:
                 cp = np.empty((3,), dtype)
-
-                a0 = a[0]
-                a1 = a[1]
-                if a.shape[-1] == 3:
-                    a2 = a[2]
-                else:
-                    a2 = 0
-                b0 = b[0]
-                b1 = b[1]
-                if b.shape[-1] == 3:
-                    b2 = b[2]
-                else:
-                    b2 = 0
-
-                cp0 = a1 * b2 - a2 * b1
-                cp1 = a2 * b0 - a0 * b2
-                cp2 = a0 * b1 - a1 * b0
-
-                cp[0] = cp0
-                cp[1] = cp1
-                cp[2] = cp2
-
+                cross_operation(a, b, cp)
             else:
                 raise ValueError(cross2d_msg)
 
