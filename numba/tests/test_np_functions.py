@@ -2614,7 +2614,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_array_and_asarray(self):
 
-        def input_variations(c_contiguous=False):
+        def input_variations():
             """
             To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html
             Input data, in any form that can be converted to an array.
@@ -2638,8 +2638,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([])
             yield np.arange(4)
             yield np.arange(12).reshape(3, 4)
-            if not c_contiguous:
-                yield np.arange(12).reshape(3, 4).T
+            yield np.arange(12).reshape(3, 4).T
 
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
@@ -2652,10 +2651,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertTrue(returned is not params['a'])
                 # should be numerically the same, just different dtype
                 np.testing.assert_allclose(returned, params['a'])
-                dtype = params.get('dtype', '') or params['a'].dtype  # allow params['dtype']==None
+                # allow params['dtype']==None
+                dtype = params.get('dtype', '') or params['a'].dtype
                 self.assertTrue(returned.dtype == dtype)
 
-        for pyfunc in [array, array_dtype, array_copy, array_dtype_copy, asarray, asarray_dtype]:
+        for pyfunc in [array, array_dtype, array_copy, array_dtype_copy,
+                       asarray, asarray_dtype]:
             cfunc = jit(nopython=True)(pyfunc)
             dtypes = [None, np.complex128] if 'dtype' in pyfunc.__name__ else []
             copies = [True, False] if 'copy' in pyfunc.__name__ else [None]
@@ -2663,9 +2664,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             for copy in copies:
                 expect_copy = copy if copy is not None else default_copy
-                _check = partial(self._check_output, pyfunc, cfunc, may_share_memory=not expect_copy)
+                _check = partial(self._check_output, pyfunc, cfunc,
+                                 may_share_memory=not expect_copy)
 
-                for x in input_variations(expect_copy):
+                for x in input_variations():
                     params = {'a': x}
                     if copy is not None:
                         params['copy'] = copy
@@ -2684,7 +2686,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 if dtypes:
                     for dt in dtypes:
                         params['dtype'] = dt
-                        pass_through = not expect_copy and (dt is None or dt == x.dtype)
+                        pass_through = (
+                            not expect_copy and (dt is None or dt == x.dtype))
                         check_pass_through(cfunc, pass_through, params)
                 else:
                     pass_through = not expect_copy
