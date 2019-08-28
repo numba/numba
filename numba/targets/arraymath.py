@@ -279,7 +279,7 @@ def array_sum_axis_dtype(context, builder, sig, args):
 @lower_builtin(np.sum, types.Array,  types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
-def array_sum_axis(context, builder, sig, args):
+def array_sum_dtype(context, builder, sig, args):
     zero = sig.return_type(0)
 
     def array_sum_impl(arr, dtype):
@@ -291,7 +291,6 @@ def array_sum_axis(context, builder, sig, args):
     res = context.compile_internal(builder, array_sum_impl, sig, args,
                                    locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
-
 
 
 @lower_builtin(np.sum, types.Array, types.intp)

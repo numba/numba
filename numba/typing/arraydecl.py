@@ -653,6 +653,7 @@ def sum_expand(self, args, kws):
             return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                                     ndim=self.this.ndim-1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
+
     elif args_len == 1 and 'dtype' in kws:
         # No axis parameter so the return type of the summation is a scalar
         # of the dtype parameter.
