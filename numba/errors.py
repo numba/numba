@@ -639,6 +639,32 @@ class ForceLiteralArg(NumbaError):
         )
         self.requested_args = new_args
 
+    def combine(self, other):
+        from numba import types
+
+        if not isinstance(other, ForceLiteralArg):
+            m = '*other* must be a {} but got a {} instead'
+            raise TypeError(m.format(ForceLiteralArg, type(other)))
+        if len(self.requested_args) != len(other.requested_args):
+            raise ValueError('*other.requested_args* has a different len')
+
+        def pick_literal(x, y):
+            x_is_lit = isinstance(x, types.ForceLiteral)
+            y_is_lit = isinstance(y, types.ForceLiteral)
+            if x_is_lit and y_is_lit:
+                return x & y
+            elif x_is_lit:
+                return x
+            else:
+                return y
+
+        new_args = tuple([
+            pick_literal(x, y)
+            for x, y in zip(self.requested_args, other.requested_args)
+        ])
+        return ForceLiteralArg(new_args)
+
+
 
 class LiteralTypingError(TypingError):
     """

@@ -527,7 +527,8 @@ def find_literal_calls(func_ir, argtypes):
     if marked_args:
         new_args = list(argtypes)
         ct = 0
-        for pos, arg in enumerate(argtypes):
+        for pos in marked_args:
+            arg = argtypes[pos]
             # Check if the type is already a literal type
             if not isinstance(arg, types.Literal):
                 new_args[pos] = types.ForceLiteral(arg)

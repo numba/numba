@@ -388,6 +388,11 @@ class ForceLiteral(Type):
 
         super(ForceLiteral, self).__init__('ForceLiteral({})'.format(value_type))
 
+    def __and__(self, other):
+        if self != other:
+            raise ValueError('*self* ({}) != *other* ({})'.format(self, other))
+        return self
+
 
 class Literal(Type):
     """Base class for Literal types.

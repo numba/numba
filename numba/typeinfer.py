@@ -490,7 +490,9 @@ class CallConstraint(object):
                 if isinstance(req, types.ForceLiteral):
                     maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                     if isinstance(maybe_arg, ir.Arg):
-                        argtypes[idx] = types.ForceLiteral(argtypes[idx])
+                        argty = argtypes[maybe_arg.index]
+                        if not isinstance(argty, types.Literal):
+                            argtypes[maybe_arg.index] = types.ForceLiteral(argty)
 
             raise ForceLiteralArg(argtypes)
 

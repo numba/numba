@@ -63,7 +63,7 @@ def literal(value):
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:
-        raise LiteralTypingError(ty)
+        raise LiteralTypingError("{} cannot be used as a literal".format(ty))
     else:
         return ctor(value)
 
