@@ -3949,6 +3949,7 @@ def np_kaiser(M, beta):
 
     return np_kaiser_impl
 
+
 @register_jitable
 def cross_operation(a, b, cp):
     a0 = a[..., 0]
