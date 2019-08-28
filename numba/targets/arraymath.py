@@ -3669,8 +3669,6 @@ def _is_nonelike(ty):
 @overload(np.array)
 def np_array(a, dtype=None, copy=True):
 
-    # developer note... keep this function (type_can_asarray) in sync with the
-    # accepted types implementations below!
     if not type_can_asarray(a):
         return None
 
@@ -3679,13 +3677,13 @@ def np_array(a, dtype=None, copy=True):
         if _is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None, copy=True):
                 if copy:
-                    return a.copy()
+                    return np.copy(a)
                 else:
                     return a
         else:
             def impl(a, dtype=None, copy=True):
                 if copy:
-                    return a.astype(dtype).copy()
+                    return np.copy(a.astype(dtype))
                 else:
                     return a.astype(dtype)
     elif isinstance(a, (types.Sequence, types.Tuple)):
