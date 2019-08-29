@@ -112,19 +112,6 @@ class TestLiteralDispatcher(TestCase):
         self.assertIsInstance(type_c, types.Literal)
         self.assertEqual(type_c.literal_value, 3)
 
-    def test_marking_literal_outside(self):
-        @njit
-        def foo(x):
-            return x
-
-        x = 0xbeef
-        litx = literally(x)
-        self.assertIsInstance(litx, types.IntegerLiteral)
-        self.assertEqual(litx.literal_value, x)
-        r = foo(litx)
-        self.assertEqual(r, x)
-        self.assertEqual(foo.nopython_signatures[0].return_type, litx)
-
 
 if __name__ == '__main__':
     unittest.main()
