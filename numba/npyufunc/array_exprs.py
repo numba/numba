@@ -367,7 +367,6 @@ def _lower_array_expr(lowerer, expr):
         ast.fix_missing_locations(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
-
     code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
