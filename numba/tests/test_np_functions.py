@@ -406,7 +406,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.arange(3 * 4).reshape(3, 4), 0)
         self.assertIn(
-            "axis is not supported on NumPy versions < 1.12.0",
+            "axis is not supported for NumPy versions < 1.12.0",
             str(raises.exception)
         )
 
