@@ -44,6 +44,11 @@ from numba.withcontexts import objmode_context as objmode
 # Initialize typed containers
 import numba.typed
 
+# Enable bytes/unicode array support (Python 3.x only)
+from .utils import IS_PY3
+if IS_PY3:
+    import numba.charseq
+
 # Keep this for backward compatibility.
 test = runtests.main
 
