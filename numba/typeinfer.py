@@ -147,20 +147,21 @@ class ConstraintNetwork(object):
                     constraint(typeinfer)
                 except TypingError as e:
                     _logger.debug("captured error", exc_info=e)
-                    e = TypingError(str(e),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
+                    new_exc = TypingError(
+                        str(e), loc=constraint.loc,
+                        highlighting=False,
+                    )
+                    errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
                     _logger.debug("captured error", exc_info=e)
                     msg = ("Internal error at {con}.\n"
                            "{err}\nEnable logging at debug level for details.")
-                    e = TypingError(
+                    new_exc = TypingError(
                         msg.format(con=constraint, err=str(e)),
                         loc=constraint.loc,
                         highlighting=False,
                     )
-                    errors.append(e)
+                    errors.append(utils.chain_exception(new_exc, e))
         return errors
 
 
@@ -1320,6 +1321,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
             sig = typing.signature(return_type, *args)
             sig.pysig = pysig
+            # Keep track of unique return_type
+            frame.add_return_type(return_type)
             return sig
         else:
             # Normal non-recursive call

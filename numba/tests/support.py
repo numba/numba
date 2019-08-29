@@ -18,6 +18,7 @@ import time
 import io
 import ctypes
 import multiprocessing as mp
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -26,6 +27,7 @@ from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
 from numba.runtime import rtsys
+from numba.six import PY2
 
 
 enable_pyobj_flags = Flags()
@@ -149,7 +151,8 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
+    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
+                       (utils.text_type), (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -422,6 +425,14 @@ class TestCase(unittest.TestCase):
         got = cfunc()
         self.assertPreciseEqual(got, expected)
         return got, expected
+
+    if PY2:
+        @contextmanager
+        def subTest(self, *args, **kwargs):
+            """A stub TestCase.subTest backport.
+            This implementation is a no-op.
+            """
+            yield
 
 
 class SerialMixin(object):

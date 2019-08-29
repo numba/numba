@@ -213,5 +213,59 @@ class TestRemoveDead(unittest.TestCase):
             # recover global state
             numba.ir_utils.alias_func_extensions = old_ext_handlers
 
+    @skip_parfors_unsupported
+    def test_alias_parfor_extension(self):
+        """Make sure aliases are considered in remove dead extension for
+        parfors.
+        """
+        def func():
+            n = 11
+            numba.parfor.init_prange()
+            A = np.empty(n)
+            B = A  # create alias to A
+            for i in numba.prange(n):
+                A[i] = i
+
+            return B
+
+        class TestPipeline(numba.compiler.Pipeline):
+            """Test pipeline that just converts prange() to parfor and calls
+            remove_dead(). Copy propagation can replace B in the example code
+            which this pipeline avoids.
+            """
+            def define_pipelines(self, pm):
+                pm.create_pipeline("test parfor aliasing")
+                self.add_preprocessing_stage(pm)
+                self.add_pre_typing_stage(pm)
+                self.add_typing_stage(pm)
+                pm.add_stage(
+                    self.stage_limited_parfor, "just prange and rm dead")
+                self.add_lowering_stage(pm)
+                self.add_cleanup_stage(pm)
+
+            def stage_limited_parfor(self):
+                parfor_pass = numba.parfor.ParforPass(
+                    self.func_ir,
+                    self.type_annotation.typemap,
+                    self.type_annotation.calltypes,
+                    self.return_type,
+                    self.typingctx,
+                    self.flags.auto_parallel,
+                    self.flags,
+                    self.parfor_diagnostics
+                )
+                remove_dels(self.func_ir.blocks)
+                parfor_pass.array_analysis.run(self.func_ir.blocks)
+                parfor_pass._convert_loop(self.func_ir.blocks)
+                remove_dead(self.func_ir.blocks, self.func_ir.arg_names,
+                    self.func_ir, self.type_annotation.typemap)
+                numba.parfor.get_parfor_params(self.func_ir.blocks,
+                    parfor_pass.options.fusion, parfor_pass.nested_fusion_info)
+
+        test_res = numba.jit(pipeline_class=TestPipeline)(func)()
+        py_res = func()
+        np.testing.assert_array_equal(test_res, py_res)
+
+
 if __name__ == "__main__":
     unittest.main()

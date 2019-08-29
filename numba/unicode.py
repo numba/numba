@@ -33,10 +33,8 @@ from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
-                              _PyUnicode_gettyperecord,
-                              _PyUnicode_TyperecordMasks,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
 # DATA MODEL
 
@@ -444,6 +442,13 @@ def _codepoint_is_ascii(ch):
 
 # PUBLIC API
 
+
+@overload(str)
+def unicode_str(s):
+    if isinstance(s, types.UnicodeType):
+        return lambda s: s
+
+
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):
@@ -529,6 +534,10 @@ def unicode_find(a, b):
         def find_impl(a, b):
             return _find(substr=b, s=a)
         return find_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def find_impl(a, b):
+            return a.find(str(b))
+        return find_impl
 
 
 @overload_method(types.UnicodeType, 'startswith')
@@ -536,6 +545,10 @@ def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
         def startswith_impl(a, b):
             return _cmp_region(a, 0, b, 0, len(b)) == 0
+        return startswith_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def startswith_impl(a, b):
+            return a.startswith(str(b))
         return startswith_impl
 
 
@@ -548,6 +561,10 @@ def unicode_endswith(a, b):
                 return False
             return _cmp_region(a, a_offset, b, 0, len(b)) == 0
         return endswith_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def endswith_impl(a, b):
+            return a.endswith(str(b))
+        return endswith_impl
 
 
 @overload_method(types.UnicodeType, 'split')
@@ -556,6 +573,11 @@ def unicode_split(a, sep=None, maxsplit=-1):
             isinstance(maxsplit, (types.Omitted, types.Integer,
                                   types.IntegerLiteral))):
         return None  # fail typing if maxsplit is not an integer
+
+    if isinstance(sep, types.UnicodeCharSeq):
+        def split_impl(a, sep, maxsplit=1):
+            return a.split(str(sep), maxsplit=maxsplit)
+        return split_impl
 
     if isinstance(sep, types.UnicodeType):
         def split_impl(a, sep, maxsplit=-1):
@@ -634,6 +656,12 @@ def unicode_split(a, sep=None, maxsplit=-1):
 def unicode_center(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def center_impl(string, width, fillchar):
+            return string.center(width, str(fillchar))
+        return center_impl
+
     if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
@@ -664,7 +692,14 @@ def unicode_center(string, width, fillchar=' '):
 def unicode_ljust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def ljust_impl(string, width, fillchar):
+            return string.ljust(width, str(fillchar))
+        return ljust_impl
+
+    if not (fillchar == ' ' or isinstance(
+            fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def ljust_impl(string, width, fillchar=' '):
@@ -687,6 +722,12 @@ def unicode_ljust(string, width, fillchar=' '):
 def unicode_rjust(string, width, fillchar=' '):
     if not isinstance(width, types.Integer):
         raise TypingError('The width must be an Integer')
+
+    if isinstance(fillchar, types.UnicodeCharSeq):
+        def rjust_impl(string, width, fillchar):
+            return string.rjust(width, str(fillchar))
+        return rjust_impl
+
     if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
@@ -740,10 +781,16 @@ def join_list(sep, parts):
 
 @overload_method(types.UnicodeType, 'join')
 def unicode_join(sep, parts):
+
     if isinstance(parts, types.List):
         if isinstance(parts.dtype, types.UnicodeType):
             def join_list_impl(sep, parts):
                 return join_list(sep, parts)
+            return join_list_impl
+        elif isinstance(parts.dtype, types.UnicodeCharSeq):
+            def join_list_impl(sep, parts):
+                _parts = [str(p) for p in parts]
+                return join_list(sep, _parts)
             return join_list_impl
         else:
             pass  # lists of any other type not supported
@@ -810,7 +857,7 @@ def unicode_strip_right_bound(string, chars):
 
 def unicode_strip_types_check(chars):
     if isinstance(chars, types.Optional):
-        chars = chars.type # catch optional type with invalid non-None type
+        chars = chars.type  # catch optional type with invalid non-None type
     if not (chars is None or isinstance(chars, (types.Omitted,
                                                 types.UnicodeType,
                                                 types.NoneType))):
@@ -819,6 +866,12 @@ def unicode_strip_types_check(chars):
 
 @overload_method(types.UnicodeType, 'lstrip')
 def unicode_lstrip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def lstrip_impl(string, chars):
+            return string.lstrip(str(chars))
+        return lstrip_impl
+
     unicode_strip_types_check(chars)
 
     def lstrip_impl(string, chars=None):
@@ -828,6 +881,12 @@ def unicode_lstrip(string, chars=None):
 
 @overload_method(types.UnicodeType, 'rstrip')
 def unicode_rstrip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def rstrip_impl(string, chars):
+            return string.rstrip(str(chars))
+        return rstrip_impl
+
     unicode_strip_types_check(chars)
 
     def rstrip_impl(string, chars=None):
@@ -837,6 +896,12 @@ def unicode_rstrip(string, chars=None):
 
 @overload_method(types.UnicodeType, 'strip')
 def unicode_strip(string, chars=None):
+
+    if isinstance(chars, types.UnicodeCharSeq):
+        def strip_impl(string, chars):
+            return string.strip(str(chars))
+        return strip_impl
+
     unicode_strip_types_check(chars)
 
     def strip_impl(string, chars=None):
@@ -1008,6 +1073,11 @@ def unicode_concat(a, b):
             return result
         return concat_impl
 
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeCharSeq):
+        def concat_impl(a, b):
+            return a + str(b)
+        return concat_impl
+
 
 @register_jitable
 def _repeat_impl(str_arg, mult_arg):
@@ -1056,39 +1126,46 @@ def unicode_not(a):
         return impl
 
 
+def _is_upper(is_lower, is_upper, is_title):
+    # impl is an approximate translation of:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    # mixed with:
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242
+    def impl(a):
+        l = len(a)
+        if l == 1:
+            return is_upper(_get_code_point(a, 0))
+        if l == 0:
+            return False
+        cased = False
+        for idx in range(l):
+            code_point = _get_code_point(a, idx)
+            if is_lower(code_point) or is_title(code_point):
+                return False
+            elif(not cased and is_upper(code_point)):
+                cased = True
+        return cased
+    return impl
+
+
+_always_false = register_jitable(lambda x: False)
+_ascii_is_upper = register_jitable(_is_upper(_Py_ISLOWER, _Py_ISUPPER,
+                                             _always_false))
+_unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
+                                               _PyUnicode_IsUppercase,
+                                               _PyUnicode_IsTitlecase))
+
+
 @overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """
     Implements .isupper()
     """
-    # impl is an approximate translation of:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
     def impl(a):
-        l = len(a)
-        if l == 0: # empty string
-            return False
         if a._is_ascii:
-            isupper = True
-            for char in a:
-                data = _PyUnicode_gettyperecord(char)
-                t = data.flags & _PyUnicode_TyperecordMasks.UPPER_MASK
-                isupper &= (t != 0)
-                if not isupper:
-                    return False
-            return isupper
+            return _ascii_is_upper(a)
         else:
-            if l == 1: # single char string
-                return _PyUnicode_IsUppercase(a)
-            else:
-                cased = 0
-                for idx in range(l):
-                    code_point = _get_code_point(a, idx)
-                    if (_PyUnicode_IsLowercase(code_point) or
-                            _PyUnicode_IsTitlecase(code_point)):
-                        return False
-                    elif not cased and _PyUnicode_IsUppercase(code_point):
-                        cased = 1
-                return cased == 1
+            return _unicode_is_upper(a)
     return impl
 
 

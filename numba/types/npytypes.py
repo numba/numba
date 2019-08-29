@@ -8,7 +8,8 @@ from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
 from .common import Buffer, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from .. import utils
-
+from .misc import UnicodeType
+from .containers import Bytes
 
 class CharSeq(Type):
     """
@@ -25,6 +26,10 @@ class CharSeq(Type):
     def key(self):
         return self.count
 
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, Bytes):
+            return Conversion.safe
+
 
 class UnicodeCharSeq(Type):
     """
@@ -40,6 +45,13 @@ class UnicodeCharSeq(Type):
     @property
     def key(self):
         return self.count
+
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            # Assuming that unicode_type itemsize is not greater than
+            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
+            # on.
+            return Conversion.safe
 
 
 _RecordField = collections.namedtuple(
