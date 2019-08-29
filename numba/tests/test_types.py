@@ -228,8 +228,8 @@ class TestTypes(TestCase):
         def ol():
             pass
 
-        template1 = make_overload_template(func_stub, ol, {}, True)
-        template2 = make_overload_template(func_stub2, ol, {}, True)
+        template1 = make_overload_template(func_stub, ol, {}, True, 'never')
+        template2 = make_overload_template(func_stub2, ol, {}, True, 'never')
 
         with self.assertRaises(ValueError) as raises:
             types.Function((template1, template2))
