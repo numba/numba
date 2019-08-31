@@ -157,6 +157,9 @@ def array_sum_dtype_kws(a, dtype):
 def array_sum_axis_dtype_kws(a, dtype, axis):
     return a.sum(axis=axis, dtype=dtype)
 
+def array_sum_axis_dtype_pos(a, a1, a2):
+    return a.sum(a1, a2)
+
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
     # for internal compile cache to see if constant-specialization is
@@ -498,7 +501,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.array([0]).reshape(())
         check_arr(arr)
 
-
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
 
@@ -537,7 +539,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_allocated(self):
         self.check_np_frombuffer_allocated(np_frombuffer_allocated)
 
-    def test_np_frombuffer_allocated(self):
+    def test_np_frombuffer_allocated2(self):
         self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
 
     def check_nonzero(self, pyfunc):
@@ -785,6 +787,23 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
+    def test_sum2(self):
+        pyfunc = array_sum
+        cfunc = jit(nopython=True)(pyfunc)
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.uint32, np.uint64, np.timedelta64]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.complex64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype),
+             np.ones((7, 3), arr_dtype) * -5]
+            for arr_dtype in all_dtypes]
+
+        for arr_list in all_test_arrays:
+            for arr in arr_list:
+                with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
     def test_sum_axis_kws(self):
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
@@ -794,13 +813,55 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # OK
         self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
 
+    def test_sum_axis_kws2(self):
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.uint32, np.uint64, np.timedelta64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype),
+             np.ones((7, 3), arr_dtype) * -5]
+            for arr_dtype in all_dtypes]
+
+        for arr_list in all_test_arrays:
+            for arr in arr_list:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape)-1:
+                        continue
+                    with self.subTest("Testing np.sum(axis) with {} "
+                                      "input ".format(arr.dtype)):
+                        self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                                cfunc(arr, axis=axis))
+
     def test_sum_dtype_kws(self):
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        dtype = np.float64
-        # OK
-        a = np.ones((7, 6, 5, 4, 3))
-        self.assertPreciseEqual(pyfunc(a, dtype=dtype), cfunc(a, dtype=dtype))
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
+                      np.uint64, np.timedelta64, np.complex64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype),
+             np.ones((7, 3), arr_dtype) * -5]
+            for arr_dtype in all_dtypes]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.unit64],
+                      np.dtype('complex64'): [np.complex64],
+                      np.dtype('timedelta64'): [np.timedelta64]}
+
+        for arr_list in all_test_arrays:
+            for arr in arr_list:
+                for out_dtype in out_dtypes[arr.dtype]:
+                    subtest_str = ("Testing np.sum with {} input and {} output"
+                                   .format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
+                                                cfunc(arr, dtype=out_dtype))
 
     def test_sum_dtype_kws_negative(self):
         pyfunc = array_sum_dtype_kws
@@ -808,7 +869,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         dtype = np.float64
         # OK
         a = np.ones((7, 6, 5, 4, 3))
-        self.assertFalse(type(pyfunc(a, dtype=np.int32))==cfunc(a, dtype=dtype))
+        self.assertFalse(type(pyfunc(a, dtype=np.int32)) == cfunc(a, dtype=dtype))
 
     def test_sum_axis_dtype_kws(self):
         pyfunc = array_sum_axis_dtype_kws
@@ -818,9 +879,58 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((7, 6, 5, 4, 3))
         self.assertPreciseEqual(pyfunc(a, axis=1, dtype=dtype),
                                 cfunc(a,  axis=1, dtype=dtype))
-
         self.assertPreciseEqual(pyfunc(a, axis=2, dtype=dtype),
                                 cfunc(a, axis=2, dtype=dtype))
+
+    def test_sum_axis_dtype_kws2(self):
+        pyfunc = array_sum_axis_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
+                      np.uint64, np.complex64]
+
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype),
+             np.ones((7, 3), arr_dtype) * -5]
+            for arr_dtype in all_dtypes]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('complex64'): [np.complex64],
+                      np.dtype('timedelta64'): [np.timedelta64]}
+
+        for arr_list in all_test_arrays:
+            for arr in arr_list:
+                for out_dtype in out_dtypes[arr.dtype]:
+                    for axis in (0, 1, 2):
+                        if axis > len(arr.shape) - 1:
+                            continue
+                        subtest_str = ("Testing np.sum with {} input and {} output "
+                                       .format(arr.dtype, out_dtype))
+                        with self.subTest(subtest_str):
+                            py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                            nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                            self.assertPreciseEqual(py_res, nb_res)
+
+    def test_sum_axis_dtype_pos_arg(self):
+        """
+        testing that axis and dtype inputs work when passed as positional
+        :return:
+        """
+        pyfunc = array_sum_axis_dtype_pos
+        cfunc = jit(nopython=True)(pyfunc)
+        dtype = np.float64
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, 1, dtype),
+                                cfunc(a,  1, dtype))
+
+        self.assertPreciseEqual(pyfunc(a, 2, dtype),
+                                cfunc(a, 2, dtype))
 
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
@@ -928,7 +1038,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         test_indices.append(np.array([1, 5, 1, 11, 3]))
         test_indices.append(np.array([[1, 5, 1], [11, 3, 0]], order='F'))
         test_indices.append(np.array([[[1, 5, 1], [11, 3, 0]]]))
-        test_indices.append(np.array([[[[1, 5]], [[11, 0]],[[1, 2]]]]))
+        test_indices.append(np.array([[[[1, 5]], [[11, 0]], [[1, 2]]]]))
         test_indices.append([1, 5, 1, 11, 3])
         test_indices.append((1, 5, 1))
         test_indices.append(((1, 5, 1), (11, 3, 2)))
@@ -948,7 +1058,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                            [szA], [-szA - 1]]
         for x in illegal_indices:
             with self.assertRaises(IndexError):
-                cfunc(A, x) # oob raises
+                cfunc(A, x) #  oob raises
 
         # check float indexing raises
         with self.assertRaises(TypingError):
