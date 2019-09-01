@@ -3987,7 +3987,7 @@ def np_cross(a, b):
         )
         cross2d_msg = (
             "dimensions for both inputs is 2.\n"
-            "Please use numba.cross2d"
+            "Please use numba.cross2d (to be implemented)"
         )
 
         def np_cross_impl_ndim(a, b):
