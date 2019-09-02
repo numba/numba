@@ -14,7 +14,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant, iternext_impl,
                        call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked,
-                       numba_typeref_ctor)
+                       numba_typeref_ctor, RefType)
 from .. import typing, types, cgutils, utils
 
 
@@ -85,17 +85,17 @@ def deferred_getattr(context, builder, typ, value, attr):
     imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
-@lower_cast(types.Any, types.DeferredType)
-@lower_cast(types.Optional, types.DeferredType)
-@lower_cast(types.Boolean, types.DeferredType)
+@lower_cast(types.Any, types.DeferredType, ref_type=RefType.BORROWED)
+@lower_cast(types.Optional, types.DeferredType, ref_type=RefType.BORROWED)
+@lower_cast(types.Boolean, types.DeferredType, ref_type=RefType.BORROWED)
 def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
 
-@lower_cast(types.DeferredType, types.Any)
-@lower_cast(types.DeferredType, types.Boolean)
-@lower_cast(types.DeferredType, types.Optional)
+@lower_cast(types.DeferredType, types.Any, ref_type=RefType.BORROWED)
+@lower_cast(types.DeferredType, types.Boolean, ref_type=RefType.UNTRACKED)
+@lower_cast(types.DeferredType, types.Optional, ref_type=RefType.BORROWED)
 def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
@@ -281,12 +281,12 @@ def number_constructor(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Constants
 
-@lower_constant(types.Dummy)
+@lower_constant(types.Dummy, ref_type=RefType.UNTRACKED)
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
 
-@lower_constant(types.ExternalFunctionPointer)
+@lower_constant(types.ExternalFunctionPointer, ref_type=RefType.UNTRACKED)
 def constant_function_pointer(context, builder, ty, pyval):
     ptrty = context.get_function_pointer_type(ty)
     ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),

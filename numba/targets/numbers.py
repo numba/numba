@@ -12,7 +12,7 @@ import llvmlite.llvmpy.core as lc
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, lower_constant,
-                       impl_ret_borrowed, impl_ret_untracked)
+                       impl_ret_borrowed, impl_ret_untracked, RefType)
 from . import optional
 from .. import typing, types, cgutils, utils, errors
 from ..extending import intrinsic, overload_method
@@ -1241,9 +1241,9 @@ lower_builtin(operator.not_, types.boolean)(number_not_impl)
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
-@lower_cast(types.IntegerLiteral, types.Integer)
-@lower_cast(types.IntegerLiteral, types.Float)
-@lower_cast(types.IntegerLiteral, types.Complex)
+@lower_cast(types.IntegerLiteral, types.Integer, ref_type=RefType.UNTRACKED)
+@lower_cast(types.IntegerLiteral, types.Float, ref_type=RefType.UNTRACKED)
+@lower_cast(types.IntegerLiteral, types.Complex, ref_type=RefType.UNTRACKED)
 def literal_int_to_number(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,
@@ -1253,7 +1253,7 @@ def literal_int_to_number(context, builder, fromty, toty, val):
     return context.cast(builder, lit, fromty.literal_type, toty)
 
 
-@lower_cast(types.Integer, types.Integer)
+@lower_cast(types.Integer, types.Integer, ref_type=RefType.UNTRACKED)
 def integer_to_integer(context, builder, fromty, toty, val):
     if toty.bitwidth == fromty.bitwidth:
         # Just a change of signedness
@@ -1268,11 +1268,11 @@ def integer_to_integer(context, builder, fromty, toty, val):
         # Unsigned upcast
         return builder.zext(val, context.get_value_type(toty))
 
-@lower_cast(types.Integer, types.voidptr)
+@lower_cast(types.Integer, types.voidptr, ref_type=RefType.UNTRACKED)
 def integer_to_voidptr(context, builder, fromty, toty, val):
     return builder.inttoptr(val, context.get_value_type(toty))
 
-@lower_cast(types.Float, types.Float)
+@lower_cast(types.Float, types.Float, ref_type=RefType.UNTRACKED)
 def float_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.bitwidth < toty.bitwidth:
@@ -1280,7 +1280,7 @@ def float_to_float(context, builder, fromty, toty, val):
     else:
         return builder.fptrunc(val, lty)
 
-@lower_cast(types.Integer, types.Float)
+@lower_cast(types.Integer, types.Float, ref_type=RefType.UNTRACKED)
 def integer_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.signed:
@@ -1288,7 +1288,7 @@ def integer_to_float(context, builder, fromty, toty, val):
     else:
         return builder.uitofp(val, lty)
 
-@lower_cast(types.Float, types.Integer)
+@lower_cast(types.Float, types.Integer, ref_type=RefType.UNTRACKED)
 def float_to_integer(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if toty.signed:
@@ -1296,8 +1296,8 @@ def float_to_integer(context, builder, fromty, toty, val):
     else:
         return builder.fptoui(val, lty)
 
-@lower_cast(types.Float, types.Complex)
-@lower_cast(types.Integer, types.Complex)
+@lower_cast(types.Float, types.Complex, ref_type=RefType.UNTRACKED)
+@lower_cast(types.Integer, types.Complex, ref_type=RefType.UNTRACKED)
 def non_complex_to_complex(context, builder, fromty, toty, val):
     real = context.cast(builder, val, fromty, toty.underlying_float)
     imag = context.get_constant(toty.underlying_float, 0)
@@ -1307,7 +1307,7 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     cmplx.imag = imag
     return cmplx._getvalue()
 
-@lower_cast(types.Complex, types.Complex)
+@lower_cast(types.Complex, types.Complex, ref_type=RefType.UNTRACKED)
 def complex_to_complex(context, builder, fromty, toty, val):
     srcty = fromty.underlying_float
     dstty = toty.underlying_float
@@ -1318,18 +1318,18 @@ def complex_to_complex(context, builder, fromty, toty, val):
     dst.imag = context.cast(builder, src.imag, srcty, dstty)
     return dst._getvalue()
 
-@lower_cast(types.Any, types.Boolean)
+@lower_cast(types.Any, types.Boolean, ref_type=RefType.UNTRACKED)
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
-@lower_cast(types.Boolean, types.Number)
+@lower_cast(types.Boolean, types.Number, ref_type=RefType.UNTRACKED)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
 
-@lower_cast(types.IntegerLiteral, types.Boolean)
+@lower_cast(types.IntegerLiteral, types.Boolean, ref_type=RefType.UNTRACKED)
 def literal_int_to_boolean(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,
@@ -1341,16 +1341,16 @@ def literal_int_to_boolean(context, builder, fromty, toty, val):
 #-------------------------------------------------------------------------------
 # Constants
 
-@lower_constant(types.Complex)
+@lower_constant(types.Complex, ref_type=RefType.UNTRACKED)
 def constant_complex(context, builder, ty, pyval):
     fty = ty.underlying_float
     real = context.get_constant_generic(builder, fty, pyval.real)
     imag = context.get_constant_generic(builder, fty, pyval.imag)
     return ir.Constant.literal_struct((real, imag))
 
-@lower_constant(types.Integer)
-@lower_constant(types.Float)
-@lower_constant(types.Boolean)
+@lower_constant(types.Integer, ref_type=RefType.UNTRACKED)
+@lower_constant(types.Float, ref_type=RefType.UNTRACKED)
+@lower_constant(types.Boolean, ref_type=RefType.UNTRACKED)
 def constant_integer(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)

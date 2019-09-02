@@ -1086,7 +1086,7 @@ def sorted_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 # Implicit casting
 
-@lower_cast(types.List, types.List)
+@lower_cast(types.List, types.List, ref_type=RefType.BORROWED)
 def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
     assert fromty.dtype == toty.dtype

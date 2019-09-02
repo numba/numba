@@ -9,7 +9,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, cgutils, numpy_support
-from .imputils import lower_builtin, lower_constant, impl_ret_untracked
+from .imputils import lower_builtin, lower_constant, impl_ret_untracked, RefType
 from ..utils import IS_PY3
 
 
@@ -122,8 +122,8 @@ leap_year_months_acc = make_constant_array(
     [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335])
 
 
-@lower_constant(types.NPDatetime)
-@lower_constant(types.NPTimedelta)
+@lower_constant(types.NPDatetime, ref_type=RefType.UNTRACKED)
+@lower_constant(types.NPTimedelta, ref_type=RefType.UNTRACKED)
 def datetime_constant(context, builder, ty, pyval):
     return DATETIME64(pyval.astype(np.int64))
 

@@ -14,6 +14,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import njit, jit, types, errors, typing, compiler
 from numba.targets.registry import cpu_target
+from numba.targets.imputils import RefType
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
@@ -67,7 +68,7 @@ mydummy = MyDummy()
 def typeof_mydummy(val, c):
     return mydummy_type
 
-@lower_cast(MyDummyType, types.Number)
+@lower_cast(MyDummyType, types.Number, ref_type=RefType.UNTRACKED)
 def mydummy_to_number(context, builder, fromty, toty, val):
     """
     Implicit conversion from MyDummy to int.

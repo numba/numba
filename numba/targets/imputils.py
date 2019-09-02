@@ -15,6 +15,31 @@ from .. import typing, cgutils, types, utils, errors
 from .. typing.templates import BaseRegistryLoader
 
 
+class RefType(Enum):
+    """
+    Enumerate the reference type
+    """
+    """
+    A new reference
+    """
+    NEW = 1
+    """
+    A borrowed reference
+    """
+    BORROWED = 2
+    """
+    An untracked reference
+    """
+    UNTRACKED = 3
+
+
+# Currently casts and lower constant implementations are expected to return borrowed references. From
+# extension API users' perspective it is desirable that casts and lower constant return new references.
+# This and the new optional arg on Registry.lower_cast|lower_constant should allow to isolate the implementations
+# from the switch (at least old impls will keep working)
+CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS = False
+
+
 class Registry(object):
     """
     A registry of function and attribute implementations.
@@ -93,7 +118,7 @@ class Registry(object):
         """
         return self.lower_setattr(ty, None)
 
-    def lower_cast(self, fromty, toty):
+    def lower_cast(self, fromty, toty, ref_type=None):
         """
         Decorate the implementation of implicit conversion between
         *fromty* and *toty*.
@@ -101,20 +126,60 @@ class Registry(object):
         The decorated implementation will have the signature
         (context, builder, fromty, toty, val).
         """
+        if ref_type is None:
+            msg = (
+                "\nThe use of lower_cast without specifying a "
+                "numba.targets.imputils.RefType is deprecated."
+            )
+            warnings.warn(errors.NumbaDeprecationWarning(msg), stacklevel=2)
+
+        ref_type = ref_type or RefType.BORROWED  # TODO: deprecation warning for ref_type == None?
+
         def decorate(impl):
-            self.casts.append((impl, (fromty, toty)))
-            return impl
+            if CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.BORROWED:
+                def wrapped(context, builder, fromty, toty, val):
+                    res = impl(context, builder, fromty, toty, val)
+                    context.nrt.incref(builder, toty, res)
+                    return res
+            elif not CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.NEW:
+                raise NotImplementedError('Returning new refs from cast implementations is not supported, yet.')
+            else:
+                wrapped = impl
+
+            self.casts.append((wrapped, (fromty, toty)))
+            return wrapped
         return decorate
 
-    def lower_constant(self, ty):
+    def lower_constant(self, ty, ref_type=None):
         """
         Decorate the implementation for creating a constant of type *ty*.
 
-        The decorated implementation will have the signature
         (context, builder, ty, pyval).
+        The decorated implementation will have the signature
         """
+        if ref_type is None:
+            msg = (
+                "\nThe use of lower_constant without specifying a "
+                "numba.targets.imputils.RefType is deprecated."
+            )
+            warnings.warn(errors.NumbaDeprecationWarning(msg), stacklevel=2)
+
+        ref_type = ref_type or RefType.BORROWED  # TODO: deprecation warning for ref_type == None?
+
         def decorate(impl):
-            self.constants.append((impl, (ty,)))
+            if CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.BORROWED:
+                def wrapped(context, builder, ty, pyval):
+                    res = impl(context, builder, ty, pyval)
+                    context.nrt.incref(builder, ty, res)
+                    return res
+            elif not CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.NEW:
+                raise NotImplementedError(
+                    'Returning new refs from lower constant  implementations is not supported, yet.'
+                )
+            else:
+                wrapped = impl
+
+            self.constants.append((wrapped, (ty,)))
             return impl
         return decorate
 
@@ -294,23 +359,6 @@ class _IternextResult(object):
         Return the iterator's yielded value, if any.
         """
         return self._pairobj.first
-
-class RefType(Enum):
-    """
-    Enumerate the reference type
-    """
-    """
-    A new reference
-    """
-    NEW = 1
-    """
-    A borrowed reference
-    """
-    BORROWED = 2
-    """
-    An untracked reference
-    """
-    UNTRACKED = 3
 
 def iternext_impl(ref_type=None):
     """

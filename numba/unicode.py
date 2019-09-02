@@ -120,7 +120,7 @@ def make_string_from_constant(context, builder, typ, literal_string):
     return uni_str._getvalue()
 
 
-@lower_cast(types.StringLiteral, types.unicode_type)
+@lower_cast(types.StringLiteral, types.unicode_type, ref_type=RefType.BORROWED)
 def cast_from_literal(context, builder, fromty, toty, val):
     return make_string_from_constant(
         context, builder, toty, fromty.literal_value,
@@ -129,7 +129,7 @@ def cast_from_literal(context, builder, fromty, toty, val):
 
 # CONSTANT
 
-@lower_constant(types.unicode_type)
+@lower_constant(types.unicode_type, ref_type=RefType.BORROWED)
 def constant_unicode(context, builder, typ, pyval):
     return make_string_from_constant(context, builder, typ, pyval)
 

@@ -10,7 +10,7 @@ from numba import types, cgutils, prange
 from .listobj import ListIterInstance
 from .arrayobj import make_array
 from .imputils import (lower_builtin, lower_cast,
-                       iterator_impl, impl_ret_untracked)
+                       iterator_impl, impl_ret_untracked, RefType)
 from numba.typing import signature
 from numba.extending import intrinsic, overload, overload_attribute, register_jitable
 from numba.parfor import internal_prange
@@ -172,7 +172,7 @@ range_impl_map = {
 for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)
 
-@lower_cast(types.RangeType, types.RangeType)
+@lower_cast(types.RangeType, types.RangeType, ref_type=RefType.UNTRACKED)
 def range_to_range(context, builder, fromty, toty, val):
     olditems = cgutils.unpack_tuple(builder, val, 3)
     items = [context.cast(builder, v, fromty.dtype, toty.dtype)

@@ -5,7 +5,7 @@ import operator
 from numba import types, cgutils, typing
 
 from .imputils import (lower_cast, lower_builtin, lower_getattr_generic,
-                       impl_ret_untracked, lower_setattr_generic)
+                       impl_ret_untracked, lower_setattr_generic, RefType)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -70,7 +70,7 @@ def optional_setattr(context, builder, sig, args, attr):
     return imp(builder, (target, val))
 
 
-@lower_cast(types.Optional, types.Optional)
+@lower_cast(types.Optional, types.Optional, ref_type=RefType.BORROWED)
 def optional_to_optional(context, builder, fromty, toty, val):
     """
     The handling of optional->optional cast must be special cased for
@@ -101,7 +101,7 @@ def optional_to_optional(context, builder, fromty, toty, val):
     return outoptval._getvalue()
 
 
-@lower_cast(types.Any, types.Optional)
+@lower_cast(types.Any, types.Optional, ref_type=RefType.BORROWED)
 def any_to_optional(context, builder, fromty, toty, val):
     if fromty == types.none:
         return context.make_optional_none(builder, toty.type)
@@ -110,8 +110,8 @@ def any_to_optional(context, builder, fromty, toty, val):
         return context.make_optional_value(builder, toty.type, val)
 
 
-@lower_cast(types.Optional, types.Any)
-@lower_cast(types.Optional, types.Boolean)
+@lower_cast(types.Optional, types.Any, ref_type=RefType.BORROWED)
+@lower_cast(types.Optional, types.Boolean, ref_type=RefType.BORROWED)
 def optional_to_any(context, builder, fromty, toty, val):
     optval = context.make_helper(builder, fromty, value=val)
     validbit = cgutils.as_bool_bit(builder, optval.valid)

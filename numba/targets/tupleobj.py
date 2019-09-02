@@ -108,8 +108,8 @@ def namedtuple_getattr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, typ[index], res)
 
 
-@lower_constant(types.UniTuple)
-@lower_constant(types.NamedUniTuple)
+@lower_constant(types.UniTuple, ref_type=RefType.BORROWED)
+@lower_constant(types.NamedUniTuple, ref_type=RefType.BORROWED)
 def unituple_constant(context, builder, ty, pyval):
     """
     Create a homogeneous tuple constant.
@@ -120,8 +120,8 @@ def unituple_constant(context, builder, ty, pyval):
         context, builder, ty, cgutils.pack_array(builder, consts),
     )
 
-@lower_constant(types.Tuple)
-@lower_constant(types.NamedTuple)
+@lower_constant(types.Tuple, ref_type=RefType.BORROWED)
+@lower_constant(types.NamedTuple, ref_type=RefType.BORROWED)
 def unituple_constant(context, builder, ty, pyval):
     """
     Create a heterogeneous tuple constant.
@@ -264,7 +264,7 @@ def static_getitem_tuple(context, builder, sig, args):
 #------------------------------------------------------------------------------
 # Implicit conversion
 
-@lower_cast(types.BaseTuple, types.BaseTuple)
+@lower_cast(types.BaseTuple, types.BaseTuple, ref_type=RefType.BORROWED)
 def tuple_to_tuple(context, builder, fromty, toty, val):
     if (isinstance(fromty, types.BaseNamedTuple)
         or isinstance(toty, types.BaseNamedTuple)):

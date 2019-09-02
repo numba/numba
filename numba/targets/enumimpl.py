@@ -4,7 +4,7 @@ Implementation of enums.
 import operator
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, lower_constant, impl_ret_untracked)
+                       lower_cast, lower_constant, impl_ret_untracked, RefType)
 from .. import types
 
 
@@ -43,7 +43,7 @@ def enum_value(context, builder, ty, val):
     return val
 
 
-@lower_cast(types.IntEnumMember, types.Integer)
+@lower_cast(types.IntEnumMember, types.Integer, ref_type=RefType.UNTRACKED)
 def int_enum_to_int(context, builder, fromty, toty, val):
     """
     Convert an IntEnum member to its raw integer value.
@@ -51,7 +51,7 @@ def int_enum_to_int(context, builder, fromty, toty, val):
     return context.cast(builder, val, fromty.dtype, toty)
 
 
-@lower_constant(types.EnumMember)
+@lower_constant(types.EnumMember, ref_type=RefType.UNTRACKED)
 def enum_constant(context, builder, ty, pyval):
     """
     Return a LLVM constant representing enum member *pyval*.
