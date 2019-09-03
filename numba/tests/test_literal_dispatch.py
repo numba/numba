@@ -5,7 +5,9 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.tests.support import TestCase
 from numba import njit, types, errors
+from numba.extending import overload, SentryLiteralArgs
 from numba.special import literally
+from numba import utils
 
 
 class TestLiteralDispatcher(TestCase):
@@ -111,6 +113,60 @@ class TestLiteralDispatcher(TestCase):
         self.assertEqual(type_b.literal_value, 2)
         self.assertIsInstance(type_c, types.Literal)
         self.assertEqual(type_c.literal_value, 3)
+
+    def test_overload(self):
+        # This test represents a more controlled usage with ensuring literal
+        # typing for an argument.
+        def do_this(x, y):
+            return x + y
+
+        @overload(do_this)
+        def ov_do_this(x, y):
+            SentryLiteralArgs(['x']).for_function(ov_do_this).bind(x, y)
+            return lambda x, y: x + y
+
+        @njit
+        def foo(a, b):
+            return do_this(a, b)
+
+        a = 123
+        b = 321
+        r = foo(a, b)
+        self.assertEqual(r, a + b)
+        [type_a, type_b] = foo.signatures[0]
+        self.assertIsInstance(type_a, types.Literal)
+        self.assertEqual(type_a.literal_value, a)
+        self.assertNotIsInstance(type_b, types.Literal)
+
+    def test_overload2(self):
+        # This test represents the preferred usage style for using literally
+        # in overload. Here, literally() is used inside the "implementation"
+        # function of the overload.
+        def do_this(x, y):
+            return x + y
+
+        @njit
+        def hidden(x, y):
+            return literally(x) + y
+
+        @overload(do_this)
+        def ov_do_this(x, y):
+            if isinstance(x, types.Integer):
+                # At this point, `x` can be a literal or not
+                return lambda x, y: hidden(x, y)
+
+        @njit
+        def foo(a, b):
+            return do_this(a, b)
+
+        a = 123
+        b = 321
+        r = foo(a, b)
+        self.assertEqual(r, a + b)
+        [type_a, type_b] = foo.signatures[0]
+        self.assertIsInstance(type_a, types.Literal)
+        self.assertEqual(type_a.literal_value, a)
+        self.assertNotIsInstance(type_b, types.Literal)
 
 
 if __name__ == '__main__':

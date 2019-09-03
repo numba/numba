@@ -4,7 +4,7 @@ import uuid
 import weakref
 import collections
 
-from numba import types, config
+from numba import types, config, errors, utils
 
 # Exported symbols
 from .typing.typeof import typeof_impl
@@ -89,7 +89,9 @@ def overload(func, jit_options={}, strict=True):
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts, strict)
+        template = make_overload_template(
+            func, overload_func, opts, strict,
+        )
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -371,3 +373,102 @@ def get_cython_function_address(module_name, function_name):
 
     """
     return _import_cython_function(module_name, function_name)
+
+
+
+def sentry_literal_args(pysig, literal_args, args, kwargs):
+    """Ensures that the given argument types (in *args* and *kwargs*) are
+    literally typed for a function with the python signature *pysig* and the
+    list of literal argument names in *literal_args*.
+
+    Alternatively, this is the same as::
+
+        SentryLiteralArgs(literal_args).for_pysig(pysig).bind(*args, **kwargs)
+    """
+    boundargs = pysig.bind(*args, **kwargs)
+    missing_literal_args = (k for k in literal_args
+                            if not isinstance(boundargs.arguments[k],
+                                              types.Literal))
+    if any(missing_literal_args):
+        # Yes, there are missing required literal arguments
+        kwargs = boundargs.arguments.copy()
+        for k in literal_args:
+            kwargs[k] = types.ForceLiteral(kwargs[k])
+
+        flattened = pysig.bind(**kwargs).arguments.values()
+        e = errors.ForceLiteralArg(tuple(flattened))
+
+        # A helper function to fold arguments
+        def folded(args, kwargs):
+            out = pysig.bind(*args, **kwargs).arguments.values()
+            return tuple(out)
+
+        e.fold_arguments = folded
+        raise e
+
+
+class SentryLiteralArgs(collections.namedtuple(
+        '_SentryLiteralArgs', ['literal_args'])):
+    """
+    Parameters
+    ----------
+    literal_args : Sequence[str]
+        A sequence of names for literal arguments
+
+    Examples
+    --------
+
+    The following line:
+
+    >>> SentryLiteralArgs(literal_args).for_pysig(pysig).bind(*args, **kwargs)
+
+    is equivalent to:
+
+    >>> sentry_literal_args(pysig, literal_args, args, kwargs)
+    """
+    def for_function(self, func):
+        """Bind the sentry to the signature of *func*.
+
+        Parameters
+        ----------
+        func : Function
+            A python function.
+
+        Returns
+        -------
+        obj : BoundLiteralArgs
+        """
+        return self.for_pysig(utils.pysignature(func))
+
+    def for_pysig(self, pysig):
+        """Bind the sentry to the given signature *pysig*.
+
+        Parameters
+        ----------
+        pysig : inspect.Signature
+
+
+        Returns
+        -------
+        obj : BoundLiteralArgs
+        """
+        return BoundLiteralArgs(
+            pysig=pysig,
+            literal_args=self.literal_args,
+        )
+
+
+class BoundLiteralArgs(collections.namedtuple(
+        '_BoundLiteralArgs', ['pysig', 'literal_args'])):
+    """
+    This class is usually created by SentryLiteralArgs.
+    """
+    def bind(self, *args, **kwargs):
+        """Bind to argument types.
+        """
+        return sentry_literal_args(
+            self.pysig,
+            self.literal_args,
+            args,
+            kwargs,
+        )

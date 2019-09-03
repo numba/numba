@@ -75,6 +75,12 @@ class _ResolutionFailures(object):
             frame = traceback.extract_tb(error.__traceback__)[-1]
             return "{}:{}".format(frame[0], frame[1])
 
+    def raise_error(self):
+        for _tempcls, e in self._failures:
+            if isinstance(e, errors.ForceLiteralArg):
+                raise e
+        raise errors.TypingError(self.format())
+
 
 class BaseFunction(Callable):
     """
@@ -143,8 +149,7 @@ class BaseFunction(Callable):
             raise AssertionError("Internal Error. "
                                  "Function resolution ended with no failures "
                                  "or successfull signature")
-
-        raise errors.TypingError(failures.format())
+        failures.raise_error()
 
     def get_call_signatures(self):
         sigs = []

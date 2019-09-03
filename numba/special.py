@@ -66,7 +66,8 @@ def literally(obj):
     """Forces numba to take *obj* as an Literal value.
 
     This functions is intercepted by the compiler to alter its behavior to
-    consider related function parameter as a literal type.
+    consider related function parameter as a literal type. It has **no effect**
+    outside of nopython-mode (interpreter, and objectmode).
     """
     return obj
 
