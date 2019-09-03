@@ -225,7 +225,6 @@ void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
 
     if ( TheMSys.gc_enable_tracking ) {
-        puts("DO TRACKING\n");
         nrt_memsys_lock();
         mi->gc_next = TheMSys.gc_heap.gc_next;
         TheMSys.gc_heap.gc_next = mi;
@@ -356,7 +355,6 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
 void _nrt_meminfo_gc_unlink(NRT_MemInfo *mi) {
     NRT_MemInfo *prev, *next;
     nrt_memsys_lock();
-    puts("UNLINK");
     prev = mi->gc_prev;
     next = mi->gc_next;
     prev->gc_next = next;
