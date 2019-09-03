@@ -47,7 +47,7 @@ class InlineTestPass(FunctionPass):
     _name = "inline_test_pass"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         # assuming the function has one block with one call inside
@@ -249,7 +249,7 @@ class TestInlining(TestCase):
             _name = "pruning_inline_test_pass"
 
             def __init__(self):
-                super().__init__()
+                FunctionPass.__init__(self)
 
             def run_pass(self, state):
                 # assuming the function has one block with one call inside

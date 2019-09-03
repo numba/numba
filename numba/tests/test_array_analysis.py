@@ -87,7 +87,7 @@ class ArrayAnalysisPass(FunctionPass):
     _name = "array_analysis_pass"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,

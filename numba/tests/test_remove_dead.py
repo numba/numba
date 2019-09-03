@@ -74,15 +74,11 @@ class TestRemoveDead(unittest.TestCase):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test_will_propagate)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
             typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
-            #print("typemap = ", typemap)
-            #print("return_type = ", return_type)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -244,7 +240,7 @@ class TestRemoveDead(unittest.TestCase):
             _name = "limited_parfor"
 
             def __init__(self):
-                super().__init__()
+                FunctionPass.__init__(self)
 
             def run_pass(self, state):
                 parfor_pass = numba.parfor.ParforPass(
