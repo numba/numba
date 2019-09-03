@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import traceback
 from llvmlite import ir
 
 from numba import cgutils, types
@@ -93,7 +94,6 @@ class NRTContext(object):
             assert align.type == u32, "align must be a uint32"
         mi = builder.call(fn, [size, align])
 
-        import traceback
         tb = ''.join(traceback.format_stack())
         self.meminfo_set_debug(builder, mi, "meminfo_alloc_aligned:\n{}".format(tb))
         return mi

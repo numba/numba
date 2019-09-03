@@ -3281,6 +3281,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     align = context.get_preferred_array_alignment(arrtype.dtype)
     meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
                                                 align=align)
+
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)

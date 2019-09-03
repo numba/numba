@@ -108,7 +108,18 @@ class _Runtime(object):
                            mi_free=_nrt.memsys_get_stats_mi_free())
 
     def dump(self):
+        """Trigger memory subsystem to print a debug dump.
+        """
         _nrt.memsys_dump()
+
+    def set_gc_tracking(self, enable):
+        """Set GC tracking setting.
+
+        If enabled, heap allocation will be contain a traceback to the python
+        source code that emitted the call to the allocation API.
+        """
+        _nrt.memsys_set_gc_tracking(enable)
+
 
 # Alias to _nrt_python._MemInfo
 MemInfo = _nrt._MemInfo

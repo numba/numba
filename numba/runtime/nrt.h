@@ -45,6 +45,9 @@ void NRT_MemSys_shutdown(void);
 VISIBILITY_HIDDEN
 void NRT_MemSys_dump(void);
 
+VISIBILITY_HIDDEN
+void NRT_MemSys_set_gc_tracking(int);
+
 /*
  * Register the system allocation functions
  */

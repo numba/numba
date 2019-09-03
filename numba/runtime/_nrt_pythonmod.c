@@ -15,6 +15,16 @@ memsys_dump(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject*
+memsys_set_gc_tracking(PyObject *self, PyObject *args) {
+    int new_setting;
+    if (!PyArg_ParseTuple(args, "p", &new_setting)) {
+        return NULL;
+    }
+    NRT_MemSys_set_gc_tracking(new_setting);
+    Py_RETURN_NONE;
+}
+
 static PyObject *
 memsys_use_cpython_allocator(PyObject *self, PyObject *args) {
     NRT_MemSys_set_allocator(PyMem_RawMalloc,
@@ -126,6 +136,7 @@ static PyMethodDef ext_methods[] = {
     declmethod_noargs(memsys_use_cpython_allocator),
     declmethod_noargs(memsys_shutdown),
     declmethod_noargs(memsys_dump),
+    declmethod(memsys_set_gc_tracking),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
     declmethod_noargs(memsys_get_stats_alloc),
