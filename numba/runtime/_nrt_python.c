@@ -142,6 +142,16 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
     return PyLong_FromSize_t(refct);
 }
 
+static
+PyObject*
+MemInfo_get_debug_info(MemInfoObject *self, void *closure) {
+    char *debug_info_ptr = NRT_MemInfo_get_debug(self->meminfo);
+    if ( debug_info_ptr == NULL ) {
+        Py_RETURN_NONE;
+    }
+    return PyString_FromString(debug_info_ptr);
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
@@ -169,6 +179,9 @@ static PyGetSetDef MemInfo_getsets[] = {
      (getter)MemInfo_get_refcount, NULL,
      "Get the refcount",
      NULL},
+     {"debug_info",
+      (getter)MemInfo_get_debug_info, NULL,
+      NULL},
     {NULL}  /* Sentinel */
 };
 

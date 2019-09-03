@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import ctypes
 from collections import namedtuple
 
 from . import nrtdynmod
@@ -119,6 +120,21 @@ class _Runtime(object):
         source code that emitted the call to the allocation API.
         """
         _nrt.memsys_set_gc_tracking(enable)
+
+    def get_allocations(self, debug=False):
+        live_objs = []
+
+        def cb_wrapper(addr):
+            mi = MemInfo(addr)
+            mi.acquire()
+            live_objs.append(mi)
+
+        proto = ctypes.PYFUNCTYPE(None, ctypes.c_void_p)
+        cb = proto(cb_wrapper)
+        addr = ctypes.cast(cb, ctypes.c_void_p).value
+        _nrt.memsys_walk_heap(addr, debug)
+
+        return live_objs
 
 
 # Alias to _nrt_python._MemInfo

@@ -15,6 +15,21 @@ memsys_dump(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+
+static PyObject*
+memsys_walk_heap(PyObject *self, PyObject *args) {
+    PyObject *addr_callback_obj;
+    void* addr_callback;
+    int verbose;
+
+    if (!PyArg_ParseTuple(args, "Op", &addr_callback_obj, &verbose)) {
+        return NULL;
+    }
+    addr_callback = PyLong_AsVoidPtr(addr_callback_obj);
+    NRT_MemSys_walk_heap(addr_callback, verbose);
+    Py_RETURN_NONE;
+}
+
 static PyObject*
 memsys_set_gc_tracking(PyObject *self, PyObject *args) {
     int new_setting;
@@ -136,6 +151,7 @@ static PyMethodDef ext_methods[] = {
     declmethod_noargs(memsys_use_cpython_allocator),
     declmethod_noargs(memsys_shutdown),
     declmethod_noargs(memsys_dump),
+    declmethod(memsys_walk_heap),
     declmethod(memsys_set_gc_tracking),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),

@@ -46,6 +46,9 @@ VISIBILITY_HIDDEN
 void NRT_MemSys_dump(void);
 
 VISIBILITY_HIDDEN
+void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose);
+
+VISIBILITY_HIDDEN
 void NRT_MemSys_set_gc_tracking(int);
 
 /*

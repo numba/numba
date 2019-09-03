@@ -8,10 +8,12 @@ import re
 
 import numpy as np
 
+from .support import MemoryLeakMixin, TestCase
+
 from numba import unittest_support as unittest
 from numba import njit, targets, typing
 from numba.compiler import compile_isolated, Flags, types
-from numba.runtime import rtsys
+from numba.runtime import rtsys, nrt
 from numba.runtime import nrtopt
 from numba.extending import intrinsic
 from numba.typing import signature
@@ -19,7 +21,6 @@ from numba.targets.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
 
-from .support import MemoryLeakMixin, TestCase
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
@@ -544,6 +545,64 @@ br i1 %.294, label %B42, label %B160
             return z
 
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
+
+
+class TestHeapTracking(MemoryLeakMixin, TestCase):
+    def test_exception_leak(self):
+        @njit
+        def bar(x):
+            if x:
+                raise IndexError
+
+        @njit
+        def foo(a, x):
+            bar(x)
+            return a + 1
+
+        arr = np.arange(10)
+        rtsys.set_gc_tracking(True)
+        try:
+            # First case doesn't have lingering live allocations
+            liveset_init = rtsys.get_allocations()
+            foo(arr, False)
+            liveset_before = rtsys.get_allocations()
+            self.assertEqual(len(liveset_init), len(liveset_before))
+
+            # Second case have lingering live allocations due to leak at raise
+            with self.assertRaises(IndexError):
+                foo(arr, True)
+
+            liveset_after = rtsys.get_allocations()
+            self.assertGreater(len(liveset_after), len(liveset_init))
+
+            for mi in liveset_after:
+                self.assertIsInstance(mi, nrt.MemInfo)
+
+            # Find the corresponding allocation for the leaked memory
+            for mi in liveset_after:
+                if mi.data == arr.ctypes.data:
+                    break
+
+            self.assertEqual(mi.data, arr.ctypes.data)
+            # Manually clear exception object
+            mi.release()
+        finally:
+            rtsys.set_gc_tracking(False)
+
+    def test_tracked_object_from_allocation(self):
+        @njit
+        def foo(n):
+            return np.arange(n)
+
+        rtsys.set_gc_tracking(True)
+        try:
+            liveset_init = rtsys.get_allocations()
+            arr = foo(10)
+            liveset_after = rtsys.get_allocations()
+            self.assertGreater(len(liveset_after), len(liveset_init))
+            self.assertPreciseEqual(arr, foo.py_func(10))
+        finally:
+            rtsys.set_gc_tracking(False)
 
 
 if __name__ == '__main__':

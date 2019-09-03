@@ -187,24 +187,35 @@ void nrt_memsys_unlock() {
     while ( !TheMSys.atomic_cas(&TheMSys.gc_lock, locked, unlocked, &old) );
 }
 
-
-void NRT_MemSys_dump(void) {
+void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose) {
     NRT_MemInfo *mi;
     nrt_memsys_lock();
-    fprintf(stderr, "=== BEGIN:NRT_MemSys_dump\n");
-    fprintf(stderr, "heap root: %p -> %p\n", &TheMSys.gc_heap, TheMSys.gc_heap.gc_next);
-    for (mi = TheMSys.gc_heap.gc_next; mi; mi = mi->gc_next) {
-        NRT_MemInfo_dump(mi, stderr);
+    if (verbose) {
+        fprintf(stderr, "=== BEGIN:NRT_MemSys_walk_heap\n");
+        fprintf(stderr, "heap root: %p -> %p\n",
+                &TheMSys.gc_heap, TheMSys.gc_heap.gc_next);
     }
-    fprintf(stderr, "=== END:NRT_MemSys_dump\n");
+    for (mi = TheMSys.gc_heap.gc_next; mi; mi = mi->gc_next) {
+        callback(mi);
+    }
+    if (verbose) {
+        fprintf(stderr, "=== END:NRT_MemSys_walk_heap\n");
+    }
     nrt_memsys_unlock();
+}
 
+void _nrt_memsys_dump_callback(NRT_MemInfo* mi) {
+    NRT_MemInfo_dump(mi, stderr);
+}
+
+void NRT_MemSys_dump(void) {
+    int verbose = 1;
+    NRT_MemSys_walk_heap(_nrt_memsys_dump_callback, verbose);
 }
 
 void NRT_MemSys_set_gc_tracking(int enable) {
-    TheMSys.gc_enable_tracking = enable? 1 : 0;
+    TheMSys.gc_enable_tracking = enable ? 1 : 0;
 }
-
 
 /*
  * The MemInfo structure.
@@ -354,6 +365,10 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
 
 void _nrt_meminfo_gc_unlink(NRT_MemInfo *mi) {
     NRT_MemInfo *prev, *next;
+    /* If gc_prev is NULL, it hasn't been linked.
+       There's always the sentinel node.
+    */
+    if ( mi->gc_prev == NULL ) return;
     nrt_memsys_lock();
     prev = mi->gc_prev;
     next = mi->gc_next;
@@ -365,7 +380,7 @@ void _nrt_meminfo_gc_unlink(NRT_MemInfo *mi) {
 }
 
 void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
-    if ( TheMSys.gc_enable_tracking ) _nrt_meminfo_gc_unlink(mi);
+    _nrt_meminfo_gc_unlink(mi);
     NRT_Free(mi);
     TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 
