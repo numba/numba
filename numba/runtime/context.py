@@ -93,9 +93,7 @@ class NRTContext(object):
         else:
             assert align.type == u32, "align must be a uint32"
         mi = builder.call(fn, [size, align])
-
-        tb = ''.join(traceback.format_stack())
-        self.meminfo_set_debug(builder, mi, "meminfo_alloc_aligned:\n{}".format(tb))
+        self.meminfo_set_debug(builder, mi, "meminfo_alloc_aligned")
         return mi
 
     def meminfo_new_varsize(self, builder, size):
@@ -177,12 +175,16 @@ class NRTContext(object):
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
 
-    def meminfo_set_debug(self, builder, meminfo, debug_text):
+    def meminfo_set_debug(self, builder, meminfo, function_name):
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(ir.VoidType(),
                                [cgutils.voidptr_t, cgutils.voidptr_t])
+
+        stack_to_caller = traceback.extract_stack()[:-1]
+        tb = traceback.format_list(stack_to_caller)
+        debug_text = "Allocated by {}\n{}".format(function_name, ''.join(tb))
         textptr = self._context.insert_const_string(mod, debug_text)
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_set_debug")
         return builder.call(fn, (meminfo, textptr))

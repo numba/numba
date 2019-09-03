@@ -21,6 +21,7 @@ struct MemInfo {
     size_t            size;    /* only used for NRT allocated memory */
     /*  additional data for debugging */
     char              *debug_data;
+    /* gc_next and gc_prev forms a doubly linked list. */
     struct MemInfo    *gc_next, *gc_prev;
 };
 
@@ -60,8 +61,11 @@ struct MemSys {
         NRT_free_func free;
     } allocator;
     /* Debugging */
+    /* is GC tracking enabled? */
     int gc_enable_tracking;
+    /* lock for mutating the gc_heap */
     void* gc_lock;
+    /* gc_heap is the sentinel node of the heap */
     NRT_MemInfo gc_heap;
 };
 
@@ -172,24 +176,29 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
 }
 
 
-void nrt_memsys_lock() {
-    void *unlocked = (void*)0;
-    void *locked = (void*)1;
+#define nrt_memsys_gc_locked ((void*)1)
+#define nrt_memsys_gc_unlocked ((void*)0)
+
+void nrt_memsys_gc_lock() {
     void *old;
-    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock, unlocked, locked, &old) );
+    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock,
+                                nrt_memsys_gc_unlocked,
+                                nrt_memsys_gc_locked,
+                                &old) );
 }
 
 
-void nrt_memsys_unlock() {
-    void *unlocked = (void*)0;
-    void *locked = (void*)1;
+void nrt_memsys_gc_unlock() {
     void *old;
-    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock, locked, unlocked, &old) );
+    while ( !TheMSys.atomic_cas(&TheMSys.gc_lock,
+                                nrt_memsys_gc_locked,
+                                nrt_memsys_gc_unlocked,
+                                &old) );
 }
 
 void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose) {
     NRT_MemInfo *mi;
-    nrt_memsys_lock();
+    nrt_memsys_gc_lock();
     if (verbose) {
         fprintf(stderr, "=== BEGIN:NRT_MemSys_walk_heap\n");
         fprintf(stderr, "heap root: %p -> %p\n",
@@ -201,7 +210,7 @@ void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose) {
     if (verbose) {
         fprintf(stderr, "=== END:NRT_MemSys_walk_heap\n");
     }
-    nrt_memsys_unlock();
+    nrt_memsys_gc_unlock();
 }
 
 void _nrt_memsys_dump_callback(NRT_MemInfo* mi) {
@@ -236,14 +245,15 @@ void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
 
     if ( TheMSys.gc_enable_tracking ) {
-        nrt_memsys_lock();
+        nrt_memsys_gc_lock();
+        /* insert into gc_heap */
         mi->gc_next = TheMSys.gc_heap.gc_next;
         TheMSys.gc_heap.gc_next = mi;
         mi->gc_prev = &TheMSys.gc_heap;
         if (mi->gc_next) {
             mi->gc_next->gc_prev = mi;
         }
-        nrt_memsys_unlock();
+        nrt_memsys_gc_unlock();
     }
 }
 
@@ -369,21 +379,21 @@ void _nrt_meminfo_gc_unlink(NRT_MemInfo *mi) {
        There's always the sentinel node.
     */
     if ( mi->gc_prev == NULL ) return;
-    nrt_memsys_lock();
+    nrt_memsys_gc_lock();
+    /* remove from gc_heap */
     prev = mi->gc_prev;
     next = mi->gc_next;
     prev->gc_next = next;
     if ( next ){
         next->gc_prev = prev;
     }
-    nrt_memsys_unlock();
+    nrt_memsys_gc_unlock();
 }
 
 void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
     _nrt_meminfo_gc_unlink(mi);
     NRT_Free(mi);
     TheMSys.atomic_inc(&TheMSys.stats_mi_free);
-
 }
 
 void NRT_MemInfo_acquire(NRT_MemInfo *mi) {

@@ -551,6 +551,8 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
     def test_exception_leak(self):
         @njit
         def bar(x):
+            # Put exception raising in separate function to hide it from
+            # dels insertion
             if x:
                 raise IndexError
 
@@ -592,6 +594,7 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
     def test_tracked_object_from_allocation(self):
         @njit
         def foo(n):
+            # Allocate a new object inside jitcode
             return np.arange(n)
 
         rtsys.set_gc_tracking(True)

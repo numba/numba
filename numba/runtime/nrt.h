@@ -42,12 +42,15 @@ void NRT_MemSys_init(void);
 VISIBILITY_HIDDEN
 void NRT_MemSys_shutdown(void);
 
+/* Ask memory system to dump its internal state for debugging */
 VISIBILITY_HIDDEN
 void NRT_MemSys_dump(void);
 
+/* Walk the heap and invoke callback for every MemInfo */
 VISIBILITY_HIDDEN
 void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose);
 
+/* Setting for the GC tracking feature */
 VISIBILITY_HIDDEN
 void NRT_MemSys_set_gc_tracking(int);
 

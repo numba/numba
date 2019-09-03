@@ -121,19 +121,27 @@ class _Runtime(object):
         """
         _nrt.memsys_set_gc_tracking(enable)
 
-    def get_allocations(self, debug=False):
+    def get_allocations(self):
+        """Return a list of live allocations. Requires GC tracking.
+
+        See also
+        --------
+
+        ``set_gc_tracking()``
+        """
         live_objs = []
 
         def cb_wrapper(addr):
-            mi = MemInfo(addr)
-            mi.acquire()
+            mi = MemInfo(addr)   # wrap raw address as MemInfo (borrow refct)
+            mi.acquire()         # acquire new refct
             live_objs.append(mi)
 
         proto = ctypes.PYFUNCTYPE(None, ctypes.c_void_p)
         cb = proto(cb_wrapper)
         addr = ctypes.cast(cb, ctypes.c_void_p).value
+        # set to True for verbose printing in *memsys_walk_heap()*
+        debug = False
         _nrt.memsys_walk_heap(addr, debug)
-
         return live_objs
 
 
