@@ -562,7 +562,7 @@ def impl_getitem(l, index):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in types.integer_domain:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
