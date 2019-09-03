@@ -77,7 +77,7 @@ class NopythonTypeInference(FunctionPass):
     _name = "nopython_type_inference"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -142,7 +142,7 @@ class AnnotateTypes(FunctionPass):
     _name = "annotate_types"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -173,7 +173,7 @@ class NopythonRewrites(FunctionPass):
     _name = "nopython_rewrites"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -198,7 +198,7 @@ class PreParforPass(FunctionPass):
     _name = "pre_parfor_pass"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -233,7 +233,7 @@ class ParforPass(FunctionPass):
     _name = "parfor_pass"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -280,7 +280,7 @@ class DumpParforDiagnostics(FunctionPass):
     _name = "dump_parfor_diagnostics"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         if state.flags.auto_parallel.enabled:
@@ -298,7 +298,7 @@ class NativeLowering(LoweringPass):
     _name = "native_lowering"
 
     def __init__(self):
-        super().__init__()
+        LoweringPass.__init__(self)
 
     def run_pass(self, state):
         targetctx = state.targetctx
@@ -347,7 +347,7 @@ class IRLegalization(FunctionPass):
     _name = "ir_legalisation"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         raise_on_unsupported_feature(state.func_ir, state.typemap)
@@ -363,7 +363,7 @@ class NoPythonBackend(FunctionPass):
     _name = "nopython_backend"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -415,7 +415,7 @@ class InlineOverloads(FunctionPass):
     _name = "inline_overloads"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     _DEBUG = False
 
@@ -553,7 +553,7 @@ class DeadCodeElimination(FunctionPass):
     _name = "dead_code_elimination"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         dead_code_elimination(state.func_ir, state.typemap)

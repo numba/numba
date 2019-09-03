@@ -1,13 +1,13 @@
 from __future__ import print_function, absolute_import
 
-import time
-from abc import ABC, abstractmethod
+import timeit
+from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
 import traceback
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
-from . import config, utils, transforms
+from . import config, utils, transforms, six
 from .tracing import event
 from .postproc import PostProcessor
 
@@ -21,14 +21,15 @@ class SimpleTimer():
     """
 
     def __enter__(self):
-        self.ts = time.time()
+        self.ts = timeit.default_timer()
         return self
 
     def __exit__(self, *exc):
-        self.elapsed = time.time() - self.ts
+        self.elapsed = timeit.default_timer() - self.ts
 
 
-class CompilerPass(ABC):
+@six.add_metaclass(ABCMeta)
+class CompilerPass(object):
 
     @abstractmethod
     def __init__(self, *args, **kwargs):

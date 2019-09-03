@@ -42,7 +42,7 @@ class ExtractByteCode(FunctionPass):
     _name = "extract_bytecode"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -62,7 +62,7 @@ class TranslateByteCode(FunctionPass):
     _name = "translate_bytecode"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -81,7 +81,7 @@ class FixupArgs(FunctionPass):
     _name = "fixup_args"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         state['nargs'] = state['func_ir'].arg_count
@@ -101,7 +101,7 @@ class IRProcessing(FunctionPass):
     _name = "ir_processing"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         func_ir = state['func_ir']
@@ -123,7 +123,7 @@ class RewriteSemanticConstants(FunctionPass):
     _name = "rewrite_semantic_constants"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -149,7 +149,7 @@ class DeadBranchPrune(FunctionPass):
     _name = "dead_branch_prune"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -184,7 +184,7 @@ class InlineClosureLikes(FunctionPass):
     _name = "inline_closure_likes"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         # Ensure we have an IR and type information.
@@ -215,7 +215,7 @@ class GenericRewrites(FunctionPass):
     _name = "generic_rewrites"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -236,7 +236,7 @@ class WithLifting(FunctionPass):
     _name = "with_lifting"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -275,7 +275,7 @@ class InlineInlinables(FunctionPass):
     _DEBUG = False
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         """Run inlining of inlinables
@@ -386,7 +386,7 @@ class PreserveIR(FunctionPass):
     _name = "preserve_ir"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         state.metadata['preserved_ir'] = state.func_ir.copy()

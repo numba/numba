@@ -1,8 +1,7 @@
 from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
-from . import (config, bytecode, interpreter, postproc, errors, types, rewrites,
-               typeinfer, funcdesc, lowering, utils, typing, pylowering,
+from . import (config, errors, types, funcdesc,  utils, typing, pylowering,
                transforms)
 from .compiler_machinery import FunctionPass, LoweringPass, register_pass
 from collections import defaultdict
@@ -35,7 +34,7 @@ class ObjectModeFrontEnd(FunctionPass):
     _name = "object_mode_front_end"
 
     def __init__(self):
-        super().__init__()
+        FunctionPass.__init__(self)
 
     def _frontend_looplift(self, state):
         """
@@ -68,7 +67,7 @@ class ObjectModeFrontEnd(FunctionPass):
             return cres
 
     def run_pass(self, state):
-        from numba.compiler import compile_ir, _EarlyPipelineCompletion
+        from numba.compiler import _EarlyPipelineCompletion
         # NOTE: That so much stuff, including going back into the compiler, is
         # captured in a single pass is not ideal.
         if state.flags.enable_looplift:
@@ -90,7 +89,7 @@ class ObjectModeBackEnd(LoweringPass):
     _name = "object_mode_back_end"
 
     def __init__(self):
-        super().__init__()
+        LoweringPass.__init__(self)
 
     def _py_lowering_stage(self, targetctx, library, interp, flags):
         fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
@@ -201,7 +200,7 @@ class CompileInterpMode(LoweringPass):
     _name = "compile_interp_mode"
 
     def __init__(self):
-        super().__init__()
+        LoweringPass.__init__(self)
 
     def run_pass(self, state):
         """

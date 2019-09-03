@@ -230,10 +230,10 @@ class _EarlyPipelineCompletion(Exception):
 class StateDict(dict):
 
     def __getattr__(self, attr):
-        if attr in self.keys():
+        try:
             return self[attr]
-        else:
-            raise KeyError
+        except KeyError:
+            raise AttributeError(attr)
 
     def __setattr__(self, attr, value):
         self[attr] = value
