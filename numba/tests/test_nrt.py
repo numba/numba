@@ -548,6 +548,14 @@ br i1 %.294, label %B42, label %B160
 
 
 class TestHeapTracking(MemoryLeakMixin, TestCase):
+    def setUp(self):
+        super(TestHeapTracking, self).setUp()
+        rtsys.set_gc_tracking(True)
+
+    def tearDown(self):
+        rtsys.set_gc_tracking(False)
+        super(TestHeapTracking, self).tearDown()
+
     def test_exception_leak(self):
         @njit
         def bar(x):
@@ -562,34 +570,32 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
             return a + 1
 
         arr = np.arange(10)
-        rtsys.set_gc_tracking(True)
-        try:
-            # First case doesn't have lingering live allocations
-            liveset_init = rtsys.get_allocations()
-            foo(arr, False)
-            liveset_before = rtsys.get_allocations()
-            self.assertEqual(len(liveset_init), len(liveset_before))
 
-            # Second case have lingering live allocations due to leak at raise
-            with self.assertRaises(IndexError):
-                foo(arr, True)
+        # First case doesn't have lingering live allocations
+        liveset_init = rtsys.get_allocations()
+        foo(arr, False)
+        liveset_before = rtsys.get_allocations()
+        self.assertEqual(len(liveset_init), len(liveset_before))
 
-            liveset_after = rtsys.get_allocations()
-            self.assertGreater(len(liveset_after), len(liveset_init))
+        # Second case have lingering live allocations due to leak at raise
+        with self.assertRaises(IndexError):
+            foo(arr, True)
 
-            for mi in liveset_after:
-                self.assertIsInstance(mi, nrt.MemInfo)
+        liveset_after = rtsys.get_allocations()
+        self.assertGreater(len(liveset_after), len(liveset_init))
 
-            # Find the corresponding allocation for the leaked memory
-            for mi in liveset_after:
-                if mi.data == arr.ctypes.data:
-                    break
+        for mi in liveset_after:
+            self.assertIsInstance(mi, nrt.MemInfo)
 
-            self.assertEqual(mi.data, arr.ctypes.data)
-            # Manually clear exception object
-            mi.release()
-        finally:
-            rtsys.set_gc_tracking(False)
+        # Find the corresponding allocation for the leaked memory
+        for mi in liveset_after:
+            if mi.data == arr.ctypes.data:
+                break
+        self.assertEqual(mi.data, arr.ctypes.data)
+        # debug_info is unset
+        self.assertIsNone(mi.debug_info)
+        # Manually clear exception object
+        mi.release()
 
     def test_tracked_object_from_allocation(self):
         @njit
@@ -597,15 +603,19 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
             # Allocate a new object inside jitcode
             return np.arange(n)
 
-        rtsys.set_gc_tracking(True)
-        try:
-            liveset_init = rtsys.get_allocations()
-            arr = foo(10)
-            liveset_after = rtsys.get_allocations()
-            self.assertGreater(len(liveset_after), len(liveset_init))
-            self.assertPreciseEqual(arr, foo.py_func(10))
-        finally:
-            rtsys.set_gc_tracking(False)
+        liveset_init = rtsys.get_allocations()
+        arr = foo(10)
+        liveset_after = rtsys.get_allocations()
+        self.assertGreater(len(liveset_after), len(liveset_init))
+        self.assertPreciseEqual(arr, foo.py_func(10))
+        # Find the corresponding allocation for the leaked memory
+        for mi in liveset_after:
+            if mi.data == arr.ctypes.data:
+                break
+        self.assertEqual(mi.data, arr.ctypes.data)
+        self.assertIsInstance(mi.debug_info, str)
+        # Name of file must be in the debug_info
+        self.assertIn(__file__, mi.debug_info)
 
 
 if __name__ == '__main__':
