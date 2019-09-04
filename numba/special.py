@@ -68,6 +68,14 @@ def literally(obj):
     This functions is intercepted by the compiler to alter its behavior to
     consider related function parameter as a literal type. It has **no effect**
     outside of nopython-mode (interpreter, and objectmode).
+
+
+    The current implementation detects literal arguments in two ways:
+
+    1. Scan uses of ``literally`` via a rewrite pass.
+    2. ``literally`` is overloaded to raise ``numba.errors.ForceLiteralArg``
+       to signal the dispatcher to treat the corresponding parameter
+       differently. This mode is to support indirect use (via a function call).
     """
     return obj
 
