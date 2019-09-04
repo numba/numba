@@ -72,6 +72,9 @@ class TargetOptions(object):
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
 
+        if 'inline' in kws:
+            flags.set('inline', kws.pop('inline'))
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

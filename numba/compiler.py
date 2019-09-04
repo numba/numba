@@ -18,7 +18,9 @@ from numba.parfor import PreParforPass, ParforPass, Parfor, ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.errors import CompilerError
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
-                            check_and_legalize_ir)
+                            check_and_legalize_ir, InlineInlinables,
+                            InlineOverloads)
+
 from numba.compiler_lock import global_compiler_lock
 from numba.analysis import (
     dead_branch_prune,
@@ -60,6 +62,7 @@ class Flags(utils.ConfigOptions):
         'error_model': 'python',
         'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
+        'inline': cpu.InlineOptions('never'),
     }
 
 
@@ -176,16 +179,22 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                             flags, locals)
 
 
-def run_frontend(func):
+def run_frontend(func, inline_closures=False):
     """
     Run the compiler frontend over the given Python function, and return
     the function's canonical Numba IR.
+
+    If inline_closures is Truthy then closure inlining will be run
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
     interp = interpreter.Interpreter(func_id)
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
+    if inline_closures:
+        inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
+                                            {}, False)
+        inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     return func_ir
@@ -566,6 +575,16 @@ class BasePipeline(object):
             rewrites.rewrite_registry.apply('after-inference',
                                             self, self.func_ir)
 
+    def stage_inline_inlinables_pass(self):
+        inlineinline = InlineInlinables(self.func_ir)
+        inlineinline.run()
+
+    def stage_inline_overloads_pass(self):
+        inlineoverloads = InlineOverloads(self.func_ir, self.typingctx,
+                                          self.targetctx,
+                                          self.type_annotation)
+        inlineoverloads.run()
+
     def stage_pre_parfor_pass(self):
         """
         Preprocessing for data-parallel computations.
@@ -826,9 +845,19 @@ class BasePipeline(object):
         if not self.flags.no_rewrites:
             pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
+
+        # run closure inlining
         pm.add_stage(self.stage_inline_pass,
                      "inline calls to locally defined closures")
         pm.add_stage(self.stage_literal_arg, "literal args rewrites")
+
+        # inline functions that have been determined as inlinable and rerun
+        # branch pruning this needs to be run after closures are inlined as
+        # the IR repr of a closure masks call sites if an inlinable is called
+        # inside a closure
+        pm.add_stage(self.stage_inline_inlinables_pass, "inline inlinables")
+        if not self.flags.no_rewrites:
+            pm.add_stage(self.stage_dead_branch_prune, "dead branch pruning")
 
     def add_typing_stage(self, pm):
         """Add the type-inference stage necessary for nopython mode.
@@ -839,6 +868,7 @@ class BasePipeline(object):
     def add_optimization_stage(self, pm):
         """Add optimization stages.
         """
+        pm.add_stage(self.stage_inline_overloads_pass, "inline overloads")
         if self.flags.auto_parallel.enabled:
             pm.add_stage(self.stage_pre_parfor_pass,
                          "Preprocessing for parfors")

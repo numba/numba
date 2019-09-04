@@ -16,6 +16,7 @@ from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
 from ._helperlib import _import_cython_function
 
+
 def type_callable(func):
     """
     Decorate a function as implementing typing for the callable *func*.
@@ -50,7 +51,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True):
+def overload(func, jit_options={}, strict=True, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -81,6 +82,21 @@ def overload(func, jit_options={}, strict=True):
     the ``signature`` is a ``typing.Signature`` specifying the precise
     signature to be used; and ``impl_function`` is the same implementation
     function as in the simple case.
+
+    If the kwarg inline determines whether the overload is inlined in the
+    calling function and can be one of three values:
+    * 'never' (default) - the overload is never inlined.
+    * 'always' - the overload is always inlined.
+    * a function that takes two arguments, both of which are instances of a
+      namedtuple with fields:
+        * func_ir
+        * typemap
+        * calltypes
+        * signature
+      The first argument holds the information from the caller, the second
+      holds the information from the callee. The function should return Truthy
+      to determine whether to inline, this essentially permitting custom
+      inlining rules (typical use might be cost models).
     """
     from .typing.templates import make_overload_template, infer_global
 
@@ -88,10 +104,10 @@ def overload(func, jit_options={}, strict=True):
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
+
     def decorate(overload_func):
-        template = make_overload_template(
-            func, overload_func, opts, strict,
-        )
+        template = make_overload_template(func, overload_func, opts, strict,
+                                          inline)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))

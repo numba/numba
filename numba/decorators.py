@@ -84,6 +84,16 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 raises exception.  The 'numpy' model sets the result to
                 *+/-inf* or *nan*. Default value is 'python'.
 
+            inline: str or callable
+                The inline option will determine whether a function is inlined
+                at into its caller if called. String options are 'never'
+                (default) which will never inline, and 'always', which will
+                always inline. If a callable is provided it will be called with
+                the caller's IR and callee's IR as arguments, it is expected to
+                return Truthy as to whether to inline.
+                NOTE: This inlining is performed at the Numba IR level and is in
+                no way related to LLVM inlining.
+
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
