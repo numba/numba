@@ -671,6 +671,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
         it = pool.imap_unordered(child_runner, tests)
+
+        executed_tests = []
         while True:
             try:
                 child_result = it.__next__(self.timeout)
@@ -678,13 +680,21 @@ class ParallelTestRunner(runner.TextTestRunner):
                 return
             except TimeoutError as e:
                 # Diagnose the names of unfinished tests
-                msg = ("Tests didn't finish before timeout (or crashed):\n%s"
-                       % "".join("- %r\n" % tid for tid in sorted(remaining_ids))
-                       )
+                msg_template = """
+Tests didn't finish before timeout (or crashed):
+{}
+Tests executed by this process:
+{}
+""".strip()
+                msg = msg_template.format(
+                    "".join("- %r\n" % tid for tid in sorted(remaining_ids)),
+                    " ".join(executed_tests)
+                )
                 e.args = (msg,) + e.args[1:]
                 raise e
             else:
                 result.add_results(child_result)
+                executed_tests.append(child_result.test_id)
                 remaining_ids.discard(child_result.test_id)
                 if child_result.shouldStop:
                     result.shouldStop = True
