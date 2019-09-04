@@ -7,7 +7,6 @@ from numba.tests.support import TestCase
 from numba import njit, types, errors
 from numba.extending import overload, SentryLiteralArgs
 from numba.special import literally
-from numba import utils
 
 
 class TestLiteralDispatcher(TestCase):

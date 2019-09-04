@@ -665,7 +665,6 @@ class ForceLiteralArg(NumbaError):
         return ForceLiteralArg(new_args)
 
 
-
 class LiteralTypingError(TypingError):
     """
     Failure in typing a Literal type
