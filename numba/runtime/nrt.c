@@ -304,7 +304,7 @@ void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
 }
 
 void NRT_MemInfo_set_debug(NRT_MemInfo *mi, char *debug_data){
-    mi->debug_data = debug_data;
+    if (mi) mi->debug_data = debug_data;
 }
 
 char* NRT_MemInfo_get_debug(NRT_MemInfo *mi){
