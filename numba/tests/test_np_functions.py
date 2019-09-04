@@ -33,6 +33,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def append(arr, values, axis):
+    return np.append(arr, values, axis=axis)
+
+
 def delete(arr, obj):
     return np.delete(arr, obj)
 
@@ -374,6 +378,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_np_append(self):
+        def arrays():
+            yield np.arange(10), 3, None
+            yield np.arange(10), np.arange(3), None
+            yield np.arange(10).reshape(5, 2), np.arange(3), None
+            yield np.array([[1, 2, 3], [4, 5, 6]]), np.array([[7, 8, 9]]), 0
+
+        pyfunc = append
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj, axis in arrays():
+            expected = pyfunc(arr, obj, axis)
+            got = cfunc(arr, obj, axis)
+            self.assertPreciseEqual(expected, got)
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
     @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")

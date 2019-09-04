@@ -1667,6 +1667,23 @@ def np_reshape(a, shape):
     return np_reshape_impl
 
 
+def _is_nonelike(ty):
+    return (ty is None) or isinstance(ty, types.NoneType)
+
+
+@overload(np.append)
+def np_append(arr, values, axis=None):
+    if _is_nonelike(axis):
+        def impl(arr, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            values = np.ravel(np.asarray(values))
+            return np.concatenate((arr, values))
+    else:
+        def impl(arr, values, axis=None):
+            return np.concatenate((arr, values), axis=axis)
+    return impl
+
+
 @lower_builtin('array.ravel', types.Array)
 def array_ravel(context, builder, sig, args):
     # Only support no argument version (default order='C')
