@@ -43,6 +43,17 @@ class CPUContext(BaseContext):
 
     @global_compiler_lock
     def init(self):
+        #ll.set_option('openmp', '-debug')
+        ll.set_option('openmp', '-paropt=31')
+        ll.set_option('openmp', '-fopenmp')
+#        ll.set_option('openmp', '-fiopenmp')
+        ll.set_option('openmp', '-fintel-compatibility')
+        ll.set_option('openmp', '-mllvm')
+        ll.set_option('openmp', '-fintel-openmp-region')
+        ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
+        #ll.set_option('openmp', '-print-after-all')
+        #ll.set_option('openmp', '-debug-pass=Structure')
+
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
