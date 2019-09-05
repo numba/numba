@@ -23,7 +23,8 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             apply_copy_propagate_extensions, replace_vars_inner,
                             visit_vars_extensions, visit_vars_inner)
 from numba.analysis import (compute_use_defs, compute_live_map,
-                            compute_dead_maps, compute_cfg_from_blocks)
+                            compute_dead_maps, compute_cfg_from_blocks,
+                            ir_extension_usedefs, _use_defs_result)
 from ..typing import signature
 from numba import config, typeinfer
 from numba.targets.cpu import ParallelOptions
@@ -84,6 +85,10 @@ class openmp_tag(object):
         if isinstance(self.arg, ir.Var):
             self.arg = replace_vars_inner(self.arg, var_dict)
 
+    def add_to_use_set(self, use_set):
+        if isinstance(self.arg, ir.Var):
+            use_set.add(self.arg.name)
+
     def __str__(self):
         return "openmp_tag(" + str(self.name) + "," + str(self.arg) + ")"
 
@@ -135,7 +140,32 @@ class openmp_region_end(ir.Stmt):
         builder.call(pre_fn, [self.start_region.omp_region_var], tail=True, tags=openmp_tag_list_to_str(self.tags, lowerer))
 
     def __str__(self):
-        return "openmp_region_start " + ", ".join([str(x) for x in self.tags])
+        return "openmp_region_end " + ", ".join([str(x) for x in self.tags])
+
+# Callback for ir_extension_usedefs
+def openmp_region_start_defs(region, use_set=None, def_set=None):
+    if use_set is None:
+        use_set = set()
+    if def_set is None:
+        def_set = set()
+    for tag in region.tags:
+        tag.add_to_use_set(use_set)
+    return _use_defs_result(usemap=use_set, defmap=def_set)
+
+def openmp_region_end_defs(region, use_set=None, def_set=None):
+    if use_set is None:
+        use_set = set()
+    if def_set is None:
+        def_set = set()
+    for tag in region.tags:
+        tag.add_to_use_set(use_set)
+#    for tag in region.start_region.tags:
+#        tag.add_to_use_set(use_set)
+    return _use_defs_result(usemap=use_set, defmap=def_set)
+
+# Extend usedef analysis to suport openmp_region_start/end nodes.
+ir_extension_usedefs[openmp_region_start] = openmp_region_start_defs
+ir_extension_usedefs[openmp_region_end] = openmp_region_end_defs
 
 def openmp_region_start_infer(prs, typeinferer):
     pass
