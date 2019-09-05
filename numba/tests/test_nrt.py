@@ -598,10 +598,14 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
         mi.release()
 
     def test_tracked_object_from_allocation(self):
+        # Use custom type to ensure that this is a unique compilation
+        custom_dtype = np.dtype([
+            ('shruberry', np.intp),
+        ])
         @njit
         def foo(n):
-            # Allocate a new object inside jitcode
-            return np.arange(n)
+            # Allocate a new object inside jitcode.
+            return np.zeros(n, dtype=custom_dtype)
 
         liveset_init = rtsys.get_allocations()
         arr = foo(10)
@@ -614,10 +618,31 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
                 break
         self.assertEqual(mi.data, arr.ctypes.data)
         self.assertIsInstance(mi.debug_info, str)
-        # mi.debug_info has the traceback from the first time `np.arange`
-        # is compiled. It may not contain be this file.
-        # Simply test for a known prefix to the traceback.
-        self.assertTrue(mi.debug_info.startswith("Allocated by"))
+        self.assertTrue(mi.debug_info.startswith("Tracked allocation by"))
+        # The function name must be in the traceback
+        self.assertIn(self.test_tracked_object_from_allocation.__name__,
+                      mi.debug_info)
+
+    def test_disabled_heap_tracking(self):
+        # Force GC tracking off
+        rtsys.set_gc_tracking(False)
+
+        # Use custom type to ensure that this is a unique compilation
+        custom_dtype = np.dtype([
+            ('Herring', np.intp),
+        ])
+        @njit
+        def foo(n):
+            # Allocate a new object inside jitcode.
+            return np.zeros(n, dtype=custom_dtype)
+
+        liveset_init = rtsys.get_allocations()
+        arr = foo(10)
+        liveset_after = rtsys.get_allocations()
+        # No new tracked allocation
+        self.assertEqual(len(liveset_init), len(liveset_after))
+        self.assertNotIn("Tracked allocation by",
+                         foo.inspect_llvm(foo.signatures[0]))
 
 
 if __name__ == '__main__':

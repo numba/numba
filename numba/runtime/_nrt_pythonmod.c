@@ -31,6 +31,17 @@ memsys_walk_heap(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+
+static PyObject*
+memsys_get_gc_tracking(PyObject *self, PyObject *args) {
+    if ( NRT_MemSys_get_gc_tracking() ){
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
+}
+
+
 static PyObject*
 memsys_set_gc_tracking(PyObject *self, PyObject *args) {
     PyObject *new_setting_obj;
@@ -155,6 +166,7 @@ static PyMethodDef ext_methods[] = {
     declmethod_noargs(memsys_shutdown),
     declmethod_noargs(memsys_dump),
     declmethod(memsys_walk_heap),
+    declmethod_noargs(memsys_get_gc_tracking),
     declmethod(memsys_set_gc_tracking),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),

@@ -4,6 +4,7 @@ import traceback
 from llvmlite import ir
 
 from numba import cgutils, types
+from numba.runtime import rtsys
 
 
 class NRTContext(object):
@@ -177,6 +178,8 @@ class NRTContext(object):
 
     def meminfo_set_debug(self, builder, meminfo, function_name):
         self._require_nrt()
+        if not rtsys.is_gc_tracking_enabled():
+            return
 
         mod = builder.module
         fnty = ir.FunctionType(ir.VoidType(),
@@ -184,7 +187,7 @@ class NRTContext(object):
 
         stack_to_caller = traceback.extract_stack()[:-1]
         tb = traceback.format_list(stack_to_caller)
-        debug_text = "Allocated by {}\n{}".format(function_name, ''.join(tb))
+        debug_text = "Tracked allocation by {}\n{}".format(function_name, ''.join(tb))
         textptr = self._context.insert_const_string(mod, debug_text)
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_set_debug")
         return builder.call(fn, (meminfo, textptr))

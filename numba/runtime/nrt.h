@@ -50,6 +50,10 @@ void NRT_MemSys_dump(void);
 VISIBILITY_HIDDEN
 void NRT_MemSys_walk_heap(void (*callback)(NRT_MemInfo *), int verbose);
 
+/* Get setting for the GC tracking feature */
+VISIBILITY_HIDDEN
+int NRT_MemSys_get_gc_tracking(void);
+
 /* Setting for the GC tracking feature */
 VISIBILITY_HIDDEN
 void NRT_MemSys_set_gc_tracking(int);

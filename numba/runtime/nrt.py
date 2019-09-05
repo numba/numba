@@ -113,6 +113,15 @@ class _Runtime(object):
         """
         _nrt.memsys_dump()
 
+    def is_gc_tracking_enabled(self):
+        """Check if GC tracking is enabled.
+
+        Returns
+        -------
+        enabled : bool
+        """
+        return _nrt.memsys_get_gc_tracking()
+
     def set_gc_tracking(self, enable):
         """Set GC tracking setting.
 

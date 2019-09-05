@@ -222,6 +222,10 @@ void NRT_MemSys_dump(void) {
     NRT_MemSys_walk_heap(_nrt_memsys_dump_callback, verbose);
 }
 
+int NRT_MemSys_get_gc_tracking(void) {
+    return TheMSys.gc_enable_tracking;
+}
+
 void NRT_MemSys_set_gc_tracking(int enable) {
     TheMSys.gc_enable_tracking = enable ? 1 : 0;
 }
