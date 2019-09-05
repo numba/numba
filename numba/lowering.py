@@ -454,7 +454,6 @@ class Lower(BaseLower):
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             res = self.context.get_constant_generic(self.builder, ty,
                                                     value.value)
-            self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Expr):
@@ -482,7 +481,7 @@ class Lower(BaseLower):
             else:
                 val = self.fnargs[value.index]
                 res = self.context.cast(self.builder, val, argty, ty)
-            self.incref(ty, res)
+                self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Yield):
@@ -640,6 +639,8 @@ class Lower(BaseLower):
                 return self._cast_var(var, signature.args[index])
 
             def default_handler(index, param, default):
+                # TODO: not entirely sure we are handling new refcount convention correctly
+                #  here. .get_constant* returns new references now
                 return self.context.get_constant_generic(
                     self.builder, signature.args[index], default)
 

@@ -20,7 +20,7 @@ from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
-                       builtin_registry, impl_ret_borrowed,
+                       builtin_registry, impl_ret_borrowed, impl_ret_new_ref,
                        RegistryLoader)
 from numba import datamodel
 
@@ -587,7 +587,7 @@ class BaseContext(object):
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
                 def imp(context, builder, typ, val, attr):
-                    return impl_ret_borrowed(context, builder, attrty, llval)
+                    return impl_ret_new_ref(context, builder, attrty, llval)
                 return imp
 
         # Lookup specific getattr implementation for this type and attribute

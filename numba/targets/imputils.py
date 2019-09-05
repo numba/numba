@@ -37,7 +37,7 @@ class RefType(Enum):
 # extension API users' perspective it is desirable that casts and lower constant return new references.
 # This and the new optional arg on Registry.lower_cast|lower_constant should allow to isolate the implementations
 # from the switch (at least old impls will keep working)
-LOWER_CONSTANT_RETURNS_NEW_REFS = False
+LOWER_CONSTANT_RETURNS_NEW_REFS = True
 CAST_RETURNS_NEW_REFS = False
 
 
