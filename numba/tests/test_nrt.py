@@ -614,8 +614,10 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
                 break
         self.assertEqual(mi.data, arr.ctypes.data)
         self.assertIsInstance(mi.debug_info, str)
-        # Name of file must be in the debug_info
-        self.assertIn(__file__, mi.debug_info)
+        # mi.debug_info has the traceback from the first time `np.arange`
+        # is compiled. It may not contain be this file.
+        # Simply test for a known prefix to the traceback.
+        self.assertTrue(mi.debug_info.startswith("Allocated by"))
 
 
 if __name__ == '__main__':
