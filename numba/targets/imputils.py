@@ -37,7 +37,8 @@ class RefType(Enum):
 # extension API users' perspective it is desirable that casts and lower constant return new references.
 # This and the new optional arg on Registry.lower_cast|lower_constant should allow to isolate the implementations
 # from the switch (at least old impls will keep working)
-CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS = False
+LOWER_CONSTANT_RETURNS_NEW_REFS = False
+CAST_RETURNS_NEW_REFS = False
 
 
 class Registry(object):
@@ -136,12 +137,11 @@ class Registry(object):
         ref_type = ref_type or RefType.BORROWED  # TODO: deprecation warning for ref_type == None?
 
         def decorate(impl):
-            if CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.BORROWED:
+            if CAST_RETURNS_NEW_REFS and ref_type == RefType.BORROWED:
                 def wrapped(context, builder, fromty, toty, val):
                     res = impl(context, builder, fromty, toty, val)
-                    context.nrt.incref(builder, toty, res)
-                    return res
-            elif not CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.NEW:
+                    return impl_ret_borrowed(context, builder, toty, res)
+            elif not CAST_RETURNS_NEW_REFS and ref_type == RefType.NEW:
                 raise NotImplementedError('Returning new refs from cast implementations is not supported, yet.')
             else:
                 wrapped = impl
@@ -167,12 +167,11 @@ class Registry(object):
         ref_type = ref_type or RefType.BORROWED  # TODO: deprecation warning for ref_type == None?
 
         def decorate(impl):
-            if CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.BORROWED:
+            if LOWER_CONSTANT_RETURNS_NEW_REFS and ref_type == RefType.BORROWED:
                 def wrapped(context, builder, ty, pyval):
                     res = impl(context, builder, ty, pyval)
-                    context.nrt.incref(builder, ty, res)
-                    return res
-            elif not CAST_AND_LOWER_CONSTANT_RETURN_NEW_REFS and ref_type == RefType.NEW:
+                    return impl_ret_borrowed(context, builder, ty, res)
+            elif not LOWER_CONSTANT_RETURNS_NEW_REFS and ref_type == RefType.NEW:
                 raise NotImplementedError(
                     'Returning new refs from lower constant  implementations is not supported, yet.'
                 )
