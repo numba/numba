@@ -18,24 +18,27 @@ memsys_dump(PyObject *self, PyObject *args) {
 
 static PyObject*
 memsys_walk_heap(PyObject *self, PyObject *args) {
-    PyObject *addr_callback_obj;
+    PyObject *addr_callback_obj, *verbose_obj;
     void* addr_callback;
     int verbose;
 
-    if (!PyArg_ParseTuple(args, "Op", &addr_callback_obj, &verbose)) {
+    if (!PyArg_ParseTuple(args, "OO", &addr_callback_obj, &verbose_obj)) {
         return NULL;
     }
     addr_callback = PyLong_AsVoidPtr(addr_callback_obj);
+    verbose = PyObject_IsTrue(verbose_obj);
     NRT_MemSys_walk_heap(addr_callback, verbose);
     Py_RETURN_NONE;
 }
 
 static PyObject*
 memsys_set_gc_tracking(PyObject *self, PyObject *args) {
+    PyObject *new_setting_obj;
     int new_setting;
-    if (!PyArg_ParseTuple(args, "p", &new_setting)) {
+    if (!PyArg_ParseTuple(args, "O", &new_setting_obj)) {
         return NULL;
     }
+    new_setting = PyObject_IsTrue(new_setting_obj);
     NRT_MemSys_set_gc_tracking(new_setting);
     Py_RETURN_NONE;
 }
