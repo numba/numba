@@ -1660,11 +1660,14 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
 
+def dump_block(label, block):
+    print(label, ":")
+    for stmt in block.body:
+        print("    ", stmt)
+
 def dump_blocks(blocks):
     for label, block in blocks.items():
-        print(label, ":")
-        for stmt in block.body:
-            print("    ", stmt)
+        dump_block(label, block)
 
 def is_get_setitem(stmt):
     """stmt is getitem assignment or setitem (and static cases)"""
