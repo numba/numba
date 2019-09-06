@@ -403,13 +403,15 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
     """
     boundargs = pysig.bind(*args, **kwargs)
 
+    # Find literal argument positions and whether it is satisfied.
     request_pos = set()
+    missing = False
     for i, (k, v) in enumerate(boundargs.arguments.items()):
         if k in literal_args:
+            request_pos.add(i)
             if not isinstance(v, types.Literal):
-                request_pos.add(i)
-
-    if request_pos:
+                missing = True
+    if missing:
         # Yes, there are missing required literal arguments
         e = errors.ForceLiteralArg(request_pos)
         # A helper function to fold arguments

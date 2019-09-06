@@ -631,7 +631,12 @@ class RequireLiteralValue(TypingError):
 
 
 class ForceLiteralArg(NumbaError):
-    """TODO
+    """A Pseudo-exception to signal the dispatcher to type argument differently
+
+    Attributes
+    ----------
+    requested_args : frozenset[int]
+        requested positions of the arguments
     """
     def __init__(self, new_args):
         super(ForceLiteralArg, self).__init__(
@@ -640,10 +645,17 @@ class ForceLiteralArg(NumbaError):
         self.requested_args = frozenset(new_args)
 
     def combine(self, other):
+        """Or'ing the requested_args
+        """
         if not isinstance(other, ForceLiteralArg):
             m = '*other* must be a {} but got a {} instead'
             raise TypeError(m.format(ForceLiteralArg, type(other)))
         return ForceLiteralArg(self.requested_args | other.requested_args)
+
+    def __or__(self, other):
+        """Same as self.combine(other)
+        """
+        return self.combine(other)
 
 
 class LiteralTypingError(TypingError):

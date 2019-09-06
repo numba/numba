@@ -20,6 +20,7 @@ import contextlib
 import itertools
 from pprint import pprint
 from collections import OrderedDict, defaultdict
+from functools import reduce
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
@@ -945,11 +946,7 @@ class TypeInferer(object):
                 if not force_lit_args:
                     raise errors[0]
                 else:
-                    head = force_lit_args[0]
-                    tail = force_lit_args[1:]
-                    for e in tail:
-                        head = head.combine(e)
-                    raise head
+                    raise reduce(operator.or_, force_lit_args)
             else:
                 return errors
 

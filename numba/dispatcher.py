@@ -348,7 +348,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(types.Omitted(a.value))
             else:
                 argtypes.append(self.typeof_pyval(a))
-
         try:
             return self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:

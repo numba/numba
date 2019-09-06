@@ -263,10 +263,6 @@ def find_top_level_loops(cfg):
             yield loop
 
 
-def literal_arg_rewrite(func_ir, called_args):
-    raise ValueError
-
-
 # Functions to manipulate IR
 def dead_branch_prune(func_ir, called_args):
     """

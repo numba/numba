@@ -25,7 +25,6 @@ from numba.compiler_lock import global_compiler_lock
 from numba.analysis import (
     dead_branch_prune,
     rewrite_semantic_constants,
-    literal_arg_rewrite,
     find_literal_calls,
 )
 
