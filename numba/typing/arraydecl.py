@@ -660,13 +660,13 @@ def sum_expand(self, args, kws):
         from .npydecl import _parse_dtype
         dtype, = args
         dtype = _parse_dtype(dtype)
-        out = signature(_expand_integer(dtype), *args, recvr=self.this)
+        out = signature(dtype, *args, recvr=self.this)
 
     elif args_len == 2:
         # There is an axis and dtype parameter, either arg or kwarg
         from .npydecl import _parse_dtype
         dtype = _parse_dtype(args[1])
-        return_type = _expand_integer(dtype)
+        return_type = dtype
         if self.this.ndim != 1:
             # 1d reduces to a scalar, 2d and above reduce dim by 1
             # the return type of this summation is  an array of dimension one
