@@ -90,6 +90,58 @@ class TestLiteralDispatcher(TestCase):
         self.assertIsInstance(type_c, types.Literal)
         self.assertEqual(type_c.literal_value, 3)
 
+    def test_literally_varargs(self):
+        @njit
+        def foo(a, *args):
+            return literally(args)
+
+        with self.assertRaises(errors.LiteralTypingError):
+            foo(1, 2, 3)
+
+        @njit
+        def bar(a, b):
+            foo(a, b)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            bar(1, 2)
+        self.assertIn(
+            "Cannot request literal type",
+            str(raises.exception),
+        )
+
+    @unittest.expectedFailure
+    def test_literally_defaults(self):
+        # Problem with OmittedArg
+        @njit
+        def foo(a, b=1):
+            return (a, literally(b))
+        foo(a=1)
+
+    @unittest.expectedFailure
+    def test_literally_defaults_inner(self):
+        # Problem with Omitted
+        @njit
+        def foo(a, b=1):
+            return (a, literally(b))
+
+        @njit
+        def bar(a):
+            return foo(a) + 1
+
+        bar(1)
+
+    def test_non_literal(self):
+        @njit
+        def foo(a, b):
+            return literally(1 + a)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(1, 2)
+        self.assertIn(
+            "Invalid use of non-Literal type",
+            str(raises.exception),
+        )
+
     def test_aliased_variable(self):
         @njit
         def foo(a, b, c):
@@ -113,7 +165,7 @@ class TestLiteralDispatcher(TestCase):
         self.assertIsInstance(type_c, types.Literal)
         self.assertEqual(type_c.literal_value, 3)
 
-    def test_overload(self):
+    def test_overload_explicit(self):
         # This test represents a more controlled usage with ensuring literal
         # typing for an argument.
         def do_this(x, y):
@@ -137,7 +189,7 @@ class TestLiteralDispatcher(TestCase):
         self.assertEqual(type_a.literal_value, a)
         self.assertNotIsInstance(type_b, types.Literal)
 
-    def test_overload2(self):
+    def test_overload_implicit(self):
         # This test represents the preferred usage style for using literally
         # in overload. Here, literally() is used inside the "implementation"
         # function of the overload.

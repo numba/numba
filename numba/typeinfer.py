@@ -484,15 +484,21 @@ class CallConstraint(object):
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
-            # XXX What about vararg?
             folded = e.fold_arguments(self.args, self.kws)
             requested = set()
+            unsatisified = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
-
-            raise ForceLiteralArg(requested)
+                elif isinstance(maybe_arg, types.Omitted):
+                    raise ValueError("cannot handle omitted argument yet")
+                else:
+                    unsatisified.add(idx)
+            if unsatisified:
+                raise TypingError("Cannot request literal type.", loc=self.loc)
+            elif requested:
+                raise ForceLiteralArg(requested)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
