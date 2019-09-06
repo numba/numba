@@ -376,24 +376,6 @@ class ArrayCompatible(Type):
         return self.as_array.dtype
 
 
-
-class ForceLiteral(Type):
-    """
-    """
-    def __init__(self, value_type):
-        if isinstance(value_type, Literal):
-            raise ValueError("cannot take a Literal: {}".format(value_type))
-        elif isinstance(value_type, ForceLiteral):
-            raise ValueError("cannot take a ForceLiteral: {}".format(value_type))
-
-        super(ForceLiteral, self).__init__('ForceLiteral({})'.format(value_type))
-
-    def __and__(self, other):
-        if self != other:
-            raise ValueError('*self* ({}) != *other* ({})'.format(self, other))
-        return self
-
-
 class Literal(Type):
     """Base class for Literal types.
     Literal types contain the original Python value in the type.

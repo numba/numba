@@ -524,14 +524,6 @@ def find_literal_calls(func_ir, argtypes):
                         if isinstance(defarg, ir.Arg):
                             marked_args.add(defarg.index)
     # Signal the dispatcher to force literal typing
-    if marked_args:
-        new_args = list(argtypes)
-        ct = 0
-        for pos in marked_args:
-            arg = argtypes[pos]
-            # Check if the type is already a literal type
-            if not isinstance(arg, types.Literal):
-                new_args[pos] = types.ForceLiteral(arg)
-                ct += 1
-        if ct:
-            raise errors.ForceLiteralArg(new_args)
+    if any(not isinstance(argtypes[pos], types.Literal)
+           for pos in marked_args):
+        raise errors.ForceLiteralArg(marked_args)

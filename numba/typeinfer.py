@@ -485,17 +485,13 @@ class CallConstraint(object):
         except ForceLiteralArg as e:
             # XXX What about vararg?
             folded = e.fold_arguments(self.args, self.kws)
-            argtypes = typeinfer.get_argument_types()
-            for idx, req in enumerate(e.requested_args):
-                if isinstance(req, types.ForceLiteral):
-                    maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
-                    if isinstance(maybe_arg, ir.Arg):
-                        argty = argtypes[maybe_arg.index]
-                        if not isinstance(argty, types.Literal):
-                            argtypes[maybe_arg.index] = types.ForceLiteral(argty)
+            requested = set()
+            for idx in e.requested_args:
+                maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
+                if isinstance(maybe_arg, ir.Arg):
+                    requested.add(maybe_arg.index)
 
-            raise ForceLiteralArg(argtypes)
-
+            raise ForceLiteralArg(requested)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type

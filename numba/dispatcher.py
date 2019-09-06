@@ -352,9 +352,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             return self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
-            args = [types.literal(args[i])
-                    if isinstance(ty, types.ForceLiteral) else args[i]
-                    for i, ty in enumerate(e.requested_args)]
+            args = [(types.literal
+                     if i in e.requested_args
+                     else lambda x: x)(args[i])
+                    for i, v in enumerate(args)]
             return self._compile_for_args(*args)
 
         except errors.TypingError as e:

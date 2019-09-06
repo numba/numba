@@ -402,18 +402,16 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
         SentryLiteralArgs(literal_args).for_pysig(pysig).bind(*args, **kwargs)
     """
     boundargs = pysig.bind(*args, **kwargs)
-    missing_literal_args = (k for k in literal_args
-                            if not isinstance(boundargs.arguments[k],
-                                              types.Literal))
-    if any(missing_literal_args):
+
+    request_pos = set()
+    for i, (k, v) in enumerate(boundargs.arguments.items()):
+        if k in literal_args:
+            if not isinstance(v, types.Literal):
+                request_pos.add(i)
+
+    if request_pos:
         # Yes, there are missing required literal arguments
-        kwargs = boundargs.arguments.copy()
-        for k in literal_args:
-            kwargs[k] = types.ForceLiteral(kwargs[k])
-
-        flattened = pysig.bind(**kwargs).arguments.values()
-        e = errors.ForceLiteralArg(tuple(flattened))
-
+        e = errors.ForceLiteralArg(request_pos)
         # A helper function to fold arguments
         def folded(args, kwargs):
             out = pysig.bind(*args, **kwargs).arguments.values()
