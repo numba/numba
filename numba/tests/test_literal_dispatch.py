@@ -153,6 +153,25 @@ class TestLiteralDispatcher(TestCase):
             str(raises.exception),
         )
 
+    def test_inlined_literal(self):
+        # Check that literally accepts inlined literal
+        @njit
+        def foo(a, b):
+            v = 1000
+            return a + literally(v) + literally(b)
+
+        got = foo(1, 2)
+        self.assertEqual(got, foo.py_func(1, 2))
+
+        @njit
+        def bar():
+            a = 100
+            b = 9
+            return foo(a=b, b=a)
+
+        got = bar()
+        self.assertEqual(got, bar.py_func())
+
     def test_aliased_variable(self):
         @njit
         def foo(a, b, c):
