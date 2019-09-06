@@ -1810,7 +1810,7 @@ def find_global_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
-    dfn = func_ir.get_definition(var)
+    dfn = get_definition(func_ir, var)
     if isinstance(dfn, ir.Global):
         return dfn.value
 

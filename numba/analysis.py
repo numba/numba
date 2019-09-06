@@ -507,19 +507,14 @@ def find_literal_calls(func_ir, argtypes):
     # Scan for literally calls
     for blk in func_ir.blocks.values():
         for assign in blk.find_exprs(op='call'):
-            try:
-                var = func_ir.get_definition(assign.func)
-            except KeyError:
-                pass
-            else:
-                fnobj = ir_utils.guard(ir_utils.find_global_value,
-                                       func_ir, var)
-                if fnobj is special.literally:
-                    # Found
-                    [arg] = assign.args
-                    defarg = func_ir.get_definition(arg)
-                    if isinstance(defarg, ir.Arg):
-                        marked_args.add(defarg.index)
+            fnobj = ir_utils.guard(ir_utils.find_global_value,
+                                   func_ir, assign.func)
+            if fnobj is special.literally:
+                # Found
+                [arg] = assign.args
+                defarg = func_ir.get_definition(arg)
+                if isinstance(defarg, ir.Arg):
+                    marked_args.add(defarg.index)
     # Signal the dispatcher to force literal typing
     if any(not isinstance(argtypes[pos], types.Literal)
            for pos in marked_args):
