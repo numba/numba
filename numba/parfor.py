@@ -3091,8 +3091,8 @@ def _lower_parfor_openmp(
                     openmp_target_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", ir.Var(scope, param, loc)))
                     openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.FIRSTPRIVATE", ir.Var(scope, param, loc)))
 
-            if ndims > 1:
-                openmp_distparloop_start_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
+            if ndims > 1 and collapse:
+                openmp_start_tags.append(openmp_tag("QUAL.OMP.COLLAPSE", ndims))
 
             # Add OpenMP LLVM directives.
             target_start = numba.npyufunc.parfor.openmp_region_start(openmp_target_start_tags, loc)
