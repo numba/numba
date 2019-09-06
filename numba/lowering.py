@@ -590,6 +590,7 @@ class Lower(BaseLower):
         # Get implementation of getitem
         op = operator.getitem
         fnop = self.context.typing_context.resolve_value_type(op)
+        signature = signature.replace(args=(signature.args[0], types.unliteral(signature.args[1])))
         fnop.get_call_type(self.context.typing_context, signature.args, {})
         impl = self.context.get_function(fnop, signature)
 
