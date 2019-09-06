@@ -792,7 +792,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32,
                       np.complex64, np.uint32, np.uint64, np.timedelta64]
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.complex64]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -816,8 +815,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_sum_axis_kws2(self):
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
-                      np.complex64, np.uint32, np.uint64, np.timedelta64]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
+                      np.uint64, np.complex64]
+        # all_dtypes += [np.timedelta64]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
