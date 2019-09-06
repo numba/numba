@@ -42,8 +42,8 @@ function:
 
 .. autofunction:: numba.literally
 
-Interal Details
-~~~~~~~~~~~~~~~
+Internal Details
+~~~~~~~~~~~~~~~~
 
 Internally, the compiler raises a ``ForceLiteralArgs`` exception to signal
 the dispatcher to wrap specified arguments using the ``Literal`` type.

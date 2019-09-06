@@ -65,6 +65,10 @@ def gdb_init(*args):
 def literally(obj):
     """Forces numba to take *obj* as an Literal value.
 
+    *obj* must be either a literal or an argument of the caller function, where
+    the argument must be bounded to a literal. The literal requirement
+    propagates up the call stack.
+
     This function is intercepted by the compiler to alter its behavior to
     wrap corresponding function parameters as ``Literal``. It has **no effect**
     outside of nopython-mode (interpreter, and objectmode).
@@ -78,6 +82,8 @@ def literally(obj):
 
     The execution semantic of this function is equivalent to an identity
     function.
+
+    See :ghfile:`numba/tests/test_literal_dispatch.py` for examples.
     """
     return obj
 
