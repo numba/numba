@@ -419,8 +419,7 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
             out = pysig.bind(*args, **kwargs).arguments.values()
             return tuple(out)
 
-        e.fold_arguments = folded
-        raise e
+        raise e.bind_fold_arguments(folded)
 
 
 class SentryLiteralArgs(collections.namedtuple(

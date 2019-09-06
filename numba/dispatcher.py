@@ -749,8 +749,9 @@ class Dispatcher(_DispatcherBase):
             try:
                 cres = self._compiler.compile(args, return_type)
             except errors.ForceLiteralArg as e:
-                e.fold_arguments = lambda args, kws: self._compiler.fold_argument_types(args, kws)[1]
-                raise
+                def folded(args, kws):
+                    return self._compiler.fold_argument_types(args, kws)[1]
+                raise e.bind_fold_arguments(folded)
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point

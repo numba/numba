@@ -491,8 +491,6 @@ class CallConstraint(object):
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
-                elif isinstance(maybe_arg, types.Omitted):
-                    raise ValueError("cannot handle omitted argument yet")
                 else:
                     unsatisified.add(idx)
             if unsatisified:

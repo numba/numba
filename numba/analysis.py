@@ -5,7 +5,7 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir, errors
+from numba import ir, errors, ir_utils
 from numba.controlflow import CFGraph
 from numba import types, consts, special
 
@@ -508,17 +508,18 @@ def find_literal_calls(func_ir, argtypes):
     for blk in func_ir.blocks.values():
         for assign in blk.find_exprs(op='call'):
             try:
-                gv = func_ir.get_definition(assign.func)
+                var = func_ir.get_definition(assign.func)
             except KeyError:
                 pass
             else:
-                if isinstance(gv, (ir.Global, ir.FreeVar)):
-                    if gv.value is special.literally:
-                        # Found
-                        [arg] = assign.args
-                        defarg = func_ir.get_definition(arg)
-                        if isinstance(defarg, ir.Arg):
-                            marked_args.add(defarg.index)
+                fnobj = ir_utils.guard(ir_utils.find_global_value,
+                                       func_ir, var)
+                if fnobj is special.literally:
+                    # Found
+                    [arg] = assign.args
+                    defarg = func_ir.get_definition(arg)
+                    if isinstance(defarg, ir.Arg):
+                        marked_args.add(defarg.index)
     # Signal the dispatcher to force literal typing
     if any(not isinstance(argtypes[pos], types.Literal)
            for pos in marked_args):

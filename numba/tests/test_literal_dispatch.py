@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import numpy as np
 
+import numba
 import numba.unittest_support as unittest
 from numba.tests.support import TestCase
 from numba import njit, types, errors
@@ -129,6 +130,16 @@ class TestLiteralDispatcher(TestCase):
             return foo(a) + 1
 
         bar(1)
+
+    def test_literally_from_module(self):
+        # Problem with Omitted
+        @njit
+        def foo(x):
+            return numba.literally(x)
+
+        got = foo(123)
+        self.assertEqual(got, foo.py_func(123))
+        self.assertIsInstance(foo.signatures[0][0], types.Literal)
 
     def test_non_literal(self):
         @njit

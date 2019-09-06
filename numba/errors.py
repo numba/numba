@@ -638,17 +638,26 @@ class ForceLiteralArg(NumbaError):
     requested_args : frozenset[int]
         requested positions of the arguments.
     """
-    def __init__(self, arg_indices):
+    def __init__(self, arg_indices, fold_arguments=None):
         """
         Parameters
         ----------
         arg_indices : Sequence[int]
             requested positions of the arguments.
+        fold_arguments: callable
+            A function ``(tuple, dict) -> tuple`` that binds and flattens
+            the ``args`` and ``kwargs``.
         """
         super(ForceLiteralArg, self).__init__(
             "Pseudo-exception to force literal arguments from the dispatcher",
         )
         self.requested_args = frozenset(arg_indices)
+        self.fold_arguments = fold_arguments
+
+    def bind_fold_arguments(self, fold_arguments):
+        """Bind the fold_arguments function
+        """
+        return ForceLiteralArg(self.requested_args, fold_arguments)
 
     def combine(self, other):
         """Returns a new instance by or'ing the requested_args.
