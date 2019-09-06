@@ -17,15 +17,54 @@ For example::
         a = 123
         return bar(x, a)
 
-Numba will type `a` as ``Literal[int](123)``. The definition of ``bar()`` can
-specialize it's implementation knowing that the second argument is a ``123``.
+Numba will type ``a`` as ``Literal[int](123)``. The definition of ``bar()`` can
+specialize it's implementation knowing that the second argument is an ``int``
+with the value ``123``.
 
+``Literal`` Type
+----------------
 
-.. autofunction:: numba.literally
-
+Classes and methods related to the ``Literal`` type.
 
 .. autoclass:: numba.types.Literal
 
+.. autofunction:: numba.types.literal
+
+.. autofunction:: numba.types.unliteral
+
+.. autofunction:: numba.types.maybe_literal
+
+Hints for Literal Typing
+------------------------
+
+To mark the requirement for a ``Literal`` type in jit-code. Use the following
+function:
+
+.. autofunction:: numba.literally
+
+Interal Details
+~~~~~~~~~~~~~~~
+
+Internally, the compiler raises a ``ForceLiteralArgs`` exception to signal
+the dispatcher to wrap specified arguments using the ``Literal`` type.
 
 .. autoclass:: numba.errors.ForceLiteralArg
+    :members: __init__, combine, __or__
 
+
+Inside Extensions
+-----------------
+
+``@overload`` extensions can use ``literally`` inside the implementation body
+like in normal jit-code.
+
+Explicit handling of literal requirements is possible by using the
+followings:
+
+.. autoclass:: numba.extending.SentryLiteralArgs
+    :members:
+
+.. autoclass:: numba.extending.BoundLiteralArgs
+    :members:
+
+.. autofunction:: numba.extending.sentry_literal_args

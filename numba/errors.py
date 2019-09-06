@@ -636,16 +636,22 @@ class ForceLiteralArg(NumbaError):
     Attributes
     ----------
     requested_args : frozenset[int]
-        requested positions of the arguments
+        requested positions of the arguments.
     """
-    def __init__(self, new_args):
+    def __init__(self, arg_indices):
+        """
+        Parameters
+        ----------
+        arg_indices : Sequence[int]
+            requested positions of the arguments.
+        """
         super(ForceLiteralArg, self).__init__(
             "Pseudo-exception to force literal arguments from the dispatcher",
         )
-        self.requested_args = frozenset(new_args)
+        self.requested_args = frozenset(arg_indices)
 
     def combine(self, other):
-        """Or'ing the requested_args
+        """Returns a new instance by or'ing the requested_args.
         """
         if not isinstance(other, ForceLiteralArg):
             m = '*other* must be a {} but got a {} instead'
