@@ -176,6 +176,7 @@ def array_sum(context, builder, sig, args):
 def _array_sum_axis_nop(arr, v):
     return arr
 
+
 def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     def inner(arr, axis):
         ndim = arr.ndim
@@ -227,6 +228,7 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
                     result += arr[index_tuple4]
         return op(result, 0)
     return inner
+
 
 @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
