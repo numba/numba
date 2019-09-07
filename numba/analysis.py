@@ -5,7 +5,7 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir, errors, ir_utils
+from numba import ir, errors
 from numba.controlflow import CFGraph
 from numba import types, consts, special
 
@@ -503,6 +503,8 @@ def rewrite_semantic_constants(func_ir, called_args):
 
 
 def find_literal_calls(func_ir, argtypes):
+    from numba import ir_utils
+
     marked_args = set()
     # Scan for literally calls
     for blk in func_ir.blocks.values():
