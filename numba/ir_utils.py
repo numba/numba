@@ -1819,7 +1819,7 @@ def find_global_value(func_ir, var):
         try:
             val = getattr(prev_val, dfn.attr)
             return val
-        except KeyError:
+        except AttributeError:
             raise GuardException
 
     raise GuardException
