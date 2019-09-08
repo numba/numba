@@ -479,6 +479,19 @@ class TestOverloadInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True})
 
+    def test_inline_always_kws(self):
+        def foo(a, b):
+            return a + b
+
+        @overload(foo, inline='always')
+        def overload_foo(a, b):
+            return lambda a, b: a + b
+
+        def impl():
+            return foo(3, b=4)
+
+        self.check(impl, inline_expect={'foo': True})
+
     def test_basic_inline_combos(self):
 
         def impl():
@@ -814,3 +827,7 @@ class TestInlineOptions(TestCase):
         self.assertFalse(model.is_never_inline)
         self.assertTrue(model.has_cost_model)
         self.assertIs(model.value, cost_model)
+
+
+if __name__ == '__main__':
+    unittest.main()

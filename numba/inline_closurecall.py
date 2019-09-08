@@ -401,6 +401,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
 def _get_callee_args(call_expr, callee, loc):
     """Get arguments for calling 'callee', including the default arguments.
+    keyword arguments are currently only handled when 'callee' is a function.
     """
     args = list(call_expr.args)
     debug_print = _make_debug_print("inline_closure_call default handling")
@@ -416,6 +417,7 @@ def _get_callee_args(call_expr, callee, loc):
             pysig, args, kws, normal_handler, default_handler,
             normal_handler)
 
+    # TODO: handle arguments for make_function case similar to function above
     callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
                        else callee.__defaults__)
     if callee_defaults:
