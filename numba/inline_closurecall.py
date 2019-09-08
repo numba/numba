@@ -317,8 +317,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 3. replace formal parameters with actual arguments
-    args = list(call_expr.args)
-    args = _handle_callee_defaults(args, callee, block.body[i].loc)
+    args = _get_callee_args(call_expr, callee, block.body[i].loc)
 
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
@@ -400,8 +399,23 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     return callee_blocks, var_dict
 
 
-def _handle_callee_defaults(args, callee, loc):
+def _get_callee_args(call_expr, callee, loc):
+    """Get arguments for calling 'callee', including the default arguments.
+    """
+    args = list(call_expr.args)
     debug_print = _make_debug_print("inline_closure_call default handling")
+
+    # handle defaults and kw arguments using pysignature if callee is function
+    if isinstance(callee, pytypes.FunctionType):
+        pysig = numba.utils.pysignature(callee)
+        normal_handler = lambda index, param, default: default
+        default_handler = lambda index, param, default: ir.Const(default, loc)
+        # TODO: handle stararg
+        kws = dict(call_expr.kws)
+        return numba.typing.fold_arguments(
+            pysig, args, kws, normal_handler, default_handler,
+            normal_handler)
+
     callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
                        else callee.__defaults__)
     if callee_defaults:
