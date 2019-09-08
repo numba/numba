@@ -273,7 +273,6 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("Found closure call: ", instr, " with callee = ", callee)
     # support both function object and make_function Expr
     callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
-    callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
     if isinstance(callee, pytypes.FunctionType):
@@ -319,28 +318,8 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
     # 3. replace formal parameters with actual arguments
     args = list(call_expr.args)
-    if callee_defaults:
-        debug_print("defaults = ", callee_defaults)
-        if isinstance(callee_defaults, tuple): # Python 3.5
-            defaults_list = []
-            for x in callee_defaults:
-                if isinstance(x, ir.Var):
-                    defaults_list.append(x)
-                else:
-                    # this branch is predominantly for kwargs from inlinable
-                    # functions
-                    loc = block.body[i].loc
-                    defaults_list.append(ir.Const(value=x, loc=loc))
-            args = args + defaults_list
-        elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
-            defaults = func_ir.get_definition(callee_defaults)
-            assert(isinstance(defaults, ir.Const))
-            loc = defaults.loc
-            args = args + [ir.Const(value=v, loc=loc)
-                           for v in defaults.value]
-        else:
-            raise NotImplementedError(
-                "Unsupported defaults to make_function: {}".format(defaults))
+    args = _handle_callee_defaults(args, callee, block.body[i].loc)
+
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
 
@@ -420,11 +399,42 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
             work_list.append(block)
     return callee_blocks, var_dict
 
+
+def _handle_callee_defaults(args, callee, loc):
+    debug_print = _make_debug_print("inline_closure_call default handling")
+    callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
+                       else callee.__defaults__)
+    if callee_defaults:
+        debug_print("defaults = ", callee_defaults)
+        if isinstance(callee_defaults, tuple): # Python 3.5
+            defaults_list = []
+            for x in callee_defaults:
+                if isinstance(x, ir.Var):
+                    defaults_list.append(x)
+                else:
+                    # this branch is predominantly for kwargs from inlinable
+                    # functions
+                    defaults_list.append(ir.Const(value=x, loc=loc))
+            args = args + defaults_list
+        elif (isinstance(callee_defaults, ir.Var)
+                or isinstance(callee_defaults, str)):
+            defaults = func_ir.get_definition(callee_defaults)
+            assert(isinstance(defaults, ir.Const))
+            loc = defaults.loc
+            args = args + [ir.Const(value=v, loc=loc)
+                           for v in defaults.value]
+        else:
+            raise NotImplementedError(
+                "Unsupported defaults to make_function: {}".format(defaults))
+    return args
+
+
 def _make_debug_print(prefix):
     def debug_print(*args):
         if config.DEBUG_INLINE_CLOSURE:
             print(prefix + ": " + "".join(str(x) for x in args))
     return debug_print
+
 
 def _debug_dump(func_ir):
     if config.DEBUG_INLINE_CLOSURE:
