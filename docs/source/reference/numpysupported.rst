@@ -320,8 +320,7 @@ The following top-level functions are supported:
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input
-  arrays should have `shape[-1] == 3` - the case where `shape[-1] == 2` for both
-  arrays will be supported in a separate implementation)
+  arrays should have `shape[-1] == 3`)
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
