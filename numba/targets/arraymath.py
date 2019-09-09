@@ -4016,7 +4016,7 @@ def np_cross(a, b):
         def np_cross_impl_1dim(a, b):
             """
             np.cross implementation for the case where both
-            a.ndim == 1 and `b.ndim == 1.
+            a.ndim == 1 and b.ndim == 1.
             """
 
             if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
