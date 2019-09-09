@@ -317,7 +317,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 3. replace formal parameters with actual arguments
-    args = _get_callee_args(call_expr, callee, block.body[i].loc)
+    args = _get_callee_args(call_expr, callee, block.body[i].loc, func_ir)
 
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
@@ -399,7 +399,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     return callee_blocks, var_dict
 
 
-def _get_callee_args(call_expr, callee, loc):
+def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
     """
