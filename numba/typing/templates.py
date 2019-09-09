@@ -686,7 +686,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
     @classmethod
     def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws,
-                                                                  jit_options):
+                        jit_options):
         """
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
