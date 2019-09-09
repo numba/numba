@@ -724,7 +724,26 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+
+        if not self._inline.is_never_inline:
+            import numba
+            from numba import compiler
+            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            resolve = disp_type.dispatcher.get_call_template
+            template, pysig, folded_args, kws = resolve(sig_args, sig_kws)
+
+            typemap, return_type, calltypes = compiler.type_inference_stage(
+                self.context, ir, folded_args, None)
+            pysig = numba.utils.pysignature(disp_type.dispatcher.py_func)
+            sig = Signature(return_type, folded_args, None, pysig)
+            self._inline_overloads[sig.args] = {'folded_args': folded_args}
+            if not self._inline.is_always_inline:
+                sig = disp_type.get_call_type(self.context, sig_args, kws)
+                iinfo = _inline_info(ir, typemap, calltypes, sig)
+                self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                    'iinfo': iinfo}
+        else:
+            sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
         return sig
 
     def _resolve(self, typ, attr):
@@ -769,6 +788,9 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+            _inline = self._inline
+            _overload_func = self._overload_func
+            _inline_overloads = self._inline_overloads
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
@@ -780,7 +802,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
 
 def make_overload_attribute_template(typ, attr, overload_func, jit_options,
-                                     base=_OverloadAttributeTemplate):
+                                     inline, base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
@@ -789,18 +811,22 @@ def make_overload_attribute_template(typ, attr, overload_func, jit_options,
     name = "OverloadTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={}, _jit_options=jit_options,
+               _inline=staticmethod(InlineOptions(inline)),
+               _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
 
 
-def make_overload_method_template(typ, attr, overload_func, jit_options):
+def make_overload_method_template(typ, attr, overload_func, jit_options,
+                                  inline):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
     return make_overload_attribute_template(
-        typ, attr, overload_func, jit_options, base=_OverloadMethodTemplate)
+        typ, attr, overload_func, jit_options, inline,
+        base=_OverloadMethodTemplate)
 
 
 def bound_function(template_key):

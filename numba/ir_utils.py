@@ -2200,12 +2200,23 @@ class InlineOverloads(object):
             return False
 
 
+        sig = self.calltypes[expr]
+        is_method = False
+
         # search the templates for this overload looking for "inline"
-        templates = getattr(func_ty, 'templates', None)
+        if getattr(func_ty, 'template', None) is not None:
+            # @overload_method
+            is_method = True
+            templates = [func_ty.template]
+            arg_typs = (func_ty.template.this,) + sig.args
+        else:
+            # @overload case
+            templates = getattr(func_ty, 'templates', None)
+            arg_typs = sig.args
+
         if templates is None:
             return False
 
-        sig = self.calltypes[expr]
 
         impl = None
         for template in templates:
@@ -2215,7 +2226,7 @@ class InlineOverloads(object):
                 continue
             if not inline_type.is_never_inline:
                 try:
-                    impl = template._overload_func(*sig.args)
+                    impl = template._overload_func(*arg_typs)
                     if impl is None:
                         raise Exception # abort for this template
                     break
@@ -2234,14 +2245,16 @@ class InlineOverloads(object):
                                               self.calltypes, sig)
 
             # must be a cost-model function, run the function
-            iinfo = template._inline_overloads[sig.args]['iinfo']
+            iinfo = template._inline_overloads[arg_typs]['iinfo']
             if inline_type.has_cost_model:
                 do_inline = inline_type.value(caller_inline_info, iinfo)
             else:
                 assert 'unreachable'
 
         if do_inline:
-            arg_typs=template._inline_overloads[sig.args]['folded_args']
+            if is_method:
+                self._add_method_self_arg(expr)
+            arg_typs = template._inline_overloads[arg_typs]['folded_args']
             # pass is typed so use the callee globals
             inline_closure_call(self.func_ir, impl.__globals__,
                                 block, i, impl, typingctx=self.tyctx,
@@ -2252,6 +2265,9 @@ class InlineOverloads(object):
             return True
         else:
             return False
+
+    def _add_method_self_arg(self, expr):
+        expr.args.insert(0, get_definition(self.func_ir, expr.func).value)
 
 
 def check_and_legalize_ir(func_ir):

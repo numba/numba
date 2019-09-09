@@ -146,7 +146,7 @@ def register_jitable(*args, **kwargs):
         return wrap(*args)
 
 
-def overload_attribute(typ, attr, jit_options={}):
+def overload_attribute(typ, attr, jit_options={}, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     attribute *attr* for the given Numba type in nopython mode.
@@ -168,14 +168,14 @@ def overload_attribute(typ, attr, jit_options={}):
 
     def decorate(overload_func):
         template = make_overload_attribute_template(
-            typ, attr, overload_func, opts)
+            typ, attr, overload_func, opts, inline)
         infer_getattr(template)
         return overload_func
 
     return decorate
 
 
-def overload_method(typ, attr, jit_options={}):
+def overload_method(typ, attr, jit_options={}, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     attribute *attr* for the given Numba type in nopython mode.
@@ -201,7 +201,7 @@ def overload_method(typ, attr, jit_options={}):
 
     def decorate(overload_func):
         template = make_overload_method_template(typ, attr, overload_func,
-                                                 opts)
+                                                 opts, inline)
         infer_getattr(template)
         return overload_func
 
