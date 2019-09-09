@@ -677,14 +677,16 @@ class _OverloadAttributeTemplate(AttributeTemplate):
             sig_args = (typ,)
             sig_kws = {}
             typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
+            disp, sig_args = cls._get_dispatcher(
+                typing_context, typ, attr, sig_args, sig_kws, {})
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
             call = context.get_function(disp_type, sig)
             return call(builder, (value,))
 
     @classmethod
-    def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws):
+    def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws,
+                                                                  jit_options):
         """
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
@@ -707,14 +709,16 @@ class _OverloadAttributeTemplate(AttributeTemplate):
                 cache_key = None            # don't cache
 
             from numba import jit
-            disp = cls._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+            disp = cls._impl_cache[cache_key] = jit(
+                nopython=True, **jit_options)(pyfunc)
         return disp, sig_args
 
     def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
         """
         Compute the actual implementation sig for the given formal argument types.
         """
-        disp, sig_args = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
+        disp, sig_args = self._get_dispatcher(
+            self.context, typ, attr, sig_args, sig_kws, self._jit_options)
         if disp is None:
             return None
 
@@ -748,7 +752,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
             typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
+            disp, sig_args = cls._get_dispatcher(
+                typing_context, typ, attr, sig.args, {}, {})
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
@@ -774,7 +779,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func,
+def make_overload_attribute_template(typ, attr, overload_func, jit_options,
                                      base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
@@ -783,19 +788,19 @@ def make_overload_attribute_template(typ, attr, overload_func,
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
-    dct = dict(key=typ, _attr=attr, _impl_cache={},
+    dct = dict(key=typ, _attr=attr, _impl_cache={}, _jit_options=jit_options,
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
 
 
-def make_overload_method_template(typ, attr, overload_func):
+def make_overload_method_template(typ, attr, overload_func, jit_options):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
-    return make_overload_attribute_template(typ, attr, overload_func,
-                                            base=_OverloadMethodTemplate)
+    return make_overload_attribute_template(
+        typ, attr, overload_func, jit_options, base=_OverloadMethodTemplate)
 
 
 def bound_function(template_key):
