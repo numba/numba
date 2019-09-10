@@ -286,7 +286,7 @@ ix_size(Py_ssize_t size) {
 }
 
 /* Align size *sz* to pointer width */
-static Py_ssize_t
+Py_ssize_t
 aligned_size(Py_ssize_t sz) {
     Py_ssize_t alignment = sizeof(void*);
     return sz + (alignment - sz % alignment) % alignment;

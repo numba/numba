@@ -1,4 +1,6 @@
 /* Adapted from CPython3.7 Objects/dict-common.h */
+#include "Python.h"
+#include "_helper.h"
 
 #ifndef NUMBA_DICT_COMMON_H
 #define NUMBA_DICT_COMMON_H
@@ -215,6 +217,9 @@ numba_dict_iter_next(NB_DictIter *it, const char **key_ptr, const char **val_ptr
 
 NUMBA_EXPORT_FUNC(void)
 numba_dict_dump(NB_Dict *);
+
+NUMBA_EXPORT_FUNC(Py_ssize_t)
+aligned_size(Py_ssize_t sz);
 
 
 #endif

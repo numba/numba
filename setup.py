@@ -120,7 +120,8 @@ def get_ext_modules():
 
     ext_helperlib = Extension(name="numba._helperlib",
                               sources=["numba/_helpermod.c",
-                                       "numba/_math_c99.c"],
+                                       "numba/_math_c99.c",
+                                       "numba/_dictobject.c"],
                               extra_compile_args=CFLAGS,
                               extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
@@ -129,7 +130,6 @@ def get_ext_modules():
                                        "numba/_lapack.c",
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
-                                       "numba/_dictobject.c",
                                        "numba/_listobject.c",
                                        "numba/mathnames.inc",
                                        ],
