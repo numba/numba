@@ -437,7 +437,7 @@ Stage 6b: Perform Automatic Parallelization
 -------------------------------------------
 
 This pass is only performed if the ``parallel`` option in the :func:`~numba.jit`
-decorator is set to ``True``.  This pass find parallelism implicit in the
+decorator is set to ``True``.  This pass finds parallelism implicit in the
 semantics of operations in the Numba IR and replaces those operations
 with explicitly parallel representations of those operations using a
 special `parfor` operator.  Then, optimizations are performed to maximize
