@@ -77,6 +77,24 @@ def ptx_gridsize3d(context, builder, sig, args):
     return cgutils.pack_array(builder, [r1, r2, r3])
 
 
+@lower(stubs.this_grid)
+def ptx_this_grid(context, builder, sig, args):
+    one = context.get_constant(types.int32, 1)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGGetIntrinsicHandle(lmod),
+        (one,))
+
+
+@lower(stubs.sync_group, types.int64)
+def ptx_sync_group(context, builder, sig, args):
+    flags = context.get_constant(types.int32, 0)
+    lmod = builder.module
+    return builder.call(
+        nvvmutils.declare_cudaCGSynchronize(lmod),
+        (*args, flags))
+
+
 # -----------------------------------------------------------------------------
 
 def ptx_sreg_template(sreg):

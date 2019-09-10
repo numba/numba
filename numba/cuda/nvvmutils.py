@@ -57,6 +57,20 @@ def declare_atomic_min_float64(lmod):
     return lmod.get_or_insert_function(fnty, fname)
 
 
+def declare_cudaCGGetIntrinsicHandle(lmod):
+    fname = 'cudaCGGetIntrinsicHandle'
+    fnty = lc.Type.function(lc.Type.int(64),
+        (lc.Type.int(32),))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_cudaCGSynchronize(lmod):
+    fname = 'cudaCGSynchronize'
+    fnty = lc.Type.function(lc.Type.int(32),
+        (lc.Type.int(64), lc.Type.int(32)))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
 def insert_addrspace_conv(lmod, elemtype, addrspace):
     addrspacename = {
         nvvm.ADDRSPACE_SHARED: 'shared',

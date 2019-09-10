@@ -185,6 +185,12 @@ class FakeCUDAModule(object):
     def warpsize(self):
         return 32
 
+    def this_grid(self):
+        return 0
+
+    def sync_group(self, grid):
+        return 0
+
     @property
     def laneid(self):
         return threading.current_thread().thread_id % 32

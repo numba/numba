@@ -20,6 +20,7 @@ def get_lib_dirs():
 DLLNAMEMAP = {
     'linux': r'lib%(name)s\.so\.%(ver)s$',
     'linux2': r'lib%(name)s\.so\.%(ver)s$',
+    'linux-static': r'lib%(name)s\.a$',
     'darwin': r'lib%(name)s\.%(ver)s\.dylib$',
     'win32': r'%(name)s%(ver)s\.dll$',
 }

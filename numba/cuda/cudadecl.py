@@ -137,6 +137,19 @@ class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
     cases = [signature(types.none, types.i4)]
 
+@intrinsic
+class Cuda_this_grid(ConcreteTemplate):
+    key = cuda.this_grid
+    cases = [signature(types.int64)]
+
+@intrinsic
+class Cuda_sync_group(ConcreteTemplate):
+    key = cuda.sync_group
+
+    # no flags, they're inserted as a constant 0 by the
+    # PTX lowering step
+    cases = [signature(types.int32, types.int64)]
+
 
 @intrinsic
 class Cuda_shfl_sync_intrinsic(ConcreteTemplate):
@@ -439,6 +452,12 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_gridsize(self, mod):
         return types.Macro(Cuda_gridsize)
+
+    def resolve_this_grid(self, mod):
+        return types.Function(Cuda_this_grid)
+
+    def resolve_sync_group(self, mod):
+        return types.Function(Cuda_sync_group)
 
     def resolve_threadIdx(self, mod):
         return types.Module(cuda.threadIdx)

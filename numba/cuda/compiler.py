@@ -248,7 +248,7 @@ class ExternFunction(object):
 
 
 class ForAll(object):
-    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+    def __init__(self, kernel, ntasks, tpb, stream, sharedmem, cooperative):
         if ntasks < 0:
             raise ValueError("Can't create ForAll with negative task count: %s"
                              % ntasks)
@@ -257,6 +257,7 @@ class ForAll(object):
         self.thread_per_block = tpb
         self.stream = stream
         self.sharedmem = sharedmem
+        self.cooperative = cooperative
 
     def __call__(self, *args):
         if self.ntasks == 0:
@@ -272,7 +273,8 @@ class ForAll(object):
         blkct = (self.ntasks + tpbm1) // tpb
 
         return kernel.configure(blkct, tpb, stream=self.stream,
-                                sharedmem=self.sharedmem)(*args)
+                                sharedmem=self.sharedmem,
+                                cooperative=self.cooperative)(*args)
 
     def _compute_thread_per_block(self, kernel):
         tpb = self.thread_per_block
@@ -301,6 +303,7 @@ class CUDAKernelBase(object):
         self.blockdim = None
         self.sharedmem = 0
         self.stream = 0
+        self.cooperative = False
 
     def copy(self):
         """
@@ -314,7 +317,7 @@ class CUDAKernelBase(object):
         new.__dict__.update(self.__dict__)
         return new
 
-    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
+    def configure(self, griddim, blockdim, stream=0, sharedmem=0, cooperative=False):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
         clone = self.copy()
@@ -322,14 +325,15 @@ class CUDAKernelBase(object):
         clone.blockdim = tuple(blockdim)
         clone.stream = stream
         clone.sharedmem = sharedmem
+        clone.cooperative = cooperative
         return clone
 
     def __getitem__(self, args):
-        if len(args) not in [2, 3, 4]:
+        if len(args) not in [2, 3, 4, 5]:
             raise ValueError('must specify at least the griddim and blockdim')
         return self.configure(*args)
 
-    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0, cooperative=False):
         """Returns a configured kernel for 1D kernel of given number of tasks
         ``ntasks``.
 
@@ -337,21 +341,22 @@ class CUDAKernelBase(object):
         - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
         - the kernel must check if the thread id is valid."""
 
-        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
+        return ForAll(self, ntasks, tpb=tpb, stream=stream,
+                      sharedmem=sharedmem, cooperative=cooperative)
 
     def _serialize_config(self):
         """
         Helper for serializing the grid, block and shared memory configuration.
         CUDA stream config is not serialized.
         """
-        return self.griddim, self.blockdim, self.sharedmem
+        return self.griddim, self.blockdim, self.sharedmem, self.cooperative
 
     def _deserialize_config(self, config):
         """
         Helper for deserializing the grid, block and shared memory
         configuration.
         """
-        self.griddim, self.blockdim, self.sharedmem = config
+        self.griddim, self.blockdim, self.sharedmem, self.cooperative = config
 
 
 class CachedPTX(object):
@@ -571,7 +576,8 @@ class CUDAKernel(CUDAKernelBase):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
-    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
+    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0,
+                     cooperative=False):
         # Prepare kernel
         cufunc = self._func.get()
 
@@ -592,7 +598,8 @@ class CUDAKernel(CUDAKernelBase):
         # Configure kernel
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
-                                   sharedmem=sharedmem)
+                                   sharedmem=sharedmem,
+                                   cooperative=cooperative)
         # Invoke kernel
         cu_func(*kernelargs)
 

@@ -1875,7 +1875,7 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
+    def configure(self, griddim, blockdim, sharedmem=0, stream=0, cooperative=False):
         while len(griddim) < 3:
             griddim += (1,)
 
@@ -1886,6 +1886,7 @@ class Function(object):
         inst.griddim = griddim
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
+        inst.cooperative = cooperative
         if stream:
             inst.stream = stream
         else:
@@ -1902,7 +1903,7 @@ class Function(object):
             streamhandle = None
 
         launch_kernel(self.handle, self.griddim, self.blockdim,
-                      self.sharedmem, streamhandle, args)
+                      self.sharedmem, streamhandle, args, self.cooperative)
 
     @property
     def device(self):
@@ -1927,7 +1928,7 @@ class Function(object):
                         maxthreads=maxtpb)
 
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
+def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args, cooperative=False):
     gx, gy, gz = griddim
     bx, by, bz = blockdim
 
@@ -1940,13 +1941,21 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
     params = (c_void_p * len(param_vals))(*param_vals)
 
-    driver.cuLaunchKernel(cufunc_handle,
-                          gx, gy, gz,
-                          bx, by, bz,
-                          sharedmem,
-                          hstream,
-                          params,
-                          None)
+    if cooperative:
+        driver.cuLaunchCooperativeKernel(cufunc_handle,
+                                         gx, gy, gz,
+                                         bx, by, bz,
+                                         sharedmem,
+                                         hstream,
+                                         params)
+    else:
+        driver.cuLaunchKernel(cufunc_handle,
+                              gx, gy, gz,
+                              bx, by, bz,
+                              sharedmem,
+                              hstream,
+                              params,
+                              None)
 
 
 FILE_EXTENSION_MAP = {
