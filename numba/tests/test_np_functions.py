@@ -2994,7 +2994,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((3, 4))
             )
         self.assertIn(
-            'cross2d',
+            'Dimensions for both inputs is 2',
             str(raises.exception)
         )
 
@@ -3016,7 +3016,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(8)[::-1].reshape((4, 2))
             )
         self.assertIn(
-            'cross2d',
+            'Dimensions for both inputs is 2',
             str(raises.exception)
         )
 

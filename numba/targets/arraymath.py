@@ -3985,9 +3985,8 @@ def np_cross(a, b):
             "incompatible dimensions for cross product\n"
             "(dimension must be 2 or 3)"
         )
-        cross2d_msg = (
-            "dimensions for both inputs is 2.\n"
-            "Please use numba.cross2d (to be implemented)"
+        not_supported_2d_msg = (
+            "Dimensions for both inputs is 2 (currently not supported)."
         )
 
         def np_cross_impl_ndim(a, b):
@@ -4009,7 +4008,7 @@ def np_cross(a, b):
                 cross_operation(a, b, cp)
 
             else:
-                raise ValueError(cross2d_msg)
+                raise ValueError(not_supported_2d_msg)
 
             return cp
 
@@ -4026,7 +4025,7 @@ def np_cross(a, b):
                 cp = np.empty((3,), dtype)
                 cross_operation(a, b, cp)
             else:
-                raise ValueError(cross2d_msg)
+                raise ValueError(not_supported_2d_msg)
 
             return cp
 
