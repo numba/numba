@@ -14,6 +14,8 @@ from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
 
+extension_libs = ['../_dictobject.c', '../_listobject.c', '../_extension_util.c']
+
 class CC(object):
     """
     An ahead-of-time compiler to create extension modules that don't
@@ -23,7 +25,7 @@ class CC(object):
     # NOTE: using ccache can speed up repetitive builds
     # (especially for the mixin modules)
 
-    _mixin_sources = ['modulemixin.c', '../_math_c99.c']
+    _mixin_sources = ['modulemixin.c', '../_math_c99.c']  + extension_libs
 
     # -flto strips all unused helper functions, which 1) makes the
     # produced output much smaller and 2) can make the linking step faster.
