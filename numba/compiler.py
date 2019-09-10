@@ -293,7 +293,6 @@ class CompilerBase(object):
         self.state.type_annotation = None
         self.state.metadata = {}  # holds arbitrary inter-pipeline stage meta data
         self.state.reload_init = []
-        self.state.pipeline = self
 
         # parfor diagnostics info, add to metadata
         self.state.parfor_diagnostics = ParforDiagnostics()
