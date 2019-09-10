@@ -119,8 +119,6 @@ class ArrayAnalysisTester(Compiler):
         """
         Populate and run compiler pipeline
         """
-        self.func_id = bytecode.FunctionIdentity.from_function(func)
-
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)
         ExtractByteCode().run_pass(self.state)
 
