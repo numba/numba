@@ -13,6 +13,13 @@ Expose all functions as pointers in a dedicated C extension.
 #else
     #include <stdbool.h>
 #endif
+
+/*
+Include C-extension here
+*/
+#include "_dictobject.h"
+#include "_listobject.h"
+
 /* Numba C helpers */
 #include "_helperlib.c"
 

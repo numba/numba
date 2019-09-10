@@ -285,13 +285,6 @@ ix_size(Py_ssize_t size) {
     return sizeof(int64_t);
 }
 
-/* Align size *sz* to pointer width */
-Py_ssize_t
-aligned_size(Py_ssize_t sz) {
-    Py_ssize_t alignment = sizeof(void*);
-    return sz + (alignment - sz % alignment) % alignment;
-}
-
 #ifndef NDEBUG
 /* NOTE: This function is only used in assert()s */
 /* Align pointer *ptr* to pointer size */

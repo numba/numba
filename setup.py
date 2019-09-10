@@ -123,6 +123,7 @@ def get_ext_modules():
                                        "numba/_math_c99.c",
                                        "numba/_dictobject.c",
                                        "numba/_listobject.c",
+                                       "numba/_extension_util.c",
                                        ],
                               extra_compile_args=CFLAGS,
                               extra_link_args=install_name_tool_fixer,
