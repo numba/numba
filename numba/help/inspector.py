@@ -295,6 +295,10 @@ class ReSTFormatter(Formatter):
         self.print('.. function:: {}.{}'.format(modname, itemname))
         self.print()
 
+        if alias:
+            self.print("   Alias to: ``{}``".format(alias))
+        self.print()
+
         for tcls, source in sources.items():
             if source:
                 impl = source['name']
@@ -315,10 +319,6 @@ class ReSTFormatter(Formatter):
 
             else:
                 self.print("   - defined by ``{}``".format(str(tcls)))
-        self.print()
-
-        if alias:
-            self.print("   alias to: ``{}``".format(alias))
         self.print()
 
     def write_unsupported_item(self, modname, itemname):
