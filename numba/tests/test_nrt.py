@@ -639,6 +639,7 @@ class TestHeapTracking(MemoryLeakMixin, TestCase):
         liveset_init = rtsys.get_allocations()
         arr = foo(10)
         liveset_after = rtsys.get_allocations()
+        self.assertPreciseEqual(arr, foo.py_func(10))
         # No new tracked allocation
         self.assertEqual(len(liveset_init), len(liveset_after))
         self.assertNotIn("Tracked allocation by",
