@@ -2949,6 +2949,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array([1, 2, 3]),
                 np.array([4, 5, 6])
             ),
+            # 3x3 array-like (1-dim)
+            (
+                (1, 2, 3),
+                (4, 5, 6)
+            ),
             # 2x3 (1-dim)
             (
                 np.array([1, 2]),

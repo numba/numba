@@ -3951,7 +3951,7 @@ def np_kaiser(M, beta):
 
 
 @register_jitable
-def cross_preprocessing(x):
+def _cross_preprocessing(x):
     dt = x.dtype
     x0 = x[..., 0]
     x1 = x[..., 1]
@@ -3963,9 +3963,9 @@ def cross_preprocessing(x):
 
 
 @register_jitable
-def cross_operation(a, b, out):
-    a0, a1, a2 = cross_preprocessing(a)
-    b0, b1, b2 = cross_preprocessing(b)
+def _cross_operation(a, b, out):
+    a0, a1, a2 = _cross_preprocessing(a)
+    b0, b1, b2 = _cross_preprocessing(b)
 
     cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
     cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
@@ -3976,60 +3976,42 @@ def cross_operation(a, b, out):
     out[..., 2] = cp2
 
 
+@generated_jit
+def _cross_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            cp = np.empty((3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    else:
+        def impl(a, b):
+            shape = np.add(a[..., 0], b[..., 0]).shape
+            cp = np.empty(shape + (3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    return impl
+
+
 @overload(np.cross)
 def np_cross(a, b):
-    if isinstance(a, types.Array) and isinstance(b, types.Array):
+    if type_can_asarray(a) and type_can_asarray(b):
+        def impl(a, b):
+            a_ = np.asarray(a)
+            b_ = np.asarray(b)
+            if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+                raise ValueError((
+                    "incompatible dimensions for cross product\n"
+                    "(dimension must be 2 or 3)"
+                ))
 
-        dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
-        wrong_dim_msg = (
-            "incompatible dimensions for cross product\n"
-            "(dimension must be 2 or 3)"
-        )
-        not_supported_2d_msg = (
-            "Dimensions for both inputs is 2 (currently not supported)."
-        )
-
-        def np_cross_impl_ndim(a, b):
-            """
-            np.cross implementation for the case where
-            a.ndim > 1 or b.ndim > 1.
-            """
-
-            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError(wrong_dim_msg)
-
-            if a.shape[-1] == 3 or b.shape[-1] == 3:
-
-                # we can't use np.broadcast; use np.add
-                # since we only need the broadcast shape
-                # to create a container for cp
-                shape_ = np.add(a[..., 0], b[..., 0]).shape
-                cp = np.empty(shape_ + (3,), dtype)
-                cross_operation(a, b, cp)
-
+            if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+                return _cross_impl(a_, b_)
             else:
-                raise ValueError(not_supported_2d_msg)
-
-            return cp
-
-        def np_cross_impl_1dim(a, b):
-            """
-            np.cross implementation for the case where both
-            a.ndim == 1 and b.ndim == 1.
-            """
-
-            if a.shape[-1] not in (2, 3) or b.shape[-1] not in (2, 3):
-                raise ValueError(wrong_dim_msg)
-
-            if a.shape[-1] == 3 or b.shape[-1] == 3:
-                cp = np.empty((3,), dtype)
-                cross_operation(a, b, cp)
-            else:
-                raise ValueError(not_supported_2d_msg)
-
-            return cp
-
-        if a.ndim == 1 and b.ndim == 1:
-            return np_cross_impl_1dim
-        else:
-            return np_cross_impl_ndim
+                raise ValueError((
+                    "Dimensions for both inputs is 2 "
+                    "(currently not supported)."
+                ))
+        return impl
+    else:
+        raise ValueError("Inputs must be array-like.")
