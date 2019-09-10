@@ -2393,8 +2393,17 @@ def constant_record(context, builder, ty, pyval):
     return cgutils.alloca_once_value(builder, val)
 
 
+@lower_constant(types.Bytes)
+def constant_bytes(context, builder, ty, pyval):
+    """
+    Create a constant array from bytes (mechanism is target-dependent).
+    """
+    buf = np.array(bytearray(pyval), dtype=np.uint8)
+    return context.make_constant_array(builder, ty, buf)
+
 #-------------------------------------------------------------------------------
 # Comparisons
+
 
 @lower_builtin(operator.is_, types.Array, types.Array)
 def array_is(context, builder, sig, args):

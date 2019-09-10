@@ -1451,6 +1451,6 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            'cannot safely cast int32 to unicode_type',
+            'Cannot cast int32 to unicode_type',
             str(raises.exception),
         )

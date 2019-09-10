@@ -34,6 +34,7 @@ FLOAT_SIGN_MASK = 0x80000000
 DOUBLE_ABS_MASK = 0x7fffffffffffffff
 DOUBLE_SIGN_MASK = 0x8000000000000000
 
+
 def is_nan(builder, val):
     """
     Return a condition testing whether *val* is a NaN.

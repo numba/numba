@@ -197,7 +197,7 @@ def to_device(ary, stream=0, copy=True, to=None):
                 dtype=ary.dtype,
                 shape=ary.shape,
                 strides=ary.strides,
-            ),
+            ).view(type=type(ary)),
         )
     else:
         to.copy_to_device(ary, stream=stream)
