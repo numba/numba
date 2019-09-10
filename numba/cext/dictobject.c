@@ -123,7 +123,7 @@ converting the dict to the combined table.
  */
 #define D_MINSIZE 8
 
-#include "_dictobject.h"
+#include "dictobject.h"
 
 
 #if defined(_MSC_VER)

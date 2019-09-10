@@ -1,7 +1,7 @@
 /*
 Expose all functions as pointers in a dedicated C extension.
 */
-#include "_helper.h"
+#include "cext/cext.h"
 /* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
 #include "_pymodule.h"
 
@@ -17,8 +17,7 @@ Expose all functions as pointers in a dedicated C extension.
 /*
 Include C-extension here
 */
-#include "_dictobject.h"
-#include "_listobject.h"
+#include "cext/cext.h"
 
 /* Numba C helpers */
 #include "_helperlib.c"

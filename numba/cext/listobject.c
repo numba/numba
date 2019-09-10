@@ -1,4 +1,4 @@
-#include "_listobject.h"
+#include "listobject.h"
 
 /* This implements the C component of the Numba typed list. It is loosely
  * inspired by the list implementation of the cpython list with some parts

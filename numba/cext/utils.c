@@ -1,4 +1,4 @@
-#include "_helper.h"
+#include "cext.h"
 
 /* Align size *sz* to pointer width */
 Py_ssize_t
