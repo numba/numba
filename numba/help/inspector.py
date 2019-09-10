@@ -395,7 +395,7 @@ def write_listings(package_name, filename, output_format):
             fmtr = ReSTFormatter(fileobj=fout)
             _format_module_infos(fmtr, package_name, mods)
     else:
-        raise ValueError("{} is not supported".format(output_format))
+        raise ValueError("Output format '{}' is not supported".format(output_format))
 
 
 program_description = """
