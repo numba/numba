@@ -2107,7 +2107,7 @@ class InlineInlinables(object):
                             # yes, it has a cost model, use it to determine
                             # whether to do the inline
                             py_func_ir = run_frontend(pyfunc)
-                            do_inline = inline_type(self.func_ir, py_func_ir)
+                            do_inline = inline_type(expr, self.func_ir, py_func_ir)
                         # if do_inline is True then inline!
                         if do_inline:
                             inline_closure_call(self.func_ir,
@@ -2236,7 +2236,7 @@ class InlineOverloads(object):
             # must be a cost-model function, run the function
             iinfo = template._inline_overloads[sig.args]['iinfo']
             if inline_type.has_cost_model:
-                do_inline = inline_type.value(caller_inline_info, iinfo)
+                do_inline = inline_type.value(expr, caller_inline_info, iinfo)
             else:
                 assert 'unreachable'
 
