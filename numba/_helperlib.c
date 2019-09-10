@@ -1212,4 +1212,4 @@ numba_gdb_breakpoint(void) {
 /*
  * List support
  */
- #include "_listobject.c"
+ #include "_listobject.h"
