@@ -306,7 +306,7 @@ def _autogenerate():
         write_listings(
             package_name=package,
             filename=os.path.join(
-                basedir, 'developer/autogen_{}_listing'.format(package),
+                basedir, 'developer', 'autogen_{}_listing'.format(package),
             ),
             output_format='rst',
         )
