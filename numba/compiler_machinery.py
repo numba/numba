@@ -15,7 +15,7 @@ from .postproc import PostProcessor
 _termcolor = errors.termcolor()
 
 
-class SimpleTimer():
+class SimpleTimer(object):
     """
     A simple context managed timer
     """
@@ -90,7 +90,7 @@ class LoweringPass(CompilerPass):
     pass
 
 
-class AnalysisUsage:
+class AnalysisUsage(object):
     """This looks and behaves like LLVM's AnalysisUsage because its like that.
     """
 
@@ -325,7 +325,7 @@ class PassManager(object):
 pass_info = namedtuple('pass_info', 'pass_inst mutates_CFG analysis_only')
 
 
-class PassRegistry:
+class PassRegistry(object):
     """
     Pass registry singleton class.
     """
