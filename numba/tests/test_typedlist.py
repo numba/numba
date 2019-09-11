@@ -47,11 +47,6 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(l[-3], 10)
         self.assertEqual(l[-2], 11)
         self.assertEqual(l[-1], 12)
-        # getitem using an unsigned integer
-        ui32_0 = types.uint32(0)
-        ui32_1 = types.uint32(1)
-        self.assertEqual(l[ui32_0], 10)
-        self.assertEqual(l[ui32_1], 11)
         # __iter__
         # the default __iter__ from MutableSequence will raise an IndexError
         # via __getitem__ and thus leak an exception, so this shouldn't
@@ -105,6 +100,54 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertNotEqual(l, new)
         # index
         self.assertEqual(l.index(15), 4)
+
+    def test_unsigned_access(self):
+        L = List.empty_list(int32)
+        ui32_0 = types.uint32(0)
+        ui32_1 = types.uint32(1)
+        ui32_2 = types.uint32(2)
+
+        L.append(10)
+        L.append(11)
+        L.append(12)
+        self.assertEqual(len(L), 3)
+
+        # getitem
+        self.assertEqual(L[ui32_0], 10)
+        self.assertEqual(L[ui32_1], 11)
+        self.assertEqual(L[ui32_2], 12)
+
+        # setitem
+        L[ui32_0] = 123
+        L[ui32_1] = 456
+        L[ui32_2] = 789
+        self.assertEqual(L[ui32_0], 123)
+        self.assertEqual(L[ui32_1], 456)
+        self.assertEqual(L[ui32_2], 789)
+
+        # index 
+        ui32_123 = types.uint32(123)
+        ui32_456 = types.uint32(456)
+        ui32_789 = types.uint32(789)
+        self.assertEqual(L.index(ui32_123), 0)
+        self.assertEqual(L.index(ui32_456), 1)
+        self.assertEqual(L.index(ui32_789), 2)
+
+        # delitem
+        L.__delitem__(ui32_2)
+        del L[ui32_1]
+        self.assertEqual(len(L), 1)
+        self.assertEqual(L[ui32_0], 123)
+
+        # pop
+        L.append(2)
+        L.append(3)
+        L.append(4)
+        self.assertEqual(len(L), 4)
+        self.assertEqual(L.pop(), 4)
+        self.assertEqual(L.pop(ui32_2), 3)
+        self.assertEqual(L.pop(ui32_1), 2)
+        self.assertEqual(L.pop(ui32_0), 123)
 
     def test_compiled(self):
         @njit

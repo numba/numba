@@ -630,7 +630,7 @@ def impl_setitem(l, index, item):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in types.integer_domain:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -704,7 +704,7 @@ def impl_pop(l, index=-1):
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
     if (isinstance(index, int)
-            or index in types.signed_domain
+            or index in types.integer_domain
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
             if len(l) == 0:
@@ -719,7 +719,7 @@ def impl_pop(l, index=-1):
         return impl
 
     else:
-        raise TypingError("argument for pop must be a signed integer")
+        raise TypingError("argument for pop must be an integer")
 
 
 @intrinsic
@@ -759,7 +759,7 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.signed_domain:
+    if index in types.integer_domain:
         def integer_impl(l, index):
             l.pop(index)
 
@@ -962,9 +962,9 @@ def impl_index(l, item, start=None, end=None):
 
     def check_arg(arg, name):
         if not (arg is None
-                or arg in types.signed_domain
+                or arg in types.integer_domain
                 or isinstance(arg, (types.Omitted, types.NoneType))):
-            raise TypingError("{} argument for index must be a signed integer"
+            raise TypingError("{} argument for index must be an integer"
                               .format(name))
     check_arg(start, "start")
     check_arg(end, "end")

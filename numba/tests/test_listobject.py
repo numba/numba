@@ -663,7 +663,7 @@ class TestPop(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "argument for pop must be a signed integer",
+                "argument for pop must be an integer",
                 str(raises.exception),
             )
 
@@ -1242,7 +1242,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "start argument for index must be a signed integer",
+            "start argument for index must be an integer",
             str(raises.exception),
         )
 
@@ -1257,7 +1257,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "end argument for index must be a signed integer",
+            "end argument for index must be an integer",
             str(raises.exception),
         )
 
