@@ -540,7 +540,8 @@ class CUDAKernel(CUDAKernelBase):
                           griddim=self.griddim,
                           blockdim=self.blockdim,
                           stream=self.stream,
-                          sharedmem=self.sharedmem)
+                          sharedmem=self.sharedmem,
+                          cooperative=self.cooperative)
 
     def bind(self):
         """
@@ -811,7 +812,8 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         Specialize and invoke this kernel with *args*.
         '''
         kernel = self.specialize(*args)
-        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
+        cfg = kernel[self.griddim, self.blockdim,
+                     self.stream, self.sharedmem, self.cooperative]
         cfg(*args)
 
     def specialize(self, *args):

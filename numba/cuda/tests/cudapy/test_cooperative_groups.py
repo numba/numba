@@ -39,6 +39,17 @@ class TestCudaCooperativeGroups(SerialMixin, unittest.TestCase):
             np.isnan(A[0]),
             'set it to something!')
 
+    def test_this_grid_autojit(self):
+        """
+        Check `link` arg being propagated
+        """
+        tg = cuda.jit(link=LINK)(this_grid)
+        A = np.full(1, fill_value=np.nan)
+        tg.configure(1, 1, cooperative=True)(A)
+        self.assertFalse(
+            np.isnan(A[0]),
+            'set it to something!')
+
     def test_sync_group(self):
         tg = cuda.jit(
             'void(float64[:])',
