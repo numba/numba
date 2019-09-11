@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+from .abstract import Callable, Literal, Type
+from .common import Dummy, IterableType, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from ..errors import TypingError, LiteralTypingError
 

@@ -2004,6 +2004,7 @@ def resolve_func_from_module(func_ir, node):
     else:
         return None
 
+
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal, warns and legalizes if not

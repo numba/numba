@@ -119,6 +119,8 @@ common ones:
   two-dimensional array of 8-bit integers.
 
 
+.. _jit-options:
+
 Compilation options
 ===================
 
