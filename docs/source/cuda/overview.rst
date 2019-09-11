@@ -59,12 +59,10 @@ Setting CUDA Installation Path
 
 Numba searches for a CUDA toolkit installation in the following order:
 
-1. Old and deprecated environment variables: ``NUMBAPRO_NVVM``,
-   ``NUMBAPRO_LIBDEVICE``, and ``NUMBAPRO_CUDALIB``.
-2. Conda installed `cudatoolkit` package.
-3. Environment variable ``CUDA_HOME``, which points to the directory of the
+1. Conda installed `cudatoolkit` package.
+2. Environment variable ``CUDA_HOME``, which points to the directory of the
    installed CUDA toolkit (i.e. ``/home/user/cuda-10``)
-4. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
+3. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
    Versioned installation paths (i.e. ``/usr/local/cuda-10.0``) are intentionally
    ignored.  Users can use ``CUDA_HOME`` to select specific versions.
 

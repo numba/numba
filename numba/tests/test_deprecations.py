@@ -110,31 +110,6 @@ class TestDeprecation(unittest.TestCase):
             timeout.cancel()
         return None, None
 
-    @unittest.skipIf(not cuda.is_available() or config.ENABLE_CUDASIM,
-                     "Needs real CUDA stack")
-    def test_numbapro_vars(self):
-        # tests deprecation of NUMBAPRO_ environment variables
-
-        expected = ("Environment variables with the 'NUMBAPRO' prefix are "
-                    "deprecated, found use of %s=%s")
-
-        NUMBAPRO_VARS = [(['NVVM', 'CUDALIB', 'LIBDEVICE'], '/'),
-                         (['VERBOSE_CU_JIT_LOG', ], '1')]
-
-        # NUMBAPRO_CUDA_LOG_SIZE is not tested, needs a live module/linker
-
-        for varz, val in NUMBAPRO_VARS:
-            for v in varz:
-                numbapro_var = 'NUMBAPRO_%s' % v
-                env_copy = os.environ.copy()
-                env_copy[numbapro_var] = val
-                call = "'from numba.cuda.cudadrv.libs import test; test()'"
-                cmdline = [sys.executable, "-c", call]
-                out, err = self.run_cmd(' '.join(cmdline), env_copy)
-                self.assertIn('NumbaDeprecationWarning:', err)
-                self.assertIn(expected % (numbapro_var, val), err)
-                self.assertIn("http://numba.pydata.org", err)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -218,47 +218,6 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of ``NUMBAPRO`` environment variables
-=================================================
-As a piece of legacy behaviour inherited from the time of ``NumbaPro`` it is
-possible to specify various CUDA drivers, libraries and configuration to use
-with Numba via the following environment variables:
-
-* ``NUMBAPRO_NVVM``
-* ``NUMBAPRO_CUDALIB``
-* ``NUMBAPRO_LIBDEVICE``
-* ``NUMBAPRO_CUDA_LOG_SIZE``
-* ``NUMBAPRO_VERBOSE_CU_JIT_LOG``
-
-These are being deprecated with view of removal in the near future.
-Please refer to :ref:`this guide <cudatoolkit-lookup>` for alternatives to
-``NUMBAPRO_NVVM``, ``NUMBAPRO_CUDALIB`` and ``NUMBAPRO_LIBDEVICE``.
-For ``NUMBAPRO_CUDA_LOG_SIZE`` and ``NUMBAPRO_VERBOSE_CU_JIT_LOG``, replace
-the ``NUMBAPRO`` prefix with ``NUMBA``.
-
-
-Reason for deprecation
-----------------------
-First, ``NUMBAPRO`` as a name causes confusion for users, especially as the
-product ``NumbaPro`` was retired since its technology was predominantly made
-Open Source, with Numba inheriting a lot of this. Second, the environment
-variables are somewhat confusing and in some cases setting one will influence
-the impact of another, none of which is documented.
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.46.0
-
-Recommendations
----------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour, or consider following
-replacement instructions outlined in :ref:`this guide <cudatoolkit-lookup>`.
-
-
 Deprecation of ``numba.autojit``
 ================================
 The decorator ``numba.autojit`` was inherited from the time of ``NumbaPro`` and

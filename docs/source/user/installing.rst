@@ -67,18 +67,8 @@ the llvmlite wheel.
 
 To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
-:ref:`cudatoolkit-lookup` for details.
-
-.. note:: Previous versions suggest the following deprecated environment
-    variables to be set:
-
-    * ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
-    * ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
-    * ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory*
-      which contains .bc files
-
-    Numba should now be able to detect CUDA libraries installed system-wide on
-    Linux.
+:ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
+installed system-wide on Linux.
 
 Enabling AMD ROCm GPU Support
 -----------------------------
