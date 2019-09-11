@@ -335,13 +335,6 @@ a function and convert it into multithreaded gufunc calls.
   ParallelAccelerator
 
 
-Deprecated Functionality
-''''''''''''''''''''''''
-
-- :ghfile:`numba/smartarray.py` - Experiment with an array object that has
-  both CPU and GPU backing.  Should be removed in future.
-
-
 Debugging Support
 '''''''''''''''''
 
@@ -416,7 +409,6 @@ typing and implementation to be specified together.
 - :ghfile:`numba/targets/options.py` - Container for options that control
   lowering
 - :ghfile:`numba/targets/printimpl.py` - Print function
-- :ghfile:`numba/targets/smartarray.py` - Smart array (deprecated)
 - :ghfile:`numba/targets/cmathimpl.py` - Python complex math module
 - :ghfile:`numba/targets/optional.py` - Special type representing value or
   ``None``

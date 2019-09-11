@@ -218,46 +218,6 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of ``SmartArray``
-============================================================================
-``SmartArray`` is an experimental interface that provides an Array-like data
-type that was intended to automatically manage data movement to and from a CUDA
-compute device (GPU). It is being deprecated with view of removal in the near
-future.
-
-Reason for deprecation
-----------------------
-The appetite for the use of ``SmartArray`` was not large, and with advances in
-both associated software and hardware any advantages it may have lead to have
-been eroded away.
-
-Example(s) of the impact
-------------------------
-Code using ``SmartArray`` will cease to work, e.g. this will fail::
-
-    from numba import SmartArray
-    from numba.cuda.kernels.transpose import transpose
-    import numpy as np
-
-    a = SmartArray(np.arange(16, dtype=float).reshape(4,4))
-    c = SmartArray(where='gpu', shape=(4,4), dtype=float)
-
-    transpose(a, b)
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.46.0
-
-Recommendations
----------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this feature and consider migrating to
-using the ``numba.cuda`` API.
-
-
 Deprecation of ``NUMBAPRO`` environment variables
 =================================================
 As a piece of legacy behaviour inherited from the time of ``NumbaPro`` it is

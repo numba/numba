@@ -5,7 +5,7 @@ import sys
 import threading
 import warnings
 import numpy as np
-from numba import jit, autojit, SmartArray, cuda, config
+from numba import jit, autojit, cuda, config
 from numba.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
 import numba.unittest_support as unittest
@@ -69,19 +69,6 @@ class TestDeprecation(unittest.TestCase):
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
                 self.assertIn("http://numba.pydata.org", warn_msg)
-
-    def test_smartarray(self):
-        # tests deprecation of SmartArray
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("ignore", category=NumbaWarning)
-            warnings.simplefilter("always", category=NumbaDeprecationWarning)
-            SmartArray(np.zeros(1))
-            self.assertEqual(len(w), 1)
-            self.assertEqual(w[0].category, NumbaDeprecationWarning)
-            warn_msg = str(w[0].message)
-            msg = "SmartArray is deprecated"
-            self.assertIn(msg, warn_msg)
-            self.assertIn("http://numba.pydata.org", warn_msg)
 
     def test_iternext_impl(self):
         # tests deprecation of iternext_impl without a RefType supplied
