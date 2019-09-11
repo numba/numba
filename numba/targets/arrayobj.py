@@ -20,6 +20,7 @@ from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
 from numba.numpy_support import type_can_asarray
+from numba.numpy_support import _is_nonelike
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
@@ -1665,10 +1666,6 @@ def np_reshape(a, shape):
     def np_reshape_impl(a, shape):
         return a.reshape(shape)
     return np_reshape_impl
-
-
-def _is_nonelike(ty):
-    return (ty is None) or isinstance(ty, types.NoneType)
 
 
 @overload(np.append)

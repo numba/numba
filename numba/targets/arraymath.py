@@ -17,6 +17,7 @@ from numba import types, cgutils, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import _is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -3660,10 +3661,6 @@ def np_convolve(a, v):
             return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
 
     return impl
-
-
-def _is_nonelike(ty):
-    return (ty is None) or isinstance(ty, types.NoneType)
 
 
 @overload(np.asarray)
