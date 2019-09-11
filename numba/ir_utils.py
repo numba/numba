@@ -2195,7 +2195,11 @@ class InlineOverloads(object):
             return False
 
         # check this is a known and typed function
-        func_ty = self.typemap[expr.func.name]
+        try:
+            func_ty = self.typemap[expr.func.name]
+        except KeyError:
+            # e.g. Calls to CUDA Intrinsic have no mapped type so KeyError
+            return False
         if not hasattr(func_ty, 'get_call_type'):
             return False
 
