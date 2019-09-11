@@ -293,6 +293,8 @@ class CompilerBase(object):
         self.state.type_annotation = None
         self.state.metadata = {}  # holds arbitrary inter-pipeline stage meta data
         self.state.reload_init = []
+        # hold this for e.g. with_lifting, null out on exit
+        self.state.pipeline = self
 
         # parfor diagnostics info, add to metadata
         self.state.parfor_diagnostics = ParforDiagnostics()
@@ -359,6 +361,10 @@ class CompilerBase(object):
         else:
             raise CompilerError("All available pipelines exhausted")
 
+        # Pipeline is done, remove self reference to release refs to user code
+        self.state.pipeline = None
+
+        # organise a return
         if res is not None:
             # Early pipeline completion
             return res
