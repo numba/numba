@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+
+from .common import SimpleIterableType, SimpleIteratorType
 
 
 class RangeType(SimpleIterableType):
