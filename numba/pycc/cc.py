@@ -13,8 +13,17 @@ from numba.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
+def _get_extension_libs():
+    libs = []
+    base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cext'))
+    for fn in os.listdir(base):
+        if fn.endswith('.c'):
+            libs.append(fn)
+    return libs
 
-extension_libs = ['../_dictobject.c', '../_listobject.c', '../_extension_util.c']
+
+extension_libs = _get_extension_libs()
+
 
 class CC(object):
     """
