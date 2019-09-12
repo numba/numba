@@ -144,7 +144,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -487,7 +487,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -957,7 +957,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "list insert indices must be signed integers",
+            "list insert indices must be integers",
             str(raises.exception),
         )
 

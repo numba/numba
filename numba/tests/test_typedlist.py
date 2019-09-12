@@ -125,7 +125,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L[ui32_1], 456)
         self.assertEqual(L[ui32_2], 789)
 
-        # index 
+        # index
         ui32_123 = types.uint32(123)
         ui32_456 = types.uint32(456)
         ui32_789 = types.uint32(789)
