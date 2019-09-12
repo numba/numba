@@ -148,6 +148,9 @@ class _EnvReloader(object):
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Permit sigabrt to reach the user from compiler locked regions
+        DEBUG_PERMIT_SIGABRT =_readenv("NUMBA_DEBUG_PERMIT_SIGABRT", int, 0)
+
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)

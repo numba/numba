@@ -1,8 +1,20 @@
+from __future__ import print_function, absolute_import
+
 import threading
 import functools
+import signal
+from . import config
+from .errors import FatalError
+
+def _handle_SIGABRT(sig_no, frame):
+    msg = ("The compilation chain has received SIGABRT. This is likely a "
+           "problem emanating from LLVM itself. Rerun with the environment "
+           "variable NUMBA_DEBUG_PERMIT_SIGABRT set to see the message from "
+           "the system level signal handler.")
+    raise FatalError(msg)
 
 
-# Lock for the preventing multiple compiler execution
+# Lock for the preventing multiple compiler execution, installs signal handlers
 class _CompilerLock(object):
     def __init__(self):
         self._lock = threading.RLock()
@@ -15,9 +27,13 @@ class _CompilerLock(object):
 
     def __enter__(self):
         self.acquire()
+        if not config.DEBUG_PERMIT_SIGABRT:
+            self._curr_handler = signal.signal(signal.SIGABRT, _handle_SIGABRT)
 
     def __exit__(self, exc_val, exc_type, traceback):
         self.release()
+        if not config.DEBUG_PERMIT_SIGABRT:
+            signal.signal(signal.SIGABRT, self._curr_handler)
 
     def is_locked(self):
         is_owned = getattr(self._lock, '_is_owned')

@@ -530,6 +530,13 @@ class VerificationError(IRError):
     pass
 
 
+class FatalError(NumbaError):
+    """
+    An error occurred from which the compiler cannot recover (e.g. LLVM SIGABRT)
+    """
+    pass
+
+
 class MacroError(NumbaError):
     """
     An error occurred during macro expansion.
