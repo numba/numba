@@ -3951,19 +3951,17 @@ def np_kaiser(M, beta):
 
 
 @register_jitable
-def _cross_preprocessing(x):
-    dt = x.dtype
-    x0 = x[..., 0]
-    x1 = x[..., 1]
-    if x.shape[-1] == 3:
-        x2 = x[..., 2]
-    else:
-        x2 = np.multiply(dt.type(0), x0)
-    return x0, x1, x2
-
-
-@register_jitable
 def _cross_operation(a, b, out):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        if x.shape[-1] == 3:
+            x2 = x[..., 2]
+        else:
+            x2 = np.multiply(x.dtype.type(0), x0)
+        return x0, x1, x2
+
     a0, a1, a2 = _cross_preprocessing(a)
     b0, b1, b2 = _cross_preprocessing(b)
 
