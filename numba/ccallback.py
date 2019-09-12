@@ -16,6 +16,7 @@ from .typing import signature
 from .typing.ctypes_utils import to_ctypes
 from .compiler_lock import global_compiler_lock
 
+
 class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
