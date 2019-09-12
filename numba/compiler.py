@@ -403,7 +403,7 @@ class Compiler(CompilerBase):
         return pms
 
 
-class DefaultPassBuilder:
+class DefaultPassBuilder(object):
     """
     This is the default pass builder, it contains the "classic" default
     pipelines as pre-canned PassManager instances:

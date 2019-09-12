@@ -10,7 +10,6 @@ import numpy as np
 import numba
 from numba import njit, ir, types
 from numba.extending import overload
-from numba.ir_utils import dead_code_elimination
 from numba.targets.cpu import InlineOptions
 from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization
@@ -22,7 +21,6 @@ from .support import TestCase, unittest
 class InlineTestPipeline(numba.compiler.CompilerBase):
     """ Same as the standard pipeline, but preserves the func_ir into the
     metadata store"""
-
 
     def define_pipelines(self):
         pipeline = DefaultPassBuilder.define_nopython_pipeline(self.state,
