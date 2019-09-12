@@ -13,11 +13,13 @@ from numba.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
+
 def _get_extension_libs():
     libs = []
     base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cext'))
     for fn in os.listdir(base):
         if fn.endswith('.c'):
+            fn = os.path.join(base, fn)
             libs.append(fn)
     return libs
 
