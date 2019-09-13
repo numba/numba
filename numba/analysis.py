@@ -506,6 +506,7 @@ def find_literal_calls(func_ir, argtypes):
     from numba import ir_utils
 
     marked_args = set()
+    first_loc = {}
     # Scan for literally calls
     for blk in func_ir.blocks.values():
         for assign in blk.find_exprs(op='call'):
@@ -516,8 +517,11 @@ def find_literal_calls(func_ir, argtypes):
                 [arg] = assign.args
                 defarg = func_ir.get_definition(arg)
                 if isinstance(defarg, ir.Arg):
-                    marked_args.add(defarg.index)
+                    argindex = defarg.index
+                    marked_args.add(argindex)
+                    first_loc.setdefault(argindex, assign.loc)
     # Signal the dispatcher to force literal typing
-    if any(not isinstance(argtypes[pos], types.Literal)
-           for pos in marked_args):
-        raise errors.ForceLiteralArg(marked_args)
+    for pos in marked_args:
+        if not isinstance(argtypes[pos], types.Literal):
+            loc = first_loc[pos]
+            raise errors.ForceLiteralArg(marked_args, loc=loc)

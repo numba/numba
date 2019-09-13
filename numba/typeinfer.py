@@ -496,7 +496,7 @@ class CallConstraint(object):
             if unsatisified:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
-                raise ForceLiteralArg(requested)
+                raise ForceLiteralArg(requested, loc=self.loc)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
