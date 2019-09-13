@@ -11,6 +11,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 import llvmlite.ir as lir
+import llvmlite.binding as lb
 
 import numba
 from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor, funcdesc
@@ -96,11 +97,32 @@ def openmp_tag_list_to_str(tag_list, lowerer):
     tag_strs = [x.lower(lowerer) for x in tag_list]
     return '[ ' + ", ".join(tag_strs) + ' ]'
 
+def add_offload_info(lowerer, new_data):
+    if hasattr(lowerer, 'omp_offload'):
+        lowerer.omp_offload.append(new_data)
+    else:
+        lowerer.omp_offload = [new_data]
+
+def get_next_offload_number(lowerer):
+    if hasattr(lowerer, 'offload_number'):
+        cur = lowerer.offload_number
+    else:
+        cur = 0
+    lowerer.offload_number = cur + 1
+    return cur
+
 class openmp_region_start(ir.Stmt):
     def __init__(self, tags, loc):
         self.tags = tags
         self.omp_region_var = None
         self.loc = loc
+        self.omp_metadata = None
+
+    def has_target(self):
+        for t in self.tags:
+            if t.name == "DIR.OMP.TARGET":
+                return True
+        return False
 
     def lower(self, lowerer):
         typingctx = lowerer.context.typing_context
@@ -114,6 +136,17 @@ class openmp_region_start(ir.Stmt):
         fnty = lir.FunctionType(llvm_token_t, [])
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.entry', (), fnty)
         self.omp_region_var = builder.call(pre_fn, [], tail=False, tags=openmp_tag_list_to_str(self.tags, lowerer))
+        if self.omp_metadata is None and self.has_target():
+            self.omp_metadata = builder.module.add_metadata([
+                 lir.IntType(32)(0),   # Kind of this metadata.  0 is for target.
+                 lir.IntType(32)(lb.getDeviceForFile(self.loc.filename)),   # Device ID of the file with the entry.
+                 lir.IntType(32)(lb.getFileIdForFile(self.loc.filename)),   # File ID of the file with the entry.
+                 lowerer.fndesc.mangled_name,   # Mangled name of the function with the entry.
+                 lir.IntType(32)(self.loc.line),  # Line in the source file where with the entry.
+                 lir.IntType(32)(get_next_offload_number(lowerer)),   # Order the entry was created.
+                 lir.IntType(32)(0)    # Entry kind.  Should always be 0 I think.
+                ])
+            add_offload_info(lowerer, self.omp_metadata)
 
     def __str__(self):
         return "openmp_region_start " + ", ".join([str(x) for x in self.tags])
