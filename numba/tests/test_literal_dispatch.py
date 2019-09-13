@@ -253,6 +253,39 @@ class TestLiteralDispatch(TestCase):
         self.assertEqual(type_a.literal_value, a)
         self.assertNotIsInstance(type_b, types.Literal)
 
+    def test_overload_error_loop(self):
+        # Test a case where a infinite compiling loop is caused because a
+        # literal type is requested but an error would raise for the
+        # literal-ized code path. This causes the overload resolution to
+        # retry by "de-literal-izing" the values.
+        def do_this(x, y):
+            return x + y
+
+        @njit
+        def hidden(x, y):
+            return literally(x) + y
+
+        @overload(do_this)
+        def ov_do_this(x, y):
+            if isinstance(y, types.IntegerLiteral):
+                # This error is however suppressed because a non-literal
+                # version is valid.
+                raise ValueError("oops")
+            else:
+                def impl(x, y):
+                    return hidden(x, y)
+                return impl
+
+        @njit
+        def foo(a, b):
+            return do_this(a, literally(b))
+
+        # Expect raising CompilerError to stop re-compiling with duplicated
+        # literal typing request.
+        with self.assertRaises(errors.CompilerError) as raises:
+            foo(a=123, b=321)
+        self.assertIn("Duplicated literal typing request",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

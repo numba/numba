@@ -351,10 +351,27 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             return self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
+            # Received request for compiler re-entry with the list of arguments
+            # indicated by e.requested_args.
+            # First, check if any of these args are already Literal-ized
+            already_lit_pos = [i for i in e.requested_args
+                               if isinstance(args[i], types.Literal)]
+            if already_lit_pos:
+                # Abort compilation if any argument is already a Literal.
+                # Letting this continue will cause infinite compilation loop.
+                m = ("Duplicated literal typing request.\n"
+                     "{}.\n"
+                     "This is likely caused by an error in typing. "
+                     "Please see nested and suppressed exceptions.")
+                info = ', '.join('Arg #{} is {}'.format(i, args[i])
+                                 for i in  sorted(already_lit_pos))
+                raise errors.CompilerError(m.format(info))
+            # Convert requested arguments into a Literal.
             args = [(types.literal
                      if i in e.requested_args
                      else lambda x: x)(args[i])
                     for i, v in enumerate(args)]
+            # Re-enter compilation with the Literal-ized arguments
             return self._compile_for_args(*args)
 
         except errors.TypingError as e:
