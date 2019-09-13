@@ -8,7 +8,8 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
+from numba import (compiler, types, ir_utils, ir, typing, numpy_support, utils,
+                   typed_passes)
 from numba import config
 from numba.typing.templates import (CallableTemplate, signature, infer_global,
                                     AbstractTemplate)
@@ -332,7 +333,7 @@ class StencilFunc(object):
             raise ValueError("The first argument to a stencil kernel must "
                              "be the primary input array.")
 
-        typemap, return_type, calltypes = compiler.type_inference_stage(
+        typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
                 argtys,

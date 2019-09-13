@@ -12,6 +12,7 @@ import weakref
 from copy import deepcopy
 
 from numba import _dispatcher, compiler, utils, types, config, errors
+from numba.compiler_lock import global_compiler_lock
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
@@ -606,7 +607,7 @@ class Dispatcher(_DispatcherBase):
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
-                 impl_kind='direct', pipeline_class=compiler.Pipeline):
+                 impl_kind='direct', pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -618,7 +619,7 @@ class Dispatcher(_DispatcherBase):
             Target-specific config options.
         impl_kind: str
             Select the compiler mode for `@jit` and `@generated_jit`
-        pipeline_class: type numba.compiler.BasePipeline
+        pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
         self.typingctx = self.targetdescr.typing_context
@@ -716,7 +717,7 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
-    @compiler.global_compiler_lock
+    @global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
@@ -830,7 +831,7 @@ class LiftedCode(_DispatcherBase):
         """
         pass
 
-    @compiler.global_compiler_lock
+    @global_compiler_lock
     def compile(self, sig):
         # Use counter to track recursion compilation depth
         with self._compiling_counter:

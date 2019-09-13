@@ -363,15 +363,15 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         _debug_dump(callee_ir)
 
     if typingctx:
-        from numba import compiler
+        from numba import typed_passes
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
         except Exception:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
             pass
         canonicalize_array_math(callee_ir, f_typemap,
@@ -967,9 +967,9 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
     1D array creations from a constant list, and rewriting it into
     direct initialization of array elements without creating the list.
     '''
-    def __init__(self, pipeline, *args, **kws):
-        self.typingctx = pipeline.typingctx
-        super(RewriteArrayOfConsts, self).__init__(pipeline, *args, **kws)
+    def __init__(self, state, *args, **kws):
+        self.typingctx = state.typingctx
+        super(RewriteArrayOfConsts, self).__init__(*args, **kws)
 
     def match(self, func_ir, block, typemap, calltypes):
         if len(calltypes) == 0:

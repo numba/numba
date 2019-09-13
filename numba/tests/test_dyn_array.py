@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import random
 import threading
+import gc
 
 from numba import unittest_support as unittest
 from numba.errors import TypingError
@@ -197,10 +198,12 @@ class TestDynArray(NrtRefCtTest, TestCase):
         np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
 
         del out
+        gc.collect()
         # out is only referenced by cfunc
         self.assertEqual(initrefct + 1, sys.getrefcount(y))
 
         del cfunc
+        gc.collect()
         # y is no longer referenced by cfunc
         self.assertEqual(initrefct, sys.getrefcount(y))
 

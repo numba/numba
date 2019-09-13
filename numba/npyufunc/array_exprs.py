@@ -24,10 +24,10 @@ class RewriteArrayExprs(rewrites.Rewrite):
     rewriting those expressions to a single operation that will expand
     into something similar to a ufunc call.
     '''
-    def __init__(self, pipeline, *args, **kws):
-        super(RewriteArrayExprs, self).__init__(pipeline, *args, **kws)
+    def __init__(self, state, *args, **kws):
+        super(RewriteArrayExprs, self).__init__(state, *args, **kws)
         # Install a lowering hook if we are using this rewrite.
-        special_ops = self.pipeline.targetctx.special_ops
+        special_ops = state.targetctx.special_ops
         if 'arrayexpr' not in special_ops:
             special_ops['arrayexpr'] = _lower_array_expr
 

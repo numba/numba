@@ -7,7 +7,9 @@ from __future__ import print_function
 
 import numpy as np
 from numba import njit, types, ir
-from numba.compiler import Pipeline
+from numba.compiler import CompilerBase, DefaultPassBuilder
+from numba.typed_passes import NopythonTypeInference
+from numba.compiler_machinery import register_pass, FunctionPass
 
 from .support import MemoryLeakMixin, TestCase
 
@@ -136,18 +138,34 @@ class TestLowering(MemoryLeakMixin, TestCase):
     def test_issue_with_literal_in_static_getitem(self):
         """Test an issue with literal type used as index of static_getitem
         """
-        class CustomPipeline(Pipeline):
-            def stage_nopython_backend(self):
+
+        @register_pass(mutates_CFG=False, analysis_only=False)
+        class ForceStaticGetitemLiteral(FunctionPass):
+
+            _name = "force_static_getitem_literal"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
                 repl = {}
                 # Force the static_getitem to have a literal type as
                 # index to replicate the problem.
-                for inst, sig in self.calltypes.items():
+                for inst, sig in state.calltypes.items():
                     if isinstance(inst, ir.Expr) and inst.op == 'static_getitem':
                         [obj, idx] = sig.args
-                        new_sig = sig.replace(args=(obj, types.literal(inst.index)))
+                        new_sig = sig.replace(args=(obj,
+                                                    types.literal(inst.index)))
                         repl[inst] = new_sig
-                self.calltypes.update(repl)
-                super(CustomPipeline, self).stage_nopython_backend()
+                state.calltypes.update(repl)
+                return True
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                pm.add_pass_after(ForceStaticGetitemLiteral, NopythonTypeInference)
+                pm.finalize()
+                return [pm]
 
         @njit(pipeline_class=CustomPipeline)
         def foo(arr):

@@ -9,8 +9,10 @@ from numba import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
-from numba.ir_utils import copy_propagate, apply_copy_propagate, get_name_var_table
+from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+                            get_name_var_table)
 from numba import ir
+from numba.typed_passes import type_inference_stage
 from numba import unittest_support as unittest
 
 def test_will_propagate(b, z, w):
@@ -62,7 +64,7 @@ class TestCopyPropagate(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = compiler.type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
             #print("typemap = ", typemap)
             #print("return_type = ", return_type)
             type_annotation = type_annotations.TypeAnnotation(
@@ -89,7 +91,7 @@ class TestCopyPropagate(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = compiler.type_inference_stage(typingctx, test_ir, args, None)
+            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
