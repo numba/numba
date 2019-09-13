@@ -419,7 +419,6 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
-        #pdb.set_trace()
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
