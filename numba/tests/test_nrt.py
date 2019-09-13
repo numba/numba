@@ -11,15 +11,20 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import njit, targets, typing
 from numba.compiler import compile_isolated, Flags, types
-from numba.runtime import rtsys
-from numba.runtime import nrtopt
+from numba.runtime import (
+    rtsys,
+    nrtopt,
+    _nrt_python,
+    nrt,
+)
 from numba.extending import intrinsic
 from numba.typing import signature
 from numba.targets.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
+from numba import cffi_support
 
-from .support import MemoryLeakMixin, TestCase
+from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
@@ -544,6 +549,57 @@ br i1 %.294, label %B42, label %B160
             return z
 
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
+
+
+class TestNrtExternal(TestCase):
+    """Testing the use of externally compiled C code that use NRT
+    """
+    @unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+    def test_cffi_compiled_module(self):
+        import numba
+
+        from cffi import FFI
+
+        ffi = FFI()
+        source = r"""
+#include <stdio.h>
+#include "numba/runtime/nrt_external.h"
+
+void my_dtor(void *ptr) {
+    free(ptr);
+}
+
+NRT_MemInfo* test_nrt_api(NRT_Functions *nrt) {
+    void * data = malloc(10);
+    NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
+    nrt->acquire(mi);
+    nrt->release(mi);
+    return mi;
+}
+        """
+        include_dir = os.path.dirname(os.path.dirname(numba.__file__))
+        ffi.set_source(
+            "cffi_nrt_usecase_ool", source,
+            include_dirs=[include_dir],
+        )
+        ffi.cdef("void* test_nrt_api(void *nrt);")
+        tmpdir = temp_directory('test_cffi_compiled_module')
+        ffi.compile(tmpdir=tmpdir)
+        sys.path.append(tmpdir)
+
+        nrt_functions_get = _nrt_python.c_helpers['Functions_get']
+        table_getter = ffi.cast("void* (*)()", nrt_functions_get)
+        table = table_getter()
+
+        try:
+            mod = import_dynamic('cffi_nrt_usecase_ool')
+        finally:
+            sys.path.remove(tmpdir)
+
+        out = mod.lib.test_nrt_api(table)
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
 
 
 if __name__ == '__main__':

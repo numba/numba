@@ -16,7 +16,9 @@ from .platform import Toolchain
 
 def _get_extension_libs():
     libs = []
-    base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cext'))
+    base = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'cext',
+    ))
     for fn in os.listdir(base):
         if fn.endswith('.c'):
             fn = os.path.join(base, fn)

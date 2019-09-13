@@ -150,7 +150,6 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
-
     ext_npyufunc_workqueue_impls = []
 
     def check_file_at_path(path2file):
@@ -304,8 +303,8 @@ def find_packages(root_dir, root_name):
     rec(root_dir, root_name)
     return packages
 
-packages = find_packages("numba", "numba")
 
+packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
@@ -342,6 +341,7 @@ metadata = dict(
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
         "numba.runtime": ["*.c", "*.h"],
+        "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.targets": ["cmdlang.gdb"],
     },
