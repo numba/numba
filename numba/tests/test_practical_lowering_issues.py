@@ -6,7 +6,8 @@ Tests for practical lowering specific errors.
 from __future__ import print_function
 
 import numpy as np
-from numba import njit
+from numba import njit, types, ir
+from numba.compiler import Pipeline
 
 from .support import MemoryLeakMixin, TestCase
 
@@ -131,3 +132,28 @@ class TestLowering(MemoryLeakMixin, TestCase):
         got = udt(4)
         expect = udt.py_func(4)
         self.assertPreciseEqual(got, expect)
+
+    def test_issue_with_literal_in_static_getitem(self):
+        """Test an issue with literal type used as index of static_getitem
+        """
+        class CustomPipeline(Pipeline):
+            def stage_nopython_backend(self):
+                repl = {}
+                # Force the static_getitem to have a literal type as
+                # index to replicate the problem.
+                for inst, sig in self.calltypes.items():
+                    if isinstance(inst, ir.Expr) and inst.op == 'static_getitem':
+                        [obj, idx] = sig.args
+                        new_sig = sig.replace(args=(obj, types.literal(inst.index)))
+                        repl[inst] = new_sig
+                self.calltypes.update(repl)
+                super(CustomPipeline, self).stage_nopython_backend()
+
+        @njit(pipeline_class=CustomPipeline)
+        def foo(arr):
+            return arr[4]  # force static_getitem
+
+        arr = np.arange(10)
+        got = foo(arr)
+        expect = foo.py_func(arr)
+        self.assertEqual(got, expect)
