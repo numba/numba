@@ -154,6 +154,12 @@ class BaseLower(object):
         """
         Called after all blocks are lowered
         """
+        # Add omp offloading metadata if present.
+        if hasattr(self, 'omp_offload'):
+            omp_offload_metadata = self.module.get_or_insert_named_metadata('omp_offload.info')
+            for oi in self.omp_offload:
+                omp_offload_metadata.add(oi)
+
         self.debuginfo.finalize()
 
     def pre_block(self, block):
