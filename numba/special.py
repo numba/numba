@@ -66,16 +66,16 @@ def literally(obj):
     """Forces numba to take *obj* as an Literal value.
 
     *obj* must be either a literal or an argument of the caller function, where
-    the argument must be bounded to a literal. The literal requirement
+    the argument must be bound to a literal. The literal requirement
     propagates up the call stack.
 
-    This function is intercepted by the compiler to alter its behavior to
-    wrap corresponding function parameters as ``Literal``. It has **no effect**
+    This function is intercepted by the compiler to alter the compilation behavior to
+    wrap the corresponding function parameters as ``Literal``. It has **no effect**
     outside of nopython-mode (interpreter, and objectmode).
 
     The current implementation detects literal arguments in two ways:
 
-    1. Scan uses of ``literally`` via a rewrite pass.
+    1. Scans for uses of ``literally`` via a compiler pass.
     2. ``literally`` is overloaded to raise ``numba.errors.ForceLiteralArg``
        to signal the dispatcher to treat the corresponding parameter
        differently. This mode is to support indirect use (via a function call).

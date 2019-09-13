@@ -631,7 +631,7 @@ class RequireLiteralValue(TypingError):
 
 
 class ForceLiteralArg(NumbaError):
-    """A Pseudo-exception to signal the dispatcher to type argument differently
+    """A Pseudo-exception to signal the dispatcher to type an argument literally
 
     Attributes
     ----------
@@ -649,7 +649,7 @@ class ForceLiteralArg(NumbaError):
             the ``args`` and ``kwargs``.
         """
         super(ForceLiteralArg, self).__init__(
-            "Pseudo-exception to force literal arguments from the dispatcher",
+            "Pseudo-exception to force literal arguments in the dispatcher",
         )
         self.requested_args = frozenset(arg_indices)
         self.fold_arguments = fold_arguments

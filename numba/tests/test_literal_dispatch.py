@@ -10,7 +10,7 @@ from numba.extending import overload, SentryLiteralArgs
 from numba.special import literally
 
 
-class TestLiteralDispatcher(TestCase):
+class TestLiteralDispatch(TestCase):
     def test_literal_basic(self):
         @njit
         def foo(x):
