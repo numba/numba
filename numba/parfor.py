@@ -2756,12 +2756,14 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, openmp):
     dprint_func_ir(func_ir, "after dels reinserted")
     for (block_label, block) in func_ir.blocks.items():
         openmp_ends = list(block.find_insts(numba.npyufunc.parfor.openmp_region_end))
-        if len(openmp_ends) == 1:
+        if len(openmp_ends) >= 1:
             dprint("Found block", block_label, "with openmp end.")
+            next_region_end_index = 0
             for i, inst in enumerate(block.body):
                 if inst in openmp_ends:
-                    block.body[1:i+1] = block.body[0:i]
-                    block.body[0] = inst
+                    block.body[next_region_end_index=1:i+1] = block.body[next_region_end_index:i]
+                    block.body[next_region_end_index] = inst
+                    next_region_end_index += 1
                     dprint("Found openmp end")
                     break
     dprint_func_ir(func_ir, "after elevating openmp end")
