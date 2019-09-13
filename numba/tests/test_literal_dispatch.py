@@ -11,17 +11,21 @@ from numba.special import literally
 
 
 class TestLiteralDispatch(TestCase):
-    def test_literal_basic(self):
+    def check_literal_basic(self, literal_args):
         @njit
         def foo(x):
             return literally(x)
 
-        self.assertEqual(foo(123), 123)
-        self.assertEqual(foo(321), 321)
+        # Test with int
+        for lit in literal_args:
+            self.assertEqual(foo(lit), lit)
 
-        sig1, sig2 = foo.signatures
-        self.assertEqual(sig1[0].literal_value, 123)
-        self.assertEqual(sig2[0].literal_value, 321)
+        for lit, sig in zip(literal_args, foo.signatures):
+            self.assertEqual(sig[0].literal_value, lit)
+
+    def test_literal_basic(self):
+        self.check_literal_basic([123, 321])
+        self.check_literal_basic(["abc", "cb123"])
 
     def test_literal_nested(self):
         @njit
@@ -248,6 +252,7 @@ class TestLiteralDispatch(TestCase):
         self.assertIsInstance(type_a, types.Literal)
         self.assertEqual(type_a.literal_value, a)
         self.assertNotIsInstance(type_b, types.Literal)
+
 
 
 if __name__ == '__main__':

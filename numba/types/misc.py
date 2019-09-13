@@ -58,8 +58,10 @@ def unliteral(lit_type):
 def literal(value):
     """Returns a Literal instance or raise LiteralTypingError
     """
-    assert not isinstance(value, Literal)
     ty = type(value)
+    if isinstance(value, Literal):
+        msg = "the function does not accept a Literal type; got {} ({})"
+        raise ValueError(msg.format(value, ty))
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:

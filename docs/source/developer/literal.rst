@@ -34,8 +34,8 @@ Classes and methods related to the ``Literal`` type.
 
 .. autofunction:: numba.types.maybe_literal
 
-Hints for Literal Typing
-------------------------
+Specifying for Literal Typing
+-----------------------------
 
 To specify a value as a ``Literal`` type in code scheduled for JIT compilation, use the following
 function:
