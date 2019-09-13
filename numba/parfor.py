@@ -2808,7 +2808,7 @@ def get_info_for_openmp(
     blocks = func_ir.blocks
     topo_order = find_topo_order(blocks)
     cfg = compute_cfg_from_blocks(blocks)
-    cfg.dump()
+#    cfg.dump()
     usedefs = compute_use_defs(blocks)
     dprint("usedefs:", usedefs)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
@@ -3174,8 +3174,9 @@ def _lower_parfor_openmp(
             jump_to_body_block.body.append(ir.Jump(index_inc_label, loc))
             # Eliminate outer dimension.
             parfor_copy.loop_nests = parfor_copy.loop_nests[1:]
-            numba.ir_utils.dump_block(block_label, block)
-            numba.ir_utils.dump_blocks(new_blocks)
+            if config.DEBUG_ARRAY_OPT >= 1:
+                numba.ir_utils.dump_block(block_label, block)
+                numba.ir_utils.dump_blocks(new_blocks)
             lp_new_block_label, lp_new_block = _lower_parfor(parfor_copy, jump_to_body_block_label, jump_to_body_block, 0, new_blocks, typemap, calltypes, typingctx, True)
             new_blocks[lp_new_block_label] = lp_new_block
         else:
@@ -3281,8 +3282,9 @@ def _lower_parfor(parfor, block_label, block, block_index, new_blocks, typemap, 
         new_blocks[l] = b
 
     dprint("end of _lower_parfor")
-    numba.ir_utils.dump_block(block_label, block)
-    numba.ir_utils.dump_blocks(new_blocks)
+    if config.DEBUG_ARRAY_OPT >= 1:
+        numba.ir_utils.dump_block(block_label, block)
+        numba.ir_utils.dump_blocks(new_blocks)
 
     return block_label, block
 
