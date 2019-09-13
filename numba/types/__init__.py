@@ -73,8 +73,6 @@ real_domain = frozenset([float32, float64])
 complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
-index_type = integer_domain
-
 # Aliases to Numpy type names
 
 b1 = bool_

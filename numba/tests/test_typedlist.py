@@ -107,9 +107,10 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         ui32_1 = types.uint32(1)
         ui32_2 = types.uint32(2)
 
-        L.append(10)
-        L.append(11)
-        L.append(12)
+        # insert
+        L.append(types.uint32(10))
+        L.append(types.uint32(11))
+        L.append(types.uint32(12))
         self.assertEqual(len(L), 3)
 
         # getitem

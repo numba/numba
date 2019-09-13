@@ -51,6 +51,8 @@ _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
 INDEXTY = types.intp
 
+index_type = types.integer_domain
+
 
 @register_model(ListType)
 class ListModel(models.StructModel):
@@ -562,7 +564,7 @@ def impl_getitem(l, index):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.index_type:
+    if index in index_type:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -630,7 +632,7 @@ def impl_setitem(l, index, item):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.index_type:
+    if index in index_type:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -704,7 +706,7 @@ def impl_pop(l, index=-1):
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
     if (isinstance(index, int)
-            or index in types.index_type
+            or index in index_type
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
             if len(l) == 0:
@@ -759,7 +761,7 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.index_type:
+    if index in index_type:
         def integer_impl(l, index):
             l.pop(index)
 
@@ -861,7 +863,7 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.index_type:
+    if index in index_type:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
             # empty, just append.
@@ -962,7 +964,7 @@ def impl_index(l, item, start=None, end=None):
 
     def check_arg(arg, name):
         if not (arg is None
-                or arg in types.index_type
+                or arg in index_type
                 or isinstance(arg, (types.Omitted, types.NoneType))):
             raise TypingError("{} argument for index must be an integer"
                               .format(name))
