@@ -44,6 +44,33 @@ class TestLiteralDispatch(TestCase):
         self.assertEqual(bar_sig[0], types.literal(y))
         self.assertNotIsInstance(bar_sig[1], types.Literal)
 
+    def test_mutual_recursion_literal(self):
+        def get_functions(decor):
+            @decor
+            def outer_fac(n, value):
+                if n < 1:
+                    return value
+                return n * inner_fac(n - 1, value)
+
+            @decor
+            def inner_fac(n, value):
+                if n < 1:
+                    return literally(value)
+                return n * outer_fac(n - 1, value)
+
+            return outer_fac, inner_fac
+
+        ref_outer_fac, ref_inner_fac = get_functions(lambda x: x)
+        outer_fac, inner_fac = get_functions(njit)
+
+        self.assertEqual(outer_fac(10, 12), ref_outer_fac(10, 12))
+        self.assertEqual(outer_fac.signatures[0][1].literal_value, 12)
+        self.assertEqual(inner_fac.signatures[0][1].literal_value, 12)
+
+        self.assertEqual(inner_fac(11, 13), ref_inner_fac(11, 13))
+        self.assertEqual(outer_fac.signatures[1][1].literal_value, 13)
+        self.assertEqual(inner_fac.signatures[1][1].literal_value, 13)
+
     def test_literal_nested_multi_arg(self):
         @njit
         def foo(a, b, c):
@@ -284,7 +311,7 @@ class TestLiteralDispatch(TestCase):
         # literal typing request.
         with self.assertRaises(errors.CompilerError) as raises:
             foo(a=123, b=321)
-        self.assertIn("Duplicated literal typing request",
+        self.assertIn("Repeated literal typing request",
                       str(raises.exception))
 
 

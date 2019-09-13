@@ -63,7 +63,7 @@ def gdb_init(*args):
 
 
 def literally(obj):
-    """Forces numba to take *obj* as an Literal value.
+    """Forces Numba to interpret *obj* as an Literal value.
 
     *obj* must be either a literal or an argument of the caller function, where
     the argument must be bound to a literal. The literal requirement

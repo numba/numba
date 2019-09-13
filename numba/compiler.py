@@ -500,7 +500,7 @@ class BasePipeline(object):
 
     def stage_literal_arg(self):
         """
-        Rewrite to move annotation about literals argument.
+        Analysis to move annotation about literals argument.
         """
         assert self.func_ir
         find_literal_calls(func_ir=self.func_ir, argtypes=self.args)

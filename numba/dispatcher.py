@@ -359,7 +359,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if already_lit_pos:
                 # Abort compilation if any argument is already a Literal.
                 # Letting this continue will cause infinite compilation loop.
-                m = ("Duplicated literal typing request.\n"
+                m = ("Repeated literal typing request.\n"
                      "{}.\n"
                      "This is likely caused by an error in typing. "
                      "Please see nested and suppressed exceptions.")

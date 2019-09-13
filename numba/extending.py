@@ -391,7 +391,6 @@ def get_cython_function_address(module_name, function_name):
     return _import_cython_function(module_name, function_name)
 
 
-
 def sentry_literal_args(pysig, literal_args, args, kwargs):
     """Ensures that the given argument types (in *args* and *kwargs*) are
     literally typed for a function with the python signature *pysig* and the
@@ -474,7 +473,7 @@ class SentryLiteralArgs(collections.namedtuple(
 
 
 class BoundLiteralArgs(collections.namedtuple(
-        '_BoundLiteralArgs', ['pysig', 'literal_args'])):
+        'BoundLiteralArgs', ['pysig', 'literal_args'])):
     """
     This class is usually created by SentryLiteralArgs.
     """

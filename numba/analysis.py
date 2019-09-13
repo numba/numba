@@ -503,6 +503,18 @@ def rewrite_semantic_constants(func_ir, called_args):
 
 
 def find_literal_calls(func_ir, argtypes):
+    """An analysis to find `numba.literally` call inside the given IR.
+    When an unsatisfied literal typing request is found, a `ForceLiteralArg`
+    exception is raised.
+
+    Parameters
+    ----------
+
+    func_ir : numba.ir.FunctionIR
+
+    argtypes : Sequence[numba.types.Type]
+        The argument types.
+    """
     from numba import ir_utils
 
     marked_args = set()
