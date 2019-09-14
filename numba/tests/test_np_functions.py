@@ -33,6 +33,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def array_equal(a, b):
+    return np.array_equal(a, b)
+
+
 def delete(arr, obj):
     return np.delete(arr, obj)
 
@@ -374,6 +378,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_array_equal(self):
+        def arrays():
+            yield np.array([]), np.array([])
+            yield np.array([1, 2]), np.array([1, 2])
+            yield np.array([]), np.array([1])
+            x = np.arange(10).reshape(5, 2)
+            x[1][1] = 30
+            yield np.arange(10).reshape(5, 2), x
+            yield x, x
+
+        pyfunc = array_equal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj in arrays():
+            expected = pyfunc(arr, obj)
+            got = cfunc(arr, obj)
+            self.assertPreciseEqual(expected, got)
+
+    def test_array_equal_exception(self):
+        pyfunc = array_equal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3 * 4).reshape(3, 4), 0)
+        self.assertIn(
+            "Arguments must be arrays",
+            str(raises.exception)
+        )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
     @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
