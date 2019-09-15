@@ -346,6 +346,7 @@ def array_mean(context, builder, sig, args):
                                    locals=dict(c=sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(np.mean, types.Array, types.intp)
 @lower_builtin(np.mean, types.Array, types.IntegerLiteral)
 @lower_builtin("array.mean", types.Array, types.intp)
@@ -437,12 +438,13 @@ def array_mean_axis(context, builder, sig, args):
                 elif axis == 3:
                     index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
                     result += arr[index_tuple4]
-        
+
         result /= axis_len
         return op(result, 0)
 
     res = context.compile_internal(builder, array_mean_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.var, types.Array)
 @lower_builtin("array.var", types.Array)
