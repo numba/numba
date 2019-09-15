@@ -377,10 +377,10 @@ class Numpy_method_redirection(AbstractTemplate):
     def generic(self, args, kws):
         pysig = None
         if kws:
-            if self.method_name == 'sum':
-                def sum_stub(arr, axis):
+            if self.method_name in ['sum', 'mean']:
+                def axis_stub(arr, axis):
                     pass
-                pysig = utils.pysignature(sum_stub)
+                pysig = utils.pysignature(axis_stub)
             elif self.method_name == 'argsort':
                 def argsort_stub(arr, kind='quicksort'):
                     pass

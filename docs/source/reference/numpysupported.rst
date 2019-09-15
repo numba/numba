@@ -182,7 +182,6 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`
-* :meth:`~numpy.ndarray.mean`
 * :meth:`~numpy.ndarray.min`
 * :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
@@ -206,6 +205,8 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.mean` (with or without the ``axis`` argument.
+  ``axis`` only supports ``integer`` values)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)

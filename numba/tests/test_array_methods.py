@@ -201,6 +201,30 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
+def array_mean(a, *args):
+    return a.mean(*args)
+
+def array_mean_kws(a, axis):
+    return a.mean(axis=axis)
+
+def array_mean_const_multi(arr, axis):
+    # use np.mean with different constant args multiple times to check
+    # for internal compile cache to see if constant-specialization is
+    # applied properly.
+    a = np.mean(arr, axis=4)
+    b = np.mean(arr, 3)
+    # the last invocation uses runtime-variable
+    c = np.mean(arr, axis)
+    # as method
+    d = arr.mean(axis=5)
+    # negative const axis
+    e = np.mean(arr, axis=-1)
+    return a, b, c, d, e
+
+def array_mean_const_axis_neg_one(a):
+    # use .mean with -1 axis, this is for use with 1D arrays where the above
+    # "const_multi" variant would raise errors
+    return a.mean(axis=-1)
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -852,6 +876,89 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # Numpy 1.13 has a different error message than prior numpy
         # Just check for the "out of bounds" phrase in it.
         self.assertIn("out of bounds", str(raises.exception))
+
+    def test_mean(self):
+        pyfunc = array_mean
+        cfunc = jit(nopython=True)(array_mean)
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+        # OK
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+
+    def test_mean_kws(self):
+        pyfunc = array_sum_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        # OK
+        a = np.ones((7, 6, 5, 4, 3))
+        self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
+        # OK
+        self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
+
+    def test_mean_1d_kws(self):
+        # check 1d reduces to scalar
+        pyfunc = array_mean_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a, axis=0), cfunc(a, axis=0))
+        pyfunc = array_mean_const_axis_neg_one
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(10.)
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_mean_const(self):
+        pyfunc = array_mean_const_multi
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.ones((3, 4, 5, 6, 7, 8))
+        axis = 1
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+        axis = 2
+        self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+
+    def test_mean_exceptions(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+        pyfunc = array_mean
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.ones((7, 6, 5, 4, 3))
+        b = np.ones((4, 3))
+        # BAD: axis > dimensions
+        with self.assertRaises(ValueError):
+            cfunc(b, 2)
+        # BAD: negative axis
+        with self.assertRaises(ValueError):
+            cfunc(a, -1)
+        # BAD: axis greater than 3
+        with self.assertRaises(ValueError):
+            cfunc(a, 4)
+
+    def test_mean_const_negative(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @jit(nopython=True)
+        def foo(arr):
+            return arr.mean(axis=-3)
+
+        # ndim == 4, axis == -3, OK
+        a = np.ones((1, 2, 3, 4))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 3, axis == -3, OK
+        a = np.ones((1, 2, 3))
+        self.assertPreciseEqual(foo(a), foo.py_func(a))
+        # ndim == 2, axis == -3, BAD
+        a = np.ones((1, 2))
+        with self.assertRaises(LoweringError) as raises:
+            foo(a)
+        errmsg = "'axis' entry is out of bounds"
+        self.assertIn(errmsg, str(raises.exception))
+        with self.assertRaises(IndexError) as raises:
+            foo.py_func(a)
+        # Numpy 1.13 has a different error message than prior numpy
+        # Just check for the "out of bounds" phrase in it.
+        self.assertIn("index out of range", str(raises.exception))
 
     def test_cumsum(self):
         pyfunc = array_cumsum

@@ -647,12 +647,30 @@ def generic_expand_cumulative(self, args, kws):
                               ndim=1, layout='C')
     return signature(return_type, recvr=self.this)
 
-def generic_hetero_real(self, args, kws):
-    assert not args
-    assert not kws
+def mean_expand(self, args, kws):
+    """
+    mean can be called with or without an axis parameter.
+    """
+    return_type = self.this.dtype
     if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
-        return signature(types.float64, recvr=self.this)
-    return signature(self.this.dtype, recvr=self.this)
+        return_type = types.float64
+
+    pysig = None
+    if kws:
+        def mean_stub(axis):
+            pass
+        pysig = utils.pysignature(mean_stub)
+        # rewrite args
+        args = list(args) + [kws['axis']]
+        # TODO: assert no other kws
+        kws = None
+    args_len = len(args)
+    assert args_len <= 1
+    if args_len == 1 and self.this.ndim > 1:
+        # Return type of reduction is array with one less dimension.
+        return_type = types.Array(return_type, ndim=self.this.ndim-1, layout='C')
+    out = signature(return_type, *args, recvr=self.this)
+    return out.replace(pysig=pysig)
 
 def generic_hetero_always_real(self, args, kws):
     assert not args
@@ -689,8 +707,7 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
+install_array_method("mean", mean_expand)
 
 # var and std by definition return in real space and int arrays
 # get promoted to float64 return
