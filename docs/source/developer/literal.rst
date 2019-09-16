@@ -42,6 +42,18 @@ function:
 
 .. autofunction:: numba.literally
 
+Code Example
+~~~~~~~~~~~~
+
+.. literalinclude:: ../../../examples/literally_usage.py
+   :language: python
+   :caption: from ``ex_literally_usage`` of ``examples/literally_usage.py``
+   :start-after: magictoken.ex_literally_usage.begin
+   :end-before: magictoken.ex_literally_usage.end
+   :dedent: 4
+   :linenos:
+
+
 Internal Details
 ~~~~~~~~~~~~~~~~
 
