@@ -1,5 +1,6 @@
 /* Adapted from CPython3.7 Objects/dict-common.h */
 #include "Python.h"
+#include "../_pymodule.h"
 #include "cext.h"
 
 #ifndef NUMBA_DICT_COMMON_H
