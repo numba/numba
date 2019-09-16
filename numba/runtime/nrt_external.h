@@ -14,12 +14,17 @@ typedef struct {
     MemInfos are like smart pointers for objects that are managed by the Numba.
     */
 
-    /* Allocate memory *nbytes*.
+    /* Allocate memory
+
+    *nbytes* is the number of bytes to be allocated
+
+    Returning a new reference.
     */
     NRT_MemInfo* (*allocate)(size_t nbytes);
 
     /* Convert externally allocated memory into a MemInfo.
 
+    *data* is the memory pointer
     *dtor* is the deallocator of the memory
     */
     NRT_MemInfo* (*manage_memory)(void *data, NRT_managed_dtor dtor);
