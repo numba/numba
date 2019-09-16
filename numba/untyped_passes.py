@@ -3,7 +3,11 @@ from .compiler_machinery import FunctionPass, register_pass
 from . import (config, bytecode, interpreter, postproc, errors, types, rewrites,
                transforms, ir, utils)
 import warnings
-from .analysis import dead_branch_prune, rewrite_semantic_constants
+from .analysis import (
+    dead_branch_prune,
+    rewrite_semantic_constants,
+    find_literal_calls,
+)
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass
 from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
@@ -390,4 +394,19 @@ class PreserveIR(FunctionPass):
 
     def run_pass(self, state):
         state.metadata['preserved_ir'] = state.func_ir.copy()
+        return False
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class FindLiterallyCalls(FunctionPass):
+    """Find calls to `numba.literally()` and signal if its requirement is not
+    satisfied.
+    """
+    _name = "find_literally"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        find_literal_calls(state.func_ir, state.args)
         return False

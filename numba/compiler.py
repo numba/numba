@@ -18,7 +18,8 @@ from .compiler_machinery import PassManager
 from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, InlineClosureLikes,
-                             GenericRewrites, WithLifting, InlineInlinables)
+                             GenericRewrites, WithLifting, InlineInlinables,
+                             FindLiterallyCalls)
 
 from .typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
@@ -439,6 +440,8 @@ class DefaultPassBuilder(object):
         pm.add_pass(InlineInlinables, "inline inlinable functions")
         if not state.flags.no_rewrites:
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
+
+        pm.add_pass(FindLiterallyCalls, "find literally calls")
 
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
