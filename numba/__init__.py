@@ -29,7 +29,8 @@ from .types import *
 from .smartarray import SmartArray
 
 # Re-export decorators
-from .decorators import autojit, cfunc, generated_jit, jit, njit, stencil
+from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
+                         jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from .npyufunc import vectorize, guvectorize, threading_layer
@@ -65,6 +66,7 @@ __all__ = """
     jitclass
     njit
     stencil
+    jit_module
     typeof
     prange
     gdb

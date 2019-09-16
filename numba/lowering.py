@@ -374,8 +374,10 @@ class Lower(BaseLower):
 
             op = operator.delitem
             fnop = self.context.typing_context.resolve_value_type(op)
-            fnop.get_call_type(self.context.typing_context, signature.args, {})
-            impl = self.context.get_function(fnop, signature)
+            callsig = fnop.get_call_type(
+                self.context.typing_context, signature.args, {},
+            )
+            impl = self.context.get_function(fnop, callsig)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,
@@ -424,8 +426,10 @@ class Lower(BaseLower):
 
         op = operator.setitem
         fnop = self.context.typing_context.resolve_value_type(op)
-        fnop.get_call_type(self.context.typing_context, signature.args, {})
-        impl = self.context.get_function(fnop, signature)
+        callsig = fnop.get_call_type(
+            self.context.typing_context, signature.args, {},
+        )
+        impl = self.context.get_function(fnop, callsig)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
@@ -590,8 +594,10 @@ class Lower(BaseLower):
         # Get implementation of getitem
         op = operator.getitem
         fnop = self.context.typing_context.resolve_value_type(op)
-        fnop.get_call_type(self.context.typing_context, signature.args, {})
-        impl = self.context.get_function(fnop, signature)
+        callsig = fnop.get_call_type(
+            self.context.typing_context, signature.args, {},
+        )
+        impl = self.context.get_function(fnop, callsig)
 
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),

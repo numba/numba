@@ -13,6 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import njit, jit, types, errors, typing, compiler
+from numba.typed_passes import type_inference_stage
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
@@ -459,7 +460,7 @@ class TestLowLevelExtending(TestCase):
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         typingctx.refresh()
-        typemap, _, _ = compiler.type_inference_stage(
+        typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         self.assertTrue(any(isinstance(a, types.MakeFunctionLiteral)
                             for a in typemap.values()))
