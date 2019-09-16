@@ -1,9 +1,11 @@
 
+import os
 import inspect
 import uuid
 import weakref
 import collections
 
+import numba
 from numba import types, config
 
 # Exported symbols
@@ -389,3 +391,10 @@ def get_cython_function_address(module_name, function_name):
 
     """
     return _import_cython_function(module_name, function_name)
+
+
+def include_path():
+    """Returns the C include directory path.
+    """
+    include_dir = os.path.dirname(os.path.dirname(numba.__file__))
+    return include_dir
