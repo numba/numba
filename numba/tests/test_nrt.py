@@ -9,9 +9,8 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit, targets, typing
-from numba.compiler import compile_isolated, Flags, types
-from numba.extending import include_path
+from numba import njit, targets, typing, types
+from numba.compiler import compile_isolated, Flags
 from numba.runtime import (
     rtsys,
     nrtopt,
@@ -24,6 +23,7 @@ from numba.targets.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
 from numba import cffi_support
+from numba.extending import include_path
 
 from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 
