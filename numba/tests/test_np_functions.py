@@ -2939,15 +2939,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([[4, 5, 6], [1, 2, 3]])
             ),
-            # 2x3 (n-dims)
+            # 2x3 array-like (n-dims)
             (
                 np.array([[1, 2, 3], [4, 5, 6]]),
-                np.array([[4, 5], [1, 2]])
+                ((4, 5), (1, 2))
             ),
-            # 3x3 (1-dim)
+            # 3x3 (1-dim) with type promotion
             (
-                np.array([1, 2, 3]),
-                np.array([4, 5, 6])
+                np.array([1, 2, 3], dtype=np.int64),
+                np.array([4, 5, 6], dtype=np.float64)
             ),
             # 3x3 array-like (1-dim)
             (
@@ -2968,6 +2968,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([1, 2, 3])
+            ),
+            # 3x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 2, 3),
+                np.arange(4).reshape(2, 2)
             )
         ]
 
