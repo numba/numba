@@ -522,8 +522,12 @@ def find_literal_calls(func_ir, argtypes):
     # Scan for literally calls
     for blk in func_ir.blocks.values():
         for assign in blk.find_exprs(op='call'):
-            fnobj = ir_utils.guard(ir_utils.find_global_value,
-                                   func_ir, assign.func)
+            var = ir_utils.guard(ir_utils.get_definition, func_ir, assign.func)
+            if isinstance(var, (ir.Global, ir.FreeVar)):
+                fnobj = var.value
+            else:
+                fnobj = ir_utils.guard(ir_utils.resolve_func_from_module,
+                                       func_ir, var)
             if fnobj is special.literally:
                 # Found
                 [arg] = assign.args

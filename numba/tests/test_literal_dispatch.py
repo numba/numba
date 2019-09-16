@@ -44,6 +44,17 @@ class TestLiteralDispatch(TestCase):
         self.assertEqual(bar_sig[0], types.literal(y))
         self.assertNotIsInstance(bar_sig[1], types.Literal)
 
+    def test_literally_freevar(self):
+        # Try referring to numba.literally not in the globals
+        import numba
+
+        @njit
+        def foo(x):
+            return numba.literally(x)
+
+        self.assertEqual(foo(123), 123)
+        self.assertEqual(foo.signatures[0][0], types.literal(123))
+
     def test_mutual_recursion_literal(self):
         def get_functions(decor):
             @decor
