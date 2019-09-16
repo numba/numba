@@ -14,6 +14,7 @@ from .dispatcher import _FunctionCompiler
 from .targets import registry
 from .typing import signature
 from .typing.ctypes_utils import to_ctypes
+from .compiler_lock import global_compiler_lock
 
 
 class _CFuncCompiler(_FunctionCompiler):
@@ -38,7 +39,7 @@ class CFunc(object):
     _targetdescr = registry.cpu_target
 
     def __init__(self, pyfunc, sig, locals, options,
-                 pipeline_class=compiler.Pipeline):
+                 pipeline_class=compiler.Compiler):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
@@ -60,7 +61,7 @@ class CFunc(object):
     def enable_caching(self):
         self._cache = FunctionCache(self._pyfunc)
 
-    @compiler.global_compiler_lock
+    @global_compiler_lock
     def compile(self):
         # Try to load from cache
         cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
