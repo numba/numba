@@ -17,13 +17,13 @@ from numba.runtime import (
     _nrt_python,
     nrt,
 )
-from numba.extending import intrinsic
+from numba.extending import intrinsic, include_path
 from numba.typing import signature
 from numba.targets.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
 from numba import cffi_support
-from numba.extending import include_path
+from numba.unsafe.nrt import NRT_get_api
 
 from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 
@@ -639,6 +639,18 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
         buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
         arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
         np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
+
+    def test_get_api(self):
+        from cffi import FFI
+
+        @njit
+        def test_nrt_api():
+            return NRT_get_api()
+
+        ffi = FFI()
+        expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
+        got = test_nrt_api()
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':
