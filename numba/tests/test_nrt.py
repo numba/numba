@@ -11,6 +11,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import njit, targets, typing
 from numba.compiler import compile_isolated, Flags, types
+from numba.extending import include_path
 from numba.runtime import (
     rtsys,
     nrtopt,
@@ -551,16 +552,37 @@ br i1 %.294, label %B42, label %B160
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
 
 
-class TestNrtExternal(TestCase):
+@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
-    @unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
-    def test_cffi_compiled_module(self):
-        import numba
 
+    def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI
 
         ffi = FFI()
+        ffi.set_source(name, source, include_dirs=[include_path()])
+        ffi.cdef(cdef)
+        tmpdir = temp_directory("cffi_test_{}".format(name))
+        ffi.compile(tmpdir=tmpdir)
+        sys.path.append(tmpdir)
+        try:
+            mod = import_dynamic(name)
+        finally:
+            sys.path.remove(tmpdir)
+
+        return ffi, mod
+
+    def get_nrt_api_table(self):
+        from cffi import FFI
+
+        ffi = FFI()
+        nrt_get_api = ffi.cast("void* (*)()", _nrt_python.c_helpers['get_api'])
+        table = nrt_get_api()
+        return table
+
+    def test_manage_memory(self):
+        name = "{}_test_manage_memory".format(self.__class__.__name__)
         source = r"""
 #include <stdio.h>
 #include "numba/runtime/nrt_external.h"
@@ -569,7 +591,7 @@ void my_dtor(void *ptr) {
     free(ptr);
 }
 
-NRT_MemInfo* test_nrt_api(NRT_Functions *nrt) {
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
     void * data = malloc(10);
     NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
     nrt->acquire(mi);
@@ -577,29 +599,46 @@ NRT_MemInfo* test_nrt_api(NRT_Functions *nrt) {
     return mi;
 }
         """
-        include_dir = os.path.dirname(os.path.dirname(numba.__file__))
-        ffi.set_source(
-            "cffi_nrt_usecase_ool", source,
-            include_dirs=[include_dir],
-        )
-        ffi.cdef("void* test_nrt_api(void *nrt);")
-        tmpdir = temp_directory('test_cffi_compiled_module')
-        ffi.compile(tmpdir=tmpdir)
-        sys.path.append(tmpdir)
+        cdef = "void* test_nrt_api(void *nrt);"
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
 
-        nrt_functions_get = _nrt_python.c_helpers['Functions_get']
-        table_getter = ffi.cast("void* (*)()", nrt_functions_get)
-        table = table_getter()
-
-        try:
-            mod = import_dynamic('cffi_nrt_usecase_ool')
-        finally:
-            sys.path.remove(tmpdir)
-
+        table = self.get_nrt_api_table()
         out = mod.lib.test_nrt_api(table)
         mi_addr = int(ffi.cast("size_t", out))
         mi = nrt.MemInfo(mi_addr)
         self.assertEqual(mi.refcount, 1)
+
+    def test_allocate(self):
+        name = "{}_test_allocate".format(self.__class__.__name__)
+        source = r"""
+#include <stdio.h>
+#include "numba/runtime/nrt_external.h"
+
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
+    size_t *data = NULL;
+    NRT_MemInfo *mi = nrt->allocate(n);
+    data = nrt->get_data(mi);
+    data[0] = 0xded;
+    data[1] = 0xabc;
+    data[2] = 0xdef;
+    return mi;
+}
+        """
+        cdef = "void* test_nrt_api(void *nrt, size_t n);"
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+
+        table = self.get_nrt_api_table()
+
+        numbytes = 3 * np.dtype(np.intp).itemsize
+        out = mod.lib.test_nrt_api(table, numbytes)
+
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
+
+        buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
+        arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
+        np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
 
 
 if __name__ == '__main__':

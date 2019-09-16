@@ -29,7 +29,11 @@ typedef struct {
 
     /* Release a reference */
     void (*release)(NRT_MemInfo* mi);
-} NRT_Functions;
+
+    /* Get MemInfo data pointer */
+    void* (*get_data)(NRT_MemInfo* mi);
+
+} NRT_api_functions;
 
 
 

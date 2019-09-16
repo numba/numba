@@ -458,14 +458,15 @@ NRT_MemInfo* nrt_manage_memory(void *data, NRT_managed_dtor dtor) {
 
 
 static const
-NRT_Functions nrt_functions_table = {
+NRT_api_functions nrt_functions_table = {
     NRT_MemInfo_alloc,
     nrt_manage_memory,
     NRT_MemInfo_acquire,
-    NRT_MemInfo_release
+    NRT_MemInfo_release,
+    NRT_MemInfo_data
 };
 
 
-const NRT_Functions* NRT_Functions_get(void) {
+const NRT_api_functions* NRT_get_api(void) {
     return &nrt_functions_table;
 }

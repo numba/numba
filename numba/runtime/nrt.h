@@ -223,6 +223,9 @@ VISIBILITY_HIDDEN void *NRT_Reallocate(void *ptr, size_t size);
  */
 VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
 
-VISIBILITY_HIDDEN const NRT_Functions* NRT_Functions_get(void);
+/*
+ * Get API function table.
+ */
+VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
 
 #endif /* NUMBA_NRT_H_ */
