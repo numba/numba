@@ -6,7 +6,7 @@ import warnings
 from .analysis import (
     dead_branch_prune,
     rewrite_semantic_constants,
-    find_literal_calls,
+    find_literally_calls,
 )
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass
@@ -408,5 +408,5 @@ class FindLiterallyCalls(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        find_literal_calls(state.func_ir, state.args)
+        find_literally_calls(state.func_ir, state.args)
         return False

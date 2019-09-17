@@ -502,7 +502,7 @@ def rewrite_semantic_constants(func_ir, called_args):
         print('-' * 80)
 
 
-def find_literal_calls(func_ir, argtypes):
+def find_literally_calls(func_ir, argtypes):
     """An analysis to find `numba.literally` call inside the given IR.
     When an unsatisfied literal typing request is found, a `ForceLiteralArg`
     exception is raised.
