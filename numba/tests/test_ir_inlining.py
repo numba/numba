@@ -329,12 +329,12 @@ class TestFunctionInlining(InliningBase):
     def test_inlining_models(self):
 
         def s17_caller_model(expr, caller_info, callee_info):
-            self.assertTrue(isinstance(expr, ir.Expr))
+            self.assertIsInstance(expr, ir.Expr)
             self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(caller_info)
 
         def s17_callee_model(expr, caller_info, callee_info):
-            self.assertTrue(isinstance(expr, ir.Expr))
+            self.assertIsInstance(expr, ir.Expr)
             self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(callee_info)
 
@@ -647,12 +647,12 @@ class TestOverloadInlining(InliningBase):
     def test_inlining_models(self):
 
         def s17_caller_model(expr, caller_info, callee_info):
-            self.assertTrue(isinstance(expr, ir.Expr))
+            self.assertIsInstance(expr, ir.Expr)
             self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(caller_info.func_ir)
 
         def s17_callee_model(expr, caller_info, callee_info):
-            self.assertTrue(isinstance(expr, ir.Expr))
+            self.assertIsInstance(expr, ir.Expr)
             self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(callee_info.func_ir)
 
