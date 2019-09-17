@@ -17,9 +17,9 @@ For example::
         a = 123
         return bar(x, a)
 
-Numba will infer the type of ``a`` as ``Literal[int](123)``. The definition of ``bar()`` can subsequently
-specialize its implementation knowing that the second argument is an ``int``
-with the value ``123``.
+Numba will infer the type of ``a`` as ``Literal[int](123)``. The definition of
+``bar()`` can subsequently specialize its implementation knowing that the
+second argument is an ``int`` with the value ``123``.
 
 ``Literal`` Type
 ----------------
@@ -37,8 +37,8 @@ Classes and methods related to the ``Literal`` type.
 Specifying for Literal Typing
 -----------------------------
 
-To specify a value as a ``Literal`` type in code scheduled for JIT compilation, use the following
-function:
+To specify a value as a ``Literal`` type in code scheduled for JIT compilation,
+use the following function:
 
 .. autofunction:: numba.literally
 

@@ -69,9 +69,9 @@ def literally(obj):
     the argument must be bound to a literal. The literal requirement
     propagates up the call stack.
 
-    This function is intercepted by the compiler to alter the compilation behavior to
-    wrap the corresponding function parameters as ``Literal``. It has **no effect**
-    outside of nopython-mode (interpreter, and objectmode).
+    This function is intercepted by the compiler to alter the compilation
+    behavior to wrap the corresponding function parameters as ``Literal``.
+    It has **no effect** outside of nopython-mode (interpreter, and objectmode).
 
     The current implementation detects literal arguments in two ways:
 
