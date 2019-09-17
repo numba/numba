@@ -388,6 +388,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             x[1][1] = 30
             yield np.arange(10).reshape(5, 2), x
             yield x, x
+            yield (1, 2, 3), (1, 2, 3)
+            yield 2, 2
+            yield 3, 2
 
         pyfunc = array_equal
         cfunc = jit(nopython=True)(pyfunc)
@@ -402,9 +405,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.arange(3 * 4).reshape(3, 4), 0)
+            cfunc(np.arange(3 * 4).reshape(3, 4), None)
         self.assertIn(
-            "Arguments must be arrays",
+            'Both arguments to "array_equals" must be array-like',
             str(raises.exception)
         )
 
