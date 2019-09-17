@@ -3993,23 +3993,23 @@ def _cross_impl(a, b):
 
 @overload(np.cross)
 def np_cross(a, b):
-    if type_can_asarray(a) and type_can_asarray(b):
-        def impl(a, b):
-            a_ = np.asarray(a)
-            b_ = np.asarray(b)
-            if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
-                raise ValueError((
-                    "incompatible dimensions for cross product\n"
-                    "(dimension must be 2 or 3)"
-                ))
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
 
-            if a_.shape[-1] == 3 or b_.shape[-1] == 3:
-                return _cross_impl(a_, b_)
-            else:
-                raise ValueError((
-                    "Dimensions for both inputs is 2 "
-                    "(currently not supported)."
-                ))
-        return impl
-    else:
-        raise ValueError("Inputs must be array-like.")
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+            raise ValueError((
+                "incompatible dimensions for cross product\n"
+                "(dimension must be 2 or 3)"
+            ))
+
+        if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+            return _cross_impl(a_, b_)
+        else:
+            raise ValueError((
+                "Dimensions for both inputs is 2 "
+                "(currently not supported)."
+            ))
+    return impl
