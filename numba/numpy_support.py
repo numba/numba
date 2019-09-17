@@ -604,6 +604,6 @@ def type_can_asarray(arr):
     return isinstance(arr, ok)
 
 
-def _is_nonelike(ty):
+def is_nonelike(ty):
     """ returns if 'ty' is none """
     return (ty is None) or isinstance(ty, types.NoneType)
