@@ -397,4 +397,5 @@ def include_path():
     """Returns the C include directory path.
     """
     include_dir = os.path.dirname(os.path.dirname(numba.__file__))
-    return include_dir
+    path = os.path.abspath(include_dir)
+    return path
