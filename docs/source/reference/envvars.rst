@@ -75,6 +75,11 @@ These variables influence what is printed out during compilation of
 
    *Default value:* ``no_color``. The type of the value is ``string``.
 
+.. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
+
+   If set to non-zero the issuing of performance warnings is disabled. Default
+   is zero.
+
 .. envvar:: NUMBA_DEBUG
 
    If set to non-zero, print out all possible debugging information during
