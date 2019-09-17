@@ -40,8 +40,12 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
-
+    # TODO: 4494 any reason this was not available?
+    def can_convert_to(self, typingctx, other):
+        # TODO: 4494 any reason casting to unicode is not allowed?
+        conv = typingctx.can_convert(self.literal_type, other)
+        if conv is not None:
+            return max(conv, Conversion.promote)
 
 Literal.ctor_map[str] = StringLiteral
 
@@ -89,6 +93,12 @@ class Omitted(Opaque):
     @property
     def key(self):
         return type(self.value), id(self.value)
+
+    def unify(self, typingctx, other):
+        # TODO: 4494 make Omitted behave like a literal of self.value
+        default_as_literal = literal(self.value)
+        if typingctx.can_convert(default_as_literal, other):
+            return other
 
 
 class VarArg(Type):

@@ -179,10 +179,10 @@ def literal_iter_usecase():
 
 
 def enumerated_iter_usecase(x):
-    buf = ""
+    buf = [""]
     scan = 0
     for i, s in enumerate(x):
-        buf += s
+        buf.append(s)
         scan += 1
     return buf, scan
 

@@ -18,7 +18,7 @@ from numba import dictobject, typeof
 from numba.typed import Dict
 from numba.typedobjectutils import _sentry_safe_cast
 from numba.utils import IS_PY3
-from numba.errors import TypingError
+from numba.errors import TypingError, LoweringError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
@@ -1314,10 +1314,12 @@ class TestDictInferred(TestCase):
             return d
 
         k, v, w = 123, 321, 32.1
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             foo(k, v, w)
+        # TODO: 4494 this error message is a little more confusing than it used to be and
+        #  currently only detected during lowering
         self.assertIn(
-            'cannot safely cast float64 to {}'.format(typeof(v)),
+            'Cannot cast DictType[int64,{}] to DictType[int64,{}]'.format(typeof(v), typeof(w)),
             str(raises.exception),
         )
 
@@ -1330,10 +1332,12 @@ class TestDictInferred(TestCase):
             return d
 
         k, h, v = 123, 123.1, 321
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(LoweringError) as raises:
             foo(k, h, v)
+        # TODO: 4494 this error message is a little more confusing than it used to be and
+        #  currently only detected during lowering
         self.assertIn(
-            'cannot safely cast float64 to {}'.format(typeof(v)),
+            'Cannot cast DictType[{},int64] to DictType[{},int64]'.format(typeof(k), typeof(h)),
             str(raises.exception),
         )
 

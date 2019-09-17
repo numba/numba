@@ -165,7 +165,8 @@ class DataFlowAnalysis(object):
         iterable = info.pop()
         stores = [info.make_temp() for _ in range(count)]
         tupleobj = info.make_temp()
-        info.append(inst, iterable=iterable, stores=stores, tupleobj=tupleobj)
+        casted_iterable = info.make_temp()
+        info.append(inst, iterable=iterable, stores=stores, tupleobj=tupleobj, casted_iterable=casted_iterable)
         for st in reversed(stores):
             info.push(st)
 
@@ -179,8 +180,9 @@ class DataFlowAnalysis(object):
     def op_BUILD_LIST(self, info, inst):
         count = inst.arg
         items = list(reversed([info.pop() for _ in range(count)]))
+        casted_items = [info.make_temp() for _ in items]
         lst = info.make_temp()
-        info.append(inst, items=items, res=lst)
+        info.append(inst, items=items, casted_items=casted_items, res=lst)
         info.push(lst)
 
     def op_LIST_APPEND(self, info, inst):
@@ -193,7 +195,10 @@ class DataFlowAnalysis(object):
             target = info.peek(index)
         appendvar = info.make_temp()
         res = info.make_temp()
-        info.append(inst, target=target, value=value, appendvar=appendvar, res=res)
+        casted_value = info.make_temp()
+        casted_res = info.make_temp()
+        info.append(inst, target=target, value=value, appendvar=appendvar, res=res,
+                    casted_value=casted_value, casted_res=casted_res)
 
     def op_BUILD_MAP(self, info, inst):
         dct = info.make_temp()
@@ -204,15 +209,18 @@ class DataFlowAnalysis(object):
             for i in range(count):
                 v, k = info.pop(), info.pop()
                 items.append((k, v))
-        info.append(inst, items=items[::-1], size=count, res=dct)
+        casted_keys = [info.make_temp() for _ in items]
+        casted_vals = [info.make_temp() for _ in items]
+        info.append(inst, items=items[::-1], casted_keys=casted_keys, casted_vals=casted_vals, size=count, res=dct)
         info.push(dct)
 
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020
         items = list(reversed([info.pop() for _ in range(count)]))
+        casted_items = [info.make_temp() for _ in items]
         res = info.make_temp()
-        info.append(inst, items=items, res=res)
+        info.append(inst, items=items, casted_items=casted_items, res=res)
         info.push(res)
 
     def op_POP_TOP(self, info, inst):
@@ -248,9 +256,10 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     def op_LOAD_CONST(self, info, inst):
-        res = info.make_temp('const')
-        info.append(inst, res=res)
-        info.push(res)
+        res = info.make_temp()
+        casted_res = info.make_temp('const')
+        info.append(inst, res=res, casted_res=casted_res)
+        info.push(casted_res)
 
     def op_LOAD_GLOBAL(self, info, inst):
         res = info.make_temp()
@@ -265,6 +274,7 @@ class DataFlowAnalysis(object):
     def op_LOAD_ATTR(self, info, inst):
         item = info.pop()
         res = info.make_temp()
+
         info.append(inst, item=item, res=res)
         info.push(res)
 
@@ -272,14 +282,22 @@ class DataFlowAnalysis(object):
         index = info.pop()
         target = info.pop()
         res = info.make_temp()
-        info.append(inst, index=index, target=target, res=res)
-        info.push(res)
+        casted_index = info.make_temp()
+        casted_res = info.make_temp()
+        info.append(inst, index=index, target=target, res=res,
+                    casted_index=casted_index,
+                    casted_res=casted_res)
+        info.push(casted_res)
 
     def op_STORE_SUBSCR(self, info, inst):
         index = info.pop()
         target = info.pop()
         value = info.pop()
-        info.append(inst, target=target, index=index, value=value)
+        casted_index = info.make_temp()
+        casted_value = info.make_temp()
+        info.append(inst, target=target, index=index, value=value,
+                    casted_index=casted_index,
+                    casted_value=casted_value)
 
     def op_DELETE_SUBSCR(self, info, inst):
         index = info.pop()
@@ -288,16 +306,20 @@ class DataFlowAnalysis(object):
 
     def op_GET_ITER(self, info, inst):
         value = info.pop()
+        casted_value = info.make_temp()
         res = info.make_temp()
-        info.append(inst, value=value, res=res)
-        info.push(res)
+        casted_res = info.make_temp()
+        info.append(inst, value=value, casted_value=casted_value, res=res, casted_res=casted_res)
+        info.push(casted_res)
 
     def op_FOR_ITER(self, info, inst):
         iterator = info.tos
         pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
+        casted_pair = info.make_temp()
+        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred,
+                    casted_pair=casted_pair)
         info.push(indval)
         # Setup for stack POP (twice) at loop exit (before processing instruction at jump target)
         def pop_info(info):
@@ -306,7 +328,7 @@ class DataFlowAnalysis(object):
         self.edge_process[(info.block.offset, inst.get_jump_target())] = pop_info
 
     if utils.PYVERSION < (3, 6):
-
+        # TODO: 4494 not looked at <py3.7, yet
         def _op_call_function(self, info, inst, has_vararg):
             narg = inst.arg & 0xff
             nkws = (inst.arg >> 8) & 0xff
@@ -338,9 +360,11 @@ class DataFlowAnalysis(object):
             args = list(reversed([info.pop() for _ in range(narg)]))
             func = info.pop()
 
+            casted_args = [info.make_temp() for a in args]
             res = info.make_temp()
-            info.append(inst, func=func, args=args, res=res)
-            info.push(res)
+            casted_res = info.make_temp()
+            info.append(inst, func=func, args=args, casted_args=casted_args, res=res, casted_res=casted_res)
+            info.push(casted_res)
 
         def op_CALL_FUNCTION_KW(self, info, inst):
             narg = inst.arg
@@ -348,9 +372,12 @@ class DataFlowAnalysis(object):
             args = list(reversed([info.pop() for _ in range(narg)]))
             func = info.pop()
 
+            casted_args = [info.make_temp() for a in args]
             res = info.make_temp()
-            info.append(inst, func=func, args=args, names=names, res=res)
-            info.push(res)
+            casted_res = info.make_temp()
+            info.append(inst, func=func, args=args, casted_args=casted_args, names=names,
+                        res=res, casted_res=casted_res)
+            info.push(casted_res)
 
         def op_CALL_FUNCTION_EX(self, info, inst):
             if inst.arg & 1:
@@ -358,9 +385,11 @@ class DataFlowAnalysis(object):
                 raise NotImplementedError(errmsg)
             vararg = info.pop()
             func = info.pop()
+            casted_vararg = info.make_temp()
             res = info.make_temp()
-            info.append(inst, func=func, vararg=vararg, res=res)
-            info.push(res)
+            casted_res = info.make_temp()
+            info.append(inst, func=func, vararg=vararg, casted_vararg=casted_vararg, res=res, casted_res=casted_res)
+            info.push(casted_res)
 
     def _build_tuple_unpack(self, info, inst):
         # Builds tuple from other tuples on the stack
@@ -400,8 +429,10 @@ class DataFlowAnalysis(object):
 
     def _unaryop(self, info, inst):
         val = info.pop()
+        casted_val = info.make_temp()
         res = info.make_temp()
-        info.append(inst, value=val, res=res)
+        casted_res = info.make_temp()
+        info.append(inst, value=val, casted_val=casted_val, res=res, casted_res=casted_res)
         info.push(res)
 
     op_UNARY_NEGATIVE = _unaryop
@@ -412,9 +443,13 @@ class DataFlowAnalysis(object):
     def _binaryop(self, info, inst):
         rhs = info.pop()
         lhs = info.pop()
+        casted_rhs = info.make_temp()
+        casted_lhs = info.make_temp()
         res = info.make_temp()
-        info.append(inst, lhs=lhs, rhs=rhs, res=res)
-        info.push(res)
+        casted_res = info.make_temp()
+        info.append(inst, lhs=lhs, rhs=rhs, casted_lhs=casted_lhs, casted_rhs=casted_rhs,
+                    res=res, casted_res=casted_res)
+        info.push(casted_res)
 
     op_COMPARE_OP = _binaryop
 
@@ -459,9 +494,13 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_res = info.make_temp()
         info.append(inst, base=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
-        info.push(res)
+                    indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_res=casted_res)
+        info.push(casted_res)
 
     def op_SLICE_1(self, info, inst):
         """
@@ -473,9 +512,13 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_res = info.make_temp()
         info.append(inst, base=tos1, start=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
-        info.push(res)
+                    indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_res=casted_res)
+        info.push(casted_res)
 
     def op_SLICE_2(self, info, inst):
         """
@@ -487,9 +530,13 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_res = info.make_temp()
         info.append(inst, base=tos1, stop=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
-        info.push(res)
+                    indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_res=casted_res)
+        info.push(casted_res)
 
     def op_SLICE_3(self, info, inst):
         """
@@ -501,9 +548,13 @@ class DataFlowAnalysis(object):
         res = info.make_temp()
         slicevar = info.make_temp()
         indexvar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_res = info.make_temp()
         info.append(inst, base=tos2, start=tos1, stop=tos, res=res,
-                    slicevar=slicevar, indexvar=indexvar)
-        info.push(res)
+                    slicevar=slicevar, indexvar=indexvar,
+                    casted_index=casted_index,
+                    casted_res=casted_res)
+        info.push(casted_res)
 
     def op_STORE_SLICE_0(self, info, inst):
         """
@@ -514,8 +565,12 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_value = info.make_temp()
         info.append(inst, base=tos, value=value, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+                    indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_value=casted_value)
 
     def op_STORE_SLICE_1(self, info, inst):
         """
@@ -527,8 +582,12 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_value = info.make_temp()
         info.append(inst, base=tos1, start=tos, slicevar=slicevar,
-                    value=value, indexvar=indexvar, nonevar=nonevar)
+                    value=value, indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_value=casted_value)
 
     def op_STORE_SLICE_2(self, info, inst):
         """
@@ -540,8 +599,12 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         nonevar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_value = info.make_temp()
         info.append(inst, base=tos1, stop=tos, value=value, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+                    indexvar=indexvar, nonevar=nonevar,
+                    casted_index=casted_index,
+                    casted_value=casted_value)
 
     def op_STORE_SLICE_3(self, info, inst):
         """
@@ -553,8 +616,12 @@ class DataFlowAnalysis(object):
         value = info.pop()
         slicevar = info.make_temp()
         indexvar = info.make_temp()
+        casted_index = info.make_temp()
+        casted_value = info.make_temp()
         info.append(inst, base=tos2, start=tos1, stop=tos, value=value,
-                    slicevar=slicevar, indexvar=indexvar)
+                    slicevar=slicevar, indexvar=indexvar,
+                    casted_index=casted_index,
+                    casted_value=casted_value)
 
     def op_DELETE_SLICE_0(self, info, inst):
         """
@@ -671,9 +738,9 @@ class DataFlowAnalysis(object):
 
     def op_YIELD_VALUE(self, info, inst):
         val = info.pop()
-        res = info.make_temp()
-        info.append(inst, value=val, res=res)
-        info.push(res)
+        castval = info.make_temp()
+        info.append(inst, value=val, res=info.make_temp(), castval=castval)
+        info.push(castval)
 
     def op_SETUP_LOOP(self, info, inst):
         self.add_syntax_block(info, LoopBlock())

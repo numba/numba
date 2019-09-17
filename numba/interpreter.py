@@ -122,7 +122,9 @@ class Interpreter(object):
         # Define variables receiving the function arguments
         for index, name in enumerate(self.arg_names):
             val = ir.Arg(index=index, name=name, loc=self.loc)
-            self.store(val, name)
+            arg_temp = '$0.{}.{}'.format(name, index)
+            self.store(val, arg_temp)
+            self.store(ir.Expr.cast(self.get(arg_temp), self.loc, incoming=True), name)
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
@@ -181,7 +183,8 @@ class Interpreter(object):
         for phiname, varname in self.dfainfo.outgoing_phis.items():
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=self.get(varname), target=target,
+            cast = ir.Expr.cast(self.get(varname), loc=self.loc)
+            stmt = ir.Assign(value=cast, target=target,
                              loc=self.loc)
             self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
@@ -258,6 +261,18 @@ class Interpreter(object):
 
 
     # --- Scope operations ---
+    def _find_make_function(self, value):
+        if isinstance(value, ir.Var):
+            dfns = self.definitions.get(value.name, [])
+            if len(dfns) != 1:
+                return
+            dfn = dfns[0]
+
+            if isinstance(dfn, ir.Expr) and dfn.op == 'make_function':
+                return value
+            else:
+                return self._find_make_function(dfn)
+
 
     def store(self, value, name, redefine=False):
         """
@@ -269,11 +284,17 @@ class Interpreter(object):
             target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
+        if isinstance(value, ir.Expr) and value.op == 'cast' and self._find_make_function(value.value):
+            # TODO: 4494 casting function definitions confuses the inline closure pass
+            value = value.value
+
         if isinstance(value, ir.Var):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
         self.definitions[target.name].append(value)
+
+        return target
 
     def get(self, name):
         """
@@ -317,10 +338,11 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, tupleobj):
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, tupleobj, casted_iterable):
         count = len(stores)
         # Exhaust the iterable into a tuple-like object
-        tup = ir.Expr.exhaust_iter(value=self.get(iterable), loc=self.loc,
+        self.store(ir.Expr.cast(self.get(iterable), self.loc, incoming=True), casted_iterable)
+        tup = ir.Expr.exhaust_iter(value=self.get(casted_iterable), loc=self.loc,
                                    count=count)
         self.store(name=tupleobj, value=tup)
 
@@ -347,7 +369,7 @@ class Interpreter(object):
                 (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
-    def op_SLICE_0(self, inst, base, res, slicevar, indexvar, nonevar):
+    def op_SLICE_0(self, inst, base, res, slicevar, indexvar, nonevar, casted_index, casted_res):
         base = self.get(base)
 
         slicegv = ir.Global("slice", slice, loc=self.loc)
@@ -360,10 +382,14 @@ class Interpreter(object):
         index = ir.Expr.call(self.get(slicevar), (none, none), (), loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
-        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
 
-    def op_SLICE_1(self, inst, base, start, nonevar, res, slicevar, indexvar):
+        expr = ir.Expr.getitem(base, self.get(casted_index), loc=self.loc)
+        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+
+    def op_SLICE_1(self, inst, base, start, nonevar, res, slicevar, indexvar, casted_index, casted_res):
         base = self.get(base)
         start = self.get(start)
 
@@ -378,10 +404,13 @@ class Interpreter(object):
                              loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
-        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
 
-    def op_SLICE_2(self, inst, base, nonevar, stop, res, slicevar, indexvar):
+        expr = ir.Expr.getitem(base, self.get(casted_index), loc=self.loc)
+        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_SLICE_2(self, inst, base, nonevar, stop, res, slicevar, indexvar, casted_index, casted_res):
         base = self.get(base)
         stop = self.get(stop)
 
@@ -396,10 +425,13 @@ class Interpreter(object):
                              loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
-        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
 
-    def op_SLICE_3(self, inst, base, start, stop, res, slicevar, indexvar):
+        expr = ir.Expr.getitem(base, self.get(casted_index), loc=self.loc)
+        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_SLICE_3(self, inst, base, start, stop, res, slicevar, indexvar, casted_index, casted_res):
         base = self.get(base)
         start = self.get(start)
         stop = self.get(stop)
@@ -411,10 +443,14 @@ class Interpreter(object):
                              loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
-        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
 
-    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar, nonevar):
+        expr = ir.Expr.getitem(base, self.get(casted_index), loc=self.loc)
+        self.store(value=expr, name=res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar, nonevar,
+                         casted_index, casted_value):
         base = self.get(base)
 
         slicegv = ir.Global("slice", slice, loc=self.loc)
@@ -427,12 +463,15 @@ class Interpreter(object):
         index = ir.Expr.call(self.get(slicevar), (none, none), (), loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
-                          loc=self.loc)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+
+        stmt = ir.SetItem(base, self.get(casted_index),
+                          self.get(casted_value), loc=self.loc)
         self.current_block.append(stmt)
 
     def op_STORE_SLICE_1(self, inst, base, start, nonevar, value, slicevar,
-                         indexvar):
+                         indexvar, casted_index, casted_value):
         base = self.get(base)
         start = self.get(start)
 
@@ -447,12 +486,15 @@ class Interpreter(object):
                              loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
-                          loc=self.loc)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+
+        stmt = ir.SetItem(base, self.get(casted_index),
+                          self.get(casted_value), loc=self.loc)
         self.current_block.append(stmt)
 
     def op_STORE_SLICE_2(self, inst, base, nonevar, stop, value, slicevar,
-                         indexvar):
+                         indexvar, casted_index, casted_value):
         base = self.get(base)
         stop = self.get(stop)
 
@@ -467,12 +509,15 @@ class Interpreter(object):
                              loc=self.loc)
         self.store(value=index, name=indexvar)
 
-        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
-                          loc=self.loc)
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+
+        stmt = ir.SetItem(base, self.get(casted_index),
+                          self.get(casted_value), loc=self.loc)
         self.current_block.append(stmt)
 
     def op_STORE_SLICE_3(self, inst, base, start, stop, value, slicevar,
-                         indexvar):
+                         indexvar, casted_index, casted_value):
         base = self.get(base)
         start = self.get(start)
         stop = self.get(stop)
@@ -483,8 +528,12 @@ class Interpreter(object):
         index = ir.Expr.call(self.get(slicevar), (start, stop), (),
                              loc=self.loc)
         self.store(value=index, name=indexvar)
-        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
-                          loc=self.loc)
+
+        self.store(ir.Expr.cast(self.get(indexvar), self.loc, incoming=True), casted_index)
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+
+        stmt = ir.SetItem(base, self.get(casted_index),
+                          self.get(casted_value), loc=self.loc)
         self.current_block.append(stmt)
 
     def op_DELETE_SLICE_0(self, inst, base, slicevar, indexvar, nonevar):
@@ -559,8 +608,8 @@ class Interpreter(object):
 
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
-        value = self.get(value)
-        self.store(value=value, name=dstname)
+        #self.store(ir.Expr.cast(self.get(value), self.loc), dstname)
+        self.store(self.get(value), dstname)
 
     def op_DUP_TOPX(self, inst, orig, duped):
         for src, dst in zip(orig, duped):
@@ -571,6 +620,7 @@ class Interpreter(object):
 
     def op_STORE_ATTR(self, inst, target, value):
         attr = self.code_names[inst.arg]
+        #self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
         sa = ir.SetAttr(target=self.get(target), value=self.get(value),
                         attr=attr, loc=self.loc)
         self.current_block.append(sa)
@@ -581,15 +631,16 @@ class Interpreter(object):
         self.current_block.append(sa)
 
     def op_LOAD_ATTR(self, inst, item, res):
-        item = self.get(item)
         attr = self.code_names[inst.arg]
-        getattr = ir.Expr.getattr(item, attr, loc=self.loc)
+        getattr = ir.Expr.getattr(self.get(item), attr, loc=self.loc)
         self.store(getattr, res)
+        #self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
-    def op_LOAD_CONST(self, inst, res):
+    def op_LOAD_CONST(self, inst, res, casted_res):
         value = self.code_consts[inst.arg]
         const = ir.Const(value, loc=self.loc)
         self.store(const, res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
@@ -646,7 +697,7 @@ class Interpreter(object):
         "no-op"
 
     if PYVERSION < (3, 6):
-
+        # TODO: 4494 Have not looked at < py3.7, yet
         def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
             func = self.get(func)
             args = [self.get(x) for x in args]
@@ -673,36 +724,50 @@ class Interpreter(object):
 
         op_CALL_FUNCTION_VAR = op_CALL_FUNCTION
     else:
-        def op_CALL_FUNCTION(self, inst, func, args, res):
+        def op_CALL_FUNCTION(self, inst, func, args, casted_args, res, casted_res):
             func = self.get(func)
-            args = [self.get(x) for x in args]
-            expr = ir.Expr.call(func, args, (), loc=self.loc)
+            for a, ca in zip(args, casted_args):
+                self.store(ir.Expr.cast(self.get(a), self.loc, incoming=True), ca)
+            the_casted_args = [self.get(x) for x in casted_args]
+            expr = ir.Expr.call(func, the_casted_args, (), loc=self.loc)
             self.store(expr, res)
+            self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
-        def op_CALL_FUNCTION_KW(self, inst, func, args, names, res):
+        def op_CALL_FUNCTION_KW(self, inst, func, args, casted_args, names, res, casted_res):
             func = self.get(func)
             args = [self.get(x) for x in args]
+            for a, ca in zip(args, casted_args):
+                self.store(ir.Expr.cast(a, self.loc, incoming=True), ca)
+            the_casted_args = [self.get(x) for x in casted_args]
             # Find names const
             names = self.get(names)
             for inst in self.current_block.body:
                 if isinstance(inst, ir.Assign) and inst.target is names:
                     self.current_block.remove(inst)
-                    keys = inst.value.value
+                    if isinstance(inst.value, ir.Expr) and inst.value.op == 'cast':
+                         inst = self.current_block.find_variable_assignment(inst.value.value.name)
+                         self.current_block.remove(inst)
+                         keys = inst.value.value
+                    else:
+                        # TODO: 4494 should no longer need this branch
+                        keys = inst.value.value
                     break
 
             nkeys = len(keys)
-            posvals = args[:-nkeys]
-            kwvals = args[-nkeys:]
+            posvals = the_casted_args[:-nkeys]
+            kwvals = the_casted_args[-nkeys:]
             keyvalues = list(zip(keys, kwvals))
 
             expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
             self.store(expr, res)
+            self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
-        def op_CALL_FUNCTION_EX(self, inst, func, vararg, res):
+        def op_CALL_FUNCTION_EX(self, inst, func, vararg, casted_vararg, res, casted_res):
             func = self.get(func)
-            vararg = self.get(vararg)
-            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
+            self.store(ir.Expr.cast(self.get(vararg), self.loc), casted_vararg)
+            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=self.get(casted_vararg))
             self.store(expr, res)
+            self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
     def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
@@ -737,11 +802,13 @@ class Interpreter(object):
         expr = ir.Expr.build_map(items=items, size=2, loc=self.loc)
         self.store(expr, res)
 
-    def op_GET_ITER(self, inst, value, res):
-        expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
+    def op_GET_ITER(self, inst, value, res, casted_value, casted_res):
+        self.store(ir.Expr.cast(value=self.get(value), loc=self.loc, incoming=True), casted_value)
+        expr = ir.Expr.getiter(value=self.get(casted_value), loc=self.loc)
         self.store(expr, res)
+        self.store(ir.Expr.cast(value=self.get(res), loc=self.loc), casted_res)
 
-    def op_FOR_ITER(self, inst, iterator, pair, indval, pred):
+    def op_FOR_ITER(self, inst, iterator, pair, indval, pred, casted_pair):
         """
         Assign new block other this instruction.
         """
@@ -752,11 +819,12 @@ class Interpreter(object):
 
         pairval = ir.Expr.iternext(value=val, loc=self.loc)
         self.store(pairval, pair)
+        self.store(ir.Expr.cast(self.get(pair), self.loc), casted_pair)
 
-        iternext = ir.Expr.pair_first(value=self.get(pair), loc=self.loc)
+        iternext = ir.Expr.pair_first(value=self.get(casted_pair), loc=self.loc)
         self.store(iternext, indval)
 
-        isvalid = ir.Expr.pair_second(value=self.get(pair), loc=self.loc)
+        isvalid = ir.Expr.pair_second(value=self.get(casted_pair), loc=self.loc)
         self.store(isvalid, pred)
 
         # Conditional jump
@@ -765,18 +833,19 @@ class Interpreter(object):
                        loc=self.loc)
         self.current_block.append(br)
 
-    def op_BINARY_SUBSCR(self, inst, target, index, res):
-        index = self.get(index)
-        target = self.get(target)
-        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
-        self.store(expr, res)
+    def op_BINARY_SUBSCR(self, inst, target, index, res, casted_index, casted_res):
+        self.store(ir.Expr.cast(self.get(index), self.loc, incoming=True), casted_index)
 
-    def op_STORE_SUBSCR(self, inst, target, index, value):
-        index = self.get(index)
-        target = self.get(target)
-        value = self.get(value)
-        stmt = ir.SetItem(target=target, index=index, value=value,
-                          loc=self.loc)
+        expr = ir.Expr.getitem(self.get(target), self.get(casted_index), self.loc)
+        self.store(expr, res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_STORE_SUBSCR(self, inst, target, index, value, casted_index, casted_value):
+        self.store(ir.Expr.cast(self.get(index), self.loc, incoming=True), casted_index)
+
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+        stmt = ir.SetItem(target=self.get(target), index=self.get(casted_index),
+                          value=self.get(casted_value), loc=self.loc)
         self.current_block.append(stmt)
 
     def op_DELETE_SUBSCR(self, inst, target, index):
@@ -786,23 +855,32 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_BUILD_TUPLE(self, inst, items, res):
+        # for item, casted_item in zip(items, casted_items):
+        #     self.store(ir.Expr.cast(self.get(item), self.loc, incoming=True), casted_item)
         expr = ir.Expr.build_tuple(items=[self.get(x) for x in items],
                                    loc=self.loc)
         self.store(expr, res)
 
-    def op_BUILD_LIST(self, inst, items, res):
-        expr = ir.Expr.build_list(items=[self.get(x) for x in items],
+    def op_BUILD_LIST(self, inst, items, casted_items, res):
+        for item, casted_item in zip(items, casted_items):
+            self.store(ir.Expr.cast(self.get(item), self.loc, incoming=True), casted_item)
+        expr = ir.Expr.build_list(items=[self.get(x) for x in casted_items],
                                   loc=self.loc)
         self.store(expr, res)
 
-    def op_BUILD_SET(self, inst, items, res):
-        expr = ir.Expr.build_set(items=[self.get(x) for x in items],
+    def op_BUILD_SET(self, inst, items, casted_items, res):
+        for item, casted_item in zip(items, casted_items):
+            self.store(ir.Expr.cast(self.get(item), self.loc, incoming=True), casted_item)
+        expr = ir.Expr.build_set(items=[self.get(x) for x in casted_items],
                                  loc=self.loc)
         self.store(expr, res)
 
-    def op_BUILD_MAP(self, inst, items, size, res):
-        items = [(self.get(k), self.get(v)) for k, v in items]
-        expr = ir.Expr.build_map(items=items, size=size, loc=self.loc)
+    def op_BUILD_MAP(self, inst, items, casted_keys, casted_vals, size, res):
+        for (k, v), ck, cv in zip(items, casted_keys, casted_vals):
+            self.store(ir.Expr.cast(self.get(k), self.loc, incoming=True), ck)
+            self.store(ir.Expr.cast(self.get(v), self.loc, incoming=True), cv)
+        casted_items = [(self.get(ck), self.get(cv)) for k, v in zip(casted_keys, casted_vals)]
+        expr = ir.Expr.build_map(items=casted_items, size=size, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):
@@ -810,125 +888,131 @@ class Interpreter(object):
                            value=self.get(value), loc=self.loc)
         self.current_block.append(stmt)
 
-    def op_UNARY_NEGATIVE(self, inst, value, res):
-        value = self.get(value)
-        expr = ir.Expr.unary('-', value=value, loc=self.loc)
-        return self.store(expr, res)
-
-    def op_UNARY_POSITIVE(self, inst, value, res):
-        value = self.get(value)
-        expr = ir.Expr.unary('+', value=value, loc=self.loc)
-        return self.store(expr, res)
-
-    def op_UNARY_INVERT(self, inst, value, res):
-        value = self.get(value)
-        expr = ir.Expr.unary('~', value=value, loc=self.loc)
-        return self.store(expr, res)
-
-    def op_UNARY_NOT(self, inst, value, res):
-        value = self.get(value)
-        expr = ir.Expr.unary('not', value=value, loc=self.loc)
-        return self.store(expr, res)
-
-    def _binop(self, op, lhs, rhs, res):
-        op = BINOPS_TO_OPERATORS[op]
-        lhs = self.get(lhs)
-        rhs = self.get(rhs)
-        expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+    def op_UNARY_NEGATIVE(self, inst, value, casted_val, res, casted_res):
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_val)
+        expr = ir.Expr.unary('-', value=self.get(casted_val), loc=self.loc)
         self.store(expr, res)
+        return self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
-    def _inplace_binop(self, op, lhs, rhs, res):
+    def op_UNARY_POSITIVE(self, inst, value, casted_val, res, casted_res):
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_val)
+        expr = ir.Expr.unary('+', value=self.get(casted_val), loc=self.loc)
+        self.store(expr, res)
+        return self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_UNARY_INVERT(self, inst, value, casted_val, res, casted_res):
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_val)
+        expr = ir.Expr.unary('~', value=self.get(casted_val), loc=self.loc)
+        self.store(expr, res)
+        return self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def op_UNARY_NOT(self, inst, value, casted_val, res, casted_res):
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_val)
+        expr = ir.Expr.unary('not', value=self.get(casted_val), loc=self.loc)
+        self.store(expr, res)
+        return self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def _binop(self, op, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        op = BINOPS_TO_OPERATORS[op]
+        self.store(ir.Expr.cast(self.get(lhs), self.loc, incoming=True), casted_lhs)
+        self.store(ir.Expr.cast(self.get(rhs), self.loc, incoming=True), casted_rhs)
+        expr = ir.Expr.binop(op, lhs=self.get(casted_lhs), rhs=self.get(casted_rhs), loc=self.loc)
+        self.store(expr, res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
+
+    def _inplace_binop(self, op, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
         immuop = BINOPS_TO_OPERATORS[op]
         op = INPLACE_BINOPS_TO_OPERATORS[op + '=']
-        lhs = self.get(lhs)
-        rhs = self.get(rhs)
-        expr = ir.Expr.inplace_binop(op, immuop, lhs=lhs, rhs=rhs,
+        self.store(ir.Expr.cast(self.get(lhs), self.loc, incoming=True), casted_lhs)
+        self.store(ir.Expr.cast(self.get(rhs), self.loc, incoming=True), casted_rhs)
+        expr = ir.Expr.inplace_binop(op, immuop, lhs=self.get(casted_lhs), rhs=self.get(casted_rhs),
                                      loc=self.loc)
         self.store(expr, res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
-    def op_BINARY_ADD(self, inst, lhs, rhs, res):
-        self._binop('+', lhs, rhs, res)
+    def op_BINARY_ADD(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('+', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_SUBTRACT(self, inst, lhs, rhs, res):
-        self._binop('-', lhs, rhs, res)
+    def op_BINARY_SUBTRACT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('-', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_MULTIPLY(self, inst, lhs, rhs, res):
-        self._binop('*', lhs, rhs, res)
+    def op_BINARY_MULTIPLY(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('*', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_DIVIDE(self, inst, lhs, rhs, res):
-        self._binop('/?', lhs, rhs, res)
+    def op_BINARY_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('/?', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_TRUE_DIVIDE(self, inst, lhs, rhs, res):
-        self._binop('/', lhs, rhs, res)
+    def op_BINARY_TRUE_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('/', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
-        self._binop('//', lhs, rhs, res)
+    def op_BINARY_FLOOR_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('//', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_MODULO(self, inst, lhs, rhs, res):
-        self._binop('%', lhs, rhs, res)
+    def op_BINARY_MODULO(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('%', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_POWER(self, inst, lhs, rhs, res):
-        self._binop('**', lhs, rhs, res)
+    def op_BINARY_POWER(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('**', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
-        self._binop('@', lhs, rhs, res)
+    def op_BINARY_MATRIX_MULTIPLY(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('@', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_LSHIFT(self, inst, lhs, rhs, res):
-        self._binop('<<', lhs, rhs, res)
+    def op_BINARY_LSHIFT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('<<', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_RSHIFT(self, inst, lhs, rhs, res):
-        self._binop('>>', lhs, rhs, res)
+    def op_BINARY_RSHIFT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('>>', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_AND(self, inst, lhs, rhs, res):
-        self._binop('&', lhs, rhs, res)
+    def op_BINARY_AND(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('&', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_OR(self, inst, lhs, rhs, res):
-        self._binop('|', lhs, rhs, res)
+    def op_BINARY_OR(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('|', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_BINARY_XOR(self, inst, lhs, rhs, res):
-        self._binop('^', lhs, rhs, res)
+    def op_BINARY_XOR(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._binop('^', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_ADD(self, inst, lhs, rhs, res):
-        self._inplace_binop('+', lhs, rhs, res)
+    def op_INPLACE_ADD(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('+', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_SUBTRACT(self, inst, lhs, rhs, res):
-        self._inplace_binop('-', lhs, rhs, res)
+    def op_INPLACE_SUBTRACT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('-', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_MULTIPLY(self, inst, lhs, rhs, res):
-        self._inplace_binop('*', lhs, rhs, res)
+    def op_INPLACE_MULTIPLY(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('*', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('/?', lhs, rhs, res)
+    def op_INPLACE_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('/?', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_TRUE_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('/', lhs, rhs, res)
+    def op_INPLACE_TRUE_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('/', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('//', lhs, rhs, res)
+    def op_INPLACE_FLOOR_DIVIDE(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('//', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_MODULO(self, inst, lhs, rhs, res):
-        self._inplace_binop('%', lhs, rhs, res)
+    def op_INPLACE_MODULO(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('%', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_POWER(self, inst, lhs, rhs, res):
-        self._inplace_binop('**', lhs, rhs, res)
+    def op_INPLACE_POWER(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('**', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
-        self._inplace_binop('@', lhs, rhs, res)
+    def op_INPLACE_MATRIX_MULTIPLY(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('@', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_LSHIFT(self, inst, lhs, rhs, res):
-        self._inplace_binop('<<', lhs, rhs, res)
+    def op_INPLACE_LSHIFT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('<<', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_RSHIFT(self, inst, lhs, rhs, res):
-        self._inplace_binop('>>', lhs, rhs, res)
+    def op_INPLACE_RSHIFT(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('>>', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_AND(self, inst, lhs, rhs, res):
-        self._inplace_binop('&', lhs, rhs, res)
+    def op_INPLACE_AND(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('&', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_OR(self, inst, lhs, rhs, res):
-        self._inplace_binop('|', lhs, rhs, res)
+    def op_INPLACE_OR(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('|', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
-    def op_INPLACE_XOR(self, inst, lhs, rhs, res):
-        self._inplace_binop('^', lhs, rhs, res)
+    def op_INPLACE_XOR(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
+        self._inplace_binop('^', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
     def op_JUMP_ABSOLUTE(self, inst):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
@@ -946,18 +1030,19 @@ class Interpreter(object):
         ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
-    def op_COMPARE_OP(self, inst, lhs, rhs, res):
+    def op_COMPARE_OP(self, inst, lhs, rhs, casted_lhs, casted_rhs, res, casted_res):
         op = dis.cmp_op[inst.arg]
         if op == 'in' or op == 'not in':
             lhs, rhs = rhs, lhs
 
         if op == 'not in':
-            self._binop('in', lhs, rhs, res)
-            tmp = self.get(res)
+            self._binop('in', lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
+            tmp = self.get(casted_res)
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
+            self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
         else:
-            self._binop(op, lhs, rhs, res)
+            self._binop(op, lhs, rhs, casted_lhs, casted_rhs, res, casted_res)
 
     def op_BREAK_LOOP(self, inst):
         loop = self.syntax_blocks[-1]
@@ -972,7 +1057,8 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        bra = ir.Branch(cond=self.get(pred), truebr=truebr, falsebr=falsebr,
+        casted_pred = self.store(ir.Expr.cast(self.get(pred), self.loc, incoming=True), pred, redefine=True)
+        bra = ir.Branch(cond=casted_pred, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
 
@@ -1000,11 +1086,13 @@ class Interpreter(object):
         stmt = ir.Raise(exception=exc, loc=self.loc)
         self.current_block.append(stmt)
 
-    def op_YIELD_VALUE(self, inst, value, res):
+    def op_YIELD_VALUE(self, inst, value, res, castval):
         # initialize index to None.  it's being set later in post-processing
         index = None
-        inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
-        return self.store(inst, res)
+        value = self.get(value)
+        self.store(ir.Yield(value=value, index=index, loc=self.loc), res)
+        cast = ir.Expr.cast(self.get(res), loc=self.loc)
+        return self.store(cast, castval)
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
         if annotations != None:
@@ -1013,7 +1101,11 @@ class Interpreter(object):
             raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
         if isinstance(defaults, tuple):
             defaults = tuple([self.get(name) for name in defaults])
-        fcode = self.definitions[code][0].value
+
+        # TODO: 4494 unpacking the constant cast should probably be in ir_utils
+        casted_fcode = self.definitions[code][0]
+        fcode = self.definitions[casted_fcode.value.name][0].value
+
         if name:
             name = self.get(name)
         if closure:
@@ -1039,13 +1131,13 @@ class Interpreter(object):
             gl = ir.FreeVar(idx, name, value, loc=self.loc)
         self.store(gl, res)
 
-    def op_LIST_APPEND(self, inst, target, value, appendvar, res):
-        target = self.get(target)
-        value = self.get(value)
-        appendattr = ir.Expr.getattr(target, 'append', loc=self.loc)
+    def op_LIST_APPEND(self, inst, target, value, appendvar, res, casted_value, casted_res):
+        self.store(ir.Expr.cast(self.get(value), self.loc, incoming=True), casted_value)
+        appendattr = ir.Expr.getattr(self.get(target), 'append', loc=self.loc)
         self.store(value=appendattr, name=appendvar)
-        appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
+        appendinst = ir.Expr.call(self.get(appendvar), (self.get(casted_value),), (), loc=self.loc)
         self.store(value=appendinst, name=res)
+        self.store(ir.Expr.cast(self.get(res), self.loc), casted_res)
 
 
     # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,

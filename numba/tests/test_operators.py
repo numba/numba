@@ -406,11 +406,11 @@ class TestOperators(TestCase):
                 x_expected = copy.copy(x)
                 got = cfunc(x_got, y)
                 expected = pyfunc(x_expected, y)
-                self.assertPreciseEqual(
+                self.assertEqual(
                     got, expected,
                     msg="mismatch for (%r, %r) with types %s: %r != %r"
                         % (x, y, arg_types, got, expected))
-                self.assertPreciseEqual(
+                self.assertEqual(
                     x_got, x_expected,
                     msg="mismatch for (%r, %r) with types %s: %r != %r"
                         % (x, y, arg_types, x_got, x_expected))

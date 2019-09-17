@@ -203,15 +203,25 @@ class NRTContext(object):
 
         from numba.runtime.nrtdynmod import incref_decref_ty
 
-        meminfos = self.get_meminfos(builder, typ, value)
-        for _, mi in meminfos:
-            mod = builder.module
-            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
-            # XXX "nonnull" causes a crash in test_dyn_array: can this
-            # function be called with a NULL pointer?
-            fn.args[0].add_attribute("noalias")
-            fn.args[0].add_attribute("nocapture")
-            builder.call(fn, [mi])
+        if isinstance(typ, types.Optional):
+            # TODO: 4494 don't think there is a way of making optional types work with incref/decref w/o special-casing
+            optional = cgutils.create_struct_proxy(typ)(self._context, builder)
+            is_valid = optional.valid
+            typ = typ.type
+            value = optional.data
+        else:
+            is_valid = cgutils.true_bit
+
+        with builder.if_then(is_valid):
+            meminfos = self.get_meminfos(builder, typ, value)
+            for _, mi in meminfos:
+                mod = builder.module
+                fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
+                # XXX "nonnull" causes a crash in test_dyn_array: can this
+                # function be called with a NULL pointer?
+                fn.args[0].add_attribute("noalias")
+                fn.args[0].add_attribute("nocapture")
+                builder.call(fn, [mi])
 
     def incref(self, builder, typ, value):
         """

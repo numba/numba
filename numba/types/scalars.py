@@ -88,8 +88,45 @@ class IntegerLiteral(Literal, Integer):
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
+        if conv == Conversion.unsafe:
+            try:
+                if (
+                    isinstance(other, Integer)
+                    and other.minval <= self.literal_value <= other.maxval
+                ):
+                    # TODO: 4494 refine unsafe casts if we can ensure we are within other's range (1 -> uint, ...)
+                    conv = Conversion.safe
+                elif isinstance(other, Number) and utils.bit_length(self.literal_value) < 32:
+                    # TODO: 4494 try int32 -> other if we value is small enough
+                    from ..types import int32
+                    conv = typingctx.can_convert(int32, other)
+            except:
+                # should only happen if x <= y <= z goes wrong above
+                pass
+
         if conv is not None:
             return max(conv, Conversion.promote)
+
+    def unify(self, typingctx, other):
+        """
+        Unify the two number types using Numpy's rules.
+        """
+        # TODO: 4494 special case (val in range of int32) -> float32
+        from ..types import float32
+        bitwidth = (utils.bit_length(self.literal_value) // 32 + 1) * 32
+        if other == float32 and bitwidth <= 32:
+            return float32
+        elif isinstance(other, Integer) and not isinstance(other, Literal):
+            min_unliteral_type = other.from_bitwidth(bitwidth, other.signed)
+            return typingctx.unify_pairs(min_unliteral_type, other)
+        from .. import numpy_support
+        if isinstance(other, Number):
+            # XXX: this can produce unsafe conversions,
+            # e.g. would unify {int64, uint64} to float64
+            a = numpy_support.as_dtype(self)
+            b = numpy_support.as_dtype(other)
+            sel = np.promote_types(a, b)
+            return numpy_support.from_dtype(sel)
 
 
 Literal.ctor_map[int] = IntegerLiteral

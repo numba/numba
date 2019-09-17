@@ -318,7 +318,7 @@ def array_cumprod(context, builder, sig, args):
 
     def array_cumprod_impl(arr):
         out = np.empty(arr.size, dtype)
-        c = 1
+        c = 1   # TODO: 4494 gets picky about (not) casting literals, need constant of right type here
         for idx, v in enumerate(arr.flat):
             c *= v
             out[idx] = c

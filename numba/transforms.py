@@ -351,9 +351,13 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
     """
     _illegal_cm_msg = "Illegal use of context-manager."
 
-    def get_var_dfn(var):
+    def get_var_dfn(var, uncast=True):
         """Get the definition given a variable"""
-        return func_ir.get_definition(var)
+        v = func_ir.get_definition(var)
+        if uncast:
+            if isinstance(v, ir.Expr) and v.op == 'cast':
+                return func_ir.get_definition(v.value)
+        return v
 
     def get_ctxmgr_obj(var_ref):
         """Return the context-manager object and extra info.
@@ -363,6 +367,11 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         """
         # If the contextmanager used as a Call
         dfn = func_ir.get_definition(var_ref)
+        # TODO: 4494 call result gets casted, unpack. This assumes the cast is actually trivial
+        #  which probably needs to be checked
+        while isinstance(dfn, ir.Expr) and dfn.op == 'cast':
+            var_ref = dfn.value
+            dfn = func_ir.get_definition(var_ref)
         if isinstance(dfn, ir.Expr) and dfn.op == 'call':
             args = [get_var_dfn(x) for x in dfn.args]
             kws = {k: get_var_dfn(v) for k, v in dfn.kws}

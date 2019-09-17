@@ -32,10 +32,10 @@ if _py34_or_later:
     _PyHASH_INF = sys.hash_info.inf
     _PyHASH_NAN = sys.hash_info.nan
     _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
-    _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+    _PyHASH_BITS = np.uint(31 if types.intp.bitwidth == 32 else 61)  # mersenne primes
     _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
     _PyHASH_IMAG = _PyHASH_MULTIPLIER
-    _PyLong_SHIFT = sys.int_info.bits_per_digit
+    _PyLong_SHIFT = np.uint(sys.int_info.bits_per_digit)
     _Py_HASH_CUTOFF = sys.hash_info.cutoff
     _Py_hashfunc_name = sys.hash_info.algorithm
 else:
@@ -106,21 +106,22 @@ def _Py_HashDouble(v):
     while (m):
         x = ((x << 28) & _PyHASH_MODULUS) | x >> (_PyHASH_BITS - 28)
         m *= 268435456.0  # /* 2**28 */
-        e -= 28
-        y = int(m)  # /* pull out integer part */
+        e = np.int32(e - 28)   # TODO: 4494 should this work w/o explicit cast? Currently
+        #                         int binops always promote to intp
+        y = np.uint(m)  # /* pull out integer part */
         m -= y
         x += y
         if x >= _PyHASH_MODULUS:
             x -= _PyHASH_MODULUS
     # /* adjust for the exponent;  first reduce it modulo _PyHASH_BITS */
     if e >= 0:
-        e = e % _PyHASH_BITS
+        e = np.int32(e % _PyHASH_BITS) # TODO: 4494 should this work w/o explicit cast?
     else:
-        e = _PyHASH_BITS - 1 - ((-1 - e) % _PyHASH_BITS)
+        e = np.int32(_PyHASH_BITS - 1 - ((-1 - e) % _PyHASH_BITS))
 
     x = ((x << e) & _PyHASH_MODULUS) | x >> (_PyHASH_BITS - e)
 
-    x = x * sign
+    x = np.uint64(x * sign)
     return process_return(x)
 
 

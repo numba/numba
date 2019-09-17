@@ -221,6 +221,10 @@ class BoundFunction(Callable, Opaque):
         is_param = hasattr(self.template, 'generic')
         return sigs, is_param
 
+    def is_precise(self):
+        return self.this.is_precise()
+
+
 class MakeFunctionLiteral(Literal, Opaque):
     pass
 

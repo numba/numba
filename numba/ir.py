@@ -503,14 +503,16 @@ class Expr(Inst):
                    index_var=index_var)
 
     @classmethod
-    def cast(cls, value, loc):
+    def cast(cls, value, loc, incoming=False):
         """
-        A node for implicit casting at the return statement
+        TODO: 4494 a node to cast vars, incoming will tell the typeinferer not to
+         back-propagate type changes of the target
         """
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
+        assert isinstance(incoming, bool)
         op = 'cast'
-        return cls(op=op, value=value, loc=loc)
+        return cls(op=op, value=value, loc=loc, incoming=incoming)
 
     @classmethod
     def make_function(cls, name, code, closure, defaults, loc):

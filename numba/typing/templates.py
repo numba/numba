@@ -821,10 +821,16 @@ def bound_function(template_key):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
 
-                def generic(_, args, kws):
-                    sig = method_resolver(self, ty, args, kws)
+                @property
+                def this(self):
+                    return self.this
+
+                def generic(_, args, kws):  # TODO: 4494 _/self is a little confusing, right?
+                    # pass the actual type along, bound method might have been defined for an
+                    # abstract type like List
+                    sig = method_resolver(self, _.this, args, kws)
                     if sig is not None and sig.recvr is None:
-                        sig.recvr = ty
+                        sig.recvr = _.this
                     return sig
 
             return types.BoundFunction(MethodTemplate, ty)

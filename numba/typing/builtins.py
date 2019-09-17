@@ -145,10 +145,9 @@ def choose_result_int(*inputs):
 
 # The "machine" integer types to take into consideration for operator typing
 # (according to the integer typing NBEP)
-machine_ints = (
-    sorted(set((types.intp, types.int64))) +
-    sorted(set((types.uintp, types.uint64)))
-    )
+signed_machine_ints = list(sorted(set((types.intp, types.int64))))
+unsigned_machine_ints = list(sorted(set((types.uintp, types.uint64))))
+machine_ints = signed_machine_ints + unsigned_machine_ints
 
 # Explicit integer rules for binary operators; smaller ints will be
 # automatically upcast.
@@ -252,7 +251,13 @@ class DivMod(ConcreteTemplate):
 
 @infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
-    cases = list(integer_binop_cases)
+    # TODO: 4494 before making casts explicit Numba was closer to
+    #  Python's behaviour, ie pow(2, 3) -> int, pow(2, -3) -> float. Now
+    #  we need to be more strict (int, int) -> float only (int, uint) -> int
+    cases = [signature(choose_result_int(x, y), x, y)
+             for x, y in itertools.product(machine_ints, unsigned_machine_ints)]
+    cases = [signature(types.float64, x, y)
+             for x, y in itertools.product(machine_ints, machine_ints)]
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
               for op in (types.int32, types.int64, types.uint64)]
@@ -266,7 +271,10 @@ class BinOpPower(ConcreteTemplate):
 
 @infer_global(operator.ipow)
 class BinOpPower(ConcreteTemplate):
-    cases = list(integer_binop_cases)
+    cases =[signature(choose_result_int(x, y), x, y)
+            for x, y in itertools.product(machine_ints, unsigned_machine_ints)]
+    cases = [signature(types.float64, x, y)
+             for x, y in itertools.product(machine_ints, machine_ints)]
     # Ensure that float32 ** int doesn't go through DP computations
     cases += [signature(types.float32, types.float32, op)
               for op in (types.int32, types.int64, types.uint64)]

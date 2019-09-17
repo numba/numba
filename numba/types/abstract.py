@@ -235,6 +235,9 @@ class Number(Hashable):
         """
         from .. import numpy_support
         if isinstance(other, Number):
+            if isinstance(other, Literal) and not isinstance(self, Literal):
+                # TODO: 4494 if other is literal rely on other's unify method
+                return other.unify(typingctx, self)
             # XXX: this can produce unsafe conversions,
             # e.g. would unify {int64, uint64} to float64
             a = numpy_support.as_dtype(self)

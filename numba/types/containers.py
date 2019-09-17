@@ -585,6 +585,11 @@ class DictType(IterableType):
         if isinstance(other, DictType):
             if not other.is_precise():
                 return self
+            else:
+                unified_kty = typingctx.unify_pairs(self.key_type, other.key_type)
+                unified_vty = typingctx.unify_pairs(self.value_type, other.value_type)
+                if unified_kty and unified_vty:
+                    return DictType(unified_kty, unified_vty)
 
 
 class DictItemsIterableType(SimpleIterableType):

@@ -7,6 +7,7 @@ import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
+from numpy.ma import isin
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
@@ -309,9 +310,8 @@ class Lower(BaseLower):
             fl = self.blkmap[inst.falsebr]
 
             condty = self.typeof(inst.cond.name)
-            pred = self.context.cast(self.builder, cond, condty, types.boolean)
-            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
-            self.builder.cbranch(pred, tr, fl)
+            assert types.unliteral(condty) == types.boolean
+            self.builder.cbranch(cond, tr, fl)
 
         elif isinstance(inst, ir.Jump):
             target = self.blkmap[inst.target]
@@ -329,8 +329,7 @@ class Lower(BaseLower):
                 # If returning an optional type
                 self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
-            if ty != oty:
-                val = self.context.cast(self.builder, val, oty, ty)
+
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
@@ -344,9 +343,6 @@ class Lower(BaseLower):
             else:
                 target = self.loadvar(inst.target.name)
                 value = self.loadvar(inst.value.name)
-                valuety = self.typeof(inst.value.name)
-                value = self.context.cast(self.builder, value, valuety,
-                                          signature.args[2])
                 return impl(self.builder, (target, inst.index, value))
 
         elif isinstance(inst, ir.Print):
@@ -378,9 +374,6 @@ class Lower(BaseLower):
             impl = self.context.get_function(fnop, signature)
 
             assert targetty == signature.args[0]
-            index = self.context.cast(self.builder, index, indexty,
-                                      signature.args[1])
-
             return impl(self.builder, (target, index))
 
         elif isinstance(inst, ir.Del):
@@ -395,11 +388,10 @@ class Lower(BaseLower):
             valuety = self.typeof(inst.value.name)
             assert signature is not None
             assert signature.args[0] == targetty
+            if isinstance(valuety, types.Literal) and not isinstance(signature.args[1], types.Literal):
+                # TODO: 4494
+                value = self.context.cast(self.builder, value, valuety, signature.args[1])
             impl = self.context.get_setattr(inst.attr, signature)
-
-            # Convert argument to match
-            value = self.context.cast(self.builder, value, valuety,
-                                      signature.args[1])
 
             return impl(self.builder, (target, value))
 
@@ -434,9 +426,8 @@ class Lower(BaseLower):
         else:
             assert targetty == signature.args[0]
 
-        index = self.context.cast(self.builder, index, indexty,
-                                  signature.args[1])
-        value = self.context.cast(self.builder, value, valuety,
+        assert types.unliteral(indexty) == types.unliteral(signature.args[1])
+        value = self.context.cast(self.builder, value, valuety,     # TODO: 4494 npyufunc.test_gufunc.TestGUVectorizeScalar.test_scalar_output
                                   signature.args[2])
 
         return impl(self.builder, (target, index, value))
@@ -463,9 +454,12 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
-            res = self.context.cast(self.builder, val, oty, ty)
-            self.incref(ty, res)
-            return res
+
+            if isinstance(oty, types.Literal) and not isinstance(ty, types.Literal):
+                val = self.context.cast(self.builder, val, oty, ty)
+
+            self.incref(ty, val)
+            return val
 
         elif isinstance(value, ir.Arg):
             # Cast from the argument type to the local variable type
@@ -475,13 +469,14 @@ class Lower(BaseLower):
                 pyval = argty.value
                 # use the type of the constant value
                 valty = self.context.typing_context.resolve_value_type(pyval)
-                const = self.context.get_constant_generic(self.builder, valty,
+                assert types.unliteral(valty) == types.unliteral(ty)
+
+                res = self.context.get_constant_generic(self.builder, valty,
                                                           pyval)
-                # cast it to the variable type
-                res = self.context.cast(self.builder, const, valty, ty)
             else:
-                val = self.fnargs[value.index]
-                res = self.context.cast(self.builder, val, argty, ty)
+                assert types.unliteral(argty) == types.unliteral(ty)
+                res = self.fnargs[value.index]
+
             self.incref(ty, res)
             return res
 
@@ -501,12 +496,10 @@ class Lower(BaseLower):
         val = self.loadvar(inst.value.name)
         typ = self.typeof(inst.value.name)
 
-        # cast the local val to the type yielded
-        yret = self.context.cast(self.builder, val, typ,
-                                 self.gentype.yield_type)
+        assert types.unliteral(typ) == types.unliteral(self.gentype.yield_type)
 
         # get the return repr of yielded value
-        retval = self.context.get_return_value(self.builder, typ, yret)
+        retval = self.context.get_return_value(self.builder, typ, val)
 
         # return
         self.call_conv.return_value(self.builder, retval)
@@ -532,12 +525,13 @@ class Lower(BaseLower):
 
         # Convert argument to match
         signature = self.fndesc.calltypes[expr]
-        lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
-        rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
+        # lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
+        # rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
 
         def cast_result(res):
-            return self.context.cast(self.builder, res,
-                                     signature.return_type, resty)
+            return res
+            # return self.context.cast(self.builder, res,
+            #                          signature.return_type, resty)
 
         # First try with static operands, if known
         def try_static_impl(tys, args):
@@ -594,15 +588,7 @@ class Lower(BaseLower):
         impl = self.context.get_function(fnop, signature)
 
         argvals = (baseval, indexval)
-        argtyps = (self.typeof(value.name),
-                   self.typeof(index.name))
-        castvals = [self.context.cast(self.builder, av, at, ft)
-                    for av, at, ft in zip(argvals, argtyps,
-                                          signature.args)]
-        res = impl(self.builder, castvals)
-        return self.context.cast(self.builder, res,
-                                 signature.return_type,
-                                 resty)
+        return impl(self.builder, argvals)
 
     def _cast_var(self, var, ty):
         """
@@ -616,7 +602,7 @@ class Lower(BaseLower):
         else:
             varty = self.typeof(var.name)
             val = self.loadvar(var.name)
-        return self.context.cast(self.builder, val, varty, ty)
+        return val
 
     def fold_call_args(self, fnty, signature, pos_args, vararg, kw_args):
         if vararg:
@@ -724,8 +710,7 @@ class Lower(BaseLower):
                     loc=self.loc
                 )
 
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
+        return res
 
     def _lower_call_ObjModeDispatcher(self, fnty, expr, signature):
         self.init_pyapi()
@@ -910,12 +895,7 @@ class Lower(BaseLower):
             # Get function
             signature = self.fndesc.calltypes[expr]
             impl = self.context.get_function(func_ty, signature)
-            # Convert argument to match
-            val = self.context.cast(self.builder, val, typ, signature.args[0])
-            res = impl(self.builder, [val])
-            res = self.context.cast(self.builder, res,
-                                    signature.return_type, resty)
-            return res
+            return impl(self.builder, [val])
 
         elif expr.op == 'call':
             res = self.lower_call(resty, expr)
@@ -937,15 +917,10 @@ class Lower(BaseLower):
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
-            ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
             impl = self.context.get_function(expr.op, signature)
-            [fty] = signature.args
-            castval = self.context.cast(self.builder, val, ty, fty)
-            res = impl(self.builder, (castval,))
-            res = self.context.cast(self.builder, res, signature.return_type,
-                                    resty)
-            return res
+
+            return impl(self.builder, (val,))
 
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
@@ -1002,8 +977,10 @@ class Lower(BaseLower):
             if isinstance(resty, types.BoundFunction):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
-                casted = self.context.cast(self.builder, val, ty, resty.this)
-                res = self.context.get_bound_function(self.builder, casted,
+                if isinstance(ty, types.Literal):
+                    val = self.context.cast(self.builder, val, ty, resty.this)
+
+                res = self.context.get_bound_function(self.builder, val,
                                                       resty.this)
                 self.incref(resty, res)
                 return res
@@ -1018,9 +995,8 @@ class Lower(BaseLower):
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
 
-                # Cast the attribute type to the expected output type
-                res = self.context.cast(self.builder, res, attrty, resty)
                 return res
+
 
         elif expr.op == "static_getitem":
             signature = typing.signature(
@@ -1050,27 +1026,36 @@ class Lower(BaseLower):
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty, toty)
-                        for val, toty, fromty in zip(itemvals, resty, itemtys)]
-            tup = self.context.make_tuple(self.builder, resty, castvals)
+            unliteral_vals = [
+                self.context.cast(self.builder, val, fromty, toty)
+                if isinstance(fromty, types.Literal) else val
+                for val, fromty, toty in zip(itemvals, itemtys, resty.types)
+            ]
+            tup = self.context.make_tuple(self.builder, resty, unliteral_vals)
             self.incref(resty, tup)
             return tup
 
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
-                        for val, fromty in zip(itemvals, itemtys)]
-            return self.context.build_list(self.builder, resty, castvals)
+            unliteral_vals = [
+                self.context.cast(self.builder, val, fromty, resty.dtype)
+                if isinstance(fromty, types.Literal) else val
+                for val, fromty in zip(itemvals, itemtys)
+            ]
+            return self.context.build_list(self.builder, resty, unliteral_vals)
 
         elif expr.op == "build_set":
             # Insert in reverse order, as Python does
             items = expr.items[::-1]
             itemvals = [self.loadvar(i.name) for i in items]
             itemtys = [self.typeof(i.name) for i in items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
-                        for val, fromty in zip(itemvals, itemtys)]
-            return self.context.build_set(self.builder, resty, castvals)
+            unliteral_vals = [
+                self.context.cast(self.builder, val, fromty, resty.dtype)
+                if isinstance(fromty, types.Literal) else val
+                for val, fromty in zip(itemvals, itemtys)
+            ]
+            return self.context.build_set(self.builder, resty, unliteral_vals)
 
         elif expr.op == "build_map":
             items = expr.items

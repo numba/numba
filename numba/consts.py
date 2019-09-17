@@ -86,6 +86,9 @@ class ConstantInference(object):
         elif expr.op == 'build_tuple':
             return tuple(self.infer_constant(i.name, loc=expr.loc) for i in
                          expr.items)
+        elif expr.op == 'cast':
+            # TODO: 4494 this is ignoring the actual cast
+            return self.infer_constant(expr.value.name)
         self._fail(expr)
 
     def _infer_call(self, func, expr):

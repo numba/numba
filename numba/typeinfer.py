@@ -18,6 +18,7 @@ import logging
 import operator
 import contextlib
 import itertools
+from operator import itemgetter
 from pprint import pprint
 from collections import OrderedDict, defaultdict
 
@@ -25,6 +26,7 @@ from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
                      termcolor, UnsupportedError)
 from .funcdesc import qualifying_prefix
+from .typeconv import Conversion
 
 
 _logger = logging.getLogger(__name__)
@@ -178,15 +180,76 @@ class Propagate(object):
     def __call__(self, typeinfer):
         with new_error_context("typing of assignment at {0}", self.loc,
                                loc=self.loc):
-            typeinfer.copy_type(self.src, self.dst, loc=self.loc)
+            #typeinfer.copy_type(self.src, self.dst, loc=self.loc)
+            src_type = typeinfer.typevars[self.src].getone()
+            typeinfer.add_type(self.dst, src_type, unless_locked=True,
+                           loc=self.loc)
+            # check if dst has src_type otherwise back propagate (doing this manual as we
+            # must not overwrite previous refine_map, yet)
+            dst_type = typeinfer.typevars[self.dst].getone()
+            if dst_type != src_type:
+                typeinfer.add_type(self.src, dst_type, unless_locked=True,
+                                   loc=self.loc)
             # If `dst` is refined, notify us
-            typeinfer.refine_map[self.dst] = self
+            typeinfer.refine_map[self.dst].add(self)
 
     def refine(self, typeinfer, target_type):
         # Do not back-propagate to locked variables (e.g. constants)
         assert target_type.is_precise()
         typeinfer.add_type(self.src, target_type, unless_locked=True,
                            loc=self.loc)
+
+
+class Cast(object):
+    """
+    Constraint for casts. Outgoing casts behave (almost) like `Propagate`, incoming casts do not back-propagate.
+    'Almost' is to say we need to be more careful about not propagating non-precise types and back-propagate
+    precise refinements.
+    TODO: 4494 this is currently back-propagating any precise type onto a non-precise type. However this should
+     check if the dst type is a more precise refinement of the src type
+    """
+    def __init__(self, dst, src, loc, incoming):
+        self.dst = dst
+        self.src = src
+        self.loc = loc
+        self.incoming = incoming
+
+    def __call__(self, typeinfer):
+        with new_error_context("typing of assignment at {0}", self.loc,
+                               loc=self.loc):
+            src_type = typeinfer.typevars[self.src]
+            dst_type = typeinfer.typevars[self.dst]
+            if src_type and src_type.getone().is_precise() or not dst_type:
+                typeinfer.add_type(self.dst, src_type.getone(), loc=self.loc)
+            else:
+                if dst_type and dst_type.getone().is_precise():
+                    typeinfer.add_type(self.src, dst_type.getone(), unless_locked=True,
+                                       loc=self.loc)
+
+            # If `dst` is refined, notify us
+            typeinfer.refine_map[self.dst].add(self)
+
+    def refine(self, typeinfer, target_type):
+        # Do not back-propagate to locked variables (e.g. constants)
+        assert target_type.is_precise()
+
+        src_type = typeinfer.typevars[self.src].getone()
+        can_convert = typeinfer.context.can_convert(src_type, target_type)
+        if src_type.is_precise() and can_convert not in (Conversion.exact, Conversion.safe, Conversion.promote):
+            raise TypingError('Cannot cast {} -> {}'.format(src_type, target_type))
+
+
+class BranchConstraint(object):
+    # TODO: 4494 these need to be fixed in TypeInferer._fix_outgoing_casts, maybe forget about these in the first
+    #  place and rely on _fix_outgoing_casts exclusively
+    def __init__(self, cond, loc):
+        self.cond = cond
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        # we would want this to narrow the type to boolean (we know cond is the target of a cast)
+        # what we get here is the unification hence the need for fixing in _fix_outgoing_casts
+        typeinfer.add_type(self.cond, types.boolean, self.loc)
 
 
 class ArgConstraint(object):
@@ -228,6 +291,11 @@ class BuildTupleConstraint(object):
                     tup = types.Tuple(vals)
                 assert tup.is_precise()
                 typeinfer.add_type(self.target, tup, loc=self.loc)
+                typeinfer.refine_map[self.target].add(self)
+
+    def refine(self, typeinfer, target_type):
+        for var, typ in zip(self.items, target_type.types):
+            typeinfer.add_type(var.name, typ, loc=var.loc)
 
 
 class _BuildContainerConstraint(object):
@@ -253,6 +321,13 @@ class _BuildContainerConstraint(object):
                         typeinfer.add_type(self.target,
                                            self.container_type(unified),
                                            loc=self.loc)
+
+            typeinfer.refine_map[self.target].add(self)
+
+    def refine(self, typeinfer, target_type):
+        if target_type.is_precise():
+            for var, typ in zip(self.items, target_type.types):
+                typeinfer.add_type(var.name, typ, loc=var.loc)
 
 
 class BuildListConstraint(_BuildContainerConstraint):
@@ -286,6 +361,13 @@ class BuildMapConstraint(object):
                                    types.DictType(key_type, value_type),
                                    loc=self.loc)
 
+            typeinfer.refine_map[self.target].add(self)
+
+    def refine(self, typeinfer, target_type):
+        if target_type.is_precise():
+            for (k, v) in self.items:
+                typeinfer.add_type(k.name, target_type.key_type, loc=k.loc)
+                typeinfer.add_type(v.name, target_type.value_type, loc=v.loc)
 
 class ExhaustIterConstraint(object):
     def __init__(self, target, count, iterator, loc):
@@ -367,6 +449,7 @@ class StaticGetItemConstraint(object):
         else:
             self.fallback = None
         self.loc = loc
+        self.sig = None
 
     def __call__(self, typeinfer):
         with new_error_context("typing of static-get-item at {0}", self.loc):
@@ -381,15 +464,69 @@ class StaticGetItemConstraint(object):
                     # if the itemty is not precise, let it through, unification
                     # will catch it and produce a better error message
                     typeinfer.add_type(self.target, itemty, loc=self.loc)
+                    self.sig = sig
                 elif self.fallback is not None:
                     self.fallback(typeinfer)
 
     def get_call_signature(self):
-        # The signature is only needed for the fallback case in lowering
-        return self.fallback and self.fallback.get_call_signature()
+        return self.sig or (self.fallback and self.fallback.get_call_signature())
 
 
-def fold_arg_vars(typevars, args, vararg, kws):
+def fold_args(sig, args, kws, vararg):
+    argtypes = {}
+
+    n_pos_args = len(args)
+    kwds = [kw for (kw, var) in kws]
+    argvars = list(args)
+    argvars += [var for (kw, var) in kws]
+    if vararg is not None:
+        argvars.append(vararg)
+
+    args = tuple(argvars)
+    pos_vars = args[:n_pos_args]
+
+    if vararg is not None:
+        # Drop the last arg
+        args = args[:-1]
+    kw_vars = dict(zip(kwds, args[n_pos_args:]))
+
+    def normal_handler(index, param, value):
+        return value
+    def default_handler(index, param, default):
+        return types.Omitted(default)
+    def stararg_handler(index, param, values):
+        return types.Tuple(values)
+
+    if sig.pysig:
+        sig_vars = typing.fold_arguments(sig.pysig, pos_vars, kw_vars,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+    else:
+        sig_vars = tuple(pos_vars) + tuple(kw_vars.values()) + ((vararg,) if vararg else ())
+
+    if vararg or (
+            sig.pysig and any(p.kind == p.VAR_POSITIONAL for p in sig.pysig.parameters.values())
+    ):
+        # TODO: 4494 handling of the vararg case looks a little weird, this will likely fail for some cases
+        sig_vars = sig_vars[:-1]
+        vararg_types = sig.args[len(args) + len(kws):-1] + sig.args[-1].types
+        if vararg_types and vararg:
+            argtypes[vararg] = types.Tuple(vararg_types)
+            sig_vars = sig_vars[:len(args) + len(kws)]
+        elif vararg_types:
+            for pv, vt in zip(pos_vars[-len(vararg_types):], vararg_types):
+                argtypes[pv] = vt
+            sig_vars = sig_vars[:len(args) + len(kws) - len(vararg_types)]
+
+    for arg, aty in zip(sig_vars, sig.args):
+        if not isinstance(arg, types.Omitted):
+            argtypes[arg] = aty
+
+    return argtypes
+
+
+def resolve_arg_vars(typevars, args, vararg, kws):
     """
     Fold and resolve the argument variables of a function call.
     """
@@ -465,7 +602,7 @@ class CallConstraint(object):
         assert fnty
         context = typeinfer.context
 
-        r = fold_arg_vars(typevars, self.args, self.vararg, self.kws)
+        r = resolve_arg_vars(typevars, self.args, self.vararg, self.kws)
         if r is None:
             # Cannot resolve call type until all argument types are known
             return
@@ -518,6 +655,40 @@ class CallConstraint(object):
                     sig = sig.replace(return_type=targetty)
 
         self.signature = sig
+        # TODO: 4494 signature will not neccessarily match the argument types (arguments can be casted)
+        #  update the argument types. Additionaly we need to be careful with omitted arguments
+        argtypes = fold_args(sig, self.args, self.kws, self.vararg)
+        for arg_var, arg_typ in argtypes.items():
+            if arg_typ != types.ffi_forced_object:
+                typeinfer.add_type(arg_var.name, arg_typ, arg_var.loc)
+
+        # if hasattr(fnty, 'dispatcher'):
+        #     _, sig_vars = fnty.dispatcher.fold_argument_types(pos_vars, kw_vars)
+        # else:
+        #     sig_vars = tuple(pos_vars) + tuple(kw_vars.values())
+        #     if sig.pysig and any(p.kind == p.VAR_POSITIONAL for p in sig.pysig.parameters.values()):
+        #         sig_vars += (types.Tuple(()),)
+        #
+        # if self.vararg or (
+        #         sig.pysig and any(p.kind == p.VAR_POSITIONAL for p in sig.pysig.parameters.values())
+        # ):
+        #     # TODO: 4494 handling of the vararg case looks a little weird, this will likely fail for some cases
+        #     sig_vars = sig_vars[:-1]
+        #     vararg_types = sig.args[len(self.args)+len(self.kws):-1] + sig.args[-1].types
+        #     if vararg_types and self.vararg:
+        #         typeinfer.add_type(self.vararg.name, types.Tuple(vararg_types), self.vararg.loc)
+        #         sig_vars = sig_vars[:len(self.args)+len(self.kws)]
+        #     elif vararg_types:
+        #         for pv, vt in zip(pos_vars[-len(vararg_types):], vararg_types):
+        #             typeinfer.add_type(pv.name, vt, pv.loc)
+        #         sig_vars = sig_vars[:len(self.args) + len(self.kws) - len(vararg_types)]
+        #
+        # for arg, aty in zip(sig_vars, sig.args):
+        #     # TODO: `types.ffi_forced_object` seems to be a marker to fall-back to object-mode
+        #     if not isinstance(arg, types.Omitted):
+        #         if aty != types.ffi_forced_object and not isinstance(arg, types.Omitted):
+        #             typeinfer.add_type(arg.name, aty, arg.loc)
+
         self._add_refine_map(typeinfer, typevars, sig)
 
     def _add_refine_map(self, typeinfer, typevars, sig):
@@ -527,10 +698,10 @@ class CallConstraint(object):
         # Array
         if (isinstance(target_type, types.Array)
                 and isinstance(sig.return_type.dtype, types.Undefined)):
-            typeinfer.refine_map[self.target] = self
+            typeinfer.refine_map[self.target].add(self)
         # DictType
         if isinstance(target_type, types.DictType) and not target_type.is_precise():
-            typeinfer.refine_map[self.target] = self
+            typeinfer.refine_map[self.target].add(self)
 
     def refine(self, typeinfer, updated_type):
         # Is getitem?
@@ -577,9 +748,10 @@ class GetAttrConstraint(object):
                     raise UntypedAttributeError(ty, self.attr,
                                                 loc=self.inst.loc)
                 else:
-                    assert attrty.is_precise()
+                    target_type = typevars[self.target]
+                    assert not target_type or attrty.is_precise() or (target_type and target_type.getone() == attrty)
                     typeinfer.add_type(self.target, attrty, loc=self.loc)
-            typeinfer.refine_map[self.target] = self
+            typeinfer.refine_map[self.target].add(self)
 
     def refine(self, typeinfer, target_type):
         if isinstance(target_type, types.BoundFunction):
@@ -723,6 +895,8 @@ class SetAttrConstraint(object):
                                   (targetty, self.attr, valty),
                                   loc=self.loc)
             self.signature = sig
+            if valty != types.ffi_forced_object:  # TODO: this seems to be a marker to fall-back to object-mode
+                typeinfer.add_type(self.value.name, sig.args[1], self.value.loc)
 
     def get_call_signature(self):
         return self.signature
@@ -737,7 +911,7 @@ class PrintConstraint(object):
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
 
-        r = fold_arg_vars(typevars, self.args, self.vararg, {})
+        r = resolve_arg_vars(typevars, self.args, self.vararg, {})
         if r is None:
             # Cannot resolve call type until all argument types are known
             return
@@ -830,7 +1004,7 @@ class TypeInferer(object):
         # The inference result of the above calls
         self.calltypes = utils.UniqueDict()
         # Target var -> constraint with refine hook
-        self.refine_map = {}
+        self.refine_map = defaultdict(lambda: set())
 
         if config.DEBUG or config.DEBUG_TYPEINFER:
             self.debug = TypeInferDebug(self)
@@ -921,6 +1095,39 @@ class TypeInferer(object):
             # Errors can appear when the type set is incomplete; only
             # raise them when there is no progress anymore.
             errors = self.constraints.propagate(self)
+
+            # update return types
+            retvars = self._get_return_vars()
+            rettypes = set()
+            for var in retvars:
+                vty = self.typevars[var.name].type
+                if vty is None:
+                    rettypes = None
+                    break
+                rettypes.add(vty)
+            if rettypes:
+                unified = self.context.unify_types(*rettypes)
+                if unified is not None and unified.is_precise():
+                    for var in retvars:
+                        self.add_type(var.name, unified, var.loc)
+
+            # update yield types
+            gi = self.generator_info
+            if gi:
+                yield_vars = [y.inst.value for y in gi.get_yield_points()]
+                yield_types = []
+                for y in yield_vars:
+                    yty = self.typevars[y.name].type
+                    if yty is None:
+                        yield_types = None
+                        break
+                    yield_types.append(yty)
+                if yield_types:
+                    unified = self.context.unify_types(*yield_types)
+                    if unified is not None and unified.is_precise():
+                        for var in yield_vars:
+                            self.add_type(var.name, unified, var.loc)
+
             newtoken = self.get_state_token()
             self.debug.propagate_finished()
         if errors:
@@ -951,8 +1158,8 @@ class TypeInferer(object):
         tv.lock(tp, loc=loc, literal_value=literal_value)
 
     def propagate_refined_type(self, updated_var, updated_type):
-        source_constraint = self.refine_map.get(updated_var)
-        if source_constraint is not None:
+        source_constraints = self.refine_map.get(updated_var, ())
+        for source_constraint in source_constraints:
             source_constraint.refine(self, updated_type)
 
     def unify(self):
@@ -1048,7 +1255,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         for var in sorted(temps):
             check_var(var)
 
-        retty = self.get_return_type(typdict)
+        typdict = self._fix_outgoing_casts(typdict)
+        retty = self.get_return_type(typdict)   # TODO: 4494 still needed?
         fntys = self.get_function_types(typdict)
         if self.generator_info:
             retty = self.get_generator_type(typdict, retty)
@@ -1103,6 +1311,73 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         for call, constraint in self.calls:
             calltypes[call] = constraint.get_call_signature()
         return calltypes
+
+    def _fix_outgoing_casts(self, typdict):
+        typdict = dict(typdict)
+        # TODO: 4494 outgoing casts back-propagate the desired final return type to signature.return_type. This
+        #  is to let the function typer implementation do the casting decisions. Here we need to clean-up and
+        #  put the actual type change onto the cast.
+        for call, constraint in self.calls:
+            # TODO: 4494 fix-up return types for the constraint types below
+            if not isinstance(constraint, (PrintConstraint, SetAttrConstraint, SetItemConstraint, StaticSetItemConstraint)):
+                sig = constraint.get_call_signature()
+                typdict[constraint.target] = sig.return_type
+
+            if isinstance(constraint, CallConstraint):
+                # TODO: 4494 final fix of argument types
+                argtypes = fold_args(sig, constraint.args, constraint.kws, constraint.vararg)
+                for arg_var, arg_typ in argtypes.items():
+                    if arg_typ != types.ffi_forced_object:
+                        typdict[arg_var.name] = arg_typ
+
+                # pos_vars, kw_vars, vararg = fold_args(typdict, constraint.args, constraint.vararg, constraint.kws)
+                # if not isinstance(constraint, IntrinsicCallConstraint):
+                #     fnty = typdict[constraint.func]
+                #     if hasattr(fnty, 'dispatcher'):
+                #         # TODO: 4494 this is pretty much repeating code fom CallConstraint.resolve with the same
+                #         #  caveats. Should go into a proper function
+                #         _, sig_vars = fnty.dispatcher.fold_argument_types(pos_vars, kw_vars)
+                #
+                #         if constraint.vararg or (
+                #                 sig.pysig and any(p.kind == p.VAR_POSITIONAL for p in sig.pysig.parameters.values())
+                #         ):
+                #             # TODO: 4494 handling of the vararg case looks a little weird, this will likely fail for some cases
+                #             sig_vars = sig_vars[:-1]
+                #             vararg_types = sig.args[len(constraint.args) + len(constraint.kws):-1] + sig.args[-1].types
+                #             if vararg_types and constraint.vararg:
+                #                 typdict[constraint.vararg.name] = types.Tuple(vararg_types)
+                #                 sig_vars = sig_vars[:len(constraint.args) + len(constraint.kws)]
+                #             elif vararg_types:
+                #                 for pv, vt in zip(pos_vars[-len(vararg_types):], vararg_types):
+                #                     typdict[pv.name] = vt
+                #                 sig_vars = sig_vars[:len(constraint.args) + len(constraint.kws) - len(vararg_types)]
+                #     else:
+                #         sig_vars = tuple(pos_vars) + tuple(kw_vars.values())
+                # else:
+                #     sig_vars = tuple(pos_vars) + tuple(kw_vars.values())
+                #
+                # for av, saty in zip(sig_vars, sig.args):
+                #     if isinstance(av, ir.Var):
+                #         aty = typdict[av.name]
+                #         # TODO: 4494 fails for numba.tests.test_builtins.TestBuiltins.test_round2
+                #         # assert aty == saty
+                #         if saty != types.ffi_forced_object: # TODO: 4494 ffi_forced_object seems to be special
+                #             typdict[av.name] = saty
+
+            if isinstance(constraint, SetAttrConstraint):
+                # TODO: 4494 fix-up value types for setattr constraint
+                sig = constraint.signature
+                valty = sig.args[1]
+
+                if valty != types.ffi_forced_object:  # TODO: 4494 ffi_forced_object seems to be special
+                    typdict[constraint.value.name] = valty
+
+        # BranchConstraints may have been overwritten by something castable to bool
+        for constraint in self.constraints.constraints:
+            if isinstance(constraint, BranchConstraint):
+                typdict[constraint.cond] = types.boolean
+
+        return typdict
 
     def _unify_return_types(self, rettypes):
         if rettypes:
@@ -1173,8 +1448,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_print(inst)
         elif isinstance(inst, ir.StoreMap):
             self.typeof_storemap(inst)
-        elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+        elif isinstance(inst, (ir.Jump, ir.Return, ir.Del)):
             pass
+        elif isinstance(inst, ir.Branch):
+            self.typeof_branch(inst)
         elif isinstance(inst, ir.StaticRaise):
             pass
         elif type(inst) in typeinfer_extensions:
@@ -1259,6 +1536,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         self.constraints.append(ArgConstraint(dst=target.name,
                                               src=src_name,
                                               loc=inst.loc))
+
+    def typeof_branch(self, inst):
+        self.constraints.append(
+            BranchConstraint(cond=inst.cond.name, loc=inst.loc)
+        )
 
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
@@ -1438,9 +1720,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                             loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
-            self.constraints.append(Propagate(dst=target.name,
+            self.constraints.append(Cast(dst=target.name,
                                               src=expr.value.name,
-                                              loc=inst.loc))
+                                              loc=inst.loc,
+                                              incoming=expr.incoming))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)

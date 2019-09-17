@@ -83,6 +83,12 @@ class InlineClosureCallPass(object):
                         call_name = guard(find_callname, self.func_ir, expr)
                         func_def = guard(get_definition, self.func_ir, expr.func)
 
+                        # TODO: 4494 if passed in as argument the func_def might have been casted
+                        if isinstance(func_def, ir.Expr) and func_def.op == 'cast':
+                            cast_src = ir_utils.get_definition(self.func_ir, func_def.value.name)
+                            if isinstance(cast_src, ir.Expr) and cast_src.op == 'make_function':
+                                func_def = cast_src
+
                         if guard(self._inline_reduction,
                                  work_list, block, i, expr, call_name):
                             modified = True
@@ -333,14 +339,16 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                     defaults_list.append(ir.Const(value=x, loc=loc))
             args = args + defaults_list
         elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
-            defaults = func_ir.get_definition(callee_defaults)
+            # TODO: 4494 not sure we can make do w/o casting the defaults
+            casted_defaults = func_ir.get_definition(callee_defaults)
+            defaults = func_ir.get_definition(casted_defaults.value)
             assert(isinstance(defaults, ir.Const))
             loc = defaults.loc
             args = args + [ir.Const(value=v, loc=loc)
                            for v in defaults.value]
         else:
             raise NotImplementedError(
-                "Unsupported defaults to make_function: {}".format(defaults))
+                "Unsupported defaults to make_function: {}".format(callee_defaults))
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
 
