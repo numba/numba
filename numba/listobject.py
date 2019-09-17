@@ -51,7 +51,7 @@ _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
 INDEXTY = types.intp
 
-index_type = types.integer_domain
+index_types = types.integer_domain
 
 
 @register_model(ListType)
@@ -564,7 +564,7 @@ def impl_getitem(l, index):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in index_type:
+    if index in index_types:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -632,7 +632,7 @@ def impl_setitem(l, index, item):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in index_type:
+    if index in index_types:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -761,7 +761,7 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    if index in index_type:
+    if index in index_types:
         def integer_impl(l, index):
             l.pop(index)
 
@@ -863,7 +863,7 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    if index in index_type:
+    if index in index_types:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
             # empty, just append.
