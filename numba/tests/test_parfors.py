@@ -1701,6 +1701,36 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True)
 
     @skip_unsupported
+    def test_prange03mul(self):
+        def test_impl():
+            s = 1
+            for i in range(10):
+                s *= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03sub(self):
+        def test_impl():
+            s = 0
+            for i in range(10):
+                s -= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03div(self):
+        def test_impl():
+            s = 1.0
+            for i in range(10):
+                s /= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
     def test_prange04(self):
         def test_impl():
             a = 2
