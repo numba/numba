@@ -650,7 +650,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
-    from numba.compiler import type_inference_stage
+    from numba.typed_passes import type_inference_stage
 
     # get untyped IR
     stencil_func_ir = sf.kernel_ir.copy()
@@ -668,19 +668,19 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
         numba.rewrites.rewrite_registry.apply(
-            'before-inference', tp, tp.func_ir)
+            'before-inference', tp.state)
 
-        tp.typemap, tp.return_type, tp.calltypes = type_inference_stage(
-            tp.typingctx, tp.func_ir, tp.args, None)
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes = type_inference_stage(
+            tp.state.typingctx, tp.state.func_ir, tp.state.args, None)
 
         type_annotations.TypeAnnotation(
-            func_ir=tp.func_ir,
-            typemap=tp.typemap,
-            calltypes=tp.calltypes,
+            func_ir=tp.state.func_ir,
+            typemap=tp.state.typemap,
+            calltypes=tp.state.calltypes,
             lifted=(),
             lifted_from=None,
-            args=tp.args,
-            return_type=tp.return_type,
+            args=tp.state.args,
+            return_type=tp.state.return_type,
             html_output=numba.config.HTML)
 
     # make block labels unique
@@ -696,7 +696,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
     # rename variables,
     var_dict = {}
-    for v, typ in tp.typemap.items():
+    for v, typ in tp.state.typemap.items():
         new_var = ir.Var(scope, mk_unique_var(v), loc)
         var_dict[v] = new_var
         typemap[new_var.name] = typ  # add new var type for overall function
@@ -707,7 +707,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         ir_utils.dump_blocks(stencil_blocks)
 
     # add call types to overall function
-    for call, call_typ in tp.calltypes.items():
+    for call, call_typ in tp.state.calltypes.items():
         calltypes[call] = call_typ
 
     arg_to_arr_dict = {}
@@ -732,13 +732,15 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):
-        self.typingctx = typingctx
-        self.targetctx = targetctx
-        self.args = args
-        self.func_ir = f_ir
-        self.typemap = None
-        self.return_type = None
-        self.calltypes = None
+        from numba.compiler import StateDict
+        self.state = StateDict()
+        self.state.typingctx = typingctx
+        self.state.targetctx = targetctx
+        self.state.args = args
+        self.state.func_ir = f_ir
+        self.state.typemap = None
+        self.state.return_type = None
+        self.state.calltypes = None
 
 
 def _get_const_index_expr(stencil_ir, func_ir, index_var):

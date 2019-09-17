@@ -299,5 +299,32 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             str(e.exception))
 
 
+class TestRecarray(SerialMixin, unittest.TestCase):
+    def test_recarray(self):
+        # From issue #4111
+        a = np.recarray((16,), dtype=[
+            ("value1", np.int64),
+            ("value2", np.float64),
+        ])
+        a.value1 = np.arange(a.size, dtype=np.int64)
+        a.value2 = np.arange(a.size, dtype=np.float64) / 100
+
+        expect1 = a.value1
+        expect2 = a.value2
+
+        def test(x, out1, out2):
+            i = cuda.grid(1)
+            if i < x.size:
+                out1[i] = x.value1[i]
+                out2[i] = x.value2[i]
+
+        got1 = np.zeros_like(expect1)
+        got2 = np.zeros_like(expect2)
+        cuda.jit(test)[1, a.size](a, got1, got2)
+
+        np.testing.assert_array_equal(expect1, got1)
+        np.testing.assert_array_equal(expect2, got2)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,13 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import traceback
-import inspect
-import sys
 
-from .abstract import *
-from .common import *
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .common import Opaque
 from .misc import unliteral
-from numba.ir import Loc
 from numba import errors
 
 # terminal color markup
@@ -88,7 +85,7 @@ class BaseFunction(Callable):
             keys = set(temp.key for temp in self.templates)
             if len(keys) != 1:
                 raise ValueError("incompatible templates: keys = %s"
-                                 % (this,))
+                                 % (keys,))
             self.typing_key, = keys
         else:
             self.templates = (template,)
@@ -206,7 +203,7 @@ class BoundFunction(Callable, Opaque):
         # Try with Literal
         try:
             out = template.apply(args, kws)
-        except Exception as e:
+        except Exception:
             out = None
         # If that doesn't work, remove literals
         if out is None:

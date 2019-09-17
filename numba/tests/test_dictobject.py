@@ -8,6 +8,7 @@ in test_dictimpl.py.
 from __future__ import print_function, absolute_import, division
 
 import sys
+import warnings
 
 import numpy as np
 
@@ -1335,6 +1336,30 @@ class TestDictInferred(TestCase):
             'cannot safely cast float64 to {}'.format(typeof(v)),
             str(raises.exception),
         )
+
+    def test_conflict_key_type_non_number(self):
+        # Allow non-number types to cast unsafely
+        @njit
+        def foo(k1, v1, k2):
+            d = Dict()
+            d[k1] = v1
+            return d, d[k2]
+
+        # k2 will unsafely downcast typeof(k1)
+        k1 = (np.int8(1), np.int8(2))
+        k2 = (np.int32(1), np.int32(2))
+        v1 = np.intp(123)
+
+        with warnings.catch_warnings(record=True) as w:
+            d, dk2 = foo(k1, v1, k2)
+        self.assertEqual(len(w), 1)
+        # Make sure the warning is about unsafe cast
+        self.assertIn('unsafe cast from tuple(int32 x 2) to tuple(int8 x 2)',
+                      str(w[0]))
+
+        keys = list(d.keys())
+        self.assertEqual(keys[0], (1, 2))
+        self.assertEqual(dk2, d[(np.int32(1), np.int32(2))])
 
     def test_ifelse_filled_both_branches(self):
         @njit

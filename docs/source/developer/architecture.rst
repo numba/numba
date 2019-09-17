@@ -238,7 +238,7 @@ the ``add()`` function described above, the Numba IR looks like::
 
 The ``del`` instructions are produced by :ref:`live variable analysis`.
 Those instructions ensure references are not leaked.
-In :term:`nopython mode`, some objects are tracked by the numba runtime and
+In :term:`nopython mode`, some objects are tracked by the Numba runtime and
 some are not.  For tracked objects, a dereference operation is emitted;
 otherwise, the instruction is an no-op.
 In :term:`object mode` each variable contains an owned reference to a PyObject.
@@ -437,7 +437,7 @@ Stage 6b: Perform Automatic Parallelization
 -------------------------------------------
 
 This pass is only performed if the ``parallel`` option in the :func:`~numba.jit`
-decorator is set to ``True``.  This pass find parallelism implicit in the
+decorator is set to ``True``.  This pass finds parallelism implicit in the
 semantics of operations in the Numba IR and replaces those operations
 with explicitly parallel representations of those operations using a
 special `parfor` operator.  Then, optimizations are performed to maximize
@@ -485,7 +485,7 @@ described in more detail in the following paragraphs.
     routines rich in Numpy operations will enable equivalence classes to be
     fully known for all arrays created within a function.
 
-    Array analysis will also reason about size equivalvence for slice selection,
+    Array analysis will also reason about size equivalence for slice selection,
     and boolean array masking (one dimensional only). For example, it is able to
     infer that ``a[1 : n-1]`` is of the same size as ``b[0 : n-2]``.
 

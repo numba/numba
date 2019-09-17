@@ -26,7 +26,8 @@ from .types import *
 from .smartarray import SmartArray
 
 # Re-export decorators
-from .decorators import autojit, cfunc, generated_jit, jit, njit, stencil
+from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
+                         jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from .npyufunc import vectorize, guvectorize, threading_layer
@@ -44,6 +45,11 @@ from numba.withcontexts import objmode_context as objmode
 # Initialize typed containers
 import numba.typed
 
+# Enable bytes/unicode array support (Python 3.x only)
+from .utils import IS_PY3
+if IS_PY3:
+    import numba.charseq
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -57,6 +63,7 @@ __all__ = """
     jitclass
     njit
     stencil
+    jit_module
     typeof
     prange
     gdb
