@@ -534,7 +534,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("alias map:", alias_map)
+        print("remove_dead alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -648,7 +648,8 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
-            call_list == [numba.array_analysis.wrap_index]):
+            call_list == [numba.array_analysis.wrap_index] or
+            call_list == [numba.special.prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
