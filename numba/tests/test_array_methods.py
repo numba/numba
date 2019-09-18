@@ -866,7 +866,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                       "input ".format(arr.dtype)):
                         self.assertPreciseEqual(
                             pyfunc(arr, axis=axis).astype(out_dtypes[arr.dtype]),
-                            cfunc(arr, axis=axis))
+                            cfunc(arr, axis=axis).astype(out_dtypes[arr.dtype]))
 
     def test_sum_dtype_kws(self):
         pyfunc = array_sum_dtype_kws
