@@ -12,7 +12,7 @@ SciPy functions to Numba.  The end user does not need to ``import
 numba_scipy`` to enable compiler support for SciPy, the extension only needs
 to be installed in the Python environment.
 
-Numba discovers extensions with the `entry points
+Numba discovers extensions using the `entry points
 <https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins>`_
 feature of ``setuptools``.  This allows a Python package to register an
 initializer function that will be called before ``numba`` compiles for the
