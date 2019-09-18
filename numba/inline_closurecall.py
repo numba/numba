@@ -1,3 +1,5 @@
+from __future__ import print_function, absolute_import
+
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba
@@ -246,7 +248,8 @@ def check_reduce_func(func_ir, func_var):
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None, callee_validator=None):
+                        work_list=None, callee_validator=None,
+                        replace_freevars=True):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -273,7 +276,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
-    callee_ir = get_ir_of_code(glbls, callee_code)
+    if isinstance(callee, pytypes.FunctionType):
+        from numba import compiler
+        callee_ir = compiler.run_frontend(callee, inline_closures=True)
+    else:
+        callee_ir = get_ir_of_code(glbls, callee_code)
+
     # check that the contents of the callee IR is something that can be inlined
     # if a validator is supplied
     if callee_validator is not None:
@@ -314,7 +322,16 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     if callee_defaults:
         debug_print("defaults = ", callee_defaults)
         if isinstance(callee_defaults, tuple): # Python 3.5
-            args = args + list(callee_defaults)
+            defaults_list = []
+            for x in callee_defaults:
+                if isinstance(x, ir.Var):
+                    defaults_list.append(x)
+                else:
+                    # this branch is predominantly for kwargs from inlinable
+                    # functions
+                    loc = block.body[i].loc
+                    defaults_list.append(ir.Const(value=x, loc=loc))
+            args = args + defaults_list
         elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
             defaults = func_ir.get_definition(callee_defaults)
             assert(isinstance(defaults, ir.Const))
@@ -328,7 +345,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 4. replace freevar with actual closure var
-    if callee_closure:
+    if callee_closure and replace_freevars:
         closure = func_ir.get_definition(callee_closure)
         debug_print("callee's closure = ", closure)
         if isinstance(closure, tuple):
@@ -346,15 +363,15 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         _debug_dump(callee_ir)
 
     if typingctx:
-        from numba import compiler
+        from numba import typed_passes
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
         except Exception:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
             pass
         canonicalize_array_math(callee_ir, f_typemap,
@@ -617,8 +634,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
                 if isinstance(func_def, ir.Expr) and func_def.op == 'getattr' \
                   and func_def.attr == 'append':
                     list_def = get_definition(func_ir, func_def.value)
-                    debug_print("list_def = ", list_def, list_def == list_var_def)
-                    if list_def == list_var_def:
+                    debug_print("list_def = ", list_def, list_def is list_var_def)
+                    if list_def is list_var_def:
                         # found matching append call
                         list_append_stmts.append((label, block, stmt))
 
@@ -673,7 +690,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Skip list construction and skip terminator, add the rest to stmts
     for i in range(len(loop_entry.body) - 1):
         stmt = loop_entry.body[i]
-        if isinstance(stmt, ir.Assign) and (stmt.value == list_def or is_removed(stmt.value, removed)):
+        if isinstance(stmt, ir.Assign) and (stmt.value is list_def or is_removed(stmt.value, removed)):
             removed.append(stmt.target)
         else:
             stmts.append(stmt)
@@ -795,7 +812,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
 
     # In append_block, change list_append into array assign
     for i in range(len(append_block.body)):
-        if append_block.body[i] == append_stmt:
+        if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
             append_block.body[i] = ir.SetItem(target=array_var, index=index_var,
                                               value=append_stmt.value.args[0], loc=append_stmt.loc)
@@ -858,7 +875,7 @@ def _fix_nested_array(func_ir):
                 inst = body[i]
                 if isinstance(inst, ir.Assign):
                     defined.add(inst.target.name)
-                    if inst.value == expr:
+                    if inst.value is expr:
                         new_varlist = []
                         for var in varlist:
                             # var must be defined before this inst, or live
@@ -950,9 +967,9 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
     1D array creations from a constant list, and rewriting it into
     direct initialization of array elements without creating the list.
     '''
-    def __init__(self, pipeline, *args, **kws):
-        self.typingctx = pipeline.typingctx
-        super(RewriteArrayOfConsts, self).__init__(pipeline, *args, **kws)
+    def __init__(self, state, *args, **kws):
+        self.typingctx = state.typingctx
+        super(RewriteArrayOfConsts, self).__init__(*args, **kws)
 
     def match(self, func_ir, block, typemap, calltypes):
         if len(calltypes) == 0:

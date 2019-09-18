@@ -178,7 +178,7 @@ Dispatcher objects
    .. method:: inspect_asm(signature=None)
 
       Return a dictionary keying compiled function signatures to the
-      human-readable native assembler code for the function.  If the
+      human-readable native assembly code for the function.  If the
       signature keyword is specified a string corresponding to that
       individual signature is returned.
 

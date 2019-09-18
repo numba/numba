@@ -22,7 +22,7 @@ try:
     from cStringIO import StringIO
 except ImportError:
     from io import StringIO
-from numba.config import PYVERSION, MACHINE_BITS
+from numba.config import PYVERSION, MACHINE_BITS, DEVELOPER_MODE
 
 
 IS_PY3 = PYVERSION >= (3, 0)
@@ -765,3 +765,12 @@ class finalize:
 # dummy invocation to force _at_shutdown() to be registered
 finalize(lambda: None, lambda: None)
 assert finalize._registered_with_atexit
+
+
+def chain_exception(new_exc, old_exc):
+    """Set the __cause__ attribute on *new_exc* for explicit exception
+    chaining.  Returns the inplace modified *new_exc*.
+    """
+    if DEVELOPER_MODE:
+        new_exc.__cause__ = old_exc
+    return new_exc

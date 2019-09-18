@@ -210,7 +210,8 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
-* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
+* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument. 
+  ``axis`` only supports ``integer`` values)
 
   * If the ``axis`` argument is a compile-time constant, all valid values are supported.
     An out-of-range value will result in a ``LoweringError`` at compile-time.

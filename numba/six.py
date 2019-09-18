@@ -22,6 +22,7 @@
 
 from __future__ import absolute_import
 
+import contextlib
 import functools
 import itertools
 import operator
@@ -626,8 +627,17 @@ else:
     def indexbytes(buf, i):
         return ord(buf[i])
     iterbytes = functools.partial(itertools.imap, ord)
-    import StringIO
-    StringIO = BytesIO = StringIO.StringIO
+    import StringIO as _StringIO
+    # make StringIO.StringIO work with `with`
+    class StringIO(_StringIO.StringIO):
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.close()
+
+    BytesIO = StringIO
     _assertCountEqual = "assertItemsEqual"
     _assertRaisesRegex = "assertRaisesRegexp"
     _assertRegex = "assertRegexpMatches"
