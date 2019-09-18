@@ -10,7 +10,7 @@ compiler.  An example of this is the `numba-scipy
 <https://github.com/numba/numba-scipy>`_ package, which adds support for some
 SciPy functions to Numba.  The end user does not need to ``import
 numba_scipy`` to enable compiler support for SciPy.  The extension only needs
-to be installed into the Python environment.
+to be installed in the Python environment.
 
 Numba discovers extensions with the `entry points
 <https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins>`_
