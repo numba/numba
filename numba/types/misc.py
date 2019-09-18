@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import Callable, Literal, Type
+from .abstract import Callable, Literal, Type, Hashable
 from .common import Dummy, IterableType, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from ..errors import TypingError, LiteralTypingError
@@ -490,7 +490,7 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(IterableType):
+class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)

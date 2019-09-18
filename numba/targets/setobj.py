@@ -187,8 +187,9 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function(operator.eq,
-                                    typing.signature(types.boolean, dtype, dtype))
+        eqty = context.typing_context.resolve_value_type(operator.eq)
+        sig = eqty.get_call_type(context.typing_context, (dtype, dtype), {})
+        eqfn = context.get_function(eqty, sig)
 
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
@@ -404,6 +405,7 @@ class SetInstance(object):
 
         old_hash = entry.hash
         entry.hash = h
+        context.nrt.incref(builder, self._ty.dtype, item)
         entry.key = item
         # used++
         used = payload.used
@@ -430,6 +432,7 @@ class SetInstance(object):
             entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
+            context.nrt.incref(builder, self._ty.dtype, item)
             entry.key = item
             # used++
             used = payload.used
@@ -447,6 +450,7 @@ class SetInstance(object):
     def _remove_entry(self, payload, entry, do_resize=True):
         # Mark entry deleted
         entry.hash = ir.Constant(entry.hash.type, DELETED)
+        self._context.nrt.decref(self._builder, self._ty.dtype, entry.key)
         # used--
         used = payload.used
         one = ir.Constant(used.type, 1)
