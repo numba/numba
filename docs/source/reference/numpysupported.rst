@@ -299,6 +299,7 @@ Other functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.array_equal`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
