@@ -706,7 +706,7 @@ def impl_pop(l, index=-1):
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
     if (isinstance(index, int)
-            or index in index_type
+            or index in index_types
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
             if len(l) == 0:
@@ -964,7 +964,7 @@ def impl_index(l, item, start=None, end=None):
 
     def check_arg(arg, name):
         if not (arg is None
-                or arg in index_type
+                or arg in index_types
                 or isinstance(arg, (types.Omitted, types.NoneType))):
             raise TypingError("{} argument for index must be an integer"
                               .format(name))
