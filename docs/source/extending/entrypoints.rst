@@ -9,10 +9,10 @@ imported directly by the user, but must still be registered with the Numba
 compiler.  An example of this is the `numba-scipy
 <https://github.com/numba/numba-scipy>`_ package, which adds support for some
 SciPy functions to Numba.  The end user does not need to ``import
-numba_scipy`` to enable compiler support for SciPy.  The extension only needs
-to be installed into the Python environment.
+numba_scipy`` to enable compiler support for SciPy, the extension only needs
+to be installed in the Python environment.
 
-Numba discovers extensions with the `entry points
+Numba discovers extensions using the `entry points
 <https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins>`_
 feature of ``setuptools``.  This allows a Python package to register an
 initializer function that will be called before ``numba`` compiles for the
