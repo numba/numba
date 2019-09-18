@@ -329,6 +329,13 @@ def array_cumprod(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@overload(np.cumproduct)
+def np_cumproduct(a):
+    def impl(a):
+        return np.cumprod(a)
+    return impl
+
+
 @lower_builtin(np.mean, types.Array)
 @lower_builtin("array.mean", types.Array)
 def array_mean(context, builder, sig, args):

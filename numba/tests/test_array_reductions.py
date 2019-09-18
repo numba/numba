@@ -29,6 +29,9 @@ def array_cumprod(arr):
 def array_cumprod_global(arr):
     return np.cumprod(arr)
 
+def array_cumproduct(arr):
+    return np.cumproduct(arr)
+
 def array_nancumprod(arr):
     return np.nancumprod(arr)
 
@@ -631,6 +634,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
+        
+    def test_array_cumproduct(self):
+        self.check_cumulative(array_cumproduct)
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)

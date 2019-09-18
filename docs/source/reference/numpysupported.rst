@@ -275,6 +275,7 @@ The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
 * :func:`numpy.median` (only the first argument)
+* :func:`numpy.cumproduct` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
 * :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
 * :func:`numpy.nanmax` (only the first argument)
