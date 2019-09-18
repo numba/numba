@@ -864,9 +864,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         continue
                     with self.subTest("Testing np.sum(axis) with {} "
                                       "input ".format(arr.dtype)):
-                        self.assertPreciseEqual(
-                            pyfunc(arr, axis=axis).astype(out_dtypes[arr.dtype]),
-                            cfunc(arr, axis=axis).astype(out_dtypes[arr.dtype]))
+                        npy_res = pyfunc(arr, axis=axis)
+                        numba_res = cfunc(arr, axis=axis)
+                        if isinstance(numba_res, np.ndarray):
+                            self.assertPreciseEqual(
+                                npy_res.astype(out_dtypes[arr.dtype]),
+                                numba_res.astype(out_dtypes[arr.dtype]))
+                        else:
+                            # the results are scalars
+                            self.assertEqual(npy_res, numba_res)
 
     def test_sum_dtype_kws(self):
         pyfunc = array_sum_dtype_kws
