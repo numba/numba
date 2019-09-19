@@ -88,7 +88,16 @@ class GetIter(AbstractTemplate):
         assert not kws
         [obj] = args
         if isinstance(obj, types.IterableType):
-            return signature(obj.iterator_type, obj)
+            # Raise this here to provide a very specific message about this
+            # common issue, delaying the error until later leads to something
+            # less specific being noted as the problem (e.g. no support for
+            # getiter on array(<>, 2, 'C')).
+            if isinstance(obj, types.Array) and obj.ndim > 1:
+                msg = ("Direct iteration is not supported for arrays with "
+                       "dimension > 1. Try using indexing instead.")
+                raise errors.TypingError(msg)
+            else:
+                return signature(obj.iterator_type, obj)
 
 
 @infer
