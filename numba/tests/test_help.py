@@ -93,4 +93,5 @@ class TestInspector(TestCase):
             subprocess.check_output(cmds, stderr=subprocess.STDOUT)
         if utils.IS_PY3:
             # No .stdout in CalledProcessError in python<3
-            self.assertIn("foo is not supported", str(raises.exception.stdout))
+            self.assertIn("\'foo\' is not supported",
+                          raises.exception.stdout.decode('ascii'))
