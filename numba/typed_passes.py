@@ -525,7 +525,7 @@ class InlineOverloads(FunctionPass):
             # must be a cost-model function, run the function
             iinfo = template._inline_overloads[sig.args]['iinfo']
             if inline_type.has_cost_model:
-                do_inline = inline_type.value(caller_inline_info, iinfo)
+                do_inline = inline_type.value(expr, caller_inline_info, iinfo)
             else:
                 assert 'unreachable'
 

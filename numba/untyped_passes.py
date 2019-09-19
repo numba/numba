@@ -365,7 +365,8 @@ class InlineInlinables(FunctionPass):
                             # yes, it has a cost model, use it to determine
                             # whether to do the inline
                             py_func_ir = run_frontend(pyfunc)
-                            do_inline = inline_type(state.func_ir, py_func_ir)
+                            do_inline = inline_type(expr, state.func_ir,
+                                                    py_func_ir)
                         # if do_inline is True then inline!
                         if do_inline:
                             inline_closure_call(state.func_ir,
