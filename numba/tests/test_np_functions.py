@@ -225,6 +225,10 @@ def np_kaiser(M, beta):
     return np.kaiser(M, beta)
 
 
+def np_cross(a, b):
+    return np.cross(a, b)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -2960,6 +2964,106 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 np_nbfunc(5, beta)
             self.assertIn("beta must be an integer or float", str(raises.exception))
+
+    def test_cross(self):
+        pyfunc = np_cross
+        cfunc = jit(nopython=True)(pyfunc)
+        pairs = [
+            # 3x3 (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                np.array([[4, 5, 6], [1, 2, 3]])
+            ),
+            # 2x3 array-like (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                ((4, 5), (1, 2))
+            ),
+            # 3x3 (1-dim) with type promotion
+            (
+                np.array([1, 2, 3], dtype=np.int64),
+                np.array([4, 5, 6], dtype=np.float64)
+            ),
+            # 3x3 array-like (1-dim)
+            (
+                (1, 2, 3),
+                (4, 5, 6)
+            ),
+            # 2x3 (1-dim)
+            (
+                np.array([1, 2]),
+                np.array([4, 5, 6])
+            ),
+            # 3x3 (with broadcasting 1d x 2d)
+            (
+                np.array([1, 2, 3]),
+                np.array([[4, 5, 6], [1, 2, 3]])
+            ),
+            # 3x3 (with broadcasting 2d x 1d)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                np.array([1, 2, 3])
+            ),
+            # 3x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 2, 3),
+                np.arange(4).reshape(2, 2)
+            )
+        ]
+
+        for x, y in pairs:
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    def test_cross_exceptions(self):
+        pyfunc = np_cross
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        # test incompatible dimensions for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(4),
+                np.arange(3)
+            )
+        self.assertIn(
+            'incompatible dimensions',
+            str(raises.exception)
+        )
+
+        # test 2d cross product error for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.array((1, 2)),
+                np.array((3, 4))
+            )
+        self.assertIn(
+            'Dimensions for both inputs is 2',
+            str(raises.exception)
+        )
+
+        # test incompatible dimensions for ndim > 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(8).reshape((2, 4)),
+                np.arange(6)[::-1].reshape((2, 3))
+            )
+        self.assertIn(
+            'incompatible dimensions',
+            str(raises.exception)
+        )
+
+        # test 2d cross product error for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(8).reshape((4, 2)),
+                np.arange(8)[::-1].reshape((4, 2))
+            )
+        self.assertIn(
+            'Dimensions for both inputs is 2',
+            str(raises.exception)
+        )
 
 
 class TestNPMachineParameters(TestCase):
