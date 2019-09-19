@@ -17,6 +17,7 @@ class TestEntrypoints(TestCase):
 
         # FIXME: Python 2 workaround because nonlocal doesn't exist
         counters = {'init': 0}
+
         def init_function():
             counters['init'] += 1
 
