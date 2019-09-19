@@ -131,6 +131,7 @@ converting the dict to the combined table.
         typedef __int8 int8_t;
         typedef __int16 int16_t;
         typedef __int32 int32_t;
+        typedef __int64 int64_t;
 #   endif
     /* Use _alloca() to dynamically allocate on the stack on MSVC */
     #define STACK_ALLOC(Type, Name, Size) Type * const Name = _alloca(Size);
