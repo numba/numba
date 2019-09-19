@@ -4033,3 +4033,47 @@ def np_cross(a, b):
                 "(currently not supported)."
             ))
     return impl
+
+
+@register_jitable
+def _cross2d_operation(a, b):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        return x0, x1
+
+    a0, a1 = _cross_preprocessing(a)
+    b0, b1 = _cross_preprocessing(b)
+
+    return np.multiply(a0, b1) - np.multiply(a1, b0)
+
+
+@generated_jit
+def _cross2d_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            return np.array(_cross2d_operation(a, b), dtype=dtype)
+    else:
+        def impl(a, b):
+            return _cross2d_operation(a, b)
+    return impl
+
+
+@generated_jit
+def cross2d(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] != 2 or b_.shape[-1] != 2:
+            raise ValueError((
+                "incompatible dimensions for 2D cross product\n"
+                "(dimension must be 2 for both inputs)"
+            ))
+        return _cross2d_impl(a_, b_)
+
+    return impl

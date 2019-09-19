@@ -14,6 +14,7 @@ from numba import jit, njit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
+from numba.targets.arraymath import cross2d
 from .support import TestCase, CompilationCache, MemoryLeakMixin
 from .matmul_usecase import needs_blas
 
@@ -3064,6 +3065,52 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Dimensions for both inputs is 2',
             str(raises.exception)
         )
+
+    def test_cross2d(self):
+        pyfunc = np_cross
+        cfunc = cross2d
+        pairs = [
+            # 2x2 (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 array-like (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                ((4, 5), (1, 2))
+            ),
+            # 2x2 (1-dim) with type promotion
+            (
+                np.array([1, 2], dtype=np.int64),
+                np.array([4, 5], dtype=np.float64)
+            ),
+            # 2x2 array-like (1-dim)
+            (
+                (1, 2),
+                (4, 5)
+            ),
+            # 2x2 (with broadcasting 1d x 2d)
+            (
+                np.array([1, 2]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 (with broadcasting 2d x 1d)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([1, 2])
+            ),
+            # 2x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 3, 2),
+                np.arange(6).reshape(3, 2)
+            )
+        ]
+
+        for x, y in pairs:
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
 
 
 class TestNPMachineParameters(TestCase):
