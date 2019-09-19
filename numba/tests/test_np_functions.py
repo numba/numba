@@ -33,6 +33,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def count_nonzero(arr, axis):
+    return np.count_nonzero(arr, axis=axis)
+
+
 def delete(arr, obj):
     return np.delete(arr, obj)
 
@@ -374,6 +378,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    @unittest.skipIf(np_version < (1, 12), "NumPy Unsupported")
+    def test_count_nonzero(self):
+
+        def arrays():
+            yield np.array([]), None
+            yield np.zeros(10), None
+            yield np.arange(10), None
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), None
+            yield np.arange(3 * 4).reshape(3, 4), 0
+            yield np.arange(3 * 4).reshape(3, 4), 1
+
+        pyfunc = count_nonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, axis in arrays():
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            self.assertPreciseEqual(expected, got)
+
+    @unittest.skipUnless(np_version < (1, 12), "NumPy Unsupported")
+    def test_count_nonzero_exception(self):
+        pyfunc = count_nonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3 * 4).reshape(3, 4), 0)
+        self.assertIn(
+            "axis is not supported for NumPy versions < 1.12.0",
+            str(raises.exception)
+        )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
     @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")

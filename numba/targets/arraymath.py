@@ -3007,6 +3007,26 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.count_nonzero)
+def np_count_nonzero(arr, axis=None):
+    if not type_can_asarray(arr):
+        raise TypingError("The argument to np.count_nonzero must be array-like")
+
+    if (numpy_version < (1, 12)):
+        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
+
+    if _is_nonelike(axis):
+        def impl(arr, axis=None):
+            arr2 = np.ravel(arr)
+            return np.sum(arr2 != 0)
+    else:
+        def impl(arr, axis=None):
+            arr2 = arr.astype(np.bool_)
+            return np.sum(arr2, axis=axis)
+
+    return impl
+
+
 np_delete_handler_isslice = register_jitable(lambda x : x)
 np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
