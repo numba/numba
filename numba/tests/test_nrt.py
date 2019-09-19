@@ -564,7 +564,7 @@ class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
         ffi.set_source(name, source, include_dirs=[include_path()])
         ffi.cdef(cdef)
         tmpdir = temp_directory("cffi_test_{}".format(name))
-        ffi.compile(tmpdir=tmpdir, verbose=True)
+        ffi.compile(tmpdir=tmpdir)
         sys.path.append(tmpdir)
         try:
             mod = import_dynamic(name)
