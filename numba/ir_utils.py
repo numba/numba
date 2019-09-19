@@ -2020,3 +2020,62 @@ def check_and_legalize_ir(func_ir):
         msg +=  func_ir.diff_str(orig_ir)
         warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
 
+
+def convert_code_obj_to_function(code_obj, caller_ir):
+    """
+    Converts a code object from a `make_function.code` attr in the IR into a
+    python function, caller_ir is the FunctionIR of the caller and is used for
+    the resolution of freevars.
+    """
+    fcode = code_obj.code
+    nfree = len(fcode.co_freevars)
+
+    # try and resolve freevars if they are consts in the caller's IR
+    # these can be baked into the new function
+    freevars = []
+    for x in fcode.co_freevars:
+        freevar_def = caller_ir.get_definition(x)
+        if isinstance(freevar_def, ir.Const):
+            freevars.append(freevar_def.value)
+        else:
+            msg = ("Cannot capture a non-constant value for variable '%s' in a "
+                   "function that will escape." % x)
+            raise TypingError(msg, loc=code_obj.loc)
+
+    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
+        func_env, func_arg, func_clo)
+    loc = {}
+    # globals are the same as those in the caller
+    glbls = caller_ir.func_id.func.__globals__
+    exec_(func_text, glbls, loc)
+
+    # hack parameter name .0 for Python 3 versions < 3.6
+    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
+        co_varnames = list(fcode.co_varnames)
+        if len(co_varnames) > 0 and co_varnames[0] == ".0":
+            co_varnames[0] = "implicit0"
+        fcode = pytypes.CodeType(
+            fcode.co_argcount,
+            fcode.co_kwonlyargcount,
+            fcode.co_nlocals,
+            fcode.co_stacksize,
+            fcode.co_flags,
+            fcode.co_code,
+            fcode.co_consts,
+            fcode.co_names,
+            tuple(co_varnames),
+            fcode.co_filename,
+            fcode.co_name,
+            fcode.co_firstlineno,
+            fcode.co_lnotab,
+            fcode.co_freevars,
+            fcode.co_cellvars)
+
+    f = loc['g']()
+    # replace the code body
+    f.__code__ = fcode
+    f.__name__ = fcode.co_name
+    return f

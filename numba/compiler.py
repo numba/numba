@@ -19,7 +19,7 @@ from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, InlineClosureLikes,
                              GenericRewrites, WithLifting, InlineInlinables,
-                             FindLiterallyCalls)
+                             FindLiterallyCalls, MakeFunctionToJitFunction)
 
 from .typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
@@ -433,6 +433,9 @@ class DefaultPassBuilder(object):
         pm.add_pass(InlineClosureLikes,
                     "inline calls to locally defined closures")
 
+        # convert any remaining closures into functions
+        pm.add_pass(MakeFunctionToJitFunction,
+                    "convert make_function into JIT functions")
         # inline functions that have been determined as inlinable and rerun
         # branch pruning this needs to be run after closures are inlined as
         # the IR repr of a closure masks call sites if an inlinable is called

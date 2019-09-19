@@ -133,14 +133,17 @@ class InlineClosureCallPass(object):
         require(not self.parallel_options.reduction)
         require(call_name == ('reduce', 'builtins') or
                 call_name == ('reduce', '_functools'))
-        if len(expr.args) != 3:
+        if len(expr.args) not in (2, 3):
             raise TypeError("invalid reduce call, "
                             "three arguments including initial "
                             "value required")
         check_reduce_func(self.func_ir, expr.args[0])
-        def reduce_func(f, A, v):
-            s = v
+        def reduce_func(f, A, v=None):
             it = iter(A)
+            if v is not None:
+                s = v
+            else:
+                s = next(it)
             for a in it:
                s = f(s, a)
             return s
@@ -236,7 +239,13 @@ def check_reduce_func(func_ir, func_var):
     if reduce_func is None:
         raise ValueError("Reduce function cannot be found for njit \
                             analysis")
-    if not (hasattr(reduce_func, 'code')
+    if isinstance(reduce_func, (ir.FreeVar, ir.Global)):
+        if not isinstance(reduce_func.value,
+                          numba.targets.registry.CPUDispatcher):
+            raise ValueError("Invalid reduction function")
+        # pull out the python function for inlining
+        reduce_func = reduce_func.value.py_func
+    elif not (hasattr(reduce_func, 'code')
             or hasattr(reduce_func, '__code__')):
         raise ValueError("Invalid reduction function")
     f_code = (reduce_func.code if hasattr(reduce_func, 'code')
