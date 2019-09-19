@@ -128,6 +128,11 @@ class _EnvReloader(object):
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
+        # disable performance warnings, will switch of the generation of
+        # warnings of the class NumbaPerformanceWarning
+        DISABLE_PERFORMANCE_WARNINGS = _readenv(
+            "NUMBA_DISABLE_PERFORMANCE_WARNINGS", int, 0)
+
         # Flag to enable full exception reporting
         FULL_TRACEBACKS = _readenv(
             "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
