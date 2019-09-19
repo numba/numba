@@ -379,6 +379,11 @@ def unbox_slice(typ, obj, c):
     return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
 
+@unbox(types.StringLiteral)
+def unbox_string_literal(typ, obj, c):
+    # A string literal is a dummy value
+    return NativeValue(c.context.get_dummy_value())
+
 #
 # Collections
 #

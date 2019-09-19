@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import functools
+import operator
 import copy
 from numba import six
 from ctypes import c_void_p
@@ -92,7 +93,7 @@ class DeviceNDArrayBase(object):
         self.shape = tuple(shape)
         self.strides = tuple(strides)
         self.dtype = np.dtype(dtype)
-        self.size = int(np.prod(self.shape))
+        self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
         if self.size > 0:
             if gpu_data is None:
@@ -566,7 +567,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         # (3) do the copy
 
-        n_elements = np.prod(lhs.shape)
+        n_elements = functools.reduce(operator.mul, lhs.shape, 1)
         _assign_kernel(lhs.ndim).forall(n_elements, stream=stream)(lhs, rhs)
 
 
