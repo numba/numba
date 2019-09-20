@@ -382,7 +382,8 @@ def _find(substr, s):
 
 @njit
 def _is_whitespace(code_point):
-    # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+    # list copied from
+    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
     return code_point == 0x0009 \
         or code_point == 0x000A \
         or code_point == 0x000B \
@@ -662,7 +663,8 @@ def unicode_center(string, width, fillchar=' '):
             return string.center(width, str(fillchar))
         return center_impl
 
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+    if not (fillchar == ' ' or
+            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def center_impl(string, width, fillchar=' '):
@@ -670,7 +672,8 @@ def unicode_center(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -707,7 +710,8 @@ def unicode_ljust(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -728,7 +732,8 @@ def unicode_rjust(string, width, fillchar=' '):
             return string.rjust(width, str(fillchar))
         return rjust_impl
 
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+    if not (fillchar == ' ' or
+            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def rjust_impl(string, width, fillchar=' '):
@@ -736,7 +741,8 @@ def unicode_rjust(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -1128,9 +1134,9 @@ def unicode_not(a):
 
 def _is_upper(is_lower, is_upper, is_title):
     # impl is an approximate translation of:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827    # noqa: E501
     # mixed with:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242    # noqa: E501
     def impl(a):
         l = len(a)
         if l == 1:
@@ -1176,13 +1182,13 @@ def unicode_upper(a):
     """
     def impl(a):
         # main structure is a translation of:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316    # noqa: E501
 
         # ASCII fast path
         l = len(a)
         if a._is_ascii:
             # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300    # noqa: E501
             ret = _empty_string(a._kind, l, a._is_ascii)
             for idx in range(l):
                 code_point = _get_code_point(a, idx)
@@ -1190,8 +1196,8 @@ def unicode_upper(a):
             return ret
         else:
             # This part in an amalgamation of two algorithms:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908    # noqa: E501
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805    # noqa: E501
             #
             # The alg walks the string and writes the upper version of the code
             # point into a 4byte kind unicode string and at the same time

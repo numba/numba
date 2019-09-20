@@ -172,8 +172,9 @@ class TestGdbBinding(TestCase):
             retcode = popen.returncode
             if retcode != 0:
                 raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\nstdout :%s" %
-                    (retcode, err.decode(), out.decode()))
+                    "process failed with code %s: "
+                    "stderr follows\n%s\n"
+                    "stdout :%s" % (retcode, err.decode(), out.decode()))
             return out.decode(), err.decode()
         finally:
             timeout.cancel()

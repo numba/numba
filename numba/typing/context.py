@@ -658,7 +658,8 @@ class BaseContext(object):
             # Can convert from second to first
             return first
 
-        if isinstance(first, types.Literal) or isinstance(second, types.Literal):
+        if isinstance(first, types.Literal) or \
+           isinstance(second, types.Literal):
             first = types.unliteral(first)
             second = types.unliteral(second)
             return self.unify_pairs(first, second)
