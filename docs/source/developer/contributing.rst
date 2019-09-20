@@ -214,6 +214,8 @@ Coding conventions
 
 All Python code should follow :pep:`8`.  Our C code doesn't have a
 well-defined coding style (would it be nice to follow :pep:`7`?).
+Code and documentation should generally fit within 80 columns, for
+maximum readability with all existing tools (such as code review UIs).
 
 Numba uses `Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent
 Python code format throughout the project. ``flake8`` can be installed
