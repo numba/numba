@@ -3112,6 +3112,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, y)
             self.assertPreciseEqual(expected, got)
 
+    def test_cross2d_exceptions(self):
+        cfunc = cross2d
+        self.disable_leak_check()
+
+        # test incompatible dimensions for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.array((1, 2, 3)),
+                np.array((4, 5, 6))
+            )
+        self.assertIn(
+            'incompatible dimensions',
+            str(raises.exception)
+        )
+
+        # test incompatible dimensions for ndim > 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(6).reshape((2, 3)),
+                np.arange(6)[::-1].reshape((2, 3))
+            )
+        self.assertIn(
+            'incompatible dimensions',
+            str(raises.exception)
+        )
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
