@@ -9,8 +9,8 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit, targets, typing
-from numba.compiler import compile_isolated, Flags, types
+from numba import njit, targets, typing, types
+from numba.compiler import compile_isolated, Flags
 from numba.runtime import rtsys
 from numba.runtime import nrtopt
 from numba.extending import intrinsic

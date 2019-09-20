@@ -1,4 +1,7 @@
 from __future__ import print_function
+import os
+import subprocess
+import sys
 import warnings
 import numpy as np
 
@@ -166,6 +169,41 @@ class TestBuiltins(unittest.TestCase):
             self.assertEqual(w[1].category, NumbaWarning)
             self.assertIn('same', str(w[0].message))
             self.assertIn('same', str(w[1].message))
+
+    def test_disable_performance_warnings(self):
+
+        not_found_ret_code = 55
+        found_ret_code = 99
+        expected = "'parallel=True' was specified but no transformation"
+
+        # NOTE: the error_usecases is needed as the NumbaPerformanceWarning's
+        # for parallel=True failing to parallelise do not appear for functions
+        # defined by string eval/exec etc.
+        parallel_code = """if 1:
+            import warnings
+            from numba.tests.error_usecases import foo
+            import numba
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                foo()
+            for x in w:
+                if x.category == numba.errors.NumbaPerformanceWarning:
+                    if "%s" in str(x.message):
+                        exit(%s)
+            exit(%s)
+        """ % (expected, found_ret_code, not_found_ret_code)
+
+        # run in the standard env, warning should raise
+        popen = subprocess.Popen([sys.executable, "-c", parallel_code])
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, found_ret_code)
+
+        # run in an env with performance warnings disabled, should not warn
+        env = dict(os.environ)
+        env['NUMBA_DISABLE_PERFORMANCE_WARNINGS'] = "1"
+        popen = subprocess.Popen([sys.executable, "-c", parallel_code], env=env)
+        out, err = popen.communicate()
+        self.assertEqual(popen.returncode, not_found_ret_code)
 
 
 if __name__ == '__main__':
