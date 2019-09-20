@@ -7,7 +7,7 @@ ignore =
     E741,  # Ambiguous variable names
     W503,  # line break before binary operator
     W504,  # line break after binary operator
-max-line-length = 120
+max-line-length = 80
 
 exclude =
     __pycache__
