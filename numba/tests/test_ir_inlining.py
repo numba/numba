@@ -23,8 +23,8 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
     metadata store"""
 
     def define_pipelines(self):
-        pipeline = DefaultPassBuilder.define_nopython_pipeline(self.state,
-                                                               "inliner_custom_pipe")
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "inliner_custom_pipe")
         # mangle the default pipeline and inject DCE and IR preservation ahead
         # of legalisation
 

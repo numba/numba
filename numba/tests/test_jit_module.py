@@ -68,7 +68,8 @@ jit_module({jit_options})
                 source_lines = self.source_lines
             tempdir = temp_directory('test_jit_module')
             # Generate random module name
-            temp_module_name = 'test_module_' + str(uuid.uuid4()).replace('-', '_')
+            temp_module_name = 'test_module_{}'.format(
+                str(uuid.uuid4()).replace('-', '_'))
             temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
 
             jit_options = self._format_jit_options(**jit_options)
@@ -117,9 +118,12 @@ jit_module({jit_options})
 
             # Test output of jitted functions is as expected
             x, y = 1.7, 2.3
-            self.assertEqual(test_module.inc(x), test_module.inc.py_func(x))
-            self.assertEqual(test_module.add(x, y), test_module.add.py_func(x, y))
-            self.assertEqual(test_module.inc_add(x), test_module.inc_add.py_func(x))
+            self.assertEqual(test_module.inc(x),
+                             test_module.inc.py_func(x))
+            self.assertEqual(test_module.add(x, y),
+                             test_module.add.py_func(x, y))
+            self.assertEqual(test_module.inc_add(x),
+                             test_module.inc_add.py_func(x))
 
     def test_jit_module_jit_options(self):
         jit_options = {"nopython": True,
@@ -145,10 +149,12 @@ jit_module({jit_options})
         jit_options = {"nopython": True,
                        "error_model": "numpy",
                        }
-        with self.create_temp_jitted_module(source_lines=source_lines, **jit_options) as test_module:
+        with self.create_temp_jitted_module(source_lines=source_lines,
+                                            **jit_options) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options
-            self.assertEqual(test_module.inc.targetoptions, {'nogil': True, 'forceobj': True})
+            self.assertEqual(test_module.inc.targetoptions,
+                             {'nogil': True, 'forceobj': True})
 
     def test_jit_module_logging_output(self):
         logger = logging.getLogger('numba.decorators')

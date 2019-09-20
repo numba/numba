@@ -144,8 +144,11 @@ class PassManager(object):
         self.pipeline_name = pipeline_name
 
     def _validate_pass(self, pass_cls):
-        if not (isinstance(pass_cls, str) or (inspect.isclass(pass_cls) and issubclass(pass_cls, CompilerPass))):
-            msg = "Pass must be referenced by name or be a subclass of a CompilerPass. Have %s" % pass_cls
+        if not (isinstance(pass_cls, str) or
+                (inspect.isclass(pass_cls) and
+                 issubclass(pass_cls, CompilerPass))):
+            msg = ("Pass must be referenced by name or be a subclass of "
+                   "a CompilerPass. Have %s" % pass_cls)
             raise TypeError(msg)
         if isinstance(pass_cls, str):
             pass_cls = _pass_registry.find_by_name(pass_cls)
@@ -185,9 +188,9 @@ class PassManager(object):
             if config.DEBUG_PRINT_AFTER == "all":
                 print_passes = [x.name() for (x, _) in self.passes]
             else:
-                # we don't validate whether the named passes exist in this pipeline
-                # the compiler may be used reentrantly and different pipelines may
-                # contain different passes
+                # we don't validate whether the named passes exist in this
+                # pipeline the compiler may be used reentrantly and different
+                # pipelines may contain different passes
                 splitted = config.DEBUG_PRINT_AFTER.split(',')
                 print_passes = [x.strip() for x in splitted]
         return print_passes

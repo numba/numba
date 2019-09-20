@@ -101,7 +101,8 @@ class NopythonTypeInference(FunctionPass):
             Only accept array return type iff it is passed into the function.
             Reject function object return types if in nopython mode.
             """
-            if not targetctx.enable_nrt and isinstance(return_type, types.Array):
+            if (not targetctx.enable_nrt and
+                    isinstance(return_type, types.Array)):
                 # Walk IR to discover all arguments and all return statements
                 retstmts = []
                 caststmts = {}
@@ -122,8 +123,8 @@ class NopythonTypeInference(FunctionPass):
                 for var in retstmts:
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
-                        raise TypeError("Only accept returning of array passed into "
-                                        "the function as argument")
+                        raise TypeError("Only accept returning of array passed "
+                                        "into the function as argument")
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
@@ -241,9 +242,14 @@ class ParforPass(FunctionPass):
         """
         # Ensure we have an IR and type information.
         assert state.func_ir
-        parfor_pass = _parfor_ParforPass(state.func_ir, state.type_annotation.typemap,
-                                         state.type_annotation.calltypes, state.return_type, state.typingctx,
-                                         state.flags.auto_parallel, state.flags, state.parfor_diagnostics)
+        parfor_pass = _parfor_ParforPass(state.func_ir,
+                                         state.type_annotation.typemap,
+                                         state.type_annotation.calltypes,
+                                         state.return_type,
+                                         state.typingctx,
+                                         state.flags.auto_parallel,
+                                         state.flags,
+                                         state.parfor_diagnostics)
         parfor_pass.run()
 
         # check the parfor pass worked and warn if it didn't
@@ -315,9 +321,11 @@ class NativeLowering(LoweringPass):
                "mode lowering" % (state.func_id.func_name,))
         with fallback_context(state, msg):
             # Lowering
-            fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
-                interp, typemap, restype, calltypes, mangler=targetctx.mangler,
-                inline=flags.forceinline, noalias=flags.noalias)
+            fndesc = \
+                funcdesc.PythonFunctionDescriptor.from_specialized_function(
+                    interp, typemap, restype, calltypes,
+                    mangler=targetctx.mangler, inline=flags.forceinline,
+                    noalias=flags.noalias)
 
             with targetctx.push_code_library(library):
                 lower = lowering.Lower(targetctx, library, fndesc, interp,
@@ -331,14 +339,16 @@ class NativeLowering(LoweringPass):
 
             from numba.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
-                state['cr'] = _LowerResult(fndesc, call_helper, cfunc=None, env=env)
+                state['cr'] = _LowerResult(fndesc, call_helper,
+                                           cfunc=None, env=env)
             else:
                 # Prepare for execution
                 cfunc = targetctx.get_executable(library, fndesc, env)
                 # Insert native function for use by other jitted-functions.
                 # We also register its library to allow for inlining.
                 targetctx.insert_user_function(cfunc, fndesc, [library])
-                state['cr'] = _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
+                state['cr'] = _LowerResult(fndesc, call_helper,
+                                           cfunc=cfunc, env=env)
         return True
 
 
