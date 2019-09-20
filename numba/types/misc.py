@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+from .abstract import Callable, Literal, Type
+from .common import Dummy, IterableType, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from ..errors import TypingError, LiteralTypingError
 
@@ -58,12 +58,14 @@ def unliteral(lit_type):
 def literal(value):
     """Returns a Literal instance or raise LiteralTypingError
     """
-    assert not isinstance(value, Literal)
     ty = type(value)
+    if isinstance(value, Literal):
+        msg = "the function does not accept a Literal type; got {} ({})"
+        raise ValueError(msg.format(value, ty))
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:
-        raise LiteralTypingError(ty)
+        raise LiteralTypingError("{} cannot be used as a literal".format(ty))
     else:
         return ctor(value)
 

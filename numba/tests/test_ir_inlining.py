@@ -10,34 +10,30 @@ import numpy as np
 import numba
 from numba import njit, ir, types
 from numba.extending import overload
-from numba.ir_utils import dead_code_elimination
 from numba.targets.cpu import InlineOptions
+from numba.compiler import DefaultPassBuilder
+from numba.typed_passes import DeadCodeElimination, IRLegalization
+from numba.untyped_passes import PreserveIR
 from itertools import product
 from .support import TestCase, unittest
 
 
-class InlineTestPipeline(numba.compiler.BasePipeline):
+class InlineTestPipeline(numba.compiler.CompilerBase):
     """ Same as the standard pipeline, but preserves the func_ir into the
     metadata store"""
 
-    def stage_preserve_final_ir(self):
-        self.metadata['final_func_ir'] = self.func_ir.copy()
-
-    def stage_dce(self):
-        dead_code_elimination(self.func_ir, self.typemap)
-
-    def define_pipelines(self, pm):
-        self.define_nopython_pipeline(pm)
+    def define_pipelines(self):
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(self.state,
+                                                               "inliner_custom_pipe")
         # mangle the default pipeline and inject DCE and IR preservation ahead
         # of legalisation
-        allstages = pm.pipeline_stages['nopython']
-        new_pipe = []
-        for x in allstages:
-            if x[0] == self.stage_ir_legalization:
-                new_pipe.append((self.stage_dce, "DCE"))
-                new_pipe.append((self.stage_preserve_final_ir, "preserve IR"))
-            new_pipe.append(x)
-        pm.pipeline_stages['nopython'] = new_pipe
+
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(DeadCodeElimination, IRLegalization)
+        pipeline.add_pass_after(PreserveIR, DeadCodeElimination)
+        pipeline.finalize()
+        return [pipeline]
 
 
 # this global has the same name as the the global in inlining_usecases.py, it
@@ -97,7 +93,7 @@ class InliningBase(TestCase):
         self.assertEqual(test_impl(*args), j_func(*args))
 
         # make sure IR doesn't have branches
-        fir = j_func.overloads[j_func.signatures[0]].metadata['final_func_ir']
+        fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
         fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
         if self._DEBUG:
             print("FIR".center(80, "-"))
@@ -332,10 +328,14 @@ class TestFunctionInlining(InliningBase):
 
     def test_inlining_models(self):
 
-        def s17_caller_model(caller_info, callee_info):
+        def s17_caller_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(caller_info)
 
-        def s17_callee_model(caller_info, callee_info):
+        def s17_callee_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(callee_info)
 
         # caller has sentinel
@@ -646,10 +646,14 @@ class TestOverloadInlining(InliningBase):
 
     def test_inlining_models(self):
 
-        def s17_caller_model(caller_info, callee_info):
+        def s17_caller_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(caller_info.func_ir)
 
-        def s17_callee_model(caller_info, callee_info):
+        def s17_callee_model(expr, caller_info, callee_info):
+            self.assertIsInstance(expr, ir.Expr)
+            self.assertEqual(expr.op, "call")
             return self.sentinel_17_cost_model(callee_info.func_ir)
 
         # caller has sentinel

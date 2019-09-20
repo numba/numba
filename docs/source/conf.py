@@ -42,6 +42,7 @@ extensions = [
     #'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
     #'sphinx.ext.graphviz',
+    'numpydoc',
 ]
 
 # Adding the github files extension
@@ -290,6 +291,11 @@ intersphinx_mapping = {
     'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
     }
 
+
+# numpydoc options
+
+# To silence "WARNING: toctree contains reference to nonexisting document"
+numpydoc_show_class_members = False
 
 # -- Custom autogeneration ------------------------------------------------
 

@@ -128,6 +128,11 @@ class _EnvReloader(object):
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
+        # disable performance warnings, will switch of the generation of
+        # warnings of the class NumbaPerformanceWarning
+        DISABLE_PERFORMANCE_WARNINGS = _readenv(
+            "NUMBA_DISABLE_PERFORMANCE_WARNINGS", int, 0)
+
         # Flag to enable full exception reporting
         FULL_TRACEBACKS = _readenv(
             "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
@@ -141,6 +146,9 @@ class _EnvReloader(object):
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
+
+        # DEBUG print IR after pass names
+        DEBUG_PRINT_AFTER = _readenv("NUMBA_DEBUG_PRINT_AFTER", str, "none")
 
         # JIT Debug flag to trigger IR instruction print
         DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)

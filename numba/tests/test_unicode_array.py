@@ -1,5 +1,6 @@
 from __future__ import print_function, unicode_literals
 
+import platform
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -211,6 +212,7 @@ def return_not(x, i):
 
 
 @skip_py2
+@unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
 class TestUnicodeArray(TestCase):
 
     def _test(self, pyfunc, cfunc, *args, **kwargs):

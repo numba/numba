@@ -438,12 +438,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if not self._inline.is_never_inline:
             # need to run the compiler front end up to type inference to compute
             # a signature
-            from numba import compiler
+            from numba import compiler, typed_passes
             ir = compiler.run_frontend(disp_type.dispatcher.py_func)
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
 
-            typemap, return_type, calltypes = compiler.type_inference_stage(
+            typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self.context, ir, folded_args, None)
             sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied
