@@ -4046,19 +4046,13 @@ def _cross2d_operation(a, b):
     a0, a1 = _cross_preprocessing(a)
     b0, b1 = _cross_preprocessing(b)
 
-    return np.multiply(a0, b1) - np.multiply(a1, b0)
-
-
-@generated_jit
-def _cross2d_impl(a, b):
-    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
-    if a.ndim == 1 and b.ndim == 1:
-        def impl(a, b):
-            return np.array(_cross2d_operation(a, b), dtype=dtype)
-    else:
-        def impl(a, b):
-            return _cross2d_operation(a, b)
-    return impl
+    cp = np.multiply(a0, b1) - np.multiply(a1, b0)
+    # If ndim of a and b is 1, cp is a scalar.
+    # In this case np.cross returns a 0-D array, containing the scalar.
+    # np.asarray is used to reconcile this case, without introducing
+    # overhead in the case where cp is an actual N-D array.
+    # (recall that np.asarray does not copy existing arrays)
+    return np.asarray(cp)
 
 
 @generated_jit
@@ -4074,6 +4068,6 @@ def cross2d(a, b):
                 "incompatible dimensions for 2D cross product\n"
                 "(dimension must be 2 for both inputs)"
             ))
-        return _cross2d_impl(a_, b_)
+        return _cross2d_operation(a_, b_)
 
     return impl
