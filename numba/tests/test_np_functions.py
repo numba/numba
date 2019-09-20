@@ -391,6 +391,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield (1, 2, 3), (1, 2, 3)
             yield 2, 2
             yield 3, 2
+            yield True, True
+            yield True, False
+            yield True, 2
+            yield True, 1
+            yield False, 0
 
         pyfunc = array_equal
         cfunc = jit(nopython=True)(pyfunc)
