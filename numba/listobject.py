@@ -462,7 +462,7 @@ def handle_index(l, index):
     """
     # convert negative indices to positive ones
     if index < 0:
-        index = len(l) + index
+        index = type(index)(len(l)) + index
     # check that the index is in range
     if not (0 <= index < len(l)):
         raise IndexError("list index out of range")

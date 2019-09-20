@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, types
+from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
@@ -149,6 +149,21 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_2), 3)
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
+
+    def test_unsigned_prange(self):
+        @njit
+        def foo(a):
+            r = types.uint64(3)
+            s = types.uint64(0)
+            for i in prange(r):
+                s = s + a[i]
+            return s
+
+        a = List.empty_list(types.uint64)
+        a.append(types.uint64(12))
+        a.append(types.uint64(1))
+        a.append(types.uint64(7))
+        self.assertEqual(foo(a), 20)
 
     def test_compiled(self):
         @njit
