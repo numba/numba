@@ -1413,6 +1413,33 @@ def my_tril(m, k=0):
     else:
         return np_tril_impl_multi
 
+@overload(np.tril_indices)
+def np_tril_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    if not isinstance(n, (int, types.Integer)):
+        raise TypeError('n must be an integer')
+    if not isinstance(k, (int, types.Integer)):
+        raise TypeError('k must be an integer')
+    if not (m is None or isinstance(m, (int, types.Integer))):
+        raise TypeError('m must be an integer')
+
+    def np_tril_indices_impl(n, k=0, m=None):
+        return np.nonzero(np.tri(n, m, k=k))
+    return np_tril_indices_impl
+
+@overload(np.tril_indices_from)
+def np_tril_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, (int, types.Integer)):
+        raise TypeError('k must be an integer')
+
+    def np_tril_indices_from_impl(arr, k=0):
+        if arr.ndim != 2:
+            raise ValueError("input array must be 2-d")
+        return np.tril_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_tril_indices_from_impl
 
 @register_jitable
 def np_triu_impl_2d(m, k=0):
@@ -1446,6 +1473,33 @@ def my_triu(m, k=0):
     else:
         return np_triu_impl_multi
 
+@overload(np.triu_indices)
+def np_triu_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    if not isinstance(n, (int, types.Integer)):
+        raise TypeError('n must be an integer')
+    if not isinstance(k, (int, types.Integer)):
+        raise TypeError('k must be an integer')
+    if not (m is None or isinstance(m, (int, types.Integer))):
+        raise TypeError('m must be an integer')
+
+    def np_triu_indices_impl(n, k=0, m=None):
+        return np.nonzero(1 - np.tri(n, m, k=k-1))
+    return np_triu_indices_impl
+
+@overload(np.triu_indices_from)
+def np_triu_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    if not isinstance(k, (int, types.Integer)):
+        raise TypeError('k must be an integer')
+
+    def np_triu_indices_from_impl(arr, k=0):
+        if arr.ndim != 2:
+            raise ValueError("input array must be 2-d")
+        return np.triu_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_triu_indices_from_impl
 
 def _prepare_array(arr):
     pass
