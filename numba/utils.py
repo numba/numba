@@ -15,13 +15,14 @@ from types import ModuleType
 import numpy as np
 
 from .six import *
+from .errors import UnsupportedError
 try:
     # preferred over pure-python StringIO due to threadsafety
     # note: parallel write to StringIO could cause data to go missing
     from cStringIO import StringIO
 except ImportError:
     from io import StringIO
-from numba.config import PYVERSION, MACHINE_BITS
+from numba.config import PYVERSION, MACHINE_BITS, DEVELOPER_MODE
 
 
 IS_PY3 = PYVERSION >= (3, 0)
@@ -77,10 +78,18 @@ try:
     from inspect import Parameter as pyParameter
 except ImportError:
     try:
-        from funcsigs import signature as pysignature
+        from funcsigs import signature as _pysignature
         from funcsigs import Signature as pySignature
         from funcsigs import Parameter as pyParameter
         from funcsigs import BoundArguments
+
+        def pysignature(*args, **kwargs):
+            try:
+                return _pysignature(*args, **kwargs)
+            except ValueError as e:
+                msg = ("Cannot obtain a signature for: %s. The error message "
+                       "from funcsigs was: '%s'." % (args,  e.message))
+                raise UnsupportedError(msg)
 
         # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3
         # This patch is from https://github.com/aliles/funcsigs/pull/30/files
@@ -756,3 +765,12 @@ class finalize:
 # dummy invocation to force _at_shutdown() to be registered
 finalize(lambda: None, lambda: None)
 assert finalize._registered_with_atexit
+
+
+def chain_exception(new_exc, old_exc):
+    """Set the __cause__ attribute on *new_exc* for explicit exception
+    chaining.  Returns the inplace modified *new_exc*.
+    """
+    if DEVELOPER_MODE:
+        new_exc.__cause__ = old_exc
+    return new_exc

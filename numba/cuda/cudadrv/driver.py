@@ -708,14 +708,20 @@ class Context(object):
                                                              memsize, blocksizelimit, flags)
         return (gridsize.value, blocksize.value)
 
+    def prepare_for_use(self):
+        """Initialize the context for use.
+        It's safe to be called multiple times.
+        """
+        # setup *deallocations* as the context becomes active for the first time
+        if self.deallocations is None:
+            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+
     def push(self):
         """
         Pushes this context on the current CPU Thread.
         """
         driver.cuCtxPushCurrent(self.handle)
-        # setup *deallocations* as the context becomes active for the first time
-        if self.deallocations is None:
-            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+        self.prepare_for_use()
 
     def pop(self):
         """

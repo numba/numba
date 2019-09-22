@@ -6,6 +6,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.errors import TypingError
 from numba import jit, types, typeof
+from numba.utils import IS_PY3
 
 
 a0 = np.array(42)
@@ -23,6 +24,9 @@ a5 = a4[::-2]
 
 # A recognizable data string
 a6 = np.frombuffer(b"XXXX_array_contents_XXXX", dtype=np.float32)
+
+
+myarray = np.array([1, ])
 
 
 def getitem0(i):
@@ -59,6 +63,10 @@ def use_arrayscalar_const():
 
 def write_to_global_array():
     myarray[0] = 1
+
+
+def bytes_as_const_array():
+    return np.frombuffer(b'foo', dtype=np.uint8)
 
 
 class TestConstantArray(unittest.TestCase):
@@ -156,7 +164,7 @@ class TestConstantArray(unittest.TestCase):
             self.assertIs(biggie, out)
             # Remove all local references to biggie
             del out
-            biggie = None  #  del biggie is syntax error in py2
+            biggie = None  # del biggie is syntax error in py2
             # Run again and verify result
             out = cres.entry_point()
             np.testing.assert_equal(expect, out)
@@ -172,6 +180,16 @@ class TestConstantArray(unittest.TestCase):
         test(c_array)
         # Test F contig
         test(f_array)
+
+
+@unittest.skipUnless(IS_PY3, "Python 3 only")
+class TestConstantBytes(unittest.TestCase):
+    def test_constant_bytes(self):
+        pyfunc = bytes_as_const_array
+        cres = compile_isolated(pyfunc, ())
+        cfunc = cres.entry_point
+
+        np.testing.assert_array_equal(pyfunc(), cfunc())
 
 
 if __name__ == '__main__':

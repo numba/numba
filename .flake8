@@ -29,7 +29,6 @@ exclude =
     numba/smartarray.py
     numba/transforms.py
     numba/tracing.py
-    numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
     numba/_version.py
@@ -55,7 +54,6 @@ exclude =
     numba/six.py
     numba/dummyarray.py
     numba/dataflow.py
-    numba/special.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
@@ -98,7 +96,6 @@ exclude =
     numba/targets/removerefctpass.py
     numba/targets/boxing.py
     numba/targets/cffiimpl.py
-    numba/targets/arraymath.py
     numba/targets/linalg.py
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
@@ -242,7 +239,6 @@ exclude =
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py
     numba/tests/test_gil.py
-    numba/tests/test_array_constants.py
     numba/tests/cffi_usecases.py
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py

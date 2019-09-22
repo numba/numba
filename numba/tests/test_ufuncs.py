@@ -6,6 +6,7 @@ import re
 import sys
 import warnings
 import threading
+import operator
 
 import numpy as np
 
@@ -17,7 +18,7 @@ from numba import jit, vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
-from numba.six import exec_
+from numba.six import exec_, string_types
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
@@ -95,10 +96,19 @@ def _make_binary_ufunc_op_usecase(ufunc_op):
 
 
 def _make_inplace_ufunc_op_usecase(ufunc_op):
-    ldict = {}
-    exec_("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
-    fn = ldict["fn"]
-    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    """Generates a function to be compiled that performs an inplace operation
+
+    ufunc_op can be a string like '+=' or a function like operator.iadd
+    """
+    if isinstance(ufunc_op, string_types):
+        ldict = {}
+        exec_("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
+        fn = ldict["fn"]
+        fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    else:
+        def inplace_op(x, y):
+            ufunc_op(x, y)
+        fn = inplace_op
     return fn
 
 
@@ -139,6 +149,11 @@ class BaseUFuncTest(MemoryLeakMixin):
             (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
+
+            (np.array([0,1], dtype=np.int8), types.Array(types.int8, 1, 'C')),
+            (np.array([0,1], dtype=np.int16), types.Array(types.int16, 1, 'C')),
+            (np.array([0,1], dtype=np.uint8), types.Array(types.uint8, 1, 'C')),
+            (np.array([0,1], dtype=np.uint16), types.Array(types.uint16, 1, 'C')),
             ]
         self.cache = CompilationCache()
 
@@ -609,17 +624,33 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     ############################################################################
     # Floating functions
+
+    def bool_additional_inputs(self):
+        return [
+            (np.array([True, False], dtype=np.bool_),
+             types.Array(types.bool_, 1, 'C')),
+            ]
+
     @tag('important')
     def test_isfinite_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isfinite, flags=flags)
+        self.unary_ufunc_test(
+            np.isfinite, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_isinf_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isinf, flags=flags)
+        self.unary_ufunc_test(
+            np.isinf, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_isnan_ufunc(self, flags=no_pyobj_flags):
-        self.unary_ufunc_test(np.isnan, flags=flags)
+        self.unary_ufunc_test(
+            np.isnan, flags=flags, kinds='ifcb',
+            additional_inputs=self.bool_additional_inputs(),
+        )
 
     @tag('important')
     def test_signbit_ufunc(self, flags=no_pyobj_flags):
@@ -952,6 +983,9 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
         pyfunc = operator_func
+        # when generating arbitrary sequences, we use a fixed seed
+        # for deterministic testing
+        random_state = np.random.RandomState(1)
         for input_tuple in inputs:
             input_operand1, input_type = input_tuple
             input_dtype = numpy_support.as_dtype(
@@ -971,7 +1005,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                 if positive_rhs and np.any(input_operand1 < zero):
                     continue
             else:
-                input_operand0 = (np.random.random(10) * 100).astype(
+                input_operand0 = (random_state.uniform(0, 100, 10)).astype(
                     input_dtype)
                 input_type0 = typeof(input_operand0)
                 if positive_rhs and input_operand1 < zero:
@@ -1074,43 +1108,55 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     @tag('important')
     def test_inplace_add(self):
         self.inplace_float_op_test('+=', [-1, 1.5, 3], [-5, 0, 2.5])
+        self.inplace_float_op_test(operator.iadd, [-1, 1.5, 3], [-5, 0, 2.5])
 
     @tag('important')
     def test_inplace_sub(self):
         self.inplace_float_op_test('-=', [-1, 1.5, 3], [-5, 0, 2.5])
+        self.inplace_float_op_test(operator.isub, [-1, 1.5, 3], [-5, 0, 2.5])
 
     @tag('important')
     def test_inplace_mul(self):
         self.inplace_float_op_test('*=', [-1, 1.5, 3], [-5, 0, 2.5])
+        self.inplace_float_op_test(operator.imul, [-1, 1.5, 3], [-5, 0, 2.5])
 
     def test_inplace_floordiv(self):
         self.inplace_float_op_test('//=', [-1, 1.5, 3], [-5, 1.25, 2.5])
+        self.inplace_float_op_test(operator.ifloordiv, [-1, 1.5, 3], [-5, 1.25, 2.5])
 
     def test_inplace_div(self):
         self.inplace_float_op_test('/=', [-1, 1.5, 3], [-5, 0, 2.5])
+        self.inplace_float_op_test(operator.itruediv, [-1, 1.5, 3], [-5, 1.25, 2.5])
 
     def test_inplace_remainder(self):
         self.inplace_float_op_test('%=', [-1, 1.5, 3], [-5, 2, 2.5])
+        self.inplace_float_op_test(operator.imod, [-1, 1.5, 3], [-5, 2, 2.5])
 
     @tag('important')
     def test_inplace_pow(self):
         self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
+        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5])
 
     def test_inplace_and(self):
         self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.iand, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     def test_inplace_or(self):
         self.inplace_bitwise_op_test('|=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.ior, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     def test_inplace_xor(self):
         self.inplace_bitwise_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.ixor, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     @tag('important')
     def test_inplace_lshift(self):
         self.inplace_int_op_test('<<=', [0, 5, -10, -51], [0, 1, 4, 14])
+        self.inplace_int_op_test(operator.ilshift, [0, 5, -10, -51], [0, 1, 4, 14])
 
     def test_inplace_rshift(self):
         self.inplace_int_op_test('>>=', [0, 5, -10, -51], [0, 1, 4, 14])
+        self.inplace_int_op_test(operator.irshift, [0, 5, -10, -51], [0, 1, 4, 14])
 
     def test_unary_positive_array_op(self):
         '''
@@ -1839,7 +1885,7 @@ class TestUFuncCompilationThreadSafety(TestCase):
                 a = np.ones((10,), dtype = np.float64)
                 expected = np.ones((10,), dtype = np.float64) + 1.
                 np.testing.assert_array_equal(foo(a), expected)
-            except BaseException as e:
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=wrapper) for i in range(16)]

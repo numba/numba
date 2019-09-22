@@ -55,7 +55,7 @@ def get_sys_info():
                                 _a = x.split(':')[1].strip()
                                 print(fmt % ("Listed accessible CPUs cores",
                                                 _a))
-            except BaseException:
+            except Exception:
                 print(fmt % ("CPU count", multiprocessing.cpu_count()))
             # See if CFS is in place
             # https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt
@@ -73,7 +73,7 @@ def get_sys_info():
                     runtime_amount = float(cfs_quota)/float(cfs_period)
                     print(fmt % ("CFS restrictions (CPUs worth of runtime)",
                                  runtime_amount))
-            except BaseException:
+            except Exception:
                 print(fmt % ("CFS restrictions", 'Information not available'))
         else:
             print(fmt % ("CPU count", multiprocessing.cpu_count()))
@@ -127,7 +127,7 @@ def get_sys_info():
             for x in locale.getdefaultlocale():
                 if x is not None:
                     lcl.append(x)
-        except BaseException as e:
+        except Exception as e:
             lcl.append(str(e))
         print(fmt % ("Python Locale ", ' '.join(lcl)))
 
@@ -143,7 +143,7 @@ def get_sys_info():
         # Look for GPUs
         try:
             cu.list_devices()[0]  # will a device initialise?
-        except BaseException as e:
+        except Exception as e:
             msg_not_found = "CUDA driver library cannot be found"
             msg_disabled_by_user = "CUDA is disabled"
             msg_end = " or no CUDA enabled devices are present."
@@ -194,7 +194,7 @@ def get_sys_info():
             from numba.roc.hsadrv.driver import hsa
             try:
                 hsa.is_available
-            except BaseException as e:
+            except Exception as e:
                 msg = str(e)
             else:
                msg = 'No ROC toolchains found.'
@@ -264,7 +264,7 @@ def get_sys_info():
                 extn_dso = os.path.split(path)[1]
                 if backend in extn_dso:
                     return "%s: %s" % (problem, symbol)
-            except BaseException:
+            except Exception:
                 pass
             return "Unknown import problem."
 

@@ -1,3 +1,24 @@
+Version 0.45.1
+--------------
+
+This patch release addresses some regressions reported in the 0.45.0 release and
+adds support for NumPy 1.17:
+
+* PR #4325: accept scalar/0d-arrays
+* PR #4338: Fix #4299. Parfors reduction vars not deleted.
+* PR #4350: Use process level locks for fork() only.
+* PR #4354: Try to fix #4352.
+* PR #4357: Fix np1.17 isnan, isinf, isfinite ufuncs
+* PR #4363: Fix np.interp for np1.17 nan handling
+* PR #4371: Fix nump1.17 random function non-aliasing
+
+Contributors:
+
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+* Valentin Haenel (core dev)
+
+
 Version 0.45.0
 --------------
 
@@ -117,20 +138,21 @@ CI Updates:
 
 Contributors:
 
-Ehsan Totoni (core dev)
-Gregory R. Lee
-Guilherme Leobas
-James Bourbeau
-Joshua L. Adelman
-Keith Kraus
-Lucio Fernandez-Arjona
-Nick White
-Rob Ennis
-Siu Kwan Lam (core dev)
-Stan Seibert (core dev)
-Stuart Archibald (core dev)
-Todd A. Anderson (core dev)
-Valentin Haenel (core dev)
+* Ehsan Totoni (core dev)
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Joshua L. Adelman
+* Keith Kraus
+* Lucio Fernandez-Arjona
+* Nick White
+* Rob Ennis
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
 
 Version 0.44.1
 --------------

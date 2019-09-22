@@ -215,3 +215,14 @@ def make_optional_return_case(jit=lambda x: x):
             return x * bar(out)
 
     return bar
+
+
+def make_growing_tuple_case(jit=lambda x: x):
+    # From issue #4387
+    @jit
+    def make_list(n):
+        if n <= 0:
+            return None
+
+        return (n, make_list(n - 1))
+    return make_list
