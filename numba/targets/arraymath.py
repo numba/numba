@@ -3007,6 +3007,26 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.count_nonzero)
+def np_count_nonzero(arr, axis=None):
+    if not type_can_asarray(arr):
+        raise TypingError("The argument to np.count_nonzero must be array-like")
+
+    if (numpy_version < (1, 12)):
+        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
+
+    if _is_nonelike(axis):
+        def impl(arr, axis=None):
+            arr2 = np.ravel(arr)
+            return np.sum(arr2 != 0)
+    else:
+        def impl(arr, axis=None):
+            arr2 = arr.astype(np.bool_)
+            return np.sum(arr2, axis=axis)
+
+    return impl
+
+
 np_delete_handler_isslice = register_jitable(lambda x : x)
 np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
@@ -3948,3 +3968,68 @@ def np_kaiser(M, beta):
         return _i0n(n, alpha, beta)
 
     return np_kaiser_impl
+
+
+@register_jitable
+def _cross_operation(a, b, out):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        if x.shape[-1] == 3:
+            x2 = x[..., 2]
+        else:
+            x2 = np.multiply(x.dtype.type(0), x0)
+        return x0, x1, x2
+
+    a0, a1, a2 = _cross_preprocessing(a)
+    b0, b1, b2 = _cross_preprocessing(b)
+
+    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+    out[..., 0] = cp0
+    out[..., 1] = cp1
+    out[..., 2] = cp2
+
+
+@generated_jit
+def _cross_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            cp = np.empty((3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    else:
+        def impl(a, b):
+            shape = np.add(a[..., 0], b[..., 0]).shape
+            cp = np.empty(shape + (3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    return impl
+
+
+@overload(np.cross)
+def np_cross(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+            raise ValueError((
+                "incompatible dimensions for cross product\n"
+                "(dimension must be 2 or 3)"
+            ))
+
+        if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+            return _cross_impl(a_, b_)
+        else:
+            raise ValueError((
+                "Dimensions for both inputs is 2 "
+                "(currently not supported)."
+            ))
+    return impl

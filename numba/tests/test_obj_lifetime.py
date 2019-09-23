@@ -3,6 +3,7 @@ from __future__ import print_function
 import collections
 import sys
 import weakref
+import gc
 
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, Loop
@@ -334,6 +335,7 @@ class TestObjLifetime(TestCase):
         with self.assertRefCount(rec):
             gen = cfunc(rec)
             del gen
+            gc.collect()
             self.assertFalse(rec.alive)
         # Stop iterating before exhaustion
         rec = RefRecorder()
@@ -342,6 +344,7 @@ class TestObjLifetime(TestCase):
             next(gen)
             self.assertTrue(rec.alive)
             del gen
+            gc.collect()
             self.assertFalse(rec.alive)
 
     def test_generator1(self):

@@ -983,6 +983,9 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
         pyfunc = operator_func
+        # when generating arbitrary sequences, we use a fixed seed
+        # for deterministic testing
+        random_state = np.random.RandomState(1)
         for input_tuple in inputs:
             input_operand1, input_type = input_tuple
             input_dtype = numpy_support.as_dtype(
@@ -1002,7 +1005,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                 if positive_rhs and np.any(input_operand1 < zero):
                     continue
             else:
-                input_operand0 = (np.random.random(10) * 100).astype(
+                input_operand0 = (random_state.uniform(0, 100, 10)).astype(
                     input_dtype)
                 input_type0 = typeof(input_operand0)
                 if positive_rhs and input_operand1 < zero:

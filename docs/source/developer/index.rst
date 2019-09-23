@@ -22,4 +22,5 @@ Developer Manual
    environment.rst
    hashing.rst
    caching.rst
+   literal.rst
    roadmap.rst
