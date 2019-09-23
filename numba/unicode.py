@@ -440,6 +440,14 @@ def _codepoint_is_ascii(ch):
     return ch < 128
 
 
+@register_jitable
+def normalize_slice_arg(arg, slice_len, default):
+    if arg is None:
+        return default
+    if -slice_len <= arg < slice_len:
+        return arg % slice_len
+    return 0 if arg < 0 else arg
+
 # PUBLIC API
 
 
@@ -538,6 +546,40 @@ def unicode_find(a, b):
         def find_impl(a, b):
             return a.find(str(b))
         return find_impl
+
+
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(src, sub, start=None, end=None):
+
+    _count_args_types_check(start)
+    _count_args_types_check(end)
+
+    if isinstance(sub, types.UnicodeType):
+        def count_impl(src, sub, start=start, end=end):
+            count = 0
+            src_len = len(src)
+            sub_len = len(sub)
+
+            start = normalize_slice_arg(start, src_len, 0)
+            end   = normalize_slice_arg(end, src_len, src_len)
+
+            if end - start < 0 or start > src_len:
+                return 0
+
+            src = src[start : end]
+            src_len = len(src)
+            start, end = 0, src_len
+            if sub_len == 0:
+                return src_len + 1
+
+            while(start + sub_len <= src_len):
+                if src[start : start + sub_len] == sub:
+                    count += 1
+                    start += sub_len
+                else:
+                    start += 1
+            return count
+        return count_impl
 
 
 @overload_method(types.UnicodeType, 'startswith')
@@ -862,6 +904,16 @@ def unicode_strip_types_check(chars):
                                                 types.UnicodeType,
                                                 types.NoneType))):
         raise TypingError('The arg must be a UnicodeType or None')
+
+
+def _count_args_types_check(arg):
+    if not (arg is None or isinstance(arg, (types.Omitted,
+                            types.Optional,
+                            types.Integer,
+                            types.NoneType))):
+        raise TypingError("The slice index must be an Integer, None, or Optional")
+    if isinstance(arg, types.Optional) and not isinstance(arg.type, types.Integer):
+        raise TypingError("The slice index of Optional type should be Integer")
 
 
 @overload_method(types.UnicodeType, 'lstrip')
