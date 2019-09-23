@@ -17,11 +17,17 @@ def array_all(arr):
 def array_all_global(arr):
     return np.all(arr)
 
+def array_alltrue_global(arr):
+    return np.alltrue(arr)
+
 def array_any(arr):
     return arr.any()
 
 def array_any_global(arr):
     return np.any(arr)
+
+def array_sometrue_global(arr):
+    return np.sometrue(arr)
 
 def array_cumprod(arr):
     return arr.cumprod()
@@ -966,7 +972,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_var, array_var_global,
                            array_std, array_std_global,
                            array_all, array_all_global,
+                           array_alltrue_global,
                            array_any, array_any_global,
+                           array_sometrue_global,
                            array_min, array_min_global,
                            array_max, array_max_global,
                            array_nanmax, array_nanmin,

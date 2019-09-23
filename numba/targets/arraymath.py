@@ -573,6 +573,13 @@ def np_all(a):
     return flat_all
 
 
+@overload(np.alltrue)
+def np_alltrue(a):
+    def impl(a):
+        return np.all(a)
+    return impl
+
+
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
@@ -583,6 +590,13 @@ def np_any(a):
         return False
 
     return flat_any
+
+
+@overload(np.sometrue)
+def np_sometrue(a):
+    def impl(a):
+        return np.any(a)
+    return impl
 
 
 def get_isnan(dtype):
