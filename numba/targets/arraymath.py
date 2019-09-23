@@ -3123,8 +3123,8 @@ def np_array_equal(a, b):
     if not (type_can_asarray(a) and type_can_asarray(b)):
         raise TypingError('Both arguments to "array_equals" must be array-like')
 
-    if isinstance(a, (types.Integer, types.Boolean)) and \
-       isinstance(b, (types.Integer, types.Boolean)):
+    if isinstance(a, (types.Integer, types.Boolean, types.Number)) and \
+       isinstance(b, (types.Integer, types.Boolean, types.Number)):
         # special case
         def impl(a, b):
             return a == b
