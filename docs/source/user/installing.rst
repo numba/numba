@@ -206,7 +206,7 @@ vary with target operating system and hardware. The following lists them all
 
 * Optional runtime are:
 
-  * ``scipy`` - provides cython bindings for used in Numba's ``np.linalg.*`` support
+  * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*`` support
   * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading backend
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba`` CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
