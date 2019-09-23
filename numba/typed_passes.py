@@ -259,7 +259,8 @@ class ParforPass(FunctionPass):
 
         if not has_parfor:
             # parfor calls the compiler chain again with a string
-            if not state.func_ir.loc.filename == '<string>':
+            if not (config.DISABLE_PERFORMANCE_WARNINGS or
+                    state.func_ir.loc.filename == '<string>'):
                 url = ("http://numba.pydata.org/numba-doc/latest/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
@@ -524,7 +525,7 @@ class InlineOverloads(FunctionPass):
             # must be a cost-model function, run the function
             iinfo = template._inline_overloads[sig.args]['iinfo']
             if inline_type.has_cost_model:
-                do_inline = inline_type.value(caller_inline_info, iinfo)
+                do_inline = inline_type.value(expr, caller_inline_info, iinfo)
             else:
                 assert 'unreachable'
 
