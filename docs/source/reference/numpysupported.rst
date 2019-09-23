@@ -174,6 +174,7 @@ The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
 * :meth:`~numpy.ndarray.all`
+* :meth:`~numpy.ndarray.alltrue`
 * :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
@@ -186,6 +187,7 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.min`
 * :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
+* :meth:`~numpy.ndarray.sometrue`
 * :meth:`~numpy.ndarray.std`
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.var`
