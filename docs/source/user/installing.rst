@@ -176,6 +176,54 @@ Then you can build and install Numba from the top level of the source tree::
 
 .. _numba-source-install-check:
 
+Dependency List
+---------------
+
+Numba has numerous required and optional dependencies which additionally may
+vary with target operating system and hardware. The following lists them all
+(as of September 2019).
+
+* Required build time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+
+* Optional build time:
+
+  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into Numba's threading backend
+  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's threading backend.
+  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support into Numba's threading backend
+
+* Required run time:
+
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+
+* Optional runtime are:
+
+  * ``scipy`` - provides cython bindings for used in Numba's ``np.linalg.*`` support
+  * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading backend
+  * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba`` CLI
+  * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
+  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP threading backend
+  * ``ipython`` - if in use, caching will use IPython's cache directories/caching still works
+  * ``pyyaml`` - permits the use of a ``.numba_config.yaml`` file for storing per project configuration options
+  * ``colorama`` - makes error message highlighting work
+  * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra performance
+  * ``pygments`` - for "pretty" type annotation
+
+* To build the documentation:
+
+  * ``sphinx``
+  * ``pygments``
+  * ``sphinx-bootstrap``
+  * ``numpydoc``
+
 Checking your installation
 --------------------------
 
