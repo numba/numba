@@ -34,12 +34,12 @@ The ``inline`` keyword argument can be one of three values:
     * ``calltypes`` - the call types of any calls in the function.
     * ``signature`` - the function's signature.
 
-    The second argument holds the information from the caller, the second
-    holds the information from the callee.
+    The second argument holds the information from the caller, the third holds
+    the information from the callee.
 
-  In all cases the function should return Truthy to determine whether to inline,
-  this essentially permitting custom inlining rules (typical use might be cost
-  models).
+  In all cases the function should return True to inline and return False to not
+  inline, this essentially permitting custom inlining rules (typical use might
+  be cost models).
 
 .. note:: No guarantee is made about the order in which functions are assessed
           for inlining or about the order in which they are inlined.
