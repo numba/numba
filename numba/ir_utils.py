@@ -1516,7 +1516,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     if typingctx and other typing inputs are available and update typemap and
     calltypes.
     """
-    from numba import compiler
+    from numba import typed_passes
     # mk_func can be actual function or make_function node
     if hasattr(mk_func, 'code'):
         code = mk_func.code
@@ -1543,7 +1543,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # perform type inference if typingctx is available and update type
     # data structures typemap and calltypes
     if typingctx:
-        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                 typingctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
@@ -1598,15 +1598,15 @@ def get_ir_of_code(glbls, fcode):
     # for example, Raise nodes need to become StaticRaise before type inference
     class DummyPipeline(object):
         def __init__(self, f_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = f_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference',
-                                    DummyPipeline(ir), ir)
+            self.state = compiler.StateDict()
+            self.state.typingctx = None
+            self.state.targetctx = None
+            self.state.args = None
+            self.state.func_ir = f_ir
+            self.state.typemap = None
+            self.state.return_type = None
+            self.state.calltypes = None
+    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
@@ -1810,7 +1810,7 @@ def find_global_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
-    dfn = func_ir.get_definition(var)
+    dfn = get_definition(func_ir, var)
     if isinstance(dfn, ir.Global):
         return dfn.value
 
@@ -1819,7 +1819,7 @@ def find_global_value(func_ir, var):
         try:
             val = getattr(prev_val, dfn.attr)
             return val
-        except KeyError:
+        except AttributeError:
             raise GuardException
 
     raise GuardException
@@ -2003,255 +2003,6 @@ def resolve_func_from_module(func_ir, node):
             return defn
     else:
         return None
-
-
-class InlineInlinables(object):
-    """
-    This pass will inline a function wrapped by the numba.jit decorator directly
-    into the site of its call depending on the value set in the 'inline' kwarg
-    to the decorator.
-
-    This is an untyped pass. CFG simplification is performed at the end of the
-    pass but no block level clean up is performed on the mutated IR (typing
-    information is not available to do so).
-    """
-
-    _DEBUG = False
-
-    def __init__(self, func_ir):
-        self.func_ir = func_ir
-
-    def run(self):
-        """Run inlining of inlinables
-        """
-        if config.DEBUG or self._DEBUG:
-            print('before inline'.center(80, '-'))
-            print(self.func_ir.dump())
-            print(''.center(80, '-'))
-        modified = False
-        # use a work list, look for call sites via `ir.Expr.op == call` and
-        # then pass these to `self._do_work` to make decisions about inlining.
-        work_list = list(self.func_ir.blocks.items())
-        while work_list:
-            label, block = work_list.pop()
-            for i, instr in enumerate(block.body):
-                if isinstance(instr, ir.Assign):
-                    expr = instr.value
-                    if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        if guard(self._do_work, work_list, block, i, expr):
-                            modified = True
-                            break  # because block structure changed
-
-        if modified:
-            # clean up unconditional branches that appear due to inlined
-            # functions introducing blocks
-            self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
-
-        if config.DEBUG or self._DEBUG:
-            print('after inline'.center(80, '-'))
-            print(self.func_ir.dump())
-            print(''.center(80, '-'))
-
-    def _do_work(self, work_list, block, i, expr):
-        from numba.inline_closurecall import (inline_closure_call,
-                                              callee_ir_validator)
-        from numba.compiler import run_frontend
-        from numba.targets.cpu import InlineOptions
-
-        # try and get a definition for the call, this isn't always possible as
-        # it might be a eval(str)/part generated awaiting update etc. (parfors)
-        to_inline = None
-        try:
-            to_inline = self.func_ir.get_definition(expr.func)
-        except Exception as e:
-            if self._DEBUG:
-                print("Cannot find definition for %s" % expr.func)
-            return False
-        # do not handle closure inlining here, another pass deals with that.
-        if getattr(to_inline, 'op', False) == 'make_function':
-            return False
-
-        # see if the definition is a "getattr", in which case walk the IR to
-        # try and find the python function via the module from which it's
-        # imported, this should all be encoded in the IR.
-        if getattr(to_inline, 'op', False) == 'getattr':
-            val = resolve_func_from_module(self.func_ir, to_inline)
-        else:
-            # This is likely a freevar or global
-            #
-            # NOTE: getattr 'value' on a call may fail if it's an ir.Expr as
-            # getattr is overloaded to look in _kws.
-            try:
-                val = getattr(to_inline, 'value', False)
-            except Exception:
-                raise GuardException
-
-        # if something was found...
-        if val:
-            # check it's dispatcher-like, the targetoptions attr holds the
-            # kwargs supplied in the jit decorator and is where 'inline' will
-            # be if it is present.
-            topt = getattr(val, 'targetoptions', False)
-            if topt:
-                inline_type = topt.get('inline', None)
-                # has 'inline' been specified?
-                if inline_type is not None:
-                    inline_opt = InlineOptions(inline_type)
-                    # Could this be inlinable?
-                    if not inline_opt.is_never_inline:
-                        # yes, it could be inlinable
-                        do_inline = True
-                        pyfunc = val.py_func
-                        # Has it got an associated cost model?
-                        if inline_opt.has_cost_model:
-                            # yes, it has a cost model, use it to determine
-                            # whether to do the inline
-                            py_func_ir = run_frontend(pyfunc)
-                            do_inline = inline_type(self.func_ir, py_func_ir)
-                        # if do_inline is True then inline!
-                        if do_inline:
-                            inline_closure_call(self.func_ir,
-                                                pyfunc.__globals__,
-                                                block, i, pyfunc,
-                                                work_list=work_list,
-                                                callee_validator=\
-                                                callee_ir_validator)
-                            return True
-        return False
-
-
-class InlineOverloads(object):
-    """
-    This pass will inline a function wrapped by the numba.extending.overload
-    decorator directly into the site of its call depending on the value set in
-    the 'inline' kwarg to the decorator.
-
-    This is a typed pass. CFG simplification and DCE are performed on
-    completion.
-    """
-
-    _DEBUG = False
-
-    def __init__(self, func_ir, tyctx, cgctx, type_annotation):
-        self.func_ir = func_ir
-        self.tyctx = tyctx
-        self.cgctx = cgctx
-        self.type_annotation = type_annotation
-        self.typemap = type_annotation.typemap
-        self.calltypes = type_annotation.calltypes
-
-    def run(self):
-        """Run inlining of overloads
-        """
-        if config.DEBUG or self._DEBUG:
-            print('before overload inline'.center(80, '-'))
-            print(self.func_ir.dump())
-            print(''.center(80, '-'))
-        modified = False
-        work_list = list(self.func_ir.blocks.items())
-        # use a work list, look for call sites via `ir.Expr.op == call` and
-        # then pass these to `self._do_work` to make decisions about inlining.
-        while work_list:
-            label, block = work_list.pop()
-            for i, instr in enumerate(block.body):
-                if isinstance(instr, ir.Assign):
-                    expr = instr.value
-                    if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        if guard(self._do_work, work_list, block, i, expr):
-                            modified = True
-                            break # because block structure changed
-
-        if config.DEBUG or self._DEBUG:
-            print('after overload inline'.center(80, '-'))
-            print(self.func_ir.dump())
-            print(''.center(80, '-'))
-
-        if modified:
-            # clean up blocks
-            dead_code_elimination(self.func_ir, typemap=self.typemap)
-            # clean up unconditional branches that appear due to inlined
-            # functions introducing blocks
-            self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
-
-        if config.DEBUG or self._DEBUG:
-            print('after overload inline DCE'.center(80, '-'))
-            print(self.func_ir.dump())
-            print(''.center(80, '-'))
-
-    def _do_work(self, work_list, block, i, expr):
-        from numba.inline_closurecall import (inline_closure_call,
-                                              callee_ir_validator)
-
-        # try and get a definition for the call, this isn't always possible as
-        # it might be a eval(str)/part generated awaiting update etc. (parfors)
-        to_inline = None
-        try:
-            to_inline = self.func_ir.get_definition(expr.func)
-        except Exception as e:
-            return False
-
-        # do not handle closure inlining here, another pass deals with that.
-        if getattr(to_inline, 'op', False) == 'make_function':
-            return False
-
-        # check this is a known and typed function
-        func_ty = self.typemap[expr.func.name]
-        if not hasattr(func_ty, 'get_call_type'):
-            return False
-
-
-        # search the templates for this overload looking for "inline"
-        templates = getattr(func_ty, 'templates', None)
-        if templates is None:
-            return False
-
-        sig = self.calltypes[expr]
-
-        impl = None
-        for template in templates:
-            inline_type = getattr(template, '_inline', None)
-            if inline_type is None:
-                # inline not defined
-                continue
-            if not inline_type.is_never_inline:
-                try:
-                    impl = template._overload_func(*sig.args)
-                    if impl is None:
-                        raise Exception # abort for this template
-                    break
-                except Exception:
-                    continue
-        else:
-            return False
-
-        # at this point we know we maybe want to inline something and there's
-        # definitely something that could be inlined.
-
-        do_inline = True
-        if not inline_type.is_always_inline:
-            from numba.typing.templates import _inline_info
-            caller_inline_info = _inline_info(self.func_ir, self.typemap,
-                                              self.calltypes, sig)
-
-            # must be a cost-model function, run the function
-            iinfo = template._inline_overloads[sig.args]['iinfo']
-            if inline_type.has_cost_model:
-                do_inline = inline_type.value(caller_inline_info, iinfo)
-            else:
-                assert 'unreachable'
-
-        if do_inline:
-            arg_typs=template._inline_overloads[sig.args]['folded_args']
-            # pass is typed so use the callee globals
-            inline_closure_call(self.func_ir, impl.__globals__,
-                                block, i, impl, typingctx=self.tyctx,
-                                arg_typs=arg_typs, typemap=self.typemap,
-                                calltypes=self.calltypes, work_list=work_list,
-                                replace_freevars=False,
-                                callee_validator=callee_ir_validator)
-            return True
-        else:
-            return False
 
 
 def check_and_legalize_ir(func_ir):

@@ -24,6 +24,9 @@ from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
 from numba.six.moves import queue as t_queue
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
 if utils.PYVERSION >= (3, 0):
     import faulthandler
@@ -354,8 +357,8 @@ class TestSpecificBackend(TestParallelBackendBase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -457,8 +460,8 @@ class ThreadLayerTestHelper(TestCase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -826,8 +829,8 @@ class TestInitSafetyIssues(TestCase):
             popen = subprocess.Popen(cmdline,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,)
-            # finish in 5 minutes or kill it
-            timeout = threading.Timer(5 * 60., popen.kill)
+            # finish in _TEST_TIMEOUT seconds or kill it
+            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
             try:
                 timeout.start()
                 out, err = popen.communicate()

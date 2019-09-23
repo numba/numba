@@ -162,7 +162,7 @@ class Array(object):
         self.shape = tuple(dim.size for dim in self.dims)
         self.strides = tuple(dim.stride for dim in self.dims)
         self.itemsize = itemsize
-        self.size = np.prod(self.shape)
+        self.size = functools.reduce(operator.mul, self.shape, 1)
         self.extent = self._compute_extent()
         self.flags = self._compute_layout()
 
@@ -272,7 +272,7 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
-        newsize = np.prod(newdims)
+        newsize = functools.reduce(operator.mul, newdims, 1)
 
         if order == 'A':
             order = 'F' if self.is_f_contig else 'C'

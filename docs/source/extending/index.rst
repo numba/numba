@@ -22,9 +22,9 @@ the :doc:`architecture document <../developer/architecture>`.
 
 
 .. toctree::
-
    high-level.rst
    low-level.rst
    interval-example.rst
    overloading-guide.rst
+   entrypoints.rst
 

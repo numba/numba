@@ -22,7 +22,7 @@ import numba
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout, MemoryLeakMixin
 from numba import njit, prange, stencil, inline_closurecall
-from numba import compiler, typing, errors
+from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
 from numba import types
 from numba.targets.registry import cpu_target
@@ -309,41 +309,42 @@ def get_optimized_numba_ir(test_func, args, **kws):
         typingctx.refresh()
         targetctx.refresh()
 
-        inline_pass = inline_closurecall.InlineClosureCallPass(tp.func_ir,
+        inline_pass = inline_closurecall.InlineClosureCallPass(tp.state.func_ir,
                                                                options,
                                                                typed=True)
         inline_pass.run()
 
-        numba.rewrites.rewrite_registry.apply(
-            'before-inference', tp, tp.func_ir)
+        numba.rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.typemap, tp.return_type, tp.calltypes = compiler.type_inference_stage(
-            tp.typingctx, tp.func_ir, tp.args, None)
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes = \
+        typed_passes.type_inference_stage(tp.state.typingctx, tp.state.func_ir,
+            tp.state.args, None)
 
         type_annotations.TypeAnnotation(
-            func_ir=tp.func_ir,
-            typemap=tp.typemap,
-            calltypes=tp.calltypes,
+            func_ir=tp.state.func_ir,
+            typemap=tp.state.typemap,
+            calltypes=tp.state.calltypes,
             lifted=(),
             lifted_from=None,
-            args=tp.args,
-            return_type=tp.return_type,
+            args=tp.state.args,
+            return_type=tp.state.return_type,
             html_output=config.HTML)
 
         diagnostics = numba.parfor.ParforDiagnostics()
 
         preparfor_pass = numba.parfor.PreParforPass(
-            tp.func_ir, tp.typemap, tp.calltypes, tp.typingctx, options,
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.typingctx, options,
             swapped=diagnostics.replaced_fns)
         preparfor_pass.run()
 
-        numba.rewrites.rewrite_registry.apply(
-            'after-inference', tp, tp.func_ir)
+        numba.rewrites.rewrite_registry.apply('after-inference', tp.state)
 
         flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(
-            tp.func_ir, tp.typemap, tp.calltypes, tp.return_type,
-            tp.typingctx, options, flags, diagnostics=diagnostics)
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, options, flags,
+            diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
@@ -363,7 +364,7 @@ def countParfors(test_func, args, **kws):
 
 def countArrays(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
-    return _count_arrays_inner(test_ir.blocks, tp.typemap)
+    return _count_arrays_inner(test_ir.blocks, tp.state.typemap)
 
 def _count_arrays_inner(blocks, typemap):
     ret_count = 0
@@ -411,7 +412,8 @@ def _count_array_allocs_inner(func_ir, block):
 
 def countNonParforArrayAccesses(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
-    return _count_non_parfor_array_accesses_inner(test_ir, test_ir.blocks, tp.typemap)
+    return _count_non_parfor_array_accesses_inner(test_ir, test_ir.blocks,
+                                                  tp.state.typemap)
 
 def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices=None):
     ret_count = 0
@@ -455,13 +457,14 @@ def _uses_indices(f_ir, index, index_set):
 
 class TestPipeline(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
-        self.typingctx = typingctx
-        self.targetctx = targetctx
-        self.args = args
-        self.func_ir = test_ir
-        self.typemap = None
-        self.return_type = None
-        self.calltypes = None
+        self.state = compiler.StateDict()
+        self.state.typingctx = typingctx
+        self.state.targetctx = targetctx
+        self.state.args = args
+        self.state.func_ir = test_ir
+        self.state.typemap = None
+        self.state.return_type = None
+        self.state.calltypes = None
 
 
 class TestParfors(TestParforsBase):

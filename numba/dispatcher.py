@@ -12,6 +12,7 @@ import weakref
 from copy import deepcopy
 
 from numba import _dispatcher, compiler, utils, types, config, errors
+from numba.compiler_lock import global_compiler_lock
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
@@ -350,6 +351,30 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(self.typeof_pyval(a))
         try:
             return self.compile(tuple(argtypes))
+        except errors.ForceLiteralArg as e:
+            # Received request for compiler re-entry with the list of arguments
+            # indicated by e.requested_args.
+            # First, check if any of these args are already Literal-ized
+            already_lit_pos = [i for i in e.requested_args
+                               if isinstance(args[i], types.Literal)]
+            if already_lit_pos:
+                # Abort compilation if any argument is already a Literal.
+                # Letting this continue will cause infinite compilation loop.
+                m = ("Repeated literal typing request.\n"
+                     "{}.\n"
+                     "This is likely caused by an error in typing. "
+                     "Please see nested and suppressed exceptions.")
+                info = ', '.join('Arg #{} is {}'.format(i, args[i])
+                                 for i in  sorted(already_lit_pos))
+                raise errors.CompilerError(m.format(info))
+            # Convert requested arguments into a Literal.
+            args = [(types.literal
+                     if i in e.requested_args
+                     else lambda x: x)(args[i])
+                    for i, v in enumerate(args)]
+            # Re-enter compilation with the Literal-ized arguments
+            return self._compile_for_args(*args)
+
         except errors.TypingError as e:
             # Intercept typing error that may be due to an argument
             # that failed inferencing as a Numba type
@@ -606,7 +631,7 @@ class Dispatcher(_DispatcherBase):
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
-                 impl_kind='direct', pipeline_class=compiler.Pipeline):
+                 impl_kind='direct', pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -618,7 +643,7 @@ class Dispatcher(_DispatcherBase):
             Target-specific config options.
         impl_kind: str
             Select the compiler mode for `@jit` and `@generated_jit`
-        pipeline_class: type numba.compiler.BasePipeline
+        pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
         self.typingctx = self.targetdescr.typing_context
@@ -716,7 +741,7 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
-    @compiler.global_compiler_lock
+    @global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
@@ -739,7 +764,12 @@ class Dispatcher(_DispatcherBase):
                 return cres.entry_point
 
             self._cache_misses[sig] += 1
-            cres = self._compiler.compile(args, return_type)
+            try:
+                cres = self._compiler.compile(args, return_type)
+            except errors.ForceLiteralArg as e:
+                def folded(args, kws):
+                    return self._compiler.fold_argument_types(args, kws)[1]
+                raise e.bind_fold_arguments(folded)
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point
@@ -830,7 +860,7 @@ class LiftedCode(_DispatcherBase):
         """
         pass
 
-    @compiler.global_compiler_lock
+    @global_compiler_lock
     def compile(self, sig):
         # Use counter to track recursion compilation depth
         with self._compiling_counter:
