@@ -551,8 +551,8 @@ def unicode_find(a, b):
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
-    _count_args_types_check(start)
-    _count_args_types_check(end)
+    count_args_types_check(start)
+    count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
         def count_impl(src, sub, start=start, end=end):
@@ -906,14 +906,14 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
-def _count_args_types_check(arg):
+def count_args_types_check(arg):
     if not (arg is None or isinstance(arg, (types.Omitted,
                             types.Optional,
                             types.Integer,
                             types.NoneType))):
-        raise TypingError("The slice index must be an Integer, None, or Optional")
+        raise TypingError("slice indices must be integers or None")
     if isinstance(arg, types.Optional) and not isinstance(arg.type, types.Integer):
-        raise TypingError("The slice index of Optional type should be Integer")
+        raise TypingError("slice indices must be integers or None")
 
 
 @overload_method(types.UnicodeType, 'lstrip')
