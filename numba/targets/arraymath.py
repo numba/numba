@@ -3016,7 +3016,7 @@ def np_count_nonzero(arr, axis=None):
     if (numpy_version < (1, 12)):
         raise TypingError("axis is not supported for NumPy versions < 1.12.0")
 
-    if _is_nonelike(axis):
+    if is_nonelike(axis):
         def impl(arr, axis=None):
             arr2 = np.ravel(arr)
             return np.sum(arr2 != 0)
