@@ -53,17 +53,21 @@ decorator:
 
 .. literalinclude:: inline_example.py
 
-which produces the following when executed:
+which produces the following when executed (with a print of the IR after the
+legalization pass, enabled via the environment variable
+``NUMBA_DEBUG_PRINT_AFTER="ir_legalization"``):
 
 .. code-block:: none
-    :emphasize-lines: 2, 3, 7, 14, 15, 19, 22, 29
+    :emphasize-lines: 2, 3, 9, 16, 17, 21, 22, 26, 35
 
     label 0:
-        $0.1 = global(never_inline: CPUDispatcher(<function never_inline at 0x7fee81d9ed90>)) ['$0.1']
+        $0.1 = global(never_inline: CPUDispatcher(<function never_inline at 0x7f890ccf9048>)) ['$0.1']
         $0.2 = call $0.1(func=$0.1, args=[], kws=(), vararg=None) ['$0.1', '$0.2']
         del $0.1                                 []
         a = $0.2                                 ['$0.2', 'a']
         del $0.2                                 []
+        $0.3 = global(always_inline: CPUDispatcher(<function always_inline at 0x7f890ccf9598>)) ['$0.3']
+        del $0.3                                 []
         $const0.1.0 = const(int, 200)            ['$const0.1.0']
         $0.2.1 = $const0.1.0                     ['$0.2.1', '$const0.1.0']
         del $const0.1.0                          []
@@ -71,7 +75,7 @@ which produces the following when executed:
         del $0.2.1                               []
         b = $0.4                                 ['$0.4', 'b']
         del $0.4                                 []
-        $0.5 = global(maybe_inline1: CPUDispatcher(<function maybe_inline1 at 0x7fee81dad400>)) ['$0.5']
+        $0.5 = global(maybe_inline1: CPUDispatcher(<function maybe_inline1 at 0x7f890ccf9ae8>)) ['$0.5']
         $0.6 = call $0.5(func=$0.5, args=[], kws=(), vararg=None) ['$0.5', '$0.6']
         del $0.5                                 []
         d = $0.6                                 ['$0.6', 'd']
@@ -79,6 +83,8 @@ which produces the following when executed:
         $const0.7 = const(int, 13)               ['$const0.7']
         magic_const = $const0.7                  ['$const0.7', 'magic_const']
         del $const0.7                            []
+        $0.8 = global(maybe_inline1: CPUDispatcher(<function maybe_inline1 at 0x7f890ccf9ae8>)) ['$0.8']
+        del $0.8                                 []
         $const0.1.2 = const(int, 300)            ['$const0.1.2']
         $0.2.3 = $const0.1.2                     ['$0.2.3', '$const0.1.2']
         del $const0.1.2                          []
@@ -86,6 +92,8 @@ which produces the following when executed:
         del $0.2.3                               []
         e = $0.9                                 ['$0.9', 'e']
         del $0.9                                 []
+        $0.10 = global(maybe_inline2: CPUDispatcher(<function maybe_inline2 at 0x7f890ccf9b70>)) ['$0.10']
+        del $0.10                                []
         $const0.1.4 = const(int, 37)             ['$const0.1.4']
         $0.2.5 = $const0.1.4                     ['$0.2.5', '$const0.1.4']
         del $const0.1.4                          []
@@ -124,6 +132,8 @@ Things to note in the above:
    been inlined as shown by the ``const(int, 300)`` in the caller body.
 5. The function ``maybe_inline2`` has been inlined as demonstrated by
    ``const(int, 37)`` in the caller body.
+6. That dead code elimination has not been performed and as a result there are
+   superfluous statements present in the IR.
 
 
 Example using :func:`numba.extending.overload`
@@ -138,7 +148,9 @@ achieve this:
 
 .. literalinclude:: inline_overload_example.py
 
-which produces the following when executed:
+which produces the following when executed (with a print of the IR after the
+legalization pass, enabled via the environment variable
+``NUMBA_DEBUG_PRINT_AFTER="ir_legalization"``):
 
 .. code-block:: none
     :emphasize-lines: 2, 3, 4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22, 28, 29, 30
@@ -170,9 +182,9 @@ which produces the following when executed:
         del $0.4.9                               []
         b = $0.6                                 ['$0.6', 'b']
         del $0.6                                 []
-        $0.7 = global(bar: <function bar at 0x7f119c8ff268>) ['$0.7']
+        $0.7 = global(bar: <function bar at 0x7f6c3710d268>) ['$0.7']
         $const0.8 = const(complex, 300j)         ['$const0.8']
-        $0.9 = call $0.7($const0.8, func=$0.7, args=[Var($const0.8, inline_overload_example.py (67))], kws=(), vararg=None) ['$0.7', '$0.9', '$const0.8']
+        $0.9 = call $0.7($const0.8, func=$0.7, args=[Var($const0.8, inline_overload_example.py (56))], kws=(), vararg=None) ['$0.7', '$0.9', '$const0.8']
         del $const0.8                            []
         del $0.7                                 []
         c = $0.9                                 ['$0.9', 'c']
@@ -197,3 +209,5 @@ Things to note in the above:
 3. The third highlighted section is the overload for the ``Number`` argument
    type that has not inlined as the cost model function decided to reject it as
    the argument was an ``Complex`` type instance.
+4. That dead code elimination has not been performed and as a result there are
+   superfluous statements present in the IR.

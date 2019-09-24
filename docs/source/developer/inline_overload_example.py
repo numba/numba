@@ -1,34 +1,6 @@
 import numba
 from numba.extending import overload
 from numba import njit, types
-from numba.ir_utils import dead_code_elimination
-
-# For pedagogical reasons, define a custom pipeline that cleans and prints the
-# Numba IR just prior to lowering
-
-
-class CleanAndPrintPipeline(numba.compiler.BasePipeline):
-
-    def stage_print_final_ir(self):
-        """ Dumps the IR """
-        self.func_ir.dump()
-
-    def stage_dce(self):
-        """ Runs dead code elimination on the IR """
-        dead_code_elimination(self.func_ir, self.typemap)
-
-    def define_pipelines(self, pm):
-        self.define_nopython_pipeline(pm)
-        # mutate the default pipeline and inject DCE and IR dump ahead of
-        # legalisation
-        allstages = pm.pipeline_stages['nopython']
-        new_pipe = []
-        for x in allstages:
-            if x[0] == self.stage_ir_legalization:
-                new_pipe.append((self.stage_dce, "DCE"))
-                new_pipe.append((self.stage_print_final_ir, "dump IR"))
-            new_pipe.append(x)
-        pm.pipeline_stages['nopython'] = new_pipe
 
 
 def bar(x):
@@ -61,7 +33,7 @@ def ol_bar_scalar(x):
         return impl
 
 
-@njit(pipeline_class=CleanAndPrintPipeline)
+@njit
 def foo():
 
     # This will resolve via `ol_bar_tuple` as the argument is a types.UniTuple

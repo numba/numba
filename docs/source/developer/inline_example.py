@@ -1,33 +1,5 @@
 from numba import njit, ir
 import numba
-from numba.ir_utils import dead_code_elimination
-
-# For pedagogical reasons, define a custom pipeline that cleans and prints the
-# Numba IR just prior to lowering
-
-
-class CleanAndPrintPipeline(numba.compiler.BasePipeline):
-
-    def stage_print_final_ir(self):
-        """ Dumps the IR """
-        self.func_ir.dump()
-
-    def stage_dce(self):
-        """ Runs dead code elimination on the IR """
-        dead_code_elimination(self.func_ir, self.typemap)
-
-    def define_pipelines(self, pm):
-        self.define_nopython_pipeline(pm)
-        # mutate the default pipeline and inject DCE and IR dump ahead of
-        # legalisation
-        allstages = pm.pipeline_stages['nopython']
-        new_pipe = []
-        for x in allstages:
-            if x[0] == self.stage_ir_legalization:
-                new_pipe.append((self.stage_dce, "DCE"))
-                new_pipe.append((self.stage_print_final_ir, "dump IR"))
-            new_pipe.append(x)
-        pm.pipeline_stages['nopython'] = new_pipe
 
 
 @njit(inline='never')
@@ -82,7 +54,7 @@ def maybe_inline2():
     return 37
 
 
-@njit(pipeline_class=CleanAndPrintPipeline)
+@njit
 def foo():
     a = never_inline()  # will never inline
     b = always_inline()  # will always inline
