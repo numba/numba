@@ -587,8 +587,11 @@ class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
 #include <stdio.h>
 #include "numba/runtime/nrt_external.h"
 
+int status = 0;
+
 void my_dtor(void *ptr) {
     free(ptr);
+    status = 0xdead;
 }
 
 NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
@@ -596,17 +599,28 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
     NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
     nrt->acquire(mi);
     nrt->release(mi);
+    status = 0xa110c;
     return mi;
 }
         """
-        cdef = "void* test_nrt_api(void *nrt);"
-        ffi, mod = self.compile_cffi_module(name, source, cdef)
+        cdef = """
+void* test_nrt_api(void *nrt);
+int status;
+        """
 
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+        # Init status is 0
+        self.assertEqual(mod.lib.status, 0)
         table = self.get_nrt_api_table()
         out = mod.lib.test_nrt_api(table)
+        # status is now 0xa110c
+        self.assertEqual(mod.lib.status, 0xa110c)
         mi_addr = int(ffi.cast("size_t", out))
         mi = nrt.MemInfo(mi_addr)
         self.assertEqual(mi.refcount, 1)
+        del mi   # force deallocation on mi
+        # status is now 0xdead
+        self.assertEqual(mod.lib.status, 0xdead)
 
     def test_allocate(self):
         name = "{}_test_allocate".format(self.__class__.__name__)
