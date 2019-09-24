@@ -301,6 +301,7 @@ def replace_var_names(blocks, namedict):
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
     while var.name in vardict.keys():
+        assert(vardict[var.name].name != var.name)
         new_var = vardict[var.name]
         var = ir.Var(new_var.scope, new_var.name, new_var.loc)
     return var
@@ -912,7 +913,11 @@ def get_block_copies(blocks, typemap):
                     rhs = stmt.value.name
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    # Some transformations can produce assignments of the
+                    # form A = A.  We don't put these mapping in the
+                    # copy propagation set because then you get cycles and
+                    # infinite loops in the replacement phase.
+                    if typemap[lhs] == typemap[rhs] and lhs != rhs:
                         assign_dict[lhs] = rhs
                         continue
                 if isinstance(stmt.value,
