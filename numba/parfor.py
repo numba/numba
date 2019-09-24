@@ -2969,7 +2969,12 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param])
-            init_val, redop = guard(get_reduction_init, reduce_nodes)
+            gri_out = guard(get_reduction_init, reduce_nodes)
+            if gri_out is not None:
+                init_val, redop = gri_out
+            else:
+                init_val = None
+                redop = None
             reductions[param] = (init_val, reduce_nodes, redop)
     return reduce_varnames, reductions
 
