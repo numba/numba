@@ -1693,7 +1693,7 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03(self):
         def test_impl():
-            s = 0
+            s = 10
             for i in range(10):
                 s += 2
             return s
@@ -1703,7 +1703,7 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03mul(self):
         def test_impl():
-            s = 1
+            s = 3
             for i in range(10):
                 s *= 2
             return s
@@ -1713,7 +1713,7 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03sub(self):
         def test_impl():
-            s = 0
+            s = 100
             for i in range(10):
                 s -= 2
             return s
@@ -1723,7 +1723,7 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03div(self):
         def test_impl():
-            s = 1.0
+            s = 10
             for i in range(10):
                 s /= 2
             return s
