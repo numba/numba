@@ -650,7 +650,8 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
             call_list == [numba.array_analysis.wrap_index] or
-            call_list == [numba.special.prange]):
+            call_list == [numba.special.prange] or
+            call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
