@@ -151,7 +151,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_0), 123)
 
     def test_unsigned_prange(self):
-        @njit
+        @njit(parallel=True)
         def foo(a):
             r = types.uint64(3)
             s = types.uint64(0)
