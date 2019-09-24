@@ -440,14 +440,6 @@ def _codepoint_is_ascii(ch):
     return ch < 128
 
 
-@register_jitable
-def normalize_slice_arg(arg, slice_len, default):
-    if arg is None:
-        return default
-    if -slice_len <= arg < slice_len:
-        return arg % slice_len
-    return 0 if arg < 0 else arg
-
 # PUBLIC API
 
 
@@ -560,8 +552,8 @@ def unicode_count(src, sub, start=None, end=None):
             src_len = len(src)
             sub_len = len(sub)
 
-            start = normalize_slice_arg(start, src_len, 0)
-            end   = normalize_slice_arg(end, src_len, src_len)
+            start = _normalize_slice_idx_count(start, src_len, 0)
+            end = _normalize_slice_idx_count(end, src_len, src_len)
 
             if end - start < 0 or start > src_len:
                 return 0
@@ -907,10 +899,9 @@ def unicode_strip_types_check(chars):
 
 
 def count_args_types_check(arg):
-    if not (arg is None or isinstance(arg, (types.Omitted,
-                            types.Optional,
-                            types.Integer,
-                            types.NoneType))):
+    if not (arg is None or
+            isinstance(arg, (types.Omitted, types.Optional,
+                             types.Integer, types.NoneType))):
         raise TypingError("slice indices must be integers or None")
     if isinstance(arg, types.Optional) and not isinstance(arg.type, types.Integer):
         raise TypingError("slice indices must be integers or None")
@@ -994,6 +985,26 @@ def normalize_str_idx(idx, length, is_start=True):
         raise IndexError("string index out of range")
 
     return idx
+
+
+@register_jitable
+def _normalize_slice_idx_count(arg, slice_len, default):
+    """
+    Used for unicode_count
+
+    If arg < -slice_len, returns 0 (prevents circle)
+
+    If arg is within slice, e.g -slice_len <= arg < slice_len
+    returns its real index via arg % slice_len
+
+    If arg > slice_len, returns arg (in this case count must return 0 if it is srart index)
+
+    """
+    if arg is None:
+        return default
+    if -slice_len <= arg < slice_len:
+        return arg % slice_len
+    return 0 if arg < 0 else arg
 
 
 @intrinsic

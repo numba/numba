@@ -6,8 +6,8 @@
 from __future__ import print_function
 
 import sys
-from itertools import permutations
 from itertools import product
+from itertools import permutations
 
 from numba import njit, types
 import numba.unittest_support as unittest
@@ -246,15 +246,49 @@ UNICODE_ORDERING_EXAMPLES = [
     '大处着眼，小处着手。🐍⚡',
 ]
 
-UNICODE_REPEATING_EXAMPLES = UNICODE_EXAMPLES + UNICODE_ORDERING_EXAMPLES + [
-    'aaaa',
-    'abaabaaba',
-    'abababab',
-    'aabbbbaaaabbbbaa'
-    'aa bb aa bb'
-    'Ă',
-    '􀌄',
-    '􀌄' + 'a_' * 10
+UNICODE_COUNT_EXAMPLES = [
+    ('ascii', ''),
+    ('asc ii', ' '),
+    ('ascii', 'ci'),
+    ('ascii', 'ascii'),
+    ('ascii', 'Ă'),
+    ('ascii', '大处'),
+    ('ascii', 'étú?'),
+    ('大处 着眼，小处着手。大大大处', ''),
+    ('大处 着眼，小处着手。大大大处', ' '),
+    ('大处 着眼，小处着手。大大大处', 'ci'),
+    ('大处 着眼，小处着手。大大大处', '大处大处'),
+    ('大处 着眼，小处着手。大大大处', '大处 着眼，小处着手。大大大处'),
+    ('大处 着眼，小处着手。大大大处', 'Ă'),
+    ('大处 着眼，小处着手。大大大处', '大处'),
+    ('大处 着眼，小处着手。大大大处', 'étú?'),
+    ('tú quién te crees?', ''),
+    ('tú quién te crees?', ' '),
+    ('tú quién te crees?', 'ci'),
+    ('tú quién te crees?', 'tú quién te crees?'),
+    ('tú quién te crees?', 'Ă'),
+    ('tú quién te crees?', '大处'),
+    ('tú quién te crees?', 'étú?'),
+    ('abababab', 'aa'),
+    ('abababab', 'ab'),
+    ('abababab', 'aaa'),
+    ('abababab', 'aba'),
+    ('abababab', 'aĂ'),
+    ('aabbbbaaaabbbbaa', 'aa'),
+    ('aabbbbaaaabbbbaa', 'ab'),
+    ('aabbbbaaaabbbbaa', 'aaa'),
+    ('aabbbbaaaabbbbaa', 'aba'),
+    ('aabbbbaaaabbbbaa', 'aĂ'),
+    ('aa bb aa bb', 'aa'),
+    ('aa bb aa bb', 'ab'),
+    ('aa bb aa bb', 'aaa'),
+    ('aa bb aa bb', 'aba'),
+    ('aa bb aa bb', 'aĂ'),
+    ('aaaaaaaaaa', 'aa'),
+    ('aaaaaaaaaa', 'ab'),
+    ('aaaaaaaaaa', 'aaa'),
+    ('aaaaaaaaaa', 'aba'),
+    ('aaaaaaaaaa', 'aĂ')
 ]
 
 
@@ -366,63 +400,56 @@ class TestUnicode(BaseTest):
         pyfunc = count_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_REPEATING_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s,
-                      'aa', 'ab', 'bb', 'aaa', 'aba']
-            for sub in extras:
-                self.assertEqual(pyfunc(s, sub),
-                                 cfunc(s, sub),
-                                 "'%s' in '%s'?" % (sub, s))
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            self.assertEqual(pyfunc(s, sub),
+                             cfunc(s, sub),
+                             "'%s' in '%s'?" % (sub, s))
 
     def test_count_with_start(self):
         pyfunc = count_with_start_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_REPEATING_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s,
-                      s + s, 'a', 'a_', 'Ă', 'aĂ', 'a􀌄', 'Ă_',
-                      'Ă􀌄', 'ab', 'bb', 'aaa', 'aba']
-            for sub in extras:
-                for i in range(-10, 10):
-                    self.assertEqual(pyfunc(s, sub, i),
-                                     cfunc(s, sub, i),
-                                     "'%s' in '%s : start:%s, end:%s'?" % (sub, s, i, len(s)))
-                self.assertEqual(pyfunc(s, sub, None),
-                                 cfunc(s, sub, None),
-                                 "'%s' in '%s : start:%s, end:%s'?" % (sub, s, None, len(s)))
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            for i in range(-10, 10):
+                self.assertEqual(pyfunc(s, sub, i),
+                                 cfunc(s, sub, i),
+                                 "'%s' in '%s : start:%s, end:%s'?" % (sub, s, i, len(s)))
+            self.assertEqual(pyfunc(s, sub, None),
+                             cfunc(s, sub, None),
+                             "'%s' in '%s : start:%s, end:%s'?" % (sub, s, None, len(s)))
 
     def test_count_with_start_end(self):
         pyfunc = count_with_start_end_usecase
         cfunc = njit(pyfunc)
 
-        for s in UNICODE_REPEATING_EXAMPLES:
-            extras = ['', ' ', 'xx', s[::-1], s[:-2], s[3:], s, s + s, 'a', 'a_',
-                      'Ă', 'aĂ', 'a􀌄', 'Ă_', 'Ă􀌄', 'ab', 'bb', 'aaa', 'aba']
-            for sub in extras:
-                for i , j in product(range(-10,10), (-10,10)):
-                    self.assertEqual(pyfunc(s, sub, i, j),
-                                     cfunc(s, sub, i, j),
-                                     "'%s' in '%s': start:%s, end:%s?" % (sub, s, i, j))
-                for j in range(-10, 10):
-                    self.assertEqual(pyfunc(s, sub, None, j),
-                                     cfunc(s, sub, None, j),
-                                     "'%s' in '%s' : start:%s, end:%s?" % (sub, s, None, j))
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            for i , j in product(range(-10,10), (-10,10)):
+                self.assertEqual(pyfunc(s, sub, i, j),
+                                 cfunc(s, sub, i, j),
+                                 "'%s' in '%s': start:%s, end:%s?" % (sub, s, i, j))
+            for j in range(-10, 10):
+                self.assertEqual(pyfunc(s, sub, None, j),
+                                 cfunc(s, sub, None, j),
+                                 "'%s' in '%s' : start:%s, end:%s?" % (sub, s, None, j))
 
     def test_count_arg_type_check(self):
         cfunc = njit(count_with_start_end_usecase)
+
         with self.assertRaises(TypingError) as raises:
             cfunc('ascii', 'c', 1, 0.5)
         self.assertIn('slice indices must be integers or None', str(raises.exception))
+
         with self.assertRaises(TypingError) as raises:
             cfunc('abcde', 's', 1.2, 7)
         self.assertIn('slice indices must be integers or None', str(raises.exception))
+
         with self.assertRaises(TypingError) as raises:
             cfunc('abcde', 's', 'ab', 7)
         self.assertIn('slice indices must be integers or None', str(raises.exception))
+
         with self.assertRaises(TypingError) as raises:
             cfunc('abcde', 's', 1, 'ab')
         self.assertIn('slice indices must be integers or None', str(raises.exception))
-
 
     def test_getitem(self):
         pyfunc = getitem_usecase
