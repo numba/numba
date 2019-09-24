@@ -47,16 +47,16 @@ must contain the following entries:
 - **version**: `integer`
 
     An integer for the version of the interface being exported.
-    The current version is *1*.
-
-
-The following are optional entries:
+    The current version is *2*.
 
 - **strides**: ``None`` or ``(integer, ...)``
 
-    A tuple of `int` (or `long`) representing the number of bytes to skip to
-    access the next element at each dimension. If it is ``None``, the array is
-    assumed to be in C-contiguous layout.
+    If it is ``None``, the array is in C-contiguous layout. Otherwise, a tuple
+    of `int` (or `long`) is explicitly given for representing the number of
+    bytes to skip to access the next element at each dimension.
+
+
+The following are optional entries:
 
 - **descr**
 
@@ -94,3 +94,10 @@ Differences with CUDA Array Interface (Version 0)
 
 The version 0 CUDA Array Interface did not have the optional **mask**
 attribute to support masked arrays.
+
+
+Differences with CUDA Array Interface (Version 1)
+-------------------------------------------------
+
+The version 0 & 1 CUDA Array Interface did not make the **strides** attribute
+mandatory.
