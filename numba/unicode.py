@@ -1381,8 +1381,10 @@ def _do_title(data, length, res, maxchars):
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
 @overload_method(types.UnicodeType, 'title')
 def unicode_title(data):
-    """Implements str.title()"""
-    # https://docs.python.org/3/library/stdtypes.html#str.title
+    """
+    Implements .title()
+    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10023-L10069
+    """
     def impl(data):
         length = len(data)
         tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
