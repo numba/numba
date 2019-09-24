@@ -32,9 +32,9 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_UCS4,
-                              _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToTitleFull, _PyUnicode_IsCased,
+from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
+                              _PyUnicode_ToLowerFull, _PyUnicode_ToTitleFull,
+                              _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
@@ -1321,41 +1321,81 @@ def unicode_istitle(s):
     return impl
 
 
+@register_jitable
+def _handle_capital_sigma(data, length, idx):
+    """
+    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9856-L9883
+    """
+    c = 0
+    j = idx - 1
+    for j in range(idx - 1, -1, -1):
+        c = _get_code_point(data, j)
+        if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+            break
+    final_sigma = (j >= 0 and _PyUnicode_IsCased(_Py_UCS4(c)))
+    if final_sigma:
+        for j in range(idx + 1, length):
+            c = _get_code_point(data, j)
+            if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+                break
+        final_sigma = (j == length or not _PyUnicode_IsCased(_Py_UCS4(c)))
+
+    return 0x3C2 if final_sigma else 0x3C3
+
+
+@register_jitable
+def _lower_ucs4(code_point, data, length, idx, mapped):
+    """
+    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9885-L9895
+    """
+    if code_point == 0x3A3:
+        mapped[0] = _handle_capital_sigma(data, length, idx)
+        return 1
+    return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+
+
+@register_jitable
+def _do_title(data, length, res, maxchars):
+    """
+    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9996-L10021
+    """
+    k = 0
+    previous_cased = False
+    for idx in range(length):
+        mapped = np.zeros(3, dtype=_Py_UCS4)
+        code_point = _get_code_point(data, idx)
+        if previous_cased:
+            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        else:
+            n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
+        for m in mapped[:n_res]:
+            maxchar, = maxchars
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+        previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
+    return k
+
+
 @overload_method(types.UnicodeType, 'title')
-def unicode_title(a):
+def unicode_title(data):
     """
     Implements .title()
+    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10023-L10069
     """
-    def impl(a):
-        # this algorithm is amalgamation of two parts:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9908-L9933
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9935-L9980
-
-        l = len(a)
-        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
-        mapped = np.array((3,), dtype=_Py_UCS4)
+    def impl(data):
+        length = len(data)
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
         maxchar = 0
-        k = 0
-        previous_cased = 0
-        for idx in range(l):
-            mapped[:] = 0
-            code_point = _get_code_point(a, idx)
-            if previous_cased == 1:
-                n_res = _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
-            else:
-                n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
-            for j in range(n_res):
-                maxchar = max(maxchar, mapped[j])
-                _set_code_point(tmp, k, mapped[j])
-                k += 1
-            previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
-        newlength = k
+        maxchars = [maxchar]
+        newlength = _do_title(data, length, tmp, maxchars)
+        maxchar, = maxchars
         newkind = _codepoint_to_kind(maxchar)
-        ret = _empty_string(newkind, newlength,
-                            _codepoint_is_ascii(maxchar))
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
         for i in range(newlength):
-            _set_code_point(ret, i, _get_code_point(tmp, i))
-        return ret
+            _set_code_point(res, i, _get_code_point(tmp, i))
+        return res
     return impl
 
 

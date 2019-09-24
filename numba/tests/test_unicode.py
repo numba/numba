@@ -188,6 +188,10 @@ def iter_usecase(x):
     return l
 
 
+def title(x):
+    return x.title()
+
+
 def literal_iter_usecase():
     l = []
     for i in '大处着眼，小处着手。':
@@ -1141,14 +1145,16 @@ class TestUnicode(BaseTest):
                              msg='failed on {}'.format(args))
 
     def test_title(self):
-        def pyfunc(x):
-            return x.title()
-
+        pyfunc = title
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES + [""]:
-            args = [a]
-            self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/3.6/Lib/test/test_unicode.py#L813-L828
+        cpython = ['\U0001044F', '\U0001044F\U0001044F', '\U0001044F\U0001044F \U0001044F\U0001044F',
+                   '\U00010427\U0001044F \U00010427\U0001044F', '\U0001044F\U00010427 \U0001044F\U00010427',
+                   'X\U00010427x\U0001044F X\U00010427x\U0001044F', 'ﬁNNISH', 'A\u03a3 \u1fa1xy', 'A\u03a3A']
+        for a in UNICODE_EXAMPLES + [''] + cpython:
+            self.assertEqual(pyfunc(a), cfunc(a),
+                             msg='Results of interpreted and compiled "{}".title() should be equal'.format(a))
 
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')

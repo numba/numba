@@ -302,7 +302,8 @@ def _PyUnicode_IsCased(ch):
 
 @register_jitable
 def _PyUnicode_IsCaseIgnorable(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.CASE_IGNORABLE_MASK != 0
 
 
 @register_jitable
