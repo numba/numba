@@ -226,7 +226,7 @@ class NRTContext(object):
         self._call_incref_decref(builder, typ, value, "NRT_decref")
 
     def get_nrt_api(self, builder):
-        """Calls NRT_get_api(), which returns NRT API function table.
+        """Calls NRT_get_api(), which returns the NRT API function table.
         """
         self._require_nrt()
 
