@@ -119,7 +119,7 @@ signature. The caller is safe to call it with arbitrary number of
 arguments.  Therefore, it is safe to be used inplace of the intended callee.
 
 Using the NRT from C code
-=====================
+=========================
 
 Externally compiled C code should use the ``NRT_api_functions`` struct as a
 function table to access the NRT API. The struct is defined in
