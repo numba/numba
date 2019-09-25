@@ -713,61 +713,26 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
-            sig_args = (typ,)
-            sig_kws = {}
-            typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
-            disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
-            call = context.get_function(disp_type, sig)
+            typingctx = context.typing_context
+            fnty = cls._get_function_type(typingctx, typ)
+            sig = cls._get_signature(typingctx, fnty, (typ,), {})
+            call = context.get_function(fnty, sig)
             return call(builder, (value,))
-
-    @classmethod
-    def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws):
-        """
-        Get the compiled dispatcher implementing the attribute for
-        the given formal signature.
-        """
-        cache_key = context, typ, attr, tuple(sig_args), tuple(sig_kws.items())
-        try:
-            disp = cls._impl_cache[cache_key]
-        except KeyError:
-            # Get the overload implementation for the given type
-            pyfunc = cls._overload_func(*sig_args, **sig_kws)
-            if pyfunc is None:
-                # No implementation => fail typing
-                cls._impl_cache[cache_key] = None
-                return None, None
-            elif isinstance(pyfunc, tuple):
-                # The implementation returned a signature that the type-inferencer
-                # should be using.
-                sig, pyfunc = pyfunc
-                sig_args = sig.args
-                cache_key = None            # don't cache
-
-            from numba import jit
-            disp = cls._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
-        return disp, sig_args
-
-    def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
-        """
-        Compute the actual implementation sig for the given formal argument types.
-        """
-        disp, sig_args = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
-        if disp is None:
-            return None
-
-        # Compile and type it for the given types
-        disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
-        return sig
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
             return None
-
-        sig = self._resolve_impl_sig(typ, attr, (typ,), {})
+        fnty = self._get_function_type(self.context, typ)
+        sig = self._get_signature(self.context, fnty, (typ,), {})
         return sig.return_type
+
+    @classmethod
+    def _get_signature(cls, typingctx, fnty, args, kws):
+        return fnty.get_call_type(typingctx, args, kws)
+
+    @classmethod
+    def _get_function_type(cls, typingctx, typ):
+        return typingctx.resolve_value_type(cls._overload_func)
 
 
 class _OverloadMethodTemplate(_OverloadAttributeTemplate):
@@ -787,10 +752,9 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
             typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
-            disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(typing_context, sig.args, {})
-            call = context.get_function(disp_type, sig)
+            fnty = cls._get_function_type(typing_context, typ)
+            sig = cls._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
             # Link dependent library
             context.add_linking_libs(getattr(call, 'libs', ()))
             return call(builder, args)
@@ -806,7 +770,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
-                sig = self._resolve_impl_sig(typ, attr, args, kws)
+                fnty = self._get_function_type(self.context, typ)
+                sig = self._get_signature(self.context, fnty, args, kws)
                 if sig is not None:
                     return sig.as_method()
 
