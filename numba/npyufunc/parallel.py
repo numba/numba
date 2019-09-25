@@ -442,15 +442,25 @@ def _launch_threads():
             ll.add_symbol('numba_parallel_for', lib.parallel_for)
             ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
             ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+            ll.add_symbol('get_num_threads', lib.get_num_threads)
+            ll.add_symbol('set_num_threads', lib.set_num_threads)
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
+            global _set_num_threads
+            _set_num_threads = CFUNCTYPE(None, c_int)(lib.set_num_threads)
+            _set_num_threads(NUM_THREADS)
 
             # set library name so it can be queried
             global _threading_layer
             _threading_layer = libname
             _is_initialized = True
 
+
+def set_num_threads(n):
+    if n > NUM_THREADS or n < 0:
+        raise ValueError("The number of threads must be between 0 and %s" % NUM_THREADS)
+    _set_num_threads(n)
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
