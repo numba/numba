@@ -1057,16 +1057,21 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_mean_axis(self):
         pyfunc = array_mean_axis
         cfunc = jit(nopython=True)(pyfunc)
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
+                      np.uint64, np.complex64, np.complex128]
+        all_test_arrays = [np.ones((7, 6, 5, 4, 3), arr_dtype) for arr_dtype in all_dtypes]
         a = np.ones((7, 6, 5, 4, 3))
-        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
-        axis = 1
-        self.assertPreciseEqual(pyfunc(a, axis), cfunc(a, axis))
-        axis = 2
-        self.assertPreciseEqual(pyfunc(a, axis), cfunc(a, axis))
-        # axis -1 is only supported for IntegerLiterals
-        pyfunc = lambda x: x.mean(axis=-1)
-        cfunc = jit(nopython=True)(pyfunc)
-        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+        for arr in all_test_arrays:
+            self.assertPreciseEqual(pyfunc(arr, 0), cfunc(arr, 0))
+            axis = 1
+            self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+            axis = 2
+            self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+            # axis -1 is only supported for IntegerLiterals
+            pyfunc2 = lambda x: x.mean(axis=-1)
+            cfunc2 = jit(nopython=True)(pyfunc2)
+            self.assertPreciseEqual(pyfunc2(arr), cfunc2(arr))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
