@@ -3672,6 +3672,18 @@ def np_array(a, dtype=None, copy=True):
     if not type_can_asarray(a):
         return None
 
+    if isinstance(dtype, types.Optional):
+        dtype = dtype.type
+    if (not isinstance(dtype, (types.DTypeSpec, types.NoneType))
+            and dtype is not None):
+        raise TypingError("'dtype' must be a valid NumPy type object")
+
+    if isinstance(copy, types.Optional):
+        copy = copy.type
+    if (not isinstance(copy, (types.Boolean, types.NoneType))
+            and copy is not True and copy is not False):
+        raise TypingError("'copy' must be a boolean")
+
     impl = None
     if isinstance(a, types.Array):
         if _is_nonelike(dtype) or a.dtype == dtype.dtype:
