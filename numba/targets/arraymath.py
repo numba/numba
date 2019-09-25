@@ -179,6 +179,18 @@ def _array_sum_axis_nop(arr, v):
 
 def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     def inner(arr, axis):
+        """
+        function that performs sums over one specific axis
+
+        The third parameter to gen_index_tuple that generates the indexing
+        tuples has to be a const so we can't just pass "axis" through since
+        that isn't const.  We can check for specific values and have
+        different instances that do take consts.  Supporting axis summation
+        only up to the fourth dimension for now.
+
+        typing/arraydecl.py:sum_expand defines the return type for sum with axis.
+        It is one dimension less than the input array.
+        """
         ndim = arr.ndim
 
         if not is_axis_const:
@@ -235,16 +247,6 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
 @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
-    """
-    The third parameter to gen_index_tuple that generates the indexing
-    tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have
-    different instances that do take consts.  Supporting axis summation
-    only up to the fourth dimension for now.
-    """
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-    # It is one dimension less than the input array.
-
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
     # if the return is scalar in type then "take" the 0th element of the
@@ -284,8 +286,6 @@ def array_sum_axis_dtype(context, builder, sig, args):
 
 
 @lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
 def array_sum_dtype(context, builder, sig, args):
     zero = sig.return_type(0)
@@ -306,16 +306,6 @@ def array_sum_dtype(context, builder, sig, args):
 @lower_builtin("array.sum", types.Array, types.intp)
 @lower_builtin("array.sum", types.Array, types.IntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
-    """
-    The third parameter to gen_index_tuple that generates the indexing
-    tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have
-    different instances that do take consts.  Supporting axis summation
-    only up to the fourth dimension for now.
-    """
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-    # It is one dimension less than the input array.
-
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
     # if the return is scalar in type then "take" the 0th element of the

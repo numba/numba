@@ -815,7 +815,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_sum_axis_kws2(self):
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.uint64, np.complex64]
+        all_dtypes = [np.float64, np.float32, np.int64, np.uint64, np.complex64,
+                      np.complex128]
         # timedelta test cannot be enabled until issue #4540 is fixed
         # all_dtypes += [np.timedelta64]
         all_test_arrays = [
@@ -878,7 +879,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64]
+                      np.uint64, np.complex64, np.complex128]
         # timedelta test cannot be enabled until issue #4540 is fixed
         # all_dtypes += [np.timedelta64]
         all_test_arrays = [
@@ -894,6 +895,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.int64],
                       np.dtype('complex64'): [np.complex64],
+                      np.dtype('complex128'): [np.complex128],
                       np.dtype('timedelta64'): [np.timedelta64]}
 
         for arr_list in all_test_arrays:
@@ -928,7 +930,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64]
+                      np.uint64, np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -942,6 +944,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.uint64],
                       np.dtype('complex64'): [np.complex64],
+                      np.dtype('complex128'): [np.complex128],
                       np.dtype('timedelta64'): [np.timedelta64]}
 
         for arr_list in all_test_arrays:

@@ -378,15 +378,15 @@ class Numpy_method_redirection(AbstractTemplate):
         pysig = None
         if kws:
             if self.method_name == 'sum':
-                if 'axis' in kws and not 'dtype' in kws:
+                if 'axis' in kws and 'dtype' not in kws:
                     def sum_stub(arr, axis):
                         pass
                     pysig = utils.pysignature(sum_stub)
-                if 'dtype' in kws and not 'axis' in kws:
+                elif 'dtype' in kws and 'axis' not in kws:
                     def sum_stub(arr, dtype):
                         pass
                     pysig = utils.pysignature(sum_stub)
-                if 'dtype' in kws and 'axis' in kws:
+                elif 'dtype' in kws and 'axis' in kws:
                     def sum_stub(arr, axis, dtype):
                         pass
                     pysig = utils.pysignature(sum_stub)
