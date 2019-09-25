@@ -4029,8 +4029,9 @@ def np_cross(a, b):
             return _cross_impl(a_, b_)
         else:
             raise ValueError((
-                "Dimensions for both inputs is 2 "
-                "(currently not supported)."
+                "Dimensions for both inputs is 2.\n"
+                "Please replace your numpy.cross(a, b) call with "
+                "numba.targets.array_math_ext.cross2d(a, b)."
             ))
     return impl
 
