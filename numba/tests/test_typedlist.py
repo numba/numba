@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import, division
 
 from itertools import product
 
+import sys
+
 import numpy as np
 
 from numba import njit
@@ -15,6 +17,10 @@ from .support import TestCase, MemoryLeakMixin, unittest
 from numba.unsafe.refcount import get_refcount
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+
+_windows_py27 = (sys.platform.startswith('win32') and
+                 sys.version_info[:2] == (2, 7))
+_32bit = sys.maxsize <= 2 ** 32
 
 
 def to_tl(l):
@@ -150,6 +156,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
+    # @unittest.skipIf(config.IS_32BITS,
+    #                  "prange is not supported on 32 bit hardware")
+    # @unittest.skipIf(config.IS_WIN32 and (not IS_PY3),
+    #                  "parallel target is not supported on Windows with PY2")
+    @unittest.skipIf(not (_windows_py27 or _32bit),
+                     "prange not supported on windows w/ PY2 or 32 bit hardware")
     def test_unsigned_prange(self):
         @njit(parallel=True)
         def foo(a):
