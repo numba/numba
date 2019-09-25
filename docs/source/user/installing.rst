@@ -169,7 +169,7 @@ Source archives of the latest release can also be found on
 
   * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
-  * Linux ``POWER``: ``gcc_linux-ppc64le``
+  * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards).
