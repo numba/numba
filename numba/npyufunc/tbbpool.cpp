@@ -37,6 +37,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
+int num_threads = 0;
 
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
@@ -206,6 +207,15 @@ static void ready(void)
 {
 }
 
+static void set_num_threads(int count)
+{
+    num_threads = count;
+}
+
+static int get_num_threads(void)
+{
+    return num_threads;
+}
 
 MOD_INIT(tbbpool)
 {
@@ -235,7 +245,10 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-
+    PyObject_SetAttrString(m, "set_num_threads",
+                           PyLong_FromVoidPtr((void*)&set_num_threads));
+    PyObject_SetAttrString(m, "get_num_threads",
+                           PyLong_FromVoidPtr((void*)&get_num_threads));
 
     return MOD_SUCCESS_VAL(m);
 }
