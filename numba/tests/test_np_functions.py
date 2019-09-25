@@ -158,14 +158,22 @@ def array(a):
 
 
 def array_dtype(a, dtype):
+    return np.array(a, dtype)
+
+
+def array_dtype_kws(a, dtype):
     return np.array(a, dtype=dtype)
 
 
-def array_copy(a, copy):
+def array_copy_kws(a, copy):
     return np.array(a, copy=copy)
 
 
 def array_dtype_copy(a, dtype, copy):
+    return np.array(a, dtype, copy=copy)
+
+
+def array_dtype_copy_kws(a, dtype, copy):
     return np.array(a, dtype=dtype, copy=copy)
 
 
@@ -174,6 +182,10 @@ def asarray(a):
 
 
 def asarray_dtype(a, dtype):
+    return np.asarray(a, dtype)
+
+
+def asarray_dtype_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
@@ -2655,8 +2667,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 dtype = params.get('dtype', '') or params['a'].dtype
                 self.assertTrue(returned.dtype == dtype)
 
-        for pyfunc in [array, array_dtype, array_copy, array_dtype_copy,
-                       asarray, asarray_dtype]:
+        for pyfunc in [array,
+                       array_dtype,
+                       array_copy_kws,
+                       array_dtype_copy,
+                       array_dtype_copy_kws,
+                       asarray,
+                       asarray_dtype,
+                       asarray_dtype_kws,
+                       ]:
             cfunc = jit(nopython=True)(pyfunc)
             dtypes = [None, np.complex128] if 'dtype' in pyfunc.__name__ else []
             copies = [True, False] if 'copy' in pyfunc.__name__ else [None]
