@@ -165,13 +165,13 @@ Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
 * A C compiler compatible with your Python installation.  If you are using
-  Anaconda, you can use the follwing conda packages:
+  Anaconda, you can use the following conda packages:
 
   * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
   * Linux ``POWER``: ``gcc_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
-  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the sytem compiler at
+  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards).
 
 * `NumPy <http://www.numpy.org/>`_
