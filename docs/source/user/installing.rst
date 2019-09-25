@@ -173,6 +173,7 @@ Source archives of the latest release can also be found on
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards).
+  * Windows: an approprite version of Visual Studio that can compile Python
 
 * `NumPy <http://www.numpy.org/>`_
 
