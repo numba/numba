@@ -165,9 +165,15 @@ Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
 * A C compiler compatible with your Python installation.  If you are using
-  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64``
-  and ``gxx_linux-64``, or macOS packages ``clang_osx-64`` and
-  ``clangxx_osx-64``.
+  Anaconda, you can use the follwing conda packages:
+
+  * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
+  * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
+  * Linux ``POWER``: ``gcc_linux-ppc64le``
+  * Linux ``ARM``: no conda packages, use the system compiler
+  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the sytem compiler at
+    ``/usr/bin/clang`` (Mojave onwards).
+
 * `NumPy <http://www.numpy.org/>`_
 
 Then you can build and install Numba from the top level of the source tree::
@@ -190,7 +196,7 @@ vary with target operating system and hardware. The following lists them all
   * ``llvmlite``
   * ``funcsigs`` (Python 2)
   * ``singledispatch`` (Python 2)
-  * Compilers in 
+  * Compiler toolchain mentioned above
 
 * Optional build time:
 
@@ -227,7 +233,9 @@ vary with target operating system and hardware. The following lists them all
   * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
     performance
   * ``pygments`` - for "pretty" type annotation
-  
+  * ``gdb`` - if you would like to us ethe gdb support
+  * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
+    Ahead-of-Time (AOT) compilation
 
 * To build the documentation:
 
