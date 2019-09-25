@@ -3666,11 +3666,25 @@ def _is_nonelike(ty):
     return (ty is None) or isinstance(ty, types.NoneType)
 
 
+def _is_booleanlike(ty):
+    return (ty is True) or (ty is False) or isinstance(ty, types.Boolean)
+
+
 @overload(np.array)
 def np_array(a, dtype=None, copy=True):
 
     if not type_can_asarray(a):
         return None
+
+    if isinstance(dtype, types.Optional):
+        dtype = dtype.type
+    if not isinstance(dtype, types.DTypeSpec) and not _is_nonelike(dtype):
+        raise TypingError("'dtype' must be a valid NumPy type object")
+
+    if isinstance(copy, types.Optional):
+        copy = copy.type
+    if not _is_booleanlike(copy):
+        raise TypingError("'copy' must be a boolean")
 
     impl = None
     if isinstance(a, types.Array):
@@ -3713,6 +3727,11 @@ def np_asarray(a, dtype=None):
     # accepted types implementations below!
     if not type_can_asarray(a):
         return None
+
+    if isinstance(dtype, types.Optional):
+        dtype = dtype.type
+    if not isinstance(dtype, types.DTypeSpec) and not _is_nonelike(dtype):
+        raise TypingError("'dtype' must be a valid NumPy type object")
 
     impl = None
     if isinstance(a, types.Array):
