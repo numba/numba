@@ -598,6 +598,29 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
+@overload(np.iscomplex)
+def np_iscomplex(x):
+    dt = determine_dtype(x)
+    if np.issubdtype(dt, np.complexfloating):
+        def impl(x):
+            ax = np.asarray(x) # NumPy uses asanyarray here!
+            return ax.imag != 0
+    else:
+        def impl(x):
+            ax = np.asarray(x)
+            zeros = np.zeros(ax.shape, dtype=types.boolean)
+            return zeros[()] # hack when x is a scalar value
+    return impl
+
+
+@overload(np.isreal)
+def np_isreal(x):
+    def impl(x):
+        ax = np.iscomplex(x)
+        return np.invert(ax)
+    return impl
+
+
 @overload(np.iscomplexobj)
 def iscomplexobj(x):
     # Implementation based on NumPy

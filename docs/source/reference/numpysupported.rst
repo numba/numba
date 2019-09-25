@@ -345,7 +345,9 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
+* :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
