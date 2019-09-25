@@ -15,6 +15,7 @@ from numba import config, compiler, types, sigutils
 from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
 from numba.compiler_lock import global_compiler_lock
+from numba import cfunc
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
@@ -253,6 +254,10 @@ class ExternFunction(object):
         self.sig = sig
 
 
+@cfunc("uint64(int32)")
+def _b2d_func(tpb):
+    return 0
+
 
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
@@ -285,7 +290,7 @@ class ForAll(object):
             ctx = get_context()
             kwargs = dict(
                 func=kernel._func.get(),
-                b2d_func=lambda tpb: 0,
+                b2d_func=_b2d_func.address,
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
             )

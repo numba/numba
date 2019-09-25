@@ -5,9 +5,9 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir
+from numba import ir, errors
 from numba.controlflow import CFGraph
-from numba import types, consts
+from numba import types, consts, special
 
 #
 # Analysis related to variable lifetime
@@ -500,3 +500,44 @@ def rewrite_semantic_constants(func_ir, called_args):
         print("after".center(80, '*'))
         func_ir.dump()
         print('-' * 80)
+
+
+def find_literally_calls(func_ir, argtypes):
+    """An analysis to find `numba.literally` call inside the given IR.
+    When an unsatisfied literal typing request is found, a `ForceLiteralArg`
+    exception is raised.
+
+    Parameters
+    ----------
+
+    func_ir : numba.ir.FunctionIR
+
+    argtypes : Sequence[numba.types.Type]
+        The argument types.
+    """
+    from numba import ir_utils
+
+    marked_args = set()
+    first_loc = {}
+    # Scan for literally calls
+    for blk in func_ir.blocks.values():
+        for assign in blk.find_exprs(op='call'):
+            var = ir_utils.guard(ir_utils.get_definition, func_ir, assign.func)
+            if isinstance(var, (ir.Global, ir.FreeVar)):
+                fnobj = var.value
+            else:
+                fnobj = ir_utils.guard(ir_utils.resolve_func_from_module,
+                                       func_ir, var)
+            if fnobj is special.literally:
+                # Found
+                [arg] = assign.args
+                defarg = func_ir.get_definition(arg)
+                if isinstance(defarg, ir.Arg):
+                    argindex = defarg.index
+                    marked_args.add(argindex)
+                    first_loc.setdefault(argindex, assign.loc)
+    # Signal the dispatcher to force literal typing
+    for pos in marked_args:
+        if not isinstance(argtypes[pos], types.Literal):
+            loc = first_loc[pos]
+            raise errors.ForceLiteralArg(marked_args, loc=loc)

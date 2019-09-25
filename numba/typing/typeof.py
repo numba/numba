@@ -228,6 +228,11 @@ def typeof_number_class(val, c):
     return val
 
 
+@typeof_impl.register(types.Literal)
+def typeof_literal(val, c):
+    return val
+
+
 @typeof_impl.register(types.TypeRef)
 def typeof_typeref(val, c):
     return val
@@ -241,4 +246,3 @@ def typeof_typeref(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
-
