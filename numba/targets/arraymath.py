@@ -177,21 +177,76 @@ def _array_sum_axis_nop(arr, v):
     return arr
 
 
+def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
+    def inner(arr, axis):
+        """
+        function that performs sums over one specific axis
+
+        The third parameter to gen_index_tuple that generates the indexing
+        tuples has to be a const so we can't just pass "axis" through since
+        that isn't const.  We can check for specific values and have
+        different instances that do take consts.  Supporting axis summation
+        only up to the fourth dimension for now.
+
+        typing/arraydecl.py:sum_expand defines the return type for sum with axis.
+        It is one dimension less than the input array.
+        """
+        ndim = arr.ndim
+
+        if not is_axis_const:
+            # Catch where axis is negative or greater than 3.
+            if axis < 0 or axis > 3:
+                raise ValueError("Numba does not support sum with axis "
+                                 "parameter outside the range 0 to 3.")
+
+        # Catch the case where the user misspecifies the axis to be
+        # more than the number of the array's dimensions.
+        if axis >= ndim:
+            raise ValueError("axis is out of bounds for array")
+
+        # Convert the shape of the input array to a list.
+        ashape = list(arr.shape)
+        # Get the length of the axis dimension.
+        axis_len = ashape[axis]
+        # Remove the axis dimension from the list of dimensional lengths.
+        ashape.pop(axis)
+        # Convert this shape list back to a tuple using above intrinsic.
+        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
+        # Tuple needed here to create output array with correct size.
+        result = np.full(ashape_without_axis, zero, type(zero))
+
+        # Iterate through the axis dimension.
+        for axis_index in range(axis_len):
+            if is_axis_const:
+                # constant specialized version works for any valid axis value
+                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
+                                                       const_axis_val)
+                result += arr[index_tuple_generic]
+            else:
+                # Generate a tuple used to index the input array.
+                # The tuple is ":" in all dimensions except the axis
+                # dimension where it is "axis_index".
+                if axis == 0:
+                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
+                    result += arr[index_tuple1]
+                elif axis == 1:
+                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
+                    result += arr[index_tuple2]
+                elif axis == 2:
+                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
+                    result += arr[index_tuple3]
+                elif axis == 3:
+                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
+                    result += arr[index_tuple4]
+        return op(result, 0)
+    return inner
+
+
 @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
-    """
-    The third parameter to gen_index_tuple that generates the indexing
-    tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have
-    different instances that do take consts.  Supporting axis summation
-    only up to the fourth dimension for now.
-    """
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-    # It is one dimension less than the input array.
-
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
     # if the return is scalar in type then "take" the 0th element of the
@@ -220,64 +275,17 @@ def array_sum_axis_dtype(context, builder, sig, args):
         sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
         is_axis_const = True
 
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
+    compiled = register_jitable(gen_impl)
+
     def array_sum_impl_axis(arr, axis, dtype):
-        ndim = arr.ndim
-
-        if not is_axis_const:
-            # Catch where axis is negative or greater than 3.
-            if axis < 0 or axis > 3:
-                raise ValueError("Numba does not support sum with axis "
-                                 "parameter outside the range 0 to 3.")
-
-        # Catch the case where the user misspecifies the axis to be
-        # more than the number of the array's dimensions.
-        if axis >= ndim:
-            raise ValueError("axis is out of bounds for array")
-
-        # Convert the shape of the input array to a list.
-        ashape = list(arr.shape)
-        # Get the length of the axis dimension.
-        axis_len = ashape[axis]
-        # Remove the axis dimension from the list of dimensional lengths.
-        ashape.pop(axis)
-        # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
-        # Tuple needed here to create output array with correct size.
-        result = np.full(ashape_without_axis, zero, type(zero))
-
-        # Iterate through the axis dimension.
-        for axis_index in range(axis_len):
-            if is_axis_const:
-                # constant specialized version works for any valid axis value
-                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
-                                                       const_axis_val)
-                result += arr[index_tuple_generic]
-            else:
-                # Generate a tuple used to index the input array.
-                # The tuple is ":" in all dimensions except the axis
-                # dimension where it is "axis_index".
-                if axis == 0:
-                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
-                    result += arr[index_tuple1]
-                elif axis == 1:
-                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
-                    result += arr[index_tuple2]
-                elif axis == 2:
-                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
-                    result += arr[index_tuple3]
-                elif axis == 3:
-                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
-                    result += arr[index_tuple4]
-
-        return op(result, 0)
+        return compiled(arr, axis)
 
     res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.DTypeSpec)
 def array_sum_dtype(context, builder, sig, args):
     zero = sig.return_type(0)
@@ -293,22 +301,11 @@ def array_sum_dtype(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-
 @lower_builtin(np.sum, types.Array, types.intp)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
 @lower_builtin("array.sum", types.Array, types.IntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
-    """
-    The third parameter to gen_index_tuple that generates the indexing
-    tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have
-    different instances that do take consts.  Supporting axis summation
-    only up to the fourth dimension for now.
-    """
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-    # It is one dimension less than the input array.
-
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
     # if the return is scalar in type then "take" the 0th element of the
@@ -337,56 +334,11 @@ def array_sum_axis(context, builder, sig, args):
         sig = sig.replace(args=[ty_array, ty_axis])
         is_axis_const = True
 
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
+    compiled = register_jitable(gen_impl)
+
     def array_sum_impl_axis(arr, axis):
-        ndim = arr.ndim
-
-        if not is_axis_const:
-            # Catch where axis is negative or greater than 3.
-            if axis < 0 or axis > 3:
-                raise ValueError("Numba does not support sum with axis "
-                                 "parameter outside the range 0 to 3.")
-
-        # Catch the case where the user misspecifies the axis to be
-        # more than the number of the array's dimensions.
-        if axis >= ndim:
-            raise ValueError("axis is out of bounds for array")
-
-        # Convert the shape of the input array to a list.
-        ashape = list(arr.shape)
-        # Get the length of the axis dimension.
-        axis_len = ashape[axis]
-        # Remove the axis dimension from the list of dimensional lengths.
-        ashape.pop(axis)
-        # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
-        # Tuple needed here to create output array with correct size.
-        result = np.full(ashape_without_axis, zero, type(zero))
-
-        # Iterate through the axis dimension.
-        for axis_index in range(axis_len):
-            if is_axis_const:
-                # constant specialized version works for any valid axis value
-                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
-                                                       const_axis_val)
-                result += arr[index_tuple_generic]
-            else:
-                # Generate a tuple used to index the input array.
-                # The tuple is ":" in all dimensions except the axis
-                # dimension where it is "axis_index".
-                if axis == 0:
-                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
-                    result += arr[index_tuple1]
-                elif axis == 1:
-                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
-                    result += arr[index_tuple2]
-                elif axis == 2:
-                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
-                    result += arr[index_tuple3]
-                elif axis == 3:
-                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
-                    result += arr[index_tuple4]
-
-        return op(result, 0)
+        return compiled(arr, axis)
 
     res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)

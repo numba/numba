@@ -163,7 +163,7 @@ def guvectorize(ftylist, signature, **kws):
         @guvectorize(['void(int32[:,:], int32[:,:], int32[:,:])',
                       'void(float32[:,:], float32[:,:], float32[:,:])'],
                       '(x, y),(x, y)->(x, y)')
-        def add_2d_array(a, b):
+        def add_2d_array(a, b, c):
             for i in range(c.shape[0]):
                 for j in range(c.shape[1]):
                     c[i, j] = a[i, j] + b[i, j]

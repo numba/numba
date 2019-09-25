@@ -119,6 +119,27 @@ class TestTupleLengthError(unittest.TestCase):
         expected = "Tuple 'tup' length must be smaller than 1000"
         self.assertIn(expected, str(raises.exception))
 
+class TestTupleTypeNotIterable(unittest.TestCase):
+    '''
+    issue 4369
+    raise an error if 'type' is not iterable
+    '''
+    def test_namedtuple_types_exception(self):
+        with self.assertRaises(errors.TypingError) as raises:
+            types.NamedTuple(types.uint32, 'p')
+        self.assertIn(
+            "Argument 'types' is not iterable",
+            str(raises.exception)
+        )
+
+    def test_tuple_types_exception(self):
+        with self.assertRaises(errors.TypingError) as raises:
+            types.Tuple((types.uint32))
+        self.assertIn(
+            "Argument 'types' is not iterable",
+            str(raises.exception)
+        )
+
 
 class TestTupleReturn(TestCase):
 

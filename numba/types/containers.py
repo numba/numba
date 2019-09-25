@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+from collections import Iterable
+
+from .abstract import (ConstSized, Container, Hashable, MutableSequence,
+                       Sequence, Type, TypeRef)
+from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
@@ -175,9 +178,6 @@ class _HomogeneousTuple(Sequence, BaseTuple):
     def iterator_type(self):
         return UniTupleIter(self)
 
-    def getitem(self, ind):
-        return self.dtype, intp
-
     def __getitem__(self, i):
         """
         Return element at position i
@@ -246,10 +246,18 @@ class _HeterogeneousTuple(BaseTuple):
     def __iter__(self):
         return iter(self.types)
 
+    @staticmethod
+    def is_types_iterable(types):
+        # issue 4463 - check if argument 'types' is iterable
+        if not isinstance(types, Iterable):
+            raise TypingError("Argument 'types' is not iterable")
+
 
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
+        _HeterogeneousTuple.is_types_iterable(types)
+
         if types and all(t == types[0] for t in types[1:]):
             return UniTuple(dtype=types[0], count=len(types))
         else:
@@ -308,6 +316,8 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
 
     def __init__(self, types, cls):
+        _HeterogeneousTuple.is_types_iterable(types)
+
         self.types = tuple(types)
         self.count = len(self.types)
         self.fields = tuple(cls._fields)

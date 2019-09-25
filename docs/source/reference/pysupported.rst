@@ -448,8 +448,8 @@ Further to the above in relation to type specification, there are limitations
 placed on the types that can be used as keys and/or values in the typed
 dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
-strings, arrays, scalars, tuples. It is expected that these limitations will
-be relaxed as Numba continues to improve.
+strings, arrays (value only), scalars, tuples. It is expected that these 
+limitations will be relaxed as Numba continues to improve.
 
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
