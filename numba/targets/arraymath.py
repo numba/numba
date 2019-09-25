@@ -598,6 +598,32 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
+@overload(np.iscomplexobj)
+def iscomplexobj(x):
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    dt = determine_dtype(x)
+    if np.issubdtype(dt, np.complexfloating):
+        @register_jitable
+        def impl(x):
+            return True
+    else:
+        @register_jitable
+        def impl(x):
+            return False
+    return impl
+
+
+@overload(np.isrealobj)
+def isrealobj(x):
+    # Return True if x is a not complex type or an array of complex numbers.
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/ccfbcc1cd9a4035a467f2e982a565ab27de25b6b/numpy/lib/type_check.py#L290-L322
+    def impl(x):
+        return not np.iscomplexobj(x)
+    return impl
+
+
 @register_jitable
 def less_than(a, b):
     return a < b

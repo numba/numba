@@ -81,6 +81,14 @@ def machar(*args):
     return np.MachAr()
 
 
+def iscomplexobj(x):
+    return np.iscomplexobj(x)
+
+
+def isrealobj(x):
+    return np.isrealobj(x)
+
+
 def iinfo(*args):
     return np.iinfo(*args)
 
@@ -531,6 +539,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+
+    def test_isobj_functions(self):
+        def values():
+            yield 1
+            yield 1 + 0j
+            yield np.asarray([3, 1 + 0j, True])
+
+        pyfuncs = [iscomplexobj, isrealobj]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertEqual(expected, got)
 
     def bincount_sequences(self):
         """
