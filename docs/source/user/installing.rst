@@ -234,7 +234,8 @@ vary with target operating system and hardware. The following lists them all
   * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
     performance
   * ``pygments`` - for "pretty" type annotation
-  * ``gdb`` - if you would like to use the gdb support
+  * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
+    support
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
 
