@@ -22,7 +22,7 @@ def ex_compiler_pass():
         # state from the CompilerBase instance.
         def run_pass(self, state):
             func_ir = state.func_ir # get the FunctionIR object
-            mutated = False # used record whether this pass mutates the IR
+            mutated = False # used to record whether this pass mutates the IR
             # walk the blocks
             for blk in func_ir.blocks.values():
                 # find the assignment nodes in the block and walk them
