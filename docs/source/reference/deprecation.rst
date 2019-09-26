@@ -70,13 +70,30 @@ as::
 
   @njit
   def foo(x):
-    x.append(10)
+      x.append(10)
 
   a = [1, 2, 3]
   foo(a)
 
-is likely to require adjustment to use a ``typed.List`` instance (not
-implemented yet!), synonymous with the ``typed.Dict``.
+will require adjustment to use a ``typed.List`` instance, this typed container
+is synonymous to the :ref:`feature-typed-dict`. An example of translating the
+above is::
+
+    from numba import njit
+    from numba.typed import List
+
+    @njit
+    def foo(x):
+        x.append(10)
+
+    a = [1, 2, 3]
+    typed_a = List()
+    [typed_a.append(x) for x in a]
+    foo(typed_a)
+
+For more information about ``typed.List`` see :ref:`feature-typed-list`. Further
+usability enhancements for this feature are scheduled for the 0.47.0 release
+cycle.
 
 Schedule
 --------
@@ -95,9 +112,10 @@ change.
 
 Expected Replacement
 --------------------
-As alluded to above, it is anticipated that a ``typed.List`` (not implemented
-yet!) will be used to permit similar functionality to reflection. The advantages
-to this approach are:
+As noted above ``typed.List`` will be used to permit similar functionality to
+reflection in the case of ``list`` s, a ``typed.Set`` will provide the
+equivalent for ``set`` (not implemented yet!). The advantages to this approach
+are:
 
 * That the containers are typed means type inference has to work less hard.
 * Nested containers (containers of containers of ...) are more easily
@@ -105,19 +123,6 @@ to this approach are:
 * Performance penalties currently incurred translating data to/from native
   formats are largely avoided.
 * Numba's ``typed.Dict`` will be able to use these containers as values.
-
-It is expected something similar to the following will act as the replacement::
-
-  from numba import njit, int64
-  from numba.typed import List
-
-  @njit
-  def foo(x):
-    x.append(10)
-
-  a = List.empty(int64)
-  a.extend([1, 2, 3])
-  foo(a)
 
 
 Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
