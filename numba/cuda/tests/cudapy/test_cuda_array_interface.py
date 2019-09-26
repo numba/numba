@@ -225,6 +225,15 @@ class TestCudaArrayInterface(CUDATestCase):
         c_arr = cuda.device_array(0)
         self.assertEqual(c_arr.__cuda_array_interface__['data'][0], 0)
 
+        @cuda.jit
+        def add_one(arr):
+            x = cuda.grid(1)
+            N = arr.shape[0]
+            if x < N:
+                arr[x] += 1
+
+        add_one[1, 10](c_arr)  # this should pass
+
     def test_strides(self):
         # for #4175
         # First, test C-contiguous array
