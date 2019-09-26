@@ -20,7 +20,9 @@ def get_numbapro_envvar(envvar, default=None):
 
 def get_numba_envvar(envvar, default=None):
     """Tries to load an environment variable with numba ``PREFIX + envvar``.
-    Two prefixes are tried.  First "NUMBA_". Then, "NUMBAPRO_".
+    Only the "NUMBA_" prefix is attempted for use herein. The use of the
+    "NUMBAPRO_" prefix was deprecated in 0.45 with support removed in 0.46.
+    However it is still checked solely to warn users that it has no effect.
     """
     assert not envvar.startswith('NUMBA')
     value = os.environ.get('NUMBA_' + envvar)
