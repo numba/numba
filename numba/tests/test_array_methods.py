@@ -179,12 +179,6 @@ def array_sum_const_axis_neg_one(a, axis):
     # "const_multi" variant would raise errors
     return a.sum(axis=-1)
 
-def array_mean(a):
-    return a.mean()
-
-def array_mean_axis(a, axis):
-    return a.mean(axis)
-
 def array_cumsum(a, *args):
     return a.cumsum(*args)
 
