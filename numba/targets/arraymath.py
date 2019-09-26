@@ -647,6 +647,25 @@ def isrealobj(x):
     return impl
 
 
+@overload(np.isneginf)
+def isneginf(x, y=None):
+    # checks
+    # x must be an array-like
+    if not type_can_asarray(x):
+        raise TypingError("The first argument must be array-like")
+
+    # if y != None, than x.shape == y.shape
+
+
+    def impl(x, y=None):
+        x = np.asarray(x)
+        y = np.zeros(x.shape, dtype=types.boolean)
+        np.logical_and(np.isinf(x), np.signbit(x), y)
+        return y[()] # hack when y is scalar
+
+    return impl
+
+
 @register_jitable
 def less_than(a, b):
     return a < b

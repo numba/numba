@@ -97,6 +97,14 @@ def isrealobj(x):
     return np.isrealobj(x)
 
 
+def isneginf(x, y=None):
+    return np.isneginf(x, y)
+
+
+def isposinf(x, y=None):
+    return np.isneginf(x, y)
+
+
 def iinfo(*args):
     return np.iinfo(*args)
 
@@ -562,6 +570,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = cfunc(x)
                 self.assertEqual(expected, got)
 
+    def test_is_real_or_complex(self):
+        def values():
+            yield np.array([1 + 1j, 1 + 0j, 4.5, 3, 2, 2j])
+            yield np.array([1, 2, 3])
+            yield 3
+            yield 1 + 4j
+            yield (1 + 4j, 2 + 0j)
+            yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+
+        pyfuncs = [iscomplex, isreal]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in values():
+                expected = pyfunc(x)
+                got = cfunc(x)
+                self.assertPreciseEqual(expected, got)
+
+    def test_isneg_or_ispos_inf(self):
+        def values():
+            yield np.NINF, None
+            yield np.inf, None
+            yield np.PINF, None
+            yield np.asarray([-np.inf, 0., np.inf]), None
+
+
+        pyfuncs = [isneginf, isposinf]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x, y in values():
+                expected = pyfunc(x, y)
+                got = cfunc(x, y)
+                self.assertPreciseEqual(expected, got)
+
     def bincount_sequences(self):
         """
         Some test sequences for np.bincount()
@@ -621,23 +662,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
                       str(raises.exception))
-
-    def test_isrealorcomplex(self):
-        def values():
-            yield np.array([1 + 1j, 1 + 0j, 4.5, 3, 2, 2j])
-            yield np.array([1, 2, 3])
-            yield 3
-            yield 1 + 4j
-            yield (1 + 4j, 2 + 0j)
-            yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
-
-        pyfuncs = [iscomplex, isreal]
-        for pyfunc in pyfuncs:
-            cfunc = jit(nopython=True)(pyfunc)
-            for x in values():
-                expected = pyfunc(x)
-                got = cfunc(x)
-                self.assertPreciseEqual(expected, got)
 
     def test_searchsorted(self):
         pyfunc = searchsorted
