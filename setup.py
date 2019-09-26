@@ -120,7 +120,11 @@ def get_ext_modules():
 
     ext_helperlib = Extension(name="numba._helperlib",
                               sources=["numba/_helpermod.c",
-                                       "numba/_math_c99.c"],
+                                       "numba/_math_c99.c",
+                                       "numba/cext/utils.c",
+                                       "numba/cext/dictobject.c",
+                                       "numba/cext/listobject.c",
+                                       ],
                               extra_compile_args=CFLAGS,
                               extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
@@ -129,8 +133,6 @@ def get_ext_modules():
                                        "numba/_lapack.c",
                                        "numba/_npymath_exports.c",
                                        "numba/_random.c",
-                                       "numba/_dictobject.c",
-                                       "numba/_listobject.c",
                                        "numba/mathnames.inc",
                                        ],
                               **np_compile_args)
@@ -147,7 +149,6 @@ def get_ext_modules():
                                             "numba/npyufunc/_internal.h",
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
-
 
     ext_npyufunc_workqueue_impls = []
 
@@ -302,8 +303,8 @@ def find_packages(root_dir, root_name):
     rec(root_dir, root_name)
     return packages
 
-packages = find_packages("numba", "numba")
 
+packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
@@ -340,6 +341,7 @@ metadata = dict(
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
         "numba.runtime": ["*.c", "*.h"],
+        "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.targets": ["cmdlang.gdb"],
     },

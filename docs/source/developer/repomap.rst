@@ -127,7 +127,7 @@ Compiler Pipeline
 '''''''''''''''''
 
 - :ghfile:`numba/compiler.py` - Compiler pipelines and flags
-- :ghfile:`numba/errors.py` - Numba exception and warning classes 
+- :ghfile:`numba/errors.py` - Numba exception and warning classes
 - :ghfile:`numba/ir.py` - Numba IR data structure objects
 - :ghfile:`numba/bytecode.py` - Bytecode parsing and function identity (??)
 - :ghfile:`numba/interpreter.py` - Translate Python interpreter bytecode to
@@ -157,7 +157,7 @@ Compiler Pipeline
   (specifically ``**``) with constant arguments so faster code can be
   generated
 - :ghfile:`numba/inline_closurecall.py` - Inlines body of closure functions
-  to call site.  Support for array comprehensions, reduction inlining, 
+  to call site.  Support for array comprehensions, reduction inlining,
   and stencil inlining.
 - :ghfile:`numba/macro.py` - Alias to ``numba.rewrites.macros``
 - :ghfile:`numba/postproc.py` - Postprocessor for Numba IR that computes
@@ -295,10 +295,10 @@ Core Python Data Types
 
 - :ghfile:`numba/_hashtable.{h,c}` - Adaptation of the Python 3.7 hash table
   implementation
-- :ghfile:`numba/_dictobject.{h,c}` - C level implementation of typed
+- :ghfile:`numba/cext/dictobject.{h,c}` - C level implementation of typed
   dictionary
 - :ghfile:`numba/dictobject.py` - Nopython mode wrapper for typed dictionary
-- :ghfile:`numba/_listobject.{h,c}` - C level implementation of typed list
+- :ghfile:`numba/cext/listobject.{h,c}` - C level implementation of typed list
 - :ghfile:`numba/listobject.py` - Nopython mode wrapper for typed list
 - :ghfile:`numba/typedobjectutils.py` - Common utilities for typed dictionary
   and list
@@ -561,7 +561,7 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/dispatcher.py` - Dispatcher for CUDA JIT functions
 - :ghfile:`numba/cuda/printimpl.py` - Special implementation of device printing
 - :ghfile:`numba/cuda/libdevice.py` - Registers libdevice functions
-- :ghfile:`numba/cuda/kernels/` - Custom kernels for reduction and transpose 
+- :ghfile:`numba/cuda/kernels/` - Custom kernels for reduction and transpose
 - :ghfile:`numba/cuda/device_init.py` - Initializes the CUDA target when
   imported
 - :ghfile:`numba/cuda/compiler.py` - Compiler pipeline for CUDA target
