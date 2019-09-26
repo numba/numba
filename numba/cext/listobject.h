@@ -10,6 +10,9 @@
 #ifndef NUMBA_LIST_H
 #define NUMBA_LIST_H
 
+#include "Python.h"
+#include "cext.h"
+
 typedef void (*list_refcount_op_t)(const void*);
 
 typedef struct {
@@ -102,5 +105,8 @@ numba_list_iter(NB_ListIter *it, NB_List *l);
 
 NUMBA_EXPORT_FUNC(int)
 numba_list_iter_next(NB_ListIter *it, const char **item_ptr);
+
+NUMBA_EXPORT_FUNC(int)
+numba_test_list(void);
 
 #endif
