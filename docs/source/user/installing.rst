@@ -172,8 +172,9 @@ Source archives of the latest release can also be found on
   * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
-    ``/usr/bin/clang`` (Mojave onwards).
-  * Windows: an approprite version of Visual Studio that can compile Python
+    ``/usr/bin/clang`` (Mojave onwards)
+  * Windows: a version of Visual Studio appropriate for the Python version in
+    use
 
 * `NumPy <http://www.numpy.org/>`_
 
@@ -245,6 +246,7 @@ vary with target operating system and hardware. The following lists them all
   * ``pygments``
   * ``sphinx-bootstrap``
   * ``numpydoc``
+  * ``make`` as an executable on the ``$PATH``
 
 Checking your installation
 --------------------------
