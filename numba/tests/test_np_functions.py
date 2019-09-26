@@ -640,6 +640,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = cfunc(x)
                 self.assertPreciseEqual(expected, got)
 
+        # testing the assertion for "isreal" is not necessary
+        # since it calls "iscomplex" internally
+        with self.assertRaises(TypingError) as raises:
+            cfunc = jit(nopython=True)(iscomplex)
+            cfunc(None)
+        self.assertIn("First argument must be array-like",
+                      str(raises.exception))
+
     def test_isneg_or_ispos_inf(self):
         def values():
             yield np.NINF, None
@@ -659,11 +667,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = cfunc(x, out)
                 self.assertPreciseEqual(expected, got)
 
-        with self.assertRaises(TypingError) as raises:
-            cfunc = jit(nopython=True)(isneginf)
-            cfunc(None)
-        self.assertIn("First argument must be array-like",
-                      str(raises.exception))
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            with self.assertRaises(TypingError) as raises:
+                cfunc(None)
+            self.assertIn("First argument must be array-like",
+                          str(raises.exception))
 
     def bincount_sequences(self):
         """

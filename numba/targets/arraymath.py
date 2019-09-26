@@ -601,6 +601,10 @@ def get_isnan(dtype):
 
 @overload(np.iscomplex)
 def np_iscomplex(x):
+
+    if not type_can_asarray(x):
+        raise TypingError("First argument must be array-like")
+
     dt = determine_dtype(x)
     if np.issubdtype(dt, np.complexfloating):
         def impl(x):
