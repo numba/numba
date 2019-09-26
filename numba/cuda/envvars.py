@@ -1,9 +1,30 @@
 import os
+import warnings
+
+from numba import errors
+
+
+def get_numbapro_envvar(envvar, default=None):
+    # use vanilla get here so as to use `None` as a signal for not-set
+    value = os.environ.get(envvar)
+    if value is not None:
+        url = ("http://numba.pydata.org/numba-doc/latest/cuda/overview.html",
+               "#cudatoolkit-lookup")
+        msg = ("\nEnvironment variables with the 'NUMBAPRO' prefix are "
+               "deprecated and consequently ignored, found use of %s=%s.\n\n"
+               "For more information about alternatives visit: %s"
+               % (envvar, value, url))
+        warnings.warn(errors.NumbaWarning(msg))
+    return default
 
 
 def get_numba_envvar(envvar, default=None):
-    """Tries to load an environment variable matchin ``PREFIX + envvar``.
-    Only the "NUMBA_" prefix is attempted herein.
+    """Tries to load an environment variable with numba ``PREFIX + envvar``.
+    Two prefixes are tried.  First "NUMBA_". Then, "NUMBAPRO_".
     """
     assert not envvar.startswith('NUMBA')
-    return os.environ.get('NUMBA_' + envvar, default)
+    value = os.environ.get('NUMBA_' + envvar)
+    if value is None:
+        return get_numbapro_envvar('NUMBAPRO_' + envvar, default=default)
+    else:
+        return default
