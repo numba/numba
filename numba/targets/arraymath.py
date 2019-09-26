@@ -2520,6 +2520,15 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.argwhere)
+def np_argwhere(a):
+
+    def impl(a):
+        return np.transpose(np.nonzero(a))
+
+    return impl
+
+
 @overload(np.flatnonzero)
 def np_flatnonzero(a):
 
