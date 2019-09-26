@@ -348,6 +348,8 @@ The following top-level functions are supported:
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isneginf`
+* :func:`numpy.isposinf`
 * :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
