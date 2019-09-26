@@ -345,7 +345,7 @@ class NativeLowering(LoweringPass):
 @register_pass(mutates_CFG=False, analysis_only=True)
 class IRLegalization(FunctionPass):
 
-    _name = "ir_legalisation"
+    _name = "ir_legalization"
 
     def __init__(self):
         FunctionPass.__init__(self)
