@@ -649,21 +649,21 @@ def isrealobj(x):
 
 
 @overload(np.isneginf)
-def isneginf(x, y=None):
-    # checks
-    # x must be an array-like
+def isneginf(x, out=None):
+
     if not type_can_asarray(x):
-        raise TypingError("The first argument must be array-like")
+        raise TypingError("First argument must be array-like")
 
-    # if y != None, than x.shape == y.shape
-
-
-    def impl(x, y=None):
-        x = np.asarray(x)
-        y = np.zeros(x.shape, dtype=types.boolean)
-        np.logical_and(np.isinf(x), np.signbit(x), y)
-        return y[()] # hack when y is scalar
-
+    if is_nonelike(out):
+        def impl(x, out=None):
+            x = np.asarray(x)
+            out = np.zeros(x.shape, dtype=types.boolean)
+            np.logical_and(np.isinf(x), np.signbit(x), out)
+            return out[()] # hack when y is scalar
+    else:
+        def impl(x, out=None):
+            np.logical_and(np.isinf(x), np.signbit(x), out)
+            return out[()] # hack when y is scalar
     return impl
 
 

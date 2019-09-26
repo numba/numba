@@ -101,12 +101,12 @@ def isrealobj(x):
     return np.isrealobj(x)
 
 
-def isneginf(x, y=None):
-    return np.isneginf(x, y)
+def isneginf(x, out=None):
+    return np.isneginf(x, out)
 
 
-def isposinf(x, y=None):
-    return np.isneginf(x, y)
+def isposinf(x, out=None):
+    return np.isneginf(x, out)
 
 
 def iinfo(*args):
@@ -646,15 +646,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.inf, None
             yield np.PINF, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-
+            yield np.NINF, np.zeros(1, dtype=np.bool)
+            yield np.inf, np.zeros(1, dtype=np.bool)
+            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
 
         pyfuncs = [isneginf, isposinf]
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
-            for x, y in values():
-                expected = pyfunc(x, y)
-                got = cfunc(x, y)
+            for x, out in values():
+                expected = pyfunc(x, out)
+                got = cfunc(x, out)
                 self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc = jit(nopython=True)(isneginf)
+            cfunc(None)
+        self.assertIn("First argument must be array-like",
+                      str(raises.exception))
 
     def bincount_sequences(self):
         """
