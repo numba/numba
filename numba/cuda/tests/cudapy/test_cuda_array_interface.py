@@ -232,7 +232,8 @@ class TestCudaArrayInterface(CUDATestCase):
             if x < N:
                 arr[x] += 1
 
-        add_one[1, 10](c_arr)  # this should pass
+        d_arr = MyArray(c_arr)
+        add_one[1, 10](d_arr)  # this should pass
 
     def test_strides(self):
         # for #4175
