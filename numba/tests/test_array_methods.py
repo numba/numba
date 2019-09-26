@@ -1050,15 +1050,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((7, 6, 5, 4, 3))
 
         for arr in all_test_arrays:
-            self.assertPreciseEqual(pyfunc(arr, 0), cfunc(arr, 0))
-            axis = 1
-            self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
-            axis = 2
-            self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
-            # axis -1 is only supported for IntegerLiterals
-            pyfunc2 = lambda x: x.mean(axis=-1)
-            cfunc2 = jit(nopython=True)(pyfunc2)
-            self.assertPreciseEqual(pyfunc2(arr), cfunc2(arr))
+            with self.subTest():
+                self.assertPreciseEqual(pyfunc(arr, 0), cfunc(arr, 0))
+            with self.subTest():
+                axis = 1
+                self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+            with self.subTest():
+                axis = 2
+                self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
+            with self.subTest():
+                # axis -1 is only supported for IntegerLiterals
+                pyfunc2 = lambda x: x.mean(axis=-1)
+                cfunc2 = jit(nopython=True)(pyfunc2)
+                self.assertPreciseEqual(pyfunc2(arr), cfunc2(arr))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
