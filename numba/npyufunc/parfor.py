@@ -6,6 +6,8 @@ from collections import OrderedDict
 import linecache
 import os
 import sys
+import operator
+
 import numpy as np
 
 import llvmlite.llvmpy.core as lc
@@ -19,7 +21,7 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             get_definition, guard, find_callname,
                             get_call_table, is_pure, get_np_ufunc_typ,
                             get_unused_var_name, find_potential_aliases,
-                            is_const_call)
+                            is_const_call, next_label)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from ..typing import signature
@@ -58,6 +60,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     lowerer.fndesc.typemap = copy.copy(orig_typemap)
     typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
+    builder = lowerer.builder
 
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel")
@@ -96,6 +99,23 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
         parfor, parfor.params, lowerer.fndesc.calltypes)
+
+
+
+    builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        name="get_num_threads")
+
+    get_num_threads_sig = signature(types.intp)
+    get_num_threads_intrinsic = ir.Intrinsic('get_num_threads', get_num_threads_sig, [])
+
+    num_threads = ir.Expr.call(get_num_threads_intrinsic, (), (), loc)
+    lowerer.fndesc.calltypes[num_threads] = get_num_threads_sig
+
+    get_num_threads_var = ir.Var(scope, mk_unique_var('get_num_threads'), loc)
+    get_num_threads_assign = ir.Assign(num_threads, get_num_threads_var, loc)
+    typemap[get_num_threads_var.name] = types.intp
+    lowerer.lower_inst(get_num_threads_assign)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -220,6 +240,17 @@ def _lower_parfor_parallel(lowerer, parfor):
                 index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
                 typemap[index_var.name] = types.uintp
                 lowerer.lower_inst(index_var_assign)
+
+                cond = ir.Expr.binop(operator.gt, index_var, get_num_threads_var, loc)
+                cond_var = ir.Var(scope, mk_unique_var('cond'), loc)
+                cond_assign = ir.Assign(cond, cond_var, loc)
+                typemap[cond_var.name] = types.intp
+                ir.lower_inst(cond_assign)
+
+                truebr = next_label()
+                falsebr = next_label()
+                branch = ir.Branch(cond, truebr, falsebr, loc)
+                lowerer.lower_inst(branch)
 
                 redsetitem = ir.SetItem(redarr_var, index_var, redtoset, loc)
                 lowerer.fndesc.calltypes[redsetitem] = signature(types.none,
