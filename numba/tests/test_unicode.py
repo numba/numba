@@ -400,65 +400,75 @@ class TestUnicode(BaseTest):
     def test_count_with_start(self):
         pyfunc = count_with_start_usecase
         cfunc = njit(pyfunc)
-        error_msg = "'{0}'.py_count('{1}', {2}) = {3}\n'{0}'.c_count('{1}', {2}) = {4}"
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}) = {3}",
+                                "'{0}'.c_count('{1}', {2}) = {4}")
 
         for s, sub in UNICODE_COUNT_EXAMPLES:
             for i in range(-18, 18):
                 py_result = pyfunc(s, sub, i)
                 c_result = cfunc(s, sub, i)
                 self.assertEqual(py_result, c_result,
-                                 error_msg.format(s, sub, i, py_result, c_result))
+                                 error_msg.format(s, sub, i, py_result,
+                                                  c_result))
 
             py_result = pyfunc(s, sub, None)
             c_result = cfunc(s, sub, None)
             self.assertEqual(py_result, c_result,
-                             error_msg.format(s, sub, None, py_result, c_result))
+                             error_msg.format(s, sub, None, py_result,
+                                              c_result))
 
     def test_count_with_start_end(self):
         pyfunc = count_with_start_end_usecase
         cfunc = njit(pyfunc)
-        error_msg = "'{0}'.py_count('{1}', {2}, {3}) = {4}\n'{0}'.c_count('{1}', {2}, {3}) = {5}"
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                "'{0}'.c_count('{1}', {2}, {3}) = {5}")
 
         for s, sub in UNICODE_COUNT_EXAMPLES:
             for i , j in product(range(-18, 18), (-18, 18)):
                 py_result = pyfunc(s, sub, i, j)
                 c_result = cfunc(s, sub, i, j)
                 self.assertEqual(py_result, c_result,
-                                 error_msg.format(s, sub, i, j, py_result, c_result))
+                                 error_msg.format(s, sub, i, j, py_result,
+                                                  c_result))
 
             for j in range(-18, 18):
                 py_result = pyfunc(s, sub, None, j)
                 c_result = cfunc(s, sub, None, j)
                 self.assertEqual(py_result, c_result,
-                                 error_msg.format(s, sub, None, j, py_result, c_result))
+                                 error_msg.format(s, sub, None, j, py_result,
+                                                  c_result))
 
             py_result = pyfunc(s, sub, None, None)
             c_result = cfunc(s, sub, None, None)
             self.assertEqual(py_result, c_result,
-                             error_msg.format(s, sub, None, None, py_result, c_result))
+                             error_msg.format(s, sub, None, None, py_result,
+                                              c_result))
 
     def test_count_arg_type_check(self):
         cfunc = njit(count_with_start_end_usecase)
 
         with self.assertRaises(TypingError) as raises:
             cfunc('ascii', 'c', 1, 0.5)
-        self.assertIn('The slice indices must be an Integer or None', str(raises.exception))
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc('ascii', 'c', 1.2, 7)
-        self.assertIn('The slice indices must be an Integer or None', str(raises.exception))
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc('ascii', 12, 1.2, 7)
-        self.assertIn('The slice indices must be an Integer or None', str(raises.exception))
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
 
     def test_count_optional_arg_type_check(self):
         pyfunc = count_with_start_end_usecase
         def try_compile_bad_optional(*args):
             bad_sig = types.int64(types.unicode_type,
-                                    types.unicode_type,
-                                    types.Optional(types.float64),
-                                    types.Optional(types.float64))
+                                  types.unicode_type,
+                                  types.Optional(types.float64),
+                                  types.Optional(types.float64))
             njit([bad_sig])(pyfunc)
 
         with self.assertRaises(TypingError) as raises:
@@ -466,17 +476,19 @@ class TestUnicode(BaseTest):
         self.assertIn('The slice indices must be an Integer or None',
                       str(raises.exception))
 
-        error_msg = "'{0}'.py_count('{1}', {2}, {3}) = {4}\n'{0}'.c_count_op('{1}', {2}, {3}) = {5}"
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                "'{0}'.c_count_op('{1}', {2}, {3}) = {5}")
         sig_optional = types.int64(types.unicode_type,
-                                     types.unicode_type,
-                                     types.Optional(types.int64),
-                                     types.Optional(types.int64))
+                                   types.unicode_type,
+                                   types.Optional(types.int64),
+                                   types.Optional(types.int64))
         cfunc_optional = njit([sig_optional])(pyfunc)
 
         py_result = pyfunc('tú quis?', 'tú', 0, 8)
         c_result = cfunc_optional('tú quis?', 'tú', 0, 8)
         self.assertEqual(py_result, c_result,
-                         error_msg.format('tú quis?', 'tú', 0, 8, py_result, c_result))
+                         error_msg.format('tú quis?', 'tú', 0, 8, py_result,
+                                          c_result))
 
     def test_getitem(self):
         pyfunc = getitem_usecase

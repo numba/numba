@@ -997,7 +997,8 @@ def _normalize_slice_idx_count(arg, slice_len, default):
     If arg is within slice, e.g -slice_len <= arg < slice_len
     returns its real index via arg % slice_len
 
-    If arg > slice_len, returns arg (in this case count must return 0 if it is srart index)
+    If arg > slice_len, returns arg (in this case count must
+    return 0 if it is srart index)
     """
 
     if arg is None:
