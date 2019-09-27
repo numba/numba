@@ -543,8 +543,8 @@ def unicode_find(a, b):
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
-    count_args_types_check(start)
-    count_args_types_check(end)
+    _count_args_types_check(start)
+    _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
         def count_impl(src, sub, start=start, end=end):
@@ -898,13 +898,13 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
-def count_args_types_check(arg):
-    if not (arg is None or
-            isinstance(arg, (types.Omitted, types.Optional,
-                             types.Integer, types.NoneType))):
-        raise TypingError("slice indices must be integers or None")
-    if isinstance(arg, types.Optional) and not isinstance(arg.type, types.Integer):
-        raise TypingError("slice indices must be integers or None")
+def _count_args_types_check(arg):
+    if isinstance(arg, types.Optional):
+        arg = arg.type
+    if not (arg is None or isinstance(arg, (types.Omitted,
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError("The slice indices must be an Integer or None")
 
 
 @overload_method(types.UnicodeType, 'lstrip')
@@ -998,8 +998,8 @@ def _normalize_slice_idx_count(arg, slice_len, default):
     returns its real index via arg % slice_len
 
     If arg > slice_len, returns arg (in this case count must return 0 if it is srart index)
-
     """
+
     if arg is None:
         return default
     if -slice_len <= arg < slice_len:
