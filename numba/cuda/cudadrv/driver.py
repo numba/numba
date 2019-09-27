@@ -1749,8 +1749,9 @@ def get_devptr_for_active_ctx(ptr):
     pointer.
     """
     devptr = c_void_p(0)
-    attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+    if ptr != 0:
+        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
     return devptr
 
 
