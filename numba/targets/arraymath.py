@@ -1438,9 +1438,10 @@ def np_tril_indices_from(arr, k=0):
     # we require k to be integer, unlike numpy
     _check_is_integer(k, 'k')
 
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
     def np_tril_indices_from_impl(arr, k=0):
-        if arr.ndim != 2:
-            raise ValueError("input array must be 2-d")
         return np.tril_indices(arr.shape[0], k=k, m=arr.shape[1])
     return np_tril_indices_from_impl
 
@@ -1497,9 +1498,10 @@ def np_triu_indices_from(arr, k=0):
     # we require k to be integer, unlike numpy
     _check_is_integer(k, 'k')
 
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
     def np_triu_indices_from_impl(arr, k=0):
-        if arr.ndim != 2:
-            raise ValueError("input array must be 2-d")
         return np.triu_indices(arr.shape[0], k=k, m=arr.shape[1])
     return np_triu_indices_from_impl
 

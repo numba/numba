@@ -1196,7 +1196,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         for ndims in [0, 1, 3]:
             a = np.ones([5] * ndims)
-            with self.assertRaises(ValueError) as raises:
+            with self.assertTypingError() as raises:
                 cfunc(a)
                 self.assertIn("input array must be 2-d", str(raises.exception))
 
