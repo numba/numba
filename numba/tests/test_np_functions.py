@@ -5,6 +5,7 @@ import itertools
 import math
 import platform
 from functools import partial
+import inspect
 
 import numpy as np
 
@@ -1233,48 +1234,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     for e, g in zip(expected, got):
                         np.testing.assert_array_equal(e, g)
 
-    def _triangular_indices_from_tests_arr_k(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for dtype in [int, float, bool]:
-            for n in range(10):
-                for m in range(10):
-                    arr = np.ones((n, m), dtype)
-                    for k in range(-10, 10):
-                        expected = pyfunc(arr)
-                        got = cfunc(arr)
-                        self.assertEqual(type(expected), type(got))
-                        self.assertEqual(len(expected), len(got))
-                        for e, g in zip(expected, got):
-                            np.testing.assert_array_equal(e, g)
-
     def _triangular_indices_exceptions(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
+        parameters = inspect.signature(pyfunc).parameters
 
         with self.assertTypingError() as raises:
-            cfunc(4, k=1.5)
+            cfunc(1.0)
+        self.assertIn("n must be an integer", str(raises.exception))
+
+        if 'k' in parameters:
+            with self.assertTypingError() as raises:
+                cfunc(1, k=1.0)
             self.assertIn("k must be an integer", str(raises.exception))
+
+        if 'm' in parameters:
+            with self.assertTypingError() as raises:
+                cfunc(1, m=1.0)
+            self.assertIn("m must be an integer", str(raises.exception))
 
     def _triangular_indices_from_exceptions(self, pyfunc, test_k=True):
         cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
 
         for ndims in [0, 1, 3]:
             a = np.ones([5] * ndims)
             with self.assertTypingError() as raises:
                 cfunc(a)
-                self.assertIn("input array must be 2-d", str(raises.exception))
+            self.assertIn("input array must be 2-d", str(raises.exception))
 
         if test_k:
             a = np.ones([5, 5])
             with self.assertTypingError() as raises:
                 cfunc(a, k=0.5)
-                self.assertIn("k must be an integer", str(raises.exception))
+            self.assertIn("k must be an integer", str(raises.exception))
 
     def test_tril_basic(self):
         self._triangular_matrix_tests_m(tril_m)
@@ -1288,6 +1279,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_indices_tests_n_k(tril_indices_n_k)
         self._triangular_indices_tests_n_m(tril_indices_n_m)
         self._triangular_indices_tests_n_k_m(tril_indices_n_k_m)
+        self._triangular_indices_exceptions(tril_indices_n)
         self._triangular_indices_exceptions(tril_indices_n_k)
         self._triangular_indices_exceptions(tril_indices_n_m)
         self._triangular_indices_exceptions(tril_indices_n_k_m)
@@ -1310,6 +1302,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_indices_tests_n_k(triu_indices_n_k)
         self._triangular_indices_tests_n_m(triu_indices_n_m)
         self._triangular_indices_tests_n_k_m(triu_indices_n_k_m)
+        self._triangular_indices_exceptions(triu_indices_n)
         self._triangular_indices_exceptions(triu_indices_n_k)
         self._triangular_indices_exceptions(triu_indices_n_m)
         self._triangular_indices_exceptions(triu_indices_n_k_m)
