@@ -20,6 +20,7 @@ from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import version as numpy_version
 from numba.numpy_support import type_can_asarray
+from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
@@ -1665,6 +1666,30 @@ def np_reshape(a, shape):
     def np_reshape_impl(a, shape):
         return a.reshape(shape)
     return np_reshape_impl
+
+
+@overload(np.append)
+def np_append(arr, values, axis=None):
+
+    if not type_can_asarray(arr):
+        raise errors.TypingError('The first argument "arr" must be array-like')
+
+    if not type_can_asarray(values):
+        raise errors.TypingError('The second argument "values" must be array-like')
+
+    if is_nonelike(axis):
+        def impl(arr, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            values = np.ravel(np.asarray(values))
+            return np.concatenate((arr, values))
+    else:
+
+        if not isinstance(axis, types.Integer):
+            raise errors.TypingError('The third argument "axis" must be an integer')
+
+        def impl(arr, values, axis=None):
+            return np.concatenate((arr, values), axis=axis)
+    return impl
 
 
 @lower_builtin('array.ravel', types.Array)

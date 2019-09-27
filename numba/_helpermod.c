@@ -1,12 +1,10 @@
 /*
 Expose all functions as pointers in a dedicated C extension.
 */
-
-#define NUMBA_EXPORT_FUNC(_rettype) static _rettype
-#define NUMBA_EXPORT_DATA(_vartype) static _vartype
-
+#include "cext/cext.h"
 /* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
 #include "_pymodule.h"
+
 #include <math.h>
 #ifdef _MSC_VER
     #define false 0
@@ -15,6 +13,12 @@ Expose all functions as pointers in a dedicated C extension.
 #else
     #include <stdbool.h>
 #endif
+
+/*
+Include C-extension here
+*/
+#include "cext/cext.h"
+
 /* Numba C helpers */
 #include "_helperlib.c"
 
