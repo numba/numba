@@ -991,8 +991,8 @@ def normalize_str_idx(idx, length, is_start=True):
 
 @register_jitable
 def _normalize_slice_idx_count(arg, slice_len, default):
-    """count
-    Used for unicode_
+    """
+    Used for unicode_count
 
     If arg < -slice_len, returns 0 (prevents circle)
 
