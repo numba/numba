@@ -1112,7 +1112,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = np.ones((5, 6))
         with self.assertTypingError() as raises:
             cfunc(a, k=1.5)
-        assert "k must be an integer" in str(raises.exception)
+            self.assertIn("k must be an integer", str(raises.exception))
 
     def _triangular_indices_tests_base(self, pyfunc, args):
         cfunc = jit(nopython=True)(pyfunc)
@@ -1186,7 +1186,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertTypingError() as raises:
             cfunc(4, k=1.5)
-        assert "k must be an integer" in str(raises.exception)
+            self.assertIn("k must be an integer", str(raises.exception))
 
     def _triangular_indices_from_exceptions(self, pyfunc, test_k=True):
         cfunc = jit(nopython=True)(pyfunc)
@@ -1198,13 +1198,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             a = np.ones([5] * ndims)
             with self.assertRaises(ValueError) as raises:
                 cfunc(a)
-            assert "input array must be 2-d" in str(raises.exception)
+                self.assertIn("input array must be 2-d", str(raises.exception))
 
         if test_k:
             a = np.ones([5, 5])
             with self.assertTypingError() as raises:
                 cfunc(a, k=0.5)
-            assert "k must be an integer" in str(raises.exception)
+                self.assertIn("k must be an integer", str(raises.exception))
 
     def test_tril_basic(self):
         self._triangular_matrix_tests_m(tril_m)

@@ -617,7 +617,7 @@ def check_array(a):
 @register_jitable
 def _check_is_integer(v, name):
     if not isinstance(v, (int, types.Integer)):
-        raise TypeError('{} must be an integer'.format(name))
+        raise TypingError('{} must be an integer'.format(name))
 
 
 def nan_min_max_factory(comparison_op, is_complex_dtype):
