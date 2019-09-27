@@ -118,6 +118,45 @@ The *unresolved symbol abort* function is defined in the NRT with a zero-argumen
 signature. The caller is safe to call it with arbitrary number of
 arguments.  Therefore, it is safe to be used inplace of the intended callee.
 
+Using the NRT from C code
+=========================
+
+Externally compiled C code should use the ``NRT_api_functions`` struct as a
+function table to access the NRT API. The struct is defined in
+:ghfile:`numba/runtime/nrt_external.h`. Users can use the utility function
+``numba.extending.include_path()`` to determine the include directory for
+Numba provided C headers.
+
+.. literalinclude:: ../../../numba/runtime/nrt_external.h
+  :language: C
+  :caption: `numba/runtime/nrt_external.h`
+
+Inside Numba compiled code, the ``numba.unsafe.nrt.NRT_get_api()`` intrinsic
+can be used to obtain a pointer to the ``NRT_api_functions``.
+
+Here is an example that uses the ``nrt_external.h``:
+
+.. code-block:: C
+
+  #include <stdio.h>
+  #include "numba/runtime/nrt_external.h"
+
+  void my_dtor(void *ptr) {
+      free(ptr);
+  }
+
+  NRT_MemInfo* my_allocate(NRT_api_functions *nrt) {
+      /* heap allocate some memory */
+      void * data = malloc(10);
+      /* wrap the allocated memory; yield a new reference */
+      NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
+      /* acquire reference */
+      nrt->acquire(mi);
+      /* release reference */
+      nrt->release(mi);
+      return mi;
+  }
+
 
 Future Plan
 ===========

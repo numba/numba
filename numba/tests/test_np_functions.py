@@ -33,6 +33,10 @@ def angle2(x, deg):
     return np.angle(x, deg)
 
 
+def append(arr, values, axis):
+    return np.append(arr, values, axis=axis)
+
+
 def count_nonzero(arr, axis):
     return np.count_nonzero(arr, axis=axis)
 
@@ -459,6 +463,55 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.arange(3 * 4).reshape(3, 4), 0)
         self.assertIn(
             "axis is not supported for NumPy versions < 1.12.0",
+            str(raises.exception)
+        )
+
+    def test_np_append(self):
+        def arrays():
+            yield 2, 2, None
+            yield np.arange(10), 3, None
+            yield np.arange(10), np.arange(3), None
+            yield np.arange(10).reshape(5, 2), np.arange(3), None
+            yield np.array([[1, 2, 3], [4, 5, 6]]), np.array([[7, 8, 9]]), 0
+            arr = np.array([[1, 2, 3], [4, 5, 6]])
+            yield arr, arr, 1
+
+        pyfunc = append
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj, axis in arrays():
+            expected = pyfunc(arr, obj, axis)
+            got = cfunc(arr, obj, axis)
+            self.assertPreciseEqual(expected, got)
+
+    def test_np_append_exceptions(self):
+        pyfunc = append
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.array([[1, 2, 3], [4, 5, 6]])
+        values = np.array([[7, 8, 9]])
+        axis = 0
+
+        # first argument must be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(None, values, axis)
+        self.assertIn(
+            'The first argument "arr" must be array-like',
+            str(raises.exception)
+        )
+
+        # second argument must also be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, None, axis)
+        self.assertIn(
+            'The second argument "values" must be array-like',
+            str(raises.exception)
+        )
+
+        # third argument must be either nonelike or an integer
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, values, axis=0.0)
+        self.assertIn(
+            'The third argument "axis" must be an integer',
             str(raises.exception)
         )
 

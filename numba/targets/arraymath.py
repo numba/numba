@@ -17,6 +17,7 @@ from numba import types, cgutils, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -1549,10 +1550,10 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
         if numpy_version >= (1, 16):
             ary_dt = _dtype_of_compound(ary)
             to_begin_dt = None
-            if not(_is_nonelike(to_begin)):
+            if not(is_nonelike(to_begin)):
                 to_begin_dt = _dtype_of_compound(to_begin)
             to_end_dt = None
-            if not(_is_nonelike(to_end)):
+            if not(is_nonelike(to_end)):
                 to_end_dt = _dtype_of_compound(to_end)
 
             if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
@@ -1616,7 +1617,7 @@ def _get_d(dx, x):
 
 @overload(_get_d)
 def get_d_impl(x, dx):
-    if _is_nonelike(x):
+    if is_nonelike(x):
         def impl(x, dx):
             return np.asarray(dx)
     else:
@@ -3073,7 +3074,7 @@ def np_count_nonzero(arr, axis=None):
     if (numpy_version < (1, 12)):
         raise TypingError("axis is not supported for NumPy versions < 1.12.0")
 
-    if _is_nonelike(axis):
+    if is_nonelike(axis):
         def impl(arr, axis=None):
             arr2 = np.ravel(arr)
             return np.sum(arr2 != 0)
@@ -3740,10 +3741,6 @@ def np_convolve(a, v):
     return impl
 
 
-def _is_nonelike(ty):
-    return (ty is None) or isinstance(ty, types.NoneType)
-
-
 @overload(np.asarray)
 def np_asarray(a, dtype=None):
 
@@ -3754,7 +3751,7 @@ def np_asarray(a, dtype=None):
 
     impl = None
     if isinstance(a, types.Array):
-        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+        if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
                 return a
         else:
@@ -3764,14 +3761,14 @@ def np_asarray(a, dtype=None):
         # Nested lists cannot be unpacked, therefore only single lists are
         # permitted and these conform to Sequence and can be unpacked along on
         # the same path as Tuple.
-        if _is_nonelike(dtype):
+        if is_nonelike(dtype):
             def impl(a, dtype=None):
                 return np.array(a)
         else:
             def impl(a, dtype=None):
                 return np.array(a, dtype)
     elif isinstance(a, (types.Number, types.Boolean)):
-        dt_conv = a if _is_nonelike(dtype) else dtype
+        dt_conv = a if is_nonelike(dtype) else dtype
         ty = as_dtype(dt_conv)
 
         def impl(a, dtype=None):
