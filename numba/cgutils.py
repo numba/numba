@@ -664,6 +664,9 @@ def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, bound
                              wraparound=wraparound, boundscheck=boundscheck)
 
 def boundscheck(context, builder, ind, dimlen, axis=None):
+    if not context.enable_boundscheck:
+        return
+
     def _dbg():
         # Remove this when we figure out how to include this information
         # in the error message.
