@@ -1210,9 +1210,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for dtype in [int, float, bool]:
-            for n in range(10):
-                for m in range(10):
-                    arr = np.ones((n, m), dtype)
+            for n,m in itertools.product(range(10), range(10)):
+                arr = np.ones((n, m), dtype)
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+                self.assertEqual(type(expected), type(got))
+                self.assertEqual(len(expected), len(got))
+                for e, g in zip(expected, got):
+                    np.testing.assert_array_equal(e, g)
+
+    def _triangular_indices_from_tests_arr_k(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for dtype in [int, float, bool]:
+            for n,m in itertools.product(range(10), range(10)):
+                arr = np.ones((n, m), dtype)
+                for k in range(-10, 10):
                     expected = pyfunc(arr)
                     got = cfunc(arr)
                     self.assertEqual(type(expected), type(got))
