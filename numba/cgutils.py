@@ -664,7 +664,8 @@ def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, bound
                              wraparound=wraparound, boundscheck=boundscheck)
 
 def boundscheck(context, builder, ind, dimlen, axis=None):
-    if not context.enable_boundscheck:
+    if (config.BOUNDSCHECK is None and not context.enable_boundscheck) \
+       or config.BOUNDSCHECK == 0:
         return
 
     def _dbg():
