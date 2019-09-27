@@ -614,7 +614,6 @@ def check_array(a):
         raise ValueError('zero-size array to reduction operation not possible')
 
 
-@register_jitable
 def _check_is_integer(v, name):
     if not isinstance(v, (int, types.Integer)):
         raise TypingError('{} must be an integer'.format(name))
