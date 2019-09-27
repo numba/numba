@@ -12,21 +12,10 @@ from numba import sigutils, typing
 from numba.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
+from numba import cext
 
 
-def _get_extension_libs():
-    libs = []
-    base = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..', 'cext',
-    ))
-    for fn in os.listdir(base):
-        if fn.endswith('.c'):
-            fn = os.path.join(base, fn)
-            libs.append(fn)
-    return libs
-
-
-extension_libs = _get_extension_libs()
+extension_libs = cext.get_extension_libs()
 
 
 class CC(object):
