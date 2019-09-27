@@ -1202,6 +1202,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             [[n, k, m] for n in range(10) for k in range(-n - 1, n + 2) for m in range(2 * n)]
         )
 
+        # Check jitted version works with default values for kwargs
+        cfunc = jit(nopython=True)(pyfunc)
+        cfunc(1)
+
     def _triangular_indices_from_tests_arr(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
 

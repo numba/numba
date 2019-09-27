@@ -1424,7 +1424,7 @@ def np_tril_indices(n, k=0, m=None):
     # we require integer arguments, unlike numpy
     _check_is_integer(n, 'n')
     _check_is_integer(k, 'k')
-    if m is not None:
+    if not is_nonelike(m):
         _check_is_integer(m, 'm')
 
     def np_tril_indices_impl(n, k=0, m=None):
@@ -1484,7 +1484,7 @@ def np_triu_indices(n, k=0, m=None):
     # we require integer arguments, unlike numpy
     _check_is_integer(n, 'n')
     _check_is_integer(k, 'k')
-    if m is not None:
+    if not is_nonelike(m):
         _check_is_integer(m, 'm')
 
     def np_triu_indices_impl(n, k=0, m=None):
