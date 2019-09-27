@@ -572,6 +572,8 @@ def unicode_count(src, sub, start=None, end=None):
                     start += 1
             return count
         return count_impl
+    error_msg = "The substring must be a UnicodeType, not {}"
+    raise TypingError(error_msg.format(type(sub)))
 
 
 @overload_method(types.UnicodeType, 'startswith')
@@ -989,8 +991,8 @@ def normalize_str_idx(idx, length, is_start=True):
 
 @register_jitable
 def _normalize_slice_idx_count(arg, slice_len, default):
-    """
-    Used for unicode_count
+    """count
+    Used for unicode_
 
     If arg < -slice_len, returns 0 (prevents circle)
 

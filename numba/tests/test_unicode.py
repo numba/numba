@@ -458,8 +458,8 @@ class TestUnicode(BaseTest):
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc('ascii', 12, 1.2, 7)
-        self.assertIn('The slice indices must be an Integer or None',
+            cfunc('ascii', 12, 1, 7)
+        self.assertIn('The substring must be a UnicodeType, not',
                       str(raises.exception))
 
     def test_count_optional_arg_type_check(self):
