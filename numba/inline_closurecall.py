@@ -419,33 +419,35 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
-
-    # TODO: handle arguments for make_function case similar to function above
-    callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
-                       else callee.__defaults__)
-    if callee_defaults:
-        debug_print("defaults = ", callee_defaults)
-        if isinstance(callee_defaults, tuple): # Python 3.5
-            defaults_list = []
-            for x in callee_defaults:
-                if isinstance(x, ir.Var):
-                    defaults_list.append(x)
-                else:
-                    # this branch is predominantly for kwargs from inlinable
-                    # functions
-                    defaults_list.append(ir.Const(value=x, loc=loc))
-            args = args + defaults_list
-        elif (isinstance(callee_defaults, ir.Var)
-                or isinstance(callee_defaults, str)):
-            defaults = func_ir.get_definition(callee_defaults)
-            assert(isinstance(defaults, ir.Const))
-            loc = defaults.loc
-            args = args + [ir.Const(value=v, loc=loc)
-                           for v in defaults.value]
-        else:
-            raise NotImplementedError(
-                "Unsupported defaults to make_function: {}".format(defaults))
-    return args
+    else:
+        # TODO: handle arguments for make_function case similar to function
+        # case above
+        callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
+                           else callee.__defaults__)
+        if callee_defaults:
+            debug_print("defaults = ", callee_defaults)
+            if isinstance(callee_defaults, tuple):  # Python 3.5
+                defaults_list = []
+                for x in callee_defaults:
+                    if isinstance(x, ir.Var):
+                        defaults_list.append(x)
+                    else:
+                        # this branch is predominantly for kwargs from
+                        # inlinable functions
+                        defaults_list.append(ir.Const(value=x, loc=loc))
+                args = args + defaults_list
+            elif (isinstance(callee_defaults, ir.Var)
+                    or isinstance(callee_defaults, str)):
+                defaults = func_ir.get_definition(callee_defaults)
+                assert(isinstance(defaults, ir.Const))
+                loc = defaults.loc
+                args = args + [ir.Const(value=v, loc=loc)
+                            for v in defaults.value]
+            else:
+                raise NotImplementedError(
+                    "Unsupported defaults to make_function: {}".format(
+                        defaults))
+        return args
 
 
 def _make_debug_print(prefix):
