@@ -411,11 +411,14 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         pysig = numba.utils.pysignature(callee)
         normal_handler = lambda index, param, default: default
         default_handler = lambda index, param, default: ir.Const(default, loc)
+        # Throw error for stararg
         # TODO: handle stararg
+        def stararg_handler(index, param, default):
+            raise NotImplementedError("Stararg not supported in inliner".format(obj))
         kws = dict(call_expr.kws)
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
-            normal_handler)
+            stararg_handler)
 
     # TODO: handle arguments for make_function case similar to function above
     callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
