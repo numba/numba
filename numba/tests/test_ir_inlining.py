@@ -479,7 +479,8 @@ class TestOverloadInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True})
 
-    def test_inline_always_kws(self):
+    def test_inline_always_kw_no_default(self):
+        # pass call arg by name that doesn't have default value
         def foo(a, b):
             return a + b
 
