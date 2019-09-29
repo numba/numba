@@ -844,15 +844,5 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
             self.assertIn("object has no attribute 'ravel'", str(e.exception))
 
-    # This will probably fail pre 1.15
-    def test_argwhere_array_like(self):
-        pyfunc = numpy_argwhere
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a in self.array_like_variations():
-            expected = pyfunc(a)
-            got = cfunc(a)
-            self.assertPreciseEqual(expected, got)
-
 if __name__ == '__main__':
     unittest.main()
