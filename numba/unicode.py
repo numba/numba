@@ -1324,7 +1324,7 @@ def unicode_istitle(s):
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
     """
-    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9856-L9883
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
     """
     c = 0
     j = idx - 1
@@ -1346,7 +1346,7 @@ def _handle_capital_sigma(data, length, idx):
 @register_jitable
 def _lower_ucs4(code_point, data, length, idx, mapped):
     """
-    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9885-L9895
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895
     """
     if code_point == 0x3A3:
         mapped[0] = _handle_capital_sigma(data, length, idx)
@@ -1357,7 +1357,7 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
 @register_jitable
 def _do_title(data, length, res, maxchars):
     """
-    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L9996-L10021
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021
     """
     k = 0
     previous_cased = False
@@ -1382,7 +1382,7 @@ def unicode_title(data):
     """
     str.title()
     https://docs.python.org/3/library/stdtypes.html#str.title
-    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10023-L10069
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
     """
     def impl(data):
         length = len(data)
