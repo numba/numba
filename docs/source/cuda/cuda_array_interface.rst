@@ -94,13 +94,13 @@ include:
 Differences with CUDA Array Interface (Version 0) 
 -------------------------------------------------
 
-The Version 0 of the CUDA Array Interface did not have the optional **mask**
+Version 0 of the CUDA Array Interface did not have the optional **mask**
 attribute to support masked arrays.
 
 
 Differences with CUDA Array Interface (Version 1)
 -------------------------------------------------
 
-The Versions 0 & 1 of the CUDA Array Interface neither clarified the
+Versions 0 and 1 of the CUDA Array Interface neither clarified the
 **strides** attribute for C-contiguous arrays nor specified the treatment for
 zero-size arrays.
