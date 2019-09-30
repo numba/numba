@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, types
+from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
@@ -13,6 +13,8 @@ from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
+
+from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
@@ -100,6 +102,71 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertNotEqual(l, new)
         # index
         self.assertEqual(l.index(15), 4)
+
+    def test_unsigned_access(self):
+        L = List.empty_list(int32)
+        ui32_0 = types.uint32(0)
+        ui32_1 = types.uint32(1)
+        ui32_2 = types.uint32(2)
+
+        # insert
+        L.append(types.uint32(10))
+        L.append(types.uint32(11))
+        L.append(types.uint32(12))
+        self.assertEqual(len(L), 3)
+
+        # getitem
+        self.assertEqual(L[ui32_0], 10)
+        self.assertEqual(L[ui32_1], 11)
+        self.assertEqual(L[ui32_2], 12)
+
+        # setitem
+        L[ui32_0] = 123
+        L[ui32_1] = 456
+        L[ui32_2] = 789
+        self.assertEqual(L[ui32_0], 123)
+        self.assertEqual(L[ui32_1], 456)
+        self.assertEqual(L[ui32_2], 789)
+
+        # index
+        ui32_123 = types.uint32(123)
+        ui32_456 = types.uint32(456)
+        ui32_789 = types.uint32(789)
+        self.assertEqual(L.index(ui32_123), 0)
+        self.assertEqual(L.index(ui32_456), 1)
+        self.assertEqual(L.index(ui32_789), 2)
+
+        # delitem
+        L.__delitem__(ui32_2)
+        del L[ui32_1]
+        self.assertEqual(len(L), 1)
+        self.assertEqual(L[ui32_0], 123)
+
+        # pop
+        L.append(2)
+        L.append(3)
+        L.append(4)
+        self.assertEqual(len(L), 4)
+        self.assertEqual(L.pop(), 4)
+        self.assertEqual(L.pop(ui32_2), 3)
+        self.assertEqual(L.pop(ui32_1), 2)
+        self.assertEqual(L.pop(ui32_0), 123)
+
+    @parfors_skip_unsupported
+    def test_unsigned_prange(self):
+        @njit(parallel=True)
+        def foo(a):
+            r = types.uint64(3)
+            s = types.uint64(0)
+            for i in prange(r):
+                s = s + a[i]
+            return s
+
+        a = List.empty_list(types.uint64)
+        a.append(types.uint64(12))
+        a.append(types.uint64(1))
+        a.append(types.uint64(7))
+        self.assertEqual(foo(a), 20)
 
     def test_compiled(self):
         @njit

@@ -5,9 +5,12 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import inspect
+import os.path
 from collections import namedtuple
 from types import MethodType, FunctionType
 
+import numba
 from .. import types, utils
 from ..errors import TypingError, InternalError
 from ..targets.cpu_options import InlineOptions
@@ -438,12 +441,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if not self._inline.is_never_inline:
             # need to run the compiler front end up to type inference to compute
             # a signature
-            from numba import compiler
+            from numba import compiler, typed_passes
             ir = compiler.run_frontend(disp_type.dispatcher.py_func)
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
 
-            typemap, return_type, calltypes = compiler.type_inference_stage(
+            typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self.context, ir, folded_args, None)
             sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied
@@ -548,6 +551,42 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         signature on the target context.
         """
         return self._compiled_overloads[sig.args]
+
+    @classmethod
+    def get_source_info(cls):
+        """Return a dictionary with information about the source code  of the
+        implementation.
+
+        Returns
+        -------
+        info : dict
+            - "kind" : str
+                The implementation kind.
+            - "name" : str
+                The name of the function that provided the definition.
+            - "sig" : str
+                The formatted signature of the function.
+            - "filename" : str
+                The name of the source file.
+            - "lines": tuple (int, int)
+                First and list line number.
+            - "docstring": str
+                The docstring of the definition.
+        """
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = cls._overload_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
 
 
 def make_overload_template(func, overload_func, jit_options, strict,

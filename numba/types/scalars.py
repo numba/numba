@@ -4,7 +4,7 @@ import enum
 
 import numpy as np
 
-from .abstract import *
+from .abstract import Dummy, Hashable, Literal, Number, Type
 from .. import npdatetime, utils
 from ..typeconv import Conversion
 

@@ -92,6 +92,11 @@ These variables influence what is printed out during compilation of
 
    *Default value:* ``no_color``. The type of the value is ``string``.
 
+.. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
+
+   If set to non-zero the issuing of performance warnings is disabled. Default
+   is zero.
+
 .. envvar:: NUMBA_DEBUG
 
    If set to non-zero, print out all possible debugging information during
@@ -148,6 +153,17 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out the Numba Intermediate Representation
    of compiled functions.
+
+.. envvar:: NUMBA_DEBUG_PRINT_AFTER
+
+   Dump the Numba IR after declared pass(es). This is useful for debugging IR
+   changes made by given passes. Accepted values are:
+
+   * Any pass name (as given by the ``.name()`` method on the class)
+   * Multiple pass names as a comma separated list, i.e. ``"foo_pass,bar_pass"``
+   * The token ``"all"``, which will print after all passes.
+
+   The default value is ``"none"`` so as to prevent output.
 
 .. envvar:: NUMBA_DUMP_ANNOTATION
 

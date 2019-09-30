@@ -17,6 +17,7 @@ from numba import types, cgutils, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -177,50 +178,20 @@ def _array_sum_axis_nop(arr, v):
     return arr
 
 
-@lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
-@lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
-def array_sum_axis(context, builder, sig, args):
-    """
-    The third parameter to gen_index_tuple that generates the indexing
-    tuples has to be a const so we can't just pass "axis" through since
-    that isn't const.  We can check for specific values and have
-    different instances that do take consts.  Supporting axis summation
-    only up to the fourth dimension for now.
-    """
-    # typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-    # It is one dimension less than the input array.
+def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
+    def inner(arr, axis):
+        """
+        function that performs sums over one specific axis
 
-    retty = sig.return_type
-    zero = getattr(retty, 'dtype', retty)(0)
-    # if the return is scalar in type then "take" the 0th element of the
-    # 0d array accumulator as the return value
-    if getattr(retty, 'ndim', None) is None:
-        op = np.take
-    else:
-        op = _array_sum_axis_nop
-    [ty_array, ty_axis] = sig.args
-    is_axis_const = False
-    const_axis_val = 0
-    if isinstance(ty_axis, types.Literal):
-        # this special-cases for constant axis
-        const_axis_val = ty_axis.literal_value
-        # fix negative axis
-        if const_axis_val < 0:
-            const_axis_val = ty_array.ndim + const_axis_val
-        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            raise ValueError("'axis' entry is out of bounds")
+        The third parameter to gen_index_tuple that generates the indexing
+        tuples has to be a const so we can't just pass "axis" through since
+        that isn't const.  We can check for specific values and have
+        different instances that do take consts.  Supporting axis summation
+        only up to the fourth dimension for now.
 
-        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
-        axis_val = context.get_constant(ty_axis, const_axis_val)
-        # rewrite arguments
-        args = args[0], axis_val
-        # rewrite sig
-        sig = sig.replace(args=[ty_array, ty_axis])
-        is_axis_const = True
-
-    def array_sum_impl_axis(arr, axis):
+        typing/arraydecl.py:sum_expand defines the return type for sum with axis.
+        It is one dimension less than the input array.
+        """
         ndim = arr.ndim
 
         if not is_axis_const:
@@ -268,8 +239,107 @@ def array_sum_axis(context, builder, sig, args):
                 elif axis == 3:
                     index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
                     result += arr[index_tuple4]
-
         return op(result, 0)
+    return inner
+
+
+@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
+def array_sum_axis_dtype(context, builder, sig, args):
+    retty = sig.return_type
+    zero = getattr(retty, 'dtype', retty)(0)
+    # if the return is scalar in type then "take" the 0th element of the
+    # 0d array accumulator as the return value
+    if getattr(retty, 'ndim', None) is None:
+        op = np.take
+    else:
+        op = _array_sum_axis_nop
+    [ty_array, ty_axis, ty_dtype] = sig.args
+    is_axis_const = False
+    const_axis_val = 0
+    if isinstance(ty_axis, types.Literal):
+        # this special-cases for constant axis
+        const_axis_val = ty_axis.literal_value
+        # fix negative axis
+        if const_axis_val < 0:
+            const_axis_val = ty_array.ndim + const_axis_val
+        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
+            raise ValueError("'axis' entry is out of bounds")
+
+        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
+        axis_val = context.get_constant(ty_axis, const_axis_val)
+        # rewrite arguments
+        args = args[0], axis_val, args[2]
+        # rewrite sig
+        sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
+        is_axis_const = True
+
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
+    compiled = register_jitable(gen_impl)
+
+    def array_sum_impl_axis(arr, axis, dtype):
+        return compiled(arr, axis)
+
+    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.DTypeSpec)
+def array_sum_dtype(context, builder, sig, args):
+    zero = sig.return_type(0)
+
+    def array_sum_impl(arr, dtype):
+        c = zero
+        for v in np.nditer(arr):
+            c += v.item()
+        return c
+
+    res = context.compile_internal(builder, array_sum_impl, sig, args,
+                                   locals=dict(c=sig.return_type))
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@lower_builtin(np.sum, types.Array, types.intp)
+@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
+@lower_builtin("array.sum", types.Array, types.intp)
+@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
+def array_sum_axis(context, builder, sig, args):
+    retty = sig.return_type
+    zero = getattr(retty, 'dtype', retty)(0)
+    # if the return is scalar in type then "take" the 0th element of the
+    # 0d array accumulator as the return value
+    if getattr(retty, 'ndim', None) is None:
+        op = np.take
+    else:
+        op = _array_sum_axis_nop
+    [ty_array, ty_axis] = sig.args
+    is_axis_const = False
+    const_axis_val = 0
+    if isinstance(ty_axis, types.Literal):
+        # this special-cases for constant axis
+        const_axis_val = ty_axis.literal_value
+        # fix negative axis
+        if const_axis_val < 0:
+            const_axis_val = ty_array.ndim + const_axis_val
+        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
+            raise ValueError("'axis' entry is out of bounds")
+
+        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
+        axis_val = context.get_constant(ty_axis, const_axis_val)
+        # rewrite arguments
+        args = args[0], axis_val
+        # rewrite sig
+        sig = sig.replace(args=[ty_array, ty_axis])
+        is_axis_const = True
+
+    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
+    compiled = register_jitable(gen_impl)
+
+    def array_sum_impl_axis(arr, axis):
+        return compiled(arr, axis)
 
     res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -1491,10 +1561,10 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
         if numpy_version >= (1, 16):
             ary_dt = _dtype_of_compound(ary)
             to_begin_dt = None
-            if not(_is_nonelike(to_begin)):
+            if not(is_nonelike(to_begin)):
                 to_begin_dt = _dtype_of_compound(to_begin)
             to_end_dt = None
-            if not(_is_nonelike(to_end)):
+            if not(is_nonelike(to_end)):
                 to_end_dt = _dtype_of_compound(to_end)
 
             if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
@@ -1558,7 +1628,7 @@ def _get_d(dx, x):
 
 @overload(_get_d)
 def get_d_impl(x, dx):
-    if _is_nonelike(x):
+    if is_nonelike(x):
         def impl(x, dx):
             return np.asarray(dx)
     else:
@@ -3007,6 +3077,26 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.count_nonzero)
+def np_count_nonzero(arr, axis=None):
+    if not type_can_asarray(arr):
+        raise TypingError("The argument to np.count_nonzero must be array-like")
+
+    if (numpy_version < (1, 12)):
+        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
+
+    if is_nonelike(axis):
+        def impl(arr, axis=None):
+            arr2 = np.ravel(arr)
+            return np.sum(arr2 != 0)
+    else:
+        def impl(arr, axis=None):
+            arr2 = arr.astype(np.bool_)
+            return np.sum(arr2, axis=axis)
+
+    return impl
+
+
 np_delete_handler_isslice = register_jitable(lambda x : x)
 np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
@@ -3095,6 +3185,28 @@ def np_diff_impl(a, n=1):
         return out
 
     return diff_impl
+
+
+@overload(np.array_equal)
+def np_array_equal(a, b):
+
+    if not (type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError('Both arguments to "array_equals" must be array-like')
+
+    accepted = (types.Boolean, types.Number)
+    if isinstance(a, accepted) and isinstance(b, accepted):
+        # special case
+        def impl(a, b):
+            return a == b
+    else:
+        def impl(a, b):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            if a.shape == b.shape:
+                return np.all(a == b)
+            return False
+
+    return impl
 
 
 def validate_1d_array_like(func_name, seq):
@@ -3662,10 +3774,6 @@ def np_convolve(a, v):
     return impl
 
 
-def _is_nonelike(ty):
-    return (ty is None) or isinstance(ty, types.NoneType)
-
-
 @overload(np.asarray)
 def np_asarray(a, dtype=None):
 
@@ -3676,7 +3784,7 @@ def np_asarray(a, dtype=None):
 
     impl = None
     if isinstance(a, types.Array):
-        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+        if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
                 return a
         else:
@@ -3686,14 +3794,14 @@ def np_asarray(a, dtype=None):
         # Nested lists cannot be unpacked, therefore only single lists are
         # permitted and these conform to Sequence and can be unpacked along on
         # the same path as Tuple.
-        if _is_nonelike(dtype):
+        if is_nonelike(dtype):
             def impl(a, dtype=None):
                 return np.array(a)
         else:
             def impl(a, dtype=None):
                 return np.array(a, dtype)
     elif isinstance(a, (types.Number, types.Boolean)):
-        dt_conv = a if _is_nonelike(dtype) else dtype
+        dt_conv = a if is_nonelike(dtype) else dtype
         ty = as_dtype(dt_conv)
 
         def impl(a, dtype=None):
@@ -3948,3 +4056,68 @@ def np_kaiser(M, beta):
         return _i0n(n, alpha, beta)
 
     return np_kaiser_impl
+
+
+@register_jitable
+def _cross_operation(a, b, out):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        if x.shape[-1] == 3:
+            x2 = x[..., 2]
+        else:
+            x2 = np.multiply(x.dtype.type(0), x0)
+        return x0, x1, x2
+
+    a0, a1, a2 = _cross_preprocessing(a)
+    b0, b1, b2 = _cross_preprocessing(b)
+
+    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+    out[..., 0] = cp0
+    out[..., 1] = cp1
+    out[..., 2] = cp2
+
+
+@generated_jit
+def _cross_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            cp = np.empty((3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    else:
+        def impl(a, b):
+            shape = np.add(a[..., 0], b[..., 0]).shape
+            cp = np.empty(shape + (3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    return impl
+
+
+@overload(np.cross)
+def np_cross(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+            raise ValueError((
+                "incompatible dimensions for cross product\n"
+                "(dimension must be 2 or 3)"
+            ))
+
+        if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+            return _cross_impl(a_, b_)
+        else:
+            raise ValueError((
+                "Dimensions for both inputs is 2 "
+                "(currently not supported)."
+            ))
+    return impl

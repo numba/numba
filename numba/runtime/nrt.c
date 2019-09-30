@@ -443,3 +443,30 @@ void nrt_debug_print(char *fmt, ...) {
    vfprintf(stderr, fmt, args);
    va_end(args);
 }
+
+
+static
+void nrt_manage_memory_dtor(void *data, size_t size, void *info) {
+    NRT_managed_dtor* dtor = (NRT_managed_dtor*)info;
+    dtor(data);
+}
+
+static
+NRT_MemInfo* nrt_manage_memory(void *data, NRT_managed_dtor dtor) {
+    return NRT_MemInfo_new(data, 0, nrt_manage_memory_dtor, dtor);
+}
+
+
+static const
+NRT_api_functions nrt_functions_table = {
+    NRT_MemInfo_alloc,
+    nrt_manage_memory,
+    NRT_MemInfo_acquire,
+    NRT_MemInfo_release,
+    NRT_MemInfo_data
+};
+
+
+const NRT_api_functions* NRT_get_api(void) {
+    return &nrt_functions_table;
+}
