@@ -85,6 +85,7 @@ class BaseFunction(Callable):
     """
 
     def __init__(self, template):
+
         if isinstance(template, (list, tuple)):
             self.templates = tuple(template)
             keys = set(temp.key for temp in self.templates)

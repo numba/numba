@@ -210,13 +210,26 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
-* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument. 
-  ``axis`` only supports ``integer`` values)
+* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` and/or ``dtype``
+  arguments.)
 
-  * If the ``axis`` argument is a compile-time constant, all valid values are supported.
+  * ``axis`` only supports ``integer`` values.
+  * If the ``axis`` argument is a compile-time constant, all valid values
+    are supported.
     An out-of-range value will result in a ``LoweringError`` at compile-time.
-  * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
+  * If the ``axis`` argument is not a compile-time constant, only values
+    from 0 to 3 are supported.
     An out-of-range value will result in a runtime exception.
+  * All numeric ``dtypes`` are supported in the ``dtype`` parameter.
+    ``timedelta`` arrays can be used as input arrays but ``timedelta`` is not
+    supported as ``dtype`` parameter.
+  * When a ``dtype`` is given, it determines the type of the internal
+    accumulator. When it is not, the selection is made automatically based on
+    the input array's ``dtype``, mostly following the same rules as NumPy.
+    However, on 64-bit Windows, Numba uses a 64-bit accumulator for integer
+    inputs (``int64`` for ``int32`` inputs and ``uint64`` for ``uint32``
+    inputs), while NumPy would use a 32-bit accumulator in those cases.
+
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
