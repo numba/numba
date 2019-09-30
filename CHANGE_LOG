@@ -1,3 +1,168 @@
+Version 0.46.0
+--------------
+
+This release significantly reworked one of the main parts of Numba, the compiler
+pipeline, to make it more extensible and easier to use. The purpose of this was
+to continue enhancing Numba's ability for use as a compiler toolkit. In a
+similar vein, Numba now has an extension registration mechanism to allow other
+Numba-using projects to automatically have their ``@jit`` decorated functions
+discovered. There were also a number of other related compiler toolkit
+enhancement added along with some more NumPy features and a lot of bug fixes.
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Aaron Meurer fixed some Python issues in the code base in #4345 and #4341.
+* Ashwin Srinath fixed a CUDA performance bug via #4576.
+* Ethan Pronovost added support for triangular indices functions in #4601 (the
+  NumPy functions ``tril_indices``, ``tril_indices_from``, ``triu_indices``, and
+  ``triu_indices_from``).
+* Gerald Dalley fixed a tear down race occurring in Python 2.
+* Gregory R. Lee fixed the use of deprecated ``inspect.getargspec``.
+* Guilherme Leobas contributed five PRs, adding support for ``np.append`` and
+  ``np.count_nonzero`` in #4518 and #4386. The typed List was fixed to accept
+  unsigned integers in #4510. #4463 made a fix to NamedTuple internals and #4397
+  updated the docs for ``np.sum``.
+* James Bourbeau added a new feature to permit the automatic application of the
+  `jit` decorator to a whole module in #4331. Also some small fixes to the docs
+  and the code base were made in #4447 and #4433, and a fix to inplace array
+  operation in #4228.
+* Jim Crist fixed a bug in the rendering of patched errors in #4464.
+* Leo Fang updated the CUDA Array Interface contract in #4609.
+* Pearu Peterson added support for Unicode based NumPy arrays in #4425.
+* Peter Andreas Entschev fixed a CUDA concurrency bug in #4581.
+* Lucio Fernandez-Arjona extended Numba's ``np.sum`` support to now accept the
+  ``dtype`` kwarg in #4472.
+* Pedro A. Morales Maries added support for ``np.cross`` in #4128 and also added
+  the necessary extension ``numba.numpy_extensions.cross2d`` in #4595.
+* David Hoese, Eric Firing, Joshua Adelman, and Juan Nunez-Iglesias all made
+  documentation fixes in #4565, #4482, #4455, #4375 respectively.
+* Vyacheslav Smirnov and Rujal Desai enabled support for ``count()`` on unicode
+  strings in #4606.
+
+General Enhancements:
+
+* PR #4113: Add rewrite for semantic constants.
+* PR #4128: Add np.cross support
+* PR #4162: Make IR comparable and legalize it.
+* PR #4208: R&D inlining, jitted and overloaded.
+* PR #4331: Automatic JIT of called functions
+* PR #4353: Inspection tool to check what numba supports
+* PR #4386: Implement np.count_nonzero
+* PR #4425: Unicode array support
+* PR #4427: Entrypoints for numba extensions
+* PR #4467: Literal dispatch
+* PR #4472: Allow dtype input argument in np.sum
+* PR #4513: New compiler.
+* PR #4518: add support for np.append
+* PR #4554: Refactor NRT C-API
+* PR #4556: 0.46 scheduled deprecations
+* PR #4567: Add env var to disable performance warnings.
+* PR #4568: add np.array_equal support
+* PR #4595: Implement numba.cross2d
+* PR #4601: Add triangular indices functions
+* PR #4606: Enable support for count() method for unicode string
+
+Fixes:
+
+* PR #4228: Fix inplace operator error for arrays
+* PR #4282: Detect and raise unsupported on generator expressions
+* PR #4305: Don't allow the allocation of mutable objects written into a
+  container to be hoisted.
+* PR #4311: Avoid deprecated use of inspect.getargspec
+* PR #4328:  Replace GC macro with function call 
+* PR #4330: Loosen up typed container casting checks
+* PR #4341: Fix some coding lines at the top of some files (utf8 -> utf-8)
+* PR #4345: Replace "import *" with explicit imports in numba/types
+* PR #4346: Fix incorrect alg in isupper for ascii strings.
+* PR #4349: test using jitclass in typed-list
+* PR #4361: Add allocation hoisting info to LICM section at diagnostic L4
+* PR #4366: Offset search box to avoid wrapping on some pages with Safari.
+  Fixes #4365.
+* PR #4372: Replace all "except BaseException" with "except Exception".
+* PR #4407: Restore the "free" conda channel for NumPy 1.10 support.
+* PR #4408: Add lowering for constant bytes.
+* PR #4409: Add exception chaining for better error context
+* PR #4411: Name of type should not contain user facing description for debug.
+* PR #4412: Fix #4387. Limit the number of return types for recursive functions
+* PR #4426: Fixed two module teardown races in py2.
+* PR #4431: Fix and test numpy.random.random_sample(n) for np117
+* PR #4463: NamedTuple - Raises an error on non-iterable elements
+* PR #4464: Add a newline in patched errors
+* PR #4474: Fix liveness for remove dead of parfors (and other IR extensions)
+* PR #4510: Make List.__getitem__ accept unsigned parameters
+* PR #4512: Raise specific error at typing time for iteration on >1D array.
+* PR #4532: Fix static_getitem with Literal type as index
+* PR #4547: Update to inliner cost model information.
+* PR #4557: Use specific random number seed when generating arbitrary test data
+* PR #4559: Adjust test timeouts
+* PR #4564: Skip unicode array tests on ppc64le that trigger an LLVM bug
+* PR #4621: Fix packaging issue due to missing numba/cext
+* PR #4623: Fix issue 4520 due to storage model mismatch
+* PR #4644: Updates for llvmlite 0.30.0
+
+CUDA Enhancements/Fixes:
+
+* PR #4410: Fix #4111. cudasim mishandling recarray
+* PR #4576: Replace use of `np.prod` with `functools.reduce` for computing size
+  from shape
+* PR #4581: Prevent taking the GIL in ForAll
+* PR #4592: Fix #4589.  Just pass NULL for b2d_func for constant dynamic
+  sharedmem
+* PR #4609: Update CUDA Array Interface & Enforce Numba compliance
+* PR #4619: Implement math.{degrees, radians} for the CUDA target.
+
+Documentation Updates:
+
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs.  Closes #4316
+* PR #4375: Add docstrings to inspect methods
+* PR #4388: Update Python 2.7 EOL statement
+* PR #4397: Add note about np.sum
+* PR #4447: Minor parallel performance tips edits
+* PR #4455: Clarify docs for typed dict with regard to arrays
+* PR #4482: Fix example in guvectorize docstring.
+* PR #4541: fix two typos in architecture.rst
+* PR #4548: Document numba.extending.intrinsic and inlining.
+* PR #4565: Fix typo in jit-compilation docs
+* PR #4607: add dependency list to docs
+* PR #4614: Add documentation for implementing new compiler passes.
+
+CI Updates:
+
+* PR #4415: Make 32bit incremental builds on linux not use free channel
+* PR #4433: Removes stale azure comment
+* PR #4493: Fix Overload Inliner wrt CUDA Intrinsics
+* PR #4593: Enable Azure CI batching
+
+Contributors:
+
+* Aaron Meurer
+* Ashwin Srinath
+* David Hoese
+* Ehsan Totoni (core dev)
+* Eric Firing
+* Ethan Pronovost
+* Gerald Dalley
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Jim Crist
+* Joshua Adelman
+* Juan Nunez-Iglesias
+* Leo Fang
+* Lucio Fernandez-Arjona
+* Pearu Peterson
+* Pedro A. Morales Marie
+* Peter Andreas Entschev
+* Rujal Desai
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+* Vyacheslav Smirnov
+
+
 Version 0.45.1
 --------------
 
