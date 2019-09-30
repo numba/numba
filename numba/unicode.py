@@ -1384,7 +1384,7 @@ def unicode_title(data):
     """
     str.title()
     https://docs.python.org/3/library/stdtypes.html#str.title
-    https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10023-L10069
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
     """
     def impl(data):
         length = len(data)
