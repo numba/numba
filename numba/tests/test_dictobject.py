@@ -1229,6 +1229,7 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Value is correctly updated
         self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
+    @skip_py2
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
         # check for storage model mismatch in refcount ops generation

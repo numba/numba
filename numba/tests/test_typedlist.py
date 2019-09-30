@@ -743,6 +743,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
 
+    @skip_py2
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
         # check for storage model mismatch in refcount ops generation
