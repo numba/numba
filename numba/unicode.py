@@ -1380,7 +1380,8 @@ def _do_title(data, length, res, maxchars):
 @overload_method(types.UnicodeType, 'title')
 def unicode_title(data):
     """
-    Implements .title()
+    str.title()
+    https://docs.python.org/3/library/stdtypes.html#str.title
     https://github.com/python/cpython/blob/3.6/Objects/unicodeobject.c#L10023-L10069
     """
     def impl(data):
