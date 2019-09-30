@@ -197,7 +197,7 @@ class BaseContext(object):
     DIBuilder = debuginfo.DIBuilder
 
     # Bound checking
-    enable_boundcheck = False
+    enable_boundscheck = False
 
     # NRT
     enable_nrt = False
