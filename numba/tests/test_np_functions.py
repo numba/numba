@@ -3138,6 +3138,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+        # test non-array-like input
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                set([1, 2]),
+                set([4, 5])
+            )
+        self.assertIn(
+            'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
