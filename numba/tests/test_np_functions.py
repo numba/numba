@@ -3029,7 +3029,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(3)
             )
         self.assertIn(
-            'incompatible dimensions',
+            'Incompatible dimensions for cross product',
             str(raises.exception)
         )
 
@@ -3051,7 +3051,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(6)[::-1].reshape((2, 3))
             )
         self.assertIn(
-            'incompatible dimensions',
+            'Incompatible dimensions for cross product',
             str(raises.exception)
         )
 
@@ -3123,7 +3123,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((4, 5, 6))
             )
         self.assertIn(
-            'incompatible dimensions',
+            'Incompatible dimensions for 2D cross product',
             str(raises.exception)
         )
 
@@ -3134,7 +3134,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(6)[::-1].reshape((2, 3))
             )
         self.assertIn(
-            'incompatible dimensions',
+            'Incompatible dimensions for 2D cross product',
             str(raises.exception)
         )
 

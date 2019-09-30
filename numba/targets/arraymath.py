@@ -4021,7 +4021,7 @@ def np_cross(a, b):
         b_ = np.asarray(b)
         if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
             raise ValueError((
-                "incompatible dimensions for cross product\n"
+                "Incompatible dimensions for cross product\n"
                 "(dimension must be 2 or 3)"
             ))
 
