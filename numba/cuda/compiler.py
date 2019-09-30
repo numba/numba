@@ -661,13 +661,7 @@ class CUDAKernel(CUDAKernelBase):
                 retr=retr)
 
         if isinstance(ty, types.Array):
-            if isinstance(ty, types.SmartArrayType):
-                devary = val.get('gpu')
-                retr.append(lambda: val.mark_changed('gpu'))
-                outer_parent = ctypes.c_void_p(0)
-                kernelargs.append(outer_parent)
-            else:
-                devary = wrap_arg(val).to_device(retr, stream)
+            devary = wrap_arg(val).to_device(retr, stream)
 
             c_intp = ctypes.c_ssize_t
 

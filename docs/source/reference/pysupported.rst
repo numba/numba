@@ -404,8 +404,10 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
-dict
-----
+.. _feature-typed-dict:
+
+Typed Dict
+''''''''''
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change

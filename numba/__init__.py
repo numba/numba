@@ -26,8 +26,6 @@ from .errors import *
 # Re-export all type names
 from .types import *
 
-from .smartarray import SmartArray
-
 # Re-export decorators
 from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
                          jit_module)
