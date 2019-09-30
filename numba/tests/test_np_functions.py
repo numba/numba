@@ -5,7 +5,6 @@ import itertools
 import math
 import platform
 from functools import partial
-import inspect
 
 import numpy as np
 
@@ -15,6 +14,7 @@ from numba import jit, njit, typeof, types
 from numba.numpy_support import version as np_version
 from numba.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
+from numba.utils import pysignature
 from .support import TestCase, CompilationCache, MemoryLeakMixin
 from .matmul_usecase import needs_blas
 
@@ -1236,7 +1236,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def _triangular_indices_exceptions(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-        parameters = inspect.signature(pyfunc).parameters
+        parameters = pysignature(pyfunc).parameters
 
         with self.assertTypingError() as raises:
             cfunc(1.0)
