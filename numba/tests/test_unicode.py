@@ -464,6 +464,7 @@ class TestUnicode(BaseTest):
 
     def test_count_optional_arg_type_check(self):
         pyfunc = count_with_start_end_usecase
+
         def try_compile_bad_optional(*args):
             bad_sig = types.int64(types.unicode_type,
                                   types.unicode_type,
