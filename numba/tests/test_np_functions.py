@@ -3066,6 +3066,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+        # test non-array-like input
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                set([1, 2, 3]),
+                set([4, 5, 6])
+            )
+        self.assertIn(
+            'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
     def test_cross2d(self):
         pyfunc = np_cross
         cfunc = cross2d
