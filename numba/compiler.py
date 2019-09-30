@@ -229,6 +229,10 @@ class _EarlyPipelineCompletion(Exception):
 
 
 class StateDict(dict):
+    """
+    A dictionary that has an overloaded getattr and setattr to permit getting
+    and setting key/values through the use of attributes.
+    """
 
     def __getattr__(self, attr):
         try:
