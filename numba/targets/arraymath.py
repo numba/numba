@@ -4066,7 +4066,7 @@ def cross2d(a, b):
         b_ = np.asarray(b)
         if a_.shape[-1] != 2 or b_.shape[-1] != 2:
             raise ValueError((
-                "incompatible dimensions for 2D cross product\n"
+                "Incompatible dimensions for 2D cross product\n"
                 "(dimension must be 2 for both inputs)"
             ))
         return _cross2d_operation(a_, b_)
