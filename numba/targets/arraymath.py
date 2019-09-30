@@ -3187,6 +3187,28 @@ def np_diff_impl(a, n=1):
     return diff_impl
 
 
+@overload(np.array_equal)
+def np_array_equal(a, b):
+
+    if not (type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError('Both arguments to "array_equals" must be array-like')
+
+    accepted = (types.Boolean, types.Number)
+    if isinstance(a, accepted) and isinstance(b, accepted):
+        # special case
+        def impl(a, b):
+            return a == b
+    else:
+        def impl(a, b):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            if a.shape == b.shape:
+                return np.all(a == b)
+            return False
+
+    return impl
+
+
 def validate_1d_array_like(func_name, seq):
     if isinstance(seq, types.Array):
         if seq.ndim != 1:
