@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import operator
 
-from .. import types, utils
+from .. import types, utils, config
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
                         Registry, signature)
 
@@ -378,9 +378,18 @@ class Numpy_method_redirection(AbstractTemplate):
         pysig = None
         if kws:
             if self.method_name == 'sum':
-                def sum_stub(arr, axis):
-                    pass
-                pysig = utils.pysignature(sum_stub)
+                if 'axis' in kws and 'dtype' not in kws:
+                    def sum_stub(arr, axis):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' not in kws:
+                    def sum_stub(arr, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' in kws:
+                    def sum_stub(arr, axis, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
             elif self.method_name == 'argsort':
                 def argsort_stub(arr, kind='quicksort'):
                     pass
@@ -961,7 +970,8 @@ class MatMulTyperMixin(object):
         else:
             all_args = (a, b)
 
-        if not all(x.layout in 'CF' for x in (a, b)):
+        if not (config.DISABLE_PERFORMANCE_WARNINGS or
+                all(x.layout in 'CF' for x in (a, b))):
             msg = ("%s is faster on contiguous arrays, called on %s" %
                    (self.func_name, (a, b)))
             warnings.warn(NumbaPerformanceWarning(msg))

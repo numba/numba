@@ -16,6 +16,7 @@ User Manual
    parallel.rst
    stencil.rst
    withobjmode.rst
+   jit-module.rst
    performance-tips.rst
    threading-layer.rst
    cli.rst

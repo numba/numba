@@ -2,15 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 
-import numpy as np
-
 from llvmlite import ir
 
-from .abstract import *
-from .common import *
+from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
+from .common import Buffer, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from .. import utils
-
+from .misc import UnicodeType
+from .containers import Bytes
 
 class CharSeq(Type):
     """
@@ -27,6 +26,10 @@ class CharSeq(Type):
     def key(self):
         return self.count
 
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, Bytes):
+            return Conversion.safe
+
 
 class UnicodeCharSeq(Type):
     """
@@ -42,6 +45,13 @@ class UnicodeCharSeq(Type):
     @property
     def key(self):
         return self.count
+
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            # Assuming that unicode_type itemsize is not greater than
+            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
+            # on.
+            return Conversion.safe
 
 
 _RecordField = collections.namedtuple(
@@ -455,26 +465,6 @@ class Array(Buffer):
 
     def is_precise(self):
         return self.dtype.is_precise()
-
-
-class SmartArrayType(Array):
-
-    def __init__(self, dtype, ndim, layout, pyclass):
-        self.pyclass = pyclass
-        super(SmartArrayType, self).__init__(dtype, ndim, layout, name='numba_array')
-
-    @property
-    def as_array(self):
-        return Array(self.dtype, self.ndim, self.layout)
-
-    def copy(self, dtype=None, ndim=None, layout=None):
-        if dtype is None:
-            dtype = self.dtype
-        if ndim is None:
-            ndim = self.ndim
-        if layout is None:
-            layout = self.layout
-        return type(self)(dtype, ndim, layout, self.pyclass)
 
 
 class ArrayCTypes(Type):

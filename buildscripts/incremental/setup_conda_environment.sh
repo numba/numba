@@ -8,6 +8,11 @@ conda config --write-default
 conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
+if [[ $(uname) == Linux ]]; then
+    if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
+        conda config --set restore_free_channel true
+    fi
+fi
 conda info
 conda config --show
 
@@ -69,7 +74,7 @@ if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install funcsigs for Python < 3.3
 if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi

@@ -7,6 +7,7 @@ import numpy as np
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
+from ..numpy_support import version as np_version
 
 
 registry = Registry()
@@ -105,6 +106,20 @@ class Random_random(ConcreteRandomTemplate):
         def typer(size=None):
             return self.array_typer(size)()
         return typer
+
+if np_version >= (1, 17):
+    infer_global(
+        np.random.random_sample,
+        typing_key="np.random.random_sample",
+    )(Random_random)
+    infer_global(
+        np.random.sample,
+        typing_key="np.random.sample",
+    )(Random_random)
+    infer_global(
+        np.random.ranf,
+        typing_key="np.random.ranf",
+    )(Random_random)
 
 
 @infer_global(random.randint, typing_key="random.randint")

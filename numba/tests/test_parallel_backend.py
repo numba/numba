@@ -1,4 +1,4 @@
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import
 
 """
@@ -24,6 +24,9 @@ from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
 from numba.six.moves import queue as t_queue
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
 if utils.PYVERSION >= (3, 0):
     import faulthandler
@@ -148,7 +151,7 @@ def chooser(fnlist, **kwargs):
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
-    except BaseException as e:
+    except Exception as e:
         q.put(e)
 
 
@@ -354,8 +357,8 @@ class TestSpecificBackend(TestParallelBackendBase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -457,8 +460,8 @@ class ThreadLayerTestHelper(TestCase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -809,6 +812,48 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
+
+
+@parfors_skip_unsupported
+class TestInitSafetyIssues(TestCase):
+
+    _DEBUG = False
+
+    @linux_only # only linux can leak semaphores
+    @skip_unless_py3 # need multiprocessing.get_context to obtain spawn on linux
+    def test_orphaned_semaphore(self):
+        # sys path injection and separate usecase module to make sure everything
+        # is importable by children of multiprocessing
+
+        def run_cmd(cmdline):
+            popen = subprocess.Popen(cmdline,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,)
+            # finish in _TEST_TIMEOUT seconds or kill it
+            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
+            try:
+                timeout.start()
+                out, err = popen.communicate()
+                if popen.returncode != 0:
+                    raise AssertionError(
+                        "process failed with code %s: stderr follows\n%s\n" %
+                        (popen.returncode, err.decode()))
+            finally:
+                timeout.cancel()
+            return out.decode(), err.decode()
+
+        test_file = os.path.join(os.path.dirname(__file__),
+                                 "orphaned_semaphore_usecase.py")
+
+        cmdline = [sys.executable, test_file]
+        out, err = run_cmd(cmdline)
+
+        # assert no semaphore leaks reported on stderr
+        self.assertNotIn("leaked semaphore", err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
 
 
 if __name__ == '__main__':

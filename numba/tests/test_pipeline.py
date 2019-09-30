@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from numba.compiler import Pipeline
+from numba.compiler import Compiler
 from numba import jit, generated_jit, types, objmode
 from numba.ir import FunctionIR
 from .support import TestCase
@@ -11,7 +11,7 @@ class TestCustomPipeline(TestCase):
         super(TestCustomPipeline, self).setUp()
 
         # Define custom pipeline class
-        class CustomPipeline(Pipeline):
+        class CustomPipeline(Compiler):
             custom_pipeline_cache = []
 
             def compile_extra(self, func):

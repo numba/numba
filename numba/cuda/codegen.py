@@ -36,7 +36,7 @@ class CUDACodeLibrary(CodeLibrary):
                 gv.name = gv.name.replace('.', '_')
 
     def get_asm_str(self):
-        # Return nothing: we can only dump assembler code when it is later
+        # Return nothing: we can only dump assembly code when it is later
         # generated (in numba.cuda.compiler).
         return None
 

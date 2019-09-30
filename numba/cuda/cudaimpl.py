@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 import operator
+import math
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
@@ -481,6 +482,22 @@ def ptx_round(context, builder, sig, args):
     return builder.call(fn, [
         context.cast(builder, args[0], sig.args[0], types.double),
     ])
+
+
+def gen_deg_rad(const):
+    def impl(context, builder, sig, args):
+        argty, = sig.args
+        factor = context.get_constant(argty, const)
+        return builder.fmul(factor, args[0])
+    return impl
+
+
+_deg2rad = math.pi / 180.
+_rad2deg = 180. / math.pi
+lower(math.radians, types.f4)(gen_deg_rad(_deg2rad))
+lower(math.radians, types.f8)(gen_deg_rad(_deg2rad))
+lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
+lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
 
 
 def _normalize_indices(context, builder, indty, inds):

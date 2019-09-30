@@ -20,10 +20,11 @@ import contextlib
 import itertools
 from pprint import pprint
 from collections import OrderedDict, defaultdict
+from functools import reduce
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
-                     termcolor, UnsupportedError)
+                     termcolor, UnsupportedError, ForceLiteralArg)
 from .funcdesc import qualifying_prefix
 
 
@@ -145,22 +146,25 @@ class ConstraintNetwork(object):
                                                    lineno=loc.line):
                 try:
                     constraint(typeinfer)
+                except ForceLiteralArg as e:
+                    errors.append(e)
                 except TypingError as e:
                     _logger.debug("captured error", exc_info=e)
-                    e = TypingError(str(e),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
+                    new_exc = TypingError(
+                        str(e), loc=constraint.loc,
+                        highlighting=False,
+                    )
+                    errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
                     _logger.debug("captured error", exc_info=e)
                     msg = ("Internal error at {con}.\n"
                            "{err}\nEnable logging at debug level for details.")
-                    e = TypingError(
+                    new_exc = TypingError(
                         msg.format(con=constraint, err=str(e)),
                         loc=constraint.loc,
                         highlighting=False,
                     )
-                    errors.append(e)
+                    errors.append(utils.chain_exception(new_exc, e))
         return errors
 
 
@@ -477,8 +481,22 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
-        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
-
+        try:
+            sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        except ForceLiteralArg as e:
+            folded = e.fold_arguments(self.args, self.kws)
+            requested = set()
+            unsatisified = set()
+            for idx in e.requested_args:
+                maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
+                if isinstance(maybe_arg, ir.Arg):
+                    requested.add(maybe_arg.index)
+                else:
+                    unsatisified.add(idx)
+            if unsatisified:
+                raise TypingError("Cannot request literal type.", loc=self.loc)
+            elif requested:
+                raise ForceLiteralArg(requested, loc=self.loc)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
@@ -861,6 +879,9 @@ class TypeInferer(object):
                 rets.append(inst.value)
         return rets
 
+    def get_argument_types(self):
+        return [self.typevars[k].getone() for k in self.arg_names.values()]
+
     def seed_argument(self, name, index, typ):
         name = self._mangle_arg_name(name)
         self.seed_type(name, typ)
@@ -924,7 +945,12 @@ class TypeInferer(object):
             self.debug.propagate_finished()
         if errors:
             if raise_errors:
-                raise errors[0]
+                force_lit_args = [e for e in errors
+                                  if isinstance(e, ForceLiteralArg)]
+                if not force_lit_args:
+                    raise errors[0]
+                else:
+                    raise reduce(operator.or_, force_lit_args)
             else:
                 return errors
 
@@ -1320,6 +1346,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
             sig = typing.signature(return_type, *args)
             sig.pysig = pysig
+            # Keep track of unique return_type
+            frame.add_return_type(return_type)
             return sig
         else:
             # Normal non-recursive call

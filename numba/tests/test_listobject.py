@@ -144,7 +144,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -487,7 +487,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -663,7 +663,7 @@ class TestPop(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "argument for pop must be a signed integer",
+                "argument for pop must be an integer",
                 str(raises.exception),
             )
 
@@ -957,7 +957,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "list insert indices must be signed integers",
+            "list insert indices must be integers",
             str(raises.exception),
         )
 
@@ -1242,7 +1242,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "start argument for index must be a signed integer",
+            "start argument for index must be an integer",
             str(raises.exception),
         )
 
@@ -1257,7 +1257,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "end argument for index must be a signed integer",
+            "end argument for index must be an integer",
             str(raises.exception),
         )
 
@@ -1451,6 +1451,6 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            'cannot safely cast int32 to unicode_type',
+            'Cannot cast int32 to unicode_type',
             str(raises.exception),
         )
