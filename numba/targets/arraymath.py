@@ -2524,7 +2524,7 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
 def np_argwhere(a):
 
     def impl(a):
-        return np.transpose(np.stack(np.nonzero(a), axis=0))
+        return np.transpose(np.vstack(np.nonzero(a)))
 
     return impl
 
