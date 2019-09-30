@@ -1,5 +1,5 @@
 """
-Numpy extensions.
+NumPy extensions.
 """
 
 from numba.targets.arraymath import cross2d
