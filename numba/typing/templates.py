@@ -728,7 +728,9 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
     @classmethod
     def _get_signature(cls, typingctx, fnty, args, kws):
-        return fnty.get_call_type(typingctx, args, kws)
+        sig = fnty.get_call_type(typingctx, args, kws)
+        sig = sig.replace(pysig=utils.pysignature(cls._overload_func))
+        return sig
 
     @classmethod
     def _get_function_type(cls, typingctx, typ):
@@ -772,6 +774,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
                 args = (typ,) + tuple(args)
                 fnty = self._get_function_type(self.context, typ)
                 sig = self._get_signature(self.context, fnty, args, kws)
+                sig = sig.replace(pysig=utils.pysignature(self._overload_func))
                 if sig is not None:
                     return sig.as_method()
 
