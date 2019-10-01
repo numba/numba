@@ -479,6 +479,26 @@ class RefleakTestRunner(runner.TextTestRunner):
     resultclass = RefleakTestResult
 
 
+class DurationLog(object):
+
+    file_name = "duration_log.csv"
+
+    def __init__(self):
+        self.open()
+
+    def open(self):
+        self.duration_log = open(self.file_name, "w+")
+
+    def close(self):
+        if self.duration_log:
+            self.duration_log.flush()
+            self.duration_log.close()
+            self.duration_log = None
+
+    def write_entry(self, test_id, duration):
+        print("{},{}".format(test_id, duration), file=self.duration_log)
+
+
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
@@ -488,7 +508,10 @@ class ParallelTestResult(runner.TextTestResult):
         """
         Add the results from the other *result* to this result.
         """
-        self.stream.write(result.stream.getvalue())
+        try:
+            self.stream.write(result.stream.getvalue())
+        except:
+            pass
         self.stream.flush()
         self.testsRun += result.testsRun
         self.failures.extend(result.failures)
@@ -496,6 +519,25 @@ class ParallelTestResult(runner.TextTestResult):
         self.skipped.extend(result.skipped)
         self.expectedFailures.extend(result.expectedFailures)
         self.unexpectedSuccesses.extend(result.unexpectedSuccesses)
+
+
+class SerialTestResult(runner.TextTestResult):
+    """
+    A TestResult that is able to record how long tests took.
+    """
+
+    def _init(self, duration_log):
+        self.duration_log = duration_log
+        self.test_start_times = {}
+
+    def startTest(self, test):
+        self.test_start_times[test] = time.time()
+
+    def stopTest(self, test):
+        end = time.time()
+        start = self.test_start_times[test]
+        duration = end - start
+        self.duration_log.write_entry(test, duration)
 
 
 class _MinimalResult(object):
@@ -631,28 +673,13 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
-    duration_log_file_name = "duration_log.csv"
 
     def __init__(self, runner_cls, nprocs, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.runner_args = kwargs
-        self.duration_log = None
-        self._open_duration_log()
-
-    def _open_duration_log(self):
-        self.duration_log = open(self.duration_log_file_name, "w+")
-
-    def _close_duration_log(self):
-        if self.duration_log:
-            self.duration_log.flush()
-            self.duration_log.close()
-            self.duration_log = None
-
-    def _write_duration_log_entry(self, test_id, duration):
-        print("{},{}".format(test_id, duration), file=self.duration_log)
-
+        self.duration_log = DurationLog()
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
@@ -687,14 +714,21 @@ class ParallelTestRunner(runner.TextTestRunner):
         if not result.shouldStop:
             t = time.time()
             stests = SerialSuite(self._stests)
-            stests.run(result)
+            sresult = SerialTestResult(
+                result.stream,
+                result.descriptions,
+                1
+            )
+            sresult._init(self.duration_log)
+            stests.run(sresult)
             serial_time = time.time() - t
+            result.add_results(sresult)
             print()
             print("Total time parallel tests: '{}'".format(parallel_time))
             print("Total time serial tests: '{}'".format(serial_time))
-            self._close_duration_log()
+            self.duration_log.close()
             print("Duration log has been written to: '{}'."
-                  .format(self.duration_log_file_name))
+                  .format(self.duration_log.file_name))
             return result
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
@@ -715,8 +749,8 @@ class ParallelTestRunner(runner.TextTestRunner):
             else:
                 result.add_results(child_result)
                 remaining_ids.discard(child_result.test_id)
-                self._write_duration_log_entry(child_result.test_id,
-                                               child_result.duration)
+                self.duration_log.write_entry(child_result.test_id,
+                                              child_result.duration)
                 if child_result.shouldStop:
                     result.shouldStop = True
                     return
