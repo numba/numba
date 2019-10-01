@@ -1286,6 +1286,31 @@ def unicode_upper(a):
     return impl
 
 
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(s):
+    """
+    Implements UnicodeType.istitle()
+    """
+
+    def impl(s):
+        str_has_abc = False
+        prev_char_is_abc = False
+        for char in s:
+            if _PyUnicode_IsUppercase(char):
+                if prev_char_is_abc:
+                    return False
+                str_has_abc = True
+                prev_char_is_abc = True
+            elif _PyUnicode_IsLowercase(char):
+                if not prev_char_is_abc:
+                    return False
+            else:
+                prev_char_is_abc = False
+
+        return str_has_abc
+    return impl
+
+
 @lower_builtin('getiter', types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args
