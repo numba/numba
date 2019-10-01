@@ -1034,31 +1034,33 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # Just check for the "out of bounds" phrase in it.
         self.assertIn("out of bounds", str(raises.exception))
 
-    def test_mean(self):
+    def test_mean_axis(self):
+        """   tests np.mean with and without axis parameter
+        """
         pyfunc = array_mean
         cfunc = jit(nopython=True)(pyfunc)
-        # OK
-        a = np.ones((7, 6, 5, 4, 3))
-        self.assertPreciseEqual(pyfunc(a), cfunc(a))
-
-    def test_mean_axis(self):
-        pyfunc = array_mean_axis
-        cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
-        all_test_arrays = [np.ones((7, 6, 5, 4, 3), arr_dtype) for arr_dtype in all_dtypes]
-        a = np.ones((7, 6, 5, 4, 3))
+        pyfunc_axis = array_mean_axis
+        cfunc_axis = jit(nopython=True)(pyfunc_axis)
+        # a complete list
+        # all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
+        #               np.uint64, np.complex64, np.complex128]
+        # a reduced list to save test execution time
+        all_dtypes = [np.float32, np.int32, np.uint32, np.complex64]
+        all_test_arrays = [np.ones((7, 6, 5, 4, 3), arr_dtype) for arr_dtype
+                           in all_dtypes]
 
         for arr in all_test_arrays:
-            with self.subTest():
-                self.assertPreciseEqual(pyfunc(arr, 0), cfunc(arr, 0))
-            with self.subTest():
+            with self.subTest("no axis - dtype: {}".format(arr.dtype)):
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+            with self.subTest("axis 0 as integer literal - dtype: {}".format(arr.dtype)):
+                self.assertPreciseEqual(pyfunc_axis(arr, 0), cfunc_axis(arr, 0))
+            with self.subTest("axis 1 as integer variable - dtype: {}".format(arr.dtype)):
                 axis = 1
-                self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
-            with self.subTest():
+                self.assertPreciseEqual(pyfunc_axis(arr, axis), cfunc_axis(arr, axis))
+            with self.subTest("axis 2  as integer variable - dtype: {}".format(arr.dtype)):
                 axis = 2
-                self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis))
-            with self.subTest():
+                self.assertPreciseEqual(pyfunc_axis(arr, axis), cfunc_axis(arr, axis))
+            with self.subTest("axis -1 as integer literal- dtype: {}".format(arr.dtype)):
                 # axis -1 is only supported for IntegerLiterals
                 pyfunc2 = lambda x: x.mean(axis=-1)
                 cfunc2 = jit(nopython=True)(pyfunc2)

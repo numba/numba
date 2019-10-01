@@ -182,7 +182,6 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`
-* :meth:`~numpy.ndarray.mean`
 * :meth:`~numpy.ndarray.min`
 * :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
@@ -287,6 +286,14 @@ Reductions
 The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.mean` (with or without the ``axis`` argument)
+
+  * ``axis`` only supports ``integer`` values.
+  * If the ``axis`` argument is a compile-time constant, all valid values
+    are supported.
+    An out-of-range value will result in a ``LoweringError`` at compile-time.
+  * If the ``axis`` argument is not a compile-time constant, only values
+    from 0 to 3 are supported.
 * :func:`numpy.median` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument, requires NumPy >= 1.12))
 * :func:`numpy.nancumsum` (only the first argument, requires NumPy >= 1.12))
