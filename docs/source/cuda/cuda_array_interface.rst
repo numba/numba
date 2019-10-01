@@ -20,8 +20,8 @@ Python Interface Specification
 
 .. note:: Experimental feature.  Specification may change.
 
-The ``__cuda_array_interface__`` attribute is a dictionary-like object that
-must contain the following entries:
+The ``__cuda_array_interface__`` attribute returns a dictionary that must
+contain the following entries:
 
 - **shape**: ``(integer, ...)``
 
@@ -34,8 +34,9 @@ must contain the following entries:
 
 - **data**: `(integer, boolean)`
 
-    The **data** is a 2-tuple.  The first element data pointer
+    The **data** is a 2-tuple.  The first element is the data pointer
     as a Python `int` (or `long`).  The data must be device-accessible.
+    For zero-size arrays, use `0` here.
     The second element is the read-only flag as a Python `bool`.
 
     Because the user of the interface may or may not be in the same context,
@@ -47,16 +48,17 @@ must contain the following entries:
 - **version**: `integer`
 
     An integer for the version of the interface being exported.
-    The current version is *1*.
+    The current version is *2*.
 
 
 The following are optional entries:
 
 - **strides**: ``None`` or ``(integer, ...)``
 
-    A tuple of `int` (or `long`) representing the number of bytes to skip to
-    access the next element at each dimension. If it is ``None``, the array is
-    assumed to be in C-contiguous layout.
+    If **strides** is not given, or it is ``None``, the array is in
+    C-contiguous layout. Otherwise, a tuple of `int` (or `long`) is explicitly
+    given for representing the number of bytes to skip to access the next
+    element at each dimension.
 
 - **descr**
 
@@ -92,5 +94,13 @@ include:
 Differences with CUDA Array Interface (Version 0) 
 -------------------------------------------------
 
-The version 0 CUDA Array Interface did not have the optional **mask**
+Version 0 of the CUDA Array Interface did not have the optional **mask**
 attribute to support masked arrays.
+
+
+Differences with CUDA Array Interface (Version 1)
+-------------------------------------------------
+
+Versions 0 and 1 of the CUDA Array Interface neither clarified the
+**strides** attribute for C-contiguous arrays nor specified the treatment for
+zero-size arrays.
