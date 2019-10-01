@@ -785,18 +785,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(np.array([]))
 
     def test_sum(self):
-        """
-        test sum - basic
-        """
-        pyfunc = array_sum
-        cfunc = jit(nopython=True)(pyfunc)
-        # OK
-        a = np.ones((7, 6, 5, 4, 3))
-        self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # OK
-        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
-
-    def test_sum2(self):
         """ test sum over a whole range of dtypes, no axis or dtype parameter
         """
         pyfunc = array_sum
@@ -814,17 +802,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
                     self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
-    def test_sum_axis_kws(self):
-        """ test sum with axis parameter - basic  """
-        pyfunc = array_sum_axis_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        # OK
-        a = np.ones((7, 6, 5, 4, 3))
-        self.assertPreciseEqual(pyfunc(a, axis=1), cfunc(a, axis=1))
-        # OK
-        self.assertPreciseEqual(pyfunc(a, axis=2), cfunc(a, axis=2))
-
-    def test_sum_axis_kws2(self):
+    def test_sum_axis_kws1(self):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
@@ -848,7 +826,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         self.assertPreciseEqual(pyfunc(arr, axis=axis),
                                                 cfunc(arr, axis=axis))
 
-    def test_sum_axis_kws3(self):
+    def test_sum_axis_kws2(self):
         """  testing uint32 and int32 separately
 
         uint32 and int32 must be tested separately because Numpy's current
