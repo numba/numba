@@ -496,8 +496,9 @@ class DurationLog(object):
             self.duration_log.close()
             self.duration_log = None
 
-    def write_entry(self, test_id, duration):
-        print("{},{}".format(test_id, duration), file=self.duration_log)
+    def write_entry(self, test_id, type_,duration):
+        print("{},{},{}".format(test_id, type_, duration),
+              file=self.duration_log)
 
 
 class ParallelTestResult(runner.TextTestResult):
@@ -538,7 +539,7 @@ class SerialTestResult(runner.TextTestResult):
         end = time.time()
         start = self.test_start_times[test]
         duration = end - start
-        self.duration_log.write_entry(test, duration)
+        self.duration_log.write_entry(test, "serial", duration)
 
 
 class _MinimalResult(object):
@@ -751,6 +752,7 @@ class ParallelTestRunner(runner.TextTestRunner):
                 result.add_results(child_result)
                 remaining_ids.discard(child_result.test_id)
                 self.duration_log.write_entry(child_result.test_id,
+                                              "parallel",
                                               child_result.duration)
                 if child_result.shouldStop:
                     result.shouldStop = True
