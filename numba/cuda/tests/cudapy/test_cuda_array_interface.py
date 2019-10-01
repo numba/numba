@@ -220,6 +220,31 @@ class TestCudaArrayInterface(CUDATestCase):
         expected_msg = 'Masked arrays are not supported'
         self.assertIn(expected_msg, str(raises.exception))
 
+    def test_zero_size_array(self):
+        # for #4175
+        c_arr = cuda.device_array(0)
+        self.assertEqual(c_arr.__cuda_array_interface__['data'][0], 0)
+
+        @cuda.jit
+        def add_one(arr):
+            x = cuda.grid(1)
+            N = arr.shape[0]
+            if x < N:
+                arr[x] += 1
+
+        d_arr = MyArray(c_arr)
+        add_one[1, 10](d_arr)  # this should pass
+
+    def test_strides(self):
+        # for #4175
+        # First, test C-contiguous array
+        c_arr = cuda.device_array((2, 3, 4))
+        self.assertEqual(c_arr.__cuda_array_interface__['strides'], None)
+
+        # Second, test non C-contiguous array
+        c_arr = c_arr[:, 1, :]
+        self.assertNotEqual(c_arr.__cuda_array_interface__['strides'], None)
+
 
 if __name__ == "__main__":
     unittest.main()

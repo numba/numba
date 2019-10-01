@@ -10,6 +10,8 @@ All functions described here are threadsafe.
 #include <stdio.h>
 #include "../_numba_common.h"
 
+#include "nrt_external.h"
+
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
 #if 0
@@ -24,7 +26,6 @@ typedef size_t (*NRT_atomic_inc_dec_func)(size_t *ptr);
 typedef int (*NRT_atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                    void **oldptr);
 
-typedef struct MemInfo NRT_MemInfo;
 typedef struct MemSys NRT_MemSys;
 
 typedef void *(*NRT_malloc_func)(size_t size);
@@ -222,5 +223,9 @@ VISIBILITY_HIDDEN void *NRT_Reallocate(void *ptr, size_t size);
  */
 VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
 
+/*
+ * Get API function table.
+ */
+VISIBILITY_HIDDEN const NRT_api_functions* NRT_get_api(void);
 
 #endif /* NUMBA_NRT_H_ */

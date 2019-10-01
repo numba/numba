@@ -93,7 +93,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 at into its caller if called. String options are 'never'
                 (default) which will never inline, and 'always', which will
                 always inline. If a callable is provided it will be called with
-                the caller's IR and callee's IR as arguments, it is expected to
+                the call expression node that is requesting inlining, the
+                caller's IR and callee's IR as arguments, it is expected to
                 return Truthy as to whether to inline.
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
