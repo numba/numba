@@ -397,13 +397,16 @@ def array_cumprod(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+
 @register_jitable
 def sum_array(arr, dtype):
     return np.sum(arr, dtype=dtype)
 
+
 @register_jitable
 def sum_array_axis(arr, axis, dtype):
     return np.sum(arr, axis=axis, dtype=dtype)
+
 
 @overload(np.mean)
 @overload_method(types.Array, 'mean')
@@ -434,6 +437,7 @@ def array_mean(arr, axis=None):
             def mean_impl(arr, axis=None):
                 return sum_array_axis(arr, axis=axis, dtype=ret_dtype)/arr.shape[axis]
             return mean_impl
+
 
 @lower_builtin(np.var, types.Array)
 @lower_builtin("array.var", types.Array)
