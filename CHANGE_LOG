@@ -5,7 +5,7 @@ This release significantly reworked one of the main parts of Numba, the compiler
 pipeline, to make it more extensible and easier to use. The purpose of this was
 to continue enhancing Numba's ability for use as a compiler toolkit. In a
 similar vein, Numba now has an extension registration mechanism to allow other
-Numba-using projects to automatically have their ``@jit`` decorated functions
+Numba-using projects to automatically have their Numba JIT compilable functions
 discovered. There were also a number of other related compiler toolkit
 enhancement added along with some more NumPy features and a lot of bug fixes.
 
