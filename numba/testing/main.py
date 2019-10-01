@@ -506,7 +506,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id')
+        'test_id', 'duration')
 
     def fixup_case(self, case):
         """
@@ -515,7 +515,7 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result, test_id=None):
+    def __init__(self, original_result, test_id=None, duration=None):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -525,6 +525,7 @@ class _MinimalResult(object):
         for case, _ in self.failures:
             self.fixup_case(case)
         self.test_id = test_id
+        self.duration = duration
 
 
 class _FakeStringIO(object):
@@ -553,6 +554,7 @@ class _MinimalRunner(object):
     # instead.
 
     def __call__(self, test):
+        start = time.time()
         # Executed in child process
         kwargs = self.runner_args
         # Force recording of output in a buffer (it will be printed out
@@ -569,7 +571,8 @@ class _MinimalRunner(object):
             test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id())
+        end = time.time()
+        return _MinimalResult(result, test.id(), duration=end-start)
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -628,12 +631,28 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
+    duration_log_file_name = "duration_log.csv"
 
     def __init__(self, runner_cls, nprocs, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.runner_args = kwargs
+        self.duration_log = None
+        self._open_duration_log()
+
+    def _open_duration_log(self):
+        self.duration_log = open(self.duration_log_file_name, "w+")
+
+    def _close_duration_log(self):
+        if self.duration_log:
+            self.duration_log.flush()
+            self.duration_log.close()
+            self.duration_log = None
+
+    def _write_duration_log_entry(self, test_id, duration):
+        print("{},{}".format(test_id, duration), file=self.duration_log)
+
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
@@ -673,6 +692,9 @@ class ParallelTestRunner(runner.TextTestRunner):
             print()
             print("Total time parallel tests: '{}'".format(parallel_time))
             print("Total time serial tests: '{}'".format(serial_time))
+            self._close_duration_log()
+            print("Duration log has been written to: '{}'."
+                  .format(self.duration_log_file_name))
             return result
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
@@ -693,6 +715,8 @@ class ParallelTestRunner(runner.TextTestRunner):
             else:
                 result.add_results(child_result)
                 remaining_ids.discard(child_result.test_id)
+                self._write_duration_log_entry(child_result.test_id,
+                                               child_result.duration)
                 if child_result.shouldStop:
                     result.shouldStop = True
                     return
