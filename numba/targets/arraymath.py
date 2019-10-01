@@ -17,6 +17,7 @@ from numba import types, cgutils, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import version as numpy_version
+from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -704,6 +705,11 @@ def greater_than(a, b):
 def check_array(a):
     if a.size == 0:
         raise ValueError('zero-size array to reduction operation not possible')
+
+
+def _check_is_integer(v, name):
+    if not isinstance(v, (int, types.Integer)):
+        raise TypingError('{} must be an integer'.format(name))
 
 
 def nan_min_max_factory(comparison_op, is_complex_dtype):
@@ -1444,8 +1450,7 @@ def _tri_impl(N, M, k):
 def np_tri(N, M=None, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def tri_impl(N, M=None, k=0):
         if M is None:
@@ -1482,8 +1487,7 @@ def np_tril_impl_2d(m, k=0):
 def my_tril(m, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1506,6 +1510,34 @@ def my_tril(m, k=0):
         return np_tril_impl_multi
 
 
+@overload(np.tril_indices)
+def np_tril_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    _check_is_integer(n, 'n')
+    _check_is_integer(k, 'k')
+    if not is_nonelike(m):
+        _check_is_integer(m, 'm')
+
+    def np_tril_indices_impl(n, k=0, m=None):
+        return np.nonzero(np.tri(n, m, k=k))
+    return np_tril_indices_impl
+
+
+@overload(np.tril_indices_from)
+def np_tril_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    _check_is_integer(k, 'k')
+
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
+    def np_tril_indices_from_impl(arr, k=0):
+        return np.tril_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_tril_indices_from_impl
+
+
 @register_jitable
 def np_triu_impl_2d(m, k=0):
     mask = np.tri(m.shape[-2], M=m.shape[-1], k=k - 1).astype(np.uint)
@@ -1515,8 +1547,7 @@ def np_triu_impl_2d(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1537,6 +1568,34 @@ def my_triu(m, k=0):
         return np_triu_impl_2d
     else:
         return np_triu_impl_multi
+
+
+@overload(np.triu_indices)
+def np_triu_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    _check_is_integer(n, 'n')
+    _check_is_integer(k, 'k')
+    if not is_nonelike(m):
+        _check_is_integer(m, 'm')
+
+    def np_triu_indices_impl(n, k=0, m=None):
+        return np.nonzero(1 - np.tri(n, m, k=k - 1))
+    return np_triu_indices_impl
+
+
+@overload(np.triu_indices_from)
+def np_triu_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    _check_is_integer(k, 'k')
+
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
+    def np_triu_indices_from_impl(arr, k=0):
+        return np.triu_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_triu_indices_from_impl
 
 
 def _prepare_array(arr):
@@ -1583,10 +1642,10 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
         if numpy_version >= (1, 16):
             ary_dt = _dtype_of_compound(ary)
             to_begin_dt = None
-            if not(_is_nonelike(to_begin)):
+            if not(is_nonelike(to_begin)):
                 to_begin_dt = _dtype_of_compound(to_begin)
             to_end_dt = None
-            if not(_is_nonelike(to_end)):
+            if not(is_nonelike(to_end)):
                 to_end_dt = _dtype_of_compound(to_end)
 
             if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
@@ -1650,7 +1709,7 @@ def _get_d(dx, x):
 
 @overload(_get_d)
 def get_d_impl(x, dx):
-    if _is_nonelike(x):
+    if is_nonelike(x):
         def impl(x, dx):
             return np.asarray(dx)
     else:
@@ -3099,6 +3158,26 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload(np.count_nonzero)
+def np_count_nonzero(arr, axis=None):
+    if not type_can_asarray(arr):
+        raise TypingError("The argument to np.count_nonzero must be array-like")
+
+    if (numpy_version < (1, 12)):
+        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
+
+    if is_nonelike(axis):
+        def impl(arr, axis=None):
+            arr2 = np.ravel(arr)
+            return np.sum(arr2 != 0)
+    else:
+        def impl(arr, axis=None):
+            arr2 = arr.astype(np.bool_)
+            return np.sum(arr2, axis=axis)
+
+    return impl
+
+
 np_delete_handler_isslice = register_jitable(lambda x : x)
 np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 
@@ -3187,6 +3266,28 @@ def np_diff_impl(a, n=1):
         return out
 
     return diff_impl
+
+
+@overload(np.array_equal)
+def np_array_equal(a, b):
+
+    if not (type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError('Both arguments to "array_equals" must be array-like')
+
+    accepted = (types.Boolean, types.Number)
+    if isinstance(a, accepted) and isinstance(b, accepted):
+        # special case
+        def impl(a, b):
+            return a == b
+    else:
+        def impl(a, b):
+            a = np.asarray(a)
+            b = np.asarray(b)
+            if a.shape == b.shape:
+                return np.all(a == b)
+            return False
+
+    return impl
 
 
 def validate_1d_array_like(func_name, seq):
@@ -3754,10 +3855,6 @@ def np_convolve(a, v):
     return impl
 
 
-def _is_nonelike(ty):
-    return (ty is None) or isinstance(ty, types.NoneType)
-
-
 @overload(np.asarray)
 def np_asarray(a, dtype=None):
 
@@ -3768,7 +3865,7 @@ def np_asarray(a, dtype=None):
 
     impl = None
     if isinstance(a, types.Array):
-        if _is_nonelike(dtype) or a.dtype == dtype.dtype:
+        if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
                 return a
         else:
@@ -3778,14 +3875,14 @@ def np_asarray(a, dtype=None):
         # Nested lists cannot be unpacked, therefore only single lists are
         # permitted and these conform to Sequence and can be unpacked along on
         # the same path as Tuple.
-        if _is_nonelike(dtype):
+        if is_nonelike(dtype):
             def impl(a, dtype=None):
                 return np.array(a)
         else:
             def impl(a, dtype=None):
                 return np.array(a, dtype)
     elif isinstance(a, (types.Number, types.Boolean)):
-        dt_conv = a if _is_nonelike(dtype) else dtype
+        dt_conv = a if is_nonelike(dtype) else dtype
         ty = as_dtype(dt_conv)
 
         def impl(a, dtype=None):
@@ -4040,3 +4137,107 @@ def np_kaiser(M, beta):
         return _i0n(n, alpha, beta)
 
     return np_kaiser_impl
+
+
+@register_jitable
+def _cross_operation(a, b, out):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        if x.shape[-1] == 3:
+            x2 = x[..., 2]
+        else:
+            x2 = np.multiply(x.dtype.type(0), x0)
+        return x0, x1, x2
+
+    a0, a1, a2 = _cross_preprocessing(a)
+    b0, b1, b2 = _cross_preprocessing(b)
+
+    cp0 = np.multiply(a1, b2) - np.multiply(a2, b1)
+    cp1 = np.multiply(a2, b0) - np.multiply(a0, b2)
+    cp2 = np.multiply(a0, b1) - np.multiply(a1, b0)
+
+    out[..., 0] = cp0
+    out[..., 1] = cp1
+    out[..., 2] = cp2
+
+
+@generated_jit
+def _cross_impl(a, b):
+    dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
+    if a.ndim == 1 and b.ndim == 1:
+        def impl(a, b):
+            cp = np.empty((3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    else:
+        def impl(a, b):
+            shape = np.add(a[..., 0], b[..., 0]).shape
+            cp = np.empty(shape + (3,), dtype)
+            _cross_operation(a, b, cp)
+            return cp
+    return impl
+
+
+@overload(np.cross)
+def np_cross(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
+            raise ValueError((
+                "Incompatible dimensions for cross product\n"
+                "(dimension must be 2 or 3)"
+            ))
+
+        if a_.shape[-1] == 3 or b_.shape[-1] == 3:
+            return _cross_impl(a_, b_)
+        else:
+            raise ValueError((
+                "Dimensions for both inputs is 2.\n"
+                "Please replace your numpy.cross(a, b) call with "
+                "numba.numpy_extensions.cross2d(a, b)."
+            ))
+    return impl
+
+
+@register_jitable
+def _cross2d_operation(a, b):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        return x0, x1
+
+    a0, a1 = _cross_preprocessing(a)
+    b0, b1 = _cross_preprocessing(b)
+
+    cp = np.multiply(a0, b1) - np.multiply(a1, b0)
+    # If ndim of a and b is 1, cp is a scalar.
+    # In this case np.cross returns a 0-D array, containing the scalar.
+    # np.asarray is used to reconcile this case, without introducing
+    # overhead in the case where cp is an actual N-D array.
+    # (recall that np.asarray does not copy existing arrays)
+    return np.asarray(cp)
+
+
+@generated_jit
+def cross2d(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] != 2 or b_.shape[-1] != 2:
+            raise ValueError((
+                "Incompatible dimensions for 2D cross product\n"
+                "(dimension must be 2 for both inputs)"
+            ))
+        return _cross2d_operation(a_, b_)
+
+    return impl

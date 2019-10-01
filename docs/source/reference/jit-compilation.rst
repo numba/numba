@@ -10,7 +10,7 @@ JIT functions
 .. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
-   code.  All parameters all optional.
+   code.  All parameters are optional.
 
    If present, the *signature* is either a single signature or a list of
    signatures representing the expected :ref:`numba-types` of function

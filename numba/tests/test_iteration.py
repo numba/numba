@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import numpy_support, types
+from numba import numpy_support, types, errors
 from .support import TestCase, MemoryLeakMixin, tag
 
 enable_pyobj_flags = Flags()
@@ -192,6 +192,24 @@ class IterationTest(MemoryLeakMixin, TestCase):
 
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
+
+    def test_array_2d_raises(self):
+
+        def foo(x):
+            for i in x:
+                pass
+
+        # 1D is fine
+        aryty = types.Array(types.int32, 1, 'C')
+        compile_isolated(foo, (aryty,))
+
+        # 2d is typing error
+        with self.assertRaises(errors.TypingError) as raises:
+            aryty = types.Array(types.int32, 2, 'C')
+            compile_isolated(foo, (aryty,))
+
+        self.assertIn("Direct iteration is not supported",
+                      str(raises.exception))
 
     def test_tuple_iter_issue1504(self):
         # The issue is due to `row` being typed as heterogeneous tuple.

@@ -143,32 +143,6 @@ creating an array in constant memory is through the use of:
    Allocate and make accessible an array in constant memory based on array-like
    *arr*.
 
-SmartArrays (deprecated since version 0.44)
-===========================================
-
-Numba provides an Array-like data type that manages data movement to
-and from the device automatically. It can be used as drop-in replacement for
-`numpy.ndarray` in most cases, and is supported by Numba's JIT-compiler for both
-'host' and 'cuda' target.
-
-.. comment: function:: numba.SmartArray(obj=None, copy=True,
-                               shape=None, dtype=None, order=None, where='host')
-
-.. autoclass:: numba.SmartArray
-   :members: __init__, get, mark_changed
-
-
-Thus, `SmartArray` objects may be passed as function arguments to jit-compiled
-functions. Whenever a cuda.jit-compiled function is being executed, it will
-trigger a data transfer to the GPU (unless the data are already there). But instead
-of transferring the data back to the host after the function completes, it leaves
-the data on the device and merely updates the host-side if there are any external
-references to that.
-Thus, if the next operation is another invocation of a cuda.jit-compiled function,
-the data does not need to be transferred again, making the compound operation more
-efficient (and making the use of the GPU advantageous even for smaller data
-sizes).
-
 Deallocation Behavior
 =====================
 

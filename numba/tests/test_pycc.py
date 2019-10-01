@@ -301,6 +301,14 @@ class TestCC(BasePYCCTest):
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    def test_c_extension_usecase(self):
+        # Test C-extensions
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            arr = np.arange(128, dtype=np.intp)
+            got = lib.dict_usecase(arr)
+            expect = arr * arr
+            self.assertPreciseEqual(got, expect)
+
 
 @_skip_missing_compilers
 class TestDistutilsSupport(TestCase):
