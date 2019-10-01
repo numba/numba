@@ -540,6 +540,42 @@ def unicode_find(a, b):
         return find_impl
 
 
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(src, sub, start=None, end=None):
+
+    _count_args_types_check(start)
+    _count_args_types_check(end)
+
+    if isinstance(sub, types.UnicodeType):
+        def count_impl(src, sub, start=start, end=end):
+            count = 0
+            src_len = len(src)
+            sub_len = len(sub)
+
+            start = _normalize_slice_idx_count(start, src_len, 0)
+            end = _normalize_slice_idx_count(end, src_len, src_len)
+
+            if end - start < 0 or start > src_len:
+                return 0
+
+            src = src[start : end]
+            src_len = len(src)
+            start, end = 0, src_len
+            if sub_len == 0:
+                return src_len + 1
+
+            while(start + sub_len <= src_len):
+                if src[start : start + sub_len] == sub:
+                    count += 1
+                    start += sub_len
+                else:
+                    start += 1
+            return count
+        return count_impl
+    error_msg = "The substring must be a UnicodeType, not {}"
+    raise TypingError(error_msg.format(type(sub)))
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
@@ -864,6 +900,15 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
+def _count_args_types_check(arg):
+    if isinstance(arg, types.Optional):
+        arg = arg.type
+    if not (arg is None or isinstance(arg, (types.Omitted,
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError("The slice indices must be an Integer or None")
+
+
 @overload_method(types.UnicodeType, 'lstrip')
 def unicode_lstrip(string, chars=None):
 
@@ -942,6 +987,27 @@ def normalize_str_idx(idx, length, is_start=True):
         raise IndexError("string index out of range")
 
     return idx
+
+
+@register_jitable
+def _normalize_slice_idx_count(arg, slice_len, default):
+    """
+    Used for unicode_count
+
+    If arg < -slice_len, returns 0 (prevents circle)
+
+    If arg is within slice, e.g -slice_len <= arg < slice_len
+    returns its real index via arg % slice_len
+
+    If arg > slice_len, returns arg (in this case count must
+    return 0 if it is start index)
+    """
+
+    if arg is None:
+        return default
+    if -slice_len <= arg < slice_len:
+        return arg % slice_len
+    return 0 if arg < 0 else arg
 
 
 @intrinsic

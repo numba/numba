@@ -116,10 +116,20 @@ class DeviceNDArrayBase(object):
 
     @property
     def __cuda_array_interface__(self):
+        if self.device_ctypes_pointer.value is not None:
+            ptr = self.device_ctypes_pointer.value
+        else:
+            ptr = 0
+
+        if array_core(self).flags['C_CONTIGUOUS']:
+            strides = None
+        else:
+            strides = tuple(self.strides)
+
         return {
             'shape': tuple(self.shape),
-            'strides': tuple(self.strides),
-            'data': (self.device_ctypes_pointer.value, False),
+            'strides': strides,
+            'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 1,
         }
