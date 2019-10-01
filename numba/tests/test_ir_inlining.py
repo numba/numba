@@ -493,6 +493,23 @@ class TestOverloadInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True})
 
+    def test_inline_stararg_error(self):
+        def foo(a, *b):
+            return a + b[0]
+
+        @overload(foo, inline='always')
+        def overload_foo(a, *b):
+            return lambda a, *b: a + b[0]
+
+        def impl():
+            return foo(3, 3, 5)
+
+        with self.assertRaises(NotImplementedError) as e:
+            self.check(impl, inline_expect={'foo': True})
+
+        self.assertIn("Stararg not supported in inliner for arg 1 *b",
+            str(e.exception))
+
     def test_basic_inline_combos(self):
 
         def impl():
