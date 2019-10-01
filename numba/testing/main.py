@@ -539,7 +539,9 @@ class SerialTestResult(runner.TextTestResult):
         end = time.time()
         start = self.test_start_times[test]
         duration = end - start
-        self.duration_log.write_entry(test, "serial", duration)
+        function, class_ = str(test).split()
+        test_id = "{}.{}".format(class_.strip("()"), function)
+        self.duration_log.write_entry(test_id, "serial", duration)
 
 
 class _MinimalResult(object):
