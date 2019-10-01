@@ -488,6 +488,7 @@ class DurationLog(object):
 
     def open(self):
         self.duration_log = open(self.file_name, "w+")
+        print("name, type, duration", file=self.duration_log)
 
     def close(self):
         if self.duration_log:
