@@ -4167,7 +4167,7 @@ def np_cross(a, b):
         b_ = np.asarray(b)
         if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
             raise ValueError((
-                "incompatible dimensions for cross product\n"
+                "Incompatible dimensions for cross product\n"
                 "(dimension must be 2 or 3)"
             ))
 
@@ -4175,7 +4175,46 @@ def np_cross(a, b):
             return _cross_impl(a_, b_)
         else:
             raise ValueError((
-                "Dimensions for both inputs is 2 "
-                "(currently not supported)."
+                "Dimensions for both inputs is 2.\n"
+                "Please replace your numpy.cross(a, b) call with "
+                "numba.numpy_extensions.cross2d(a, b)."
             ))
+    return impl
+
+
+@register_jitable
+def _cross2d_operation(a, b):
+
+    def _cross_preprocessing(x):
+        x0 = x[..., 0]
+        x1 = x[..., 1]
+        return x0, x1
+
+    a0, a1 = _cross_preprocessing(a)
+    b0, b1 = _cross_preprocessing(b)
+
+    cp = np.multiply(a0, b1) - np.multiply(a1, b0)
+    # If ndim of a and b is 1, cp is a scalar.
+    # In this case np.cross returns a 0-D array, containing the scalar.
+    # np.asarray is used to reconcile this case, without introducing
+    # overhead in the case where cp is an actual N-D array.
+    # (recall that np.asarray does not copy existing arrays)
+    return np.asarray(cp)
+
+
+@generated_jit
+def cross2d(a, b):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+        if a_.shape[-1] != 2 or b_.shape[-1] != 2:
+            raise ValueError((
+                "Incompatible dimensions for 2D cross product\n"
+                "(dimension must be 2 for both inputs)"
+            ))
+        return _cross2d_operation(a_, b_)
+
     return impl
