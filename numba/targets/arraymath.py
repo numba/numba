@@ -684,6 +684,11 @@ def check_array(a):
         raise ValueError('zero-size array to reduction operation not possible')
 
 
+def _check_is_integer(v, name):
+    if not isinstance(v, (int, types.Integer)):
+        raise TypingError('{} must be an integer'.format(name))
+
+
 def nan_min_max_factory(comparison_op, is_complex_dtype):
     if is_complex_dtype:
         def impl(a):
@@ -1422,8 +1427,7 @@ def _tri_impl(N, M, k):
 def np_tri(N, M=None, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def tri_impl(N, M=None, k=0):
         if M is None:
@@ -1460,8 +1464,7 @@ def np_tril_impl_2d(m, k=0):
 def my_tril(m, k=0):
 
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def np_tril_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1484,6 +1487,34 @@ def my_tril(m, k=0):
         return np_tril_impl_multi
 
 
+@overload(np.tril_indices)
+def np_tril_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    _check_is_integer(n, 'n')
+    _check_is_integer(k, 'k')
+    if not is_nonelike(m):
+        _check_is_integer(m, 'm')
+
+    def np_tril_indices_impl(n, k=0, m=None):
+        return np.nonzero(np.tri(n, m, k=k))
+    return np_tril_indices_impl
+
+
+@overload(np.tril_indices_from)
+def np_tril_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    _check_is_integer(k, 'k')
+
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
+    def np_tril_indices_from_impl(arr, k=0):
+        return np.tril_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_tril_indices_from_impl
+
+
 @register_jitable
 def np_triu_impl_2d(m, k=0):
     mask = np.tri(m.shape[-2], M=m.shape[-1], k=k - 1).astype(np.uint)
@@ -1493,8 +1524,7 @@ def np_triu_impl_2d(m, k=0):
 @overload(np.triu)
 def my_triu(m, k=0):
     # we require k to be integer, unlike numpy
-    if not isinstance(k, (int, types.Integer)):
-        raise TypeError('k must be an integer')
+    _check_is_integer(k, 'k')
 
     def np_triu_impl_1d(m, k=0):
         m_2d = _make_square(m)
@@ -1515,6 +1545,34 @@ def my_triu(m, k=0):
         return np_triu_impl_2d
     else:
         return np_triu_impl_multi
+
+
+@overload(np.triu_indices)
+def np_triu_indices(n, k=0, m=None):
+
+    # we require integer arguments, unlike numpy
+    _check_is_integer(n, 'n')
+    _check_is_integer(k, 'k')
+    if not is_nonelike(m):
+        _check_is_integer(m, 'm')
+
+    def np_triu_indices_impl(n, k=0, m=None):
+        return np.nonzero(1 - np.tri(n, m, k=k - 1))
+    return np_triu_indices_impl
+
+
+@overload(np.triu_indices_from)
+def np_triu_indices_from(arr, k=0):
+
+    # we require k to be integer, unlike numpy
+    _check_is_integer(k, 'k')
+
+    if arr.ndim != 2:
+        raise TypingError("input array must be 2-d")
+
+    def np_triu_indices_from_impl(arr, k=0):
+        return np.triu_indices(arr.shape[0], k=k, m=arr.shape[1])
+    return np_triu_indices_from_impl
 
 
 def _prepare_array(arr):
