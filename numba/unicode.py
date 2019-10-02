@@ -541,6 +541,93 @@ def unicode_find(a, b):
         return find_impl
 
 
+@register_jitable
+def _check_type(ty, name, accepted=(types.NoneType,)):
+    """
+    Check object belongs to one of specified types
+    :param ty: object type
+    :param name: name of the argument
+    :param accepted: accepted types
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
+
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+
+
+@register_jitable
+def _adjust_start(length, start=0):
+    """
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9350-L9354
+    """
+    if start < 0:
+        start += length
+        if start < 0:
+            return 0
+
+    return start
+
+
+@register_jitable
+def _adjust_end(length, end=0):
+    """
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9343-L9349
+    """
+    if end > length:
+        return length
+    if end < 0:
+        end += length
+        if end < 0:
+            return 0
+
+    return end
+
+
+@register_jitable
+def _adjust_indices(length, start=0, end=0):
+    """
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354
+    """
+    return _adjust_start(length, start=start), _adjust_end(length, end=end)
+
+
+@overload_method(types.UnicodeType, 'rfind')
+def unicode_rfind(s, substr, start=None, end=None):
+    accepted_types = (types.Integer, int, types.NoneType)
+    _check_type(start, 'start', accepted_types)
+    _check_type(end, 'end', accepted_types)
+
+    if not isinstance(substr, types.UnicodeType):
+        raise TypingError('must be {}, not {}'.format(types.UnicodeType, type(substr)))
+
+    def rfind_impl(s, substr, start=None, end=None):
+        length = len(s)
+        sub_length = len(substr)
+        if start is None:
+            start = 0
+        if end is None:
+            end = length
+
+        start, end = _adjust_indices(length, start=start, end=end)
+        if end - start < sub_length:
+            return -1
+
+        if sub_length == 0:
+            return end
+
+        for i in range(min(len(s), end) - len(substr), start - 1, -1):
+            if _cmp_region(s, i, substr, 0, len(substr)) == 0:
+                return i
+        return -1
+    return rfind_impl
+
+
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
