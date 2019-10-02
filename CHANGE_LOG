@@ -72,7 +72,7 @@ Fixes:
 * PR #4328:  Replace GC macro with function call 
 * PR #4330: Loosen up typed container casting checks
 * PR #4341: Fix some coding lines at the top of some files (utf8 -> utf-8)
-* PR #4345: Replace "import *" with explicit imports in numba/types
+* PR #4345: Replace "import \*" with explicit imports in numba/types
 * PR #4346: Fix incorrect alg in isupper for ascii strings.
 * PR #4349: test using jitclass in typed-list
 * PR #4361: Add allocation hoisting info to LICM section at diagnostic L4
