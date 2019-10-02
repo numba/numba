@@ -156,6 +156,7 @@ class BaseLower(object):
         """
         # Add omp offloading metadata if present.
         if hasattr(self, 'omp_offload'):
+            print("Has omp_offload")
             omp_offload_metadata = self.module.get_or_insert_named_metadata('omp_offload.info')
             for oi in self.omp_offload:
                 omp_offload_metadata.add(oi)

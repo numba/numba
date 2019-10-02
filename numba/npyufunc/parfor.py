@@ -112,10 +112,11 @@ def get_next_offload_number(lowerer):
     return cur
 
 class openmp_region_start(ir.Stmt):
-    def __init__(self, tags, loc):
+    def __init__(self, tags, region_number, loc):
         self.tags = tags
-        self.omp_region_var = None
+        self.region_number = region_number
         self.loc = loc
+        self.omp_region_var = None
         self.omp_metadata = None
 
     def has_target(self):
@@ -132,6 +133,8 @@ class openmp_region_start(ir.Stmt):
         builder = lowerer.builder
         library = lowerer.library
 
+        builder.module.device_triples = "spir64"
+
         llvm_token_t = lc.Type.token()
         fnty = lir.FunctionType(llvm_token_t, [])
         pre_fn = builder.module.declare_intrinsic('llvm.directive.region.entry', (), fnty)
@@ -143,7 +146,8 @@ class openmp_region_start(ir.Stmt):
                  lir.IntType(32)(lb.getFileIdForFile(self.loc.filename)),   # File ID of the file with the entry.
                  lowerer.fndesc.mangled_name,   # Mangled name of the function with the entry.
                  lir.IntType(32)(self.loc.line),  # Line in the source file where with the entry.
-                 lir.IntType(32)(get_next_offload_number(lowerer)),   # Order the entry was created.
+                 lir.IntType(32)(self.region_number),   # Order the entry was created.
+                 #lir.IntType(32)(get_next_offload_number(lowerer)),   # Order the entry was created.
                  lir.IntType(32)(0)    # Entry kind.  Should always be 0 I think.
                 ])
             add_offload_info(lowerer, self.omp_metadata)
@@ -1433,7 +1437,7 @@ def _create_gufunc_for_parfor_body(
                     rhs = instr.value
                     if isinstance(rhs, ir.Expr) and rhs.op == 'call':
 #                        print("definitions", gufunc_ir._definitions)
-#                        pdb.set_trace()
+                        #pdb.set_trace()
 #                        func_def = get_definition(gufunc_ir, rhs.func)
                         callname = find_callname(gufunc_ir, rhs)
 #                        print("func_def", func_def, type(func_def))
