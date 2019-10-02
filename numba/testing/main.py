@@ -728,11 +728,24 @@ class ParallelTestRunner(runner.TextTestRunner):
             serial_time = time.time() - t
             result.add_results(sresult)
             print()
+            print("Number of parallel test functions: '{}'".format(len(self._ptests)))
+            print("Total serial test functions: '{}'".format(len(self._stests)))
             print("Total time parallel tests: '{}'".format(parallel_time))
             print("Total time serial tests: '{}'".format(serial_time))
             self.duration_log.close()
             print("Duration log has been written to: '{}'."
                   .format(self.duration_log.file_name))
+            try:
+                import pandas
+            except:
+                "Unable to analyse duration log, please install pandas."
+            else:
+                df = pandas.read_csv("duration_log.csv")
+                pandas.options.display.max_colwidth = 120
+                print("Top 20 functions")
+                print(df.sort_values(by='duration').tail(20))
+                print("Total test functions by type from duration log")
+                print(df.groupby(by='type').count()["name"])
             return result
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
@@ -762,8 +775,6 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test)
-        print("Number of parallel test functions: '{}'".format(len(self._ptests)))
-        print("Total serial test functions: '{}'".format(len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
