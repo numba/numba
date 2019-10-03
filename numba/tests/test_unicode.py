@@ -1178,6 +1178,9 @@ class TestUnicode(BaseTest):
         # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L759-L768
         sigma = ['\u03a3', '\u0345\u03a3', 'A\u0345\u03a3', 'A\u0345\u03a3a', '\u03a3\u0345 ', '\U0008fffe', '\u2177']
 
+        extra_sigma = 'A\u03a3\u03a2'
+        sigma.append(extra_sigma)
+
         for s in UNICODE_EXAMPLES + [""] + extras + cpython + sigma:
             self.assertEqual(pyfunc(s), cfunc(s),
                              msg='Results of interpreted and compiled "{}".lower() should be equal'.format(s))

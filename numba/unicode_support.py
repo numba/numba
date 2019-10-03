@@ -276,6 +276,7 @@ def _PyUnicode_ToUpperFull(ch, res):
         index = ctype.upper & 0xFFFF
         n = ctype.upper >> 24
         for i in range(n):
+            # Perhaps needed to use unicode._set_code_point() here
             res[i] = _PyUnicode_ExtendedCase(index + i)
         return n
     res[0] = ch + ctype.upper

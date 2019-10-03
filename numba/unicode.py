@@ -1364,7 +1364,7 @@ def _handle_capital_sigma(data, length, idx):
     final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
     if final_sigma:
         j = idx + 1
-        while j < 0:
+        while j < length:
             c = _get_code_point(data, j)
             if not _PyUnicode_IsCaseIgnorable(c):
                 break
@@ -1440,7 +1440,7 @@ def unicode_lower(data):
             # maxchar should be inside of a list to be pass as argument by reference
             maxchars = [0]
             newlength = _do_lower(data, length, tmp, maxchars)
-            maxchar, = maxchars
+            maxchar = maxchars[0]
             newkind = _codepoint_to_kind(maxchar)
             res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
             for i in range(newlength):
