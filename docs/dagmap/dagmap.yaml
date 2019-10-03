@@ -47,6 +47,7 @@ tasks:
     depends_on:
       - declarative_overload
       - improve_test_suite_tooling
+      - faster_pr_testing
 
   - label: Unify and add more test suite tooling
     id: improve_test_suite_tooling
@@ -163,25 +164,24 @@ tasks:
       Make it possible to use pytest as test runner for Numba
 
   - label: Option to run modified tests only
-     id: run_new_tests
+    id: run_new_tests
     description: |
       Use / make pytest plugin to detect all test files which are new / changed
       relative to a given branch, and run only those tests
     depends_on:
-	- pytest
-	
+        - pytest
+
   - label: Option to run 1/N slice of tests
-     id: run_test_slice
+    id: run_test_slice
     description: |
       Use / make pytest plugin to run 1/N of enumerated tests.
     depends_on:
-	- pytest
-	
+        - pytest
+
   - label: Faster PR testing
-     id: faster_pr_testing
+    id: faster_pr_testing
     description: |
       Make automated PR testing with public CI services give faster feedback.
     depends_on:
-	- run_new_tests
-	- run_test_slice
-	
+        - run_new_tests
+        - run_test_slice
