@@ -580,8 +580,8 @@ class TestUnicode(BaseTest):
         pyfunc = rfind_with_start_end_usecase
         sig_optional = types.int64(types.unicode_type,
                                    types.unicode_type,
-                                   types.Optional(types.int64),
-                                   types.Optional(types.int64))
+                                   types.Optional(types.intp),
+                                   types.Optional(types.intp))
         cfunc = njit([sig_optional])(pyfunc)
 
         for s in UNICODE_EXAMPLES:
