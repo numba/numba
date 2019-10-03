@@ -1349,29 +1349,28 @@ def unicode_islower(data):
 
 
 @register_jitable
-def _handle_capital_sigma(s, l, idx):
+def _handle_capital_sigma(data, length, idx):
     """
     Handle capital sigma
     https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
     """
     c = 0
-    x = idx - 1
-    for j in range(idx - 1, -1, -1):
-        c = _get_code_point(s, j)
-        if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+    j = idx - 1
+    while j >= 0:
+        c = _get_code_point(data, j)
+        if not _PyUnicode_IsCaseIgnorable(c):
             break
-        x -= 1
-    final_sigma = (x >= 0 and _PyUnicode_IsCased(_Py_UCS4(c)))
-    if final_sigma == 1:
-        x = idx + 1
-        for j in range(idx + 1, l):
-            c = _get_code_point(s, j)
-            if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+        j -= 1
+    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
+    if final_sigma:
+        j = idx + 1
+        while j < 0:
+            c = _get_code_point(data, j)
+            if not _PyUnicode_IsCaseIgnorable(c):
                 break
-            x += 1
-        final_sigma = (x == l or (not _PyUnicode_IsCased(_Py_UCS4(c))))
-    ret = 0x3c2 if final_sigma == 1 else 0x3c3
-    return ret
+            j += 1
+        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
+    return 0x3c2 if final_sigma else 0x3c3
 
 
 @register_jitable
@@ -1382,7 +1381,7 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     if code_point == 0x3A3:
         mapped[0] = _handle_capital_sigma(data, length, idx)
         return 1
-    return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+    return _PyUnicode_ToLowerFull(code_point, mapped)
 
 
 @register_jitable
@@ -1397,10 +1396,9 @@ def _do_upper_or_lower(data, length, res, maxchars, lower):
         if lower:
             n_res = _lower_ucs4(code_point, data, length, idx, mapped)
         else:
-            n_res = _PyUnicode_ToUpperFull(_Py_UCS4(code_point), mapped)
+            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
         for m in mapped[:n_res]:
-            maxchar, = maxchars
-            maxchars[0] = max(maxchar, m)
+            maxchars[0] = max(maxchars[0], m)
             _set_code_point(res, k, m)
             k += 1
     return k
@@ -1440,8 +1438,7 @@ def unicode_lower(data):
             # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
             tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
             # maxchar should be inside of a list to be pass as argument by reference
-            maxchar = 0
-            maxchars = [maxchar]
+            maxchars = [0]
             newlength = _do_lower(data, length, tmp, maxchars)
             maxchar, = maxchars
             newkind = _codepoint_to_kind(maxchar)
