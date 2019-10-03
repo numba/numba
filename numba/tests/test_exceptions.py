@@ -1,4 +1,6 @@
-
+"""
+PYTEST_DONT_REWRITE
+"""
 import numpy as np
 import sys
 import traceback

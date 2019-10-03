@@ -2,6 +2,9 @@
 # Copyright (c) 2017 Intel Corporation
 # SPDX-License-Identifier: BSD-2-Clause
 #
+"""
+PYTEST_DONT_REWRITE
+"""
 
 from __future__ import print_function, division, absolute_import
 
@@ -46,7 +49,7 @@ _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 skip_unsupported = skip_parfors_unsupported
-test_disabled = unittest.skipIf(True, 'Test disabled')
+disabled_test = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
@@ -280,7 +283,7 @@ def lr_impl(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
-def test_kmeans_example(A, numCenter, numIter, init_centroids):
+def check_kmeans_example(A, numCenter, numIter, init_centroids):
     centroids = init_centroids
     N, D = A.shape
 
@@ -303,7 +306,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
     else:
         options = cpu.ParallelOptions(True)
 
-    tp = TestPipeline(typingctx, targetctx, args, test_ir)
+    tp = Pipeline4Testing(typingctx, targetctx, args, test_ir)
 
     with cpu_target.nested_context(typingctx, targetctx):
         typingctx.refresh()
@@ -455,7 +458,7 @@ def _uses_indices(f_ir, index, index_set):
     return False
 
 
-class TestPipeline(object):
+class Pipeline4Testing(object):
     def __init__(self, typingctx, targetctx, args, test_ir):
         self.state = compiler.StateDict()
         self.state.typingctx = typingctx
@@ -573,14 +576,14 @@ class TestParfors(TestParforsBase):
         centers = 3
         A = np.random.ranf((N, D))
         init_centroids = np.random.ranf((centers, D))
-        self.check(test_kmeans_example, A, centers, 3, init_centroids,
+        self.check(check_kmeans_example, A, centers, 3, init_centroids,
                                                                     decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
         arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
                     types.Array(types.float64, 2, 'C'))
         self.assertTrue(
-            countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
+            countNonParforArrayAccesses(check_kmeans_example, arg_typs) == 0)
 
     @unittest.skipIf(not (_windows_py27 or _32bit),
                      "Only impacts Windows with Python 2.7 / 32 bit hardware")
@@ -752,7 +755,7 @@ class TestParfors(TestParforsBase):
             return np.sum(A[:, b])
         self.check(test_impl)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_15(self):
         """same as corresponding test_simple_<n> case but using operator.add"""
         def test_impl(v1, v2, m1, m2):
@@ -760,14 +763,14 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_16(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m1, m1)
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_17(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m2, v1)
@@ -1205,7 +1208,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_unsupported
-    @test_disabled # Test itself is problematic, see #3155
+    @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
@@ -2034,7 +2037,7 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True, check_fastmath_result=True)
 
 #    @skip_unsupported
-    @test_disabled
+    @disabled_test
     def test_check_error_model(self):
         def test_impl():
             n = 32
@@ -2563,7 +2566,7 @@ class TestParforsSlice(TestParforsBase):
         self.assertIn("do not match", str(raises.exception))
 
 #    @skip_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice8(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2574,7 +2577,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(9).reshape((3,3)))
 
 #    @skip_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice9(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2585,7 +2588,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 #    @skip_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice10(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2650,25 +2653,25 @@ class TestParforsSlice(TestParforsBase):
 
     @skip_unsupported
     def test_parfor_slice16(self):
-        def test_impl(a, b, n):
+        def check_impl(a, b, n):
             assert(a.shape == b.shape)
             a[1:n] = 10
             b[0:(n-1)] = 10
             return a * b
 
-        self.check(test_impl, np.ones(10), np.zeros(10), 8)
+        self.check(check_impl, np.ones(10), np.zeros(10), 8)
         args = (numba.float64[:], numba.float64[:], numba.int64)
-        self.assertEqual(countParfors(test_impl, args), 2)
+        self.assertEqual(countParfors(check_impl, args), 2)
 
     @skip_unsupported
     def test_parfor_slice17(self):
-        def test_impl(m, A):
+        def check_impl(m, A):
             B = np.zeros(m)
             n = len(A)
             B[-n:] = A
             return B
 
-        self.check(test_impl, 10, np.ones(10))
+        self.check(check_impl, 10, np.ones(10))
 
     @skip_unsupported
     def test_parfor_slice18(self):

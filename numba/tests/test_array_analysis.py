@@ -1,3 +1,7 @@
+"""
+PYTEST_DONT_REWRITE
+"""
+
 from __future__ import division
 
 import itertools
@@ -430,12 +434,12 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_cond, (types.intp, types.intp, types.intp),
                                asserts=None)
 
-        def test_assert_1(m, n):
+        def check_assert_1(m, n):
             assert(m == n)
             A = np.ones(m)
             B = np.ones(n)
             return np.sum(A + B)
-        self._compile_and_test(test_assert_1, (types.intp, types.intp),
+        self._compile_and_test(check_assert_1, (types.intp, types.intp),
                                asserts=None)
 
         def test_assert_2(A, B):

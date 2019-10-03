@@ -53,7 +53,7 @@ class Class(object):
         self.__test = value
 
     test = tracing.trace(property(_test_get, _test_set))
-        
+
     @tracing.trace
     def method(self, some, other='value', *args, **kwds):
         pass
@@ -91,7 +91,7 @@ class Class2(object):
 
 
 @tracing.trace
-def test(x, y, z = True):
+def trace_test(x, y, z = True):
     a = x + y
     b = x * y
     if z: return a
@@ -107,7 +107,7 @@ class TestTracing(unittest.TestCase):
 
     def tearDown(self):
         del self.capture
-        
+
     def test_method(self):
 
         with self.capture:
@@ -148,13 +148,13 @@ class TestTracing(unittest.TestCase):
     def test_function(self):
 
         with self.capture:
-            test(5, 5)
-            test(5, 5, False)
+            trace_test(5, 5)
+            trace_test(5, 5, False)
         self.assertEqual(self.capture.getvalue(),
-                         ">> test(x=5, y=5, z=True)\n" +
-                         "<< test -> 10\n" +
-                         ">> test(x=5, y=5, z=False)\n" +
-                         "<< test -> 25\n")
+                         ">> trace_test(x=5, y=5, z=True)\n" +
+                         "<< trace_test -> 10\n" +
+                         ">> trace_test(x=5, y=5, z=False)\n" +
+                         "<< trace_test -> 25\n")
 
     @unittest.skip("recursive decoration not yet implemented")
     def test_injected(self):
@@ -174,7 +174,7 @@ class TestTracing(unittest.TestCase):
                          ">> static_method()\n"
                          "<< static_method\n")
 
-            
+
 # Reset tracing to its original value
 tracing.trace = orig_trace
 

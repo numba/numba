@@ -32,7 +32,7 @@ from .matmul_usecase import needs_blas
 from .support import skip_parfors_unsupported
 
 
-def test_will_propagate(b, z, w):
+def check_will_propagate(b, z, w):
     x = 3
     if b > 0:
         y = z + w
@@ -73,7 +73,7 @@ class TestRemoveDead(unittest.TestCase):
     def test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test_will_propagate)
+        test_ir = compiler.run_frontend(check_will_propagate)
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()

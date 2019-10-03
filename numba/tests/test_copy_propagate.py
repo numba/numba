@@ -15,7 +15,7 @@ from numba import ir
 from numba.typed_passes import type_inference_stage
 from numba import unittest_support as unittest
 
-def test_will_propagate(b, z, w):
+def check_will_propagate(b, z, w):
     x = 3
     if b > 0:
         y = z + w
@@ -24,7 +24,7 @@ def test_will_propagate(b, z, w):
     a = 2 * x
     return a < b
 
-def test_wont_propagate(b, z, w):
+def check_wont_propagate(b, z, w):
     x = 3
     if b > 0:
         y = z + w
@@ -57,7 +57,7 @@ class TestCopyPropagate(unittest.TestCase):
     def test1(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test_will_propagate)
+        test_ir = compiler.run_frontend(check_will_propagate)
         #print("Num blocks = ", len(test_ir.blocks))
         #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
@@ -84,7 +84,7 @@ class TestCopyPropagate(unittest.TestCase):
     def test2(self):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
-        test_ir = compiler.run_frontend(test_wont_propagate)
+        test_ir = compiler.run_frontend(check_wont_propagate)
         #print("Num blocks = ", len(test_ir.blocks))
         #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
