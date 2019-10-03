@@ -10,7 +10,7 @@ different ways.
 ## Requirements
 
 ```
-conda install jinja2 python-graphviz
+conda install jinja2 python-graphviz pyyaml
 ```
 
 ## Usage
@@ -33,7 +33,9 @@ The `style` section of the file is not used yet.
 
 ## Notes
 
-The HTML rendering of the graph is based on a slightly modified version of (jquery.graphviz.svg)[https://github.com/mountainstorm/jquery.graphviz.svg/].  Its license is:
+The HTML rendering of the graph is based on a slightly modified version of
+(jquery.graphviz.svg)[https://github.com/mountainstorm/jquery.graphviz.svg/].
+Its license is:
 ```
 Copyright (c) 2015 Mountainstorm
 Permission is hereby granted, free of charge, to any person obtaining a copy
