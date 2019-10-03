@@ -35,8 +35,8 @@ def to_graphviz(dagmap):
         graph_attr=dict(bgcolor="#f4f4f4", pad="0.5", overlap="false"),
         node_attr=dict(width="0.6", style="filled",
                        fillcolor="#83c6de", color="#83c6de", penwidth="3", label="",
-                       fontname="helvetica Neue Ultra Light"),
-        edge_attr=dict(color="#616a72", penwidth="2", fontname="helvetica Neue Ultra Light"))
+                       fontname="helvetica Neue Ultra Light", fontsize="28"),
+        edge_attr=dict(color="#616a72", arrowsize="2.0", penwidth="4", fontname="helvetica Neue Ultra Light"))
 
     G.node(name='_nothing', label='', style='invis')
 

@@ -479,16 +479,19 @@
       // create set of all other elements and dim them
       $everything.not($nodesEdges).each(function () {
         that.colorElement($(this), options.highlight.unselected)
+        $(this).css('font-weight', 'normal')
         that.tooltip($(this))
       })
       $nodesEdges.each(function () {
         that.colorElement($(this), options.highlight.selected)
+        $(this).css('font-weight', 'normal')
       })
 
       this.tooltip($nodesEdges, tooltips)
     } else {
       $everything.each(function () {
         that.restoreElement($(this))
+        $(this).css('font-weight', 'normal')
       })
       this.tooltip($everything)
     }
