@@ -65,8 +65,8 @@ tasks:
     description:
         From parfors extract out the array expression fusion pass
     depends_on:
-        - parfors_clean_up
-        - pass_formalisation
+      - parfors_clean_up
+      - pass_formalisation
 
   - label: LICM Pass
     id: new_licm_pass
@@ -103,9 +103,9 @@ tasks:
     description: |
       Meta task for all performance analysis related functionality
     depends_on:
-        - line_profiling
-        - assembly_analysis_tooling
-        - vectorisation_analysis
+      - line_profiling
+      - assembly_analysis_tooling
+      - vectorisation_analysis
 
   - label: Vectorisation analysis
     id: vectorisation_analysis
@@ -118,15 +118,15 @@ tasks:
       Support collection of profiling statistics from compiled machine code and map back to
       lines of Python.
     depends_on:
-        - orc_jit
-        - assembly_analysis_tooling
+      - orc_jit
+      - assembly_analysis_tooling
 
   - label: Assembly analysis tooling
     id: assembly_analysis_tooling
     description: |
       Tie generated assembly back to python lines and annotate instruction quality
     depends_on:
-        - capstone
+      - capstone
 
   - label: Build capstone against llvmdev
     id: capstone
@@ -138,8 +138,8 @@ tasks:
     description: |
       Increase the performance of jitclass methods
     depends_on:
-        - llvm_ref_count_pruning
-        - new_licm_pass
+      - llvm_ref_count_pruning
+      - new_licm_pass
 
   - label: LLVM level ref count pruning
     id: llvm_ref_count_pruning
@@ -151,7 +151,7 @@ tasks:
     description: |
       Work out how to leverage gcov support in LLVM to enable coverage information
     depends_on:
-        - compiler_rt
+      - compiler_rt
 
   - label: LLVM compiler_rt support
     id: compiler_rt
@@ -169,19 +169,19 @@ tasks:
       Use / make pytest plugin to detect all test files which are new / changed
       relative to a given branch, and run only those tests
     depends_on:
-        - pytest
+      - pytest
 
   - label: Option to run 1/N slice of tests
     id: run_test_slice
     description: |
       Use / make pytest plugin to run 1/N of enumerated tests.
     depends_on:
-        - pytest
+      - pytest
 
   - label: Faster PR testing
     id: faster_pr_testing
     description: |
       Make automated PR testing with public CI services give faster feedback.
     depends_on:
-        - run_new_tests
-        - run_test_slice
+      - run_new_tests
+      - run_test_slice
