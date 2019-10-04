@@ -2800,6 +2800,10 @@ class TestParforsMisc(TestParforsBase):
     """
     _numba_parallel_test_ = False
 
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
     @skip_unsupported
     def test_no_warn_if_cache_set(self):
 
@@ -2853,6 +2857,17 @@ class TestParforsMisc(TestParforsBase):
             # recover global state
             numba.parfor.sequential_parfor_lowering = old_seq_flag
 
+    @skip_unsupported
+    def test_alias_analysis_for_parfor1(self):
+        def test_impl():
+            acc = 0
+            for _ in range(4):
+                acc += 1
+
+            data = np.zeros((acc,))
+            return data
+
+        self.check(test_impl)
 
 @skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
