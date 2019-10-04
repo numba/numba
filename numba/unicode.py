@@ -1296,7 +1296,7 @@ def unicode_istitle(s):
         str_has_abc = False
         prev_char_is_abc = False
         for char in s:
-            if _PyUnicode_IsUppercase(char):
+            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
                 if prev_char_is_abc:
                     return False
                 str_has_abc = True
