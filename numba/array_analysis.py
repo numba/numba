@@ -540,11 +540,13 @@ class ShapeEquivSet(EquivSet):
         newset.ind_to_var = ind_to_var
         return newset
 
-    def define(self, name):
+    def define(self, name, redefined):
         """Increment the internal count of how many times a variable is being
         defined. Most variables in Numba IR are SSA, i.e., defined only once,
         but not all of them. When a variable is being re-defined, it must
-        be removed from the equivalence relation.
+        be removed from the equivalence relation and added to the redefined
+        set. Those variables redefined are removed from all the blocks'
+        equivalence sets later.
         """
         if isinstance(name, ir.Var):
             name = name.name
@@ -554,6 +556,7 @@ class ShapeEquivSet(EquivSet):
             # equivalences. Believe it is a rare case, and only happens to
             # scalar accumuators.
             if name in self.obj_to_ind:
+                redefined.add(name) # remove this var from all equiv sets
                 i = self.obj_to_ind[name]
                 del self.obj_to_ind[name]
                 self.ind_to_obj[i].remove(name)
@@ -574,14 +577,14 @@ class ShapeEquivSet(EquivSet):
         else:
             self.defs[name] = 1
 
-    def union_defs(self, defs):
+    def union_defs(self, defs, redefined):
         """Union with the given defs dictionary. This is meant to handle
         branch join-point, where a variable may have been defined in more
         than one branches.
         """
         for k, v in defs.items():
             if v > 0:
-                self.define(k)
+                self.define(k, redefined)
 
 class SymbolicEquivSet(ShapeEquivSet):
 
@@ -741,7 +744,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                             super(SymbolicEquivSet, self)._insert(names)
             return value
 
-    def define(self, var, func_ir=None, typ=None):
+    def define(self, var, redefined, func_ir=None, typ=None):
         """Besides incrementing the definition count of the given variable
         name, it will also retrieve and simplify its definition from func_ir,
         and remember the result for later equivalence comparison. Supported
@@ -753,7 +756,7 @@ class SymbolicEquivSet(ShapeEquivSet):
             name = var.name
         else:
             name = var
-        super(SymbolicEquivSet, self).define(name)
+        super(SymbolicEquivSet, self).define(name, redefined)
         if (func_ir and self.defs.get(name, 0) == 1 and
                 isinstance(typ, types.Number)):
             value = guard(self._get_or_set_rel, name, func_ir)
@@ -894,6 +897,18 @@ class ArrayAnalysis(object):
         """
         return self.equiv_sets[block_label]
 
+    def remove_redefineds(self, redefineds):
+        """Take a set of variables in redefineds and go through all
+        the currently existing equivalence sets (created in topo order)
+        and remove that variable from all of them since it is multiply
+        defined within the function.
+        """
+        unused = set()
+        for r in redefineds:
+            for eslabel in self.equiv_sets:
+                es = self.equiv_sets[eslabel]
+                es.define(r, unused)
+
     def run(self, blocks=None, equiv_set=None):
         """run array shape analysis on the given IR blocks, resulting in
         modified IR and finalized EquivSet for each block.
@@ -911,8 +926,8 @@ class ArrayAnalysis(object):
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
 
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("variable types: ", sorted(self.typemap.items()))
-            print("call types: ", self.calltypes)
+            print("ArrayAnalysis variable types: ", sorted(self.typemap.items()))
+            print("ArrayAnalysis call types: ", self.calltypes)
 
         cfg = compute_cfg_from_blocks(blocks)
         topo_order = find_topo_order(blocks, cfg=cfg)
@@ -941,12 +956,20 @@ class ArrayAnalysis(object):
                     if (p, label) in self.prepends:
                         instrs = self.prepends[(p, label)]
                         for inst in instrs:
-                            self._analyze_inst(label, scope, from_set, inst)
+                            redefined = set()
+                            self._analyze_inst(label, scope, from_set, inst, redefined)
+                            # Remove anything multiply defined in this block 
+                            # from every block equivs.
+                            self.remove_redefineds(redefined)
                     if equiv_set == None:
                         equiv_set = from_set
                     else:
                         equiv_set = equiv_set.intersect(from_set)
-                        equiv_set.union_defs(from_set.defs)
+                        redefined = set()
+                        equiv_set.union_defs(from_set.defs, redefined)
+                        # Remove anything multiply defined in this block 
+                        # from every block equivs.
+                        self.remove_redefineds(redefined)
 
             # Start with a new equiv_set if none is computed
             if equiv_set == None:
@@ -955,7 +978,10 @@ class ArrayAnalysis(object):
             # Go through instructions in a block, and insert pre/post
             # instructions as we analyze them.
             for inst in block.body:
-                pre, post = self._analyze_inst(label, scope, equiv_set, inst)
+                redefined = set()
+                pre, post = self._analyze_inst(label, scope, equiv_set, inst, redefined)
+                # Remove anything multiply defined in this block from every block equivs.
+                self.remove_redefineds(redefined)
                 for instr in pre:
                     new_body.append(instr)
                 new_body.append(inst)
@@ -965,8 +991,8 @@ class ArrayAnalysis(object):
 
         if config.DEBUG_ARRAY_OPT >= 1:
             self.dump()
-            print("variable types: ", sorted(self.typemap.items()))
-            print("call types: ", self.calltypes)
+            print("ArrayAnalysis post variable types: ", sorted(self.typemap.items()))
+            print("ArrayAnalysis post call types: ", self.calltypes)
 
         dprint_func_ir(self.func_ir, "after array analysis", blocks)
 
@@ -980,7 +1006,7 @@ class ArrayAnalysis(object):
         self.func_ir._definitions[var.name] = [value]
         equiv_set.define(var, self.func_ir, typ)
 
-    def _analyze_inst(self, label, scope, equiv_set, inst):
+    def _analyze_inst(self, label, scope, equiv_set, inst, redefined):
         pre = []
         post = []
         if isinstance(inst, ir.Assign):
@@ -1020,7 +1046,7 @@ class ArrayAnalysis(object):
                     dimensional size equivalence ids to the lhs
                     equivalence id.
                 """
-                equiv_set.define(lhs, self.func_ir, typ)
+                equiv_set.define(lhs, redefined, self.func_ir, typ)
                 lhs_ind = equiv_set._get_ind(lhs.name)
                 if lhs_ind != -1:
                     equiv_set.wrap_map[(shape.slice_size, shape.dim_size)] = lhs_ind
@@ -1039,7 +1065,7 @@ class ArrayAnalysis(object):
 
             if shape != None:
                 equiv_set.insert_equiv(lhs, shape)
-            equiv_set.define(lhs, self.func_ir, typ)
+            equiv_set.define(lhs, redefined, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
             result = guard(self._index_to_shape,
