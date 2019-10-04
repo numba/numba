@@ -912,7 +912,7 @@ class TestUnicode(BaseTest):
         pyfunc = istitle_usecase
         cfunc = njit(pyfunc)
         error_msg = "'{0}'.py_istitle() = {1}\n'{0}'.c_istitle() = {2}"
-        
+
         unicode_title = [x.title() for x in UNICODE_EXAMPLES]
         special = [
             '',
@@ -932,10 +932,12 @@ class TestUnicode(BaseTest):
             '𐑎',
             '🐍 Is',
             '🐍 NOT',
-            '👯Is'
+            '👯Is',
+            'ῼ',
+            'Greek ῼitlecases ...'
         ]
         ISTITLE_EXAMPLES = UNICODE_EXAMPLES + unicode_title + special
-        
+
         for s in ISTITLE_EXAMPLES:
             py_result = pyfunc(s)
             c_result = cfunc(s)
