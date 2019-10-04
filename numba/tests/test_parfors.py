@@ -2662,7 +2662,7 @@ class TestParforsSlice(TestParforsBase):
 
     @skip_unsupported
     def test_parfor_slice20(self):
-        # issues #4075, slice size
+        # issue #4075, slice size
         def test_impl():
             a = np.ones(10)
             c = a[1:]
@@ -2681,6 +2681,15 @@ class TestParforsSlice(TestParforsBase):
         x1 = np.random.rand(5)
         x2 = np.random.rand(6)
         self.check(test_impl, x1, x2)
+
+    @skip_unsupported
+    def test_parfor_slice22(self):
+        # issue #4630
+        def test_impl(x):
+            x[:0] = 2
+            return x
+
+        self.check(test_impl, np.ones(10))
 
 class TestParforsOptions(TestParforsBase):
 
