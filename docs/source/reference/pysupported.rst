@@ -183,6 +183,7 @@ The following functions, attributes and methods are currently supported:
 * ``.isupper()``
 * ``.upper()``
 * ``.zfill()``
+* ``.count()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -404,8 +405,10 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
-dict
-----
+.. _feature-typed-dict:
+
+Typed Dict
+''''''''''
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change
