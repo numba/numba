@@ -658,16 +658,21 @@ def isneginf(x, out=None):
     if not type_can_asarray(x):
         raise TypingError("First argument must be array-like")
 
+    if numpy_version <= (1, 12):
+        wrapper = register_jitable(lambda x: np.asarray(x))
+    else:
+        wrapper = register_jitable(lambda x: x[()])
+
     if is_nonelike(out):
         def impl(x, out=None):
             x = np.asarray(x)
             out = np.zeros(x.shape, dtype=types.boolean)
             np.logical_and(np.isinf(x), np.signbit(x), out)
-            return out[()] # hack when y is scalar
+            return wrapper(out)
     else:
         def impl(x, out=None):
             np.logical_and(np.isinf(x), np.signbit(x), out)
-            return out[()] # hack when y is scalar
+            return wrapper(out)
     return impl
 
 
