@@ -52,13 +52,16 @@ tasks:
   - label: Unify and add more test suite tooling
     id: improve_test_suite_tooling
     description: |
-      Add tools to help with common patterns in testing and unify the ones we have, there's no need for 12 spellings of "is this Python 3"
-      Also decide on "what to test", do all types need testing if inputs are being "as_array"'d?
+      Add tools to help with common patterns in testing and unify the ones we
+      have, there's no need for 12 spellings of "is this Python 3" Also decide
+      on "what to test", do all types need testing if inputs are being
+      "as_array"'d?
 
   - label: Pipeline pass formalisation
     id: pass_formalisation
     description: |
-      Decide on a formal description of a compiler pass and create supporting code for it
+      Decide on a formal description of a compiler pass and create supporting
+      code for it
 
   - label: Array expression fusion pass
     id: new_array_expr_fusion_pass
@@ -84,7 +87,8 @@ tasks:
   - label: Mode based pipeline
     id: mode_based_pipeline
     description: |
-      Switch the jit decorator to use a mode based pipeline with `nopython=True` equivalent as default.
+      Switch the jit decorator to use a mode based pipeline with
+      `nopython=True` equivalent as default.
 
   - label: Remove object mode fallback
     id: remove_objmode_fallback
@@ -96,7 +100,8 @@ tasks:
   - label: Switch to ORC JIT
     id: orc_jit
     description: |
-      MCJIT has been deprecated for some time.  Need to switch to the newer ORC JIT class.
+      MCJIT has been deprecated for some time.  Need to switch to the newer
+      ORC JIT class.
 
   - label: Performance analysis suite
     id: perform_analysis_suite
@@ -110,13 +115,14 @@ tasks:
   - label: Vectorisation analysis
     id: vectorisation_analysis
     description: |
-      Obtain LLVMs vectorisation reports and present these in a user friendly manner
+      Obtain LLVMs vectorisation reports and present these in a user friendly
+      manner
 
   - label: Line profiling
     id: line_profiling
     description: |
-      Support collection of profiling statistics from compiled machine code and map back to
-      lines of Python.
+      Support collection of profiling statistics from compiled machine code
+      and map back to lines of Python.
     depends_on:
       - orc_jit
       - assembly_analysis_tooling
@@ -124,7 +130,8 @@ tasks:
   - label: Assembly analysis tooling
     id: assembly_analysis_tooling
     description: |
-      Tie generated assembly back to python lines and annotate instruction quality
+      Tie generated assembly back to python lines and annotate instruction
+      quality
     depends_on:
       - capstone
 
@@ -149,7 +156,8 @@ tasks:
   - label: JITted coverage information
     id: jitted_coverage_info
     description: |
-      Work out how to leverage gcov support in LLVM to enable coverage information
+      Work out how to leverage gcov support in LLVM to enable coverage
+      information
     depends_on:
       - compiler_rt
 
@@ -166,8 +174,8 @@ tasks:
   - label: Option to run modified tests only
     id: run_new_tests
     description: |
-      Use / make pytest plugin to detect all test files which are new / changed
-      relative to a given branch, and run only those tests
+      Use / make pytest plugin to detect all test files which are new /
+      changed relative to a given branch, and run only those tests
     depends_on:
       - pytest
 

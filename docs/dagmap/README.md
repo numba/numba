@@ -19,7 +19,8 @@ conda install jinja2 python-graphviz pyyaml
 ./render.py -o dagmap.html dagmap.yaml
 ```
 
-The generated HTML file will look for `jquery.graphviz.svg.js` in the same directory.
+The generated HTML file will look for `jquery.graphviz.svg.js` in the same
+directory.
 
 ## Updating the DAG
 

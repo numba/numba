@@ -148,6 +148,9 @@ limitations under the License.
 
 jquery.graphviz.svg (https://github.com/mountainstorm/jquery.graphviz.svg/)
 ---------------------------------------------------------------------------
+The DAG roadmap rendering code in docs/dagmap/ uses Javascript from this 
+package to draw graphs in HTML.
+
 Copyright (c) 2015 Mountainstorm
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
