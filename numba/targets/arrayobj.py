@@ -1693,7 +1693,8 @@ def np_append(arr, values, axis=None):
         raise errors.TypingError('The first argument "arr" must be array-like')
 
     if not type_can_asarray(values):
-        raise errors.TypingError('The second argument "values" must be array-like')
+        raise errors.TypingError('The second argument "values" must be '
+                                 'array-like')
 
     if is_nonelike(axis):
         def impl(arr, values, axis=None):
@@ -1703,7 +1704,8 @@ def np_append(arr, values, axis=None):
     else:
 
         if not isinstance(axis, types.Integer):
-            raise errors.TypingError('The third argument "axis" must be an integer')
+            raise errors.TypingError('The third argument "axis" must be an '
+                                     'integer')
 
         def impl(arr, values, axis=None):
             return np.concatenate((arr, values), axis=axis)

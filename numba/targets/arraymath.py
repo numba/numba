@@ -189,8 +189,8 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
         different instances that do take consts.  Supporting axis summation
         only up to the fourth dimension for now.
 
-        typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-        It is one dimension less than the input array.
+        typing/arraydecl.py:sum_expand defines the return type for sum with
+        axis. It is one dimension less than the input array.
         """
         ndim = arr.ndim
 

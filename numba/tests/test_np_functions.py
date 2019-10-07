@@ -1247,7 +1247,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def _triangular_indices_tests_n_k_m(self, pyfunc):
         self._triangular_indices_tests_base(
             pyfunc,
-            [[n, k, m] for n in range(10) for k in range(-n - 1, n + 2) for m in range(2 * n)]
+            [[n, k, m] for n in range(10)
+             for k in range(-n - 1, n + 2)
+             for m in range(2 * n)]
         )
 
         # Check jitted version works with default values for kwargs
