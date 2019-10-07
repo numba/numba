@@ -6,7 +6,7 @@ import enum
 
 import numpy as np
 
-from numba import numpy_support, types, utils, smartarray
+from numba import numpy_support, types, utils
 from numba import errors
 
 # terminal color markup
@@ -221,11 +221,6 @@ def _typeof_ndarray(val, c):
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
-
-@typeof_impl.register(smartarray.SmartArray)
-def typeof_array(val, c):
-    arrty = typeof_impl(val.get('host'), c)
-    return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
 
 @typeof_impl.register(types.NumberClass)

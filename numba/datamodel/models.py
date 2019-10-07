@@ -865,16 +865,6 @@ class ArrayFlagsModel(StructModel):
         super(ArrayFlagsModel, self).__init__(dmm, fe_type, members)
 
 
-@register_default(types.SmartArrayType)
-class SmartArrayModel(StructModel):
-    def __init__(self, dmm, fe_type):
-        members = [
-            ('parent', types.pyobject),
-            ('data', fe_type.as_array)
-        ]
-        super(SmartArrayModel, self).__init__(dmm, fe_type, members)
-
-
 @register_default(types.NestedArray)
 class NestedArrayModel(ArrayModel):
     def __init__(self, dmm, fe_type):

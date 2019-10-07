@@ -26,8 +26,6 @@ from .errors import *
 # Re-export all type names
 from .types import *
 
-from .smartarray import SmartArray
-
 # Re-export decorators
 from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
                          jit_module)
@@ -78,7 +76,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 29, 0)
+_min_llvmlite_version = (0, 30, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():
