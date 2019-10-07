@@ -38,6 +38,10 @@ class Environment(_dynfunc.Environment):
             cls._memo[fndesc.env_name] = inst
             return inst
 
+    @classmethod
+    def from_mod(cls, mod):
+        return cls(mod.__dict__)
+
     def __reduce__(self):
         return _rebuild_env, (
             self.globals['__name__'],
@@ -152,6 +156,13 @@ class BaseLower(object):
         """
         Called after all blocks are lowered
         """
+        # Add omp offloading metadata if present.
+        if hasattr(self, 'omp_offload'):
+            print("Has omp_offload")
+            omp_offload_metadata = self.module.get_or_insert_named_metadata('omp_offload.info')
+            for oi in self.omp_offload:
+                omp_offload_metadata.add(oi)
+
         self.debuginfo.finalize()
 
     def pre_block(self, block):
@@ -190,6 +201,8 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
+            import sys
+            sys.stdout.flush()
 
         # Special optimization to remove NRT on functions that do not need it.
         if self.context.enable_nrt and self.generator_info is None:

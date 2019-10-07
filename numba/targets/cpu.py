@@ -35,6 +35,17 @@ class EnvBody(cgutils.Structure):
     ]
 
 
+#ll.set_option('openmp', '-debug')
+ll.set_option('openmp', '-paropt=31')
+ll.set_option('openmp', '-fopenmp')
+#ll.set_option('openmp', '-fiopenmp')
+ll.set_option('openmp', '-fintel-compatibility')
+ll.set_option('openmp', '-mllvm')
+ll.set_option('openmp', '-fintel-openmp-region')
+ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
+#ll.set_option('openmp', '-print-after-all')
+#ll.set_option('openmp', '-debug-pass=Structure')
+
 class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
@@ -47,6 +58,19 @@ class CPUContext(BaseContext):
 
     @global_compiler_lock
     def init(self):
+        """
+#        ll.set_option('openmp', '-debug')
+        ll.set_option('openmp', '-paropt=31')
+        ll.set_option('openmp', '-fopenmp')
+#        ll.set_option('openmp', '-fiopenmp')
+        ll.set_option('openmp', '-fintel-compatibility')
+        ll.set_option('openmp', '-mllvm')
+        ll.set_option('openmp', '-fintel-openmp-region')
+        ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
+        #ll.set_option('openmp', '-print-after-all')
+        #ll.set_option('openmp', '-debug-pass=Structure')
+        """
+
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
@@ -160,6 +184,12 @@ class CPUContext(BaseContext):
                                 fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
         builder.build()
+        if config.DUMP_LLVM:
+            print(("LLVM WRAPPER DUMP %s" % fndesc).center(80, '-'))
+            print(wrapper_module)
+            print('=' * 80)
+            import sys
+            sys.stdout.flush()
         library.add_ir_module(wrapper_module)
 
     def get_executable(self, library, fndesc, env):
@@ -197,6 +227,74 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
+
+class FastMathOptions(object):
+    """
+    Options for controlling fast math optimization.
+    """
+    def __init__(self, value):
+        # https://releases.llvm.org/7.0.0/docs/LangRef.html#fast-math-flags
+        valid_flags = {
+            'fast',
+            'nnan', 'ninf', 'nsz', 'arcp',
+            'contract', 'afn', 'reassoc',
+        }
+
+        if value is True:
+            self.flags = {'fast'}
+        elif value is False:
+            self.flags = set()
+        elif isinstance(value, set):
+            invalid = value - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = value
+        elif isinstance(value, dict):
+            invalid = set(value.keys()) - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = {v for v, enable in value.items() if enable}
+        else:
+            raise ValueError("Expected fastmath option(s) to be either a bool, dict or set")
+
+    def __bool__(self):
+        return bool(self.flags)
+
+    __nonzero__ = __bool__
+
+
+class ParallelOptions(object):
+    """
+    Options for controlling auto parallelization.
+    """
+    def __init__(self, value):
+        self.csa = False
+        self.gen_openmp = False
+        if isinstance(value, bool):
+            self.enabled = value
+            self.comprehension = value
+            self.reduction = value
+            self.setitem = value
+            self.numpy = value
+            self.stencil = value
+            self.fusion = value
+            self.prange = value
+        elif isinstance(value, dict):
+            self.enabled = True
+            self.comprehension = value.pop('comprehension', True)
+            self.reduction = value.pop('reduction', True)
+            self.setitem = value.pop('setitem', True)
+            self.numpy = value.pop('numpy', True)
+            self.stencil = value.pop('stencil', True)
+            self.fusion = value.pop('fusion', True)
+            self.prange = value.pop('prange', True)
+            self.csa = value.pop('csa', False)
+            self.gen_openmp = value.pop('openmp', False)
+            if value:
+                raise NameError("Unrecognized parallel options: %s" % value.keys())
+        else:
+            raise ValueError("Expect parallel option to be either a bool or a dict")
 
 
 # ----------------------------------------------------------------------------
