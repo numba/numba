@@ -374,7 +374,7 @@ class TestSpecificBackend(TestParallelBackendBase):
     def run_test_in_separate_process(self, test, threading_layer):
         env_copy = os.environ.copy()
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
-        cmdline = [sys.executable, "-m", "numba.runtests", test]
+        cmdline = ["catchsegv", sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
 
     @classmethod

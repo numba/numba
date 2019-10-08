@@ -617,8 +617,8 @@ def _split_nonparallel_tests(test):
         stests = _flatten_suite(test)
     return ptests, stests
 
-# A test can't run longer than 10 minutes
-_TIMEOUT = 600
+# A test can't run longer than about a working week
+_TIMEOUT = 500000
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
