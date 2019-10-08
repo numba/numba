@@ -249,17 +249,15 @@ class TestCudaArrayInterface(CUDATestCase):
         hostarray = np.arange(10).reshape(2, 5)
         face = cuda.to_device(hostarray).__cuda_array_interface__
         self.assertIsNone(face['strides'])
-        np.testing.assert_array_equal(
-            cuda.from_cuda_array_interface(face).copy_to_host(),
-            hostarray,
-        )
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
         # Try non-NULL strides
         face['strides'] = hostarray.strides
         self.assertIsNotNone(face['strides'])
-        np.testing.assert_array_equal(
-            cuda.from_cuda_array_interface(face).copy_to_host(),
-            hostarray,
-        )
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
 
 
 if __name__ == "__main__":
