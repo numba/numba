@@ -95,7 +95,7 @@ class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
         # Check reconstructed dufunc
         r = rebuilt(123)
         self.assertEqual(123, r)
-        self.assertIsInstance(r, (int, np.integer))
+        self.assertIsInstance(r, result_type)
 
         # Try to use reconstructed dufunc in @jit
         @njit
@@ -104,7 +104,7 @@ class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
 
         r = foo(321)
         self.assertEqual(321, r)
-        self.assertIsInstance(r, (int, np.integer))
+        self.assertIsInstance(r, result_type)
 
     def test_unrestricted(self):
         @vectorize
