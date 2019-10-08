@@ -1,7 +1,5 @@
 from __future__ import absolute_import, print_function, division
 
-import numpy as np
-
 from numba import serialize
 
 from .. import jit, typeof, utils, types, numpy_support, sigutils
@@ -10,6 +8,7 @@ from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
 from ..dispatcher import Dispatcher
 from .. import array_analysis
+
 
 def make_dufunc_kernel(_dufunc):
     from ..targets import npyimpl
@@ -65,6 +64,7 @@ class DUFuncLowerer(object):
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
                                           self.kernel,
                                           explicit_output=explicit_output)
+
 
 class DUFunc(_internal._DUFunc):
     """
@@ -304,5 +304,6 @@ class DUFunc(_internal._DUFunc):
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
             [(self._lower_me, self, sig) for sig in (sig0, sig1)])
+
 
 array_analysis.MAP_TYPES.append(DUFunc)

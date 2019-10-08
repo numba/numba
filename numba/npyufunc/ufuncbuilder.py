@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
-import warnings
 import inspect
 from contextlib import contextmanager
-
-import numpy as np
 
 from numba import serialize
 from numba.decorators import jit
@@ -61,9 +58,14 @@ class UFuncDispatcher(object):
 
     def __reduce__(self):
         globs = serialize._get_function_globals_for_reduction(self.py_func)
-        return (serialize._rebuild_reduction,
-            (self.__class__, serialize._reduce_function(self.py_func, globs),
-             self.locals, self.targetoptions))
+        return (
+            serialize._rebuild_reduction,
+            (
+                self.__class__,
+                serialize._reduce_function(self.py_func, globs),
+                self.locals, self.targetoptions,
+            ),
+        )
 
     @classmethod
     def _rebuild(cls, redfun, locals, targetoptions):
@@ -104,7 +106,7 @@ class UFuncDispatcher(object):
             # use to ensure overloads are stored on success
             try:
                 yield
-            except:
+            except Exception:
                 raise
             else:
                 exists = self.overloads.get(cres.signature)
@@ -131,6 +133,7 @@ class UFuncDispatcher(object):
 
                 return cres
 
+
 dispatcher_registry['npyufunc'] = UFuncDispatcher
 
 
@@ -142,6 +145,7 @@ def _compile_element_wise_function(nb_func, targetoptions, sig):
     cres = nb_func.compile(sig, **targetoptions)
     args, return_type = sigutils.normalize_signature(sig)
     return cres, args, return_type
+
 
 def _finalize_ufunc_signature(cres, args, return_type):
     '''Given a compilation result, argument types, and a return type,
@@ -157,6 +161,7 @@ def _finalize_ufunc_signature(cres, args, return_type):
 
     assert return_type != types.pyobject
     return return_type(*args)
+
 
 def _build_element_wise_ufunc_wrapper(cres, signature):
     '''Build a wrapper for the ufunc loop entry point given by the
@@ -181,7 +186,8 @@ _identities = {
     1: _internal.PyUFunc_One,
     None: _internal.PyUFunc_None,
     "reorderable": _internal.PyUFunc_ReorderableNone,
-    }
+}
+
 
 def parse_identity(identity):
     """
@@ -267,9 +273,11 @@ class UFuncBuilder(_BaseUFuncBuilder):
             # For instance, -1 for typenum will cause segfault.
             # If elements of type-list (2nd arg) is tuple instead,
             # there will also memory corruption. (Seems like code rewrite.)
-            ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
-                                    ptrlist, dtypelist, inct, outct, datlist,
-                                    keepalive, self.identity)
+            ufunc = _internal.fromfunc(
+                self.py_func.__name__, self.py_func.__doc__,
+                ptrlist, dtypelist, inct, outct, datlist,
+                keepalive, self.identity,
+            )
 
             return ufunc
 
@@ -326,9 +334,11 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         outct = len(self.sout)
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
-        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
-                                ptrlist, dtypelist, inct, outct, datlist,
-                                keepalive, self.identity, self.signature)
+        ufunc = _internal.fromfunc(
+            self.py_func.__name__, self.py_func.__doc__,
+            ptrlist, dtypelist, inct, outct, datlist,
+            keepalive, self.identity, self.signature,
+        )
         return ufunc
 
     def build(self, cres):
