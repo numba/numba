@@ -7,6 +7,7 @@ from contextlib import contextmanager
 
 import numpy as np
 
+from numba import serialize
 from numba.decorators import jit
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
@@ -41,6 +42,7 @@ class UFuncTarget(TargetDescriptor):
     def target_context(self):
         return cpu_target.target_context
 
+
 ufunc_target = UFuncTarget()
 
 
@@ -56,6 +58,17 @@ class UFuncDispatcher(object):
         self.targetoptions = targetoptions
         self.locals = locals
         self.cache = NullCache()
+
+    def __reduce__(self):
+        globs = serialize._get_function_globals_for_reduction(self.py_func)
+        return (serialize._rebuild_reduction,
+            (self.__class__, serialize._reduce_function(self.py_func, globs),
+             self.locals, self.targetoptions))
+
+    @classmethod
+    def _rebuild(cls, redfun, locals, targetoptions):
+        return cls(serialize._rebuild_function(*redfun),
+                   locals, targetoptions)
 
     def enable_caching(self):
         self.cache = FunctionCache(self.py_func)
@@ -117,7 +130,6 @@ class UFuncDispatcher(object):
                 self.cache.save_overload(sig, cres)
 
                 return cres
-
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher
 

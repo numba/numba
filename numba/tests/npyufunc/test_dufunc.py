@@ -1,11 +1,13 @@
 from __future__ import print_function, absolute_import, division
-from numba import unittest_support as unittest
+
+import pickle
 
 import numpy as np
 
-from numba import njit
+from numba import njit, vectorize
 from numba.npyufunc import dufunc
 from ..support import MemoryLeakMixin
+from numba import unittest_support as unittest
 
 
 def pyuadd(a0, a1):
@@ -83,6 +85,56 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         duadd(1, 2)
         self.assertEqual(duadd.ntypes, 1)
         self.assertEqual(duadd.ntypes, len(duadd.types))
+
+
+class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
+    def test_unrestricted(self):
+        @vectorize
+        def ident(x1):
+            return x1
+
+        buf = pickle.dumps(ident)
+        del ident
+        rebuilt = pickle.loads(buf)
+
+        # Check reconstructed dufunc
+        r = rebuilt(123)
+        self.assertEqual(123, r)
+        self.assertIsInstance(r, (int, np.integer))
+
+        # Try to use reconstructed dufunc in @jit
+        @njit
+        def foo(x):
+            return rebuilt(x)
+
+        r = foo(321)
+        self.assertEqual(321, r)
+        self.assertIsInstance(r, (int, np.integer))
+
+    def test_restricted(self):
+        @vectorize(["float64(float64)"])
+        def ident(x1):
+            return x1
+
+        buf = pickle.dumps(ident)
+        del ident
+        rebuilt = pickle.loads(buf)
+
+        # Check reconstructed dufunc
+        r = rebuilt(123)
+        self.assertEqual(123.0, r)
+        self.assertIsInstance(r, float)
+
+        # Try to use reconstructed dufunc in @jit
+        @njit
+        def foo(x):
+            return rebuilt(x)
+
+        r = foo(321)
+        self.assertEqual(321.0, r)
+        self.assertIsInstance(r, float)
+
+
 
 if __name__ == "__main__":
     unittest.main()

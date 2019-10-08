@@ -2,6 +2,8 @@ from __future__ import absolute_import, print_function, division
 
 import numpy as np
 
+from numba import serialize
+
 from .. import jit, typeof, utils, types, numpy_support, sigutils
 from ..typing import npydecl
 from ..typing.templates import AbstractTemplate, signature
@@ -64,7 +66,6 @@ class DUFuncLowerer(object):
                                           self.kernel,
                                           explicit_output=explicit_output)
 
-
 class DUFunc(_internal._DUFunc):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
@@ -78,25 +79,46 @@ class DUFunc(_internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
-        self.targetoptions = targetoptions.copy()
-        kws = {}
-        kws['identity'] = ufuncbuilder.parse_identity(identity)
-
         dispatcher = jit(target='npyufunc', cache=cache)(py_func)
-        super(DUFunc, self).__init__(dispatcher, **kws)
+        self._initialize(dispatcher, identity)
+
+    def _initialize(self, dispatcher, identity):
+        identity = ufuncbuilder.parse_identity(identity)
+        super(DUFunc, self).__init__(dispatcher, identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
         self._install_type()
         self._lower_me = DUFuncLowerer(self)
         self._install_cg()
-        self.__name__ = py_func.__name__
-        self.__doc__ = py_func.__doc__
+        self.__name__ = dispatcher.py_func.__name__
+        self.__doc__ = dispatcher.py_func.__doc__
+
+    def __reduce__(self):
+        siglist = list(self._dispatcher.overloads.keys())
+        return (serialize._rebuild_reduction,
+                (self.__class__, self._dispatcher, self.identity,
+                 self._frozen, siglist))
+
+    @classmethod
+    def _rebuild(cls, dispatcher, identity, frozen, siglist):
+        self = _internal._DUFunc.__new__(cls)
+        self._initialize(dispatcher, identity)
+        # Re-add signatures
+        for sig in siglist:
+            self.add(sig)
+        if frozen:
+            self.disable_compile()
+        return self
 
     def build_ufunc(self):
         """
         For compatibility with the various *UFuncBuilder classes.
         """
         return self
+
+    @property
+    def targetoptions(self):
+        return self._dispatcher.targetoptions
 
     @property
     def nin(self):
