@@ -508,7 +508,7 @@ class TestOverloadInlining(InliningBase):
             self.check(impl, inline_expect={'foo': True})
 
         self.assertIn("Stararg not supported in inliner for arg 1 *b",
-            str(e.exception))
+                      str(e.exception))
 
     def test_basic_inline_combos(self):
 
