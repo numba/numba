@@ -131,7 +131,7 @@ class DeviceNDArrayBase(object):
             'strides': strides,
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 1,
+            'version': 2,
         }
 
     def bind(self, stream=0):
