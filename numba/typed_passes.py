@@ -13,7 +13,7 @@ from .compiler_machinery import FunctionPass, LoweringPass, register_pass
 from .annotations import type_annotations
 from .ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                        check_and_legalize_ir, guard, dead_code_elimination,
-                       simplify_CFG)
+                       simplify_CFG, get_definition)
 
 
 @contextmanager
@@ -487,12 +487,22 @@ class InlineOverloads(FunctionPass):
         if not hasattr(func_ty, 'get_call_type'):
             return False
 
+        sig = state.type_annotation.calltypes[expr]
+        is_method = False
+
         # search the templates for this overload looking for "inline"
-        templates = getattr(func_ty, 'templates', None)
+        if getattr(func_ty, 'template', None) is not None:
+            # @overload_method
+            is_method = True
+            templates = [func_ty.template]
+            arg_typs = (func_ty.template.this,) + sig.args
+        else:
+            # @overload case
+            templates = getattr(func_ty, 'templates', None)
+            arg_typs = sig.args
+
         if templates is None:
             return False
-
-        sig = state.type_annotation.calltypes[expr]
 
         impl = None
         for template in templates:
@@ -502,7 +512,7 @@ class InlineOverloads(FunctionPass):
                 continue
             if not inline_type.is_never_inline:
                 try:
-                    impl = template._overload_func(*sig.args)
+                    impl = template._overload_func(*arg_typs)
                     if impl is None:
                         raise Exception  # abort for this template
                     break
@@ -523,14 +533,16 @@ class InlineOverloads(FunctionPass):
                                               sig)
 
             # must be a cost-model function, run the function
-            iinfo = template._inline_overloads[sig.args]['iinfo']
+            iinfo = template._inline_overloads[arg_typs]['iinfo']
             if inline_type.has_cost_model:
                 do_inline = inline_type.value(expr, caller_inline_info, iinfo)
             else:
                 assert 'unreachable'
 
         if do_inline:
-            arg_typs = template._inline_overloads[sig.args]['folded_args']
+            if is_method:
+                self._add_method_self_arg(state, expr)
+            arg_typs = template._inline_overloads[arg_typs]['folded_args']
             # pass is typed so use the callee globals
             inline_closure_call(state.func_ir, impl.__globals__,
                                 block, i, impl, typingctx=state.typingctx,
@@ -543,6 +555,9 @@ class InlineOverloads(FunctionPass):
             return True
         else:
             return False
+
+    def _add_method_self_arg(self, state, expr):
+        expr.args.insert(0, get_definition(state.func_ir, expr.func).value)
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)

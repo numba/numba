@@ -769,19 +769,25 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+            _inline = self._inline
+            _overload_func = self._overload_func
+            _inline_overloads = self._inline_overloads
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
                 fnty = self._get_function_type(self.context, typ)
                 sig = self._get_signature(self.context, fnty, args, kws)
                 sig = sig.replace(pysig=utils.pysignature(self._overload_func))
+                # XXX
+                [template] = fnty.templates
+                self._inline_overloads.update(template._inline_overloads)
                 if sig is not None:
                     return sig.as_method()
 
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func,
+def make_overload_attribute_template(typ, attr, overload_func, inline,
                                      base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
@@ -791,18 +797,22 @@ def make_overload_attribute_template(typ, attr, overload_func,
     name = "OverloadTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
+               _inline=staticmethod(InlineOptions(inline)),
+               _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
 
 
-def make_overload_method_template(typ, attr, overload_func):
+def make_overload_method_template(typ, attr, overload_func, inline):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
-    return make_overload_attribute_template(typ, attr, overload_func,
-                                            base=_OverloadMethodTemplate)
+    return make_overload_attribute_template(
+        typ, attr, overload_func, inline=inline,
+        base=_OverloadMethodTemplate,
+    )
 
 
 def bound_function(template_key):

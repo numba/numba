@@ -167,7 +167,10 @@ def overload_attribute(typ, attr, **kwargs):
     from .typing.templates import make_overload_attribute_template
 
     def decorate(overload_func):
-        template = make_overload_attribute_template(typ, attr, overload_func)
+        template = make_overload_attribute_template(
+            typ, attr, overload_func,
+            inline=kwargs.get('inline', 'never'),
+        )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)
         return overload_func
@@ -198,7 +201,10 @@ def overload_method(typ, attr, **kwargs):
     from .typing.templates import make_overload_method_template
 
     def decorate(overload_func):
-        template = make_overload_method_template(typ, attr, overload_func)
+        template = make_overload_method_template(
+            typ, attr, overload_func,
+            inline=kwargs.get('inline', 'never'),
+        )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)
         return overload_func
