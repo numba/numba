@@ -88,13 +88,8 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
-    def test_unrestricted(self):
-        @vectorize
-        def ident(x1):
-            return x1
-
+    def check(self, ident, result_type):
         buf = pickle.dumps(ident)
-        del ident
         rebuilt = pickle.loads(buf)
 
         # Check reconstructed dufunc
@@ -111,29 +106,19 @@ class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
         self.assertEqual(321, r)
         self.assertIsInstance(r, (int, np.integer))
 
+    def test_unrestricted(self):
+        @vectorize
+        def ident(x1):
+            return x1
+
+        self.check(ident, result_type=(int, np.integer))
+
     def test_restricted(self):
         @vectorize(["float64(float64)"])
         def ident(x1):
             return x1
 
-        buf = pickle.dumps(ident)
-        del ident
-        rebuilt = pickle.loads(buf)
-
-        # Check reconstructed dufunc
-        r = rebuilt(123)
-        self.assertEqual(123.0, r)
-        self.assertIsInstance(r, float)
-
-        # Try to use reconstructed dufunc in @jit
-        @njit
-        def foo(x):
-            return rebuilt(x)
-
-        r = foo(321)
-        self.assertEqual(321.0, r)
-        self.assertIsInstance(r, float)
-
+        self.check(ident, result_type=float)
 
 
 if __name__ == "__main__":
