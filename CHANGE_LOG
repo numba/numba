@@ -10,7 +10,7 @@ discovered. There were also a number of other related compiler toolkit
 enhancement added along with some more NumPy features and a lot of bug fixes.
 
 This release has updated the CUDA Array Interface specification to version 2,
-which clarified the `strides` attribute for C-contiguous arrays and specified
+which clarifies the `strides` attribute for C-contiguous arrays and specifies
 the treatment for zero-size arrays. The implementation in Numba has been
 changed and may affect downstream packages relying on the old behavior
 (see issue #4661).
