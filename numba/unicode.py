@@ -1291,7 +1291,7 @@ def unicode_istitle(s):
     """
     Implements UnicodeType.istitle()
     The algorithm is an approximate translation from CPython:
-    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885
+    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
     """
 
     def impl(s):
