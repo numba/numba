@@ -9,6 +9,12 @@ Numba-using projects to automatically have their Numba JIT compilable functions
 discovered. There were also a number of other related compiler toolkit
 enhancement added along with some more NumPy features and a lot of bug fixes.
 
+This release has updated the CUDA Array Interface specification to version 2,
+which clarified the `strides` attribute for C-contiguous arrays and specified
+the treatment for zero-size arrays. The implementation in Numba has been
+changed and may affect downstream packages relying on the old behavior
+(see issue #4661).
+
 Enhancements from user contributed PRs (with thanks!):
 
 * Aaron Meurer fixed some Python issues in the code base in #4345 and #4341.
@@ -69,7 +75,7 @@ Fixes:
 * PR #4305: Don't allow the allocation of mutable objects written into a
   container to be hoisted.
 * PR #4311: Avoid deprecated use of inspect.getargspec
-* PR #4328:  Replace GC macro with function call 
+* PR #4328:  Replace GC macro with function call
 * PR #4330: Loosen up typed container casting checks
 * PR #4341: Fix some coding lines at the top of some files (utf8 -> utf-8)
 * PR #4345: Replace "import *" with explicit imports in numba/types
@@ -110,6 +116,7 @@ CUDA Enhancements/Fixes:
   sharedmem
 * PR #4609: Update CUDA Array Interface & Enforce Numba compliance
 * PR #4619: Implement math.{degrees, radians} for the CUDA target.
+* PR #4675: Bump cuda array interface to version 2
 
 Documentation Updates:
 
