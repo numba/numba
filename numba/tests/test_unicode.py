@@ -748,7 +748,7 @@ class TestUnicode(BaseTest):
         with self.assertRaises(TypingError) as raises:
             cfunc('', [1, 2, 3])
         # This error message is obscure, but indicates the error was trapped
-        # in typing of str.join()
+        # in the typing of str.join()
         # Feel free to change this as we update error messages.
         exc_message = str(raises.exception)
         self.assertIn("Invalid use of BoundFunction", exc_message)

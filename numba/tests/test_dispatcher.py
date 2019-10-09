@@ -400,7 +400,8 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all explict references?
+        # do we get the same object even if we delete all the explict
+        # references?
         id_orig = id(foo_rebuilt)
         del foo
         del foo_rebuilt
@@ -1320,7 +1321,8 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertIsNone(locator)
 
             sys.frozen = True
-            # returns cache locator object, only works when executable is frozen
+            # returns a cache locator object, only works when the executable
+            # is frozen
             locator = _UserWideCacheLocator.from_function(function, source)
             self.assertIsInstance(locator, _UserWideCacheLocator)
 

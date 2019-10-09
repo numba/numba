@@ -732,7 +732,8 @@ class TestOverloadInlining(InliningBase):
         def impl():
             a = bar(1)  # integer literal, should inline
             b = bar(2.3)  # float literal, should not inline
-            c = bar(3j)  # complex literal, should inline via cost model
+            # complex literal, should inline by virtue of cost model
+            c = bar(3j)
             return a + b + c
 
         # there should still be a `bar` not inlined

@@ -1368,10 +1368,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         expected = pyfunc(a, kth)
         got = cfunc(a, kth)
 
-        # but we do expect unordered collection of elements up to kth to tie out
+        # but we do expect the unordered collection of elements up to the
+        # kth to tie out
         self.assertPreciseEqual(np.unique(expected[:kth]), np.unique(got[:kth]))
 
-        # likewise the unordered collection of elements from kth onwards
+        # likewise the unordered collection of elements from the kth onwards
         self.assertPreciseEqual(np.unique(expected[kth:]), np.unique(got[kth:]))
 
     def test_partition_fuzz(self):
