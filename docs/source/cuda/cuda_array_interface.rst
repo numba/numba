@@ -1,8 +1,8 @@
 .. _cuda-array-interface:
 
-====================
-CUDA Array Interface
-====================
+================================
+CUDA Array Interface (Version 2)
+================================
 
 The *cuda array inteface* is created for interoperability between different
 implementation of GPU array-like objects in various projects.  The idea is
@@ -91,7 +91,7 @@ include:
 .. _numpy array interface: https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html#__array_interface__
 
 
-Differences with CUDA Array Interface (Version 0) 
+Differences with CUDA Array Interface (Version 0)
 -------------------------------------------------
 
 Version 0 of the CUDA Array Interface did not have the optional **mask**
