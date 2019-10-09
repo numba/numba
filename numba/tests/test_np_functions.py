@@ -475,6 +475,10 @@ def diagflat1(v):
 def diagflat2(v, k=0):
     return np.diagflat(v, k)
 
+    
+def np_setxor1d(a, b, assume_unique=False):
+    return np.setxor1d(a, b, assume_unique)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -6164,6 +6168,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3.0)
         self.assertIn('The argument "k" must be an integer',
                       str(raises.exception))
+                      
+    def test_setxor1d(self):
+        np_pyfunc = np_setxor1d
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False):
+            expected = np_pyfunc(ar1, ar2, assume_unique)
+            got = np_nbfunc(ar1, ar2, assume_unique)
+            self.assertPreciseEqual(expected, got)
+
+        a = np.array([1, 2, 3, 2, 4])
+        b = np.array([2, 3, 5, 7, 5])
+        check(a, b)
+        check(a, b, True)
+
+        a = np.array([])
+        b = np.array([])
+        check(a, b)
+
+        a = np.arange(10).reshape((5, 2))
+        b = np.arange(3)
+        with self.assertRaises(TypingError) as raises:
+            np_nbfunc(a, b, True)
+        self.assertIn(
+                "Only 1D arrays input arrays are supported",
+                str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

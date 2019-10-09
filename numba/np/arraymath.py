@@ -4835,4 +4835,41 @@ def np_trim_zeros(filt, trim='fb'):
                     last = last - 1
         return a_[first:last]
 
+       
+# ----------------------------------------------------------------------------
+# Set routines
+
+
+@overload(np.setxor1d)
+def np_setxor1d(ar1, ar2, assume_unique=False):
+    if not (type_can_asarray(ar1) and type_can_asarray(ar2)):
+        raise TypingError("Inputs must be array-like")
+
+    if not isinstance(assume_unique, types.Boolean):
+        raise TypingError("Argument `assume_unique` must be boolean")
+
+    if ar1.ndim != 1 or ar2.ndim != 1:
+        raise TypingError(
+            "Only 1D arrays input arrays are supported"
+            )
+
+    def impl(ar1, ar2, assume_unique=False):
+        a = np.asarray(ar1)
+        b = np.asarray(ar2)
+
+        if not assume_unique:
+            a = np.unique(a)
+            b = np.unique(b)
+
+        aux = np.concatenate((a, b))
+        if aux.size == 0:
+            return aux
+
+        aux.sort()
+        flag = np.empty(2 + aux.shape[0] - 1, dtype=np.bool_)
+        flag[0] = True
+        flag[-1] = True
+        flag[1:-1] = aux[1:] != aux[:-1]
+        return aux[flag[1:] & flag[:-1]]
+
     return impl
