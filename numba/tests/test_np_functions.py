@@ -6192,8 +6192,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             np_nbfunc(a, b, True)
         self.assertIn(
-                "Only 1D arrays input arrays are supported",
-                str(raises.exception))
+            "Only 1D arrays input arrays are supported",
+            str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

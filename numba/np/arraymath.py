@@ -4849,9 +4849,7 @@ def np_setxor1d(ar1, ar2, assume_unique=False):
         raise TypingError("Argument `assume_unique` must be boolean")
 
     if ar1.ndim != 1 or ar2.ndim != 1:
-        raise TypingError(
-            "Only 1D arrays input arrays are supported"
-            )
+        raise TypingError("Only 1D arrays input arrays are supported")
 
     def impl(ar1, ar2, assume_unique=False):
         a = np.asarray(ar1)
