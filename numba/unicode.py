@@ -1295,21 +1295,21 @@ def unicode_istitle(s):
     """
 
     def impl(s):
-        str_has_abc = False
-        prev_char_is_abc = False
+        cased = False
+        previous_is_cased = False
         for char in s:
             if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
-                if prev_char_is_abc:
+                if previous_is_cased:
                     return False
-                str_has_abc = True
-                prev_char_is_abc = True
+                cased = True
+                previous_is_cased = True
             elif _PyUnicode_IsLowercase(char):
-                if not prev_char_is_abc:
+                if not previous_is_cased:
                     return False
             else:
-                prev_char_is_abc = False
+                previous_is_cased = False
 
-        return str_has_abc
+        return cased
     return impl
 
 
