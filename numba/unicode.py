@@ -541,13 +541,11 @@ def unicode_find(a, b):
         return find_impl
 
 
-@register_jitable
-def _check_type(ty, name, accepted=(types.NoneType,)):
+def unicode_rfind_check_type(ty, name):
     """
-    Check object belongs to one of specified types
+    Check object belongs to one of specific types
     :param ty: object type
     :param name: name of the argument
-    :param accepted: accepted types
     """
     thety = ty
     # if the type is omitted, the concrete type is the value
@@ -557,54 +555,20 @@ def _check_type(ty, name, accepted=(types.NoneType,)):
     elif isinstance(ty, types.Optional):
         thety = ty.type
 
+    accepted = (types.Integer, int, types.NoneType)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
 
 
-@register_jitable
-def _adjust_start(length, start=0):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9350-L9354
-    """
-    if start < 0:
-        start += length
-        if start < 0:
-            return 0
-
-    return start
-
-
-@register_jitable
-def _adjust_end(length, end=0):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9343-L9349
-    """
-    if end > length:
-        return length
-    if end < 0:
-        end += length
-        if end < 0:
-            return 0
-
-    return end
-
-
-@register_jitable
-def _adjust_indices(length, start=0, end=0):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354
-    """
-    return _adjust_start(length, start=start), _adjust_end(length, end=end)
-
-
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(s, substr, start=None, end=None):
-    accepted_types = (types.Integer, int, types.NoneType)
-    _check_type(start, 'start', accepted_types)
-    _check_type(end, 'end', accepted_types)
+    """Implements str.rfind()"""
+    unicode_rfind_check_type(start, 'start')
+    unicode_rfind_check_type(end, 'end')
 
     if not isinstance(substr, types.UnicodeType):
-        raise TypingError('must be {}, not {}'.format(types.UnicodeType, type(substr)))
+        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
+        raise TypingError(msg)
 
     def rfind_impl(s, substr, start=None, end=None):
         length = len(s)
@@ -614,7 +578,22 @@ def unicode_rfind(s, substr, start=None, end=None):
         if end is None:
             end = length
 
-        start, end = _adjust_indices(length, start=start, end=end)
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354
+        def _adjust_indices(length, start, end):
+            if end > length:
+                end = length
+            if end < 0:
+                end += length
+                if end < 0:
+                    end = 0
+            if start < 0:
+                start += length
+                if start < 0:
+                    start = 0
+
+            return start, end
+
+        start, end = _adjust_indices(length, start, end)
         if end - start < sub_length:
             return -1
 
