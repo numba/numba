@@ -1321,48 +1321,49 @@ def unicode_istitle(s):
     return impl
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
-    """
+    """This is a translation of the function that handles the capital sigma character."""
     c = 0
     j = idx - 1
-    for j in range(idx - 1, -1, -1):
+    while j >= 0:
         c = _get_code_point(data, j)
-        if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+        if not _PyUnicode_IsCaseIgnorable(c):
             break
-    final_sigma = (j >= 0 and _PyUnicode_IsCased(_Py_UCS4(c)))
+        j -= 1
+    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
     if final_sigma:
-        for j in range(idx + 1, length):
+        j = idx + 1
+        while j < length:
             c = _get_code_point(data, j)
-            if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
+            if not _PyUnicode_IsCaseIgnorable(c):
                 break
-        final_sigma = (j == length or not _PyUnicode_IsCased(_Py_UCS4(c)))
+            j += 1
+        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
 
-    return 0x3C2 if final_sigma else 0x3C3
+    return 0x3c2 if final_sigma else 0x3c3
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895
 @register_jitable
 def _lower_ucs4(code_point, data, length, idx, mapped):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895
-    """
+    """This is a translation of the function that lowers a character."""
     if code_point == 0x3A3:
         mapped[0] = _handle_capital_sigma(data, length, idx)
         return 1
     return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021
 @register_jitable
 def _do_title(data, length, res, maxchars):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021
-    """
+    """This is a translation of the function that titles a unicode string."""
     k = 0
     previous_cased = False
+    mapped = np.zeros(3, dtype=_Py_UCS4)
     for idx in range(length):
-        mapped = np.zeros(3, dtype=_Py_UCS4)
+        mapped.fill(0)
         code_point = _get_code_point(data, idx)
         if previous_cased:
             n_res = _lower_ucs4(code_point, data, length, idx, mapped)
@@ -1377,13 +1378,11 @@ def _do_title(data, length, res, maxchars):
     return k
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
 @overload_method(types.UnicodeType, 'title')
 def unicode_title(data):
-    """
-    str.title()
-    https://docs.python.org/3/library/stdtypes.html#str.title
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
-    """
+    """Implements str.title()"""
+    # https://docs.python.org/3/library/stdtypes.html#str.title
     def impl(data):
         length = len(data)
         tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)

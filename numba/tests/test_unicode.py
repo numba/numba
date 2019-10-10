@@ -1149,12 +1149,16 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         # Samples taken from CPython testing:
         # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L813-L828
-        cpython = ['\U0001044F', '\U0001044F\U0001044F', '\U0001044F\U0001044F \U0001044F\U0001044F',
-                   '\U00010427\U0001044F \U00010427\U0001044F', '\U0001044F\U00010427 \U0001044F\U00010427',
-                   'X\U00010427x\U0001044F X\U00010427x\U0001044F', 'ﬁNNISH', 'A\u03a3 \u1fa1xy', 'A\u03a3A']
-        for a in UNICODE_EXAMPLES + [''] + cpython:
-            self.assertEqual(pyfunc(a), cfunc(a),
-                             msg='Results of interpreted and compiled "{}".title() should be equal'.format(a))
+        cpython = ['\U0001044F', '\U0001044F\U0001044F',
+                   '\U0001044F\U0001044F \U0001044F\U0001044F',
+                   '\U00010427\U0001044F \U00010427\U0001044F',
+                   '\U0001044F\U00010427 \U0001044F\U00010427',
+                   'X\U00010427x\U0001044F X\U00010427x\U0001044F',
+                   'ﬁNNISH', 'A\u03a3 \u1fa1xy', 'A\u03a3A']
+
+        msg = 'Results of "{}".title() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
