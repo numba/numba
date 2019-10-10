@@ -1355,28 +1355,6 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
 
 
-@register_jitable
-def _handle_capital_sigma(data, length, idx):
-    """
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
-    """
-    c = 0
-    j = idx - 1
-    for j in range(idx - 1, -1, -1):
-        c = _get_code_point(data, j)
-        if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
-            break
-    final_sigma = (j >= 0 and _PyUnicode_IsCased(_Py_UCS4(c)))
-    if final_sigma:
-        for j in range(idx + 1, length):
-            c = _get_code_point(data, j)
-            if not _PyUnicode_IsCaseIgnorable(_Py_UCS4(c)):
-                break
-        final_sigma = (j == length or not _PyUnicode_IsCased(_Py_UCS4(c)))
-
-    return 0x3C2 if final_sigma else 0x3C3
-
-
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
 @register_jitable
 def _do_title(data, length, res, maxchars):
