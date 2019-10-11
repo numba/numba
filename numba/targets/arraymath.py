@@ -423,7 +423,7 @@ def array_mean(arr, axis=None):
                             "It supports boolean, integer, float "
                             "and complex arrays").format(arr.dtype))
         # dispatch based on whether there's an axis parameter and its type
-        if axis is None:
+        if axis is None or isinstance(axis, types.Omitted):
 
             def mean_impl(arr, axis=None):
                 return sum_array(arr, dtype=ret_dtype) / arr.size
