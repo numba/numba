@@ -9,7 +9,16 @@ import numpy as np
 
 import numba
 from numba import njit, ir, types
-from numba.extending import overload
+from numba.extending import (
+    overload,
+    overload_method,
+    overload_attribute,
+    register_model,
+    typeof_impl,
+    unbox,
+    NativeValue,
+)
+from numba.datamodel.models import OpaqueModel
 from numba.targets.cpu import InlineOptions
 from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization
@@ -748,6 +757,77 @@ class TestOverloadInlining(InliningBase):
                   if isinstance(getattr(x, 'value', None), ir.Const)]
         for val in consts:
             self.assertNotEqual(val.value, 1234)
+
+
+class TestOverloadMethsAttrsInlining(InliningBase):
+    def setUp(self):
+        class DummyType(types.Opaque):
+            pass
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_Dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_index(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        self.Dummy = Dummy
+        self.DummyType = DummyType
+
+    def check_method(self, test_impl, args, expected, block_count):
+        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        # check they produce the same answer first!
+        self.assertEqual(j_func(*args), expected)
+
+        # make sure IR doesn't have branches
+        fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
+        fir.blocks = fir.blocks
+        self.assertEqual(len(fir.blocks), block_count)
+        # assert no calls
+        for block in fir.blocks.values():
+            calls = list(block.find_exprs('call'))
+            self.assertFalse(calls)
+
+    def test_overload_method(self):
+        @overload_method(self.DummyType, "inline_method", inline='always')
+        def _get_inlined_method(obj, val):
+            def get(obj, val):
+                return ("THIS IS INLINED", val)
+            return get
+
+        def foo(obj):
+            return obj.inline_method(123)
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected=("THIS IS INLINED", 123),
+            block_count=1,
+        )
+
+    def test_overload_attribute(self):
+        @overload_attribute(self.DummyType, "inlineme", inline='always')
+        def _get_inlineme(obj):
+            def get(obj):
+                return "MY INLINED ATTRS"
+            return get
+
+        def foo(obj):
+            return obj.inlineme
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected="MY INLINED ATTRS",
+            block_count=1,
+        )
 
 
 class TestGeneralInlining(InliningBase):
