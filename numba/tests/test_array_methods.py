@@ -1044,7 +1044,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             #     # axis -1 is only supported for IntegerLiterals
             #     pyfunc2 = lambda x: x.mean(axis=-1)
             #     cfunc2 = jit(nopython=True)(pyfunc2)
-                self.assertPreciseEqual(pyfunc2(arr), cfunc2(arr))
+            #     self.assertPreciseEqual(pyfunc2(arr), cfunc2(arr))
 
     def test_cumsum(self):
         pyfunc = array_cumsum
