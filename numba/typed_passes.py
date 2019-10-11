@@ -469,21 +469,19 @@ class InlineOverloads(FunctionPass):
         return True
 
     def _do_work_getattr(self, state, work_list, block, i, expr):
-        from numba.inline_closurecall import (inline_closure_call,
-                                              callee_ir_validator)
         recv_type = state.type_annotation.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
         matched = state.typingctx.find_matching_getattr_template(recv_type, expr.attr)
         if not matched:
             return False
         template = matched['template']
-
-        ### REFACTOR
-
         inline_type = getattr(template, '_inline', None)
         if inline_type is None:
             # inline not defined
             return False
+        sig = typing.signature(matched['return_type'], recv_type)
+        arg_typs = sig.args
+
         if not inline_type.is_never_inline:
             try:
                 impl = template._overload_func(recv_type)
@@ -492,45 +490,13 @@ class InlineOverloads(FunctionPass):
             except Exception:
                 return False
 
-        sig = typing.signature(matched['return_type'], recv_type)
-        arg_typs = sig.args
-        do_inline = True
-        if not inline_type.is_always_inline:
-            from numba.typing.templates import _inline_info
-
-            caller_inline_info = _inline_info(state.func_ir,
-                                              state.type_annotation.typemap,
-                                              state.type_annotation.calltypes,
-                                              sig)
-
-            # must be a cost-model function, run the function
-            iinfo = template._inline_overloads[arg_typs]['iinfo']
-            if inline_type.has_cost_model:
-                do_inline = inline_type.value(expr, caller_inline_info, iinfo)
-            else:
-                assert 'unreachable'
-
-        if do_inline:
-            arg_typs = template._inline_overloads[arg_typs]['folded_args']
-            # pass is typed so use the callee globals
-            inline_closure_call(state.func_ir, impl.__globals__,
-                                block, i, impl, typingctx=state.typingctx,
-                                arg_typs=arg_typs,
-                                typemap=state.type_annotation.typemap,
-                                calltypes=state.type_annotation.calltypes,
-                                work_list=work_list,
-                                replace_freevars=False,
-                                callee_validator=callee_ir_validator)
-            return True
-        else:
-            return False
-
-        return True
+        is_method = False
+        return self._run_inliner(
+            state, inline_type, sig, template, arg_typs, expr, i, impl, block,
+            work_list, is_method,
+        )
 
     def _do_work_call(self, state, work_list, block, i, expr):
-        from numba.inline_closurecall import (inline_closure_call,
-                                              callee_ir_validator)
-
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
         to_inline = None
@@ -588,6 +554,17 @@ class InlineOverloads(FunctionPass):
 
         # at this point we know we maybe want to inline something and there's
         # definitely something that could be inlined.
+        return self._run_inliner(
+            state, inline_type, sig, template, arg_typs, expr, i, impl, block,
+            work_list, is_method,
+        )
+
+    def _run_inliner(
+        self, state, inline_type, sig, template, arg_typs, expr, i, impl, block,
+        work_list, is_method,
+    ):
+        from numba.inline_closurecall import (inline_closure_call,
+                                              callee_ir_validator)
 
         do_inline = True
         if not inline_type.is_always_inline:
