@@ -420,8 +420,8 @@ def array_mean(arr, axis=None):
             ret_dtype = arr.dtype
         else:
             raise TypeError(("np.mean is not supported on {} arrays. "
-                            "It supports boolean, integer, float "
-                            "and complex arrays").format(arr.dtype))
+                             "It supports boolean, integer, float "
+                             "and complex arrays").format(arr.dtype))
         # dispatch based on whether there's an axis parameter and its type
         if axis is None or isinstance(axis, types.Omitted):
 
