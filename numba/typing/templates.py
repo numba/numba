@@ -325,6 +325,13 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
+class _EmptyImplementationEntry(InternalError):
+    def __init__(self, reason):
+        super(_EmptyImplementationEntry, self).__init__(
+            "_EmptyImplementationEntry({!r})".format(reason),
+        )
+
+
 class _OverloadFunctionTemplate(AbstractTemplate):
     """
     A base class of templates for overload functions.
@@ -455,7 +462,10 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # this stores the compiled overloads, if there's no compiled
             # overload available i.e. function is always inlined, the key still
             # needs to exist for type resolution
-            self._compiled_overloads[sig.args] = None
+
+            # FIXME: The lack of inlining-pass should not cause this failure.
+            impl_init = _EmptyImplementationEntry('always inlined')
+            self._compiled_overloads[sig.args] = impl_init
             if not self._inline.is_always_inline:
                 # this branch is here because a user has supplied a function to
                 # determine whether to inline or not. As a result both compiled
