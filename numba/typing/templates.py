@@ -734,7 +734,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
             return None
         fnty = self._get_function_type(self.context, typ)
         sig = self._get_signature(self.context, fnty, (typ,), {})
-        # XXX
+        # There should only be one template
         [template] = fnty.templates
         self._inline_overloads.update(template._inline_overloads)
         return sig.return_type
@@ -791,7 +791,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
                 fnty = self._get_function_type(self.context, typ)
                 sig = self._get_signature(self.context, fnty, args, kws)
                 sig = sig.replace(pysig=utils.pysignature(self._overload_func))
-                # XXX
+                # There should only be one template
                 [template] = fnty.templates
                 self._inline_overloads.update(template._inline_overloads)
                 if sig is not None:
