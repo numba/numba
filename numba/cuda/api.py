@@ -31,7 +31,8 @@ def from_cuda_array_interface(desc, owner=None):
     The resulting DeviceNDArray will acquire a reference from it.
     """
     version = desc.get('version')
-    if version == 1:
+    # Mask introduced in version 1
+    if 1 <= version:
         mask = desc.get('mask')
         # Would ideally be better to detect if the mask is all valid
         if mask is not None:
