@@ -318,7 +318,12 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 3. replace formal parameters with actual arguments
-    args = list(call_expr.args)
+    if call_expr.op == 'call':
+        args = list(call_expr.args)
+    elif call_expr.op == 'getattr':
+        args = [call_expr.value]
+    else:
+        raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
     if callee_defaults:
         debug_print("defaults = ", callee_defaults)
         if isinstance(callee_defaults, tuple): # Python 3.5
