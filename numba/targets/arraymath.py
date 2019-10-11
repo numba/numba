@@ -414,29 +414,36 @@ def sum_array_axis(arr, axis, dtype):
 def array_mean(arr, axis=None):
     if isinstance(arr, types.Array):
         # determine accumulator type
-        if isinstance(arr.dtype, types.Integer):
+        if isinstance(arr.dtype, (types.Integer, types.Boolean)):
             ret_dtype = np.float64
         elif isinstance(arr.dtype, (types.Float, types.Complex)):
             ret_dtype = arr.dtype
         else:
-            raise TypeError("np.mean is supported on arrays with integer, float "
-                            "and complex dtypes")
+            raise TypeError(("np.mean is not supported on {} arrays. "
+                            "It supports boolean, integer, float "
+                            "and complex arrays").format(arr.dtype))
         # dispatch based on whether there's an axis parameter and its type
         if axis is None:
-            def mean_impl(arr):
-                return sum_array(arr, dtype=ret_dtype)/arr.size
+
+            def mean_impl(arr, axis=None):
+                return sum_array(arr, dtype=ret_dtype) / arr.size
+
             return mean_impl
         elif isinstance(axis, types.Integer):
+
             def mean_impl(arr, axis=None):
                 if axis >= arr.ndim:
                     raise ValueError("'axis' entry is out of bounds")
-                return sum_array_axis(arr, axis=axis, dtype=ret_dtype)/arr.shape[axis]
+                return sum_array_axis(arr, axis=axis, dtype=ret_dtype) / arr.shape[axis]
+
             return mean_impl
         elif isinstance(axis, types.IntegerLiteral):
             if axis.literal_value >= arr.ndim:
                 raise ValueError("'axis' entry is out of bounds")
+
             def mean_impl(arr, axis=None):
-                return sum_array_axis(arr, axis=axis, dtype=ret_dtype)/arr.shape[axis]
+                return sum_array_axis(arr, axis=axis, dtype=ret_dtype) / arr.shape[axis]
+
             return mean_impl
 
 
