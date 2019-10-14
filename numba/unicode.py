@@ -575,12 +575,12 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeCharSeq):
-        def split_impl(a, sep, maxsplit=1):
+        def split_impl(a, sep=None, maxsplit=1):
             return a.split(str(sep), maxsplit=maxsplit)
         return split_impl
 
     if isinstance(sep, types.UnicodeType):
-        def split_impl(a, sep, maxsplit=-1):
+        def split_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
             sep_len = len(sep)
 
