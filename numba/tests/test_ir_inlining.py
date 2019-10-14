@@ -812,9 +812,10 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             block_count=1,
         )
 
+    @unittest.expectedFailure
     def test_overload_method_cost_driven(self):
         def costmodel(*args):
-            print(args)
+            raise NotImplementedError('to be implemented')
             return True
 
         @overload_method(self.DummyType, "inline_method", inline=costmodel)
