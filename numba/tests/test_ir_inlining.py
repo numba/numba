@@ -795,7 +795,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             calls = list(block.find_exprs('call'))
             self.assertFalse(calls)
 
-    def test_overload_method(self):
+    def test_overload_method_always(self):
         @overload_method(self.DummyType, "inline_method", inline='always')
         def _get_inlined_method(obj, val):
             def get(obj, val):
@@ -812,7 +812,29 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             block_count=1,
         )
 
-    def test_overload_attribute(self):
+    def test_overload_method_cost_driven(self):
+        def costmodel(*args):
+            print(args)
+            return True
+
+        @overload_method(self.DummyType, "inline_method", inline=costmodel)
+        def _get_inlined_method(obj, val):
+            def get(obj, val):
+                return ("THIS IS INLINED", val)
+            return get
+
+        def foo(obj):
+            return obj.inline_method(123)
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected=("THIS IS INLINED", 123),
+            block_count=1,
+        )
+
+
+    def test_overload_attribute_always(self):
         @overload_attribute(self.DummyType, "inlineme", inline='always')
         def _get_inlineme(obj):
             def get(obj):

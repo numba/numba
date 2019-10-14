@@ -489,6 +489,8 @@ class InlineOverloads(FunctionPass):
                     raise Exception  # abort for this template
             except Exception:
                 return False
+        else:
+            return False
 
         is_method = False
         return self._run_inliner(
