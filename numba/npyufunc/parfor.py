@@ -100,20 +100,20 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
         parfor, parfor.params, lowerer.fndesc.calltypes)
 
-
-
-    builder.module.get_or_insert_function(
+    get_num_threads = builder.module.get_or_insert_function(
         lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
         name="get_num_threads")
 
-    get_num_threads_sig = signature(types.intp)
-    get_num_threads_intrinsic = ir.Intrinsic('get_num_threads', get_num_threads_sig, [])
+    num_threads = builder.call(get_num_threads, [])
 
-    num_threads = ir.Expr.call(get_num_threads_intrinsic, (), (), loc)
-    lowerer.fndesc.calltypes[num_threads] = get_num_threads_sig
+    # get_num_threads_sig = signature(types.intp)
+    # get_num_threads_intrinsic = ir.Intrinsic('get_num_threads', get_num_threads_sig, [])
+    #
+    # num_threads = ir.Expr.call(get_num_threads_intrinsic, (), (), loc)
+    # lowerer.fndesc.calltypes[num_threads] = get_num_threads_sig
 
     get_num_threads_var = ir.Var(scope, mk_unique_var('get_num_threads'), loc)
-    get_num_threads_assign = ir.Assign(num_threads, get_num_threads_var, loc)
+    get_num_threads_assign = ir.Assign(ir.Const(num_threads, loc), get_num_threads_var, loc)
     typemap[get_num_threads_var.name] = types.intp
     lowerer.lower_inst(get_num_threads_assign)
 
