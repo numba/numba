@@ -168,6 +168,7 @@ def box_enum(typ, val, c):
     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
     return c.pyapi.call_function_objargs(cls_obj, (valobj,))
 
+
 @unbox(types.EnumMember)
 def unbox_enum(typ, obj, c):
     """
@@ -175,7 +176,6 @@ def unbox_enum(typ, obj, c):
     """
     valobj = c.pyapi.object_getattr_string(obj, "value")
     return c.unbox(typ.dtype, valobj)
-
 
 #
 # Composite types
@@ -189,6 +189,7 @@ def box_record(typ, val, c):
     ptr = c.builder.bitcast(val, ir.PointerType(ir.IntType(8)))
     return c.pyapi.recreate_record(ptr, size, typ.dtype, c.env_manager)
 
+
 @unbox(types.Record)
 def unbox_record(typ, obj, c):
     buf = c.pyapi.alloca_buffer()
@@ -201,6 +202,69 @@ def unbox_record(typ, obj, c):
     def cleanup():
         c.pyapi.release_buffer(buf)
     return NativeValue(val, cleanup=cleanup, is_error=is_error)
+
+if IS_PY3:
+
+    @box(types.UnicodeCharSeq)
+    def box_unicodecharseq(typ, val, c):
+        # XXX could kind be determined from strptr?
+        unicode_kind = {
+            1: c.pyapi.py_unicode_1byte_kind,
+            2: c.pyapi.py_unicode_2byte_kind,
+            4: c.pyapi.py_unicode_4byte_kind}[numpy_support.sizeof_unicode_char]
+        kind = c.context.get_constant(types.int32, unicode_kind)
+        rawptr = cgutils.alloca_once_value(c.builder, value=val)
+        strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
+
+        fullsize = c.context.get_constant(types.intp, typ.count)
+        zero = fullsize.type(0)
+        one = fullsize.type(1)
+        step = fullsize.type(numpy_support.sizeof_unicode_char)
+        count = cgutils.alloca_once_value(c.builder, zero)
+        with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
+            # Get char at idx
+            ch = c.builder.load(c.builder.gep(strptr, [c.builder.mul(idx, step)]))
+            # If the char is a non-null-byte, store the next index as count
+            with c.builder.if_then(cgutils.is_not_null(c.builder, ch)):
+                c.builder.store(c.builder.add(idx, one), count)
+        strlen = c.builder.load(count)
+        return c.pyapi.string_from_kind_and_data(kind, strptr, strlen)
+
+
+    @unbox(types.UnicodeCharSeq)
+    def unbox_unicodecharseq(typ, obj, c):
+        lty = c.context.get_value_type(typ)
+
+        ok, buffer, size, kind, is_ascii, hashv = \
+            c.pyapi.string_as_string_size_and_kind(obj)
+
+        # If conversion is ok, copy the buffer to the output storage.
+        with cgutils.if_likely(c.builder, ok):
+            # Check if the returned string size fits in the charseq
+            storage_size = ir.Constant(size.type, typ.count)
+            size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
+
+            # Allow truncation of string
+            size = c.builder.select(size_fits, size, storage_size)
+
+            # Initialize output to zero bytes
+            null_string = ir.Constant(lty, None)
+            outspace  = cgutils.alloca_once_value(c.builder, null_string)
+
+            # We don't need to set the NULL-terminator because the storage
+            # is already zero-filled.
+            cgutils.memcpy(c.builder,
+                           c.builder.bitcast(outspace, buffer.type),
+                           buffer, size)
+
+        ret = c.builder.load(outspace)
+        return NativeValue(ret, is_error=c.builder.not_(ok))
+
+
+    @box(types.Bytes)
+    def box_bytes(typ, val, c):
+        obj = c.context.make_helper(c.builder, typ, val)
+        return c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
 
 
 @box(types.CharSeq)
@@ -224,6 +288,7 @@ def box_charseq(typ, val, c):
 
     strlen = c.builder.load(count)
     return c.pyapi.bytes_from_string_and_size(strptr, strlen)
+
 
 @unbox(types.CharSeq)
 def unbox_charseq(typ, obj, c):
@@ -314,6 +379,11 @@ def unbox_slice(typ, obj, c):
     return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
 
+@unbox(types.StringLiteral)
+def unbox_string_literal(typ, obj, c):
+    # A string literal is a dummy value
+    return NativeValue(c.context.get_dummy_value())
+
 #
 # Collections
 #
@@ -336,38 +406,6 @@ def box_array(typ, val, c):
         c.pyapi.incref(parent)
         return parent
 
-@box(types.SmartArrayType)
-def box_smart_array(typ, value, c):
-    # First build a Numpy array object, then wrap it in a SmartArray
-    a = c.context.make_helper(c.builder, typ, value=value)
-    # if 'parent' is set, we are re-boxing an object, so use the same logic
-    # as reflect.
-    obj = a.parent
-    res = cgutils.alloca_once_value(c.builder, obj)
-    with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
-        with has_parent:
-            c.pyapi.incref(obj)
-            host = c.pyapi.string_from_constant_string('host')
-            retn = c.pyapi.call_method(obj, 'mark_changed', [host])
-            with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
-                with success:
-                    c.pyapi.decref(retn)
-                with failure:
-                    c.builder.store(c.pyapi.get_null_object(), res)
-            c.pyapi.decref(host)
-        with otherwise:
-            # box into a new array:
-            classobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.pyclass))
-            arrayobj = c.box(typ.as_array, a.data)
-            # Adopt arrayobj rather than copying it.
-            false = c.pyapi.bool_from_bool(cgutils.false_bit)
-            obj = c.pyapi.call_function_objargs(classobj, (arrayobj,false))
-            c.pyapi.decref(classobj)
-            c.pyapi.decref(arrayobj)
-            c.pyapi.decref(false)
-            c.builder.store(obj, res)
-
-    return c.builder.load(res)
 
 @unbox(types.Buffer)
 def unbox_buffer(typ, obj, c):
@@ -442,37 +480,6 @@ def unbox_array(typ, obj, c):
                                "different type")
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
-
-@unbox(types.SmartArrayType)
-def unbox_smart_array(typ, obj, c):
-    a = c.context.make_helper(c.builder, typ)
-    host = c.pyapi.string_from_constant_string('host')
-    arr = c.pyapi.call_method(obj, 'get', [host])
-    with c.builder.if_else(cgutils.is_not_null(c.builder, arr)) as (success, failure):
-        with success:
-            a.data = c.unbox(typ.as_array, arr).value
-            a.parent = obj
-            c.pyapi.decref(arr)
-        with failure:
-            c.pyapi.raise_object()
-
-    c.pyapi.decref(host)
-    return NativeValue(a._getvalue())
-
-
-@reflect(types.SmartArrayType)
-def reflect_smart_array(typ, value, c):
-    a = c.context.make_helper(c.builder, typ, value)
-    arr = a.parent
-    host = c.pyapi.string_from_constant_string('host')
-    retn = c.pyapi.call_method(arr, 'mark_changed', [host])
-    with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
-        with success:
-            c.pyapi.decref(retn)
-        with failure:
-            c.pyapi.raise_object()
-
-    c.pyapi.decref(host)
 
 @box(types.Tuple)
 @box(types.UniTuple)

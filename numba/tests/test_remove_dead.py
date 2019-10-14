@@ -14,7 +14,18 @@ from numba.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
+from numba.typed_passes import type_inference_stage
 from numba import ir
+from numba.compiler_machinery import FunctionPass, register_pass, PassManager
+from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                             IRProcessing, DeadBranchPrune,
+                             RewriteSemanticConstants, GenericRewrites,
+                             WithLifting, PreserveIR, InlineClosureLikes)
+
+from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                           NopythonRewrites, PreParforPass, ParforPass,
+                           DumpParforDiagnostics, NativeLowering,
+                           IRLegalization, NoPythonBackend)
 from numba import unittest_support as unittest
 import numpy as np
 from .matmul_usecase import needs_blas
@@ -63,15 +74,11 @@ class TestRemoveDead(unittest.TestCase):
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test_will_propagate)
-        #print("Num blocks = ", len(test_ir.blocks))
-        #print(test_ir.dump())
         with cpu_target.nested_context(typingctx, targetctx):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, return_type, calltypes = compiler.type_inference_stage(typingctx, test_ir, args, None)
-            #print("typemap = ", typemap)
-            #print("return_type = ", return_type)
+            typemap, return_type, calltypes = type_inference_stage(typingctx, test_ir, args, None)
             type_annotation = type_annotations.TypeAnnotation(
                 func_ir=test_ir,
                 typemap=typemap,
@@ -212,6 +219,84 @@ class TestRemoveDead(unittest.TestCase):
         finally:
             # recover global state
             numba.ir_utils.alias_func_extensions = old_ext_handlers
+
+    @skip_parfors_unsupported
+    def test_alias_parfor_extension(self):
+        """Make sure aliases are considered in remove dead extension for
+        parfors.
+        """
+        def func():
+            n = 11
+            numba.parfor.init_prange()
+            A = np.empty(n)
+            B = A  # create alias to A
+            for i in numba.prange(n):
+                A[i] = i
+
+            return B
+
+        @register_pass(analysis_only=False, mutates_CFG=True)
+        class LimitedParfor(FunctionPass):
+            _name = "limited_parfor"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                parfor_pass = numba.parfor.ParforPass(
+                    state.func_ir,
+                    state.type_annotation.typemap,
+                    state.type_annotation.calltypes,
+                    state.return_type,
+                    state.typingctx,
+                    state.flags.auto_parallel,
+                    state.flags,
+                    state.parfor_diagnostics
+                )
+                remove_dels(state.func_ir.blocks)
+                parfor_pass.array_analysis.run(state.func_ir.blocks)
+                parfor_pass._convert_loop(state.func_ir.blocks)
+                remove_dead(state.func_ir.blocks,
+                            state.func_ir.arg_names,
+                            state.func_ir,
+                            state.type_annotation.typemap)
+                numba.parfor.get_parfor_params(state.func_ir.blocks,
+                                                parfor_pass.options.fusion,
+                                                parfor_pass.nested_fusion_info)
+                return True
+
+        class TestPipeline(numba.compiler.Compiler):
+            """Test pipeline that just converts prange() to parfor and calls
+            remove_dead(). Copy propagation can replace B in the example code
+            which this pipeline avoids.
+            """
+            def define_pipelines(self):
+                name = 'test parfor aliasing'
+                pm = PassManager(name)
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(FixupArgs, "fix up args")
+                pm.add_pass(IRProcessing, "processing IR")
+                pm.add_pass(WithLifting, "Handle with contexts")
+                # pre typing
+                if not self.state.flags.no_rewrites:
+                    pm.add_pass(GenericRewrites, "nopython rewrites")
+                    pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+                    pm.add_pass(DeadBranchPrune, "dead branch pruning")
+                pm.add_pass(InlineClosureLikes,
+                            "inline calls to locally defined closures")
+                # typing
+                pm.add_pass(NopythonTypeInference, "nopython frontend")
+                pm.add_pass(AnnotateTypes, "annotate types")
+
+                # lower
+                pm.add_pass(NoPythonBackend, "nopython mode backend")
+                pm.finalize()
+                return [pm]
+
+        test_res = numba.jit(pipeline_class=TestPipeline)(func)()
+        py_res = func()
+        np.testing.assert_array_equal(test_res, py_res)
+
 
 if __name__ == "__main__":
     unittest.main()

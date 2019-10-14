@@ -2176,11 +2176,8 @@ class ArrayAnalysis(object):
         return tuple(size_vars), out
 
     def _isarray(self, varname):
-        # no SmartArrayType support yet (can't generate parfor, allocate, etc)
         typ = self.typemap[varname]
-        return (isinstance(typ, types.npytypes.Array) and
-                not isinstance(typ, types.npytypes.SmartArrayType) and
-                typ.ndim > 0)
+        return (isinstance(typ, types.npytypes.Array) and typ.ndim > 0)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent

@@ -1,8 +1,7 @@
 """Cudatoolkit libraries lookup utilities.
 
-Cudatoolkit libraries can be available via the `cudatoolkit` conda package,
-user supplied location from CUDA_HOME, or old deprecating NUMBAPRO_ prefixed
-environment variables.
+Cudatoolkit libraries can be available via the `cudatoolkit` conda package or a
+user supplied location from CUDA_HOME or a system wide location.
 """
 from __future__ import print_function
 import os

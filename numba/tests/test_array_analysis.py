@@ -11,10 +11,19 @@ from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
     jitclass, prange)
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
-from numba.compiler import Pipeline, Flags, _PipelineManager
+from numba.compiler import Compiler, Flags, PassManager
 from numba.targets import cpu, registry
 from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
+from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                             IRProcessing, DeadBranchPrune,
+                             RewriteSemanticConstants, GenericRewrites,
+                             WithLifting, PreserveIR, InlineClosureLikes)
+
+from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                                NopythonRewrites, IRLegalization)
+
+from numba.compiler_machinery import FunctionPass, PassManager, register_pass
 
 # for parallel tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
@@ -73,7 +82,25 @@ class TestEquivSet(TestCase):
         self.assertFalse(r.is_equiv('c', 'd'))
 
 
-class ArrayAnalysisTester(Pipeline):
+@register_pass(analysis_only=False, mutates_CFG=True)
+class ArrayAnalysisPass(FunctionPass):
+    _name = "array_analysis_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
+                                             state.type_annotation.typemap,
+                                             state.type_annotation.calltypes)
+        state.array_analysis.run(state.func_ir.blocks)
+        state.func_ir_copies.append(state.func_ir.copy())
+        if state.test_idempotence and len(state.func_ir_copies) > 1:
+            state.test_idempotence(state.func_ir_copies)
+        return False
+
+
+class ArrayAnalysisTester(Compiler):
 
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
@@ -92,53 +119,46 @@ class ArrayAnalysisTester(Pipeline):
         """
         Populate and run compiler pipeline
         """
-        self.func_id = bytecode.FunctionIdentity.from_function(func)
+        self.state.func_id = bytecode.FunctionIdentity.from_function(func)
+        ExtractByteCode().run_pass(self.state)
 
-        try:
-            bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
-            raise e
+        self.state.lifted = ()
+        self.state.lifted_from = None
+        state = self.state
+        state.func_ir_copies = []
+        state.test_idempotence = test_idempotence
 
-        self.bc = bc
-        self.lifted = ()
-        self.lifted_from = None
+        name = 'array_analysis_testing'
+        pm = PassManager(name)
+        pm.add_pass(TranslateByteCode, "analyzing bytecode")
+        pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
+        # pre typing
+        if not state.flags.no_rewrites:
+            pm.add_pass(GenericRewrites, "nopython rewrites")
+            pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
-        pm = _PipelineManager()
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
 
-        pm.create_pipeline("nopython")
-        if self.func_ir is None:
-            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-        pm.add_stage(self.stage_process_ir, "processing IR")
-        if not self.flags.no_rewrites:
-            if self.status.can_fallback:
-                pm.add_stage(
-                    self.stage_preserve_ir, "preserve IR for fallback")
-            pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-        pm.add_stage(
-            self.stage_inline_pass, "inline calls to locally defined closures")
-        pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
-        pm.add_stage(self.stage_annotate_type, "annotate type")
-        if not self.flags.no_rewrites:
-            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-        func_ir_copies = []
-
-        def stage_array_analysis():
-            self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.type_annotation.typemap,
-                                                self.type_annotation.calltypes)
-            self.array_analysis.run(self.func_ir.blocks)
-            func_ir_copies.append(self.func_ir.copy())
-            if test_idempotence and len(func_ir_copies) > 1:
-                test_idempotence(func_ir_copies)
-
-        pm.add_stage(stage_array_analysis, "analyze array equivalences")
+        # Array Analysis pass
+        pm.add_pass(ArrayAnalysisPass, "array analysis")
         if test_idempotence:
             # Do another pass of array analysis to test idempotence
-            pm.add_stage(stage_array_analysis, "analyze array equivalences")
+            pm.add_pass(ArrayAnalysisPass, "idempotence array analysis")
+        # legalise
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
 
+        # partial compile
         pm.finalize()
-        res = pm.run(self.status)
-        return self.array_analysis
+        pm.run(state)
+        return state.array_analysis
 
 
 class TestArrayAnalysis(TestCase):

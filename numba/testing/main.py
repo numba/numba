@@ -213,7 +213,7 @@ class NumbaTestProgram(unittest.main):
                         #try and parse the next arg as an int
                         try:
                             nprocs = int(m_option)
-                        except BaseException:
+                        except Exception:
                             msg = ('Expected an integer argument to '
                                 'option `-m`, found "%s"')
                             raise ValueError(msg % m_option)
@@ -617,6 +617,8 @@ def _split_nonparallel_tests(test):
         stests = _flatten_suite(test)
     return ptests, stests
 
+# A test can't run longer than 10 minutes
+_TIMEOUT = 600
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
@@ -625,8 +627,7 @@ class ParallelTestRunner(runner.TextTestRunner):
     """
 
     resultclass = ParallelTestResult
-    # A test can't run longer than 5 minutes
-    timeout = 300
+    timeout = _TIMEOUT
 
     def __init__(self, runner_cls, nprocs, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)

@@ -8,6 +8,16 @@ from numba import unittest_support as unittest
 from numba import errors, utils
 import numpy as np
 
+
+from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                                  IRProcessing,)
+
+from numba.typed_passes import (NopythonTypeInference, DeadCodeElimination,
+                                NativeLowering,
+                                IRLegalization, NoPythonBackend)
+
+from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+
 from .support import skip_parfors_unsupported
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -100,26 +110,21 @@ class TestMiscErrorHandling(unittest.TestCase):
     def test_use_of_ir_unknown_loc(self):
         # for context see # 3390
         import numba
-        class TestPipeline(numba.compiler.BasePipeline):
-            def define_pipelines(self, pm):
-                pm.create_pipeline('test_loc')
-                self.add_preprocessing_stage(pm)
-                self.add_with_handling_stage(pm)
-                self.add_pre_typing_stage(pm)
+        class TestPipeline(numba.compiler.CompilerBase):
+            def define_pipelines(self):
+                name = 'bad_DCE_pipeline'
+                pm = PassManager(name)
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(FixupArgs, "fix up args")
+                pm.add_pass(IRProcessing, "processing IR")
                 # remove dead before type inference so that the Arg node is removed
                 # and the location of the arg cannot be found
-                pm.add_stage(self.rm_dead_stage,
-                            "remove dead before type inference for testing")
-                self.add_typing_stage(pm)
-                self.add_optimization_stage(pm)
-                pm.add_stage(self.stage_ir_legalization,
-                            "ensure IR is legal prior to lowering")
-                self.add_lowering_stage(pm)
-                self.add_cleanup_stage(pm)
-
-            def rm_dead_stage(self):
-                numba.ir_utils.remove_dead(
-                    self.func_ir.blocks, self.func_ir.arg_names, self.func_ir)
+                pm.add_pass(DeadCodeElimination, "DCE")
+                # typing
+                pm.add_pass(NopythonTypeInference, "nopython frontend")
+                pm.add_pass(NoPythonBackend, "nopython mode backend")
+                pm.finalize()
+                return [pm]
 
         @numba.jit(pipeline_class=TestPipeline)
         def f(a):
@@ -167,6 +172,21 @@ class TestMiscErrorHandling(unittest.TestCase):
         expected = ("'prange' looks like a Numba internal function, "
                     "has it been imported")
         self.assertIn(expected, str(raises.exception))
+
+    def test_handling_unsupported_generator_expression(self):
+        def foo():
+            y = (x for x in range(10))
+
+        if utils.IS_PY3:
+            expected = "The use of yield in a closure is unsupported."
+        else:
+            # funcsigs falls over on py27
+            expected = "Cannot obtain a signature for"
+
+        for dec in jit(forceobj=True), njit:
+            with self.assertRaises(errors.UnsupportedError) as raises:
+                dec(foo)()
+            self.assertIn(expected, str(raises.exception))
 
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):

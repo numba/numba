@@ -21,7 +21,9 @@ from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.errors import (TypingError, UnsupportedError,
-                          NumbaPendingDeprecationWarning)
+                          NumbaPendingDeprecationWarning, NumbaWarning,
+                          feedback_details)
+
 import copy
 
 _unique_var_count = 0
@@ -547,7 +549,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir, typemap)
+            stmt = f(stmt, lives_n_aliases, arg_aliases, alias_map, func_ir,
+                     typemap)
             if stmt is None:
                 removed = True
                 continue
@@ -1513,7 +1516,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     if typingctx and other typing inputs are available and update typemap and
     calltypes.
     """
-    from numba import compiler
+    from numba import typed_passes
     # mk_func can be actual function or make_function node
     if hasattr(mk_func, 'code'):
         code = mk_func.code
@@ -1540,7 +1543,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # perform type inference if typingctx is available and update type
     # data structures typemap and calltypes
     if typingctx:
-        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                 typingctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
@@ -1595,15 +1598,15 @@ def get_ir_of_code(glbls, fcode):
     # for example, Raise nodes need to become StaticRaise before type inference
     class DummyPipeline(object):
         def __init__(self, f_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = f_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference',
-                                    DummyPipeline(ir), ir)
+            self.state = compiler.StateDict()
+            self.state.typingctx = None
+            self.state.targetctx = None
+            self.state.args = None
+            self.state.func_ir = f_ir
+            self.state.typemap = None
+            self.state.return_type = None
+            self.state.calltypes = None
+    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
@@ -1807,7 +1810,7 @@ def find_global_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
-    dfn = func_ir.get_definition(var)
+    dfn = get_definition(func_ir, var)
     if isinstance(dfn, ir.Global):
         return dfn.value
 
@@ -1816,7 +1819,7 @@ def find_global_value(func_ir, var):
         try:
             val = getattr(prev_val, dfn.attr)
             return val
-        except KeyError:
+        except AttributeError:
             raise GuardException
 
     raise GuardException
@@ -1926,6 +1929,12 @@ def raise_on_unsupported_feature(func_ir, typemap):
                     isinstance(ty, types.DictType)):
                     raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
+            # checks for generator expressions (yield in use when func_ir has
+            # not been identified as a generator).
+            if isinstance(stmt.value, ir.Yield) and not func_ir.is_generator:
+                msg = "The use of generator expressions is unsupported."
+                raise UnsupportedError(msg, loc=stmt.loc)
+
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
         msg = ("Calling either numba.gdb() or numba.gdb_init() more than once "
@@ -1937,6 +1946,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
 
 def warn_deprecated(func_ir, typemap):
     # first pass, just walk the type map
@@ -1957,3 +1967,56 @@ def warn_deprecated(func_ir, typemap):
                         "'%s' of function '%s'.\n\nFor more information visit "
                         "%s" % (tyname, arg, fname, url))
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+
+
+def resolve_func_from_module(func_ir, node):
+    """
+    This returns the python function that is being getattr'd from a module in
+    some IR, it resolves import chains/submodules recursively. Should it not be
+    possible to find the python function being called None will be returned.
+
+    func_ir - the FunctionIR object
+    node - the IR node from which to start resolving (should be a `getattr`).
+    """
+    getattr_chain = []
+    def resolve_mod(mod):
+        if getattr(mod, 'op', False) == 'getattr':
+            getattr_chain.insert(0, mod.attr)
+            try:
+                mod = func_ir.get_definition(mod.value)
+            except KeyError: # multiple definitions
+                return None
+            return resolve_mod(mod)
+        elif isinstance(mod, (ir.Global, ir.FreeVar)):
+            if isinstance(mod.value, pytypes.ModuleType):
+                return mod
+        return None
+
+    mod = resolve_mod(node)
+    if mod is not None:
+        defn = mod.value
+        for x in getattr_chain:
+            defn = getattr(defn, x, False)
+            if not defn:
+                break
+        else:
+            return defn
+    else:
+        return None
+
+
+def check_and_legalize_ir(func_ir):
+    """
+    This checks that the IR presented is legal, warns and legalizes if not
+    """
+    orig_ir = func_ir.copy()
+    post_proc = numba.postproc.PostProcessor(func_ir)
+    post_proc.run()
+    msg = ("\nNumba has detected inconsistencies in its internal "
+           "representation of the code at %s. Numba can probably recover from "
+           "this problem and is attempting to do, however something inside "
+           "Numba needs fixing...\n%s\n") % (func_ir.loc, feedback_details)
+    if not func_ir.equal_ir(orig_ir):
+        msg +=  func_ir.diff_str(orig_ir)
+        warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
+

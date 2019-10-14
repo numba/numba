@@ -5,12 +5,21 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import inspect
+import os.path
+from collections import namedtuple
 from types import MethodType, FunctionType
 
+import numba
 from .. import types, utils
 from ..errors import TypingError, InternalError
+from ..targets.cpu_options import InlineOptions
 
 _IS_PY3 = sys.version_info >= (3,)
+
+# info store for inliner callback functions e.g. cost model
+_inline_info = namedtuple('inline_info',
+                          'func_ir typemap calltypes signature')
 
 
 class Signature(object):
@@ -421,14 +430,47 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        disp, args = self._get_impl(args, kws)
+        disp, new_args = self._get_impl(args, kws)
         if disp is None:
             return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, args, kws)
-        # Store the compiled overload for use in the lowering phase
-        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        # Store the compiled overload for use in the lowering phase if there's
+        # no inlining required (else functions are being compiled which will
+        # never be used as they are inlined)
+        if not self._inline.is_never_inline:
+            # need to run the compiler front end up to type inference to compute
+            # a signature
+            from numba import compiler, typed_passes
+            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            resolve = disp_type.dispatcher.get_call_template
+            template, pysig, folded_args, kws = resolve(new_args, kws)
+
+            typemap, return_type, calltypes = typed_passes.type_inference_stage(
+                self.context, ir, folded_args, None)
+            sig = Signature(return_type, folded_args, None)
+            # this stores a load of info for the cost model function if supplied
+            # it by default is None
+            self._inline_overloads[sig.args] = {'folded_args': folded_args}
+            # this stores the compiled overloads, if there's no compiled
+            # overload available i.e. function is always inlined, the key still
+            # needs to exist for type resolution
+            self._compiled_overloads[sig.args] = None
+            if not self._inline.is_always_inline:
+                # this branch is here because a user has supplied a function to
+                # determine whether to inline or not. As a result both compiled
+                # function and inliner info needed, delaying the computation of
+                # this leads to an internal state mess at present. TODO: Fix!
+                sig = disp_type.get_call_type(self.context, new_args, kws)
+                self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+                # store the inliner information, it's used later in the cost
+                # model function call
+                iinfo = _inline_info(ir, typemap, calltypes, sig)
+                self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                    'iinfo': iinfo}
+        else:
+            sig = disp_type.get_call_type(self.context, new_args, kws)
+            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
     def _get_impl(self, args, kws):
@@ -510,8 +552,45 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         return self._compiled_overloads[sig.args]
 
+    @classmethod
+    def get_source_info(cls):
+        """Return a dictionary with information about the source code  of the
+        implementation.
 
-def make_overload_template(func, overload_func, jit_options, strict):
+        Returns
+        -------
+        info : dict
+            - "kind" : str
+                The implementation kind.
+            - "name" : str
+                The name of the function that provided the definition.
+            - "sig" : str
+                The formatted signature of the function.
+            - "filename" : str
+                The name of the source file.
+            - "lines": tuple (int, int)
+                First and list line number.
+            - "docstring": str
+                The docstring of the definition.
+        """
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = cls._overload_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
+
+
+def make_overload_template(func, overload_func, jit_options, strict,
+                           inline):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -521,7 +600,8 @@ def make_overload_template(func, overload_func, jit_options, strict):
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict)
+               _strict=strict, _inline=staticmethod(InlineOptions(inline)),
+               _inline_overloads={})
     return type(base)(name, (base,), dct)
 
 

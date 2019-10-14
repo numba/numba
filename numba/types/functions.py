@@ -1,13 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import traceback
-import inspect
-import sys
 
-from .abstract import *
-from .common import *
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .common import Opaque
 from .misc import unliteral
-from numba.ir import Loc
 from numba import errors
 
 # terminal color markup
@@ -75,6 +72,12 @@ class _ResolutionFailures(object):
             frame = traceback.extract_tb(error.__traceback__)[-1]
             return "{}:{}".format(frame[0], frame[1])
 
+    def raise_error(self):
+        for _tempcls, e in self._failures:
+            if isinstance(e, errors.ForceLiteralArg):
+                raise e
+        raise errors.TypingError(self.format())
+
 
 class BaseFunction(Callable):
     """
@@ -82,12 +85,13 @@ class BaseFunction(Callable):
     """
 
     def __init__(self, template):
+
         if isinstance(template, (list, tuple)):
             self.templates = tuple(template)
             keys = set(temp.key for temp in self.templates)
             if len(keys) != 1:
                 raise ValueError("incompatible templates: keys = %s"
-                                 % (this,))
+                                 % (keys,))
             self.typing_key, = keys
         else:
             self.templates = (template,)
@@ -143,8 +147,7 @@ class BaseFunction(Callable):
             raise AssertionError("Internal Error. "
                                  "Function resolution ended with no failures "
                                  "or successfull signature")
-
-        raise errors.TypingError(failures.format())
+        failures.raise_error()
 
     def get_call_signatures(self):
         sigs = []
@@ -205,7 +208,7 @@ class BoundFunction(Callable, Opaque):
         # Try with Literal
         try:
             out = template.apply(args, kws)
-        except Exception as e:
+        except Exception:
             out = None
         # If that doesn't work, remove literals
         if out is None:

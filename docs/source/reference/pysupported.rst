@@ -183,6 +183,7 @@ The following functions, attributes and methods are currently supported:
 * ``.isupper()``
 * ``.upper()``
 * ``.zfill()``
+* ``.count()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -404,8 +405,10 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
-dict
-----
+.. _feature-typed-dict:
+
+Typed Dict
+''''''''''
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change
@@ -448,8 +451,8 @@ Further to the above in relation to type specification, there are limitations
 placed on the types that can be used as keys and/or values in the typed
 dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
-strings, arrays, scalars, tuples. It is expected that these limitations will
-be relaxed as Numba continues to improve.
+strings, arrays (value only), scalars, tuples. It is expected that these 
+limitations will be relaxed as Numba continues to improve.
 
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:

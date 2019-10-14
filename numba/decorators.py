@@ -6,12 +6,16 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import warnings
+import inspect
+import logging
 
 from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
 from .stencil import stencil
 
+
+_logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
@@ -56,7 +60,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
-    pipeline_class: type numba.compiler.BasePipeline
+    pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
 
     options:
@@ -83,6 +87,17 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 Valid values are 'python' and 'numpy'. The 'python' model
                 raises exception.  The 'numpy' model sets the result to
                 *+/-inf* or *nan*. Default value is 'python'.
+
+            inline: str or callable
+                The inline option will determine whether a function is inlined
+                at into its caller if called. String options are 'never'
+                (default) which will never inline, and 'always', which will
+                always inline. If a callable is provided it will be called with
+                the call expression node that is requesting inlining, the
+                caller's IR and callee's IR as arguments, it is expected to
+                return Truthy as to whether to inline.
+                NOTE: This inlining is performed at the Numba IR level and is in
+                no way related to LLVM inlining.
 
     Returns
     --------
@@ -246,3 +261,27 @@ def cfunc(sig, locals={}, cache=False, **options):
         return res
 
     return wrapper
+
+
+def jit_module(**kwargs):
+    """ Automatically ``jit``-wraps functions defined in a Python module
+
+    Note that ``jit_module`` should only be called at the end of the module to
+    be jitted. In addition, only functions which are defined in the module
+    ``jit_module`` is called from are considered for automatic jit-wrapping.
+    See the Numba documentation for more information about what can/cannot be
+    jitted.
+
+    :param kwargs: Keyword arguments to pass to ``jit`` such as ``nopython``
+                   or ``error_model``.
+
+    """
+    # Get the module jit_module is being called from
+    frame = inspect.stack()[1]
+    module = inspect.getmodule(frame[0])
+    # Replace functions in module with jit-wrapped versions
+    for name, obj in module.__dict__.items():
+        if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
+            _logger.debug("Auto decorating function {} from module {} with jit "
+                          "and options: {}".format(obj, module.__name__, kwargs))
+            module.__dict__[name] = jit(obj, **kwargs)

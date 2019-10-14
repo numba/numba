@@ -865,16 +865,6 @@ class ArrayFlagsModel(StructModel):
         super(ArrayFlagsModel, self).__init__(dmm, fe_type, members)
 
 
-@register_default(types.SmartArrayType)
-class SmartArrayModel(StructModel):
-    def __init__(self, dmm, fe_type):
-        members = [
-            ('parent', types.pyobject),
-            ('data', fe_type.as_array)
-        ]
-        super(SmartArrayModel, self).__init__(dmm, fe_type, members)
-
-
 @register_default(types.NestedArray)
 class NestedArrayModel(ArrayModel):
     def __init__(self, dmm, fe_type):
@@ -973,6 +963,24 @@ class UnicodeCharSeq(DataModel):
 
     def get_data_type(self):
         return self._be_type
+
+    def as_data(self, builder, value):
+        return value
+
+    def from_data(self, builder, value):
+        return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def from_return(self, builder, value):
+        return value
+
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
+        return value
 
 
 @register_default(types.CharSeq)

@@ -6,6 +6,7 @@
 from __future__ import print_function
 
 import sys
+from itertools import product
 from itertools import permutations
 
 from numba import njit, types
@@ -16,7 +17,8 @@ from numba.errors import TypingError
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 
-isascii = lambda s: all(ord(c) < 128 for c in s)
+def isascii(s):
+    return all(ord(c) < 128 for c in s)
 
 
 def literal_usecase():
@@ -78,6 +80,18 @@ def ge_usecase(x, y):
 
 def find_usecase(x, y):
     return x.find(y)
+
+
+def count_usecase(x, y):
+    return x.count(y)
+
+
+def count_with_start_usecase(x, y, start):
+    return x.count(y, start)
+
+
+def count_with_start_end_usecase(x, y, start, end):
+    return x.count(y, start, end)
 
 
 def startswith_usecase(x, y):
@@ -232,6 +246,41 @@ UNICODE_ORDERING_EXAMPLES = [
     '大处着眼，小处着手。🐍⚡',
 ]
 
+UNICODE_COUNT_EXAMPLES = [
+    ('', ''),
+    ('', 'ascii'),
+    ('ascii', ''),
+    ('asc ii', ' '),
+    ('ascii', 'ci'),
+    ('ascii', 'ascii'),
+    ('ascii', 'Ă'),
+    ('ascii', '大处'),
+    ('ascii', 'étú?'),
+    ('', '大处 着眼，小处着手。大大大处'),
+    ('大处 着眼，小处着手。大大大处', ''),
+    ('大处 着眼，小处着手。大大大处', ' '),
+    ('大处 着眼，小处着手。大大大处', 'ci'),
+    ('大处 着眼，小处着手。大大大处', '大处大处'),
+    ('大处 着眼，小处着手。大大大处', '大处 着眼，小处着手。大大大处'),
+    ('大处 着眼，小处着手。大大大处', 'Ă'),
+    ('大处 着眼，小处着手。大大大处', '大处'),
+    ('大处 着眼，小处着手。大大大处', 'étú?'),
+    ('', 'tú quién te crees?'),
+    ('tú quién te crees?', ''),
+    ('tú quién te crees?', ' '),
+    ('tú quién te crees?', 'ci'),
+    ('tú quién te crees?', 'tú quién te crees?'),
+    ('tú quién te crees?', 'Ă'),
+    ('tú quién te crees?', '大处'),
+    ('tú quién te crees?', 'étú?'),
+    ('abababab', 'a'),
+    ('abababab', 'ab'),
+    ('abababab', 'aba'),
+    ('aaaaaaaaaa', 'aaa'),
+    ('aaaaaaaaaa', 'aĂ'),
+    ('aabbaaaabbaa', 'aa')
+]
+
 
 @unittest.skipUnless(_py34_or_later,
                      'unicode support requires Python 3.4 or later')
@@ -336,6 +385,111 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
+
+    def test_count(self):
+        pyfunc = count_usecase
+        cfunc = njit(pyfunc)
+        error_msg = "'{0}'.py_count('{1}') = {2}\n'{0}'.c_count('{1}') = {3}"
+
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            py_result = pyfunc(s, sub)
+            c_result = cfunc(s, sub)
+            self.assertEqual(py_result, c_result,
+                             error_msg.format(s, sub, py_result, c_result))
+
+    def test_count_with_start(self):
+        pyfunc = count_with_start_usecase
+        cfunc = njit(pyfunc)
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}) = {3}",
+                                "'{0}'.c_count('{1}', {2}) = {4}")
+
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            for i in range(-18, 18):
+                py_result = pyfunc(s, sub, i)
+                c_result = cfunc(s, sub, i)
+                self.assertEqual(py_result, c_result,
+                                 error_msg.format(s, sub, i, py_result,
+                                                  c_result))
+
+            py_result = pyfunc(s, sub, None)
+            c_result = cfunc(s, sub, None)
+            self.assertEqual(py_result, c_result,
+                             error_msg.format(s, sub, None, py_result,
+                                              c_result))
+
+    def test_count_with_start_end(self):
+        pyfunc = count_with_start_end_usecase
+        cfunc = njit(pyfunc)
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                "'{0}'.c_count('{1}', {2}, {3}) = {5}")
+
+        for s, sub in UNICODE_COUNT_EXAMPLES:
+            for i , j in product(range(-18, 18), (-18, 18)):
+                py_result = pyfunc(s, sub, i, j)
+                c_result = cfunc(s, sub, i, j)
+                self.assertEqual(py_result, c_result,
+                                 error_msg.format(s, sub, i, j, py_result,
+                                                  c_result))
+
+            for j in range(-18, 18):
+                py_result = pyfunc(s, sub, None, j)
+                c_result = cfunc(s, sub, None, j)
+                self.assertEqual(py_result, c_result,
+                                 error_msg.format(s, sub, None, j, py_result,
+                                                  c_result))
+
+            py_result = pyfunc(s, sub, None, None)
+            c_result = cfunc(s, sub, None, None)
+            self.assertEqual(py_result, c_result,
+                             error_msg.format(s, sub, None, None, py_result,
+                                              c_result))
+
+    def test_count_arg_type_check(self):
+        cfunc = njit(count_with_start_end_usecase)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ascii', 'c', 1, 0.5)
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ascii', 'c', 1.2, 7)
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ascii', 12, 1, 7)
+        self.assertIn('The substring must be a UnicodeType, not',
+                      str(raises.exception))
+
+    def test_count_optional_arg_type_check(self):
+        pyfunc = count_with_start_end_usecase
+
+        def try_compile_bad_optional(*args):
+            bad_sig = types.int64(types.unicode_type,
+                                  types.unicode_type,
+                                  types.Optional(types.float64),
+                                  types.Optional(types.float64))
+            njit([bad_sig])(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            try_compile_bad_optional('tú quis?', 'tú', 1.1, 1.1)
+        self.assertIn('The slice indices must be an Integer or None',
+                      str(raises.exception))
+
+        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                "'{0}'.c_count_op('{1}', {2}, {3}) = {5}")
+        sig_optional = types.int64(types.unicode_type,
+                                   types.unicode_type,
+                                   types.Optional(types.int64),
+                                   types.Optional(types.int64))
+        cfunc_optional = njit([sig_optional])(pyfunc)
+
+        py_result = pyfunc('tú quis?', 'tú', 0, 8)
+        c_result = cfunc_optional('tú quis?', 'tú', 0, 8)
+        self.assertEqual(py_result, c_result,
+                         error_msg.format('tú quis?', 'tú', 0, 8, py_result,
+                                          c_result))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
@@ -909,7 +1063,15 @@ class TestUnicode(BaseTest):
 
         cfunc = njit(pyfunc)
         uppers = [x.upper() for x in UNICODE_EXAMPLES]
-        for a in UNICODE_EXAMPLES + uppers + [""]:
+        extras = ["AA12A", "aa12a", "大AA12A", "大aa12a", "AAAǄA", "A 1 1 大"]
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L585-L599
+        cpython = ['\u2167', '\u2177', '\U00010401', '\U00010427', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F']
+        fourxcpy = [x * 4 for x in cpython]
+
+        for a in UNICODE_EXAMPLES + uppers + [""] + extras + cpython + fourxcpy:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))

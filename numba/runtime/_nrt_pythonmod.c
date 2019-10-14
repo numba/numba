@@ -225,6 +225,7 @@ declmethod(MemInfo_varsize_realloc);
 declmethod(MemInfo_release);
 declmethod(Allocate);
 declmethod(Free);
+declmethod(get_api);
 
 
 #undef declmethod

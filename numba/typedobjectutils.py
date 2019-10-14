@@ -1,6 +1,7 @@
 """ Common compiler level utilities for typed dict and list. """
 
 import operator
+import warnings
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Builder
@@ -11,7 +12,7 @@ from numba import typing
 from numba.targets.registry import cpu_target
 from numba.typeconv import Conversion
 from numba.extending import intrinsic
-from numba.errors import TypingError
+from numba.errors import TypingError, NumbaTypeSafetyWarning
 
 
 def _as_bytes(builder, ptr):
@@ -39,18 +40,38 @@ def _sentry_safe_cast(fromty, toty):
     """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
     """
     tyctxt = cpu_target.typing_context
+    fromty, toty = map(types.unliteral, (fromty, toty))
     by = tyctxt.can_convert(fromty, toty)
+
+    def warn():
+        m = 'unsafe cast from {} to {}. Precision may be lost.'
+        warnings.warn(m.format(fromty, toty),
+                      category=NumbaTypeSafetyWarning)
+
+    isint = lambda x: isinstance(x, types.Integer)
+    isflt = lambda x: isinstance(x, types.Float)
+    iscmplx = lambda x: isinstance(x, types.Complex)
+    # Only check against numeric types.
     if by is None or by > Conversion.safe:
-        if isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+        if isint(fromty) and isint(toty):
             # Accept if both types are ints
-            return
-        if isinstance(fromty, types.Integer) and isinstance(toty, types.Float):
+            warn()
+        elif isint(fromty) and isflt(toty):
             # Accept if ints to floats
-            return
-        if isinstance(fromty, types.Float) and isinstance(toty, types.Float):
+            warn()
+        elif isflt(fromty) and isflt(toty):
             # Accept if floats to floats
-            return
-        raise TypingError('cannot safely cast {} to {}'.format(fromty, toty))
+            warn()
+        elif iscmplx(fromty) and iscmplx(toty):
+            # Accept if complex to complex
+            warn()
+        elif not isinstance(toty, types.Number):
+            # Non-numbers
+            warn()
+        else:
+            # Make it a hard error for numeric type that changes domain.
+            m = 'cannot safely cast {} to {}. Please cast explicitly.'
+            raise TypingError(m.format(fromty, toty))
 
 
 def _sentry_safe_cast_default(default, valty):
@@ -107,8 +128,12 @@ def _get_incref_decref(context, module, datamodel, container_type):
         refct_fnty,
         name='.numba_{}_incref${}'.format(container_type, fe_type),
     )
+
     builder = ir.IRBuilder(incref_fn.append_basic_block())
-    context.nrt.incref(builder, fe_type, builder.load(incref_fn.args[0]))
+    context.nrt.incref(
+        builder, fe_type,
+        datamodel.load_from_data_pointer(builder, incref_fn.args[0]),
+    )
     builder.ret_void()
 
     decref_fn = module.get_or_insert_function(
@@ -116,7 +141,10 @@ def _get_incref_decref(context, module, datamodel, container_type):
         name='.numba_{}_decref${}'.format(container_type, fe_type),
     )
     builder = ir.IRBuilder(decref_fn.append_basic_block())
-    context.nrt.decref(builder, fe_type, builder.load(decref_fn.args[0]))
+    context.nrt.decref(
+        builder, fe_type,
+        datamodel.load_from_data_pointer(builder, decref_fn.args[0]),
+    )
     builder.ret_void()
 
     return incref_fn, decref_fn

@@ -55,6 +55,15 @@ class TestSelfRecursion(TestCase):
         for arg in (0, 5, 10, 15):
             self.assertEqual(pfunc(arg), cfunc(arg))
 
+    def test_growing_return_tuple(self):
+        cfunc = self.mod.make_growing_tuple_case(jit(nopython=True))
+        with self.assertRaises(TypingError) as raises:
+            cfunc(100)
+        self.assertIn(
+            "Return type of recursive function does not converge",
+            str(raises.exception),
+        )
+
 
 class TestMutualRecursion(TestCase):
 

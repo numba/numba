@@ -1,36 +1,33 @@
 # Tests numba.analysis functions
 from __future__ import print_function, absolute_import, division
+import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend
-from numba import types, rewrites, ir, jit, ir_utils
+from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import types, rewrites, ir, jit, ir_utils, errors, njit
 from .support import TestCase, MemoryLeakMixin, SerialMixin
 
-
-from numba.analysis import dead_branch_prune
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
+
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
 
 
 def compile_to_ir(func):
     func_ir = run_frontend(func)
+    state = StateDict()
+    state.func_ir = func_ir
+    state.typemap = None
+    state.calltypes = None
 
-    class MockPipeline(object):
-        def __init__(self, func_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = func_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
     # call this to get print etc rewrites
-    rewrites.rewrite_registry.apply('before-inference', MockPipeline(func_ir),
-                                    func_ir)
+    rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
 
 
-class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
+class TestBranchPruneBase(MemoryLeakMixin, TestCase):
     """
     Tests branch pruning
     """
@@ -44,7 +41,7 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
             branches.extend(tmp)
         return branches
 
-    def assert_prune(self, func, args_tys, prune, *args):
+    def assert_prune(self, func, args_tys, prune, *args, **kwargs):
         # This checks that the expected pruned branches have indeed been pruned.
         # func is a python function to assess
         # args_tys is the numba types arguments tuple
@@ -55,6 +52,9 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
         # None: under no circumstances should this branch be pruned
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
+        # **kwargs:
+        #        - flags: compiler.Flags instance to pass to `compile_isolated`,
+        #          permits use of e.g. object mode
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -63,6 +63,7 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
             print("before prune")
             func_ir.dump()
 
+        rewrite_semantic_constants(func_ir, args_tys)
         dead_branch_prune(func_ir, args_tys)
 
         after = func_ir
@@ -102,10 +103,19 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
             print("expect_removed", sorted(expect_removed))
             raise e
 
-        cres = compile_isolated(func, args_tys)
-        res = cres.entry_point(*args)
-        expected = func(*args)
+        supplied_flags = kwargs.pop('flags', False)
+        compiler_kws = {'flags': supplied_flags} if supplied_flags else {}
+        cres = compile_isolated(func, args_tys, **compiler_kws)
+        if args is None:
+            res = cres.entry_point()
+            expected = func()
+        else:
+            res = cres.entry_point(*args)
+            expected = func(*args)
         self.assertEqual(res, expected)
+
+
+class TestBranchPrune(TestBranchPruneBase, SerialMixin):
 
     def test_single_if(self):
 
@@ -372,12 +382,12 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
         def bug(a, b):
             if a.ndim == 1:
                 if b is None:
-                    return 10
+                    return dict()
                 return 12
             return []
 
-        self.assertEqual(bug(np.arange(10), 4), 12)
-        self.assertEqual(bug(np.arange(10), None), 10)
+        self.assertEqual(bug(np.zeros(10), 4), 12)
+        self.assertEqual(bug(np.arange(10), None), dict())
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
@@ -551,3 +561,75 @@ class TestBranchPrune(MemoryLeakMixin, SerialMixin, TestCase):
                            types.float64, types.NoneType('none')),
                           [None, None],
                           np.zeros((2, 3)), 1.2, None)
+
+
+class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
+    # Tests that semantic constants rewriting works by virtue of branch pruning
+
+    def test_array_ndim_attr(self):
+
+        def impl(array):
+            if array.ndim == 2:
+                if array.shape[1] == 2:
+                    return 1
+            else:
+                return 10
+
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,
+                                                                        None],
+                          np.zeros((2, 3)))
+        self.assert_prune(impl, (types.Array(types.float64, 1, 'C'),), [True,
+                                                                        'both'],
+                          np.zeros((2,)))
+
+    def test_tuple_len(self):
+
+        def impl(tup):
+            if len(tup) == 3:
+                if tup[2] == 2:
+                    return 1
+            else:
+                return 0
+
+        self.assert_prune(impl, (types.UniTuple(types.int64, 3),), [False,
+                                                                    None],
+                          tuple([1, 2, 3]))
+        self.assert_prune(impl, (types.UniTuple(types.int64, 2),), [True,
+                                                                    'both'],
+                          tuple([1, 2]))
+
+    def test_attr_not_len(self):
+        # The purpose of this test is to make sure that the conditions guarding
+        # the rewrite part do not themselves raise exceptions.
+        # This produces an `ir.Expr` call node for `float.as_integer_ratio`,
+        # which is a getattr() on `float`.
+
+        @njit
+        def test():
+            float.as_integer_ratio(1.23)
+
+        # this should raise a TypingError
+        with self.assertRaises(errors.TypingError) as e:
+            test()
+
+        self.assertIn("Unknown attribute 'as_integer_ratio'", str(e.exception))
+
+    def test_ndim_not_on_array(self):
+
+        FakeArray = collections.namedtuple('FakeArray', ['ndim'])
+        fa = FakeArray(ndim=2)
+
+        def impl(fa):
+            if fa.ndim == 2:
+                return fa.ndim
+            else:
+                object()
+
+        # check prune works for array ndim
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False],
+                          np.zeros((2, 3)))
+
+        # check prune fails for something with `ndim` attr that is not array
+        FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
+        self.assert_prune(impl, (FakeArrayType,), [None], fa,
+                          flags=enable_pyobj_flags)

@@ -35,7 +35,7 @@ from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi, _extras
 from numba import config, serialize, errors
 from numba.utils import longint as long
-from numba.cuda.envvars import get_numba_envvar, get_numbapro_envvar
+from numba.cuda.envvars import get_numba_envvar
 
 
 VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
@@ -690,7 +690,10 @@ class Context(object):
     def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
-        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' uses based on the block size.
+        :param b2d_func: function that calculates how much per-block dynamic
+                         shared memory 'func' uses based on the block size.
+                         Can also be the address of a C function.
+                         Use `0` to pass `NULL` to the underlying CUDA API.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         :param blocksizelimit: maximum block size the kernel is designed to handle"""
 
@@ -708,14 +711,20 @@ class Context(object):
                                                              memsize, blocksizelimit, flags)
         return (gridsize.value, blocksize.value)
 
+    def prepare_for_use(self):
+        """Initialize the context for use.
+        It's safe to be called multiple times.
+        """
+        # setup *deallocations* as the context becomes active for the first time
+        if self.deallocations is None:
+            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+
     def push(self):
         """
         Pushes this context on the current CPU Thread.
         """
         driver.cuCtxPushCurrent(self.handle)
-        # setup *deallocations* as the context becomes active for the first time
-        if self.deallocations is None:
-            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+        self.prepare_for_use()
 
     def pop(self):
         """
@@ -1740,8 +1749,9 @@ def get_devptr_for_active_ctx(ptr):
     pointer.
     """
     devptr = c_void_p(0)
-    attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+    if ptr != 0:
+        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
     return devptr
 
 
