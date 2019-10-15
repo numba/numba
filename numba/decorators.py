@@ -45,7 +45,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
 
     Args
     -----
-    signature:
+    signature_or_function:
         The (optional) signature or list of signatures to be compiled.
         If not passed, required signatures will be compiled when the
         decorated function is called, depending on the argument values.
