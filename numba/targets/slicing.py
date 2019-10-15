@@ -207,3 +207,12 @@ def slice_step_impl(context, builder, typ, value):
         return sli.step
     else:
         return context.get_constant(types.intp, 1)
+
+
+@lower_builtin("slice.indices", types.SliceType, types.Integer)
+def slice_indices(context, builder, sig, args):
+    size = args[1]
+    sli = context.make_helper(builder, sig.args[0], args[0])
+    fix_slice(builder, sli, size)
+    out_tuple = context.make_tuple(builder, sig.return_type, (sli.start, sli.stop, sli.step))
+    return out_tuple

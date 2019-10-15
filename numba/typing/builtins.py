@@ -726,6 +726,11 @@ class SliceAttribute(AttributeTemplate):
     def resolve_step(self, ty):
         return types.intp
 
+    @bound_function("slice.indices")
+    def resolve_indices(self, ty, args, kws):
+        assert not kws
+        return signature(types.UniTuple(types.intp, 3), types.intp)
+
 
 #-------------------------------------------------------------------------------
 

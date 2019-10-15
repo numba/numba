@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 import itertools
 import sys
 
+import numpy as np
+
 from numba import unittest_support as unittest
 from numba import jit, typeof
 from .support import TestCase
@@ -14,6 +16,9 @@ def slice_passing(sl):
 def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
+
+def slice_indices(s: slice, l: int):
+    return s.indices(l)
 
 
 class TestSlices(TestCase):
@@ -77,6 +82,25 @@ class TestSlices(TestCase):
                                ]:
             got = cfunc(*args)
             self.assertPreciseEqual(got, expected)
+
+    def test_slice_indices(self):
+        """Test that a numba slice returns same result for .indices as a python one."""
+        N_TESTS = 500
+
+        lengths = np.random.randint(0, 100, N_TESTS)
+        starts = np.random.randint(-120, 120, N_TESTS)
+        stops = np.random.randint(-120, 120, N_TESTS)
+        steps = np.random.randint(1, 120, N_TESTS)  # Steps can't be 0
+        steps[np.random.randint(0, 2, N_TESTS, dtype=bool)] *= -1
+        args = np.stack([starts, stops, steps], axis=1).astype(object)
+        args[np.random.randint(0, 2, (N_TESTS, 3), dtype=bool)] = None
+
+        cfunc = jit(nopython=True)(slice_indices)
+
+        for i in range(N_TESTS):
+            s = slice(*args[i, :])
+            l = lengths[i]
+            self.assertPreciseEqual(slice_indices(s, l), cfunc(s, l))
 
 
 if __name__ == '__main__':
