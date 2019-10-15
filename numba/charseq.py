@@ -24,7 +24,8 @@ bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
 u1_dtype = np.dtype('U1')
 unicode_byte_width = u1_dtype.itemsize
 unicode_uint = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unicode_byte_width]
-unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND, 2: unicode.PY_UNICODE_2BYTE_KIND,
+unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND,
+                2: unicode.PY_UNICODE_2BYTE_KIND,
                 4: unicode.PY_UNICODE_4BYTE_KIND}[unicode_byte_width]
 
 
@@ -215,7 +216,8 @@ def charseq_to_bytes(context, builder, fromty, toty, val):
 def unicode_to_bytes_cast(context, builder, fromty, toty, val):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
-    notkind1 = builder.icmp_unsigned('!=', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
+    notkind1 = builder.icmp_unsigned('!=', uni_str.kind,
+                                     ir.Constant(uni_str.kind.type, 1))
     src_length = uni_str.length
 
     with builder.if_then(notkind1):
@@ -246,9 +248,12 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
     src2 = builder.bitcast(uni_str.data, ir.IntType(16).as_pointer())
     src4 = builder.bitcast(uni_str.data, ir.IntType(32).as_pointer())
-    kind1 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
-    kind2 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 2))
-    kind4 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 4))
+    kind1 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 1))
+    kind2 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 2))
+    kind4 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 4))
     src_length = uni_str.length
 
     lty = context.get_value_type(toty)
@@ -362,19 +367,23 @@ def charseq_len(s):
 def charseq_concat(a, b):
     if not _same_kind(a, b):
         return
-    if (isinstance(a, types.UnicodeCharSeq) and isinstance(b, types.UnicodeType)):
+    if (isinstance(a, types.UnicodeCharSeq) and
+            isinstance(b, types.UnicodeType)):
         def impl(a, b):
             return str(a) + b
         return impl
-    if (isinstance(b, types.UnicodeCharSeq) and isinstance(a, types.UnicodeType)):
+    if (isinstance(b, types.UnicodeCharSeq) and
+            isinstance(a, types.UnicodeType)):
         def impl(a, b):
             return a + str(b)
         return impl
-    if (isinstance(a, types.UnicodeCharSeq) and isinstance(b, types.UnicodeCharSeq)):
+    if (isinstance(a, types.UnicodeCharSeq) and
+            isinstance(b, types.UnicodeCharSeq)):
         def impl(a, b):
             return str(a) + str(b)
         return impl
-    if (isinstance(a, (types.CharSeq, types.Bytes)) and isinstance(b, (types.CharSeq, types.Bytes))):
+    if (isinstance(a, (types.CharSeq, types.Bytes)) and
+            isinstance(b, (types.CharSeq, types.Bytes))):
         def impl(a, b):
             return (a._to_str() + b._to_str())._to_bytes()
         return impl
@@ -757,7 +766,8 @@ def unicode_charseq_split(a, sep=None, maxsplit=-1):
     if isinstance(a, (types.CharSeq, types.Bytes)):
         if isinstance(sep, (types.CharSeq, types.Bytes)):
             def impl(a, sep, maxsplit=-1):
-                return _map_bytes(a._to_str().split(sep._to_str(), maxsplit=maxsplit))
+                return _map_bytes(a._to_str().split(sep._to_str(),
+                                                    maxsplit=maxsplit))
             return impl
         if isinstance(sep, types.NoneType) or sep is None:
             if maxsplit == -1:

@@ -23,8 +23,8 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
     metadata store"""
 
     def define_pipelines(self):
-        pipeline = DefaultPassBuilder.define_nopython_pipeline(self.state,
-                                                               "inliner_custom_pipe")
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "inliner_custom_pipe")
         # mangle the default pipeline and inject DCE and IR preservation ahead
         # of legalisation
 
@@ -732,7 +732,8 @@ class TestOverloadInlining(InliningBase):
         def impl():
             a = bar(1)  # integer literal, should inline
             b = bar(2.3)  # float literal, should not inline
-            c = bar(3j)  # complex literal, should inline by virtue of cost model
+            # complex literal, should inline by virtue of cost model
+            c = bar(3j)
             return a + b + c
 
         # there should still be a `bar` not inlined

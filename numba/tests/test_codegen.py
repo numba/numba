@@ -36,7 +36,7 @@ asm_sum_inner = """
       %.3 = add i32 %.1, %.2
       ret i32 %.3
     }
-"""
+"""    # noqa: E501
 
 asm_sum_outer = """
     declare i32 @"__main__.ising_element_update$1.array(int8,_2d,_C).int64.int64"(i32 %.1, i32 %.2)
@@ -45,7 +45,8 @@ asm_sum_outer = """
       %.3 = call i32 @"__main__.ising_element_update$1.array(int8,_2d,_C).int64.int64"(i32 %.1, i32 %.2)
       ret i32 %.3
     }
-"""
+"""    # noqa: E501
+
 
 ctypes_sum_ty = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
 

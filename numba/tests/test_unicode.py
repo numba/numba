@@ -621,7 +621,8 @@ class TestUnicode(BaseTest):
         cfunc = njit(repeat_usecase)
         with self.assertRaises(TypingError) as raises:
             cfunc('hi', 2.5)
-        self.assertIn('Invalid use of Function(<built-in function mul>)', str(raises.exception))
+        self.assertIn('Invalid use of Function(<built-in function mul>)',
+                      str(raises.exception))
 
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
@@ -682,8 +683,10 @@ class TestUnicode(BaseTest):
             ('abababa', 'aba', 5),
         ]
 
-        for pyfunc, fmt_str in [(split_with_maxsplit_usecase, "'%s'.split('%s', %d)?"),
-                                (split_with_maxsplit_kwarg_usecase, "'%s'.split('%s', maxsplit=%d)?")]:
+        for pyfunc, fmt_str in [(split_with_maxsplit_usecase,
+                                 "'%s'.split('%s', %d)?"),
+                                (split_with_maxsplit_kwarg_usecase,
+                                 "'%s'.split('%s', maxsplit=%d)?")]:
 
             cfunc = njit(pyfunc)
             for test_str, splitter, maxsplit in CASES:
@@ -692,15 +695,18 @@ class TestUnicode(BaseTest):
                                  fmt_str % (test_str, splitter, maxsplit))
 
     def test_split_whitespace(self):
-        # explicit sep=None cases covered in test_split and test_split_with_maxsplit
+        # explicit sep=None cases covered in test_split and
+        # test_split_with_maxsplit
         pyfunc = split_whitespace_usecase
         cfunc = njit(pyfunc)
 
-        # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+        # list copied from
+        # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
         all_whitespace = ''.join(map(chr, [
-            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020,
-            0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
-            0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E,
+            0x001F, 0x0020, 0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002,
+            0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+            0x2028, 0x2029, 0x202F, 0x205F, 0x3000
         ]))
 
         CASES = [
@@ -741,7 +747,8 @@ class TestUnicode(BaseTest):
         # Handle empty separator exception
         with self.assertRaises(TypingError) as raises:
             cfunc('', [1, 2, 3])
-        # This error message is obscure, but indicates the error was trapped in typing of str.join()
+        # This error message is obscure, but indicates the error was trapped
+        # in the typing of str.join()
         # Feel free to change this as we update error messages.
         exc_message = str(raises.exception)
         self.assertIn("Invalid use of BoundFunction", exc_message)
@@ -805,31 +812,38 @@ class TestUnicode(BaseTest):
             for fillchar in [' ', '+', 'ú', '处']:
                 with self.assertRaises(TypingError) as raises:
                     cfunc(UNICODE_EXAMPLES[0], 1.1, fillchar)
-                self.assertIn('The width must be an Integer', str(raises.exception))
+                self.assertIn('The width must be an Integer',
+                              str(raises.exception))
 
                 for s in UNICODE_EXAMPLES:
                     for width in range(-3, 20):
                         self.assertEqual(pyfunc(s, width, fillchar),
                                          cfunc(s, width, fillchar),
-                                         "'%s'.%s(%d, '%s')?" % (s, case_name, width, fillchar))
+                                         "'%s'.%s(%d, '%s')?" % (s, case_name,
+                                                                 width,
+                                                                 fillchar))
 
     def test_justification_fillchar_exception(self):
         self.disable_leak_check()
 
-        for pyfunc in [center_usecase_fillchar, ljust_usecase_fillchar, rjust_usecase_fillchar]:
+        for pyfunc in [center_usecase_fillchar,
+                       ljust_usecase_fillchar,
+                       rjust_usecase_fillchar]:
             cfunc = njit(pyfunc)
 
             # disallowed fillchar cases
             for fillchar in ['', '+0', 'quién', '处着']:
                 with self.assertRaises(ValueError) as raises:
                     cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-                self.assertIn('The fill character must be exactly one', str(raises.exception))
+                self.assertIn('The fill character must be exactly one',
+                              str(raises.exception))
 
             # forbid fillchar cases with different types
             for fillchar in [1, 1.1]:
                 with self.assertRaises(TypingError) as raises:
                     cfunc(UNICODE_EXAMPLES[0], 20, fillchar)
-                self.assertIn('The fillchar must be a UnicodeType', str(raises.exception))
+                self.assertIn('The fillchar must be a UnicodeType',
+                              str(raises.exception))
 
     def test_inplace_concat(self, flags=no_pyobj_flags):
         pyfunc = inplace_concat_usecase
@@ -1066,7 +1080,7 @@ class TestUnicode(BaseTest):
         extras = ["AA12A", "aa12a", "大AA12A", "大aa12a", "AAAǄA", "A 1 1 大"]
 
         # Samples taken from CPython testing:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L585-L599
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L585-L599    # noqa: E501
         cpython = ['\u2167', '\u2177', '\U00010401', '\U00010427', '\U00010429',
                    '\U0001044E', '\U0001F40D', '\U0001F46F']
         fourxcpy = [x * 4 for x in cpython]

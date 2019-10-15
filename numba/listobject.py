@@ -378,7 +378,8 @@ def _list_length(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_length')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_length')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -402,7 +403,8 @@ def _list_append(typingctx, l, item):
         )
         [l, item] = args
         [tl, titem] = sig.args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_append')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_append')
 
         dm_item = context.data_model_manager[titem]
 
@@ -524,8 +526,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_{}'.format(op))
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_{}'.format(op))
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
@@ -541,7 +543,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
             ],
         )
         # Load item if output is available
-        found = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+        found = builder.icmp_signed('>=', status,
+                                    status.type(int(ListStatus.LIST_OK)))
 
         out = context.make_optional_none(builder, tl.item_type)
         pout = cgutils.alloca_once_value(builder, out)
@@ -688,7 +691,8 @@ def impl_setitem(l, index, item):
             # Extended slices
             else:
                 if len(slice_range) != len(item):
-                    raise ValueError("length mismatch for extended slice and sequence")
+                    raise ValueError("length mismatch for extended slice "
+                                     "and sequence")
                 # extended slice can only replace
                 for i, j in zip(slice_range, item):
                     l[i] = j
@@ -740,8 +744,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         )
         [l, start, stop, step] = args
         [tl, tstart, tstop, tstep] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_delete_slice')
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_delete_slice')
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
