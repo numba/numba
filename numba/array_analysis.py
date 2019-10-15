@@ -1051,7 +1051,7 @@ class ArrayAnalysis(object):
             result = result[1]
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
-            if value_shape is (): # constant
+            if value_shape == (): # constant
                 equiv_set.set_shape_setitem(inst, target_shape)
                 return pre, []
             elif value_shape != None:
