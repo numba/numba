@@ -235,27 +235,41 @@ def _lower_parfor_parallel(lowerer, parfor):
                 redtoset = redvar
 
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
+            redblocks = []
             for j in range(get_thread_count()):
+                block = ir.Block(scope, loc)
+                redblocks.append(block)
                 index_var = ir.Var(scope, mk_unique_var("index_var"), loc)
                 index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
                 typemap[index_var.name] = types.uintp
+                block.body.append(index_var_assign)
                 lowerer.lower_inst(index_var_assign)
 
                 cond = ir.Expr.binop(operator.gt, index_var, get_num_threads_var, loc)
                 cond_var = ir.Var(scope, mk_unique_var('cond'), loc)
                 cond_assign = ir.Assign(cond, cond_var, loc)
                 typemap[cond_var.name] = types.intp
-                ir.lower_inst(cond_assign)
+                lowerer.fndesc.calltypes[cond] = signature(types.i1, types.intp, types.intp)
+                lowerer.lower_inst(cond_assign)
 
                 truebr = next_label()
+                true_block = ir.Block(scope, loc)
+                lowerer.blkmap[truebr] = true_block
+                # lowerer.blocks[truebr] = true_block
                 falsebr = next_label()
-                branch = ir.Branch(cond, truebr, falsebr, loc)
-                lowerer.lower_inst(branch)
+                false_block = ir.Block(scope, loc)
+                lowerer.blkmap[falsebr] = false_block
+                # lowerer.blocks[falsebr] = false_block
 
                 redsetitem = ir.SetItem(redarr_var, index_var, redtoset, loc)
                 lowerer.fndesc.calltypes[redsetitem] = signature(types.none,
                         typemap[redarr_var.name], typemap[index_var.name], redvar_typ)
-                lowerer.lower_inst(redsetitem)
+                false_block.body.append(redsetitem)
+
+                branch = ir.Branch(cond_var, truebr, falsebr, loc)
+                block.body.append(branch)
+                # lowerer.lower_inst(branch)
+            parfor.init_block.body.append(ir.Jump(redblocks[0], loc))
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = copy.copy(parfor.flags)
