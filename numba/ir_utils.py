@@ -504,6 +504,9 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("alias map:", alias_map)
+        print("live_map:", live_map)
+        print("usemap:", usedefs.usemap)
+        print("defmap:", usedefs.defmap)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -511,8 +514,12 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
         lives = {v.name for v in block.terminator.list_vars()}
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("remove_dead processing block", label, lives)
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("succ live_map", out_blk, live_map[out_blk])
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap)
@@ -539,6 +546,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
     new_body = [block.terminator]
     # for each statement in reverse order, excluding terminator
     for stmt in reversed(block.body[:-1]):
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("remove_dead_block", stmt)
         # aliases of lives are also live
         alias_lives = set()
         init_alias_lives = lives & alias_set
@@ -549,7 +558,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives_n_aliases, arg_aliases, alias_map, func_ir,
+            #stmt = f(stmt, lives_n_aliases, arg_aliases, alias_map, func_ir,
+            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir,
                      typemap)
             if stmt is None:
                 removed = True
@@ -1356,6 +1366,8 @@ def simplify(func_ir, typemap, calltypes):
         calltypes)
     restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
+    if config.DEBUG_ARRAY_OPT >= 1:
+        dprint_func_ir(func_ir, "after copy prop")
     remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT >= 1:
