@@ -6,7 +6,7 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
-A Just-In-Time(JIT) Compiler for Numerical Functions in Python
+A Just-In-Time(JIT) Compiler for Numerical Functions in Python.
 #########################################################
 
 Numba is an open source, NumPy-aware optimizing compiler for Python sponsored
