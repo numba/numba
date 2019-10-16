@@ -37,6 +37,10 @@ def len_usecase(x):
     return len(x)
 
 
+def bool_usecase(x):
+    return bool(x)
+
+
 def getitem_usecase(x, i):
     return x[i]
 
@@ -221,6 +225,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
 
 UNICODE_EXAMPLES = [
+    '',
     'ascii',
     '12345',
     '1234567890',
@@ -344,6 +349,12 @@ class TestUnicode(BaseTest):
 
     def test_len(self, flags=no_pyobj_flags):
         pyfunc = len_usecase
+        cfunc = njit(pyfunc)
+        for s in UNICODE_EXAMPLES:
+            self.assertEqual(pyfunc(s), cfunc(s))
+
+    def test_bool(self, flags=no_pyobj_flags):
+        pyfunc = bool_usecase
         cfunc = njit(pyfunc)
         for s in UNICODE_EXAMPLES:
             self.assertEqual(pyfunc(s), cfunc(s))

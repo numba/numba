@@ -458,6 +458,14 @@ def unicode_len(s):
         return len_impl
 
 
+@overload(bool)
+def unicode_bool(s):
+    if isinstance(s, types.UnicodeType):
+        def bool_impl(s):
+            return s._length > 0
+        return bool_impl
+
+
 @overload(operator.eq)
 def unicode_eq(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
