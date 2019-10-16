@@ -1,9 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
 import itertools
+from itertools import chain, product, starmap
 import sys
-
-import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, typeof
@@ -17,7 +16,7 @@ def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
-def slice_indices(s: slice, l: int):
+def slice_indices(s, l):
     return s.indices(l)
 
 
@@ -85,22 +84,25 @@ class TestSlices(TestCase):
 
     def test_slice_indices(self):
         """Test that a numba slice returns same result for .indices as a python one."""
-        N_TESTS = 500
-
-        lengths = np.random.randint(0, 100, N_TESTS)
-        starts = np.random.randint(-120, 120, N_TESTS)
-        stops = np.random.randint(-120, 120, N_TESTS)
-        steps = np.random.randint(1, 120, N_TESTS)  # Steps can't be 0
-        steps[np.random.randint(0, 2, N_TESTS, dtype=bool)] *= -1
-        args = np.stack([starts, stops, steps], axis=1).astype(object)
-        args[np.random.randint(0, 2, (N_TESTS, 3), dtype=bool)] = None
+        slices = starmap(
+            slice,
+            product(
+                chain(range(-5, 5), (None,)),
+                chain(range(-5, 5), (None,)),
+                chain(range(-5, 5), (None,))
+            )
+        )
+        lens = range(-1, 5)
 
         cfunc = jit(nopython=True)(slice_indices)
 
-        for i in range(N_TESTS):
-            s = slice(*args[i, :])
-            l = lengths[i]
-            self.assertPreciseEqual(slice_indices(s, l), cfunc(s, l))
+        for s, l in product(slices, lens):
+            try:
+                expected = slice_indices(s, l)
+            except Exception as e:
+                self.assertRaises(type(e), cfunc, s, l)
+                continue
+            self.assertPreciseEqual(expected, cfunc(s, l))
 
 
 if __name__ == '__main__':
