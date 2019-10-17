@@ -362,6 +362,14 @@ def charseq_len(s):
             return len_impl
 
 
+@overload(bool)
+def charseq_bool(s):
+    if isinstance(s, (types.CharSeq, types.UnicodeCharSeq)):
+        def bool_impl(s):
+            return len(s) > 0
+        return bool_impl
+
+
 @overload(operator.add)
 @overload(operator.iadd)
 def charseq_concat(a, b):
