@@ -9,7 +9,7 @@ import sys
 from itertools import product
 from itertools import permutations
 
-from numba import njit, types, utils
+from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
@@ -515,7 +515,7 @@ class TestUnicode(BaseTest):
             (s, ['', 'xx', s[:-2], s[3:], s]) for s in UNICODE_EXAMPLES
         ]
         # Samples taken from CPython testing:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L233-L259
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L233-L259    # noqa: E501
         cpython_subs = [
             ('\u0102' + 'a' * 100, ['\u0102', '\u0201', '\u0120', '\u0220']),
             ('\U00100304' + 'a' * 100, ['\U00100304', '\U00100204',
@@ -584,13 +584,12 @@ class TestUnicode(BaseTest):
                     msg = 'must be {}'.format(accepted_types)
                     self.assertIn(msg, str(raises.exception))
 
-    @unittest.skipIf(utils.MACHINE_BITS == 32, 'No support for 32-bit')
     def test_rfind_with_start_end_optional(self):
         pyfunc = rfind_with_start_end_usecase
         sig_optional = types.int64(types.unicode_type,
                                    types.unicode_type,
-                                   types.Optional(types.int64),
-                                   types.Optional(types.int64))
+                                   types.Optional(types.intp),
+                                   types.Optional(types.intp))
         cfunc = njit([sig_optional])(pyfunc)
 
         starts = list(range(-20, 20)) + [None]

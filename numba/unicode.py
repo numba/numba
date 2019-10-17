@@ -541,28 +541,28 @@ def unicode_find(a, b):
         return find_impl
 
 
-def unicode_rfind_check_type(ty, name):
-    """
-    Check object belongs to one of specific types
-    :param ty: object type
-    :param name: name of the argument
-    """
-    thety = ty
-    # if the type is omitted, the concrete type is the value
-    if isinstance(ty, types.Omitted):
-        thety = ty.value
-    # if the type is optional, the concrete type is the captured type
-    elif isinstance(ty, types.Optional):
-        thety = ty.type
-
-    accepted = (types.Integer, int, types.NoneType)
-    if thety is not None and not isinstance(thety, accepted):
-        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
-
-
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(s, substr, start=None, end=None):
     """Implements str.rfind()"""
+    def unicode_rfind_check_type(ty, name):
+        """
+        Check object belongs to one of specific types
+        :param ty: object type
+        :param name: name of the argument
+        """
+        thety = ty
+        # if the type is omitted, the concrete type is the value
+        if isinstance(ty, types.Omitted):
+            thety = ty.value
+        # if the type is optional, the concrete type is the captured type
+        elif isinstance(ty, types.Optional):
+            thety = ty.type
+
+        accepted = (types.Integer, int, types.NoneType)
+        if thety is not None and not isinstance(thety, accepted):
+            raise TypingError(
+                '"{}" must be {}, not {}'.format(name, accepted, ty))
+
     unicode_rfind_check_type(start, 'start')
     unicode_rfind_check_type(end, 'end')
 
