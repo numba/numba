@@ -1292,6 +1292,33 @@ def unicode_upper(a):
     return impl
 
 
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(s):
+    """
+    Implements UnicodeType.istitle()
+    The algorithm is an approximate translation from CPython:
+    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
+    """
+
+    def impl(s):
+        cased = False
+        previous_is_cased = False
+        for char in s:
+            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
+                if previous_is_cased:
+                    return False
+                cased = True
+                previous_is_cased = True
+            elif _PyUnicode_IsLowercase(char):
+                if not previous_is_cased:
+                    return False
+            else:
+                previous_is_cased = False
+
+        return cased
+    return impl
+
+
 @lower_builtin('getiter', types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args

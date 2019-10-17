@@ -1706,9 +1706,39 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03(self):
         def test_impl():
-            s = 0
+            s = 10
             for i in range(10):
                 s += 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03mul(self):
+        def test_impl():
+            s = 3
+            for i in range(10):
+                s *= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03sub(self):
+        def test_impl():
+            s = 100
+            for i in range(10):
+                s -= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03div(self):
+        def test_impl():
+            s = 10
+            for i in range(10):
+                s /= 2
             return s
         self.prange_tester(test_impl, scheduler_type='unsigned',
                            check_fastmath=True)
@@ -2813,6 +2843,10 @@ class TestParforsMisc(TestParforsBase):
     """
     _numba_parallel_test_ = False
 
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
     @skip_unsupported
     def test_no_warn_if_cache_set(self):
 
@@ -2879,6 +2913,18 @@ class TestParforsMisc(TestParforsBase):
             return res + dummy[2]
 
         self.assertTrue(get_init_block_size(test_impl, ()) == 0)
+
+    @skip_unsupported
+    def test_alias_analysis_for_parfor1(self):
+        def test_impl():
+            acc = 0
+            for _ in range(4):
+                acc += 1
+
+            data = np.zeros((acc,))
+            return data
+
+        self.check(test_impl)
 
 @skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
