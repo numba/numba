@@ -1321,10 +1321,10 @@ def unicode_istitle(s):
     return impl
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
-    """This is a translation of the function that handles the capital sigma character."""
+    """This is a translation of the function that handles the capital sigma."""
     c = 0
     j = idx - 1
     while j >= 0:
@@ -1345,7 +1345,7 @@ def _handle_capital_sigma(data, length, idx):
     return 0x3c2 if final_sigma else 0x3c3
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
 @register_jitable
 def _lower_ucs4(code_point, data, length, idx, mapped):
     """This is a translation of the function that lowers a character."""
@@ -1355,7 +1355,7 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
 @register_jitable
 def _do_title(data, length, res, maxchars):
     """This is a translation of the function that titles a unicode string."""
@@ -1378,7 +1378,7 @@ def _do_title(data, length, res, maxchars):
     return k
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
 @overload_method(types.UnicodeType, 'title')
 def unicode_title(data):
     """Implements str.title()"""
