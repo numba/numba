@@ -177,6 +177,10 @@ def rjust_usecase_fillchar(x, y, fillchar):
     return x.rjust(y, fillchar)
 
 
+def istitle_usecase(x):
+    return x.istitle()
+
+
 def iter_usecase(x):
     l = []
     for i in x:
@@ -917,6 +921,42 @@ class TestUnicode(BaseTest):
                                      fn(string, chars),
                                      "'%s'.%s('%s')?" % (string, case_name,
                                                          chars))
+
+    def test_istitle(self):
+        pyfunc = istitle_usecase
+        cfunc = njit(pyfunc)
+        error_msg = "'{0}'.py_istitle() = {1}\n'{0}'.c_istitle() = {2}"
+
+        unicode_title = [x.title() for x in UNICODE_EXAMPLES]
+        special = [
+            '',
+            '    ',
+            '  AA  ',
+            '  Ab  ',
+            '1',
+            'A123',
+            'A12Bcd',
+            '+abA',
+            '12Abc',
+            'A12abc',
+            '%^Abc 5 $% Def'
+            '𐐁𐐩',
+            '𐐧𐑎',
+            '𐐩',
+            '𐑎',
+            '🐍 Is',
+            '🐍 NOT',
+            '👯Is',
+            'ῼ',
+            'Greek ῼitlecases ...'
+        ]
+        ISTITLE_EXAMPLES = UNICODE_EXAMPLES + unicode_title + special
+
+        for s in ISTITLE_EXAMPLES:
+            py_result = pyfunc(s)
+            c_result = cfunc(s)
+            self.assertEqual(py_result, c_result,
+                             error_msg.format(s, py_result, c_result))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
