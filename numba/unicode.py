@@ -1325,9 +1325,9 @@ def unicode_istitle(s):
 def unicode_islower(data):
     """
     impl is an approximate translation of:
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933    # noqa: E501
     mixed with:
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156    # noqa: E501
     """
 
     def impl(data):
@@ -1348,7 +1348,7 @@ def unicode_islower(data):
     return impl
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
     """Handle capital sigma"""
@@ -1371,7 +1371,7 @@ def _handle_capital_sigma(data, length, idx):
     return 0x3c2 if final_sigma else 0x3c3
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
 @register_jitable
 def _lower_ucs4(code_point, data, length, idx, mapped):
     if code_point == 0x3A3:
@@ -1380,7 +1380,7 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     return _PyUnicode_ToLowerFull(code_point, mapped)
 
 
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
 @register_jitable
 def _do_upper_or_lower(data, length, res, maxchars, lower):
     k = 0
@@ -1404,13 +1404,13 @@ def unicode_lower(data):
     """Implements .lower()"""
     def impl(data):
         # main structure is a translation of:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
 
         # ASCII fast path
         length = len(data)
         if data._is_ascii:
             # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
             res = _empty_string(data._kind, length, data._is_ascii)
             for idx in range(length):
                 code_point = _get_code_point(data, idx)
@@ -1418,7 +1418,7 @@ def unicode_lower(data):
             return res
         else:
             # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
             tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
                                 data._is_ascii)
             # maxchar is inside of a list to be pass as argument by reference

@@ -249,7 +249,7 @@ def _PyUnicode_ToLowercase(ch):
     raise NotImplementedError
 
 
-# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L211-L225
+# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L211-L225    # noqa: E501
 @register_jitable
 def _PyUnicode_ToLowerFull(ch, res):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -288,14 +288,14 @@ def _PyUnicode_ToFoldedFull(ch, res):
     raise NotImplementedError
 
 
-# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L274-L279
+# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L274-L279    # noqa: E501
 @register_jitable
 def _PyUnicode_IsCased(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.CASED_MASK != 0
 
 
-# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L281-L286
+# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L281-L286    # noqa: E501
 @register_jitable
 def _PyUnicode_IsCaseIgnorable(ch):
     ctype = _PyUnicode_gettyperecord(ch)
