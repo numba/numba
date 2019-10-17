@@ -24,7 +24,7 @@ http://numba.pydata.org
 Dependencies
 ============
 
-* llvmlite
+* llvmlite (version 0.30.0 or higher)
 * NumPy (version 1.9 or higher)
 * funcsigs (for Python 2)
 
@@ -43,6 +43,7 @@ Supported Platforms
 * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
   macOS (< 10.14)
 * AMD GPUs via ROCm driver on Linux
+* llvmlite >= 0.30.0
 
 
 Installing
