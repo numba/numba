@@ -194,6 +194,10 @@ class TestCFFI(TestCase):
         x = 1.123
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 
+    def test_unbox_cdata(self):
+        voidptr, intptr = mod.make_pointers()
+        jit(nopython=True)(mod.use_pointers)(voidptr, intptr)
+
 
 if __name__ == '__main__':
     unittest.main()

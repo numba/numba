@@ -10,6 +10,13 @@ class Opaque(Dummy):
     """
     A type that is a opaque pointer.
     """
+    def __init__(self, name, get_pointer=None):
+        self.get_pointer = get_pointer
+        super(Opaque, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.name, self.get_pointer
 
 
 class SimpleIterableType(IterableType):

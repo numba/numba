@@ -47,6 +47,11 @@ def is_cffi_func(obj):
         except:
             return False
 
+
+def is_cffi_value(obj):
+    return isinstance(obj, cffi.FFI.CData)
+
+
 def get_pointer(cffi_func):
     """
     Get a pointer to the underlying function for a CFFI function as an
@@ -120,9 +125,10 @@ def map_type(cffi_type, use_record_dtype=False):
     elif kind == 'pointer':
         pointee = cffi_type.item
         if pointee.kind == 'void':
-            return types.voidptr
+            return types.RawPointer('void*', get_pointer=get_pointer)
         else:
-            return types.CPointer(primed_map_type(pointee))
+            pointee = primed_map_type(pointee)
+            return types.CPointer(pointee, get_pointer=get_pointer)
     elif kind == 'array':
         dtype = primed_map_type(cffi_type.item)
         nelem = cffi_type.length
@@ -134,6 +140,13 @@ def map_type(cffi_type, use_record_dtype=False):
         if result is None:
             raise TypeError(cffi_type)
         return result
+
+
+def map_typeof(value, use_record_dtype=False):
+    return map_type(
+        ffi.typeof(value),
+        use_record_dtype=use_record_dtype,
+    )
 
 
 def map_struct_to_record_dtype(cffi_type):

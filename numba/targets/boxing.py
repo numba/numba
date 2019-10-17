@@ -11,6 +11,25 @@ from . import listobj, setobj
 from ..utils import IS_PY3
 
 
+def native_from_get_pointer(typ, obj, c):
+    """Call get_pointer() on the object to get the raw pointer value"""
+    ptrty = c.context.get_function_pointer_type(typ)
+    ret = cgutils.alloca_once_value(c.builder,
+                                    ir.Constant(ptrty, None),
+                                    name='fnptr')
+    ser = c.pyapi.serialize_object(typ.get_pointer)
+    get_pointer = c.pyapi.unserialize(ser)
+    with cgutils.if_likely(c.builder,
+                           cgutils.is_not_null(c.builder, get_pointer)):
+        intobj = c.pyapi.call_function_objargs(get_pointer, (obj,))
+        c.pyapi.decref(get_pointer)
+        with cgutils.if_likely(c.builder,
+                               cgutils.is_not_null(c.builder, intobj)):
+            ptr = c.pyapi.long_as_voidptr(intobj)
+            c.pyapi.decref(intobj)
+            c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
+    return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+
 #
 # Scalar types
 #
@@ -156,6 +175,14 @@ def box_raw_pointer(typ, val, c):
     ll_intp = c.context.get_value_type(types.uintp)
     addr = c.builder.ptrtoint(val, ll_intp)
     return c.box(types.uintp, addr)
+
+@unbox(types.CPointer)
+@unbox(types.RawPointer)
+def unbox_pointer(typ, obj, c):
+    if typ.get_pointer is None:
+        raise NotImplementedError(typ)
+
+    return native_from_get_pointer(typ, obj, c)
 
 
 @box(types.EnumMember)
@@ -1020,23 +1047,7 @@ def unbox_funcptr(typ, obj, c):
     if typ.get_pointer is None:
         raise NotImplementedError(typ)
 
-    # Call get_pointer() on the object to get the raw pointer value
-    ptrty = c.context.get_function_pointer_type(typ)
-    ret = cgutils.alloca_once_value(c.builder,
-                                    ir.Constant(ptrty, None),
-                                    name='fnptr')
-    ser = c.pyapi.serialize_object(typ.get_pointer)
-    get_pointer = c.pyapi.unserialize(ser)
-    with cgutils.if_likely(c.builder,
-                           cgutils.is_not_null(c.builder, get_pointer)):
-        intobj = c.pyapi.call_function_objargs(get_pointer, (obj,))
-        c.pyapi.decref(get_pointer)
-        with cgutils.if_likely(c.builder,
-                               cgutils.is_not_null(c.builder, intobj)):
-            ptr = c.pyapi.long_as_voidptr(intobj)
-            c.pyapi.decref(intobj)
-            c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
-    return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+    return native_from_get_pointer(typ, obj, c)
 
 @box(types.DeferredType)
 def box_deferred(typ, val, c):

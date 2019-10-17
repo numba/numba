@@ -153,14 +153,15 @@ class CPointer(Type):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, get_pointer=None):
         self.dtype = dtype
         name = "%s*" % dtype
+        self.get_pointer = get_pointer
         super(CPointer, self).__init__(name)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.get_pointer
 
 
 class EphemeralPointer(CPointer):

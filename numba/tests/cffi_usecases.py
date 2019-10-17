@@ -65,6 +65,12 @@ def load_ool_module():
     void vdSin(int n, double* x, double* y);
     void vector_real(numba_complex *c, double *real, int n);
     void vector_imag(numba_complex *c, double *imag, int n);
+
+    void* make_voidptr(void);
+    void use_voidptr(void *ptr);
+
+    int* make_intptr(void);
+    void use_intptr(int*);
     """
 
     source = numba_complex + bool_define + """
@@ -101,6 +107,16 @@ def load_ool_module():
         for (i = 0; i < n; i++)
             imag[i] = c[i].imag;
     }
+
+    void* make_voidptr(void) {
+        return NULL;
+    }
+    void use_voidptr(void *ptr) { }
+
+    int* make_intptr(void) {
+        return NULL;
+    }
+    void use_intptr(int*) { }
     """
 
     ffi = FFI()
@@ -197,3 +213,12 @@ def vector_extract_real(x, y):
 
 def vector_extract_imag(x, y):
     vector_imag(ffi.from_buffer(x), ffi.from_buffer(y), len(x))
+
+
+# For testing unboxing of cffi CData objets
+def make_pointers():
+    return make_voidptr(), make_intptr()
+
+def use_pointers(voidptr, intptr):
+    use_voidptr()
+    use_intptr()
