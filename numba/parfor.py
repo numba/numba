@@ -3439,7 +3439,7 @@ def get_parfor_pattern_vars(parfor):
                     out.add(v.name)
     return out
 
-def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
+def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, func_ir, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
@@ -3456,7 +3456,7 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         parfor.loop_body[first_label].body,
         parfor.index_var, alias_map,
         first_block_saved_values,
-        lives
+        lives_n_aliases
         )
 
     # remove saved first block setitems if array potentially changed later
@@ -3483,13 +3483,13 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         block = parfor.loop_body[l]
         saved_values = first_block_saved_values.copy()
         _update_parfor_get_setitems(block.body, parfor.index_var, alias_map,
-                                        saved_values, lives)
+                                        saved_values, lives_n_aliases)
 
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
     last_label = max(blocks.keys())
-    return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
+    return_label, tuple_var = _add_liveness_return_block(blocks, lives_n_aliases, typemap)
     # jump to return label
     jump = ir.Jump(return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(jump)
