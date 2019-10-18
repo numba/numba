@@ -70,7 +70,7 @@ def load_ool_module():
     void use_voidptr(void *ptr);
 
     int* make_intptr(void);
-    void use_intptr(int*);
+    void use_intptr(int *ptr);
     """
 
     source = numba_complex + bool_define + """
@@ -116,7 +116,7 @@ def load_ool_module():
     int* make_intptr(void) {
         return NULL;
     }
-    void use_intptr(int*) { }
+    void use_intptr(int *ptr) { }
     """
 
     ffi = FFI()
