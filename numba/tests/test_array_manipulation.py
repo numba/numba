@@ -805,12 +805,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 0
         yield 1
         yield False
+        yield True
         yield (True, False, True)
         yield 2 + 1j
         # the following are not array-like, but numpy 1.15+ does not raise
         yield None
         if not sys.version_info < (3,):
             yield 'a_string'
+            yield ''
 
     @unittest.skipUnless(np_version >= (1, 15),
                          "flatnonzero array-like handling per 1.15+")
@@ -843,6 +845,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 pyfunc(a)
 
             self.assertIn("object has no attribute 'ravel'", str(e.exception))
+
+    def test_argwhere_array_like(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+            
 
 if __name__ == '__main__':
     unittest.main()
