@@ -363,7 +363,7 @@ class TestUnicode(BaseTest):
         pyfunc = startswith_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for b in [x for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
+            for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
@@ -372,7 +372,7 @@ class TestUnicode(BaseTest):
         pyfunc = endswith_usecase
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
-            for b in [x for x in ['', 'x', a[:-2], a[3:], a, a + a]]:
+            for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
@@ -382,7 +382,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
             extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
-            for substr in [x for x in extras]:
+            for substr in extras:
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
                                  "'%s' in '%s'?" % (substr, a))
@@ -392,7 +392,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for a in UNICODE_EXAMPLES:
             extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
-            for substr in [x for x in extras]:
+            for substr in extras:
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
@@ -620,7 +620,7 @@ class TestUnicode(BaseTest):
     def test_repeat(self, flags=no_pyobj_flags):
         pyfunc = repeat_usecase
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES + ['']:
+        for a in UNICODE_EXAMPLES:
             for b in (-1, 0, 1, 2, 3, 4, 5, 7, 8, 15, 70):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b))
@@ -1077,7 +1077,7 @@ class TestUnicode(BaseTest):
             return not x
 
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES + [""]:
+        for a in UNICODE_EXAMPLES:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
@@ -1096,7 +1096,7 @@ class TestUnicode(BaseTest):
                    '\U0001044E', '\U0001F40D', '\U0001F46F']
         fourxcpy = [x * 4 for x in cpython]
 
-        for a in UNICODE_EXAMPLES + uppers + [""] + extras + cpython + fourxcpy:
+        for a in UNICODE_EXAMPLES + uppers + extras + cpython + fourxcpy:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
@@ -1106,7 +1106,7 @@ class TestUnicode(BaseTest):
             return x.upper()
 
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES + [""]:
+        for a in UNICODE_EXAMPLES:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
