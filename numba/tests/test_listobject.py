@@ -37,6 +37,21 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), i)
 
 
+class TestBool(MemoryLeakMixin, TestCase):
+    """Test list bool."""
+
+    def test_list_bool(self):
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            for i in range(n):
+                l.append(i)
+            return bool(l)
+
+        for i in (0, 1, 2, 100):
+            self.assertEqual(foo(i), i > 0)
+
+
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):
 
     def test_list_to_from_meminfo(self):

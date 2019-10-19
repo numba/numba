@@ -657,6 +657,19 @@ def impl_new_dict(key, value):
     return imp
 
 
+@overload(bool)
+def impl_bool(d):
+    """bool(dict)
+    """
+    if not isinstance(d, types.DictType):
+        return
+
+    def impl(d):
+        return _dict_length(d) > 0
+
+    return impl
+
+
 @overload(len)
 def impl_len(d):
     """len(dict)

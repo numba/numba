@@ -25,6 +25,26 @@ skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
+    def test_dict_bool(self):
+        """
+        Exercise bool(dict)
+        """
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float32)
+            for i in range(n):
+                d[i] = i + 1
+            return bool(d)
+
+        # Insert nothing
+        self.assertEqual(foo(n=0), False)
+        # Insert 1 entry
+        self.assertEqual(foo(n=1), True)
+        # Insert 2 entries
+        self.assertEqual(foo(n=2), True)
+        # Insert 100 entries
+        self.assertEqual(foo(n=100), True)
+
     def test_dict_create(self):
         """
         Exercise dictionary creation, insertion and len
@@ -430,7 +450,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
-            d.setdefault(1, 1.2) # used because key is not in
+            d.setdefault(1, 1.2)  # used because key is not in
             a = d.get(1)
             d[1] = 2.3
             b = d.get(1)
@@ -821,7 +841,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d = dictobject.new_dict(int32, float64)
             d[11] = 12.
             d[22] = 9.
-            k2 = d.keys() & {12,}
+            k2 = d.keys() & {12, }
             return k2
 
         print(foo())
