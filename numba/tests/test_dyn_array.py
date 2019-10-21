@@ -9,6 +9,7 @@ import gc
 
 from numba import unittest_support as unittest
 from numba.errors import TypingError
+from numba import config
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
@@ -574,6 +575,9 @@ class ConstructorBaseTest(NrtRefCtTest):
         with self.assertRaises(ValueError) as cm:
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
+        if config.IS_32BITS:
+            with self.assertRaises(OverflowError):
+                cfunc(1 << (32 - 1), 1)
 
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
@@ -620,9 +624,13 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
         pyfunc = self.pyfunc
-        def func(m, n):
+        def func1(m, n):
             return pyfunc((np.int16(m), np.int32(n)))
-        self.check_2d(func)
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return pyfunc((np.int64(m), np.int8(n)))
+        self.check_2d(func2)
 
     @tag('important')
     def test_2d_dtype_kwarg(self):
@@ -695,9 +703,13 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
-        def func(m, n):
+        def func1(m, n):
             return np.full((np.int16(m), np.int32(n)), 4.5)
-        self.check_2d(func)
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return np.full((np.int64(m), np.int8(n)), 4.5)
+        self.check_2d(func2)
 
 
 class ConstructorLikeBaseTest(object):
