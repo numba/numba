@@ -617,6 +617,13 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc((m, n))
         self.check_2d(func)
 
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((np.int16(m), np.int64(n)))
+        self.check_2d(func)
+
     @tag('important')
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
@@ -684,6 +691,12 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         # and that if a dtype is specified, this influences the return type
         def func(m, n):
             return np.full((m, n), 1, dtype=np.int8)
+        self.check_2d(func)
+
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        def func(m, n):
+            return np.full((np.int16(m), np.int64(n)), 4.5)
         self.check_2d(func)
 
 
