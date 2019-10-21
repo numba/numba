@@ -5,7 +5,7 @@ from itertools import chain, product, starmap
 import sys
 
 from numba import unittest_support as unittest
-from numba import jit, typeof
+from numba import jit, typeof, utils
 from .support import TestCase
 
 
@@ -92,7 +92,7 @@ class TestSlices(TestCase):
                 chain(range(-5, 5), (None,))
             )
         )
-        lens = range(-1, 5)
+        lens = range(-2, 3)
 
         cfunc = jit(nopython=True)(slice_indices)
 
@@ -100,9 +100,42 @@ class TestSlices(TestCase):
             try:
                 expected = slice_indices(s, l)
             except Exception as e:
-                self.assertRaises(type(e), cfunc, s, l)
+                with self.assertRaises(type(e)):
+                    cfunc(s, l)
+                continue
+            if l < 0 and not utils.IS_PY3:
+                # Passing a negative length to slice.indices in python2 is undefined
                 continue
             self.assertPreciseEqual(expected, cfunc(s, l))
+
+    def test_slice_indices_examples(self):
+        """Test that a numba slice returns same result for .indices as a python one."""
+
+        cslice_indices = jit(nopython=True)(slice_indices)
+
+        # slice.indices shouldn't allow negative lengths
+        if utils.IS_PY3:
+            with self.assertRaises(ValueError):
+                cslice_indices(slice(None), -5)
+
+        # slice.indices shouldn't allow steps of 0
+        with self.assertRaises(ValueError):
+            cslice_indices(slice(None, None, 0), 0)
+
+        for args, length, expected in [
+            ((None, None), 5, (0, 5, 1)),
+            ((2, 3, 1), 10, (2, 3, 1)),
+            ((None, 5, 2), 10, (0, 5, 2)),
+            ((None, None, 3), 2, (0, 2, 3))
+        ]:
+            self.assertPreciseEqual(
+                cslice_indices(slice(*args), length),
+                expected
+            )
+            self.assertPreciseEqual(
+                cslice_indices(slice(*slice_constructor(*args)), length),
+                expected
+            )
 
 
 if __name__ == '__main__':
