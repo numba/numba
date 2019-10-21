@@ -670,20 +670,9 @@ def get_isnan(dtype):
 
 @overload(np.iscomplex)
 def np_iscomplex(x):
-
-    if not type_can_asarray(x):
-        raise TypingError("First argument must be array-like")
-
-    dt = determine_dtype(x)
-    if np.issubdtype(dt, np.complexfloating):
-        def impl(x):
-            ax = np.asarray(x) # NumPy uses asanyarray here!
-            return ax.imag != 0
-    else:
-        def impl(x):
-            ax = np.asarray(x)
-            zeros = np.zeros(ax.shape, dtype=types.boolean)
-            return zeros[()] # hack when x is a scalar value
+    def impl(x):
+        ax = np.asarray(x) # NumPy uses asanyarray here!
+        return ax.imag != 0
     return impl
 
 
@@ -697,18 +686,11 @@ def np_isreal(x):
 
 @overload(np.iscomplexobj)
 def iscomplexobj(x):
-    # Implementation based on NumPy
-    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    # # Implementation based on NumPy
+    # # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
     dt = determine_dtype(x)
-    if np.issubdtype(dt, np.complexfloating):
-        @register_jitable
-        def impl(x):
-            return True
-    else:
-        @register_jitable
-        def impl(x):
-            return False
-    return impl
+    iscmplx = np.issubdtype(dt, np.complexfloating)
+    return lambda x: iscmplx
 
 
 @overload(np.isrealobj)
@@ -733,15 +715,50 @@ def isneginf(x, out=None):
         wrapper = register_jitable(lambda x: x[()])
 
     if is_nonelike(out):
-        def impl(x, out=None):
-            x = np.asarray(x)
-            out = np.zeros(x.shape, dtype=types.boolean)
-            np.logical_and(np.isinf(x), np.signbit(x), out)
-            return wrapper(out)
+        if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
+            def impl(x, out=None):
+                x = np.asarray(x)
+                out = np.zeros(x.shape, dtype=types.boolean)
+                np.logical_and(np.isinf(x), np.signbit(x), out)
+                return wrapper(out)
+        else:
+            def impl(x, out=None):
+                out = np.isinf(x) and np.signbit(x)
+                return out
     else:
         def impl(x, out=None):
             np.logical_and(np.isinf(x), np.signbit(x), out)
             return wrapper(out)
+
+    return impl
+
+@overload(np.isposinf)
+def isposinf(x, out=None):
+
+    if not type_can_asarray(x):
+        raise TypingError("First argument must be array-like")
+
+    if numpy_version <= (1, 12):
+        wrapper = register_jitable(lambda x: np.asarray(x))
+    else:
+        wrapper = register_jitable(lambda x: x[()])
+
+    if is_nonelike(out):
+        if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
+            def impl(x, out=None):
+                x = np.asarray(x)
+                out = np.zeros(x.shape, dtype=types.boolean)
+                np.logical_and(np.isinf(x), ~np.signbit(x), out)
+                return wrapper(out)
+        else:
+            def impl(x, out=None):
+                out = np.isinf(x) and ~np.signbit(x)
+                return out
+    else:
+        def impl(x, out=None):
+            np.logical_and(np.isinf(x), ~np.signbit(x), out)
+            return wrapper(out)
+
     return impl
 
 

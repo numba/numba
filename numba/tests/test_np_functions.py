@@ -112,7 +112,7 @@ def isneginf(x, out=None):
 
 
 def isposinf(x, out=None):
-    return np.isneginf(x, out)
+    return np.isposinf(x, out)
 
 
 def iinfo(*args):
