@@ -104,7 +104,8 @@ class TestSlices(TestCase):
                     cfunc(s, l)
                 continue
             if l < 0 and not utils.IS_PY3:
-                # Passing a negative length to slice.indices in python2 is undefined
+                # Passing a negative length to slice.indices in python2 is
+                # undefined. See https://bugs.python.org/issue14794#msg174678
                 continue
             self.assertPreciseEqual(expected, cfunc(s, l))
 
