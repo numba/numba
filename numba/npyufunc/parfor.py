@@ -134,7 +134,8 @@ class openmp_region_start(ir.Stmt):
         builder = lowerer.builder
         library = lowerer.library
 
-        builder.module.device_triples = "spir64"
+        if self.has_target():
+            builder.module.device_triples = "spir64"
 
         llvm_token_t = lc.Type.token()
         fnty = lir.FunctionType(llvm_token_t, [])

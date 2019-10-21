@@ -22,8 +22,6 @@ _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
 
 
-Todd = True
-
 def _is_x86(triple):
     arch = triple.split('-')[0]
     return arch in _x86arch
@@ -218,12 +216,14 @@ class CodeLibrary(object):
         self.add_llvm_module(ll_module)
 
     def add_llvm_module(self, ll_module):
-        print("CodeLibrary::add_llvm_module", self._name)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("CodeLibrary::add_llvm_module", self._name)
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
-        print("CodeLibrary::add_llvm_module end", self._name)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("CodeLibrary::add_llvm_module end", self._name)
 
     def finalize(self):
         """
@@ -231,7 +231,8 @@ class CodeLibrary(object):
         Finalization involves various stages of code optimization and
         linking.
         """
-        print("CodeLibrary::finalize", self._name)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("CodeLibrary::finalize", self._name)
         require_global_compiler_lock()
 
         # Report any LLVM-related problems to the user
@@ -242,7 +243,8 @@ class CodeLibrary(object):
         if config.DUMP_FUNC_OPT:
             dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
-        print("Before link_in")
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("Before link_in")
         # Link libraries for shared code
         seen = set()
         for library in self._linking_libraries:
@@ -258,7 +260,8 @@ class CodeLibrary(object):
 
         self._final_module.verify()
         self._finalize_final_module()
-        print("CodeLibrary::finalize end", self._name)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("CodeLibrary::finalize end", self._name)
         if self._name == 'f1':
             import pdb
             #pdb.set_trace()
@@ -544,7 +547,7 @@ class RuntimeLinker(object):
         prefix = self.PREFIX
 
         for gv in module.global_variables:
-            if Todd:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("scan_unresolved_symbols", gv)
             if gv.name.startswith(prefix):
                 sym = gv.name[len(prefix):]
@@ -562,7 +565,7 @@ class RuntimeLinker(object):
         Scan and track all defined symbols.
         """
         for fn in module.functions:
-            if Todd:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("scan_defined_symbols", fn)
             if not fn.is_declaration:
                 self._defined.add(fn.name)
@@ -571,13 +574,13 @@ class RuntimeLinker(object):
         """
         Fix unresolved symbols if they are defined.
         """
-        if Todd:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("RuntimeLinker resolve", self._unresolved, self._defined)
         # An iterator to get all unresolved but available symbols
         pending = [name for name in self._unresolved if name in self._defined]
         # Resolve pending symbols
         for name in pending:
-            if Todd:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("name", name)
             # Get runtime address
             fnptr = engine.get_function_address(name)
@@ -623,7 +626,7 @@ class JitEngine(object):
         """Extract symbols from the module
         """
         for gsets in (mod.functions, mod.global_variables):
-            if Todd:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("_load_defined_symbols", gsets, self._defined_symbols)
             self._defined_symbols |= {gv.name for gv in gsets
                                       if not gv.is_declaration}
@@ -632,7 +635,7 @@ class JitEngine(object):
         """Override ExecutionEngine.add_module
         to keep info about defined symbols.
         """
-        if Todd:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("add_module", module)
         self._load_defined_symbols(module)
         return self._ee.add_module(module)
