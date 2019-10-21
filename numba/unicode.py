@@ -1396,6 +1396,7 @@ def unicode_title(data):
         for i in range(newlength):
             _set_code_point(res, i, _get_code_point(tmp, i))
         return res
+    return impl
 
 
 @lower_builtin('getiter', types.UnicodeType)
