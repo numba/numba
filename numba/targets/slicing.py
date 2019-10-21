@@ -234,5 +234,3 @@ def slice_indices(context, builder, sig, args):
         sig.return_type,
         (sli.start, sli.stop, sli.step)
     )
-
-    return out_tuple
