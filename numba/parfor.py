@@ -3232,7 +3232,7 @@ def _lower_parfor_openmp(
     return block_label, parfor_found
 
 
-def _lower_parfor(parfor, block_label, block, block_index, new_blocks, typemap, calltypes, typingctx, parfor_found):
+def _lower_parfor(parfor, block_label, block, block_index, new_blocks, typemap, calltypes, typingctx, parfor_found, func_ir):
     scope = block.scope
 
     parfor_outputs = get_parfor_outputs(parfor, parfor.params)
@@ -3311,7 +3311,7 @@ def _lower_parfor(parfor, block_label, block, block_index, new_blocks, typemap, 
     # add parfor body to blocks
     for (l, b) in parfor.loop_body.items():
         l, parfor_found = _lower_parfor_sequential_block(
-            l, b, new_blocks, typemap, calltypes, parfor_found, False, typingctx)
+            l, b, new_blocks, typemap, calltypes, parfor_found, False, typingctx, func_ir)
         new_blocks[l] = b
 
     dprint("end of _lower_parfor")
@@ -3340,7 +3340,7 @@ def _lower_parfor_sequential_block(
     while i != -1:
         parfor_found = True
         inst = block.body[i]
-        block_label, block = _lower_parfor(inst, block_label, block, i, new_blocks, typemap, calltypes, typingctx, parfor_found)
+        block_label, block = _lower_parfor(inst, block_label, block, i, new_blocks, typemap, calltypes, typingctx, parfor_found, func_ir)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 
