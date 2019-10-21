@@ -621,7 +621,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         # Test for issue #4575
         pyfunc = self.pyfunc
         def func(m, n):
-            return pyfunc((np.int16(m), np.int64(n)))
+            return pyfunc((np.int16(m), np.int32(n)))
         self.check_2d(func)
 
     @tag('important')
@@ -696,7 +696,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
         def func(m, n):
-            return np.full((np.int16(m), np.int64(n)), 4.5)
+            return np.full((np.int16(m), np.int32(n)), 4.5)
         self.check_2d(func)
 
 

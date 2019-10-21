@@ -3396,8 +3396,8 @@ def _parse_shape(context, builder, ty, val):
         assert isinstance(ty, types.BaseTuple)
         ndim = ty.count
         intp_t = context.get_value_type(types.intp)
-        shapes = [builder.sext(dims, intp_t) for dims in
-                  cgutils.unpack_tuple(builder, val, count=ndim)]
+        shapes = [builder.sext(d, intp_t) if d.type.width < intp_t.width else d
+                  for d in cgutils.unpack_tuple(builder, val, count=ndim)]
 
     zero = context.get_constant_generic(builder, types.intp, 0)
     for dim in range(ndim):
