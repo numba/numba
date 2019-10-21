@@ -43,7 +43,7 @@ Supported Platforms
 * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
   macOS (< 10.14)
 * AMD GPUs via ROCm driver on Linux
-* llvmlite >= 0.30.0
+* llvmlite: >= 0.30.0
 
 
 Installing
