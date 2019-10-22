@@ -575,9 +575,6 @@ class ConstructorBaseTest(NrtRefCtTest):
         with self.assertRaises(ValueError) as cm:
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
-        if config.IS_32BITS:
-            with self.assertRaises(ValueError):
-                cfunc(1 << (32 - 1), 1)
 
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
@@ -631,6 +628,11 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         def func2(m, n):
             return pyfunc((np.int64(m), np.int8(n)))
         self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: pyfunc((m, n)))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
 
     @tag('important')
     def test_2d_dtype_kwarg(self):
@@ -710,6 +712,11 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         def func2(m, n):
             return np.full((np.int64(m), np.int8(n)), 4.5)
         self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: np.full((m, n), 4.5))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
 
 
 class ConstructorLikeBaseTest(object):

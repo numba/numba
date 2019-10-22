@@ -3389,6 +3389,27 @@ def _parse_shape(context, builder, ty, val):
     """
     Parse the shape argument to an array constructor.
     """
+    def safecast_intp(context, builder, src_t, src):
+        """Cast src to intp only if value can be maintained"""
+        intp_t = context.get_value_type(types.intp)
+        intp_width = intp_t.width
+        intp_ir = ir.IntType(intp_width)
+        maxval = ir.Constant(intp_ir, ((1 << intp_width- 1) - 1))
+        if src_t.width < intp_width:
+            res = builder.sext(src, intp_ir)
+        elif src_t.width >= intp_width:
+            is_larger = builder.icmp_signed(">", src, maxval)
+            with builder.if_then(is_larger, likely=False):
+                context.call_conv.return_user_exc(
+                    builder, ValueError,
+                    ("Cannot safely convert value to intp",)
+                )
+            if src_t.width > intp_width:
+                res = builder.trunc(src, intp_ir)
+            else:
+                res = src
+        return res
+
     if isinstance(ty, types.Integer):
         ndim = 1
         passed_shapes = [context.cast(builder, val, ty, types.intp)]
@@ -3398,25 +3419,8 @@ def _parse_shape(context, builder, ty, val):
         passed_shapes = cgutils.unpack_tuple(builder, val, count=ndim)
 
     shapes = []
-    intp_t = context.get_value_type(types.intp)
-    maxval = 1 << (intp_t.width - 1) - 1
     for s in passed_shapes:
-        cgutils.printf(builder, "%d ", s)
-        width = s.type.width
-        if width < intp_t.width:
-            shapes.append(builder.sext(s, intp_t))
-        elif width == intp_t.width:
-            shapes.append(s)
-        elif width > intp_t.width:
-            maxval_ir = context.get_constant(s.type, maxval)
-            is_larger = builder.icmp_signed(">", s, maxval_ir)
-            with builder.if_then(is_larger, likely=False):
-                context.call_conv.return_user_exc(
-                    builder, ValueError,
-                    ("Passed array shape is greater than intp typemax for this"
-                     " {}-bit system.".format(context.address_size),)
-                )
-            shapes.append(builder.trunc(s, intp_t))
+        shapes.append(safecast_intp(context, builder, s.type, s))
 
     zero = context.get_constant_generic(builder, types.intp, 0)
     for dim in range(ndim):
