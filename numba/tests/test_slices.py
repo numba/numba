@@ -6,7 +6,7 @@ import sys
 
 from numba import unittest_support as unittest
 from numba import jit, typeof, utils
-from .support import TestCase
+from .support import TestCase, MemoryLeakMixin
 
 
 def slice_passing(sl):
@@ -20,7 +20,7 @@ def slice_indices(s, l):
     return s.indices(l)
 
 
-class TestSlices(TestCase):
+class TestSlices(MemoryLeakMixin, TestCase):
 
     def test_slice_passing(self):
         """
@@ -54,6 +54,7 @@ class TestSlices(TestCase):
                                                         step_cases):
             check(a, b, c, d, e, f)
 
+        self.disable_leak_check()  # Exceptions leak refs
         # Some member is neither integer nor None
         with self.assertRaises(TypeError):
             cfunc(slice(1.5, 1, 1))
@@ -92,27 +93,30 @@ class TestSlices(TestCase):
                 chain(range(-5, 5), (None,))
             )
         )
-        lens = range(-2, 3)
+        lengths = range(-2, 3)
 
         cfunc = jit(nopython=True)(slice_indices)
 
-        for s, l in product(slices, lens):
+        self.disable_leak_check()  # Exceptions leak references
+
+        for s, l in product(slices, lengths):
+            if l < 0 and not utils.IS_PY3:
+                # Passing a negative length to slice.indices in python2 is
+                # undefined. See https://bugs.python.org/issue14794#msg174678
+                continue
             try:
                 expected = slice_indices(s, l)
             except Exception as e:
                 with self.assertRaises(type(e)):
                     cfunc(s, l)
-                continue
-            if l < 0 and not utils.IS_PY3:
-                # Passing a negative length to slice.indices in python2 is
-                # undefined. See https://bugs.python.org/issue14794#msg174678
-                continue
-            self.assertPreciseEqual(expected, cfunc(s, l))
+            else:
+                self.assertPreciseEqual(expected, cfunc(s, l))
 
     def test_slice_indices_examples(self):
         """Test that a numba slice returns same result for .indices as a python one."""
-
         cslice_indices = jit(nopython=True)(slice_indices)
+
+        self.disable_leak_check()  # Exceptions leak references
 
         # slice.indices shouldn't allow negative lengths
         if utils.IS_PY3:
