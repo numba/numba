@@ -7,6 +7,7 @@ from __future__ import division
 import itertools
 
 import numpy as np
+import pytest
 import sys
 from collections import namedtuple
 
@@ -34,7 +35,7 @@ _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_unsupported = pytest.mark.skipif(_32bit or _windows_py27, reason=_reason)
 
 
 # test class for #3700

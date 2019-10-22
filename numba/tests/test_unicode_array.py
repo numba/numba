@@ -1,5 +1,6 @@
 from __future__ import print_function, unicode_literals
 
+import pytest
 import platform
 import numpy as np
 
@@ -8,8 +9,10 @@ from numba import jit, utils, from_dtype, types
 from numba.typed import Dict
 from numba.tests.support import TestCase
 
-skip_py2 = unittest.skipIf(not utils.IS_PY3, "not supported in Python 2")
-require_py37 = unittest.skipIf(utils.PYVERSION < (3, 7), "requires Python 3.7+")
+skip_py2 = pytest.mark.skipif(not utils.IS_PY3,
+                              reason="not supported in Python 2")
+require_py37 = pytest.mark.skipif(utils.PYVERSION < (3, 7),
+                                  reason="requires Python 3.7+")
 
 
 def getitem(x, i):
@@ -212,7 +215,7 @@ def return_not(x, i):
 
 
 @skip_py2
-@unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+@pytest.mark.skipif(platform.machine() == 'ppc64le', reason="LLVM bug")
 class TestUnicodeArray(TestCase):
 
     def _test(self, pyfunc, cfunc, *args, **kwargs):

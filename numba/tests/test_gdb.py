@@ -4,6 +4,7 @@ Tests gdb bindings
 from __future__ import print_function
 import os
 import platform
+import pytest
 import subprocess
 import sys
 import threading
@@ -23,15 +24,17 @@ _unix_like = (_platform.startswith('linux')
               or _platform.startswith('darwin')
               or ('bsd' in _platform))
 
-unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
-not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
+unix_only = pytest.mark.skipif(not _unix_like,
+                               reason="unix-like OS is required")
+not_unix = pytest.mark.skipif(_unix_like, reason="non unix-like OS is required")
 
 _arch_name = platform.machine()
 _is_arm = _arch_name in {'aarch64', 'armv7l'}
-not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
+not_arm = pytest.mark.skipif(_is_arm, reason="testing disabled on ARM")
 
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
-needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
+needs_gdb_harness = pytest.mark.skipif(not _gdb_cond,
+                                       reason="needs gdb harness")
 
 # check if gdb is present and working
 try:
@@ -41,7 +44,7 @@ except Exception:
     _HAVE_GDB = False
 
 _msg = "functioning gdb with correct ptrace permissions is required"
-needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
+needs_gdb = pytest.mark.skipif(not _HAVE_GDB, reason=_msg)
 long_running = tag('long_running')
 
 _dbg_njit = njit(debug=True)

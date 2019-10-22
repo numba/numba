@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import array
 import numpy as np
+import pytest
 import sys
 
 from numba import unittest_support as unittest
@@ -18,8 +19,8 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED,
-                     "CFFI not supported -- please install the cffi module")
+@pytest.mark.skipif(not cffi_support.SUPPORTED,
+                    reason="CFFI not found - please install the cffi module")
 class TestCFFI(TestCase):
 
     # Need to run the tests serially because of race conditions in
@@ -124,8 +125,8 @@ class TestCFFI(TestCase):
         imag_cfunc(x, y)
         np.testing.assert_equal(x.imag, y)
 
-    @unittest.skipIf(sys.version_info < (3,),
-                     "buffer protocol on array.array needs Python 3+")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="buffer protocol on array.array needs Python 3+")
     def test_from_buffer_pyarray(self):
         pyfunc = mod.vector_sin_float32
         cfunc = jit(nopython=True)(pyfunc)

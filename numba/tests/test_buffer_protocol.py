@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import array
+import pytest
 import sys
 
 import numpy as np
@@ -296,8 +297,8 @@ class TestMemoryView(MemoryLeakMixin, TestCase):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(readonly_usecase(m), False)
 
-    @unittest.skipUnless(sys.version_info >= (3,),
-                         "memoryview.*contiguous doesn't exist on 2.7")
+    @pytest.mark.skipif(not sys.version_info >= (3,),
+                        reason="memoryview.*contiguous doesn't exist on 2.7")
     def test_contiguous(self):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(contiguous_usecase(m), True)

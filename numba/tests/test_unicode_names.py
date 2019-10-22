@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import
 
+import pytest
 
 from numba import njit, cfunc, cgutils
 from numba.six import exec_
@@ -19,7 +20,8 @@ def Ծ_Ծ(ಠ_ರೃ, ಠਊಠ):
 """
 
 
-@unittest.skipIf(PY2, "unicode identifier not supported in python2")
+@pytest.mark.skipif(PY2,
+                    reason="unicode identifier not supported in python2")
 class TestUnicodeNames(TestCase):
     def make_testcase(self, src, fname):
         glb = {}
@@ -52,7 +54,8 @@ class TestUnicodeUtils(TestCase):
         # try encoding to latin
         out.encode('latin1')
 
-    @unittest.skipIf(PY2, "unicode identifier not supported in python2")
+    @pytest.mark.skipif(PY2,
+                        reason="unicode identifier not supported in python2")
     def test_normalize_ir_text_py3(self):
         # unicode input
         out = cgutils.normalize_ir_text(unicode_name2)

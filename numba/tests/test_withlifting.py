@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
 import copy
 import warnings
 import numpy as np
@@ -25,7 +26,7 @@ except ImportError:
     scipy = None
 
 _msg = "SciPy needed for test"
-skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+skip_unless_scipy = pytest.mark.skipif(scipy is None, reason=_msg)
 
 
 def get_func_ir(func):
@@ -677,7 +678,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         )
 
     # No easy way to handle this yet.
-    @unittest.expectedFailure
+    @pytest.mark.xfail
     def test_case15_close_over_objmode_ctx(self):
         # Fails with Unsupported constraint encountered: enter_with $phi8.1
         def foo(x):

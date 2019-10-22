@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division
 
 import re
+import pytest
 
 import numba
 from numba import unittest_support as unittest
@@ -18,7 +19,8 @@ try:
 except ImportError:
     pygments = None
 
-@unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
+@pytest.mark.skipif(jinja2 is None,
+                    reason="please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
 
     def test_exercise_code_path(self):
@@ -133,7 +135,8 @@ class TestAnnotation(unittest.TestCase):
         # Ensure the loop is tagged in both output
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 2)
 
-    @unittest.skipIf(pygments is None, "please install the 'pygments' package")
+    @pytest.mark.skipif(pygments is None,
+                        reason="please install the 'pygments' package")
     def test_pretty_print(self):
 
         @numba.njit

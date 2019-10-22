@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import pytest
+
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -182,7 +184,7 @@ class TestConstantArray(unittest.TestCase):
         test(f_array)
 
 
-@unittest.skipUnless(IS_PY3, "Python 3 only")
+@pytest.mark.skipif(not IS_PY3, reason="Python 3 only")
 class TestConstantBytes(unittest.TestCase):
     def test_constant_bytes(self):
         pyfunc = bytes_as_const_array

@@ -8,6 +8,7 @@ import itertools
 import math
 import random
 import sys
+import pytest
 
 import numpy as np
 
@@ -275,8 +276,9 @@ def unique_usecase(src):
     return res
 
 
-needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
-                                     "set literals unavailable before Python 2.7")
+needs_set_literals = pytest.mark.skipif(sys.version_info < (2, 7),
+                                        reason=("set literals unavailable "
+                                                "before Python 2.7"))
 
 
 class BaseTest(MemoryLeakMixin, TestCase):

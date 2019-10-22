@@ -4,6 +4,7 @@ from collections import namedtuple
 import contextlib
 import itertools
 import math
+import pytest
 import sys
 import ctypes as ct
 import numpy as np
@@ -638,13 +639,13 @@ class TestLists(MemoryLeakMixin, TestCase):
         for v in range(5):
             self.assertPreciseEqual(cfunc(18, v), pyfunc(18, v))
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.clear() needs Python 3.3+")
+    @pytest.mark.skipif(not sys.version_info >= (3, 3),
+                        reason="list.clear() needs Python 3.3+")
     def test_clear(self):
         self.check_unary_with_size(list_clear)
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.copy() needs Python 3.3+")
+    @pytest.mark.skipif(not sys.version_info >= (3, 3),
+                        reason="list.copy() needs Python 3.3+")
     def test_copy(self):
         self.check_unary_with_size(list_copy)
 
@@ -686,8 +687,8 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
 
-    @unittest.skipUnless(sys.maxsize >= 2**32,
-                         "need a 64-bit system to test for MemoryError")
+    @pytest.mark.skipif(not sys.maxsize >= 2**32,
+                        reason="need a 64-bit system to test for MemoryError")
     def test_mul_error(self):
         self.disable_leak_check()
         pyfunc = list_mul
@@ -1277,7 +1278,8 @@ class TestListOfList(ManagedListTestCase):
             str(raises.exception),
             )
 
-    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
+    @pytest.mark.skipif(not utils.IS_PY3,
+                        reason="Py3 only due to ordering of error")
     @expect_reflection_failure
     def test_c05(self):
         def bar(x):
@@ -1288,7 +1290,8 @@ class TestListOfList(ManagedListTestCase):
         r = [[np.arange(3).astype(np.intp)]]
         self.compile_and_test(bar, r)
 
-    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
+    @pytest.mark.skipif(not utils.IS_PY3,
+                        reason="Py3 only due to ordering of error")
     def test_c06(self):
         def bar(x):
             f = x

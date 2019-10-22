@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import itertools
 import functools
+import pytest
 import sys
 
 import numpy as np
@@ -323,7 +324,8 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_chr(flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="cmp not available as global is Py3")
     def test_cmp(self, flags=enable_pyobj_flags):
         pyfunc = cmp_usecase
 
@@ -335,7 +337,8 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="cmp not available as global is Py3")
     def test_cmp_npm(self):
         with self.assertTypingError():
             self.test_cmp(flags=no_pyobj_flags)
@@ -586,7 +589,8 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_locals(flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.IS_PY3, "long is not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="long is not available as global is Py3")
     def test_long(self, flags=enable_pyobj_flags):
         pyfunc = long_usecase
 
@@ -598,7 +602,8 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="cmp not available as global is Py3")
     def test_long_npm(self):
         with self.assertTypingError():
             self.test_long(flags=no_pyobj_flags)
@@ -901,7 +906,8 @@ class TestBuiltins(TestCase):
         check(True, 2)
         check(2.5j, False)
 
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="unichr not available as global is Py3")
     def test_unichr(self, flags=enable_pyobj_flags):
         pyfunc = unichr_usecase
 
@@ -910,7 +916,8 @@ class TestBuiltins(TestCase):
         for x in range(0, 1000, 10):
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
+    @pytest.mark.skipif(utils.IS_PY3,
+                        reason="unichr not available as global is Py3")
     def test_unichr_npm(self):
         with self.assertTypingError():
             self.test_unichr(flags=no_pyobj_flags)

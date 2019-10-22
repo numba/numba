@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import os
 import platform
+import pytest
 import sys
 import re
 
@@ -30,10 +31,10 @@ from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
 
-linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
-                             'linux only test')
-x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'),
-                           'x86 only test')
+linux_only = pytest.mark.skipif(not sys.platform.startswith('linux'),
+                                reason='linux only test')
+x86_only = pytest.mark.skipif(platform.machine() not in ('i386', 'x86_64'),
+                              reason='x86 only test')
 
 
 class Dummy(object):
@@ -119,7 +120,8 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
@@ -142,7 +144,8 @@ class TestNrtMemInfo(unittest.TestCase):
         del mview
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="memoryview not supported")
     def test_memoryview(self):
         from ctypes import c_uint32, c_void_p, POINTER, cast
 
@@ -221,8 +224,8 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
-@unittest.skipUnless(sys.version_info >= (3, 4),
-                     "need Python 3.4+ for the tracemalloc module")
+@pytest.mark.skipif(not sys.version_info >= (3, 4),
+                    reason="need Python 3.4+ for the tracemalloc module")
 class TestTracemalloc(unittest.TestCase):
     """
     Test NRT-allocated memory can be tracked by tracemalloc.
@@ -552,7 +555,7 @@ br i1 %.294, label %B42, label %B160
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+@pytest.mark.skipif(not cffi_support.SUPPORTED, reason="cffi required")
 class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """

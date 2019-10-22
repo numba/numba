@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 import itertools
 import math
 import platform
+import pytest
 from functools import partial
 
 import numpy as np
@@ -478,7 +479,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    @unittest.skipIf(np_version < (1, 12), "NumPy Unsupported")
+    @pytest.mark.skipif(np_version < (1, 12),
+                        reason="NumPy Unsupported")
     def test_count_nonzero(self):
 
         def arrays():
@@ -497,7 +499,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, axis)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipUnless(np_version < (1, 12), "NumPy Unsupported")
+    @pytest.mark.skipif(not (np_version < (1, 12)),
+                        reason="NumPy Unsupported")
     def test_count_nonzero_exception(self):
         pyfunc = count_nonzero
         cfunc = jit(nopython=True)(pyfunc)
@@ -559,7 +562,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+    @pytest.mark.skipif(platform.machine() == 'ppc64le', reason="LLVM bug")
     def test_delete(self):
 
         def arrays():
@@ -1692,7 +1695,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_invalid_ddof(self):
         pyfunc = cov
@@ -1756,19 +1760,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for input_arr in input_variations():
             _check({first_arg_name: input_arr})
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_basic(self):
         pyfunc = corrcoef
         self.corr_corrcoef_basic(pyfunc, first_arg_name='x')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_basic(self):
         pyfunc = cov
         self.corr_corrcoef_basic(pyfunc, first_arg_name='m')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_explicit_arguments(self):
         pyfunc = cov
@@ -1788,7 +1795,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                       'bias': bias, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_explicit_arguments(self):
         pyfunc = corrcoef
@@ -1865,7 +1873,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {first_arg_name: y, 'y': m, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_edge_cases(self):
         pyfunc = corrcoef
@@ -1878,7 +1887,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {'x': x}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 11), "behaviour per Numpy 1.11+")
+    @pytest.mark.skipif(not (np_version >= (1, 11)),
+                        reason="behaviour per Numpy 1.11+")
     @needs_blas
     def test_corrcoef_edge_case_extreme_values(self):
         pyfunc = corrcoef
@@ -1902,7 +1912,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         #
         # Numba implementation replicates Numpy 1.11+ behaviour
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_edge_cases(self):
         pyfunc = cov
@@ -1916,7 +1927,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': m, 'ddof': 5}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_exceptions(self):
         pyfunc = cov
@@ -1967,7 +1979,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('2D array containing a single row is unsupported',
                       str(raises.exception))
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    @pytest.mark.skipif(not (np_version >= (1, 12)),
+                        reason="ediff1d needs Numpy 1.12+")
     def test_ediff1d_basic(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -1998,7 +2011,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    @pytest.mark.skipif(not (np_version >= (1, 12)),
+                        reason="ediff1d needs Numpy 1.12+")
     def test_ediff1d_edge_cases(self):
         # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
         # https://github.com/numpy/numpy/issues/13103, as this is not resolved
@@ -2078,7 +2092,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
         # _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
+    @pytest.mark.skipif(not (np_version >= (1, 12)),
+                        reason="ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -2463,7 +2478,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertIn('y cannot be a scalar', str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2683,7 +2699,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # random_grid
         yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="interp needs Numpy 1.10+")
     def test_interp_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2733,7 +2750,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.12+")
+    @pytest.mark.skipif(not (np_version >= (1, 12)),
+                        reason="complex interp: Numpy 1.12+")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2761,7 +2779,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.rnd.shuffle(fp)
             np.testing.assert_allclose(expected, got, equal_nan=True)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2831,8 +2850,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn(complex_dtype_msg, str(e.exception))
 
-    @unittest.skipUnless((1, 10) <= np_version < (1, 12),
-                         'complex interp: Numpy 1.12+')
+    @pytest.mark.skipif(not ((1, 10) <= np_version < (1, 12)),
+                        reason='complex interp: Numpy 1.12+')
     def test_interp_pre_112_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2853,7 +2872,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
         self.assertIn(complex_dtype_msg, str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="interp needs Numpy 1.10+")
     def test_interp_non_finite_calibration(self):
         # examples from
         # https://github.com/numpy/numpy/issues/12951
@@ -2873,7 +2893,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x, 'xp': xp, 'fp': fp}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 10)),
+                        reason="interp needs Numpy 1.10+")
     def test_interp_supplemental_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501
@@ -2915,7 +2936,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.sin(xp)
         np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.10+")
+    @pytest.mark.skipif(not (np_version >= (1, 12)),
+                        reason="complex interp: Numpy 1.10+")
     def test_interp_supplemental_complex_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501

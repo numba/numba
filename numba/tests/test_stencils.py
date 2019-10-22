@@ -10,6 +10,7 @@ import numpy as np
 import ast
 import inspect
 import operator
+import pytest
 import types as pytypes
 from contextlib import contextmanager
 from copy import deepcopy
@@ -30,7 +31,7 @@ _windows_py27 = (sys.platform.startswith('win32') and _py27)
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 _unsupported = _32bit or _windows_py27
-skip_unsupported = unittest.skipIf(_unsupported, _reason)
+skip_unsupported = pytest.mark.skipif(_unsupported, reason=_reason)
 
 
 @stencil

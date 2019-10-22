@@ -8,6 +8,8 @@ PYTEST_DONT_REWRITE
 
 from __future__ import print_function, division, absolute_import
 
+import pytest
+
 from math import sqrt
 import numbers
 import re
@@ -49,10 +51,12 @@ _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 skip_unsupported = skip_parfors_unsupported
-disabled_test = unittest.skipIf(True, 'Test disabled')
-_lnx_reason = 'linux only test'
-linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
-x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
+disabled_test = pytest.mark.skipif(True, reason='Test disabled')
+linux_only = pytest.mark.skipif(not sys.platform.startswith('linux'),
+                                reason='linux only test')
+x86_only = pytest.mark.skipif(platform.machine() not in ('i386', 'x86_64'),
+                              reason='x86 only test')
+
 
 class TestParforsBase(TestCase):
     """
@@ -585,8 +589,9 @@ class TestParfors(TestParforsBase):
         self.assertTrue(
             countNonParforArrayAccesses(check_kmeans_example, arg_typs) == 0)
 
-    @unittest.skipIf(not (_windows_py27 or _32bit),
-                     "Only impacts Windows with Python 2.7 / 32 bit hardware")
+    @pytest.mark.skipif(not (_windows_py27 or _32bit),
+                        reason=("Only impacts Windows with Python 2.7 / 32 bit "
+                                "hardware"))
     @needs_blas
     def test_unsupported_combination_raises(self):
         """

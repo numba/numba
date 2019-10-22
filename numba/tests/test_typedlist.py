@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import pytest
 from itertools import product
 
 import numpy as np
@@ -10,13 +11,13 @@ from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
 from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import TestCase, MemoryLeakMixin
 
 from numba.unsafe.refcount import get_refcount
 
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+skip_py2 = pytest.mark.skipif(not IS_PY3, reason='not supported in py2')
 
 
 def to_tl(l):

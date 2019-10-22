@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import numba.unittest_support as unittest
 
+import pytest
 import sys
 from collections import defaultdict
 
@@ -172,7 +173,7 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.uint64(0x1ffffffffffffffe)])
         self.check_hash_values([np.uint64(0x1fffffffffffffff)])
 
-    @unittest.skipIf(utils.IS_PY3, "Python 2 only test")
+    @pytest.mark.skipif(utils.IS_PY3, reason="Python 2 only test")
     def test_py27(self):
         # for common types, check that those with the same contents hash to the
         # same value and those with different contents hash to something
@@ -251,7 +252,7 @@ class TestTupleHashing(BaseTest):
 
         self.check_tuples(self.int_samples(), split)
 
-    @unittest.skipIf(utils.IS_PY3, "Python 2 only test")
+    @pytest.mark.skipif(utils.IS_PY3, reason="Python 2 only test")
     def test_py27(self):
         # check that tuples with the same contents hash to the same value
         # and those with different contents hash to something different
@@ -265,7 +266,8 @@ class TestTupleHashing(BaseTest):
         self.assertFalse(a1_hash == a3_hash)
 
 
-@unittest.skipUnless(utils.IS_PY3, "unicode hash tests are Python 3 only")
+@pytest.mark.skipif(not utils.IS_PY3,
+                    reason="unicode hash tests are Python 3 only")
 class TestUnicodeHashing(BaseTest):
 
     def test_basic_unicode(self):

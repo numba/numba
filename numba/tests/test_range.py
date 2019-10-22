@@ -5,6 +5,7 @@ import numba.unittest_support as unittest
 import sys
 
 import numpy
+import pytest
 
 from numba.compiler import compile_isolated
 from numba import types, utils, jit, njit
@@ -101,7 +102,8 @@ class TestRange(unittest.TestCase):
             self.assertEqual(cfunc(*args), pyfunc(*args))
 
     @tag('important')
-    @unittest.skipIf(sys.version_info >= (3,), "test is Python 2-specific")
+    @pytest.mark.skipif(sys.version_info >= (3,),
+                        reason="test is Python 2-specific")
     def test_xrange(self):
         pyfunc = xrange_usecase
         cres = compile_isolated(pyfunc, (types.int32,))
@@ -169,7 +171,7 @@ class TestRange(unittest.TestCase):
         self.assertEqual(cfunc(arglist), len(arglist))
 
     @tag('important')
-    @unittest.skipUnless(utils.IS_PY3, "range() attrs are Py3 only")
+    @pytest.mark.skipif(not utils.IS_PY3, reason="range() attrs are Py3 only")
     def test_range_attrs(self):
         pyfunc = range_attrs
         arglist = [(0, 0, 1),

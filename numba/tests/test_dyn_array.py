@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import contextlib
 import sys
 import numpy as np
+import pytest
 import random
 import threading
 import gc
@@ -632,7 +633,8 @@ class TestNdOnes(TestNdZeros):
         self.pyfunc = np.ones
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
+@pytest.mark.skipif(numpy_version < (1, 8),
+                    reason="test requires Numpy 1.8 or later")
 class TestNdFull(ConstructorBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
@@ -816,7 +818,8 @@ class TestNdOnesLike(TestNdZerosLike):
         super(TestNdOnesLike, self).test_like_dtype_structured()
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
+@pytest.mark.skipif(numpy_version < (1, 8),
+                    reason="test requires Numpy 1.8 or later")
 class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
@@ -1285,7 +1288,8 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
 
-@unittest.skipUnless(hasattr(np, "stack"), "this Numpy doesn't have np.stack()")
+@pytest.mark.skipif(not hasattr(np, "stack"),
+                    reason="this Numpy doesn't have np.stack()")
 class TestNpStack(MemoryLeakMixin, TestCase):
     """
     Tests for np.stack().

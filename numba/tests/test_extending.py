@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import pytest
 import math
 import operator
 import sys
@@ -874,7 +875,7 @@ class TestHighLevelExtending(TestCase):
         if _IS_PY3:
             self.assertIn('<Parameter "kw=None">', msg)
 
-    @unittest.skipUnless(_IS_PY3, "Python 3+ only syntax")
+    @pytest.mark.skipif(not _IS_PY3, reason="Python 3+ only syntax")
     def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
         """
         Tests that an overload which has a differing typing and implementing
@@ -1268,7 +1269,8 @@ class TestRegisterJitable(unittest.TestCase):
 
 
 class TestImportCythonFunction(unittest.TestCase):
-    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    @pytest.mark.skipif(sc is None,
+                        reason="Only run if SciPy >= 0.19 is installed")
     def test_getting_function(self):
         addr = get_cython_function_address("scipy.special.cython_special", "j0")
         functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
@@ -1284,7 +1286,8 @@ class TestImportCythonFunction(unittest.TestCase):
         match = re.match(msg, str(raises.exception))
         self.assertIsNotNone(match)
 
-    @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
+    @pytest.mark.skipif(sc is None,
+                        reason="Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
         with self.assertRaises(ValueError) as raises:
             addr = get_cython_function_address("scipy.special.cython_special", "foo")

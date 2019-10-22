@@ -1,4 +1,5 @@
 import sys
+import pytest
 
 try:
     import scipy.linalg.cython_blas
@@ -6,7 +7,6 @@ try:
 except ImportError:
     has_blas = False
 
-import numba.unittest_support as unittest
 from numba.numpy_support import version as numpy_version
 
 
@@ -33,11 +33,12 @@ else:
     matmul_usecase = None
     imatmul_usecase = None
 
-needs_matmul = unittest.skipUnless(
+needs_matmul = pytest.mark.skipif(
     has_matmul,
-    "the matrix multiplication operator needs Python 3.5+ and Numpy 1.10+")
+    reason=("the matrix multiplication operator needs Python 3.5+ and "
+            "Numpy 1.10+"))
 
-needs_blas = unittest.skipUnless(has_blas, "BLAS needs Scipy 0.16+")
+needs_blas = pytest.mark.skipif(not has_blas, reason="BLAS needs Scipy 0.16+")
 
 
 class DumbMatrix(object):

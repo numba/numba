@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import pytest
 import sys
 import threading
 
@@ -83,7 +84,8 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         x = 3.14
         self.assertEqual(pyfunc(x), cfunc(x))
 
-    @unittest.skipUnless(is_windows, "Windows-specific test")
+    @pytest.mark.skipif(not is_windows,
+                        reason="Windows-specific test")
     def test_stdcall(self):
         # Just check that it doesn't crash
         cres = compile_isolated(use_c_sleep, [types.uintc])

@@ -3,6 +3,7 @@ from __future__ import print_function
 import sys
 
 import numpy as np
+import pytest
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -189,7 +190,8 @@ class TestPrint(TestCase):
                     "keyword arguments.")
         self.assertIn(raises.exception.msg, expected)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    @pytest.mark.skipif(utils.PYVERSION < (3, 2),
+                        reason="needs Python 3.2+")
     def test_print_no_truncation(self):
         ''' See: https://github.com/numba/numba/issues/3811
         '''

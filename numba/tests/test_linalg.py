@@ -2,6 +2,7 @@ from __future__ import division, print_function
 
 import contextlib
 import gc
+import pytest
 from itertools import product, cycle
 import sys
 import warnings
@@ -24,8 +25,8 @@ try:
 except ImportError:
     has_lapack = False
 
-needs_lapack = unittest.skipUnless(has_lapack,
-                                   "LAPACK needs Scipy 0.16+")
+needs_lapack = pytest.mark.skipif(not has_lapack,
+                                  reason="LAPACK needs Scipy 0.16+")
 
 
 def dot2(a, b):

@@ -2,6 +2,7 @@
 from __future__ import print_function, absolute_import
 
 import gc
+import pytest
 import weakref
 
 from numba import unittest_support as unittest
@@ -124,7 +125,7 @@ class TestFuncLifetime(TestCase):
         gc.collect()
         self.assertEqual([w() for w in wrs], [None] * len(wrs))
 
-    @unittest.skipUnless(IS_PY3, "py3 only; known leak in py2")
+    @pytest.mark.skipif(not IS_PY3, reason="py3 only; known leak in py2")
     def test_inner_function_lifetime(self):
         self.check_inner_function_lifetime(forceobj=True)
 

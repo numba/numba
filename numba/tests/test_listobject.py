@@ -12,6 +12,8 @@ assumes that they work.
 """
 from __future__ import print_function, absolute_import, division
 
+import pytest
+
 from numba import njit
 from numba import int32, types
 from numba.errors import TypingError
@@ -19,7 +21,7 @@ from numba import listobject
 from numba.utils import IS_PY3
 from .support import TestCase, MemoryLeakMixin, unittest
 
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+skip_py2 = pytest.mark.skipif(not IS_PY3, reason='not supported in py2')
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):

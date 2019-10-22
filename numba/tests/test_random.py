@@ -5,6 +5,7 @@ import functools
 import math
 import multiprocessing
 import os
+import pytest
 import random
 import subprocess
 import sys
@@ -1462,7 +1463,8 @@ class TestThreads(ConcurrencyBaseTest):
         self.check_implicit_initialization(np_extract_randomness)
 
 
-@unittest.skipIf(os.name == 'nt', "Windows is not affected by fork() issues")
+@pytest.mark.skipif(os.name == 'nt',
+                    reason="Windows is not affected by fork() issues")
 class TestProcesses(ConcurrencyBaseTest):
     """
     Check the PRNG behaves well in child processes.

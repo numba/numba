@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import pytest
 import sys
 import subprocess
 
@@ -59,7 +60,7 @@ class TestCase(unittest.TestCase):
         minsize = 100 if cuda.is_available() else 1
         self.check_testsuite_size(['numba.cuda.tests'], minsize)
 
-    @unittest.skipIf(not cuda.is_available(), "NO CUDA")
+    @pytest.mark.skipif(not cuda.is_available(), reason="NO CUDA")
     def test_cuda_submodules(self):
         self.check_listing_prefix('numba.cuda.tests.cudadrv')
         self.check_listing_prefix('numba.cuda.tests.cudapy')
@@ -76,8 +77,9 @@ class TestCase(unittest.TestCase):
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50)
 
-    @unittest.skipIf(sys.version_info < (3, 4),
-                     "'--random' only supported on Python 3.4 or higher")
+    @pytest.mark.skipif(sys.version_info < (3, 4),
+                        reason=("'--random' only supported on Python 3.4 or "
+                                "higher"))
     def test_random(self):
         self.check_testsuite_size(
             ['--random', '0.1', 'numba.tests.npyufunc'], 5)

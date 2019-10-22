@@ -9,6 +9,7 @@ PYTEST_DONT_REWRITE
 """
 from __future__ import print_function, absolute_import, division
 
+import pytest
 import sys
 import warnings
 
@@ -23,7 +24,7 @@ from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+skip_py2 = pytest.mark.skipif(not IS_PY3, reason='not supported in py2')
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -649,8 +650,8 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
-    @unittest.skipUnless(utils.IS_PY3 and sys.maxsize > 2 ** 32,
-                         "Python 3, 64 bit test only")
+    @pytest.mark.skipif(not (utils.IS_PY3 and sys.maxsize > 2 ** 32),
+                        reason="Python 3, 64 bit test only")
     def test_007_collision_checks(self):
         # this checks collisions in real life for 64bit systems
         @njit

@@ -1,4 +1,5 @@
 import os
+import pytest
 import tempfile
 import unittest
 from .support import TestCase, temp_directory, override_env_config
@@ -11,7 +12,7 @@ except ImportError:
     _HAVE_YAML = False
 
 _skip_msg = "pyyaml needed for configuration file tests"
-needs_yaml = unittest.skipIf(not _HAVE_YAML, _skip_msg)
+needs_yaml = pytest.mark.skipif(not _HAVE_YAML, reason=_skip_msg)
 
 
 @needs_yaml

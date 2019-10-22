@@ -4,6 +4,7 @@ from functools import partial
 from itertools import permutations
 import numba.unittest_support as unittest
 
+import pytest
 import sys
 import numpy as np
 
@@ -785,8 +786,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         if not sys.version_info < (3,):
             yield 'a_string'
 
-    @unittest.skipUnless(np_version >= (1, 15),
-                         "flatnonzero array-like handling per 1.15+")
+    @pytest.mark.skipif(not np_version >= (1, 15),
+                        reason="flatnonzero array-like handling per 1.15+")
     def test_flatnonzero_array_like_115_and_on(self):
         # these tests should pass where numpy version is >= 1.15
         pyfunc = numpy_flatnonzero
@@ -797,8 +798,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipUnless(np_version < (1, 15),
-                         "flatnonzero array-like handling pre 1.15")
+    @pytest.mark.skipif(not np_version < (1, 15),
+                        reason="flatnonzero array-like handling pre 1.15")
     def test_flatnonzero_array_like_pre_115(self):
         # these tests should pass where numpy version is < 1.15
         pyfunc = numpy_flatnonzero

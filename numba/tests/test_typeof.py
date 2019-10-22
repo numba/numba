@@ -8,6 +8,7 @@ import array
 from collections import namedtuple
 import enum
 import mmap
+import pytest
 import sys
 
 import numpy as np
@@ -288,7 +289,8 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                             ty_sin.get_pointer(c_sin))
 
     @tag('important')
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @pytest.mark.skipif(not cffi_support.SUPPORTED,
+                        reason="CFFI not supported")
     def test_cffi(self):
         from . import cffi_usecases as mod
         mod.init()

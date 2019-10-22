@@ -1,5 +1,6 @@
 from __future__ import print_function, unicode_literals
 
+import pytest
 import sys
 
 import numba.unittest_support as unittest
@@ -12,7 +13,8 @@ def docstring_usecase():
     return 1
 
 
-@unittest.skipIf(sys.version_info >= (3,), "Python 2-specific test")
+@pytest.mark.skipif(sys.version_info >= (3,),
+                    reason="Python 2-specific test")
 class TestFutureUnicodeLiterals(TestCase):
     """
     Test issues with unicode_literals on Python 2.

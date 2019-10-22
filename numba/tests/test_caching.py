@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import pytest
 import sys
 import multiprocessing as mp
 
@@ -14,13 +15,13 @@ from .support import (
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 _has_mp_get_context = hasattr(mp, 'get_context')
-_skip_no_unicode = unittest.skipUnless(
-    _py34_or_later,
-    "unicode requires py3.4+",
+_skip_no_unicode = pytest.mark.skipif(
+    not _py34_or_later,
+    reason="unicode requires py3.4+",
 )
-_skip_no_mp_spawn = unittest.skipUnless(
-    _has_mp_get_context,
-    "requires multiprocessing.get_context",
+_skip_no_mp_spawn = pytest.mark.skipif(
+    not _has_mp_get_context,
+    reason="requires multiprocessing.get_context",
 )
 
 

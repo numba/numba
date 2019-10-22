@@ -5,6 +5,8 @@
 
 from __future__ import print_function
 
+import pytest
+
 import sys
 from itertools import product
 from itertools import permutations
@@ -286,8 +288,8 @@ UNICODE_COUNT_EXAMPLES = [
 ]
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
+@pytest.mark.skipif(not _py34_or_later,
+                    reason='unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
 
     def test_literal(self, flags=no_pyobj_flags):
@@ -1141,8 +1143,8 @@ class TestUnicode(BaseTest):
                              msg='failed on {}'.format(args))
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
+@pytest.mark.skipif(not _py34_or_later,
+                    reason='unicode support requires Python 3.4 or later')
 class TestUnicodeInTuple(BaseTest):
 
     def test_const_unicode_in_tuple(self):
@@ -1220,8 +1222,8 @@ class TestUnicodeInTuple(BaseTest):
         self.assertEqual(f(), (1, 0, 0, 1, 0))
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
+@pytest.mark.skipif(not _py34_or_later,
+                    reason='unicode support requires Python 3.4 or later')
 class TestUnicodeIteration(BaseTest):
 
     def test_unicode_iter(self):

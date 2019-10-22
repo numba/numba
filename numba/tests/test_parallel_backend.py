@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import
 """
 Tests the parallel backend
 """
+import pytest
 import threading
 import multiprocessing
 import random
@@ -52,14 +53,17 @@ except ImportError:
     _HAVE_LAPACK = False
 
 # test skipping decorators
-skip_no_omp = unittest.skipUnless(_HAVE_OMP_POOL, "OpenMP threadpool required")
-skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
+skip_no_omp = pytest.mark.skipif(not _HAVE_OMP_POOL,
+                                 reason="OpenMP threadpool required")
+skip_no_tbb = pytest.mark.skipif(not _HAVE_TBB_POOL,
+                                 reason="TBB threadpool required")
 
 _gnuomp = _HAVE_OMP_POOL and omppool.openmp_vendor == "GNU"
-skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
+skip_unless_gnu_omp = pytest.mark.skipif(not _gnuomp,
+                                         reason="GNU OpenMP only tests")
 
-skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
-                                      "Test runs on Python 3 only")
+skip_unless_py3 = pytest.mark.skipif(utils.PYVERSION >= (3, 0),
+                                     reason="Test runs on Python 3 only")
 
 _windows = sys.platform.startswith('win')
 _osx = sys.platform.startswith('darwin')
@@ -300,7 +304,8 @@ class TestParallelBackendBase(TestCase):
 _specific_backends = config.THREADING_LAYER in ('omp', 'tbb', 'workqueue')
 
 
-@unittest.skipUnless(_specific_backends, "Threading layer not explicit")
+@pytest.mark.skipif(not _specific_backends,
+                    reason="Threading layer not explicit")
 class TestParallelBackend(TestParallelBackendBase):
     """ These are like the numba.tests.test_threadsafety tests but designed
     instead to torture the parallel backend.
@@ -350,7 +355,7 @@ class TestSpecificBackend(TestParallelBackendBase):
 
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
-                'workqueue': unittest.skipIf(False, '')}
+                'workqueue': pytest.mark.skipif(False, reason='')}
 
     def run_cmd(self, cmdline, env):
         popen = subprocess.Popen(cmdline,
@@ -483,7 +488,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
-                'workqueue': unittest.skipIf(False, '')}
+                'workqueue': pytest.mark.skipif(False, reason='')}
 
     @classmethod
     def _inject(cls, backend, backend_guard):

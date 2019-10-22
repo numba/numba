@@ -2,6 +2,7 @@ from __future__ import division, print_function
 
 import math
 import numpy as np
+import pytest
 import subprocess
 import numbers
 import importlib
@@ -16,8 +17,8 @@ from numba.compiler import compile_isolated, Flags
 from numba.six import exec_
 from .support import TestCase, tag, override_env_config
 
-needs_svml = unittest.skipUnless(numba.config.USING_SVML,
-                                 "SVML tests need SVML to be present")
+needs_svml = pytest.mark.skipif(not numba.config.USING_SVML,
+                                reason="SVML tests need SVML to be present")
 
 # a map of float64 vector lenghs with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
@@ -189,7 +190,7 @@ class TestSVMLGeneration(TestCase):
         skipped = dtype.startswith('int') and vlen == 2
         args = (dtype, mode, vlen, flags)
         # unit test body template
-        @unittest.skipUnless(not skipped, "Not implemented")
+        @pytest.mark.skipif(skipped, reason="Not implemented")
         def test_template(self):
             fn, contains, avoids = combo_svml_usecase(*args)
             # look for specific patters in the asm for a given target

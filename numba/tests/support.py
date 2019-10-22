@@ -3,6 +3,7 @@ Assorted utilities for use in tests.
 """
 from __future__ import print_function
 
+import pytest
 import cmath
 import contextlib
 import enum
@@ -48,7 +49,8 @@ _windows_py27 = (sys.platform.startswith('win32') and
                  sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
-skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_parfors_unsupported = pytest.mark.skipif(_32bit or _windows_py27,
+                                              reaso=_reason)
 
 
 class CompilationCache(object):

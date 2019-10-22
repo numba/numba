@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import
 
 import ctypes
 import os
+import pytest
 import subprocess
 import sys
 from collections import namedtuple
@@ -18,9 +19,9 @@ from numba import cffi_support, numpy_support
 from .support import TestCase, tag, captured_stderr
 from .test_dispatcher import BaseCacheTest
 
-skip_cffi_unsupported = unittest.skipUnless(
-    cffi_support.SUPPORTED,
-    "CFFI not supported -- please install the cffi module",
+skip_cffi_unsupported = pytest.mark.skipif(
+    not cffi_support.SUPPORTED,
+    reason="CFFI not supported -- please install the cffi module",
 )
 
 

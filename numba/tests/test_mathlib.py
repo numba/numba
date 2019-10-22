@@ -1,4 +1,5 @@
 from __future__ import print_function, absolute_import, division
+import pytest
 
 import itertools
 import math
@@ -224,8 +225,8 @@ class TestMathLib(TestCase):
     def test_sin_npm(self):
         self.test_sin(flags=no_pyobj_flags)
 
-    @unittest.skipIf(sys.platform == 'win32',
-                     "not exactly equal on win32 (issue #597)")
+    @pytest.mark.skipif(sys.platform == 'win32',
+                     reason="not exactly equal on win32 (issue #597)")
     def test_cos(self, flags=enable_pyobj_flags):
         pyfunc = cos
         x_types = [types.int16, types.int32, types.int64,
@@ -507,11 +508,11 @@ class TestMathLib(TestCase):
     def test_isinf_npm(self):
         self.check_predicate_func(isinf, flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    @pytest.mark.skipif(utils.PYVERSION < (3, 2), reason="needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite, flags=enable_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    @pytest.mark.skipif(utils.PYVERSION < (3, 2), reason="needs Python 3.2+")
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite, flags=no_pyobj_flags)
 
@@ -590,8 +591,8 @@ class TestMathLib(TestCase):
     def test_erfc_npm(self):
         self.test_erfc(flags=no_pyobj_flags)
 
-    @unittest.skipIf(PYVERSION == (2, 7) and IS_WIN32 and not IS_32BITS,
-                     'unknown error with tgamma')
+    @pytest.mark.skipif(PYVERSION == (2, 7) and IS_WIN32 and not IS_32BITS,
+                     reason='unknown error with tgamma')
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]

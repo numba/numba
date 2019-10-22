@@ -3,6 +3,7 @@ from __future__ import print_function
 import contextlib
 import imp
 import os
+import pytest
 import shutil
 import subprocess
 import sys
@@ -26,11 +27,11 @@ from numba.pycc.platform import _external_compiler_ok
 
 # if suitable compilers are not present then skip.
 _skip_reason = 'AOT compatible compilers missing'
-_skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
-                                          _skip_reason)
+_skip_missing_compilers = pytest.mark.skipif(not _external_compiler_ok,
+                                             reason=_skip_reason)
 _skip_reason = 'windows only'
-_windows_only = unittest.skipIf(not sys.platform.startswith('win'),
-                                _skip_reason)
+_windows_only = pytest.mark.skipif(not sys.platform.startswith('win'),
+                                   reason=_skip_reason)
 
 from .matmul_usecase import has_blas
 from .support import TestCase, tag, import_dynamic, temp_directory
@@ -361,7 +362,7 @@ class TestDistutilsSupport(TestCase):
             self.skipTest("must use setuptools to build extensions for Python 2")
         self.check_setup_py("setup_distutils.py")
 
-    @unittest.skipIf(setuptools is None, "test needs setuptools")
+    @pytest.mark.skipif(setuptools is None, reason="test needs setuptools")
     def test_setup_py_setuptools(self):
         self.check_setup_py("setup_setuptools.py")
 

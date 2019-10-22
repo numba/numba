@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import cmath
 import itertools
 import math
+import pytest
 import sys
 
 from numba import unittest_support as unittest
@@ -188,11 +189,11 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isinf_npm(self):
         self.check_predicate_func(isinf_usecase, no_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    @pytest.mark.skipif(utils.PYVERSION < (3, 2), reason="needs Python 3.2+")
     def test_isfinite(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isfinite_usecase, enable_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    @pytest.mark.skipif(utils.PYVERSION < (3, 2), reason="needs Python 3.2+")
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite_usecase, no_pyobj_flags)
 

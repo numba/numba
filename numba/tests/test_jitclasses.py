@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from collections import OrderedDict
 import ctypes
+import pytest
 import random
 import sys
 import pickle
@@ -20,7 +21,7 @@ from numba.errors import LoweringError
 
 # there are some python 3 specific syntax tests
 if sys.version_info >= (3,):
-    from .jitclass_usecases import TestClass1, TestClass2
+    from .jitclass_usecases import SomeTestClass1, SomeTestClass2
 
 
 def _get_meminfo(box):
@@ -570,7 +571,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="Python 3-specific test")
     def test_annotations(self):
         """
         Methods with annotations should compile fine (issue #1911).
@@ -649,14 +651,15 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.y, 2)
         self.assertEqual(tc.z, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="Python 3-specific test")
     def test_default_args_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),
                 ('z', int32),
                 ('a', int32)]
 
-        TestClass = jitclass(spec)(TestClass1)
+        TestClass = jitclass(spec)(SomeTestClass1)
 
         tc = TestClass(2, 3)
         self.assertEqual(tc.x, 2)
@@ -682,7 +685,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
+    @pytest.mark.skipif(sys.version_info < (3,),
+                        reason="Python 3-specific test")
     def test_default_args_starargs_and_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),
@@ -691,7 +695,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('a', int32)]
 
         with self.assertRaises(errors.UnsupportedError) as raises:
-            jitclass(spec)(TestClass2)
+            jitclass(spec)(SomeTestClass2)
 
         msg = "VAR_POSITIONAL argument type unsupported"
         self.assertIn(msg, str(raises.exception))

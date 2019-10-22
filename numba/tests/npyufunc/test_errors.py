@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function, division
 
 import contextlib
+import pytest
 import sys
 import warnings
 
@@ -38,9 +39,9 @@ def power(a, b):
     return a ** b
 
 # See https://github.com/numpy/numpy/pull/3691
-skipIfFPStatusBug = unittest.skipIf(
+skipIfFPStatusBug = pytest.mark.skipif(
     sys.platform == 'win32' and np_version < (1, 8) and sys.maxsize < 2 ** 32,
-    "test disabled because of FPU state handling issue on Numpy < 1.8")
+    reason="test disabled because of FPU state handling issue on Numpy < 1.8")
 
 
 class TestExceptions(TestCase):
