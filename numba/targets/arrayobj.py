@@ -3398,9 +3398,10 @@ def _parse_shape(context, builder, ty, val):
         passed_shapes = cgutils.unpack_tuple(builder, val, count=ndim)
 
     shapes = []
-    maxval = 1 << (context.address_size - 1)
     intp_t = context.get_value_type(types.intp)
+    maxval = 1 << (intp_t.width - 1) - 1
     for s in passed_shapes:
+        cgutils.printf(builder, "%d ", s)
         width = s.type.width
         if width < intp_t.width:
             shapes.append(builder.sext(s, intp_t))
@@ -3411,7 +3412,7 @@ def _parse_shape(context, builder, ty, val):
             is_larger = builder.icmp_signed(">", s, maxval_ir)
             with builder.if_then(is_larger, likely=False):
                 context.call_conv.return_user_exc(
-                    builder, OverflowError,
+                    builder, ValueError,
                     ("Passed array shape is greater than intp typemax for this"
                      " {}-bit system.".format(context.address_size),)
                 )

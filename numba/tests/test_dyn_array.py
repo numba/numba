@@ -576,7 +576,7 @@ class ConstructorBaseTest(NrtRefCtTest):
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
         if config.IS_32BITS:
-            with self.assertRaises(OverflowError):
+            with self.assertRaises(ValueError):
                 cfunc(1 << (32 - 1), 1)
 
 
