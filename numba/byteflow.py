@@ -2,17 +2,14 @@
 Implement python 3.8+ bytecode analysis
 """
 import logging
-import dis
-from collections import namedtuple, defaultdict
-from pprint import pformat
+from collections import namedtuple
 
-from numba.utils import UniqueDict
+from numba.utils import UniqueDict, PYVERSION
 from numba.controlflow import NEW_BLOCKERS
 
 
 _logger = logging.getLogger(__name__)
-
-
+# logging.basicConfig(level=logging.DEBUG)
 
 class Flow(object):
     def __init__(self, bytecode):
@@ -26,10 +23,18 @@ class Flow(object):
 
         first_encounter = UniqueDict()
         while runner.pending:
-            _logger.debug('pending: %s', runner.pending)
+            _logger.debug("pending: %s", runner.pending)
             state = runner.pending.pop()
             if state not in runner.finished:
                 first_encounter[state.pc_initial] = state
+                # except:
+                #     print(first_encounter[state.pc_initial])
+                #     print(state)
+                #     print('^^^^^^^^^^^^^^^^^')
+                #     import dis
+                #     dis.dis(self._bytecode.func_id.code)
+                #     import sys
+                #     sys.exit(-1)
                 while True:
                     runner.dispatch(state)
                     if state.has_terminated():
@@ -47,7 +52,7 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = adapt_state_infos(state)
 
-        _logger.debug('block_infos: %s', self.block_infos.keys())
+        _logger.debug("block_infos: %s", self.block_infos.keys())
         assert self.block_infos
 
     def _is_implicit_new_block(self, state):
@@ -69,7 +74,7 @@ class Runner(object):
     def dispatch(self, state):
         inst = state.get_inst()
         _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
-        fn = getattr(self, 'op_{}'.format(inst.opname))
+        fn = getattr(self, "op_{}".format(inst.opname))
         fn(state, inst)
 
     def op_POP_TOP(self, state, inst):
@@ -80,8 +85,13 @@ class Runner(object):
         state.append(inst, res=res)
         state.push(res)
 
+    def op_LOAD_DEREF(self, state, inst):
+        res = state.make_temp()
+        state.append(inst, res=res)
+        state.push(res)
+
     def op_LOAD_CONST(self, state, inst):
-        res = state.make_temp('const')
+        res = state.make_temp("const")
         state.push(res)
         state.append(inst, res=res)
 
@@ -97,6 +107,10 @@ class Runner(object):
         state.append(inst, res=res)
         state.push(res)
 
+    def op_STORE_DEREF(self, state, inst):
+        value = state.pop()
+        state.append(inst, value=value)
+
     def op_STORE_FAST(self, state, inst):
         value = state.pop()
         state.append(inst, value=value)
@@ -111,8 +125,15 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, start=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            start=tos,
+            res=res,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
         state.push(res)
 
     def op_SLICE_2(self, state, inst):
@@ -125,8 +146,15 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, stop=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            stop=tos,
+            res=res,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
         state.push(res)
 
     def op_SLICE_3(self, state, inst):
@@ -139,8 +167,15 @@ class Runner(object):
         res = state.make_temp()
         slicevar = state.make_temp()
         indexvar = state.make_temp()
-        state.append(inst, base=tos2, start=tos1, stop=tos, res=res,
-                    slicevar=slicevar, indexvar=indexvar)
+        state.append(
+            inst,
+            base=tos2,
+            start=tos1,
+            stop=tos,
+            res=res,
+            slicevar=slicevar,
+            indexvar=indexvar,
+        )
         state.push(res)
 
     def op_STORE_SLICE_0(self, state, inst):
@@ -152,8 +187,14 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos, value=value, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos,
+            value=value,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
 
     def op_STORE_SLICE_1(self, state, inst):
         """
@@ -165,8 +206,15 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, start=tos, slicevar=slicevar,
-                    value=value, indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            start=tos,
+            slicevar=slicevar,
+            value=value,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
 
     def op_STORE_SLICE_2(self, state, inst):
         """
@@ -178,8 +226,15 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, stop=tos, value=value, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            stop=tos,
+            value=value,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
 
     def op_STORE_SLICE_3(self, state, inst):
         """
@@ -191,8 +246,15 @@ class Runner(object):
         value = state.pop()
         slicevar = state.make_temp()
         indexvar = state.make_temp()
-        state.append(inst, base=tos2, start=tos1, stop=tos, value=value,
-                    slicevar=slicevar, indexvar=indexvar)
+        state.append(
+            inst,
+            base=tos2,
+            start=tos1,
+            stop=tos,
+            value=value,
+            slicevar=slicevar,
+            indexvar=indexvar,
+        )
 
     def op_DELETE_SLICE_0(self, state, inst):
         """
@@ -202,8 +264,9 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst, base=tos, slicevar=slicevar, indexvar=indexvar, nonevar=nonevar
+        )
 
     def op_DELETE_SLICE_1(self, state, inst):
         """
@@ -214,8 +277,14 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, start=tos, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            start=tos,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
 
     def op_DELETE_SLICE_2(self, state, inst):
         """
@@ -226,8 +295,14 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         nonevar = state.make_temp()
-        state.append(inst, base=tos1, stop=tos, slicevar=slicevar,
-                    indexvar=indexvar, nonevar=nonevar)
+        state.append(
+            inst,
+            base=tos1,
+            stop=tos,
+            slicevar=slicevar,
+            indexvar=indexvar,
+            nonevar=nonevar,
+        )
 
     def op_DELETE_SLICE_3(self, state, inst):
         """
@@ -238,8 +313,9 @@ class Runner(object):
         tos2 = state.pop()
         slicevar = state.make_temp()
         indexvar = state.make_temp()
-        state.append(inst, base=tos2, start=tos1, stop=tos,
-                    slicevar=slicevar, indexvar=indexvar)
+        state.append(
+            inst, base=tos2, start=tos1, stop=tos, slicevar=slicevar, indexvar=indexvar
+        )
 
     def op_BUILD_SLICE(self, state, inst):
         """
@@ -263,8 +339,9 @@ class Runner(object):
             raise Exception("unreachable")
         slicevar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, start=start, stop=stop, step=step, res=res,
-                    slicevar=slicevar)
+        state.append(
+            inst, start=start, stop=stop, step=step, res=res, slicevar=slicevar
+        )
         state.push(res)
 
     def _op_POP_JUMP_IF(self, state, inst):
@@ -285,6 +362,9 @@ class Runner(object):
     op_JUMP_IF_FALSE_OR_POP = _op_JUMP_IF_OR_POP
     op_JUMP_IF_TRUE_OR_POP = _op_JUMP_IF_OR_POP
 
+    def op_JUMP_FORWARD(self, state, inst):
+        state.append(inst)
+        state.fork(pc=inst.get_jump_target())
 
     def op_JUMP_ABSOLUTE(self, state, inst):
         state.append(inst)
@@ -292,6 +372,16 @@ class Runner(object):
 
     def op_RETURN_VALUE(self, state, inst):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
+        state.terminate()
+
+    def op_RAISE_VARARGS(self, state, inst):
+        if inst.arg == 0:
+            exc = None
+        elif inst.arg == 1:
+            exc = state.pop()
+        else:
+            raise ValueError("Multiple argument raise is not supported.")
+        state.append(inst, exc=exc)
         state.terminate()
 
     def op_BINARY_SUBSCR(self, state, inst):
@@ -316,6 +406,73 @@ class Runner(object):
         state.append(inst, func=func, args=args, res=res)
         state.push(res)
 
+    def op_CALL_FUNCTION_KW(self, state, inst):
+        narg = inst.arg
+        names = state.pop()  # tuple of names
+        args = list(reversed([state.pop() for _ in range(narg)]))
+        func = state.pop()
+
+        res = state.make_temp()
+        state.append(inst, func=func, args=args, names=names, res=res)
+        state.push(res)
+
+    def op_CALL_FUNCTION_EX(self, state, inst):
+        if inst.arg & 1:
+            errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+            raise NotImplementedError(errmsg)
+        vararg = state.pop()
+        func = state.pop()
+        res = state.make_temp()
+        state.append(inst, func=func, vararg=vararg, res=res)
+        state.push(res)
+
+    def _dup_topx(self, state, inst, count):
+        orig = [state.pop() for _ in range(count)]
+        orig.reverse()
+        # We need to actually create new temporaries if we want the
+        # IR optimization pass to work correctly (see issue #580)
+        duped = [state.make_temp() for _ in range(count)]
+        state.append(inst, orig=orig, duped=duped)
+        for val in orig:
+            state.push(val)
+        for val in duped:
+            state.push(val)
+
+    def op_DUP_TOPX(self, state, inst):
+        count = inst.arg
+        assert 1 <= count <= 5, "Invalid DUP_TOPX count"
+        self._dup_topx(state, inst, count)
+
+    def op_DUP_TOP(self, state, inst):
+        self._dup_topx(state, inst, count=1)
+
+    def op_DUP_TOP_TWO(self, state, inst):
+        self._dup_topx(state, inst, count=2)
+
+    def op_ROT_TWO(self, state, inst):
+        first = state.pop()
+        second = state.pop()
+        state.push(first)
+        state.push(second)
+
+    def op_ROT_THREE(self, state, inst):
+        first = state.pop()
+        second = state.pop()
+        third = state.pop()
+        state.push(first)
+        state.push(third)
+        state.push(second)
+
+    def op_ROT_FOUR(self, state, inst):
+        first = state.pop()
+        second = state.pop()
+        third = state.pop()
+        forth = state.pop()
+        state.push(first)
+        state.push(forth)
+        state.push(third)
+        state.push(second)
+
     def op_UNPACK_SEQUENCE(self, state, inst):
         count = inst.arg
         iterable = state.pop()
@@ -331,6 +488,60 @@ class Runner(object):
         tup = state.make_temp()
         state.append(inst, items=items, res=tup)
         state.push(tup)
+
+    def _build_tuple_unpack(self, state, inst):
+        # Builds tuple from other tuples on the stack
+        tuples = list(reversed([state.pop() for _ in range(inst.arg)]))
+        temps = [state.make_temp() for _ in range(len(tuples) - 1)]
+        state.append(inst, tuples=tuples, temps=temps)
+        # The result is in the last temp var
+        state.push(temps[-1])
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, state, inst):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(state, inst)
+
+    def op_BUILD_TUPLE_UNPACK(self, state, inst):
+        self._build_tuple_unpack(state, inst)
+
+    def op_BUILD_LIST(self, state, inst):
+        count = inst.arg
+        items = list(reversed([state.pop() for _ in range(count)]))
+        lst = state.make_temp()
+        state.append(inst, items=items, res=lst)
+        state.push(lst)
+
+    def op_LIST_APPEND(self, state, inst):
+        value = state.pop()
+        # Python 2.7+ added an argument to LIST_APPEND.
+        if PYVERSION == (2, 6):
+            target = state.pop()
+        else:
+            index = inst.arg
+            target = state.peek(index)
+        appendvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, appendvar=appendvar, res=res)
+
+    def op_BUILD_MAP(self, state, inst):
+        dct = state.make_temp()
+        count = inst.arg
+        items = []
+        if PYVERSION >= (3, 5):
+            # In 3.5+, BUILD_MAP takes <count> pairs from the stack
+            for i in range(count):
+                v, k = state.pop(), state.pop()
+                items.append((k, v))
+        state.append(inst, items=items[::-1], size=count, res=dct)
+        state.push(dct)
+
+    def op_BUILD_SET(self, state, inst):
+        count = inst.arg
+        # Note: related python bug http://bugs.python.org/issue26020
+        items = list(reversed([state.pop() for _ in range(count)]))
+        res = state.make_temp()
+        state.append(inst, items=items, res=res)
+        state.push(res)
 
     def op_GET_ITER(self, state, inst):
         value = state.pop()
@@ -349,12 +560,23 @@ class Runner(object):
         state.fork(pc=end, npop=2)
         state.fork(pc=inst.next)
 
-    def _binaryop(self, stack, inst):
-        rhs = stack.pop()
-        lhs = stack.pop()
-        res = stack.make_temp()
-        stack.append(inst, lhs=lhs, rhs=rhs, res=res)
-        stack.push(res)
+    def _unaryop(self, state, inst):
+        val = state.pop()
+        res = state.make_temp()
+        state.append(inst, value=val, res=res)
+        state.push(res)
+
+    op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_POSITIVE = _unaryop
+    op_UNARY_NOT = _unaryop
+    op_UNARY_INVERT = _unaryop
+
+    def _binaryop(self, state, inst):
+        rhs = state.pop()
+        lhs = state.pop()
+        res = state.make_temp()
+        state.append(inst, lhs=lhs, rhs=rhs, res=res)
+        state.push(res)
 
     op_COMPARE_OP = _binaryop
 
@@ -390,7 +612,73 @@ class Runner(object):
     op_BINARY_OR = _binaryop
     op_BINARY_XOR = _binaryop
 
-    #NOTE: Please see notes in `interpreter.py` surrounding the implementation
+    def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
+        if PYVERSION == (2, 7):
+            name = None
+        else:
+            name = state.pop()
+        code = state.pop()
+        closure = annotations = kwdefaults = defaults = None
+        if PYVERSION < (3, 0):
+            if MAKE_CLOSURE:
+                closure = state.pop()
+            num_posdefaults = inst.arg
+            if num_posdefaults > 0:
+                defaults = []
+                for i in range(num_posdefaults):
+                    defaults.append(state.pop())
+                defaults = tuple(defaults)
+        elif PYVERSION >= (3, 0) and PYVERSION < (3, 6):
+            num_posdefaults = inst.arg & 0xFF
+            num_kwdefaults = (inst.arg >> 8) & 0xFF
+            num_annotations = (inst.arg >> 16) & 0x7FFF
+            if MAKE_CLOSURE:
+                closure = state.pop()
+            if num_annotations > 0:
+                annotations = state.pop()
+            if num_kwdefaults > 0:
+                kwdefaults = []
+                for i in range(num_kwdefaults):
+                    v = state.pop()
+                    k = state.pop()
+                    kwdefaults.append((k, v))
+                kwdefaults = tuple(kwdefaults)
+            if num_posdefaults:
+                defaults = []
+                for i in range(num_posdefaults):
+                    defaults.append(state.pop())
+                defaults = tuple(defaults)
+        else:
+            if inst.arg & 0x8:
+                closure = state.pop()
+            if inst.arg & 0x4:
+                annotations = state.pop()
+            if inst.arg & 0x2:
+                kwdefaults = state.pop()
+            if inst.arg & 0x1:
+                defaults = state.pop()
+        res = state.make_temp()
+        state.append(
+            inst,
+            name=name,
+            code=code,
+            closure=closure,
+            annotations=annotations,
+            kwdefaults=kwdefaults,
+            defaults=defaults,
+            res=res,
+        )
+        state.push(res)
+
+    def op_MAKE_CLOSURE(self, state, inst):
+        self.op_MAKE_FUNCTION(state, inst, MAKE_CLOSURE=True)
+
+    def op_LOAD_CLOSURE(self, state, inst):
+        res = state.make_temp()
+        state.append(inst, res=res)
+        state.push(res)
+
+    # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
     def op_LOAD_METHOD(self, state, inst):
@@ -398,7 +686,6 @@ class Runner(object):
 
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
-
 
 
 class State(object):
@@ -416,20 +703,17 @@ class State(object):
         self._phis = {}
         self._outgoing_phis = UniqueDict()
         for i in range(nstack):
-            phi = self.make_temp('phi')
+            phi = self.make_temp("phi")
             self._phis[phi] = i
             self.push(phi)
 
     def __repr__(self):
         return "State(pc_initial={} nstack_initial={})".format(
-            self._pc_initial, self._nstack_initial,
+            self._pc_initial, self._nstack_initial
         )
 
     def get_identity(self):
-        return (
-            self._pc_initial,
-            self._nstack_initial,
-        )
+        return (self._pc_initial, self._nstack_initial)
 
     def __hash__(self):
         return hash(self.get_identity())
@@ -463,8 +747,8 @@ class State(object):
         inst = self.get_inst()
         self._pc = inst.next
 
-    def make_temp(self, prefix=''):
-        name = '${prefix}{offset}{opname}.{tempct}'.format(
+    def make_temp(self, prefix=""):
+        name = "${prefix}{offset}{opname}.{tempct}".format(
             prefix=prefix,
             offset=self._pc,
             opname=self.get_inst().opname,
@@ -478,9 +762,12 @@ class State(object):
         self._insts.append((inst.offset, kwargs))
 
     def get_tos(self):
-        item = self.pop()
-        self.push(item)
-        return item
+        return self.peek(1)
+
+    def peek(self, k):
+        """Return the k'th element on the stack
+        """
+        return self._stack[-k]
 
     def push(self, item):
         """Push to stack"""
@@ -521,8 +808,7 @@ class State(object):
         assert not self._outgoing_phis
         ret = []
         for edge in self._outedges:
-            state = State(bytecode=self._bytecode, pc=edge.pc,
-                          nstack=len(edge.stack))
+            state = State(bytecode=self._bytecode, pc=edge.pc, nstack=len(edge.stack))
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
@@ -530,8 +816,7 @@ class State(object):
         return ret
 
 
-Edge = namedtuple('Edge', ['pc', 'stack'])
-
+Edge = namedtuple("Edge", ["pc", "stack"])
 
 
 class AdaptDFA(object):
@@ -543,14 +828,10 @@ class AdaptDFA(object):
         return self._flow.block_infos
 
 
-AdaptBlockInfo = namedtuple('AdaptBlockInfo', [
-    'insts',
-    'outgoing_phis',
-])
+AdaptBlockInfo = namedtuple("AdaptBlockInfo", ["insts", "outgoing_phis"])
 
 
 def adapt_state_infos(state):
     return AdaptBlockInfo(
-        insts=tuple(state.instructions),
-        outgoing_phis=state.outgoing_phis,
+        insts=tuple(state.instructions), outgoing_phis=state.outgoing_phis
     )
