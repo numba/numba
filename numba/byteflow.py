@@ -69,6 +69,9 @@ class Runner(object):
         fn = getattr(self, "op_{}".format(inst.opname))
         fn(state, inst)
 
+    def op_NOP(self, state, inst):
+        state.append(inst)
+
     def op_POP_TOP(self, state, inst):
         state.pop()
 

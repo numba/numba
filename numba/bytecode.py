@@ -16,6 +16,9 @@ from numba import errors, utils
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
+# The following offset is used as a hack to inject a NOP at the start of the bytecode
+_FIXED_OFFSET = 2
+
 
 def get_function_object(obj):
     """
@@ -88,7 +91,7 @@ class ByteCodeInst(object):
             return self.next + self.arg
         else:
             assert self.opcode in JABS_OPS
-            return self.arg
+            return self.arg + _FIXED_OFFSET
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
@@ -125,6 +128,8 @@ def _unpack_opargs(code):
     if sys.version_info[0] < 3:
         code = list(map(ord, code))
 
+    yield (0, dis.opname.index('NOP'), 0, _FIXED_OFFSET)
+
     extended_arg = 0
     n = len(code)
     offset = i = 0
@@ -144,7 +149,7 @@ def _unpack_opargs(code):
             i += NO_ARG_LEN
 
         extended_arg = 0
-        yield (offset, op, arg, i)
+        yield (offset + _FIXED_OFFSET, op, arg, i + _FIXED_OFFSET)
         offset = i  # Mark inst offset at first extended
 
 
@@ -184,7 +189,7 @@ class ByteCode(object):
     def __init__(self, func_id):
         code = func_id.code
 
-        labels = set(dis.findlabels(code.co_code))
+        labels = set(x + _FIXED_OFFSET for x in dis.findlabels(code.co_code))
         labels.add(0)
 
         # A map of {offset: ByteCodeInst}
