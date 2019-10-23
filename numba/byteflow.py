@@ -27,14 +27,6 @@ class Flow(object):
             state = runner.pending.pop()
             if state not in runner.finished:
                 first_encounter[state.pc_initial] = state
-                # except:
-                #     print(first_encounter[state.pc_initial])
-                #     print(state)
-                #     print('^^^^^^^^^^^^^^^^^')
-                #     import dis
-                #     dis.dis(self._bytecode.func_id.code)
-                #     import sys
-                #     sys.exit(-1)
                 while True:
                     runner.dispatch(state)
                     if state.has_terminated():
