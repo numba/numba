@@ -100,23 +100,6 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
         parfor, parfor.params, lowerer.fndesc.calltypes)
 
-    get_num_threads = builder.module.get_or_insert_function(
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
-        name="get_num_threads")
-
-    num_threads = builder.call(get_num_threads, [])
-
-    # get_num_threads_sig = signature(types.intp)
-    # get_num_threads_intrinsic = ir.Intrinsic('get_num_threads', get_num_threads_sig, [])
-    #
-    # num_threads = ir.Expr.call(get_num_threads_intrinsic, (), (), loc)
-    # lowerer.fndesc.calltypes[num_threads] = get_num_threads_sig
-
-    get_num_threads_var = ir.Var(scope, mk_unique_var('get_num_threads'), loc)
-    get_num_threads_assign = ir.Assign(ir.Const(num_threads, loc), get_num_threads_var, loc)
-    typemap[get_num_threads_var.name] = types.intp
-    lowerer.lower_inst(get_num_threads_assign)
-
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
@@ -235,41 +218,16 @@ def _lower_parfor_parallel(lowerer, parfor):
                 redtoset = redvar
 
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
-            redblocks = []
             for j in range(get_thread_count()):
-                block = ir.Block(scope, loc)
-                redblocks.append(block)
                 index_var = ir.Var(scope, mk_unique_var("index_var"), loc)
                 index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
                 typemap[index_var.name] = types.uintp
-                block.body.append(index_var_assign)
                 lowerer.lower_inst(index_var_assign)
-
-                cond = ir.Expr.binop(operator.gt, index_var, get_num_threads_var, loc)
-                cond_var = ir.Var(scope, mk_unique_var('cond'), loc)
-                cond_assign = ir.Assign(cond, cond_var, loc)
-                typemap[cond_var.name] = types.intp
-                lowerer.fndesc.calltypes[cond] = signature(types.i1, types.intp, types.intp)
-                lowerer.lower_inst(cond_assign)
-
-                truebr = next_label()
-                true_block = ir.Block(scope, loc)
-                lowerer.blkmap[truebr] = true_block
-                # lowerer.blocks[truebr] = true_block
-                falsebr = next_label()
-                false_block = ir.Block(scope, loc)
-                lowerer.blkmap[falsebr] = false_block
-                # lowerer.blocks[falsebr] = false_block
 
                 redsetitem = ir.SetItem(redarr_var, index_var, redtoset, loc)
                 lowerer.fndesc.calltypes[redsetitem] = signature(types.none,
                         typemap[redarr_var.name], typemap[index_var.name], redvar_typ)
-                false_block.body.append(redsetitem)
-
-                branch = ir.Branch(cond_var, truebr, falsebr, loc)
-                block.body.append(branch)
-                # lowerer.lower_inst(branch)
-            parfor.init_block.body.append(ir.Jump(redblocks[0], loc))
+                lowerer.lower_inst(redsetitem)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = copy.copy(parfor.flags)
