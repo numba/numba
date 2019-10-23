@@ -37,7 +37,15 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
-int num_threads = 0;
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(int) num_threads = 0;
 
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
