@@ -60,7 +60,6 @@ def _lower_parfor_parallel(lowerer, parfor):
     lowerer.fndesc.typemap = copy.copy(orig_typemap)
     typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
-    builder = lowerer.builder
 
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel")
