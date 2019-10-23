@@ -30,7 +30,8 @@ def make_dufunc_kernel(_dufunc):
             isig = self.inner_sig
             osig = self.outer_sig
             cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in zip(args, osig.args, isig.args)]
+                         for val, inty, outty in
+                         zip(args, osig.args, isig.args)]
             if self.cres.objectmode:
                 func_type = self.context.call_conv.get_function_type(
                     types.pyobject, [types.pyobject] * len(isig.args))
@@ -79,7 +80,9 @@ class DUFunc(_internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
-        dispatcher = jit(target='npyufunc', cache=cache, **targetoptions)(py_func)
+        dispatcher = jit(target='npyufunc',
+                         cache=cache,
+                         **targetoptions)(py_func)
         self._initialize(dispatcher, identity)
 
     def _initialize(self, dispatcher, identity):
