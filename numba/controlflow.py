@@ -215,7 +215,7 @@ class CFGraph(object):
         Return the list of Loop objects the *node* belongs to,
         from innermost to outermost.
         """
-        return [self._loops[x] for x in self._in_loops[node]]
+        return [self._loops[x] for x in self._in_loops.get(node, ())]
 
     def dead_nodes(self):
         """
@@ -701,10 +701,13 @@ class ControlFlowAnalysis(object):
         # function scope.
         inloopblocks = set()
 
+        # for b in self.blocks.keys():
+        #     for s, e in self._loops:
+        #         if s <= b < e:
+        #             inloopblocks.add(b)
         for b in self.blocks.keys():
-            for s, e in self._loops:
-                if s <= b < e:
-                    inloopblocks.add(b)
+            if self.graph.in_loops(b):
+                inloopblocks.add(b)
 
         self.backbone = backbone - inloopblocks
 
