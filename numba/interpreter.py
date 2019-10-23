@@ -99,8 +99,13 @@ class Interpreter(object):
             self.cfa.dump()
 
         # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
+        # self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        # self.dfa.run()
+        from numba.byteflow import Flow, AdaptDFA
+        flow = Flow(bytecode)
+        flow.run()
+        self.dfa = AdaptDFA(flow)
+
 
         # Temp states during interpretation
         self.current_block = None
