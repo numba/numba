@@ -732,6 +732,7 @@ def isneginf(x, out=None):
 
     return impl
 
+
 @overload(np.isposinf)
 def isposinf(x, out=None):
 
