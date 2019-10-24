@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import collections
 import dis
 import operator
+import logging
 
 from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
@@ -13,6 +14,9 @@ from .utils import (
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
     )
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Assigner(object):
@@ -119,9 +123,11 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+        fir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
+        _logger.debug(fir.dump_to_string())
+        return fir
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -651,6 +657,9 @@ class Interpreter(object):
         "no-op"
 
     def op_END_FINALLY(self, inst):
+        "no-op"
+
+    def op_BEGIN_FINALLY(self, inst):
         "no-op"
 
     if PYVERSION < (3, 6):
