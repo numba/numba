@@ -545,10 +545,11 @@ def unicode_find(a, b):
 def unicode_rfind(s, substr, start=None, end=None):
     """Implements str.rfind()"""
     def unicode_rfind_check_type(ty, name):
-        """
-        Check object belongs to one of specific types
-        :param ty: object type
-        :param name: name of the argument
+        """Check object belongs to one of specific types
+        ty: type
+            Type of the object
+        name: str
+            Name of the object
         """
         thety = ty
         # if the type is omitted, the concrete type is the value
