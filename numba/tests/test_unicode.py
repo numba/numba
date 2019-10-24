@@ -603,21 +603,32 @@ class TestUnicode(BaseTest):
                                      msg=msg.format(s, sub_str, start, end))
 
     def test_rfind_wrong_start_end_optional(self):
-        def try_compile_wrong_optional(*args):
+        s = UNICODE_EXAMPLES[0]
+        sub_str = s[1:-1]
+        accepted_types = (types.Integer, int, types.NoneType)
+        msg = 'must be {}'.format(accepted_types)
+
+        def try_compile_wrong_start_optional(*args):
             wrong_sig_optional = types.int64(types.unicode_type,
                                              types.unicode_type,
                                              types.Optional(types.float64),
+                                             types.Optional(types.intp))
+            njit([wrong_sig_optional])(rfind_with_start_end_usecase)
+
+        with self.assertRaises(TypingError) as raises:
+            try_compile_wrong_start_optional(s, sub_str, 0.1, 1)
+        self.assertIn(msg, str(raises.exception))
+
+        def try_compile_wrong_end_optional(*args):
+            wrong_sig_optional = types.int64(types.unicode_type,
+                                             types.unicode_type,
+                                             types.Optional(types.intp),
                                              types.Optional(types.float64))
             njit([wrong_sig_optional])(rfind_with_start_end_usecase)
 
-        start, end = 0.1, -0.1
-        for s in UNICODE_EXAMPLES:
-            for sub_str in ['', 'xx', s[:-2], s[3:], s]:
-                with self.assertRaises(TypingError) as raises:
-                    try_compile_wrong_optional(s, sub_str, start, end)
-                accepted_types = (types.Integer, int, types.NoneType)
-                msg = 'must be {}'.format(accepted_types)
-                self.assertIn(msg, str(raises.exception))
+        with self.assertRaises(TypingError) as raises:
+            try_compile_wrong_end_optional(s, sub_str, 1, 0.1)
+        self.assertIn(msg, str(raises.exception))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
