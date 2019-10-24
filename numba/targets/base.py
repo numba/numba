@@ -730,7 +730,6 @@ class BaseContext(object):
         fnty = self.typing_context.resolve_value_type(bool)
         sig = fnty.get_call_type(self.typing_context, (typ,), {})
         impl = self.get_function(fnty, sig)
-        # impl = self.get_function(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name, dllimport=False):
