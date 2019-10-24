@@ -9,7 +9,7 @@ from numba.controlflow import NEW_BLOCKERS
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 class Flow(object):
     def __init__(self, bytecode):
@@ -17,7 +17,8 @@ class Flow(object):
         self.block_infos = UniqueDict()
 
     def run(self):
-        firststate = State(bytecode=self._bytecode, pc=0, nstack=0)
+        firststate = State(bytecode=self._bytecode, pc=0, nstack=0,
+                           blockstack=())
         runner = Runner()
         runner.pending.append(firststate)
 
@@ -379,6 +380,35 @@ class Runner(object):
         state.append(inst, exc=exc)
         state.terminate()
 
+    def op_BEGIN_FINALLY(self, state, inst):
+        state.append(inst)
+
+    def op_END_FINALLY(self, state, inst):
+        state.append(inst)
+
+    def op_WITH_CLEANUP_START(self, state, inst):
+        # state.pop()
+        state.append(inst)
+
+    def op_WITH_CLEANUP_FINISH(self, state, inst):
+        state.append(inst)
+
+    def op_SETUP_WITH(self, state, inst):
+        cm = state.pop()    # the context-manager
+        state.push_block({
+            'kind': 'with',
+            'end': inst.get_jump_target(),
+        })
+        state.push(cm)
+        yielded = state.make_temp()
+        state.push(yielded)
+        state.append(inst, contextmanager=cm)
+        # Forces a new block
+        state.fork(pc=inst.next)
+
+    def op_POP_BLOCK(self, state, inst):
+        state.pop_block()
+
     def op_BINARY_SUBSCR(self, state, inst):
         index = state.pop()
         target = state.pop()
@@ -684,13 +714,13 @@ class Runner(object):
 
 
 class State(object):
-    def __init__(self, bytecode, pc, nstack):
+    def __init__(self, bytecode, pc, nstack, blockstack):
         self._bytecode = bytecode
         self._pc_initial = pc
         self._pc = pc
         self._nstack_initial = nstack
         self._stack = []
-        self._blockstack = []
+        self._blockstack = list(blockstack)
         self._temp_registers = []
         self._insts = []
         self._outedges = []
@@ -772,6 +802,15 @@ class State(object):
         """Pop the stack"""
         return self._stack.pop()
 
+    def push_block(self, synblk):
+        d = synblk.copy()
+        d['stack_depth'] = len(self._stack)
+        self._blockstack.append(d)
+
+    def pop_block(self):
+        b = self._blockstack.pop()
+        self._stack = self._stack[:b['stack_depth']]
+
     def get_varname(self, inst):
         """Get referenced variable name from the oparg
         """
@@ -788,7 +827,8 @@ class State(object):
         assert 0 <= npop <= len(self._stack)
         nstack = len(self._stack) - npop
         stack = self._stack[:nstack]
-        self._outedges.append(Edge(pc=pc, stack=stack))
+        self._outedges.append(Edge(pc=pc, stack=stack,
+                                   blockstack=tuple(self._blockstack)))
         self.terminate()
 
     def split_new_block(self):
@@ -803,7 +843,8 @@ class State(object):
         assert not self._outgoing_phis
         ret = []
         for edge in self._outedges:
-            state = State(bytecode=self._bytecode, pc=edge.pc, nstack=len(edge.stack))
+            state = State(bytecode=self._bytecode, pc=edge.pc, nstack=len(edge.stack),
+                          blockstack=edge.blockstack)
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
@@ -811,7 +852,7 @@ class State(object):
         return ret
 
 
-Edge = namedtuple("Edge", ["pc", "stack"])
+Edge = namedtuple("Edge", ["pc", "stack", "blockstack"])
 
 
 class AdaptDFA(object):
