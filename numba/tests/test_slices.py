@@ -54,7 +54,6 @@ class TestSlices(MemoryLeakMixin, TestCase):
                                                         step_cases):
             check(a, b, c, d, e, f)
 
-        self.disable_leak_check()  # Exceptions leak refs
         # Some member is neither integer nor None
         with self.assertRaises(TypeError):
             cfunc(slice(1.5, 1, 1))
@@ -97,8 +96,6 @@ class TestSlices(MemoryLeakMixin, TestCase):
 
         cfunc = jit(nopython=True)(slice_indices)
 
-        self.disable_leak_check()  # Exceptions leak references
-
         for s, l in product(slices, lengths):
             if l < 0 and not utils.IS_PY3:
                 # Passing a negative length to slice.indices in python2 is
@@ -115,8 +112,6 @@ class TestSlices(MemoryLeakMixin, TestCase):
     def test_slice_indices_examples(self):
         """Test that a numba slice returns same result for .indices as a python one."""
         cslice_indices = jit(nopython=True)(slice_indices)
-
-        self.disable_leak_check()  # Exceptions leak references
 
         # slice.indices shouldn't allow negative lengths
         if utils.IS_PY3:
