@@ -12,6 +12,7 @@ jobs:
         PYTHON: '2.7'
         NUMPY: '1.16'
         CONDA_ENV: 'travisci'
+        CFLAGS:  "${CFLAGS} -isysroot /"
         #      py37_np16:
         #        PYTHON: '3.7'
         #        NUMPY: '1.16'
