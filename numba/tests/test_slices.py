@@ -5,7 +5,7 @@ from itertools import chain, product, starmap
 import sys
 
 from numba import unittest_support as unittest
-from numba import jit, typeof, utils
+from numba import jit, typeof, utils, TypingError
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -16,8 +16,8 @@ def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
-def slice_indices(s, l):
-    return s.indices(l)
+def slice_indices(s, *indargs):
+    return s.indices(*indargs)
 
 
 class TestSlices(MemoryLeakMixin, TestCase):
@@ -103,39 +103,33 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 continue
             try:
                 expected = slice_indices(s, l)
-            except Exception as e:
-                with self.assertRaises(type(e)):
+            except Exception as py_e:
+                with self.assertRaises(type(py_e)) as numba_e:
                     cfunc(s, l)
+                self.assertIn(
+                    str(py_e),
+                    str(numba_e.exception)
+                )
             else:
                 self.assertPreciseEqual(expected, cfunc(s, l))
 
     def test_slice_indices_examples(self):
-        """Test that a numba slice returns same result for .indices as a python one."""
+        """Tests for specific error cases."""
         cslice_indices = jit(nopython=True)(slice_indices)
 
-        # slice.indices shouldn't allow negative lengths
-        if utils.IS_PY3:
-            with self.assertRaises(ValueError):
-                cslice_indices(slice(None), -5)
+        with self.assertRaises(TypingError) as e:
+            cslice_indices(slice(None), 1, 2, 3)
+        self.assertIn(
+             "indices() takes exactly one argument (3 given)",
+             str(e.exception)
+        )
 
-        # slice.indices shouldn't allow steps of 0
-        with self.assertRaises(ValueError):
-            cslice_indices(slice(None, None, 0), 0)
-
-        for args, length, expected in [
-            ((None, None), 5, (0, 5, 1)),
-            ((2, 3, 1), 10, (2, 3, 1)),
-            ((None, 5, 2), 10, (0, 5, 2)),
-            ((None, None, 3), 2, (0, 2, 3))
-        ]:
-            self.assertPreciseEqual(
-                cslice_indices(slice(*args), length),
-                expected
-            )
-            self.assertPreciseEqual(
-                cslice_indices(slice(*slice_constructor(*args)), length),
-                expected
-            )
+        with self.assertRaises(TypingError) as e:
+            cslice_indices(slice(None, None, 0), 1.2)
+        self.assertIn(
+            "'%s' object cannot be interpreted as an integer" % typeof(1.2),
+            str(e.exception)
+        )
 
 
 if __name__ == '__main__':

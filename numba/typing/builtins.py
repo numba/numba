@@ -729,6 +729,15 @@ class SliceAttribute(AttributeTemplate):
     @bound_function("slice.indices")
     def resolve_indices(self, ty, args, kws):
         assert not kws
+        if len(args) != 1:
+            raise TypeError(
+                "indices() takes exactly one argument (%d given)" % len(args)
+            )
+        typ, = args
+        if not isinstance(typ, types.Integer):
+            raise TypeError(
+                "'%s' object cannot be interpreted as an integer" % typ
+            )
         return signature(types.UniTuple(types.intp, 3), types.intp)
 
 
