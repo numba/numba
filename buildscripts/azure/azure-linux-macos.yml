@@ -23,6 +23,7 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
+        export CFLAGS="${CFLAGS} ${CFLAGS_EXTRA_001}"
         buildscripts/incremental/build.sh
       displayName: 'Build'
 
