@@ -11,6 +11,7 @@ from numba import unittest_support as unittest
 from numba.errors import TypingError
 from numba import config
 from numba import njit
+from numba import types
 from numba import utils
 from numba.numpy_support import version as numpy_version
 from .support import MemoryLeakMixin, TestCase, tag
@@ -576,6 +577,16 @@ class ConstructorBaseTest(NrtRefCtTest):
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
+    def check_alloc_size(self, pyfunc):
+        """Checks that pyfunc will error, not segfaulting due to array size."""
+        cfunc = nrtjit(pyfunc)
+        with self.assertRaises(ValueError) as e:
+            cfunc()
+        self.assertIn(
+            "array is too big",
+            str(e.exception)
+        )
+
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
 
@@ -640,6 +651,15 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
         self.check_2d(func)
+
+    def test_alloc_size(self):
+        pyfunc = self.pyfunc
+        width = types.intp.bitwidth
+        def gen_func(shape, dtype):
+            return lambda : pyfunc(shape, dtype)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, np.intp))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), np.intp))
 
 
 class TestNdOnes(TestNdZeros):
@@ -717,6 +737,14 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             cfunc = nrtjit(lambda m, n: np.full((m, n), 4.5))
             with self.assertRaises(ValueError):
                 cfunc(np.int64(1 << (32 - 1)), 1)
+
+    def test_alloc_size(self):
+        width = types.intp.bitwidth
+        def gen_func(shape, value):
+            return lambda : np.full(shape, value)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, 1))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
 
 
 class ConstructorLikeBaseTest(object):

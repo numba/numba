@@ -3337,8 +3337,13 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
     # compute array length
     arrlen = context.get_constant(types.intp, 1)
+    overflow = ir.Constant(ir.IntType(1), 0)
     for s in shapes:
-        arrlen = builder.mul(arrlen, s)
+        arrlen_mult = builder.smul_with_overflow(arrlen, s)
+        arrlen = builder.extract_value(arrlen_mult, 0)
+        overflow = builder.or_(
+            overflow, builder.extract_value(arrlen_mult, 1)
+        )
 
     if arrtype.ndim == 0:
         strides = ()
@@ -3357,7 +3362,20 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
             "Don't know how to allocate array with layout '{0}'.".format(
                 arrtype.layout))
 
-    allocsize = builder.mul(itemsize, arrlen)
+    # Check overflow, numpy also does this after checking order
+    allocsize_mult = builder.smul_with_overflow(arrlen, itemsize)
+    allocsize = builder.extract_value(allocsize_mult, 0)
+    overflow = builder.or_(overflow, builder.extract_value(allocsize_mult, 1))
+
+    with builder.if_then(overflow, likely=False):
+        # Raise same error as numpy, see:
+        # https://github.com/numpy/numpy/blob/2a488fe76a0f732dc418d03b452caace161673da/numpy/core/src/multiarray/ctors.c#L1095-L1101    # noqa: E501
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("array is too big; `arr.size * arr.dtype.itemsize` is larger than"
+             " the maximum possible size.",)
+        )
+
     align = context.get_preferred_array_alignment(arrtype.dtype)
     meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
                                                 align=align)
