@@ -1,18 +1,21 @@
 """
 Implement python 3.8+ bytecode analysis
 """
+
+from pprint import pformat
 import logging
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 from numba.utils import UniqueDict, PYVERSION
 from numba.controlflow import NEW_BLOCKERS
 
 
 _logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 class Flow(object):
-    def __init__(self, bytecode):
+    def __init__(self, cfa, bytecode):
+        self._cfa = cfa
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
 
@@ -41,12 +44,94 @@ class Flow(object):
                 runner.finished.add(state)
                 out_states = state.get_outgoing_states()
                 runner.pending.extend(out_states)
+
+        self._prune_phis(runner)
         # Post process
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
-            self.block_infos[state.pc_initial] = adapt_state_infos(state)
+            self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
+            _logger.debug("block_infos %s:\n%s", state, si)
 
-        _logger.debug("block_infos: %s", self.block_infos.keys())
         assert self.block_infos
+
+    def _prune_phis(self, runner):
+        # XXX
+        # Find phis that are unused in the local block
+        _logger.debug("Prune PHIs".center(60, '-'))
+
+        # Compute dataflow for used phis and propagate
+
+        # 1. Get used-phis for each block
+        # Map block to used_phis
+        def get_used_phis_per_state():
+            used_phis = defaultdict(set)
+            phi_set = set()
+            for state in runner.finished:
+                used = set(state._used_regs)
+                phis = set(state._phis)
+                used_phis[state] |= phis & used
+                phi_set |= phis
+            return used_phis, phi_set
+
+        used_phis, phi_set = get_used_phis_per_state()
+        _logger.debug("Used_phis: %s", pformat(used_phis))
+
+        # Find use-defs
+        def find_use_defs():
+            defmap = {}
+            phismap = defaultdict(set)
+            for state in runner.finished:
+                for phi, rhs in state._outgoing_phis.items():
+                    if rhs not in phi_set:
+                        # Is a definition
+                        defmap[phi] = state
+                    # else:
+                    phismap[phi].add((rhs, state))
+            _logger.debug("defmap: %s", pformat(defmap))
+            _logger.debug("phismap: %s", pformat(phismap))
+            return defmap, phismap
+
+        defmap, phismap = find_use_defs()
+
+        def propagate_phi_map():
+
+            while True:
+                changing = False
+                for phi, defsites in list(phismap.items()):
+                    for rhs, state in list(defsites):
+                        if rhs in phi_set:
+                            old = frozenset(defsites)
+                            defsites |= phismap[rhs]
+                            defsites.discard((rhs, state))
+                            changing = old != defsites
+                _logger.debug("changing phismap: %s", pformat(phismap))
+
+                if not changing:
+                    break
+
+
+        propagate_phi_map()
+
+        #### WIP
+        def lastly():
+            keep = {}
+            for state, used_set in used_phis.items():
+                for phi in used_set:
+                    keep[phi] = phismap[phi]
+            _logger.debug("keep phismap: %s", pformat(keep))
+            new_out = defaultdict(dict)
+            for phi in keep:
+                for rhs, state in keep[phi]:
+                    new_out[state][phi] = rhs
+
+            _logger.debug("new_out: %s", pformat(new_out))
+            for state in runner.finished:
+                state._outgoing_phis.clear()
+                state._outgoing_phis.update(new_out[state])
+
+        lastly()
+
+
+        _logger.debug("DONE Prune PHIs".center(60, '-'))
 
     def _is_implicit_new_block(self, state):
         inst = state.get_inst()
@@ -727,6 +812,7 @@ class State(object):
         self._terminated = False
         self._phis = {}
         self._outgoing_phis = UniqueDict()
+        self._used_regs = set()
         for i in range(nstack):
             phi = self.make_temp("phi")
             self._phis[phi] = i
@@ -773,18 +859,27 @@ class State(object):
         self._pc = inst.next
 
     def make_temp(self, prefix=""):
-        name = "${prefix}{offset}{opname}.{tempct}".format(
-            prefix=prefix,
-            offset=self._pc,
-            opname=self.get_inst().opname,
-            tempct=len(self._temp_registers),
-        )
+        if not prefix:
+            name = "${prefix}{offset}{opname}.{tempct}".format(
+                prefix=prefix,
+                offset=self._pc,
+                opname=self.get_inst().opname,
+                tempct=len(self._temp_registers),
+            )
+        else:
+            name = "${prefix}{offset}.{tempct}".format(
+                prefix=prefix,
+                offset=self._pc,
+                tempct=len(self._temp_registers),
+            )
+
         self._temp_registers.append(name)
         return name
 
     def append(self, inst, **kwargs):
         """Append new inst"""
         self._insts.append((inst.offset, kwargs))
+        self._used_regs |= set(_flatten_inst_regs(kwargs.values()))
 
     def get_tos(self):
         return self.peek(1)
@@ -871,3 +966,15 @@ def adapt_state_infos(state):
     return AdaptBlockInfo(
         insts=tuple(state.instructions), outgoing_phis=state.outgoing_phis
     )
+
+
+def _flatten_inst_regs(iterable):
+    """Flatten an iterable of registers used in an instruction
+    """
+    for item in iterable:
+        if isinstance(item, str):
+            yield item
+        elif isinstance(item, list):
+            for x in _flatten_inst_regs(item):
+                yield x
+

@@ -106,7 +106,7 @@ class Interpreter(object):
         # self.dfa = dataflow.DataFlowAnalysis(self.cfa)
         # self.dfa.run()
         from numba.byteflow import Flow, AdaptDFA
-        flow = Flow(bytecode)
+        flow = Flow(self.cfa, bytecode)
         flow.run()
         self.dfa = AdaptDFA(flow)
 
