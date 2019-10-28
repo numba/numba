@@ -15,6 +15,7 @@ _logger = logging.getLogger(__name__)
 
 class Flow(object):
     def __init__(self, bytecode):
+        _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
 
@@ -29,6 +30,8 @@ class Flow(object):
             _logger.debug("pending: %s", runner.pending)
             state = runner.pending.pop()
             if state not in runner.finished:
+
+                _logger.debug("stack: %s", state._stack)
                 first_encounter[state.pc_initial] = state
                 while True:
                     runner.dispatch(state)
@@ -483,7 +486,12 @@ class Runner(object):
         state.append(inst)
 
     def op_END_FINALLY(self, state, inst):
+        state.pop()
         state.append(inst)
+
+    def op_POP_FINALLY(self, state, inst):
+        assert inst.arg == 0
+        pass #state.append(inst)
 
     def op_WITH_CLEANUP_START(self, state, inst):
         # state.pop()
@@ -494,14 +502,17 @@ class Runner(object):
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
+        state.push(cm)
+
+        yielded = state.make_temp()
+        state.push(yielded)
+        state.append(inst, contextmanager=cm)
+
         state.push_block({
             'kind': 'with',
             'end': inst.get_jump_target(),
         })
-        state.push(cm)
-        yielded = state.make_temp()
-        state.push(yielded)
-        state.append(inst, contextmanager=cm)
+
         # Forces a new block
         state.fork(pc=inst.next)
 
@@ -918,7 +929,9 @@ class State(object):
 
     def pop_block(self):
         b = self._blockstack.pop()
-        self._stack = self._stack[:b['stack_depth']]
+        new_stack = self._stack[:b['stack_depth']]
+        _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack, new_stack)
+        self._stack = new_stack
 
     def get_varname(self, inst):
         """Get referenced variable name from the oparg
