@@ -459,8 +459,10 @@ def _launch_threads():
 
 def set_num_threads(n):
     if n > NUM_THREADS or n < 0:
-        raise ValueError("The number of threads must be between 0 and %s" % NUM_THREADS)
+        raise ValueError("The number of threads must be between 0 and %s" %
+                         NUM_THREADS)
     _set_num_threads(n)
+
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
