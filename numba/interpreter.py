@@ -99,8 +99,7 @@ class Interpreter(object):
         # Control flow analysis
         # self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         # self.cfa.run()
-        # if config.DUMP_CFG:
-        #     self.cfa.dump()
+
         # self.cfa.dump()
 
         # Data flow analysis
@@ -111,6 +110,8 @@ class Interpreter(object):
         flow.run()
         self.dfa = AdaptDFA(flow)
         self.cfa = AdaptCFA(flow)
+        if config.DUMP_CFG:
+            self.cfa.dump()
 
         # Temp states during interpretation
         self.current_block = None
@@ -138,10 +139,10 @@ class Interpreter(object):
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
-            firstinst = self.bytecode[block.body[0]]
             self._start_new_block(block.offset)
             if blkct == 0:
                 # Is first block
+                firstinst = self.bytecode[block.body[0]]
                 self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:

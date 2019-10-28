@@ -13,6 +13,15 @@ from numba.controlflow import NEW_BLOCKERS, CFGraph
 _logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
 
+class _lazy_pformat(object):
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def __str__(self):
+        return pformat(*self.args, **self.kwargs)
+
+
 class Flow(object):
     def __init__(self, bytecode):
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
@@ -90,7 +99,7 @@ class Flow(object):
             return used_phis, phi_set
 
         used_phis, phi_set = get_used_phis_per_state()
-        _logger.debug("Used_phis: %s", pformat(used_phis))
+        _logger.debug("Used_phis: %s", _lazy_pformat(used_phis))
 
         # Find use-defs
         def find_use_defs():
@@ -103,8 +112,8 @@ class Flow(object):
                         defmap[phi] = state
                     # else:
                     phismap[phi].add((rhs, state))
-            _logger.debug("defmap: %s", pformat(defmap))
-            _logger.debug("phismap: %s", pformat(phismap))
+            _logger.debug("defmap: %s", _lazy_pformat(defmap))
+            _logger.debug("phismap: %s", _lazy_pformat(phismap))
             return defmap, phismap
 
         defmap, phismap = find_use_defs()
@@ -120,7 +129,7 @@ class Flow(object):
                             defsites |= phismap[rhs]
                             defsites.discard((rhs, state))
                             changing = old != defsites
-                _logger.debug("changing phismap: %s", pformat(phismap))
+                _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
 
                 if not changing:
                     break
@@ -134,13 +143,13 @@ class Flow(object):
             for state, used_set in used_phis.items():
                 for phi in used_set:
                     keep[phi] = phismap[phi]
-            _logger.debug("keep phismap: %s", pformat(keep))
+            _logger.debug("keep phismap: %s", _lazy_pformat(keep))
             new_out = defaultdict(dict)
             for phi in keep:
                 for rhs, state in keep[phi]:
                     new_out[state][phi] = rhs
 
-            _logger.debug("new_out: %s", pformat(new_out))
+            _logger.debug("new_out: %s", _lazy_pformat(new_out))
             for state in runner.finished:
                 state._outgoing_phis.clear()
                 state._outgoing_phis.update(new_out[state])
@@ -204,6 +213,15 @@ class Runner(object):
         res = state.make_temp(name)
         state.append(inst, res=res)
         state.push(res)
+
+    def op_DELETE_ATTR(self, state, inst):
+        target = state.pop()
+        state.append(inst, target=target)
+
+    def op_STORE_ATTR(self, state, inst):
+        target = state.pop()
+        value = state.pop()
+        state.append(inst, target=target, value=value)
 
     def op_STORE_DEREF(self, state, inst):
         value = state.pop()
@@ -537,6 +555,11 @@ class Runner(object):
         target = state.pop()
         value = state.pop()
         state.append(inst, target=target, index=index, value=value)
+
+    def op_DELETE_SUBSCR(self, state, inst):
+        index = state.pop()
+        target = state.pop()
+        state.append(inst, target=target, index=index)
 
     def op_CALL_FUNCTION(self, state, inst):
         narg = inst.arg
@@ -894,7 +917,7 @@ class State(object):
             name = "${prefix}{offset}{opname}.{tempct}".format(
                 prefix=prefix,
                 offset=self._pc,
-                opname=self.get_inst().opname,
+                opname=self.get_inst().opname.lower(),
                 tempct=len(self._temp_registers),
             )
         else:
@@ -1045,6 +1068,8 @@ class AdaptCFA(object):
         for b in sorted(self.blocks):
             yield self.blocks[b]
 
+    def dump(self):
+        self._flow.cfgraph.dump()
 
 
 class AdaptCFBlock(object):
