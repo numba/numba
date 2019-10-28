@@ -40,7 +40,7 @@ conda remove --all -q -y -n $CONDA_ENV
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip pytest pytest-xdist gitpython
 
 # Activate first
 set +v

@@ -50,7 +50,7 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_parfors_unsupported = pytest.mark.skipif(_32bit or _windows_py27,
-                                              reaso=_reason)
+                                              reason=_reason)
 
 
 class CompilationCache(object):

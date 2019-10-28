@@ -13,8 +13,7 @@ def _work(slice_common=None, nprocs=None):
     # imported modules are cached, seems like this would be safe as the test
     # runner is being run as a batch job
 
-    common_args = ['-rs', '--collect-only', "--durations=0", "--strict",
-                   'numba/tests']
+    common_args = ['-rs', "--durations=0", "--strict", 'numba/tests']
 
     if nprocs is not None:
         common_args = ['-n', nprocs] + common_args
