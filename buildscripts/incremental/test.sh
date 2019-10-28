@@ -55,6 +55,8 @@ fi
 archstr=`uname -m`
 if [[ "$archstr" == 'ppc64le' ]]; then
     TEST_NPROCS=16
+else
+    TEST_NPROCS=2
 fi
 
 # First check that the test discovery works
