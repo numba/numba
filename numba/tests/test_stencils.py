@@ -1268,7 +1268,8 @@ class pyStencilGenerator:
                 vararg=None,
                 kwarg=None,
                 kwonlyargs=[],
-                kw_defaults=[])
+                kw_defaults=[],
+                posonlyargs=[])
             new = ast.FunctionDef(
                 name='__%s' %
                 node.name,
