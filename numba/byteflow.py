@@ -472,6 +472,12 @@ class Runner(object):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
 
+    def op_YIELD_VALUE(self, state, inst):
+        val = state.pop()
+        res = state.make_temp()
+        state.append(inst, value=val, res=res)
+        state.push(res)
+
     def op_RAISE_VARARGS(self, state, inst):
         if inst.arg == 0:
             exc = None
