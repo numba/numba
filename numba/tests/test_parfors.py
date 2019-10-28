@@ -1470,6 +1470,16 @@ class TestParfors(TestParforsBase):
         msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
 
+    @skip_unsupported
+    @tag('important')
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
