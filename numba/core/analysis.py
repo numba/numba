@@ -347,6 +347,21 @@ def dead_branch_prune(func_ir, called_args):
         taken = do_prune(take_truebr, blk)
         return True, taken
 
+    def prune_by_predicate(branch, pred, blk):
+        try:
+            # Just to prevent accidents, whilst already guarded, ensure this
+            # is an ir.Const
+            if not isinstance(pred, (ir.Const, ir.FreeVar, ir.Global)):
+                raise TypeError
+            take_truebr = bool(pred.value)
+        except Exception:
+            return False, None
+        if DEBUG > 0:
+            kill = branch.falsebr if take_truebr else branch.truebr
+            print("Pruning %s" % kill, branch, pred)
+        taken = do_prune(take_truebr, blk)
+        return True, taken
+
     class Unknown(object):
         pass
 
@@ -383,6 +398,7 @@ def dead_branch_prune(func_ir, called_args):
     # if the condition is met it will replace the branch with a jump
     branch_info = find_branches(func_ir)
     nullified_conditions = [] # stores conditions that have no impact post prune
+
     for branch, condition, blk in branch_info:
         const_conds = []
         if isinstance(condition, ir.Expr) and condition.op == 'binop':
@@ -411,6 +427,21 @@ def dead_branch_prune(func_ir, called_args):
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
+                if(prune_stat):
+                    # add the condition to the list of nullified conditions
+                    nullified_conditions.append((condition, taken))
+        else:
+            # see if this is a branch on a constant value predicate
+            resolved_const = Unknown()
+            try:
+                resolved_const = find_const(func_ir, branch.cond)
+                if resolved_const is None:
+                    resolved_const = types.NoneType('none')
+            except GuardException:
+                pass
+
+            if not isinstance(resolved_const, Unknown):
+                prune_stat, taken = prune_by_predicate(branch, condition, blk)
                 if(prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append((condition, taken))
