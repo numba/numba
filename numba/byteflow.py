@@ -7,15 +7,14 @@ import logging
 from collections import namedtuple, defaultdict
 
 from numba.utils import UniqueDict, PYVERSION
-from numba.controlflow import NEW_BLOCKERS
+from numba.controlflow import NEW_BLOCKERS, CFGraph
 
 
 _logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
 
 class Flow(object):
-    def __init__(self, cfa, bytecode):
-        self._cfa = cfa
+    def __init__(self, bytecode):
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
 
@@ -45,6 +44,9 @@ class Flow(object):
                 out_states = state.get_outgoing_states()
                 runner.pending.extend(out_states)
 
+        # Complete Controlflow
+        self._build_cfg(runner.finished)
+
         self._prune_phis(runner)
         # Post process
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
@@ -52,6 +54,18 @@ class Flow(object):
             _logger.debug("block_infos %s:\n%s", state, si)
 
         assert self.block_infos
+
+    def _build_cfg(self, all_states):
+        graph = CFGraph()
+        for state in all_states:
+            b = state.pc_initial
+            graph.add_node(b)
+        for state in all_states:
+            for edge in state.outgoing_edges:
+                graph.add_edge(state.pc_initial, edge.pc, 0)
+        graph.set_entry_point(0)
+        graph.process()
+        self.cfgraph = graph
 
     def _prune_phis(self, runner):
         # XXX
@@ -978,3 +992,43 @@ def _flatten_inst_regs(iterable):
             for x in _flatten_inst_regs(item):
                 yield x
 
+
+
+class AdaptCFA(object):
+    def __init__(self, flow):
+        self._flow = flow
+        self._blocks = {}
+        for offset, blockinfo in flow.block_infos.items():
+            self._blocks[offset] = AdaptCFBlock(blockinfo, offset)
+        backbone = self._flow.cfgraph.backbone()
+
+        graph = flow.cfgraph
+        # Find backbone
+        backbone = graph.backbone()
+        # Filter out in loop blocks (Assuming no other cyclic control blocks)
+        # This is to unavoid variable defined in loops to be considered as
+        # function scope.
+        inloopblocks = set()
+        for b in self.blocks.keys():
+            if graph.in_loops(b):
+                inloopblocks.add(b)
+        self._backbone = backbone - inloopblocks
+
+    @property
+    def backbone(self):
+        return self._backbone
+
+    @property
+    def blocks(self):
+        return self._blocks
+
+    def iterliveblocks(self):
+        for b in sorted(self.blocks):
+            yield self.blocks[b]
+
+
+
+class AdaptCFBlock(object):
+    def __init__(self, blockinfo, offset):
+        self.offset = offset
+        self.body = tuple(i for i, _ in blockinfo.insts)

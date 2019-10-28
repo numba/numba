@@ -97,19 +97,20 @@ class Interpreter(object):
         self.scopes.append(global_scope)
 
         # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        self.cfa.run()
-        if config.DUMP_CFG:
-            self.cfa.dump()
+        # self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+        # self.cfa.run()
+        # if config.DUMP_CFG:
+        #     self.cfa.dump()
+        # self.cfa.dump()
 
         # Data flow analysis
         # self.dfa = dataflow.DataFlowAnalysis(self.cfa)
         # self.dfa.run()
-        from numba.byteflow import Flow, AdaptDFA
-        flow = Flow(self.cfa, bytecode)
+        from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+        flow = Flow(bytecode)
         flow.run()
         self.dfa = AdaptDFA(flow)
-
+        self.cfa = AdaptCFA(flow)
 
         # Temp states during interpretation
         self.current_block = None
@@ -138,7 +139,7 @@ class Interpreter(object):
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
             firstinst = self.bytecode[block.body[0]]
-            self._start_new_block(firstinst)
+            self._start_new_block(block.offset)
             if blkct == 0:
                 # Is first block
                 self.loc = self.loc.with_lineno(firstinst.lineno)
@@ -149,19 +150,19 @@ class Interpreter(object):
                 yield inst, kws
             self._end_current_block()
 
-    def _start_new_block(self, inst):
+    def _start_new_block(self, offset):
         oldblock = self.current_block
-        self.insert_block(inst.offset)
+        self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            jmp = ir.Jump(inst.offset, loc=self.loc)
+            jmp = ir.Jump(offset, loc=self.loc)
             oldblock.append(jmp)
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
         while self.syntax_blocks:
-            if inst.offset >= self.syntax_blocks[-1].exit:
+            if offset >= self.syntax_blocks[-1].exit:
                 self.syntax_blocks.pop()
             else:
                 break
