@@ -120,20 +120,23 @@ class Flow(object):
 
         def propagate_phi_map():
 
-            while True:
-                changing = False
-                for phi, defsites in list(phismap.items()):
-                    for rhs, state in list(defsites):
+            def update():
+                for phi, defsites in phismap.items():
+                    for rhs, state in defsites:
                         if rhs in phi_set:
                             old = frozenset(defsites)
-                            defsites |= phismap[rhs]
-                            defsites.discard((rhs, state))
-                            changing = old != defsites
+                            new = (phismap[rhs] | old) - {(rhs, state)}
+                            changing = old != new
+                            if changing:
+                                return phi, new
+            while True:
+                changing = update()
+                if changing is not None:
+                    phi, defsites = changing
+                    phismap[phi] = defsites
                 _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
-
                 if not changing:
                     break
-
 
         propagate_phi_map()
 
