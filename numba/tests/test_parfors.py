@@ -9,6 +9,7 @@ from math import sqrt
 import numbers
 import re
 import sys
+import dis
 import platform
 import types as pytypes
 import warnings
@@ -19,6 +20,7 @@ import operator
 from collections import defaultdict
 
 import numba
+from numba.utils import PYVERSION
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout, MemoryLeakMixin
 from numba import njit, prange, stencil, inline_closurecall
@@ -1500,6 +1502,14 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
 
+
+def iterate_bytecode(code):
+    if PYVERSION >= (3, 4):   # available since Py3.4
+        return dis.Bytecode(code)
+    else:
+        return ByteCodeIter(code)
+
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -1527,7 +1537,7 @@ class TestPrangeBase(TestParforsBase):
             range_idx = pyfunc_code.co_names.index('range')
             range_locations = []
             # look for LOAD_GLOBALs that point to 'range'
-            for _, instr in ByteCodeIter(pyfunc_code):
+            for instr in iterate_bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
                     if instr.arg == range_idx:
                         range_locations.append(instr.offset + 1)
