@@ -142,7 +142,7 @@ def pytest_collection_modifyitems(session, config, items):
         except ImportError:
             raise ValueError("gitpython needed for git functionality")
         repo = Repo('.')
-        branch_commits = [x for x in repo.iter_commits('master..HEAD')]
+        branch_commits = [x for x in repo.iter_commits('origin/master..HEAD')]
         run = []
         for c in branch_commits:
             for fname, stat in c.stats.files.items():
