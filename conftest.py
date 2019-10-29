@@ -157,7 +157,7 @@ def pytest_collection_modifyitems(session, config, items):
         raise ValueError("Unknown type specified in `--runtype`: %s" % ty)
 
     # clobber existing items
-    items.clear()
+    del items[:]
     items.extend(keep)
 
     # use slicing if given
@@ -168,7 +168,7 @@ def pytest_collection_modifyitems(session, config, items):
         exec("sl = slice(%s)" % sls, l)
         default_slice = l['sl']
         new = items[default_slice]
-        items.clear()
+        del items[:]
         items.extend(new)
 
     print("\n", "-" * 80)
