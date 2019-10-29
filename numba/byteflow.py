@@ -13,6 +13,7 @@ from numba.controlflow import NEW_BLOCKERS, CFGraph
 _logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
 
+
 class _lazy_pformat(object):
     def __init__(self, *args, **kwargs):
         self.args = args
@@ -120,20 +121,15 @@ class Flow(object):
 
         def propagate_phi_map():
 
-            def update():
-                for phi, defsites in phismap.items():
-                    for rhs, state in defsites:
+            while True:
+                changing = False
+                for phi, defsites in sorted(list(phismap.items())):
+                    for rhs, state in sorted(list(defsites)):
                         if rhs in phi_set:
                             old = frozenset(defsites)
-                            new = (phismap[rhs] | old) - {(rhs, state)}
-                            changing = old != new
-                            if changing:
-                                return phi, new
-            while True:
-                changing = update()
-                if changing is not None:
-                    phi, defsites = changing
-                    phismap[phi] = defsites
+                            defsites |= phismap[rhs]
+                            defsites.discard((rhs, state))
+                            changing = old != defsites
                 _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
                 if not changing:
                     break
@@ -671,6 +667,14 @@ class Runner(object):
     def op_BUILD_TUPLE_UNPACK(self, state, inst):
         self._build_tuple_unpack(state, inst)
 
+    def op_BUILD_CONST_KEY_MAP(self, state, inst):
+        keys = state.pop()
+        vals = list(reversed([state.pop() for _ in range(inst.arg)]))
+        keytmps = [state.make_temp() for _ in range(inst.arg)]
+        res = state.make_temp()
+        state.append(inst, keys=keys, keytmps=keytmps, values=vals, res=res)
+        state.push(res)
+
     def op_BUILD_LIST(self, state, inst):
         count = inst.arg
         items = list(reversed([state.pop() for _ in range(count)]))
@@ -1033,7 +1037,7 @@ def _flatten_inst_regs(iterable):
     for item in iterable:
         if isinstance(item, str):
             yield item
-        elif isinstance(item, list):
+        elif isinstance(item, (tuple, list)):
             for x in _flatten_inst_regs(item):
                 yield x
 
