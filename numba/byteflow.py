@@ -8,6 +8,8 @@ from collections import namedtuple, defaultdict
 
 from numba.utils import UniqueDict, PYVERSION
 from numba.controlflow import NEW_BLOCKERS, CFGraph
+from numba.ir import Loc
+from numba.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ class Flow(object):
     def run(self):
         firststate = State(bytecode=self._bytecode, pc=0, nstack=0,
                            blockstack=())
-        runner = Runner()
+        runner = Runner(debug_filename=self._bytecode.func_id.filename)
         runner.pending.append(firststate)
 
         first_encounter = UniqueDict()
@@ -170,15 +172,21 @@ class Flow(object):
 
 
 class Runner(object):
-    def __init__(self):
+    def __init__(self, debug_filename):
+        self.debug_filename = debug_filename
         self.pending = []
         self.finished = set()
 
     def dispatch(self, state):
         inst = state.get_inst()
         _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
-        fn = getattr(self, "op_{}".format(inst.opname))
-        fn(state, inst)
+        fn = getattr(self, "op_{}".format(inst.opname), None)
+        if fn is not None:
+            fn(state, inst)
+        else:
+            l = Loc(self.debug_filename, inst.lineno)
+            msg = "Use of unsupported opcode (%s) found" % inst.opname
+            raise UnsupportedError(msg, loc=l)
 
     def op_NOP(self, state, inst):
         state.append(inst)
