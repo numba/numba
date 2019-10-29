@@ -559,7 +559,7 @@ def unicode_rfind(s, substr, start=None, end=None):
         elif isinstance(ty, types.Optional):
             thety = ty.type
 
-        accepted = (types.Integer, int, types.NoneType)
+        accepted = (types.Integer, types.NoneType)
         if thety is not None and not isinstance(thety, accepted):
             raise TypingError(
                 '"{}" must be {}, not {}'.format(name, accepted, ty))

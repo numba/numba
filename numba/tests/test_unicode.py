@@ -577,11 +577,20 @@ class TestUnicode(BaseTest):
 
         for s in UNICODE_EXAMPLES:
             for sub_str in ['', 'xx', s[:-2], s[3:], s]:
-                for start, end in product([0.1, False], [-0.1, True, None]):
+                for start, end in product([0.1, False], [-1, 1]):
                     with self.assertRaises(TypingError) as raises:
                         cfunc(s, sub_str, start, end)
-                    accepted_types = (types.Integer, int, types.NoneType)
-                    msg = 'must be {}'.format(accepted_types)
+                    accepted_types = (types.Integer, types.NoneType)
+                    msg = '"start" must be {}'.format(accepted_types)
+                    self.assertIn(msg, str(raises.exception))
+
+        for s in UNICODE_EXAMPLES:
+            for sub_str in ['', 'xx', s[:-2], s[3:], s]:
+                for start, end in product([-1, 1], [-0.1, True]):
+                    with self.assertRaises(TypingError) as raises:
+                        cfunc(s, sub_str, start, end)
+                    accepted_types = (types.Integer, types.NoneType)
+                    msg = '"end" must be {}'.format(accepted_types)
                     self.assertIn(msg, str(raises.exception))
 
     def test_rfind_with_start_end_optional(self):
@@ -605,7 +614,7 @@ class TestUnicode(BaseTest):
     def test_rfind_wrong_start_end_optional(self):
         s = UNICODE_EXAMPLES[0]
         sub_str = s[1:-1]
-        accepted_types = (types.Integer, int, types.NoneType)
+        accepted_types = (types.Integer, types.NoneType)
         msg = 'must be {}'.format(accepted_types)
 
         def try_compile_wrong_start_optional(*args):
