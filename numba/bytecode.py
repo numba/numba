@@ -212,7 +212,7 @@ class ByteCode(object):
         """
         for offset, lineno in dis.findlinestarts(code):
             if offset in table:
-                table[offset].lineno = lineno
+                table[offset + _FIXED_OFFSET].lineno = lineno
         known = -1
         for inst in table.values():
             if inst.lineno >= 0:
