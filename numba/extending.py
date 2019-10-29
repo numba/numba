@@ -44,6 +44,7 @@ def type_callable(func):
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
+        return typing_func
 
     return decorate
 
