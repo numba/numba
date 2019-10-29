@@ -40,12 +40,24 @@ conda remove --all -q -y -n $CONDA_ENV
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip pytest pytest-xdist gitpython
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+
 
 # Activate first
 set +v
 source activate $CONDA_ENV
 set -v
+
+
+# Needed for CI:
+# pytest/attrs has some brokenness on the linux32 systems
+# https://github.com/pytest-dev/pytest/issues/3280
+if [[ $(uname) == "Linux" && ("$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes") ]] ; then
+    $CONDA_INSTALL pytest pytest-xdist gitpython attrs==19.1.0
+else
+    $CONDA_INSTALL pytest pytest-xdist gitpython
+fi
+
 
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
