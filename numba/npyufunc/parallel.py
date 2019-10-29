@@ -458,6 +458,8 @@ def _launch_threads():
 
 
 def set_num_threads(n):
+    _launch_threads()
+
     if n > NUM_THREADS or n < 0:
         raise ValueError("The number of threads must be between 0 and %s" %
                          NUM_THREADS)
