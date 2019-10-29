@@ -28,10 +28,16 @@ def _work(slice_common=None, nprocs=None):
     common_extra = ['--runtype=common']
     if slice_common is not None:
         common_extra.append('--slice=%s' % slice_common)
-    pytest.main(common_args + common_extra,)
+    stat = pytest.main(common_args + common_extra,)
+    if stat:
+        msg = "Failing early. Testing subset target %s" % "common"
+        raise RuntimeError(msg, stat)
 
     # then the specific ones
-    pytest.main(common_args + ['--runtype=specific'],)
+    stat = pytest.main(common_args + ['--runtype=specific'],)
+    if stat:
+        msg = "Failing early. Testing subset target %s" % "specific"
+        raise RuntimeError(msg, stat)
 
 if __name__ == "__main__":
     import argparse
