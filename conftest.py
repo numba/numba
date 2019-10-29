@@ -120,21 +120,21 @@ def pytest_collection_modifyitems(session, config, items):
         # marker considered "special" is the use of 'serial' as a marker by
         # itself.
         for item in items:
-            if item.own_markers:
+            if getattr(item, 'own_markers', False):
                 if not (len(item.own_markers) == 1 and
                         item.own_markers[0].name == "serial"):
                     keep.append(item)
     elif ty == "serial":
         # anything with 'serial' in the markers is considered serial
         for item in items:
-            if item.own_markers:
+            if getattr(item, 'own_markers', False):
                 for mark in item.own_markers:
                     if mark.name == "serial":
                         keep.append(item)
     elif ty == "common":
         # anything unmarked is 'common'
         for item in items:
-            if not item.own_markers:
+            if not getattr(item, 'own_markers', False):
                 keep.append(item)
     elif ty == "gitdiff":
         try:
