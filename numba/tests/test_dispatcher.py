@@ -1362,8 +1362,8 @@ class TestCache(BaseCacheUsecasesTest):
 
     @skip_bad_access
     @pytest.mark.skipif(os.name == "nt",
-                        reason=\
-                        "cannot easily make a directory read-only on Windows")
+                        reason=("cannot easily make a directory read-only on "
+                                "Windows"))
     def test_non_creatable_pycache(self):
         # Make it impossible to create the __pycache__ directory
         old_perms = os.stat(self.tempdir).st_mode
@@ -1374,8 +1374,8 @@ class TestCache(BaseCacheUsecasesTest):
 
     @skip_bad_access
     @pytest.mark.skipif(os.name == "nt",
-                        reason=\
-                        "cannot easily make a directory read-only on Windows")
+                        reason=("cannot easily make a directory read-only on "
+                                "Windows"))
     def test_non_writable_pycache(self):
         # Make it impossible to write to the __pycache__ directory
         pycache = os.path.join(self.tempdir, '__pycache__')

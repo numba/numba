@@ -19,7 +19,7 @@ from numba import int32, types
 from numba.errors import TypingError
 from numba import listobject
 from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import TestCase, MemoryLeakMixin
 
 skip_py2 = pytest.mark.skipif(not IS_PY3, reason='not supported in py2')
 

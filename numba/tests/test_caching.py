@@ -6,7 +6,6 @@ import multiprocessing as mp
 
 from numba import njit
 from .support import (
-    unittest,
     TestCase,
     SerialMixin,
     run_in_new_process_caching
