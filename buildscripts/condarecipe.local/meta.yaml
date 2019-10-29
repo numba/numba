@@ -51,6 +51,9 @@ requirements:
     - libopenblas !=0.3.6      # [x86_64]
 test:
   requires:
+    - pytest
+    - pytest-xdist
+    - attrs ==19.1.0           #  [x86]
     - jinja2
     # Required to test optional Numba features
     - cffi

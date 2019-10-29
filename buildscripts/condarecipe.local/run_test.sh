@@ -20,6 +20,8 @@ fi
 archstr=`uname -m`
 if [[ "$archstr" == 'ppc64le' ]]; then
     TEST_NPROCS=16
+else
+    TEST_NPROCS=4
 fi
 
 # Check Numba executables are there
@@ -30,8 +32,8 @@ numba -h
 numba -s
 
 # Check test discovery works
-python -m numba.tests.test_runtests
+# python -m numba.tests.test_runtests
 
 # Run the whole test suite
 echo "Running: $SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- $TESTS_TO_RUN"
-$SEGVCATCH python -m numba.runtests -b -m $TEST_NPROCS -- $TESTS_TO_RUN
+$SEGVCATCH ./runtests.py --slice-common=0,None,500 -m $TEST_NPROCS -- $TESTS_TO_RUN
