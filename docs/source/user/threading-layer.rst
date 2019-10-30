@@ -167,3 +167,21 @@ system level libraries, some additional things to note:
   threading layer.
 * For Windows users running Python 2.7, the ``tbb`` threading layer is not
   available.
+
+Masking Threads
+---------------
+
+The number of threads used by numba is based on the number of CPU cores
+available (``multiprocessing.cpu_count()``), but it can be overridden with the
+:envvar:`NUMBA_NUM_THREADS` environment variable.
+
+The total number of threads is in the variable
+:obj:`numba.npyufunc.parallel.NUM_THREADS`:
+
+.. autodata:: numba.npyufunc.parallel.NUM_THREADS
+   :annotation:
+
+This total can be masked to a smaller number using
+:func:`numba.npyufunc.parallel.set_num_threads`:
+
+.. autofunction:: numba.npyufunc.parallel.set_num_threads

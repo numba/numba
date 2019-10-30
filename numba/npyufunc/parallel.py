@@ -39,7 +39,10 @@ def get_thread_count():
         raise ValueError("Number of threads specified must be > 0.")
     return t
 
-
+#: The total (maximum) number of threads used by numba parallel.
+#:
+#: Defaults to the number of cores but can be overridden with the
+#: envvar:`NUMBA_NUM_THREADS` environment variable.
 NUM_THREADS = get_thread_count()
 
 
@@ -458,6 +461,29 @@ def _launch_threads():
 
 
 def set_num_threads(n):
+    """
+    Set the number of threads to use for parallel execution
+
+    This functionality works by masking out threads that are not used.
+    Therefore, the number of threads *n* must be less than or equal to the
+    total number of threads that are launched, which is set to the number of
+    cores by default but can be configured with the
+    :envvar:`NUMBA_NUM_THREADS` environment variable. See the
+    :func:`get_thread_count` function.
+
+    Parameters
+    ----------
+    n: The number of threads. Must be between 1 and :obj:`numba.npyufunc.parallel.NUM_THREADS`.
+
+    Returns
+    -------
+    The old number of threads.
+
+    See Also
+    --------
+    get_num_threads, NUM_THREADS
+
+    """
     _launch_threads()
 
     if n > NUM_THREADS or n < 1:
