@@ -450,9 +450,13 @@ def _launch_threads():
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
+
             global _set_num_threads
             _set_num_threads = CFUNCTYPE(c_int, c_int)(lib.set_num_threads)
             _set_num_threads(NUM_THREADS)
+
+            global _get_num_threads
+            _get_num_threads = CFUNCTYPE(c_int)(lib.set_num_threads)
 
             # set library name so it can be queried
             global _threading_layer
@@ -490,6 +494,29 @@ def set_num_threads(n):
         raise ValueError("The number of threads must be between 1 and %s" %
                          NUM_THREADS)
     return _set_num_threads(n)
+
+
+def get_num_threads():
+    """
+    Get the number of threads used for parallel execution.
+
+    By default (if :func:`~.set_num_threads` is never called), all
+    :obj:`numba.npyufunc.parallel.NUM_THREADS` threads are used.
+
+    This number is less than or equal to the total number of threads that are
+    launched, :obj:`numba.npyufunc.parallel.NUM_THREADS`.
+
+    Returns
+    -------
+    The number of threads.
+
+    See Also
+    --------
+    set_num_threads, NUM_THREADS
+
+    """
+    _launch_threads()
+    return _get_num_threads()
 
 
 @njit
