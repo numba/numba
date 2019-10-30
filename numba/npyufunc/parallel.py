@@ -448,7 +448,7 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
             global _set_num_threads
-            _set_num_threads = CFUNCTYPE(None, c_int)(lib.set_num_threads)
+            _set_num_threads = CFUNCTYPE(c_int, c_int)(lib.set_num_threads)
             _set_num_threads(NUM_THREADS)
 
             # set library name so it can be queried
@@ -463,7 +463,7 @@ def set_num_threads(n):
     if n > NUM_THREADS or n < 1:
         raise ValueError("The number of threads must be between 1 and %s" %
                          NUM_THREADS)
-    _set_num_threads(n)
+    return _set_num_threads(n)
 
 
 @njit
@@ -474,7 +474,7 @@ def _set_num_threads_jit(n):
     It does not check that n is in the right range and it will fail if
     _launch_threads() has not already been called.
     """
-    _set_num_threads(n)
+    return _set_num_threads(n)
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))

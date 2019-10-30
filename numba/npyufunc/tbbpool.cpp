@@ -215,9 +215,11 @@ static void ready(void)
 {
 }
 
-static void set_num_threads(int count)
+static int set_num_threads(int count)
 {
+    int old_num_threads = num_threads;
     num_threads = count;
+    return old_num_threads;
 }
 
 static int get_num_threads(void)
