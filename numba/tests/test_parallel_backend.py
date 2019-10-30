@@ -62,7 +62,7 @@ _gnuomp = _HAVE_OMP_POOL and omppool.openmp_vendor == "GNU"
 skip_unless_gnu_omp = pytest.mark.skipif(not _gnuomp,
                                          reason="GNU OpenMP only tests")
 
-skip_unless_py3 = pytest.mark.skipif(utils.PYVERSION >= (3, 0),
+skip_unless_py3 = pytest.mark.skipif(not utils.PYVERSION >= (3, 0),
                                      reason="Test runs on Python 3 only")
 
 _windows = sys.platform.startswith('win')
