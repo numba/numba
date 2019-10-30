@@ -5,9 +5,10 @@ source activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
-# Check if we are on MACOSX and Python 2.7 and reset -isysroot if so.
-if  [ "$(uname -a)" == "Darwin" ] and \
-    [ "$(python -V 2>&1 | grep -o \"Python \\d\")" == "Python 2" ]; then
+# Check if we are on MACOSX and Python 2.7 and reset -isysroot if so
+UNAME=$(uname -a)
+PYVERSION=$(python -V 2>&1 | grep -o "Python \d")
+if [ "$UNAME"  = "Darwin" ] && [ "$PYVERSION" = "Python 2" ]; then
     export CFLAGS="${CFLAGS} -isysroot /"
 fi
 
