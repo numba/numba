@@ -34,7 +34,7 @@ else:
     imatmul_usecase = None
 
 needs_matmul = pytest.mark.skipif(
-    has_matmul,
+    not has_matmul,
     reason=("the matrix multiplication operator needs Python 3.5+ and "
             "Numpy 1.10+"))
 
