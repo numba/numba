@@ -23,10 +23,10 @@ python -m numba.tests.test_runtests
 if "%RUN_COVERAGE%" == "yes" (
     set PYTHONPATH=.
     coverage erase
-    coverage run runtests.py -b --exclude-tags='long_running' -m 4 -- numba.tests
+    coverage run python runtests.py --slice-common=0,None,500 -m 4
 ) else (
     set NUMBA_ENABLE_CUDASIM=1
-    python runtests.py -b --exclude-tags='long_running' -m 4 -- numba.tests
+    python runtests.py --slice-common=0,None,500 -m 4
 )
 
 if %errorlevel% neq 0 exit /b %errorlevel%
