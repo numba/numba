@@ -150,6 +150,7 @@ def chooser(fnlist, **kwargs):
             faulthandler.enable()
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
+            print("CHOOSER CHOOSES:", fn)
             fn()
     except Exception as e:
         q.put(e)
@@ -268,19 +269,26 @@ class TestParallelBackendBase(TestCase):
     safe_backends = {'omp', 'tbb'}
 
     def run_compile(self, fnlist, parallelism='threading'):
+        print("IN RUN COMPILE")
         self._cache_dir = temp_directory(self.__class__.__name__)
         with override_config('CACHE_DIR', self._cache_dir):
             if parallelism == 'threading':
+                print("thread_impl::", fnlist)
                 thread_impl(fnlist)
             elif parallelism == 'multiprocessing_fork':
+                print("fork_proc_impl::", fnlist)
                 fork_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_forkserver':
+                print("forkserver_proc_impl::", fnlist)
                 forkserver_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_spawn':
+                print("multiprocessing_spawn::", fnlist)
                 spawn_proc_impl(fnlist)
             elif parallelism == 'multiprocessing_default':
+                print("multiprocessing_default::", fnlist)
                 default_proc_impl(fnlist)
             elif parallelism == 'random':
+                print("random::", fnlist)
                 if utils.PYVERSION < (3, 0):
                     ps = [thread_impl, default_proc_impl]
                 else:
@@ -290,6 +298,7 @@ class TestParallelBackendBase(TestCase):
                         ps.append(forkserver_proc_impl)
 
                 random.shuffle(ps)
+                print("RANDOM TEST ORDERING::", ps)
                 for impl in ps:
                     impl(fnlist)
             else:
@@ -310,6 +319,9 @@ class TestParallelBackend(TestParallelBackendBase):
     have children.
     """
 
+    def setUp(self):
+        random.seed(0)
+
     # NOTE: All tests are generated based on what a platform supports concurrent
     # execution wise from Python, irrespective of whether the native libraries
     # can actually handle the behaviour present.
@@ -327,6 +339,7 @@ class TestParallelBackend(TestParallelBackendBase):
                             _msg = 'daemonized processes cannot have children'
                             self.skipTest(_msg)
                         else:
+                            print("running compile")
                             self.run_compile(impl, parallelism=p)
                     return test_method
                 fn = methgen(impl, p)
@@ -346,7 +359,7 @@ class TestSpecificBackend(TestParallelBackendBase):
     isolated manner such that if they hang/crash/have issues, it doesn't kill
     the test suite.
     """
-    _DEBUG = False
+    _DEBUG = True
 
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
@@ -387,7 +400,7 @@ class TestSpecificBackend(TestParallelBackendBase):
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
-                print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+                print('stdout:\n"%s"\n stderr:\n"%s"' % (o, e))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
