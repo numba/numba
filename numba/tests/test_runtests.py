@@ -104,6 +104,10 @@ class TestCase(unittest.TestCase):
             excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
 
+    def test_check_slice(self):
+        tmp = self.get_testsuite_listing(['-j','0,5,1'])
+        l = [x for x in tmp if x.startswith('numba.')]
+        self.assertEqual(len(l), 5)
 
 if __name__ == '__main__':
     unittest.main()
