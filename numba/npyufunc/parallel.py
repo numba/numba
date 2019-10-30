@@ -466,18 +466,19 @@ def _launch_threads():
 
 def set_num_threads(n):
     """
-    Set the number of threads to use for parallel execution
+    Set the number of threads to use for parallel execution.
+
+    By default, all :obj:`numba.npyufunc.parallel.NUM_THREADS` threads are
+    used.
 
     This functionality works by masking out threads that are not used.
-    Therefore, the number of threads *n* must be less than or equal to the
-    total number of threads that are launched, which is set to the number of
-    cores by default but can be configured with the
-    :envvar:`NUMBA_NUM_THREADS` environment variable. See the
-    :func:`get_thread_count` function.
+    Therefore, the number of threads *n* must be less than or equal to
+    :obj:`~.NUM_THREADS`, the total number of threads that are launched. See
+    its documentation for more details.
 
     Parameters
     ----------
-    n: The number of threads. Must be between 1 and :obj:`numba.npyufunc.parallel.NUM_THREADS`.
+    n: The number of threads. Must be between 1 and NUM_THREADS.
 
     Returns
     -------
