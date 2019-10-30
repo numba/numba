@@ -13,31 +13,34 @@ def _work(slice_common=None, nprocs=None):
     # imported modules are cached, seems like this would be safe as the test
     # runner is being run as a batch job
 
-    common_args = ['-rs', "--durations=0", "--strict", 'numba/tests']
+    common_args = ['-rs', "--strict", 'numba/tests']
+
+    def check_stat(stat, target):
+        ok_stat = (0, 5) # 0 is "collected and passed", 5 is none collected
+        if stat not in ok_stat:
+            msg = "Failing early. Testing subset target %s" % target
+            raise RuntimeError(msg, stat)
+        if stat == 5:
+            print("NO TESTS COLLECTED FOR TARGET: %s" % target)
 
     if nprocs is not None:
         common_args = ['-n', nprocs] + common_args
 
     # run the "gitdiff" tests first
     stat = pytest.main(common_args + ['--runtype=gitdiff'],)
-    if stat:
-        msg = "Failing early. Testing subset target %s" % "gitdiff"
-        raise RuntimeError(msg, stat)
+    check_stat(stat, "gitdiff")
 
     # then the common ones
     common_extra = ['--runtype=common']
     if slice_common is not None:
         common_extra.append('--slice=%s' % slice_common)
     stat = pytest.main(common_args + common_extra,)
-    if stat:
-        msg = "Failing early. Testing subset target %s" % "common"
-        raise RuntimeError(msg, stat)
+    check_stat(stat, "common")
 
     # then the specific ones
     stat = pytest.main(common_args + ['--runtype=specific'],)
-    if stat:
-        msg = "Failing early. Testing subset target %s" % "specific"
-        raise RuntimeError(msg, stat)
+    check_stat(stat, "specific")
+
 
 if __name__ == "__main__":
     import argparse
