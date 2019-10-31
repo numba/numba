@@ -14,7 +14,7 @@ from numba import typing, errors
 from numba.targets.registry import cpu_target
 from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
-from numba import njit, typeof, objmode
+from numba import njit, typeof, objmode, types
 from numba.extending import overload
 from .support import MemoryLeak, TestCase, captured_stdout
 
@@ -156,6 +156,9 @@ bogus_contextmanager = object()
 def lift_invalid():
     with bogus_contextmanager:
         pass
+
+
+gv_type = types.intp
 
 
 class TestWithFinding(TestCase):
@@ -799,6 +802,34 @@ class TestLiftObj(MemoryLeak, TestCase):
             return foo(1)
 
         self.assertEqual(f(), 1 + 3)
+
+    def test_objmode_gv_name(self):
+        @njit
+        def global_name():
+            with objmode(val='gv_type'):
+                val = 123
+            return val
+
+        self.assertEqual(global_name(), 123)
+
+    def test_objmode_closure_type_in_overload(self):
+        def foo():
+            pass
+
+        @overload(foo)
+        def foo_overload():
+            shrubbery = types.float64[:]
+            def impl():
+                with objmode(out=shrubbery):
+                    out = np.ones(10).astype(np.float64)
+                return out
+            return impl
+
+        @njit
+        def bar():
+            return foo()
+
+        self.assertPreciseEqual(bar(), np.ones(10).astype(np.float64))
 
 
 class TestBogusContext(BaseTestWithLifting):
