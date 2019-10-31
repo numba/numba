@@ -78,7 +78,7 @@ def _specialize_box(typ):
         return _cache_specialized_box[typ]
     dct = {'__slots__': (),
            '_numba_type_': typ,
-           '__doc__': typ.class_type.class_def.__doc__,
+           '__doc__': typ.class_type.class_doc,
            }
     # Inject attributes as class properties
     for field in typ.struct:
@@ -99,7 +99,9 @@ def _specialize_box(typ):
         dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
     for name, func in typ.methods.items():
-        if not (name.startswith('__') and name.endswith('__')):
+        if (name == "__getitem__" or name == "__setitem__") or \
+                (not (name.startswith('__') and name.endswith('__'))):
+
             dct[name] = _generate_method(name, func)
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
@@ -133,9 +135,13 @@ def _box_class_instance(typ, val, c):
     # Create Box instance
     box_subclassed = _specialize_box(typ)
     # Note: the ``box_subclassed`` is kept alive by the cache
-    int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
+    voidptr_boxcls = c.context.add_dynamic_addr(
+        c.builder,
+        id(box_subclassed),
+        info="box_class_instance",
+    )
+    box_cls = c.builder.bitcast(voidptr_boxcls, c.pyapi.pyobj)
 
-    box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
     box = c.pyapi.call_function_objargs(box_cls, ())
 
     # Initialize Box instance

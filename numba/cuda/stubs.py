@@ -77,6 +77,10 @@ class gridDim(Stub):
     y = macro.Macro('nctaid.y', SREG_SIGNATURE)
     z = macro.Macro('nctaid.z', SREG_SIGNATURE)
 
+
+warpsize = macro.Macro('warpsize', SREG_SIGNATURE)
+laneid = macro.Macro('laneid', SREG_SIGNATURE)
+
 #-------------------------------------------------------------------------------
 # Grid Macro
 
@@ -154,7 +158,7 @@ def gridsize_expand(ndim):
 gridsize = macro.Macro('ptx.gridsize', gridsize_expand, callable=True)
 
 #-------------------------------------------------------------------------------
-# synthreads
+# syncthreads
 
 class syncthreads(Stub):
     '''
@@ -163,7 +167,92 @@ class syncthreads(Stub):
     function waits until all threads in the block call it, at which point it
     returns control to all its callers.
     '''
-    _description_ = '<syncthread()>'
+    _description_ = '<syncthreads()>'
+
+
+class syncthreads_count(Stub):
+    '''
+    syncthreads_count(predictate)
+
+    An extension to numba.cuda.syncthreads where the return value is a count
+    of the threads where predicate is true.
+    '''
+    _description_ = '<syncthreads_count()>'
+
+
+class syncthreads_and(Stub):
+    '''
+    syncthreads_and(predictate)
+
+    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
+    true for all threads or 0 otherwise.
+    '''
+    _description_ = '<syncthreads_and()>'
+
+
+class syncthreads_or(Stub):
+    '''
+    syncthreads_or(predictate)
+
+    An extension to numba.cuda.syncthreads where 1 is returned if predicate is
+    true for any thread or 0 otherwise.
+    '''
+    _description_ = '<syncthreads_or()>'
+
+
+# -------------------------------------------------------------------------------
+# warp level operations
+
+class syncwarp(Stub):
+    '''
+    syncwarp(mask)
+
+    Synchronizes a masked subset of threads in a warp.
+    '''
+    _description_ = '<warp_sync()>'
+
+
+class shfl_sync_intrinsic(Stub):
+    '''
+    shfl_sync_intrinsic(mask, mode, value, mode_offset, clamp)
+
+    Nvvm intrinsic for shuffling data across a warp
+    docs.nvidia.com/cuda/nvvm-ir-spec/index.html#nvvm-intrin-warp-level-datamove
+    '''
+    _description_ = '<shfl_sync()>'
+
+
+class vote_sync_intrinsic(Stub):
+    '''
+    vote_sync_intrinsic(mask, mode, predictate)
+
+    Nvvm intrinsic for performing a reduce and broadcast across a warp
+    docs.nvidia.com/cuda/nvvm-ir-spec/index.html#nvvm-intrin-warp-level-vote
+    '''
+    _description_ = '<vote_sync()>'
+
+
+class match_any_sync(Stub):
+    '''
+    match_any_sync(mask, value)
+
+    Nvvm intrinsic for performing a compare and broadcast across a warp.
+    Returns a mask of threads that have same value as the given value from within the masked warp.
+    '''
+    _description_ = '<match_any_sync()>'
+
+
+class match_all_sync(Stub):
+    '''
+    match_all_sync(mask, value)
+
+    Nvvm intrinsic for performing a compare and broadcast across a warp.
+    Returns a tuple of (mask, pred), where mask is a mask of threads that have
+    same value as the given value from within the masked warp, if they
+    all have the same value, otherwise it is 0. Pred is a boolean of whether
+    or not all threads in the mask warp have the same warp.
+    '''
+    _description_ = '<match_all_sync()>'
 
 
 # -------------------------------------------------------------------------------
@@ -284,6 +373,61 @@ class const(Stub):
     Create a const array from *ary*. The resulting const array will have the
     same shape, type, and values as *ary*.
     '''
+
+#-------------------------------------------------------------------------------
+# bit manipulation
+
+class popc(Stub):
+    """
+    popc(val)
+
+    Returns the number of set bits in the given value.
+    """
+
+
+class brev(Stub):
+    """
+    brev(val)
+
+    Reverse the bitpattern of an integer value; for example 0b10110110
+    becomes 0b01101101.
+    """
+
+
+class clz(Stub):
+    """
+    clz(val)
+
+    Counts the number of leading zeros in a value.
+    """
+
+
+class ffs(Stub):
+    """
+    ffs(val)
+
+    Find the position of the least significant bit set to 1 in an integer.
+    """
+
+#-------------------------------------------------------------------------------
+# comparison and selection instructions
+
+class selp(Stub):
+    """
+    selp(a, b, c)
+
+    Select between source operands, based on the value of the predicate source operand.
+    """
+
+#-------------------------------------------------------------------------------
+# single / double precision arithmetic
+
+class fma(Stub):
+    """
+    fma(a, b, c)
+
+    Perform the fused multiply-add operation.
+    """
 
 #-------------------------------------------------------------------------------
 # atomic

@@ -12,7 +12,6 @@ import itertools
 from types import CodeType, ModuleType
 
 from numba import errors, utils
-from numba.config import PYVERSION
 
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -74,10 +73,6 @@ class ByteCodeInst(object):
         self.opname = dis.opname[opcode]
         self.arg = arg
         self.lineno = -1  # unknown line number
-
-    @classmethod
-    def get(cls, offset, opname, arg):
-        return cls(offset, dis.opmap[opname], arg)
 
     @property
     def is_jump(self):
@@ -184,7 +179,7 @@ class ByteCode(object):
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -200,6 +195,7 @@ class ByteCode(object):
         self.co_names = code.co_names
         self.co_varnames = code.co_varnames
         self.co_consts = code.co_consts
+        self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
         self.table = table
         self.labels = sorted(labels)
@@ -327,3 +323,8 @@ class FunctionIdentity(object):
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
 
         return self
+
+    def derive(self):
+        """Copy the object and increment the unique counter.
+        """
+        return self.from_function(self.func)

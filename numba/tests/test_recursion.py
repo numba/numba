@@ -49,6 +49,21 @@ class TestSelfRecursion(TestCase):
 
         self.assertEqual(str(raises.exception), "raise_self")
 
+    def test_optional_return(self):
+        pfunc = self.mod.make_optional_return_case()
+        cfunc = self.mod.make_optional_return_case(jit(nopython=True))
+        for arg in (0, 5, 10, 15):
+            self.assertEqual(pfunc(arg), cfunc(arg))
+
+    def test_growing_return_tuple(self):
+        cfunc = self.mod.make_growing_tuple_case(jit(nopython=True))
+        with self.assertRaises(TypingError) as raises:
+            cfunc(100)
+        self.assertIn(
+            "Return type of recursive function does not converge",
+            str(raises.exception),
+        )
+
 
 class TestMutualRecursion(TestCase):
 
@@ -90,7 +105,7 @@ class TestMutualRecursion(TestCase):
         # nopython mode
         cfunc = self.mod.make_inner_error(jit(nopython=True))
         with self.assertRaises(TypingError) as raises:
-                cfunc(2)
+            cfunc(2)
         errmsg = 'Unknown attribute \'ndim\''
         self.assertIn(errmsg, str(raises.exception))
         # objectmode

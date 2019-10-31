@@ -8,6 +8,7 @@ import collections
 import contextlib
 import inspect
 import functools
+from enum import Enum
 
 from .. import typing, cgutils, types, utils
 from .. typing.templates import BaseRegistryLoader
@@ -166,6 +167,20 @@ def _decorate_setattr(impl, ty, attr):
     return res
 
 
+def fix_returning_optional(context, builder, sig, status, retval):
+    # Reconstruct optional return type
+    if isinstance(sig.return_type, types.Optional):
+        value_type = sig.return_type.type
+        optional_none = context.make_optional_none(builder, value_type)
+        retvalptr = cgutils.alloca_once_value(builder, optional_none)
+        with builder.if_then(builder.not_(status.is_none)):
+            optional_value = context.make_optional_value(
+                builder, value_type, retval,
+                )
+            builder.store(optional_value, retvalptr)
+        retval = builder.load(retvalptr)
+    return retval
+
 def user_function(fndesc, libs):
     """
     A wrapper inserting code calling Numba-compiled *fndesc*.
@@ -175,21 +190,12 @@ def user_function(fndesc, libs):
         func = context.declare_function(builder.module, fndesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
+            builder, func, fndesc.restype, fndesc.argtypes, args)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
         assert sig.return_type == fndesc.restype
         # Reconstruct optional return type
-        if isinstance(sig.return_type, types.Optional):
-            value_type = sig.return_type.type
-            optional_none = context.make_optional_none(builder, value_type)
-            retvalptr = cgutils.alloca_once_value(builder, optional_none)
-            with builder.if_then(builder.not_(status.is_none)):
-                optional_value = context.make_optional_value(builder,
-                                                             value_type,
-                                                             retval)
-                builder.store(optional_value, retvalptr)
-            retval = builder.load(retvalptr)
+        retval = fix_returning_optional(context, builder, sig, status, retval)
         # If the data representations don't match up
         if retval.type != context.get_value_type(sig.return_type):
             msg = "function returned {0} but expect {1}"
@@ -211,7 +217,7 @@ def user_generator(gendesc, libs):
         func = context.declare_function(builder.module, gendesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, gendesc.restype, gendesc.argtypes, args, env=None)
+            builder, func, gendesc.restype, gendesc.argtypes, args)
         # Return raw status for caller to process StopIteration
         return status, retval
 
@@ -229,7 +235,7 @@ def iterator_impl(iterable_type, iterator_type):
         # These are unbound methods
         iternext = cls.iternext
 
-        @iternext_impl
+        @iternext_impl(RefType.BORROWED)
         def iternext_wrapper(context, builder, sig, args, result):
             (value,) = args
             iterobj = cls(context, builder, value)
@@ -288,25 +294,56 @@ class _IternextResult(object):
         """
         return self._pairobj.first
 
+class RefType(Enum):
+    """
+    Enumerate the reference type
+    """
+    """
+    A new reference
+    """
+    NEW = 1
+    """
+    A borrowed reference
+    """
+    BORROWED = 2
+    """
+    An untracked reference
+    """
+    UNTRACKED = 3
 
-def iternext_impl(func):
+def iternext_impl(ref_type=None):
     """
     Wrap the given iternext() implementation so that it gets passed
     an _IternextResult() object easing the returning of the iternext()
     result pair.
 
+    ref_type: a numba.targets.imputils.RefType value, the reference type used is
+    that specified through the RefType enum.
+
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
+    if ref_type not in [x for x in RefType]:
+        raise ValueError("ref_type must be an enum member of imputils.RefType")
 
-    def wrapper(context, builder, sig, args):
-        pair_type = sig.return_type
-        pairobj = context.make_helper(builder, pair_type)
-        func(context, builder, sig, args,
-             _IternextResult(context, builder, pairobj))
-        return impl_ret_borrowed(context, builder,
-                                 pair_type, pairobj._getvalue())
-    return wrapper
+    def outer(func):
+        def wrapper(context, builder, sig, args):
+            pair_type = sig.return_type
+            pairobj = context.make_helper(builder, pair_type)
+            func(context, builder, sig, args,
+                _IternextResult(context, builder, pairobj))
+            if ref_type == RefType.NEW:
+                impl_ret = impl_ret_new_ref
+            elif ref_type == RefType.BORROWED:
+                impl_ret = impl_ret_borrowed
+            elif ref_type == RefType.UNTRACKED:
+                impl_ret = impl_ret_untracked
+            else:
+                raise ValueError("Unknown ref_type encountered")
+            return impl_ret(context, builder,
+                                    pair_type, pairobj._getvalue())
+        return wrapper
+    return outer
 
 
 def call_getiter(context, builder, iterable_type, val):
@@ -420,3 +457,10 @@ def force_error_model(context, model_name='numpy'):
         yield
     finally:
         context.error_model = old_error_model
+
+
+def numba_typeref_ctor(*args, **kwargs):
+    """A stub for use internally by Numba when a call is emitted
+    on a TypeRef.
+    """
+    raise NotImplementedError("This function should not be executed.")

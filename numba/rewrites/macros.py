@@ -41,7 +41,7 @@ class ExpandMacros(Rewrite):
     Expand lookups and calls of Macro objects.
     """
 
-    def match(self, interp, block, typemap, calltypes):
+    def match(self, func_ir, block, typemap, calltypes):
         """
         Look for potential macros for expand and store their expansions.
         """
@@ -55,19 +55,19 @@ class ExpandMacros(Rewrite):
                     and isinstance(rhs.func, ir.Var)):
                     # Is it a callable macro?
                     try:
-                        const = interp.infer_constant(rhs.func)
+                        const = func_ir.infer_constant(rhs.func)
                     except errors.ConstantInferenceError:
                         continue
                     if isinstance(const, Macro):
                         assert const.callable
-                        new_expr = self._expand_callable_macro(interp, rhs,
+                        new_expr = self._expand_callable_macro(func_ir, rhs,
                                                                const, rhs.loc)
                         rewrites[rhs] = new_expr
 
                 elif isinstance(rhs, ir.Expr) and rhs.op == 'getattr':
                     # Is it a non-callable macro looked up as a constant attribute?
                     try:
-                        const = interp.infer_constant(inst.target)
+                        const = func_ir.infer_constant(inst.target)
                     except errors.ConstantInferenceError:
                         continue
                     if isinstance(const, Macro) and not const.callable:
@@ -85,18 +85,18 @@ class ExpandMacros(Rewrite):
                                 kws=(), loc=loc)
         return new_expr
 
-    def _expand_callable_macro(self, interp, call, macro, loc):
+    def _expand_callable_macro(self, func_ir, call, macro, loc):
         """
         Return the IR expression of expanding the macro call.
         """
         assert macro.callable
 
         # Resolve all macro arguments as constants, or fail
-        args = [interp.infer_constant(arg.name) for arg in call.args]
+        args = [func_ir.infer_constant(arg.name) for arg in call.args]
         kws = {}
         for k, v in call.kws:
             try:
-                kws[k] = interp.infer_constant(v)
+                kws[k] = func_ir.infer_constant(v)
             except errors.ConstantInferenceError:
                 msg = "Argument {name!r} must be a " \
                       "constant at {loc}".format(name=k,

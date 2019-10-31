@@ -7,11 +7,11 @@ from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAGufunc(unittest.TestCase):
+class TestCUDAGufunc(SerialMixin, unittest.TestCase):
 
     def test_gufunc_small(self):
 
@@ -286,6 +286,17 @@ class TestCUDAGufunc(unittest.TestCase):
         items = msg[len(head):].strip().split(',')
         items = [i.strip("'\" ") for i in items]
         self.assertEqual(set(['what1', 'ever2']), set(items))
+
+    def test_duplicated_output(self):
+        @guvectorize([void(float32[:], float32[:])], '(x)->(x)', target='cuda')
+        def foo(inp, out):
+            pass  # intentionally empty; never executed
+
+        inp = out = np.zeros(10, dtype=np.float32)
+        with self.assertRaises(ValueError) as raises:
+            foo(inp, out, out=out)
+        self.assertEqual(str(raises.exception),
+            "cannot specify 'out' as both a positional and keyword argument")
 
 
 if __name__ == '__main__':

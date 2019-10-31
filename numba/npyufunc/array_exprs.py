@@ -6,8 +6,9 @@ import contextlib
 import sys
 
 import numpy as np
+import operator
 
-from .. import compiler, ir, types, rewrites, six
+from .. import compiler, ir, types, rewrites, six, utils
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -23,14 +24,14 @@ class RewriteArrayExprs(rewrites.Rewrite):
     rewriting those expressions to a single operation that will expand
     into something similar to a ufunc call.
     '''
-    def __init__(self, pipeline, *args, **kws):
-        super(RewriteArrayExprs, self).__init__(pipeline, *args, **kws)
+    def __init__(self, state, *args, **kws):
+        super(RewriteArrayExprs, self).__init__(state, *args, **kws)
         # Install a lowering hook if we are using this rewrite.
-        special_ops = self.pipeline.targetctx.special_ops
+        special_ops = state.targetctx.special_ops
         if 'arrayexpr' not in special_ops:
             special_ops['arrayexpr'] = _lower_array_expr
 
-    def match(self, interp, block, typemap, calltypes):
+    def match(self, func_ir, block, typemap, calltypes):
         """
         Using typing and a basic block, search the basic block for array
         expressions.
@@ -229,34 +230,37 @@ class RewriteArrayExprs(rewrites.Rewrite):
 
 
 _unaryops = {
-    '+' : ast.UAdd,
-    '-' : ast.USub,
-    '~' : ast.Invert,
+    operator.pos: ast.UAdd,
+    operator.neg: ast.USub,
+    operator.invert: ast.Invert,
 }
 
 _binops = {
-    '+' : ast.Add,
-    '-' : ast.Sub,
-    '*' : ast.Mult,
-    '/' : ast.Div,
-    '/?' : ast.Div,
-    '%' : ast.Mod,
-    '|' : ast.BitOr,
-    '>>' : ast.RShift,
-    '^' : ast.BitXor,
-    '<<' : ast.LShift,
-    '&' : ast.BitAnd,
-    '**' : ast.Pow,
-    '//' : ast.FloorDiv,
+    operator.add: ast.Add,
+    operator.sub: ast.Sub,
+    operator.mul: ast.Mult,
+    operator.truediv: ast.Div,
+    operator.mod: ast.Mod,
+    operator.or_: ast.BitOr,
+    operator.rshift: ast.RShift,
+    operator.xor: ast.BitXor,
+    operator.lshift: ast.LShift,
+    operator.and_: ast.BitAnd,
+    operator.pow: ast.Pow,
+    operator.floordiv: ast.FloorDiv,
 }
 
+if not utils.IS_PY3:
+    _binops[operator.div] = ast.Div
+
+
 _cmpops = {
-    '==' : ast.Eq,
-    '!=' : ast.NotEq,
-    '<' : ast.Lt,
-    '<=' : ast.LtE,
-    '>' : ast.Gt,
-    '>=' : ast.GtE,
+    operator.eq: ast.Eq,
+    operator.ne: ast.NotEq,
+    operator.lt: ast.Lt,
+    operator.le: ast.LtE,
+    operator.gt: ast.Gt,
+    operator.ge: ast.GtE,
 }
 
 
@@ -363,7 +367,6 @@ def _lower_array_expr(lowerer, expr):
         ast.fix_missing_locations(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
-
     code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
@@ -375,6 +378,8 @@ def _lower_array_expr(lowerer, expr):
     outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
+        if isinstance(argty, types.Optional):
+            argty = argty.type
         if isinstance(argty, types.Array):
             inner_sig_args.append(argty.dtype)
         else:
@@ -385,7 +390,8 @@ def _lower_array_expr(lowerer, expr):
     # division (issue #1223).
     flags = compiler.Flags()
     flags.set('error_model', 'numpy')
-    cres = context.compile_subroutine_no_cache(builder, impl, inner_sig, flags=flags)
+    cres = context.compile_subroutine(builder, impl, inner_sig, flags=flags,
+                                      caching=False)
 
     # Create kernel subclass calling our native function
     from ..targets import npyimpl

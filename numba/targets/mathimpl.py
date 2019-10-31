@@ -4,7 +4,9 @@ Provide math calls that uses intrinsics or libc math functions.
 
 from __future__ import print_function, absolute_import, division
 import math
+import operator
 import sys
+import numpy as np
 
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
@@ -19,14 +21,19 @@ lower = registry.lower
 
 
 # Helpers, shared with cmathimpl.
+_NP_FLT_FINFO = np.finfo(np.dtype('float32'))
+FLT_MAX = _NP_FLT_FINFO.max
+FLT_MIN = _NP_FLT_FINFO.tiny
 
-FLT_MAX = 3.402823466E+38
-FLT_MIN = 1.175494351E-38
+_NP_DBL_FINFO = np.finfo(np.dtype('float64'))
+DBL_MAX = _NP_DBL_FINFO.max
+DBL_MIN = _NP_DBL_FINFO.tiny
 
 FLOAT_ABS_MASK = 0x7fffffff
 FLOAT_SIGN_MASK = 0x80000000
 DOUBLE_ABS_MASK = 0x7fffffffffffffff
 DOUBLE_SIGN_MASK = 0x8000000000000000
+
 
 def is_nan(builder, val):
     """
@@ -162,6 +169,45 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
 
     return float_impl
 
+def unary_sqrt_extern(fn, int_restype=False):
+    """
+    Register implementations of Python function *fn* using the
+    external function named *f32extern* and *f64extern* (for float32
+    and float64 inputs, respectively).
+    If *int_restype* is true, then the function's return value should be
+    integral, otherwise floating-point.
+    """
+    f_restype = types.int64 if int_restype else None
+
+    def float_impl(context, builder, sig, args):
+        """
+        Implement *fn* for a types.Float input.
+        """
+        [val] = args
+        mod = builder.module
+        input_type = sig.args[0]
+        lty = context.get_value_type(input_type)
+        sqrt32extern = getattr(context, 'sqrt32extern', "sqrtf")
+        sqrt64extern = getattr(context, 'sqrt64extern', "sqrt")
+
+        func_name = {
+            types.float32: sqrt32extern,
+            types.float64: sqrt64extern,
+            }[input_type]
+        fnty = Type.function(lty, [lty])
+        fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
+        res = builder.call(fn, (val,))
+        res = context.cast(builder, res, input_type, sig.return_type)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    lower(fn, types.Float)(float_impl)
+
+    # Implement wrapper for integer inputs
+    unary_math_int_impl(fn, float_impl)
+
+    return float_impl
+
+
 
 unary_math_intr(math.fabs, lc.INTR_FABS)
 #unary_math_intr(math.sqrt, lc.INTR_SQRT)
@@ -200,7 +246,8 @@ else:
     ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil")
     floor_impl = unary_math_extern(math.floor, "floorf", "floor")
 gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
-sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
+sqrt_impl = unary_sqrt_extern(math.sqrt)
+#sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
 lgamma_impl = unary_math_extern(math.lgamma, "lgammaf", "lgamma")
 
@@ -401,5 +448,5 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 @lower(math.pow, types.Float, types.Float)
 @lower(math.pow, types.Float, types.Integer)
 def pow_impl(context, builder, sig, args):
-    impl = context.get_function("**", sig)
+    impl = context.get_function(operator.pow, sig)
     return impl(builder, args)

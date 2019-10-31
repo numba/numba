@@ -103,7 +103,7 @@ def runaway_mutual_inner(x):
     return runaway_mutual(x)
 
 
-# Mutual type changing reursion
+# Mutual type changing recursion
 
 def make_type_change_mutual(jit=lambda x: x):
     @jit
@@ -194,3 +194,35 @@ def make_raise_mutual(jit=lambda x: x):
             return 1
 
     return outer
+
+
+def make_optional_return_case(jit=lambda x: x):
+    @jit
+    def foo(x):
+        if x > 5:
+            return x - 1
+        else:
+            return
+
+    @jit
+    def bar(x):
+        out = foo(x)
+        if out is None:
+            return out
+        elif out < 8:
+            return out
+        else:
+            return x * bar(out)
+
+    return bar
+
+
+def make_growing_tuple_case(jit=lambda x: x):
+    # From issue #4387
+    @jit
+    def make_list(n):
+        if n <= 0:
+            return None
+
+        return (n, make_list(n - 1))
+    return make_list

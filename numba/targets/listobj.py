@@ -1,16 +1,18 @@
 """
-Support for native homogenous lists.
+Support for native homogeneous lists.
 """
 
 from __future__ import print_function, absolute_import, division
 
 import math
+import operator
 
 from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+                                    impl_ret_new_ref, impl_ret_untracked,
+                                    RefType)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -56,10 +58,6 @@ class _ListPayloadMixin(object):
     def _gep(self, idx):
         return cgutils.gep(self._builder, self.data, idx)
 
-    # Note about NRT: lists of NRT-managed objects (included nested lists)
-    # cannot be handled right now, as the number of nested meminfos is
-    # dynamic.
-
     def getitem(self, idx):
         ptr = self._gep(idx)
         data_item = self._builder.load(ptr)
@@ -100,7 +98,7 @@ class _ListPayloadMixin(object):
         overflow = self._builder.icmp_signed('>=', idx, size)
         with builder.if_then(overflow, likely=False):
             builder.store(size, idxptr)
-            
+
         return builder.load(idxptr)
 
     def guard_index(self, idx, msg):
@@ -118,9 +116,35 @@ class _ListPayloadMixin(object):
         """
         return slicing.fix_slice(self._builder, slice, self.size)
 
+    def incref_value(self, val):
+        "Incref an element value"
+        self._context.nrt.incref(self._builder, self.dtype, val)
+
+    def decref_value(self, val):
+        "Decref an element value"
+        self._context.nrt.decref(self._builder, self.dtype, val)
+
+
+class ListPayloadAccessor(_ListPayloadMixin):
+    """
+    A helper object to access the list attributes given the pointer to the
+    payload type.
+    """
+    def __init__(self, context, builder, list_type, payload_ptr):
+        self._context = context
+        self._builder = builder
+        self._ty = list_type
+        self._datamodel = context.data_model_manager[list_type.dtype]
+        payload_type = types.ListPayload(list_type)
+        ptrty = context.get_data_type(payload_type).as_pointer()
+        payload_ptr = builder.bitcast(payload_ptr, ptrty)
+        payload = context.make_data_helper(builder, payload_type,
+                                           ref=payload_ptr)
+        self._payload = payload
+
 
 class ListInstance(_ListPayloadMixin):
-    
+
     def __init__(self, context, builder, list_type, list_val):
         self._context = context
         self._builder = builder
@@ -158,16 +182,44 @@ class ListInstance(_ListPayloadMixin):
         if self._ty.reflected:
             self._payload.dirty = cgutils.true_bit if val else cgutils.false_bit
 
-    def setitem(self, idx, val):
+    def clear_value(self, idx):
+        """Remove the value at the location
+        """
+        self.decref_value(self.getitem(idx))
+        # it's necessary for the dtor which just decref every slot on it.
+        self.zfill(idx, self._builder.add(idx, idx.type(1)))
+
+    def setitem(self, idx, val, incref):
+        # Decref old data
+        self.decref_value(self.getitem(idx))
+
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
         self._builder.store(data_item, ptr)
         self.set_dirty(True)
+        if incref:
+            # Incref the underlying data
+            self.incref_value(val)
 
-    def inititem(self, idx, val):
+    def inititem(self, idx, val, incref=True):
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
         self._builder.store(data_item, ptr)
+        if incref:
+            self.incref_value(val)
+
+    def zfill(self, start, stop):
+        """Zero-fill the memory at index *start* to *stop*
+
+        *stop* MUST not be smaller than *start*.
+        """
+        builder = self._builder
+        base = self._gep(start)
+        end = self._gep(stop)
+        intaddr_t = self._context.get_value_type(types.intp)
+        size = builder.sub(builder.ptrtoint(end, intaddr_t),
+                           builder.ptrtoint(base, intaddr_t))
+        cgutils.memset(builder, base, size, ir.IntType(8)(0))
 
     @classmethod
     def allocate_ex(cls, context, builder, list_type, nitems):
@@ -200,7 +252,8 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
+            meminfo = context.nrt.meminfo_new_varsize_dtor(
+                builder, size=allocsize, dtor=self.get_dtor())
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:
@@ -211,8 +264,49 @@ class ListInstance(_ListPayloadMixin):
                     self._payload.allocated = nitems
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
                     self._payload.dirty = cgutils.false_bit
+                    # Zero the allocated region
+                    self.zfill(self.size.type(0), nitems)
 
         return builder.load(ok), self
+
+    def define_dtor(self):
+        "Define the destructor if not already defined"
+        context = self._context
+        builder = self._builder
+        mod = builder.module
+        # Declare dtor
+        fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t])
+        fn = mod.get_or_insert_function(fnty, name='.dtor.list.{}'.format(self.dtype))
+        if not fn.is_declaration:
+            # End early if the dtor is already defined
+            return fn
+        fn.linkage = 'linkonce_odr'
+        # Populate the dtor
+        builder = ir.IRBuilder(fn.append_basic_block())
+        base_ptr = fn.args[0]  # void*
+
+        # get payload
+        payload = ListPayloadAccessor(context, builder, self._ty, base_ptr)
+
+        # Loop over all data to decref
+        intp = payload.size.type
+        with cgutils.for_range_slice(
+                builder, start=intp(0), stop=payload.size, step=intp(1),
+                intp=intp) as (idx, _):
+            val = payload.getitem(idx)
+            context.nrt.decref(builder, self.dtype, val)
+        builder.ret_void()
+        return fn
+
+    def get_dtor(self):
+        """"Get the element dtor function pointer as void pointer.
+
+        It's safe to be called multiple times.
+        """
+        # Define and set the Dtor
+        dtor = self.define_dtor()
+        dtor_fnptr = self._builder.bitcast(dtor, cgutils.voidptr_t)
+        return dtor_fnptr
 
     @classmethod
     def allocate(cls, context, builder, list_type, nitems):
@@ -273,7 +367,6 @@ class ListInstance(_ListPayloadMixin):
         itemsize = get_itemsize(context, self._ty)
         allocated = self._payload.allocated
 
-        one = ir.Constant(intp_t, 1)
         two = ir.Constant(intp_t, 2)
         eight = ir.Constant(intp_t, 8)
 
@@ -294,6 +387,7 @@ class ListInstance(_ListPayloadMixin):
                                         builder.add(new_size,
                                                     builder.ashr(new_size, two)))
             _payload_realloc(new_allocated)
+            self.zfill(self.size, new_allocated)
 
         self._payload.size = new_size
         self.set_dirty(True)
@@ -306,11 +400,11 @@ class ListInstance(_ListPayloadMixin):
         src_ptr = self._gep(src_idx)
         cgutils.raw_memmove(self._builder, dest_ptr, src_ptr,
                             count, itemsize=self._itemsize)
+
         self.set_dirty(True)
 
-
 class ListIterInstance(_ListPayloadMixin):
-    
+
     def __init__(self, context, builder, iter_type, iter_val):
         self._context = context
         self._builder = builder
@@ -358,7 +452,7 @@ def build_list(context, builder, list_type, items):
     # Populate list
     inst.size = context.get_constant(types.intp, nitems)
     for i, val in enumerate(items):
-        inst.setitem(context.get_constant(types.intp, i), val)
+        inst.setitem(context.get_constant(types.intp, i), val, incref=True)
 
     return impl_ret_new_ref(context, builder, list_type, inst.value)
 
@@ -373,6 +467,12 @@ def list_constructor(context, builder, sig, args):
 
     return context.compile_internal(builder, list_impl, sig, args)
 
+@lower_builtin(list)
+def list_constructor(context, builder, sig, args):
+    list_type = sig.return_type
+    list_len = 0
+    inst = ListInstance.allocate(context, builder, list_type, list_len)
+    return impl_ret_new_ref(context, builder, list_type, inst.value)
 
 #-------------------------------------------------------------------------------
 # Various operations
@@ -388,7 +488,7 @@ def getiter_list(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 @lower_builtin('iternext', types.ListIter)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
 
@@ -402,28 +502,30 @@ def iternext_listiter(context, builder, sig, args, result):
         inst.index = builder.add(index, context.get_constant(types.intp, 1))
 
 
-@lower_builtin('getitem', types.List, types.Integer)
+@lower_builtin(operator.getitem, types.List, types.Integer)
 def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
 
     index = inst.fix_index(index)
+    inst.guard_index(index, msg="getitem out of range")
     result = inst.getitem(index)
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@lower_builtin('setitem', types.List, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
     value = args[2]
 
     index = inst.fix_index(index)
-    inst.setitem(index, value)
+    inst.guard_index(index, msg="setitem out of range")
+    inst.setitem(index, value, incref=True)
     return context.get_dummy_value()
 
 
-@lower_builtin('getitem', types.List, types.SliceType)
+@lower_builtin(operator.getitem, types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = context.make_helper(builder, sig.args[1], args[1])
@@ -439,14 +541,14 @@ def getslice_list(context, builder, sig, args):
                                          slice.step) as (pos_range, neg_range):
         with pos_range as (idx, count):
             value = inst.getitem(idx)
-            result.inititem(count, value)
+            result.inititem(count, value, incref=True)
         with neg_range as (idx, count):
             value = inst.getitem(idx)
-            result.inititem(count, value)
+            result.inititem(count, value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
-@lower_builtin('setitem', types.List, types.SliceType, types.Any)
+@lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
@@ -487,8 +589,8 @@ def setitem_list(context, builder, sig, args):
 
             with cgutils.for_range(builder, src_size) as loop:
                 value = src.getitem(loop.index)
-                dest.setitem(builder.add(loop.index, dest_offset), value)
-        
+                dest.setitem(builder.add(loop.index, dest_offset), value, incref=True)
+
         with otherwise:
             with builder.if_then(builder.icmp_signed('!=', size_delta, zero)):
                 msg = "cannot resize extended list slice with step != 1"
@@ -498,16 +600,26 @@ def setitem_list(context, builder, sig, args):
                 builder, slice.start, slice.stop, slice.step) as (pos_range, neg_range):
                 with pos_range as (index, count):
                     value = src.getitem(count)
-                    dest.setitem(index, value)
+                    dest.setitem(index, value, incref=True)
                 with neg_range as (index, count):
                     value = src.getitem(count)
-                    dest.setitem(index, value)
+                    dest.setitem(index, value, incref=True)
 
     return context.get_dummy_value()
 
 
-@lower_builtin('delitem', types.List, types.SliceType)
-def setitem_list(context, builder, sig, args):
+
+@lower_builtin(operator.delitem, types.List, types.Integer)
+def delitem_list_index(context, builder, sig, args):
+
+    def list_delitem_impl(lst, i):
+        lst.pop(i)
+
+    return context.compile_internal(builder, list_delitem_impl, sig, args)
+
+
+@lower_builtin(operator.delitem, types.List, types.SliceType)
+def delitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = context.make_helper(builder, sig.args[1], args[1])
 
@@ -516,9 +628,8 @@ def setitem_list(context, builder, sig, args):
 
     slice_len = slicing.get_slice_length(builder, slice)
 
-    zero = ir.Constant(slice_len.type, 0)
     one = ir.Constant(slice_len.type, 1)
-    
+
     with builder.if_then(builder.icmp_signed('!=', slice.step, one), likely=False):
         msg = "unsupported del list[start:stop:step] with step != 1"
         context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))
@@ -526,6 +637,12 @@ def setitem_list(context, builder, sig, args):
     # Compute the real stop, e.g. for dest[2:0]
     start = slice.start
     real_stop = builder.add(start, slice_len)
+    # Decref the removed range
+    with cgutils.for_range_slice(
+            builder, start, real_stop, start.type(1)
+            ) as (idx, _):
+        inst.decref_value(inst.getitem(idx))
+
     # Size of the list tail, after the end of slice
     tail_size = builder.sub(inst.size, real_stop)
     inst.move(start, real_stop, tail_size)
@@ -536,9 +653,9 @@ def setitem_list(context, builder, sig, args):
 
 # XXX should there be a specific module for Sequence or collection base classes?
 
-@lower_builtin("in", types.Any, types.Sequence)
+@lower_builtin(operator.contains, types.Sequence, types.Any)
 def in_seq(context, builder, sig, args):
-    def seq_contains_impl(value, lst):
+    def seq_contains_impl(lst, value):
         for elem in lst:
             if elem == value:
                 return True
@@ -554,7 +671,7 @@ def sequence_bool(context, builder, sig, args):
     return context.compile_internal(builder, sequence_bool_impl, sig, args)
 
 
-@lower_builtin("+", types.List, types.List)
+@lower_builtin(operator.add, types.List, types.List)
 def list_add(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -568,15 +685,15 @@ def list_add(context, builder, sig, args):
     with cgutils.for_range(builder, a_size) as loop:
         value = a.getitem(loop.index)
         value = context.cast(builder, value, a.dtype, dest.dtype)
-        dest.setitem(loop.index, value)
+        dest.setitem(loop.index, value, incref=True)
     with cgutils.for_range(builder, b_size) as loop:
         value = b.getitem(loop.index)
         value = context.cast(builder, value, b.dtype, dest.dtype)
-        dest.setitem(builder.add(loop.index, a_size), value)
+        dest.setitem(builder.add(loop.index, a_size), value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@lower_builtin("+=", types.List, types.List)
+@lower_builtin(operator.iadd, types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
     assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
@@ -584,7 +701,7 @@ def list_add_inplace(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
 
 
-@lower_builtin("*", types.List, types.Integer)
+@lower_builtin(operator.mul, types.List, types.Integer)
 def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
@@ -600,11 +717,11 @@ def list_mul(context, builder, sig, args):
     with cgutils.for_range_slice(builder, zero, nitems, src_size, inc=True) as (dest_offset, _):
         with cgutils.for_range(builder, src_size) as loop:
             value = src.getitem(loop.index)
-            dest.setitem(builder.add(loop.index, dest_offset), value)
+            dest.setitem(builder.add(loop.index, dest_offset), value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@lower_builtin("*=", types.List, types.Integer)
+@lower_builtin(operator.imul, types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     src_size = inst.size
@@ -619,7 +736,7 @@ def list_mul_inplace(context, builder, sig, args):
     with cgutils.for_range_slice(builder, src_size, nitems, src_size, inc=True) as (dest_offset, _):
         with cgutils.for_range(builder, src_size) as loop:
             value = inst.getitem(loop.index)
-            inst.setitem(builder.add(loop.index, dest_offset), value)
+            inst.setitem(builder.add(loop.index, dest_offset), value, incref=True)
 
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
@@ -627,7 +744,7 @@ def list_mul_inplace(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@lower_builtin('is', types.List, types.List)
+@lower_builtin(operator.is_, types.List, types.List)
 def list_is(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -635,7 +752,7 @@ def list_is(context, builder, sig, args):
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)
 
-@lower_builtin('==', types.List, types.List)
+@lower_builtin(operator.eq, types.List, types.List)
 def list_eq(context, builder, sig, args):
     aty, bty = sig.args
     a = ListInstance(context, builder, aty, args[0])
@@ -650,7 +767,7 @@ def list_eq(context, builder, sig, args):
         with cgutils.for_range(builder, a_size) as loop:
             v = a.getitem(loop.index)
             w = b.getitem(loop.index)
-            itemres = context.generic_compare(builder, '==',
+            itemres = context.generic_compare(builder, operator.eq,
                                               (aty.dtype, bty.dtype), (v, w))
             with builder.if_then(builder.not_(itemres)):
                 # Exit early
@@ -659,7 +776,7 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@lower_builtin('!=', types.List, types.List)
+@lower_builtin(operator.ne, types.List, types.List)
 def list_ne(context, builder, sig, args):
 
     def list_ne_impl(a, b):
@@ -667,7 +784,7 @@ def list_ne(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ne_impl, sig, args)
 
-@lower_builtin('<=', types.List, types.List)
+@lower_builtin(operator.le, types.List, types.List)
 def list_le(context, builder, sig, args):
 
     def list_le_impl(a, b):
@@ -682,7 +799,7 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
-@lower_builtin('<', types.List, types.List)
+@lower_builtin(operator.lt, types.List, types.List)
 def list_lt(context, builder, sig, args):
 
     def list_lt_impl(a, b):
@@ -697,7 +814,7 @@ def list_lt(context, builder, sig, args):
 
     return context.compile_internal(builder, list_lt_impl, sig, args)
 
-@lower_builtin('>=', types.List, types.List)
+@lower_builtin(operator.ge, types.List, types.List)
 def list_ge(context, builder, sig, args):
 
     def list_ge_impl(a, b):
@@ -705,7 +822,7 @@ def list_ge(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
 
-@lower_builtin('>', types.List, types.List)
+@lower_builtin(operator.gt, types.List, types.List)
 def list_gt(context, builder, sig, args):
 
     def list_gt_impl(a, b):
@@ -724,7 +841,7 @@ def list_append(context, builder, sig, args):
     n = inst.size
     new_size = builder.add(n, ir.Constant(n.type, 1))
     inst.resize(new_size)
-    inst.setitem(n, item)
+    inst.setitem(n, item, incref=True)
 
     return context.get_dummy_value()
 
@@ -767,7 +884,7 @@ def _list_extend_list(context, builder, sig, args):
     with cgutils.for_range(builder, src_size) as loop:
         value = src.getitem(loop.index)
         value = context.cast(builder, value, src.dtype, dest.dtype)
-        dest.setitem(builder.add(loop.index, dest_size), value)
+        dest.setitem(builder.add(loop.index, dest_size), value, incref=True)
 
     return dest
 
@@ -851,7 +968,7 @@ def list_insert(context, builder, sig, args):
     new_size = builder.add(n, one)
     inst.resize(new_size)
     inst.move(builder.add(index, one), index, builder.sub(n, index))
-    inst.setitem(index, value)
+    inst.setitem(index, value, incref=True)
 
     return context.get_dummy_value()
 
@@ -864,8 +981,10 @@ def list_pop(context, builder, sig, args):
                        (IndexError, "pop from empty list"))
     n = builder.sub(n, ir.Constant(n.type, 1))
     res = inst.getitem(n)
+    inst.incref_value(res)  # incref the pop'ed element
+    inst.clear_value(n)     # clear the storage space
     inst.resize(n)
-    return res
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin("list.pop", types.List, types.Integer)
 def list_pop(context, builder, sig, args):
@@ -883,7 +1002,7 @@ def list_pop(context, builder, sig, args):
     n = builder.sub(n, ir.Constant(n.type, 1))
     inst.move(idx, builder.add(idx, one), builder.sub(n, idx))
     inst.resize(n)
-    return res
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin("list.remove", types.List, types.Any)
 def list_remove(context, builder, sig, args):

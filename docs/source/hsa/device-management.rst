@@ -1,5 +1,0 @@
-
-Device management
-=================
-
-TODO...

@@ -13,7 +13,8 @@ Note:
 from __future__ import print_function, absolute_import, division
 import functools
 import threading
-from numba import servicelib
+from contextlib import contextmanager
+
 from .driver import driver
 
 
@@ -52,8 +53,10 @@ class _DeviceList(object):
     def current(self):
         """Returns the active device or None if there's no active device
         """
-        if _runtime.context_stack:
-            return self.lst[_runtime.current_context.device.id]
+        with driver.get_active_context() as ac:
+            devnum = ac.devnum
+            if devnum is not None:
+                return self[devnum]
 
 
 class _DeviceContextManager(object):
@@ -75,10 +78,11 @@ class _DeviceContextManager(object):
         return getattr(self._device, item)
 
     def __enter__(self):
-        _runtime.push_context(self)
+        _runtime.get_or_create_context(self._device.id)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        _runtime.pop_context()
+        # this will verify that we are popping the right device context.
+        self._device.get_primary_context().pop()
 
     def __str__(self):
         return "<Managed Device {self.id}>".format(self=self)
@@ -94,8 +98,8 @@ class _Runtime(object):
     def __init__(self):
         self.gpus = _DeviceList()
 
-        # A thread local stack
-        self.context_stack = servicelib.TLStack()
+        # For caching the attached CUDA Context
+        self._tls = threading.local()
 
         # Remember the main thread
         # Only the main thread can *actually* destroy
@@ -104,71 +108,86 @@ class _Runtime(object):
         # Avoid mutation of runtime state in multithreaded programs
         self._lock = threading.RLock()
 
-    @property
-    def current_context(self):
-        """Return the active gpu context
+    @contextmanager
+    def ensure_context(self):
+        """Ensure a CUDA context is available inside the context.
+
+        On entrance, queries the CUDA driver for an active CUDA context and
+        attaches it in TLS for subsequent calls so they do not need to query
+        the CUDA driver again.  On exit, detach the CUDA context from the TLS.
+
+        This will allow us to pickup thirdparty activated CUDA context in
+        any top-level Numba CUDA API.
         """
-        return self.context_stack.top
-
-    def _get_or_create_context(self, gpu):
-        """Try to use a already created context for the given gpu.  If none
-        existed, create a new context.
-
-        Returns the context
-        """
-        with self._lock:
-            ctx = gpu.get_primary_context()
-            ctx.push()
-            return ctx
-
-    def push_context(self, gpu):
-        """Push a context for the given GPU or create a new one if no context
-        exist for the given GPU.
-        """
-        # Context stack is empty or the active device is not the given gpu
-        if self.context_stack.is_empty or self.current_context.device != gpu:
-            ctx = self._get_or_create_context(gpu)
-
-        # Active context is from the gpu
-        else:
-            ctx = self.current_context
-
-        # Always put the new context on the stack
-        self.context_stack.push(ctx)
-        return ctx
-
-    def pop_context(self):
-        """Pop a context from the context stack if there is more than
-        one context in the stack.
-
-        Will not remove the last context in the stack.
-        """
-        ctx = self.current_context
-        # If there is more than one context
-        # Do not pop the last context so there is always a active context
-        if len(self.context_stack) > 1:
-            ctx.pop()
-            self.context_stack.pop()
-        assert self.context_stack
+        with driver.get_active_context():
+            oldctx = self._get_attached_context()
+            newctx = self.get_or_create_context(None)
+            self._set_attached_context(newctx)
+            try:
+                yield
+            finally:
+                self._set_attached_context(oldctx)
 
     def get_or_create_context(self, devnum):
-        """Returns the current context or push/create a context for the GPU
-        with the given device number.
+        """Returns the primary context and push+create it if needed
+        for *devnum*.  If *devnum* is None, use the active CUDA context (must
+        be primary) or create a new one with ``devnum=0``.
         """
-        if self.context_stack:
-            return self.current_context
+        if devnum is None:
+            attached_ctx = self._get_attached_context()
+            if attached_ctx is None:
+                return self._get_or_create_context_uncached(devnum)
+            else:
+                return attached_ctx
         else:
-            with self._lock:
-                return self.push_context(self.gpus[devnum])
+            return self._activate_context_for(devnum)
+
+    def _get_or_create_context_uncached(self, devnum):
+        """See also ``get_or_create_context(devnum)``.
+        This version does not read the cache.
+        """
+        with self._lock:
+            # Try to get the active context in the CUDA stack or
+            # activate GPU-0 with the primary context
+            with driver.get_active_context() as ac:
+                if not ac:
+                    return self._activate_context_for(0)
+                else:
+                    # Get primary context for the active device
+                    ctx = self.gpus[ac.devnum].get_primary_context()
+                    # Is active context the primary context?
+                    if ctx.handle.value != ac.context_handle.value:
+                        msg = ('Numba cannot operate on non-primary'
+                               ' CUDA context {:x}')
+                        raise RuntimeError(msg.format(ac.context_handle.value))
+                    # Ensure the context is ready
+                    ctx.prepare_for_use()
+                return ctx
+
+    def _activate_context_for(self, devnum):
+        with self._lock:
+            gpu = self.gpus[devnum]
+            newctx = gpu.get_primary_context()
+            # Detect unexpected context switch
+            cached_ctx = self._get_attached_context()
+            if cached_ctx is not None and cached_ctx is not newctx:
+                raise RuntimeError('Cannot switch CUDA-context.')
+            newctx.push()
+            return newctx
+
+    def _get_attached_context(self):
+        return getattr(self._tls, 'attached_context', None)
+
+    def _set_attached_context(self, ctx):
+        self._tls.attached_context = ctx
 
     def reset(self):
         """Clear all contexts in the thread.  Destroy the context if and only
         if we are in the main thread.
         """
-        # Clear the context stack
-        while self.context_stack:
-            ctx = self.context_stack.pop()
-            ctx.pop()
+        # Pop all active context.
+        while driver.pop_active_context() is not None:
+            pass
 
         # If it is the main thread
         if threading.current_thread() == self._mainthread:
@@ -187,7 +206,7 @@ _runtime = _Runtime()
 gpus = _runtime.gpus
 
 
-def get_context(devnum=0):
+def get_context(devnum=None):
     """Get the current device or use a device by device number, and
     return the CUDA context.
     """
@@ -198,18 +217,12 @@ def require_context(fn):
     """
     A decorator that ensures a CUDA context is available when *fn* is executed.
 
-    Decorating *fn* is equivalent to writing::
-
-       get_context()
-       fn()
-
-    at each call site.
+    Note: The function *fn* cannot switch CUDA-context.
     """
-
     @functools.wraps(fn)
     def _require_cuda_context(*args, **kws):
-        get_context()
-        return fn(*args, **kws)
+        with _runtime.ensure_context():
+            return fn(*args, **kws)
 
     return _require_cuda_context
 

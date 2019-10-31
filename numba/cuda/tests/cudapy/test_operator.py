@@ -1,12 +1,12 @@
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba import cuda
 import operator
 
 
-class TestOperatorModule(unittest.TestCase):
+class TestOperatorModule(SerialMixin, unittest.TestCase):
     """
     Test if operator module is supported by the CUDA target.
     """

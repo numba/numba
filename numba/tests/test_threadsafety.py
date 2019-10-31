@@ -14,14 +14,26 @@ from numba import jit, vectorize, guvectorize
 from .support import temp_directory, override_config
 
 
+def foo(n, v):
+    return np.ones(n)
+
+
+def ufunc_foo(a, b):
+    return a + b
+
+
+def gufunc_foo(a, b, out):
+    out[0] = a + b
+
+
+
 class TestThreadSafety(unittest.TestCase):
 
     def run_jit(self, **options):
         def runner():
-            @jit(**options)
-            def foo(n, v):
-                return np.ones(n)
-            return foo(4, 10)
+            cfunc = jit(**options)(foo)
+
+            return cfunc(4, 10)
         return runner
 
     def run_compile(self, fnlist):
@@ -47,12 +59,9 @@ class TestThreadSafety(unittest.TestCase):
 
     def run_vectorize(self, **options):
         def runner():
-            @vectorize(['(f4, f4)'], **options)
-            def foo(a, b):
-                return a + b
-
+            cfunc = vectorize(['(f4, f4)'], **options)(ufunc_foo)
             a = b = np.random.random(10).astype(np.float32)
-            return foo(a, b)
+            return cfunc(a, b)
         return runner
 
     def test_concurrent_vectorize(self):
@@ -63,12 +72,10 @@ class TestThreadSafety(unittest.TestCase):
 
     def run_guvectorize(self, **options):
         def runner():
-            @guvectorize(['(f4, f4, f4[:])'], '(),()->()', **options)
-            def foo(a, b, out):
-                out[0] = a + b
-
+            sig = ['(f4, f4, f4[:])']
+            cfunc = guvectorize(sig, '(),()->()', **options)(gufunc_foo)
             a = b = np.random.random(10).astype(np.float32)
-            return foo(a, b)
+            return cfunc(a, b)
         return runner
 
     def test_concurrent_guvectorize(self):

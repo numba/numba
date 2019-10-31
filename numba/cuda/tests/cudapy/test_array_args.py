@@ -3,10 +3,10 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestCudaArrayArg(unittest.TestCase):
+class TestCudaArrayArg(SerialMixin, unittest.TestCase):
     def test_array_ary(self):
 
         @cuda.jit('double(double[:],int64)', device=True, inline=True)

@@ -7,6 +7,7 @@ import numpy as np
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
+from ..numpy_support import version as np_version
 
 
 registry = Registry()
@@ -105,6 +106,20 @@ class Random_random(ConcreteRandomTemplate):
         def typer(size=None):
             return self.array_typer(size)()
         return typer
+
+if np_version >= (1, 17):
+    infer_global(
+        np.random.random_sample,
+        typing_key="np.random.random_sample",
+    )(Random_random)
+    infer_global(
+        np.random.sample,
+        typing_key="np.random.sample",
+    )(Random_random)
+    infer_global(
+        np.random.ranf,
+        typing_key="np.random.ranf",
+    )(Random_random)
 
 
 @infer_global(random.randint, typing_key="random.randint")
@@ -283,17 +298,6 @@ class Random_nullary_distribution(ConcreteRandomTemplate):
 class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp, tp, tp) for tp in _float_types]
-
-# Other
-
-@infer_global(random.shuffle, typing_key="random.shuffle")
-@infer_global(np.random.shuffle, typing_key="np.random.shuffle")
-class Random_shuffle(AbstractTemplate):
-    def generic(self, args, kws):
-        arr, = args
-        if isinstance(arr, types.Buffer) and arr.ndim == 1 and arr.mutable:
-            return signature(types.void, arr)
-
 
 # NOTE: some functions can have @overloads in numba.targets.randomimpl,
 # and therefore don't need a typing declaration here.

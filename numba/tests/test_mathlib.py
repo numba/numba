@@ -235,8 +235,6 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @tag('important')
-    @unittest.skipIf(sys.platform == 'win32',
-                     "not exactly equal on win32 (issue #597)")
     def test_cos_npm(self):
         self.test_cos(flags=no_pyobj_flags)
 

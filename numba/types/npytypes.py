@@ -2,13 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 
-import numpy as np
+from llvmlite import ir
 
-from .abstract import *
-from .common import *
+from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
+from .common import Buffer, Opaque, SimpleIteratorType
 from ..typeconv import Conversion
 from .. import utils
-
+from .misc import UnicodeType
+from .containers import Bytes
 
 class CharSeq(Type):
     """
@@ -24,6 +25,10 @@ class CharSeq(Type):
     @property
     def key(self):
         return self.count
+
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, Bytes):
+            return Conversion.safe
 
 
 class UnicodeCharSeq(Type):
@@ -41,53 +46,173 @@ class UnicodeCharSeq(Type):
     def key(self):
         return self.count
 
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            # Assuming that unicode_type itemsize is not greater than
+            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
+            # on.
+            return Conversion.safe
+
+
+_RecordField = collections.namedtuple(
+    '_RecordField',
+    'type,offset,alignment,title',
+)
+
 
 class Record(Type):
     """
-    A Numpy structured scalar.  *descr* is the string representation
-    of the Numpy dtype; *fields* of mapping of field names to
-    (type, offset) tuples; *size* the bytesize of a record;
-    *aligned* whether the fields are aligned; *dtype* the Numpy dtype
-    instance.
+    A Record datatype can be mapped to a NumPy structured dtype.
+    A record is very flexible since it is laid out as a list of bytes.
+    Fields can be mapped to arbitrary points inside it, even if they overlap.
+
+    *fields* is a list of `(name:str, data:dict)`.
+        Where `data` is `{ type: Type, offset: int }`
+    *size* is an int; the record size
+    *aligned* is a boolean; whether the record is ABI aligned.
     """
     mutable = True
 
-    def __init__(self, descr, fields, size, aligned, dtype):
-        self.descr = descr
-        self.fields = fields.copy()
+    @classmethod
+    def make_c_struct(cls, name_types):
+        """Construct a Record type from a list of (name:str, type:Types).
+        The layout of the structure will follow C.
+
+        Note: only scalar types are supported currently.
+        """
+        from numba.targets.registry import cpu_target
+
+        ctx = cpu_target.target_context
+        offset = 0
+        fields = []
+        lltypes = []
+        for k, ty in name_types:
+            if not isinstance(ty, (Number, NestedArray)):
+                msg = "Only Number and NestedArray types are supported, found: {}. "
+                raise TypeError(msg.format(ty))
+            datatype = ctx.get_data_type(ty)
+            lltypes.append(datatype)
+            size = ctx.get_abi_sizeof(datatype)
+            align = ctx.get_abi_alignment(datatype)
+            # align
+            misaligned = offset % align
+            if misaligned:
+                offset += align - misaligned
+            fields.append((k, {
+                'type': ty, 'offset': offset, 'alignment': align,
+            }))
+            offset += size
+        # Adjust sizeof structure
+        abi_size = ctx.get_abi_sizeof(ir.LiteralStructType(lltypes))
+        return Record(fields, size=abi_size, aligned=True)
+
+    def __init__(self, fields, size, aligned):
+        fields = self._normalize_fields(fields)
+        self.fields = dict(fields)
         self.size = size
         self.aligned = aligned
-        self.dtype = dtype
-        name = 'Record(%s)' % descr
+
+        # Create description
+        descbuf = []
+        fmt = "{}[type={};offset={}{}]"
+        for k, infos in fields:
+            extra = ""
+            if infos.alignment is not None:
+                extra += ';alignment={}'.format(infos.alignment)
+            elif infos.title is not None:
+                extra += ';title={}'.format(infos.title)
+            descbuf.append(fmt.format(k, infos.type, infos.offset, extra))
+
+        desc = ','.join(descbuf)
+        name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
         super(Record, self).__init__(name)
+
+    @classmethod
+    def _normalize_fields(cls, fields):
+        """
+        fields:
+            [name: str,
+             value: {
+                 type: Type,
+                 offset: int,
+                 [ alignment: int ],
+                 [ title : str],
+             }]
+        """
+        res = []
+        for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
+            fd = _RecordField(
+                type=infos['type'],
+                offset=infos['offset'],
+                alignment=infos.get('alignment'),
+                title=infos.get('title'),
+            )
+            res.append((name, fd))
+        return res
 
     @property
     def key(self):
-        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # Numpy dtype equality doesn't always succeed, use the name instead
         # (https://github.com/numpy/numpy/issues/5715)
-        return (self.descr, self.size, self.aligned)
+        return self.name
 
     @property
     def mangling_args(self):
         return self.__class__.__name__, (self._code,)
 
     def __len__(self):
+        """Returns the number of fields
+        """
         return len(self.fields)
 
     def offset(self, key):
-        return self.fields[key][1]
+        """Get the byte offset of a field from the start of the structure.
+        """
+        return self.fields[key].offset
 
     def typeof(self, key):
-        return self.fields[key][0]
+        """Get the type of a field.
+        """
+        return self.fields[key].type
+
+    def alignof(self, key):
+        """Get the specified alignment of the field.
+
+        Since field alignment is optional, this may return None.
+        """
+        return self.fields[key].alignment
+
+    def has_titles(self):
+        """Returns True the record uses titles.
+        """
+        return any(fd.title is not None for fd in self.fields.values())
+
+    def is_title(self, key):
+        """Returns True if the field named *key* is a title.
+        """
+        return self.fields[key].title == key
 
     @property
     def members(self):
-        return [(f, t) for f, (t, _) in self.fields.items()]
+        """An ordered list of (name, type) for the fields.
+        """
+        ordered = sorted(self.fields.items(), key=lambda x: x[1].offset)
+        return [(k, v.type) for k, v in ordered]
+
+    @property
+    def dtype(self):
+        from numba.numpy_support import as_struct_dtype
+
+        return as_struct_dtype(self)
 
 
 class DType(DTypeSpec, Opaque):
     """
-    Type class for Numpy dtypes.
+    Type class associated with the `np.dtype`.
+
+    i.e. :code:`assert type(np.dtype('int32')) == np.dtype`
+
+    np.dtype('int32')
     """
 
     def __init__(self, dtype):
@@ -314,16 +439,18 @@ class Array(Buffer):
         """
         Unify this with the *other* Array.
         """
-        if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
-            if self.layout == other.layout:
-                layout = self.layout
-            else:
-                layout = 'A'
-            readonly = not (self.mutable and other.mutable)
-            aligned = self.aligned and other.aligned
-            return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                         readonly=readonly, aligned=aligned)
+        # If other is array and the ndim matches
+        if isinstance(other, Array) and other.ndim == self.ndim:
+            # If dtype matches or other.dtype is undefined (inferred)
+            if other.dtype == self.dtype or not other.dtype.is_precise():
+                if self.layout == other.layout:
+                    layout = self.layout
+                else:
+                    layout = 'A'
+                readonly = not (self.mutable and other.mutable)
+                aligned = self.aligned and other.aligned
+                return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
+                             readonly=readonly, aligned=aligned)
 
     def can_convert_to(self, typingctx, other):
         """
@@ -336,25 +463,8 @@ class Array(Buffer):
                 and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
-
-class SmartArrayType(Array):
-
-    def __init__(self, dtype, ndim, layout, pyclass):
-        self.pyclass = pyclass
-        super(SmartArrayType, self).__init__(dtype, ndim, layout, name='numba_array')
-
-    @property
-    def as_array(self):
-        return Array(self.dtype, self.ndim, self.layout)
-
-    def copy(self, dtype=None, ndim=None, layout=None):
-        if dtype is None:
-            dtype = self.dtype
-        if ndim is None:
-            ndim = self.ndim
-        if layout is None:
-            layout = self.layout
-        return type(self)(dtype, ndim, layout, self.pyclass)
+    def is_precise(self):
+        return self.dtype.is_precise()
 
 
 class ArrayCTypes(Type):

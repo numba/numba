@@ -5,7 +5,6 @@ from __future__ import print_function, division, absolute_import
 
 from .. import config
 
-
 class TargetOptions(object):
     OPTIONS = {}
 
@@ -64,11 +63,17 @@ class TargetOptions(object):
         if kws.pop('no_cpython_wrapper', False):
             flags.set('no_cpython_wrapper')
 
-        if kws.pop('fastmath', False):
-            flags.set('fastmath')
+        if 'parallel' in kws:
+            flags.set('auto_parallel', kws.pop('parallel'))
+
+        if 'fastmath' in kws:
+            flags.set('fastmath', kws.pop('fastmath'))
 
         if 'error_model' in kws:
             flags.set('error_model', kws.pop('error_model'))
+
+        if 'inline' in kws:
+            flags.set('inline', kws.pop('inline'))
 
         flags.set("enable_pyobject_looplift")
 

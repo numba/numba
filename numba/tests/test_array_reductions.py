@@ -1,6 +1,6 @@
 from __future__ import division
 
-from itertools import product
+from itertools import product, combinations_with_replacement
 
 import numpy as np
 
@@ -29,11 +29,17 @@ def array_cumprod(arr):
 def array_cumprod_global(arr):
     return np.cumprod(arr)
 
+def array_nancumprod(arr):
+    return np.nancumprod(arr)
+
 def array_cumsum(arr):
     return arr.cumsum()
 
 def array_cumsum_global(arr):
     return np.cumsum(arr)
+
+def array_nancumsum(arr):
+    return np.nancumsum(arr)
 
 def array_sum(arr):
     return arr.sum()
@@ -116,6 +122,20 @@ def array_nanvar(arr):
 def array_nanmedian_global(arr):
     return np.nanmedian(arr)
 
+def array_percentile_global(arr, q):
+    return np.percentile(arr, q)
+
+def array_nanpercentile_global(arr, q):
+    return np.nanpercentile(arr, q)
+
+def array_ptp_global(a):
+    return np.ptp(a)
+
+def array_quantile_global(arr, q):
+    return np.quantile(arr, q)
+
+def array_nanquantile_global(arr, q):
+    return np.nanquantile(arr, q)
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -140,6 +160,15 @@ def full_test_arrays(dtype):
     # Add floats with some mantissa
     if dtype == np.float32:
         array_list += [a / 10 for a in array_list]
+
+    # add imaginary part
+    if dtype == np.complex64:
+        acc = []
+        for a in array_list:
+            tmp = a / 10 + 1j * a / 11
+            tmp[::2] = np.conj(tmp[::2])
+            acc.append(tmp)
+        array_list.extend(acc)
 
     for a in array_list:
         assert a.dtype == np.dtype(dtype)
@@ -314,6 +343,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in array_variations(np.arange(64) + 10.5):
             check_even(a)
 
+    @staticmethod
+    def _array_variations(a):
+        # Sorted, reversed, random, many duplicates, many NaNs, all NaNs
+        yield a
+        a = a[::-1].copy()
+        yield a
+        np.random.shuffle(a)
+        yield a
+        a[a % 4 >= 1] = 3.5
+        yield a
+        a[a % 4 >= 2] = np.nan
+        yield a
+        a[:] = np.nan
+        yield a
+
     @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
@@ -330,23 +374,197 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q, abs_tol=1e-12):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        a = self.random.randn(27).reshape(3, 3, 3)
+        q = np.linspace(0, q_upper_bound, 14)[::-1]
+        check(a, q)
+        check(a, 0)
+        check(a, q_upper_bound / 2)
+        check(a, q_upper_bound)
+
+        not_finite = [np.nan, -np.inf, np.inf]
+        a.flat[:10] = self.random.choice(not_finite, 10)
+        self.random.shuffle(a)
+        self.random.shuffle(q)
+        check(a, q)
+
+        a = a.flatten().tolist()
+        q = q.flatten().tolist()
+        check(a, q)
+        check(tuple(a), tuple(q))
+
+        a = self.random.choice([1, 2, 3, 4], 10)
+        q = np.linspace(0, q_upper_bound, 5)
+        check(a, q)
+
+        # tests inspired by
+        # https://github.com/numpy/numpy/blob/345b2f6e/numpy/lib/tests/test_function_base.py
+        x = np.arange(8) * 0.5
+        np.testing.assert_equal(cfunc(x, 0), 0.)
+        np.testing.assert_equal(cfunc(x, q_upper_bound), 3.5)
+        np.testing.assert_equal(cfunc(x, q_upper_bound / 2), 1.75)
+
+        x = np.arange(12).reshape(3, 4)
+        q = np.array((0.25, 0.5, 1.0)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q), [2.75, 5.5, 11.0])
+
+        x = np.arange(3 * 4 * 5 * 6).reshape(3, 4, 5, 6)
+        q = np.array((0.25, 0.50)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q).shape, (2,))
+
+        q = np.array((0.25, 0.50, 0.75)) * q_upper_bound
+        np.testing.assert_equal(cfunc(x, q).shape, (3,))
+
+        x = np.arange(12).reshape(3, 4)
+        np.testing.assert_equal(cfunc(x, q_upper_bound / 2), 5.5)
+        self.assertTrue(np.isscalar(cfunc(x, q_upper_bound / 2)))
+
+        np.testing.assert_equal(cfunc([1, 2, 3], 0), 1)
+
+        a = np.array([2, 3, 4, 1])
+        cfunc(a, [q_upper_bound / 2])
+        np.testing.assert_equal(a, np.array([2, 3, 4, 1]))
+
+    def check_percentile_edge_cases(self, pyfunc, q_upper_bound=100):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q, abs_tol=1e-14):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        def convert_to_float_and_check(a, q, abs_tol=1e-14):
+            expected = pyfunc(a, q).astype(np.float64)
+            got = cfunc(a, q)
+            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+
+        def _array_combinations(elements):
+            for i in range(1, 10):
+                for comb in combinations_with_replacement(elements, i):
+                    yield np.array(comb)
+
+        # high number of combinations, many including non-finite values
+        q = (0, 0.1 * q_upper_bound, 0.2 * q_upper_bound, q_upper_bound)
+        element_pool = (1, -1, np.nan, np.inf, -np.inf)
+        for a in _array_combinations(element_pool):
+            check(a, q)
+
+        # edge cases - numpy exhibits behavioural differences across
+        # platforms, see: https://github.com/numpy/numpy/issues/13272
+        if q_upper_bound == 1:
+            _check = convert_to_float_and_check
+        else:
+            _check = check
+
+        a = np.array(5)
+        q = np.array(1)
+        _check(a, q)
+
+        a = True
+        q = False
+        _check(a, q)
+
+        a = np.array([False, True, True])
+        q = a
+        _check(a, q)
+
+        a = 5
+        q = q_upper_bound / 2
+        _check(a, q)
+
+    def check_percentile_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertEqual(
+                "Percentiles must be in the range [0, 100]",
+                str(raises.exception)
+            )
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(5)
+        check_err(a, -5)  # q less than 0
+        check_err(a, (1, 10, 105))  # q contains value greater than 100
+        check_err(a, (1, 10, np.nan))  # q contains nan
+
+        with self.assertTypingError() as e:
+            a = np.arange(5) * 1j
+            q = 0.1
+            cfunc(a, q)
+
+        self.assertIn('Not supported for complex dtype', str(e.exception))
+
+    def check_quantile_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_err(a, q):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, q)
+            self.assertEqual(
+                "Quantiles must be in the range [0, 1]",
+                str(raises.exception)
+            )
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        a = np.arange(5)
+        check_err(a, -0.5)  # q less than 0
+        check_err(a, (0.1, 0.10, 1.05))  # q contains value greater than 1
+        check_err(a, (0.1, 0.10, np.nan))  # q contains nan
+
+        with self.assertTypingError() as e:
+            a = np.arange(5) * 1j
+            q = 0.1
+            cfunc(a, q)
+
+        self.assertIn('Not supported for complex dtype', str(e.exception))
+
+    @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
+    def test_percentile_basic(self):
+        pyfunc = array_percentile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
+        self.check_percentile_exceptions(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 11),
+                         "nanpercentile needs Numpy 1.11+")
+    def test_nanpercentile_basic(self):
+        pyfunc = array_nanpercentile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
+        self.check_percentile_exceptions(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
+    def test_quantile_basic(self):
+        pyfunc = array_quantile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
+        self.check_quantile_exceptions(pyfunc)
+
+    @unittest.skipUnless(np_version >= (1, 15),
+                         "nanquantile needs Numpy 1.15+")
+    def test_nanquantile_basic(self):
+        pyfunc = array_nanquantile_global
+        self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
+        self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
+        self.check_quantile_exceptions(pyfunc)
+
     @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
-
-        def variations(a):
-            # Sorted, reversed, random, many duplicates, many NaNs
-            yield a
-            a = a[::-1].copy()
-            yield a
-            np.random.shuffle(a)
-            yield a
-            a[a % 4 <= 1] = 3.5
-            yield a
-            a[a % 4 >= 2] = float('nan')
-            yield a
-
-        self.check_median_basic(pyfunc, variations)
+        self.check_median_basic(pyfunc, self._array_variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -444,6 +662,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumsum)
         self.check_aggregation_magnitude(array_cumsum_global)
 
+    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
+    def test_nancumsum_magnitude(self):
+        self.check_aggregation_magnitude(array_nancumsum, is_prod=True)
+
     def test_prod_magnitude(self):
         self.check_aggregation_magnitude(array_prod, is_prod=True)
         self.check_aggregation_magnitude(array_prod_global, is_prod=True)
@@ -451,6 +673,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_cumprod_magnitude(self):
         self.check_aggregation_magnitude(array_cumprod, is_prod=True)
         self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
+
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
+    def test_nancumprod_magnitude(self):
+        self.check_aggregation_magnitude(array_nancumprod, is_prod=True)
 
     def test_mean_magnitude(self):
         self.check_aggregation_magnitude(array_mean)
@@ -519,47 +745,323 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_npdatetime(self):
         self.check_nptimedelta(array_mean)
 
+    def check_nan_cumulative(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def _set_some_values_to_nan(a):
+            p = a.size // 2  # set approx half elements to NaN
+            np.put(a, np.random.choice(range(a.size), p, replace=False), np.nan)
+            return a
+
+        def a_variations():
+            yield np.linspace(-1, 3, 60).reshape(3, 4, 5)
+            yield np.array([np.inf, 3, 4])
+            yield np.array([True, True, True, False])
+            yield np.arange(1, 10)
+            yield np.asfortranarray(np.arange(1, 64) - 33.3)
+            yield np.arange(1, 10, dtype=np.float32)[::-1]
+
+        for a in a_variations():
+            check(a)  # no nans
+            check(_set_some_values_to_nan(a.astype(np.float64)))  # about 50% nans
+
+        # edge cases
+        check(np.array([]))
+        check(np.full(10, np.nan))
+
+        parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
+
+        a = parts + 1j * parts[::-1]
+        a = a.reshape(3, 3)
+        check(a)
+
+    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
+    def test_nancumprod_basic(self):
+        self.check_cumulative(array_nancumprod)
+        self.check_nan_cumulative(array_nancumprod)
+
+    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
+    def test_nancumsum_basic(self):
+        self.check_cumulative(array_nancumsum)
+        self.check_nan_cumulative(array_nancumsum)
+
+    def test_ptp_basic(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield np.arange(10)
+            yield np.array([-1.1, np.nan, 2.2])
+            yield np.array([-np.inf, 5])
+            yield (4, 2, 5)
+            yield (1,)
+            yield np.full(5, 5)
+            yield [2.2, -2.3, 0.1]
+            a = np.linspace(-10, 10, 16).reshape(4, 2, 2)
+            yield a
+            yield np.asfortranarray(a)
+            yield a[::-1]
+            np.random.RandomState(0).shuffle(a)
+            yield a
+            yield 6
+            yield 6.5
+            yield -np.inf
+            yield 1 + 4j
+            yield [2.2, np.nan]
+            yield [2.2, np.inf]
+            yield ((4.1, 2.0, -7.6), (4.3, 2.7, 5.2))
+            yield np.full(5, np.nan)
+            yield 1 + np.nan * 1j
+            yield np.nan + np.nan * 1j
+            yield np.nan
+
+        for a in a_variations():
+            check(a)
+
+    def test_ptp_complex(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def make_array(real_nan=False, imag_nan=False):
+            real = np.linspace(-4, 4, 25)
+            if real_nan:
+                real[4:9] = np.nan
+            imag = np.linspace(-5, 5, 25)
+            if imag_nan:
+                imag[7:12] = np.nan
+            return (real + 1j * imag).reshape(5, 5)
+
+        for real_nan, imag_nan in product([True, False], repeat=2):
+            comp = make_array(real_nan, imag_nan)
+            check(comp)
+
+        real = np.ones(8)
+        imag = np.arange(-4, 4)
+        comp = real + 1j * imag
+        check(comp)
+        comp = real - 1j * imag
+        check(comp)
+
+        comp = np.full((4, 4), fill_value=(1 - 1j))
+        check(comp)
+
+    def test_ptp_exceptions(self):
+        pyfunc = array_ptp_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertTypingError() as e:
+            cfunc(np.array((True, True, False)))
+
+        msg = "Boolean dtype is unsupported (as per NumPy)"
+        self.assertIn(msg, str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([]))
+
+        msg = "zero-size array reduction not possible"
+        self.assertIn(msg, str(e.exception))
+
+    def test_min_max_complex_basic(self):
+        pyfuncs = array_min_global, array_max_global
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            imag = real * 2
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                dtype = self.random.choice([np.complex64, np.complex128])
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a.astype(dtype))
+
+    def test_nanmin_nanmax_complex_basic(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check(a):
+                expected = pyfunc(a)
+                got = cfunc(a)
+                self.assertPreciseEqual(expected, got)
+
+            real = np.linspace(-10, 10, 40)
+            real[:4] = real[-1]
+            real[5:9] = np.nan
+            imag = real * 2
+            imag[7:12] = np.nan
+            a = real - imag * 1j
+            check(a)
+
+            for _ in range(10):
+                self.random.shuffle(real)
+                self.random.shuffle(imag)
+                a = real - imag * 1j
+                a[:4] = a[-1]
+                check(a)
+
+    def test_nanmin_nanmax_non_array_inputs(self):
+        pyfuncs = array_nanmin, array_nanmax
+
+        def check(a):
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        def a_variations():
+            yield [1, 6, 4, 2]
+            yield ((-10, 4, -12), (5, 200, -30))
+            yield np.array(3)
+            yield (2,)
+            yield 3.142
+            yield False
+            yield (np.nan, 3.142, -5.2, 3.0)
+            yield [np.inf, np.nan, -np.inf]
+            yield [(np.nan, 1.1), (-4.4, 8.7)]
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            for a in a_variations():
+                check(a)
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
+
+        # these function are tested in real and complex space
         reduction_funcs = [array_sum, array_sum_global,
                            array_prod, array_prod_global,
                            array_mean, array_mean_global,
                            array_var, array_var_global,
                            array_std, array_std_global,
-                           array_min, array_min_global,
-                           array_max, array_max_global,
-                           array_argmin, array_argmin_global,
-                           array_argmax, array_argmax_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
-                           array_nanmax,
-                           array_nanmin,
+                           array_min, array_min_global,
+                           array_max, array_max_global,
+                           array_nanmax, array_nanmin,
                            array_nansum,
                            ]
+
+        # these functions only work in real space as no complex comparison
+        # operator is implemented
+        reduction_funcs_rspace = [array_argmin, array_argmin_global,
+                                  array_argmax, array_argmax_global]
+
         if np_version >= (1, 8):
             reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
         if np_version >= (1, 10):
             reduction_funcs += [array_nanprod]
 
-        dtypes_to_test = [np.int32, np.float32, np.bool_]
+        dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 
-        # Install tests on class
-        for dt in dtypes_to_test:
-            test_arrays = full_test_arrays(dt)
-            for red_func, test_array in product(reduction_funcs, test_arrays):
-                # Create the name for the test function
-                test_name = "test_{0}_{1}_{2}d".format(red_func.__name__, test_array.dtype.name, test_array.ndim)
+        def install_tests(dtypes, funcs):
+            # Install tests on class
+            for dt in dtypes:
+                test_arrays = full_test_arrays(dt)
+                for red_func, test_array in product(funcs, test_arrays):
+                    # Create the name for the test function
+                    test_name = "test_{0}_{1}_{2}d"
+                    test_name = test_name.format(red_func.__name__,
+                                                 test_array.dtype.name,
+                                                 test_array.ndim)
 
-                def new_test_function(self, redFunc=red_func, testArray=test_array, testName=test_name):
-                    npr, nbr = run_comparative(redFunc, testArray)
-                    self.assertPreciseEqual(npr, nbr, msg=test_name, prec="single")
+                    def new_test_function(self, redFunc=red_func,
+                                          testArray=test_array,
+                                          testName=test_name):
+                        ulps = 1
+                        if 'prod' in red_func.__name__ and \
+                            np.iscomplexobj(testArray):
+                            # prod family accumulate slightly more error on
+                            # some architectures (power, 32bit) for complex input
+                            ulps = 3
+                        npr, nbr = run_comparative(redFunc, testArray)
+                        self.assertPreciseEqual(npr, nbr, msg=test_name,
+                                                prec="single", ulps=ulps)
 
-                # Install it into the class
-                setattr(cls, test_name, new_test_function)
+                    # Install it into the class
+                    setattr(cls, test_name, new_test_function)
+
+        # install tests for reduction functions that only work in real space
+        install_tests(dtypes_to_test[:-1], reduction_funcs_rspace)
+
+        # install tests for reduction functions
+        install_tests(dtypes_to_test, reduction_funcs)
 
 
 TestArrayReductions.install_generated_tests()
+
+
+class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
+
+    # int64, size 0
+    zero_size = np.arange(0)
+
+    def check_exception(self, pyfunc, msg):
+        cfunc = jit(nopython=True)(pyfunc)
+        # make sure NumPy raises consistently/no behaviour change
+        with self.assertRaises(BaseException):
+            pyfunc(self.zero_size)
+        # check numba impl raises expected
+        with self.assertRaises(ValueError) as e:
+            cfunc(self.zero_size)
+        self.assertIn(msg, str(e.exception))
+
+    @classmethod
+    def install(cls):
+
+        fn_to_msg = dict()
+        empty_seq = "attempt to get {0} of an empty sequence"
+        op_no_ident = ("zero-size array to reduction operation "
+                       "{0}")
+        for x in [array_argmax, array_argmax_global, array_argmin,
+                  array_argmin_global]:
+            fn_to_msg[x] = empty_seq
+        for x in [array_max, array_max, array_min, array_min]:
+            fn_to_msg[x] = op_no_ident
+
+        name_template = "test_zero_size_array_{0}"
+        for fn, msg in fn_to_msg.items():
+            test_name = name_template.format(fn.__name__)
+
+            lmsg = msg.format(fn.__name__)
+            lmsg = lmsg.replace('array_','').replace('_global','')
+            def test_fn(self, func=fn, message=lmsg):
+                self.check_exception(func, message)
+
+            setattr(cls, test_name, test_fn)
+
+TestArrayReductionsExceptions.install()
 
 
 if __name__ == '__main__':

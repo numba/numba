@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os.path
 import re
-from contextlib import contextmanager
 import subprocess
 
 import numpy as np
@@ -11,7 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import config
 
-from ..support import captured_stdout
+from ..support import capture_cache_log
 from ..test_dispatcher import BaseCacheTest
 
 
@@ -20,6 +19,8 @@ class UfuncCacheTest(BaseCacheTest):
     Since the cache stats is not exposed by ufunc, we test by looking at the
     cache debug log.
     """
+    _numba_parallel_test_ = False
+
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "ufunc_caching_test_fodder"
@@ -29,13 +30,6 @@ class UfuncCacheTest(BaseCacheTest):
 
     regex_data_loaded = re.compile(r'\[cache\] data loaded from')
     regex_index_loaded = re.compile(r'\[cache\] index loaded from')
-
-    @contextmanager
-    def capture_cache_log(self):
-        with captured_stdout() as out:
-            old, config.DEBUG_CACHE = config.DEBUG_CACHE, True
-            yield out
-            config.DEBUG_CACHE = old
 
     def check_cache_saved(self, cachelog, count):
         """
@@ -63,13 +57,13 @@ class UfuncCacheTest(BaseCacheTest):
         mod = self.import_module()
         usecase = getattr(mod, usecase_name)
         # New cache entry saved
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             new_ufunc = usecase(**kwargs)
         cachelog = out.getvalue()
         self.check_cache_saved(cachelog, count=n_overloads)
 
         # Use cached version
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             cached_ufunc = usecase(**kwargs)
         cachelog = out.getvalue()
         self.check_cache_loaded(cachelog, count=n_overloads)
@@ -114,16 +108,16 @@ class TestDUfuncCacheTest(UfuncCacheTest):
         mod = self.import_module()
         usecase = getattr(mod, usecase_name)
         # Create dufunc
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             ufunc = usecase()
         self.check_cache_saved(out.getvalue(), count=0)
         # Compile & cache
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             ufunc(np.arange(10))
         self.check_cache_saved(out.getvalue(), count=1)
         self.check_cache_loaded(out.getvalue(), count=0)
         # Use cached
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             ufunc = usecase()
             ufunc(np.arange(10))
         self.check_cache_loaded(out.getvalue(), count=1)
@@ -147,7 +141,7 @@ class TestGUfuncCacheTest(UfuncCacheTest):
     def test_filename_prefix(self):
         mod = self.import_module()
         usecase = getattr(mod, "direct_gufunc_cache_usecase")
-        with self.capture_cache_log() as out:
+        with capture_cache_log() as out:
             usecase()
         cachelog = out.getvalue()
         # find number filename with "guf-" prefix

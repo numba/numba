@@ -15,6 +15,7 @@ import numpy as np
 # this is lazily initialized to avoid circular imports
 _ufunc_db = None
 
+
 def _lazy_init_db():
     global _ufunc_db
 
@@ -399,7 +400,8 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_cos_impl,
     }
 
-    tan_impl = cmathimpl.tan_impl if v >= (1, 10) else npyfuncs.np_complex_tan_impl
+    tan_impl = cmathimpl.tan_impl if v >= (
+        1, 10) else npyfuncs.np_complex_tan_impl
 
     ufunc_db[np.tan] = {
         'f->f': npyfuncs.np_real_tan_impl,
@@ -408,7 +410,8 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': tan_impl,
     }
 
-    arcsin_impl = cmathimpl.asin_impl if v >= (1, 10) else npyfuncs.np_complex_asin_impl
+    arcsin_impl = cmathimpl.asin_impl if v >= (
+        1, 10) else npyfuncs.np_complex_asin_impl
 
     ufunc_db[np.arcsin] = {
         'f->f': npyfuncs.np_real_asin_impl,
@@ -424,7 +427,8 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': cmathimpl.acos_impl,
     }
 
-    arctan_impl = cmathimpl.atan_impl if v >= (1, 10) else npyfuncs.np_complex_atan_impl
+    arctan_impl = cmathimpl.atan_impl if v >= (
+        1, 10) else npyfuncs.np_complex_atan_impl
 
     ufunc_db[np.arctan] = {
         'f->f': npyfuncs.np_real_atan_impl,
@@ -464,7 +468,8 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_tanh_impl,
     }
 
-    arcsinh_impl = cmathimpl.asinh_impl if v >= (1, 10) else npyfuncs.np_complex_asinh_impl
+    arcsinh_impl = cmathimpl.asinh_impl if v >= (
+        1, 10) else npyfuncs.np_complex_asinh_impl
 
     ufunc_db[np.arcsinh] = {
         'f->f': npyfuncs.np_real_asinh_impl,
@@ -480,7 +485,8 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
-    arctanh_impl = cmathimpl.atanh_impl if v >= (1, 10) else npyfuncs.np_complex_atanh_impl
+    arctanh_impl = cmathimpl.atanh_impl if v >= (
+        1, 10) else npyfuncs.np_complex_atanh_impl
 
     ufunc_db[np.arctanh] = {
         'f->f': npyfuncs.np_real_atanh_impl,
@@ -782,6 +788,23 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isnan_impl,
         'F->?': npyfuncs.np_complex_isnan_impl,
         'D->?': npyfuncs.np_complex_isnan_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isnan_impl,
+        'B->?': npyfuncs.np_int_isnan_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isnan_impl,
+        'H->?': npyfuncs.np_int_isnan_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isnan_impl,
+        'I->?': npyfuncs.np_int_isnan_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isnan_impl,
+        'L->?': npyfuncs.np_int_isnan_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isnan_impl,
+        'Q->?': npyfuncs.np_int_isnan_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isnan_impl,
     }
 
     ufunc_db[np.isinf] = {
@@ -789,6 +812,23 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isinf_impl,
         'F->?': npyfuncs.np_complex_isinf_impl,
         'D->?': npyfuncs.np_complex_isinf_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isinf_impl,
+        'B->?': npyfuncs.np_int_isinf_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isinf_impl,
+        'H->?': npyfuncs.np_int_isinf_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isinf_impl,
+        'I->?': npyfuncs.np_int_isinf_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isinf_impl,
+        'L->?': npyfuncs.np_int_isinf_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isinf_impl,
+        'Q->?': npyfuncs.np_int_isinf_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isinf_impl,
     }
 
     ufunc_db[np.isfinite] = {
@@ -796,6 +836,26 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_isfinite_impl,
         'F->?': npyfuncs.np_complex_isfinite_impl,
         'D->?': npyfuncs.np_complex_isfinite_impl,
+        # int8
+        'b->?': npyfuncs.np_int_isfinite_impl,
+        'B->?': npyfuncs.np_int_isfinite_impl,
+        # int16
+        'h->?': npyfuncs.np_int_isfinite_impl,
+        'H->?': npyfuncs.np_int_isfinite_impl,
+        # int32
+        'i->?': npyfuncs.np_int_isfinite_impl,
+        'I->?': npyfuncs.np_int_isfinite_impl,
+        # int64
+        'l->?': npyfuncs.np_int_isfinite_impl,
+        'L->?': npyfuncs.np_int_isfinite_impl,
+        # intp
+        'q->?': npyfuncs.np_int_isfinite_impl,
+        'Q->?': npyfuncs.np_int_isfinite_impl,
+        # boolean
+        '?->?': npyfuncs.np_int_isfinite_impl,
+        # datetime & timedelta
+        'M->?': npyfuncs.np_datetime_isfinite_impl,
+        'm->?': npyfuncs.np_datetime_isfinite_impl,
     }
 
     ufunc_db[np.signbit] = {
@@ -868,7 +928,7 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': numbers.int_xor_impl,
     }
 
-    ufunc_db[np.invert] = { # aka np.bitwise_not
+    ufunc_db[np.invert] = {  # aka np.bitwise_not
         '?->?': numbers.int_invert_impl,
         'b->b': numbers.int_invert_impl,
         'B->B': numbers.int_invert_impl,
@@ -912,29 +972,29 @@ def _fill_ufunc_db(ufunc_db):
     from . import npdatetime
     ufunc_db[np.negative].update({
         'm->m': npdatetime.timedelta_neg_impl,
-        })
+    })
     ufunc_db[np.absolute].update({
         'm->m': npdatetime.timedelta_abs_impl,
-        })
+    })
     ufunc_db[np.sign].update({
         'm->m': npdatetime.timedelta_sign_impl,
-        })
+    })
     ufunc_db[np.add].update({
         'mm->m': npdatetime.timedelta_add_impl,
         'Mm->M': npdatetime.datetime_plus_timedelta,
         'mM->M': npdatetime.timedelta_plus_datetime,
-        })
+    })
     ufunc_db[np.subtract].update({
         'mm->m': npdatetime.timedelta_sub_impl,
         'Mm->M': npdatetime.datetime_minus_timedelta,
         'MM->m': npdatetime.datetime_minus_datetime,
-        })
+    })
     ufunc_db[np.multiply].update({
         'mq->m': npdatetime.timedelta_times_number,
         'md->m': npdatetime.timedelta_times_number,
         'qm->m': npdatetime.number_times_timedelta,
         'dm->m': npdatetime.number_times_timedelta,
-        })
+    })
     if np.divide != np.true_divide:
         ufunc_db[np.divide].update({
             'mq->m': npdatetime.timedelta_over_number,
@@ -950,6 +1010,12 @@ def _fill_ufunc_db(ufunc_db):
         'mq->m': npdatetime.timedelta_over_number,
         'md->m': npdatetime.timedelta_over_number,
     })
+
+    if numpy_support.version >= (1, 16):
+        ufunc_db[np.floor_divide].update({
+            'mm->q': npdatetime.timedelta_floor_div_timedelta,
+        })
+
     ufunc_db[np.equal].update({
         'MM->?': npdatetime.datetime_eq_datetime_impl,
         'mm->?': npdatetime.timedelta_eq_timedelta_impl,
@@ -992,3 +1058,8 @@ def _fill_ufunc_db(ufunc_db):
         'MM->M': npdatetime.datetime_min_impl,
         'mm->m': npdatetime.timedelta_min_impl,
     })
+
+    if numpy_support.version >= (1, 16):
+        ufunc_db[np.remainder].update({
+            'mm->m': npdatetime.timedelta_mod_timedelta,
+        })

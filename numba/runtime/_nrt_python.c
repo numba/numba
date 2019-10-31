@@ -27,12 +27,13 @@ pyobject_dtor(void *ptr, size_t size, void* info) {
     PyGILState_Release(gstate);     /* release the GIL */
 }
 
-static NRT_MemInfo *
-meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
+NUMBA_EXPORT_FUNC(NRT_MemInfo *)
+NRT_meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
     size_t dummy_size = 0;
     Py_INCREF(ownerobj);
     return NRT_MemInfo_new(data, dummy_size, pyobject_dtor, ownerobj);
 }
+
 
 /*
  * A Python object wrapping a NRT meminfo.
@@ -42,6 +43,7 @@ typedef struct {
     PyObject_HEAD
     NRT_MemInfo *meminfo;
 } MemInfoObject;
+
 
 static
 int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
@@ -219,6 +221,35 @@ static PyTypeObject MemInfoType = {
 
 
 /*
+Return a MemInfo* as a MemInfoObject*
+The NRT reference to the MemInfo is borrowed.
+*/
+NUMBA_EXPORT_FUNC(MemInfoObject*)
+NRT_meminfo_as_pyobject(NRT_MemInfo *meminfo) {
+    MemInfoObject *mi;
+    PyObject *addr;
+
+    addr = PyLong_FromVoidPtr(meminfo);
+    if (!addr) return NULL;
+    mi = (MemInfoObject*)PyObject_CallFunctionObjArgs((PyObject *)&MemInfoType, addr, NULL);
+    Py_DECREF(addr);
+    if (!mi) return NULL;
+    return mi;
+}
+
+
+/*
+Return a MemInfo* from a MemInfoObject*
+A new reference is returned.
+*/
+NUMBA_EXPORT_FUNC(NRT_MemInfo*)
+NRT_meminfo_from_pyobject(MemInfoObject *miobj) {
+    NRT_MemInfo_acquire(miobj->meminfo);
+    return miobj->meminfo;
+}
+
+
+/*
  * Array adaptor code
  */
 
@@ -237,7 +268,7 @@ NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     ndim = PyArray_NDIM(ndary);
     data = PyArray_DATA(ndary);
 
-    arystruct->meminfo = meminfo_new_from_pyobject((void*)data, obj);
+    arystruct->meminfo = NRT_meminfo_new_from_pyobject((void*)data, obj);
     arystruct->data = data;
     arystruct->nitems = PyArray_SIZE(ndary);
     arystruct->itemsize = PyArray_ITEMSIZE(ndary);
@@ -387,7 +418,7 @@ NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
 
     if (buf->obj) {
         /* Allocate new MemInfo only if the buffer has a parent */
-        arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
+        arystruct->meminfo = NRT_meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
     }
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;

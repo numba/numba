@@ -341,7 +341,7 @@ class TestSetLiterals(BaseTest):
         self.run_nullary_func(pyfunc, flags=flags)
 
     @needs_set_literals
-    def test_build_heterogenous_set(self, flags=enable_pyobj_flags):
+    def test_build_heterogeneous_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
         self.run_nullary_func(pyfunc, flags=flags)
         pyfunc = set_literal_return_usecase((2.0, 2))
@@ -705,8 +705,8 @@ class TestUnboxing(BaseTest):
         check((1, set([(2,), (3,)])))
 
     def test_errors(self):
-        # Error checking should ensure the set is homogenous
-        msg = "can't unbox heterogenous set"
+        # Error checking should ensure the set is homogeneous
+        msg = "can't unbox heterogeneous set"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)
         val = set([1, 2.5])

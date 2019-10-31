@@ -13,8 +13,6 @@
 
 /*
  * EnvironmentObject hosts data needed for execution of compiled functions.
- * For now, it is only used in object mode (though it still gets passed
- * to nopython functions).
  */
 typedef struct {
     PyObject_HEAD
@@ -51,7 +49,7 @@ env_clear(EnvironmentObject *env)
 static void
 env_dealloc(EnvironmentObject *env)
 {
-    _PyObject_GC_UNTRACK((PyObject *) env);
+    PyObject_GC_UnTrack((PyObject *) env);
     env_clear(env);
     Py_TYPE(env)->tp_free((PyObject *) env);
 }
@@ -174,7 +172,7 @@ closure_traverse(ClosureObject *clo, visitproc visit, void *arg)
 static void
 closure_dealloc(ClosureObject *clo)
 {
-    _PyObject_GC_UNTRACK((PyObject *) clo);
+    PyObject_GC_UnTrack((PyObject *) clo);
     if (clo->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) clo);
     PyObject_Free((void *) clo->def.ml_name);
@@ -236,7 +234,8 @@ static PyTypeObject ClosureType = {
 static char *
 dup_string(PyObject *strobj)
 {
-    char *tmp, *str;
+    const char *tmp = NULL;
+    char *str;
     tmp = PyString_AsString(strobj);
     if (tmp == NULL)
         return NULL;
@@ -286,18 +285,25 @@ pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
                 PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
 {
     PyObject *funcobj;
-    PyObject *modname;
-    ClosureObject *closure;
+    PyObject *modname = NULL;
+    ClosureObject *closure = NULL;
 
     closure = closure_new(module, name, doc, fnaddr, env, keepalive);
-    if (closure == NULL)
-        return NULL;
+    if (closure == NULL) goto FAIL;
 
-    modname = PyString_FromString(PyModule_GetName(module));
+    modname = PyObject_GetAttrString(module, "__name__");
+    if (modname == NULL) goto FAIL;
+
     funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, modname);
     Py_DECREF(closure);
     Py_DECREF(modname);
+
     return funcobj;
+
+FAIL:
+    Py_XDECREF(closure);
+    Py_XDECREF(modname);
+    return NULL;
 }
 
 /*
@@ -343,13 +349,17 @@ generator_clear(GeneratorObject *gen)
 static void
 generator_dealloc(GeneratorObject *gen)
 {
-    _PyObject_GC_UNTRACK((PyObject *) gen);
+    PyObject_GC_UnTrack((PyObject *) gen);
     if (gen->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) gen);
     /* XXX The finalizer may be called after the LLVM module has been
        destroyed (typically at interpreter shutdown) */
 #if PY_MAJOR_VERSION >= 3
+#if PY_MINOR_VERSION >= 7
+    if (!_Py_IsFinalizing())
+#else
     if (!_Py_Finalizing)
+#endif
 #endif
         if (gen->finalizer != NULL)
             gen->finalizer(gen->state);

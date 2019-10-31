@@ -28,10 +28,10 @@ def main():
     else:
         print('Using default max number of iteration to 2 due to long run time.')
         print('Override by passing a cmdline arg: python {} <max_iter>'.format(__file__))
-        iter_max = 3
+        iter_max = 1000
 
-    NN = 512
-    NM = 512
+    NN = 3000
+    NM = 3000
 
     A = np.zeros((NN, NM), dtype=np.float64)
     Anew = np.zeros((NN, NM), dtype=np.float64)

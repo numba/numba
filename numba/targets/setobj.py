@@ -1,5 +1,5 @@
 """
-Support for native homogenous sets.
+Support for native homogeneous sets.
 """
 
 from __future__ import print_function, absolute_import, division
@@ -7,13 +7,14 @@ from __future__ import print_function, absolute_import, division
 import collections
 import contextlib
 import math
+import operator
 
 from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
-                                    for_iter, call_len)
+                                    for_iter, call_len, RefType)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -57,8 +58,10 @@ def get_hash_value(context, builder, typ, value):
     """
     Compute the hash of the given value.
     """
-    sig = typing.signature(types.intp, typ)
-    fn = context.get_function(hash, sig)
+    typingctx = context.typing_context
+    fnty = typingctx.resolve_value_type(hash)
+    sig = fnty.get_call_type(typingctx, (typ,), {})
+    fn = context.get_function(fnty, sig)
     h = fn(builder, (value,))
     # Fixup reserved values
     is_ok = is_hash_used(context, builder, h)
@@ -184,7 +187,7 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function('==',
+        eqfn = context.get_function(operator.eq,
                                     typing.signature(types.boolean, dtype, dtype))
 
         one = ir.Constant(intp_t, 1)
@@ -472,6 +475,56 @@ class SetInstance(object):
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
         self._add_key(payload, item, h, do_resize)
+
+    def add_pyapi(self, pyapi, item, do_resize=True):
+        """A version of .add for use inside functions following Python calling
+        convention.
+        """
+        context = self._context
+        builder = self._builder
+
+        payload = self.payload
+        h = self._pyapi_get_hash_value(pyapi, context, builder, item)
+        self._add_key(payload, item, h, do_resize)
+
+    def _pyapi_get_hash_value(self, pyapi, context, builder, item):
+        """Python API compatible version of `get_hash_value()`.
+        """
+        def emit_wrapper(resty, argtypes):
+            # Because `get_hash_value()` could raise a nopython exception,
+            # we need to wrap it in a function that has nopython
+            # calling convention.
+
+            fnty = context.call_conv.get_function_type(resty, argtypes)
+            mod = builder.module
+            fn = ir.Function(
+                mod, fnty, name=mod.get_unique_name('.set_hash_item'),
+            )
+            fn.linkage = 'internal'
+            inner_builder = ir.IRBuilder(fn.append_basic_block())
+            [inner_item] = context.call_conv.decode_arguments(
+                inner_builder, argtypes, fn,
+            )
+            # Call get_hash_value()
+            h = get_hash_value(
+                context, inner_builder, self._ty.dtype, inner_item,
+            )
+            context.call_conv.return_value(inner_builder, h)
+            return fn
+
+        argtypes = [self._ty.dtype]
+        resty = types.intp
+        fn = emit_wrapper(resty, argtypes)
+        # Call wrapper function
+        status, retval = context.call_conv.call_function(
+            builder, fn, resty, argtypes, [item],
+        )
+        # Handle return status
+        with builder.if_then(builder.not_(status.is_ok), likely=False):
+            # Raise nopython exception as a Python exception
+            context.call_conv.raise_error(builder, pyapi, status)
+            builder.ret(pyapi.get_null_object())
+        return retval
 
     def contains(self, item):
         context = self._context
@@ -1151,10 +1204,10 @@ def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.get_size()
 
-@lower_builtin("in", types.Any, types.Set)
+@lower_builtin(operator.contains, types.Set, types.Any)
 def in_set(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[1], args[1])
-    return inst.contains(args[0])
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    return inst.contains(args[1])
 
 @lower_builtin('getiter', types.Set)
 def getiter_set(context, builder, sig, args):
@@ -1162,7 +1215,7 @@ def getiter_set(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 @lower_builtin('iternext', types.SetIter)
-@iternext_impl
+@iternext_impl(RefType.BORROWED)
 def iternext_listiter(context, builder, sig, args, result):
     inst = SetIterInstance(context, builder, sig.args[0], args[0])
     inst.iternext(result)
@@ -1274,13 +1327,13 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-for op, op_impl in [
-    ('&=', set_intersection_update),
-    ('|=', set_update),
-    ('-=', set_difference_update),
-    ('^=', set_symmetric_difference_update),
+for op_, op_impl in [
+    (operator.iand, set_intersection_update),
+    (operator.ior, set_update),
+    (operator.isub, set_difference_update),
+    (operator.ixor, set_symmetric_difference_update),
     ]:
-    @lower_builtin(op, types.Set, types.Set)
+    @lower_builtin(op_, types.Set, types.Set)
     def set_inplace(context, builder, sig, args, op_impl=op_impl):
         assert sig.return_type == sig.args[0]
         op_impl(context, builder, sig, args)
@@ -1289,7 +1342,7 @@ for op, op_impl in [
 
 # Set operations creating a new set
 
-@lower_builtin("-", types.Set, types.Set)
+@lower_builtin(operator.sub, types.Set, types.Set)
 @lower_builtin("set.difference", types.Set, types.Set)
 def set_difference(context, builder, sig, args):
     def difference_impl(a, b):
@@ -1299,7 +1352,7 @@ def set_difference(context, builder, sig, args):
 
     return context.compile_internal(builder, difference_impl, sig, args)
 
-@lower_builtin("&", types.Set, types.Set)
+@lower_builtin(operator.and_, types.Set, types.Set)
 @lower_builtin("set.intersection", types.Set, types.Set)
 def set_intersection(context, builder, sig, args):
     def intersection_impl(a, b):
@@ -1314,7 +1367,7 @@ def set_intersection(context, builder, sig, args):
 
     return context.compile_internal(builder, intersection_impl, sig, args)
 
-@lower_builtin("^", types.Set, types.Set)
+@lower_builtin(operator.xor, types.Set, types.Set)
 @lower_builtin("set.symmetric_difference", types.Set, types.Set)
 def set_symmetric_difference(context, builder, sig, args):
     def symmetric_difference_impl(a, b):
@@ -1330,7 +1383,7 @@ def set_symmetric_difference(context, builder, sig, args):
     return context.compile_internal(builder, symmetric_difference_impl,
                                     sig, args)
 
-@lower_builtin("|", types.Set, types.Set)
+@lower_builtin(operator.or_, types.Set, types.Set)
 @lower_builtin("set.union", types.Set, types.Set)
 def set_union(context, builder, sig, args):
     def union_impl(a, b):
@@ -1355,7 +1408,7 @@ def set_isdisjoint(context, builder, sig, args):
 
     return inst.isdisjoint(other)
 
-@lower_builtin("<=", types.Set, types.Set)
+@lower_builtin(operator.le, types.Set, types.Set)
 @lower_builtin("set.issubset", types.Set, types.Set)
 def set_issubset(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1363,7 +1416,7 @@ def set_issubset(context, builder, sig, args):
 
     return inst.issubset(other)
 
-@lower_builtin(">=", types.Set, types.Set)
+@lower_builtin(operator.ge, types.Set, types.Set)
 @lower_builtin("set.issuperset", types.Set, types.Set)
 def set_issuperset(context, builder, sig, args):
     def superset_impl(a, b):
@@ -1371,35 +1424,35 @@ def set_issuperset(context, builder, sig, args):
 
     return context.compile_internal(builder, superset_impl, sig, args)
 
-@lower_builtin("==", types.Set, types.Set)
+@lower_builtin(operator.eq, types.Set, types.Set)
 def set_isdisjoint(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.equals(other)
 
-@lower_builtin("!=", types.Set, types.Set)
+@lower_builtin(operator.ne, types.Set, types.Set)
 def set_ne(context, builder, sig, args):
     def ne_impl(a, b):
         return not a == b
 
     return context.compile_internal(builder, ne_impl, sig, args)
 
-@lower_builtin("<", types.Set, types.Set)
+@lower_builtin(operator.lt, types.Set, types.Set)
 def set_lt(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.issubset(other, strict=True)
 
-@lower_builtin(">", types.Set, types.Set)
+@lower_builtin(operator.gt, types.Set, types.Set)
 def set_gt(context, builder, sig, args):
     def gt_impl(a, b):
         return b < a
 
     return context.compile_internal(builder, gt_impl, sig, args)
 
-@lower_builtin('is', types.Set, types.Set)
+@lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):
     a = SetInstance(context, builder, sig.args[0], args[0])
     b = SetInstance(context, builder, sig.args[1], args[1])

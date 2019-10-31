@@ -1,10 +1,10 @@
 from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestCudaAutoContext(unittest.TestCase):
+class TestCudaAutoContext(SerialMixin, unittest.TestCase):
     def test_auto_context(self):
         """A problem was revealed by a customer that the use cuda.to_device
         does not create a CUDA context.

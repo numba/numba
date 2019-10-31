@@ -20,6 +20,17 @@ transfer:
 .. autofunction:: numba.cuda.to_device
    :noindex:
 
+In addition to the device arrays, Numba can consume any object that implements
+:ref:`cuda array interface <cuda-array-interface>`.  These objects also can be
+manually converted into a Numba device array by creating a view of the GPU
+buffer using the following APIs:
+
+.. autofunction:: numba.cuda.as_cuda_array
+  :noindex:
+.. autofunction:: numba.cuda.is_cuda_array
+  :noindex:
+
+
 Device arrays
 -------------
 
@@ -29,6 +40,10 @@ called in host code, not within CUDA-jitted functions.
 .. autoclass:: numba.cuda.cudadrv.devicearray.DeviceNDArray
     :members: copy_to_host, is_c_contiguous, is_f_contiguous, ravel, reshape
     :noindex:
+
+
+.. note:: DeviceNDArray defines the :ref:`cuda array interface <cuda-array-interface>`.
+
 
 Pinned memory
 =============
@@ -70,9 +85,10 @@ traditional dynamic memory management.
 
    Allocate a shared array of the given *shape* and *type* on the device.
    This function must be called on the device (i.e. from a kernel or
-   device function).  *shape* is either an integer or a tuple of integers
-   representing the array's dimensions.  *type* is a :ref:`Numba type <numba-types>`
-   of the elements needing to be stored in the array.
+   device function). *shape* is either an integer or a tuple of integers
+   representing the array's dimensions and must be a simple constant
+   expression. *type* is a :ref:`Numba type <numba-types>` of the elements
+   needing to be stored in the array.
 
    The returned array-like object can be read and written to like any normal
    device array (e.g. through indexing).
@@ -107,34 +123,25 @@ unlike traditional dynamic memory management.
    :noindex:
 
    Allocate a local array of the given *shape* and *type* on the device.
-   The array is private to the current thread.  An array-like object is
+   *shape* is either an integer or a tuple of integers representing the array's
+   dimensions and must be a simple constant expression. *type* is a
+   :ref:`Numba type <numba-types>` of the elements needing to be stored in the
+   array. The array is private to the current thread. An array-like object is
    returned which can be read and written to like any standard array
    (e.g. through indexing).
 
-SmartArrays (experimental)
-==========================
+Constant memory
+===============
 
-Numba provides an Array-like data type that manages data movement to
-and from the device automatically. It can be used as drop-in replacement for
-`numpy.ndarray` in most cases, and is supported by Numba's JIT-compiler for both
-'host' and 'cuda' target.
+Constant memory is an area of memory that is read only, cached and off-chip, it
+is accessible by all threads and is host allocated. A method of
+creating an array in constant memory is through the use of:
 
-.. comment: function:: numba.SmartArray(obj=None, copy=True,
-                               shape=None, dtype=None, order=None, where='host')
+.. function:: numba.cuda.const.array_like(arr)
+   :noindex:
 
-.. autoclass:: numba.SmartArray
-   :members: __init__, get, mark_changed
-
-
-Thus, `SmartArray` objects may be passed as function arguments to jit-compiled
-functions. Whenever a cuda.jit-compiled function is being executed, it will
-trigger a data transfer to the GPU (unless the data are already there). But instead
-of transferring the data back to the host after the function completes, it leaves
-the data on the device and merely updates the host-side if there are any external
-references to that.
-Thus, if the next operation is another invocation of a cuda.jit-compiled function,
-the data does not need to be transferred again, making the compound operation more
-efficient (and making the use of the GPU advantagous even for smaller data sizes).
+   Allocate and make accessible an array in constant memory based on array-like
+   *arr*.
 
 Deallocation Behavior
 =====================

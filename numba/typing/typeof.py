@@ -3,12 +3,14 @@ from __future__ import print_function, absolute_import
 from collections import namedtuple
 import ctypes
 import enum
-import sys
 
 import numpy as np
 
-from numba import numpy_support, types, utils, smartarray
+from numba import numpy_support, types, utils
+from numba import errors
 
+# terminal color markup
+_termcolor = errors.termcolor()
 
 class Purpose(enum.Enum):
     # Value being typed is used as an argument
@@ -27,7 +29,8 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = "cannot determine Numba type of %r" % (type(val),)
+        msg = _termcolor.errmsg(
+            "cannot determine Numba type of %r") % (type(val),)
         raise ValueError(msg)
     return ty
 
@@ -76,6 +79,7 @@ def typeof_ctypes_function(val, c):
     if is_ctypes_funcptr(val):
         return make_function_type(val)
 
+
 @typeof_impl.register(type)
 def typeof_type(val, c):
     """
@@ -85,6 +89,18 @@ def typeof_type(val, c):
         return types.ExceptionClass(val)
     if issubclass(val, tuple) and hasattr(val, "_asdict"):
         return types.NamedTupleClass(val)
+
+    if issubclass(val, np.generic):
+        return types.NumberClass(numpy_support.from_dtype(val))
+
+    from numba.typed import Dict
+    if issubclass(val, Dict):
+        return types.TypeRef(types.DictType)
+
+    from numba.typed import List
+    if issubclass(val, List):
+        return types.TypeRef(types.ListType)
+
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
@@ -125,6 +141,10 @@ def _typeof_numpy_scalar(val, c):
 def _typeof_str(val, c):
     return types.string
 
+@typeof_impl.register(type((lambda a: a).__code__))
+def _typeof_code(val, c):
+    return types.code_type
+
 @typeof_impl.register(type(None))
 def _typeof_none(val, c):
     return types.none
@@ -145,6 +165,10 @@ def _typeof_list(val, c):
     if len(val) == 0:
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
+    if ty is None:
+        raise ValueError(
+            "Cannot type list element of {!r}".format(type(val[0])),
+            )
     return types.List(ty, reflected=True)
 
 @typeof_impl.register(set)
@@ -173,7 +197,7 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type enum with no members")
     dtypes = {typeof_impl(mem.value, c) for mem in members}
     if len(dtypes) > 1:
-        raise ValueError("Cannot type heterogenous enum: "
+        raise ValueError("Cannot type heterogeneous enum: "
                          "got value types %s"
                          % ", ".join(sorted(str(ty) for ty in dtypes)))
     if issubclass(val, enum.IntEnum):
@@ -187,6 +211,7 @@ def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)
     return types.DType(tp)
 
+
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
     try:
@@ -197,8 +222,27 @@ def _typeof_ndarray(val, c):
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
 
-@typeof_impl.register(smartarray.SmartArray)
-def typeof_array(val, c):
-    arrty = typeof_impl(val.get('host'), c)
-    return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
 
+@typeof_impl.register(types.NumberClass)
+def typeof_number_class(val, c):
+    return val
+
+
+@typeof_impl.register(types.Literal)
+def typeof_literal(val, c):
+    return val
+
+
+@typeof_impl.register(types.TypeRef)
+def typeof_typeref(val, c):
+    return val
+
+
+@typeof_impl.register(types.Type)
+def typeof_typeref(val, c):
+    if isinstance(val, types.BaseFunction):
+        return val
+    elif isinstance(val, (types.Number, types.Boolean)):
+        return types.NumberClass(val)
+    else:
+        return types.TypeRef(val)

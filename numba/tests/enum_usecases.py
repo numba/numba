@@ -28,7 +28,7 @@ class Planet(Enum):
     NEPTUNE = (1.024e+26, 2.4746e7)
 
 
-class HeterogenousEnum(Enum):
+class HeterogeneousEnum(Enum):
     red = 1.0
     green = 2.0
     blue = 3j

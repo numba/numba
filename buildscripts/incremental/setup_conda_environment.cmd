@@ -1,3 +1,14 @@
+@rem first configure conda to have more tolerance of network problems, these
+@rem numbers are not scientifically chosen, just merely larger than defaults
+set CONDA_CONFIG=cmd /C conda config
+%CONDA_CONFIG% --write-default
+%CONDA_CONFIG% --set remote_connect_timeout_secs 30.15
+%CONDA_CONFIG% --set remote_max_retries 10
+%CONDA_CONFIG% --set remote_read_timeout_secs 120.2
+%CONDA_CONFIG% --set restore_free_channel true
+cmd /C conda info
+%CONDA_CONFIG% --show
+
 @rem The cmd /C hack circumvents a regression where conda installs a conda.bat
 @rem script in non-root environments.
 set CONDA_INSTALL=cmd /C conda install -q -y
@@ -23,6 +34,14 @@ if %PYTHON% LSS 3.4 (%PIP_INSTALL% singledispatch)
 if %PYTHON% LSS 3.3 (%CONDA_INSTALL% -c numba funcsigs)
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx pygments)
-if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinxjp.themecore sphinxjp.themes.basicstrap)
+if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
+@rem Install TBB
+%CONDA_INSTALL% tbb tbb-devel
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"

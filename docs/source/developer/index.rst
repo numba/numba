@@ -8,6 +8,7 @@ Developer Manual
    :maxdepth: 2
 
    contributing.rst
+   repomap.rst
    architecture.rst
    dispatching.rst
    generators.rst
@@ -15,3 +16,11 @@ Developer Manual
    rewrites.rst
    live_variable_analysis.rst
    listings.rst
+   stencil.rst
+   custom_pipeline.rst
+   inlining.rst
+   environment.rst
+   hashing.rst
+   caching.rst
+   literal.rst
+   roadmap.rst

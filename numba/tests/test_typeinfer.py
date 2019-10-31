@@ -677,7 +677,7 @@ class TestMiscIssues(TestCase):
         pyfunc = list_unify_usecase2
         cfunc = jit(nopython=True)(pyfunc)
         res = cfunc(3)
-        # NOTE: the types will differ (Numba returns a homogenous list with
+        # NOTE: the types will differ (Numba returns a homogeneous list with
         # converted values).
         self.assertEqual(res, pyfunc(3))
 

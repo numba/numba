@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 import math
 import numpy as np
 from numba import cuda, float64, int8, int32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def cu_mat_power(A, power, power_A):
@@ -25,7 +25,7 @@ def cu_mat_power_binop(A, power, power_A):
     power_A[y, x] = A[y, x] ** power
 
 
-class TestCudaPowi(unittest.TestCase):
+class TestCudaPowi(SerialMixin, unittest.TestCase):
     def test_powi(self):
         dec = cuda.jit(argtypes=[float64[:, :], int8, float64[:, :]])
         kernel = dec(cu_mat_power)

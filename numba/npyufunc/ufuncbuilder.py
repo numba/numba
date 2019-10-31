@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 import inspect
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -10,21 +11,22 @@ from numba.decorators import jit
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
+from numba.targets.cpu import FastMathOptions
 from numba import utils, compiler, types, sigutils
 from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
+from numba.compiler_lock import global_compiler_lock
+from numba.config import PYVERSION
 
-
-import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython" : bool,
         "forceobj" : bool,
-        "fastmath" : bool,
+        "fastmath" : FastMathOptions,
     }
 
 
@@ -74,9 +76,7 @@ class UFuncDispatcher(object):
         # The feature requires a real python function
         flags.unset("enable_looplift")
 
-        cres = self._compile_core(sig, flags, locals)
-        self.overloads[cres.signature] = cres
-        return cres
+        return self._compile_core(sig, flags, locals)
 
     def _compile_core(self, sig, flags, locals):
         """
@@ -85,19 +85,38 @@ class UFuncDispatcher(object):
         """
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
+
+        @contextmanager
+        def store_overloads_on_success():
+            # use to ensure overloads are stored on success
+            try:
+                yield
+            except:
+                raise
+            else:
+                exists = self.overloads.get(cres.signature)
+                if exists is None:
+                    self.overloads[cres.signature] = cres
+
         # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            cres = self.cache.load_overload(sig, targetctx)
-            if cres is not None:
-                # Use cached version
+        with global_compiler_lock:
+            with store_overloads_on_success():
+                # attempt look up of existing
+                cres = self.cache.load_overload(sig, targetctx)
+                if cres is not None:
+                    return cres
+
+                # Compile
+                args, return_type = sigutils.normalize_signature(sig)
+                cres = compiler.compile_extra(typingctx, targetctx,
+                                              self.py_func, args=args,
+                                              return_type=return_type,
+                                              flags=flags, locals=locals)
+
+                # cache lookup failed before so safe to save
+                self.cache.save_overload(sig, cres)
+
                 return cres
-            # Compile
-            args, return_type = sigutils.normalize_signature(sig)
-            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                        args=args, return_type=return_type,
-                                        flags=flags, locals=locals)
-            self.cache.save_overload(sig, cres)
-            return cres
 
 
 dispatcher_registry['npyufunc'] = UFuncDispatcher
@@ -135,24 +154,14 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     library = cres.library
     fname = cres.fndesc.llvm_func_name
 
-    env = None
-    if cres.objectmode:
-        # Get env
-        env = cres.environment
-        assert env is not None
-        ll_intp = cres.target_context.get_value_type(types.intp)
-        ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-    else:
-        envptr = None
-
-    ptr = build_ufunc_wrapper(library, ctx, fname, signature,
-                              cres.objectmode, envptr, env)
-
+    with global_compiler_lock:
+        info = build_ufunc_wrapper(library, ctx, fname, signature,
+                                   cres.objectmode, cres)
+        ptr = info.library.get_pointer_to_function(info.name)
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
     dtypenums.append(as_dtype(signature.return_type).num)
-    return dtypenums, ptr, env
+    return dtypenums, ptr, cres.environment
 
 
 _identities = {
@@ -213,40 +222,44 @@ class UFuncBuilder(_BaseUFuncBuilder):
         return _finalize_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
-        dtypelist = []
-        ptrlist = []
-        if not self.nb_func:
-            raise TypeError("No definition")
+        with global_compiler_lock:
+            dtypelist = []
+            ptrlist = []
+            if not self.nb_func:
+                raise TypeError("No definition")
 
-        # Get signature in the order they are added
-        keepalive = []
-        cres = None
-        for sig in self._sigs:
-            cres = self._cres[sig]
-            dtypenums, ptr, env = self.build(cres, sig)
-            dtypelist.append(dtypenums)
-            ptrlist.append(utils.longint(ptr))
-            keepalive.append((cres.library, env))
+            # Get signature in the order they are added
+            keepalive = []
+            cres = None
+            for sig in self._sigs:
+                cres = self._cres[sig]
+                dtypenums, ptr, env = self.build(cres, sig)
+                dtypelist.append(dtypenums)
+                ptrlist.append(utils.longint(ptr))
+                keepalive.append((cres.library, env))
 
-        datlist = [None] * len(ptrlist)
+            datlist = [None] * len(ptrlist)
 
-        if cres is None:
-            argspec = inspect.getargspec(self.py_func)
-            inct = len(argspec.args)
-        else:
-            inct = len(cres.signature.args)
-        outct = 1
+            if cres is None:
+                if PYVERSION >= (3, 0):
+                    argspec = inspect.getfullargspec(self.py_func)
+                else:
+                    argspec = inspect.getargspec(self.py_func)
+                inct = len(argspec.args)
+            else:
+                inct = len(cres.signature.args)
+            outct = 1
 
-        # Becareful that fromfunc does not provide full error checking yet.
-        # If typenum is out-of-bound, we have nasty memory corruptions.
-        # For instance, -1 for typenum will cause segfault.
-        # If elements of type-list (2nd arg) is tuple instead,
-        # there will also memory corruption. (Seems like code rewrite.)
-        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
-                                   ptrlist, dtypelist, inct, outct, datlist,
-                                   keepalive, self.identity)
+            # Becareful that fromfunc does not provide full error checking yet.
+            # If typenum is out-of-bound, we have nasty memory corruptions.
+            # For instance, -1 for typenum will cause segfault.
+            # If elements of type-list (2nd arg) is tuple instead,
+            # there will also memory corruption. (Seems like code rewrite.)
+            ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                    ptrlist, dtypelist, inct, outct, datlist,
+                                    keepalive, self.identity)
 
-        return ufunc
+            return ufunc
 
     def build(self, cres, signature):
         '''Slated for deprecation, use
@@ -279,6 +292,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
         return return_type(*args)
 
+    @global_compiler_lock
     def build_ufunc(self):
         dtypelist = []
         ptrlist = []
@@ -301,8 +315,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
         ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
-                                   ptrlist, dtypelist, inct, outct, datlist,
-                                   keepalive, self.identity, self.signature)
+                                ptrlist, dtypelist, inct, outct, datlist,
+                                keepalive, self.identity, self.signature)
         return ufunc
 
     def build(self, cres):
@@ -311,9 +325,13 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         # Buider wrapper for ufunc entry point
         signature = cres.signature
-        ptr, env, wrapper_name = build_gufunc_wrapper(self.py_func, cres, self.sin, self.sout,
-                                        cache=self.cache)
+        info = build_gufunc_wrapper(
+            self.py_func, cres, self.sin, self.sout,
+            cache=self.cache, is_parfors=False,
+        )
 
+        env = info.env
+        ptr = info.library.get_pointer_to_function(info.name)
         # Get dtypes
         dtypenums = []
         for a in signature.args:

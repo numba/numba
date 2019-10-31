@@ -1,10 +1,10 @@
 from __future__ import absolute_import, print_function
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
-class TestCudaEvent(unittest.TestCase):
+class TestCudaEvent(SerialMixin, unittest.TestCase):
     def test_event_elapsed(self):
         N = 32
         dary = cuda.device_array(N, dtype=np.double)
@@ -12,7 +12,7 @@ class TestCudaEvent(unittest.TestCase):
         evtend = cuda.event()
 
         evtstart.record()
-        cuda.to_device(np.arange(N), to=dary)
+        cuda.to_device(np.arange(N, dtype=np.double), to=dary)
         evtend.record()
         evtend.wait()
         evtend.synchronize()
@@ -27,7 +27,7 @@ class TestCudaEvent(unittest.TestCase):
         evtend = cuda.event()
 
         evtstart.record(stream=stream)
-        cuda.to_device(np.arange(N), to=dary, stream=stream)
+        cuda.to_device(np.arange(N, dtype=np.double), to=dary, stream=stream)
         evtend.record(stream=stream)
         evtend.wait(stream=stream)
         evtend.synchronize()

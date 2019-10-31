@@ -104,6 +104,7 @@ typedef struct DispatcherObject{
     dispatcher_t *dispatcher;
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
+    char exact_match_required;
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef, *interpdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
@@ -142,13 +143,16 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     int argct;
     int can_fallback;
     int has_stararg = 0;
+    int exact_match_required = 0;
 
-    if (!PyArg_ParseTuple(args, "OiiO!O!i|i", &tmaddrobj, &argct,
+    if (!PyArg_ParseTuple(args, "OiiO!O!i|ii", &tmaddrobj, &argct,
                           &self->fold_args,
                           &PyTuple_Type, &self->argnames,
                           &PyTuple_Type, &self->defargs,
                           &can_fallback,
-                          &has_stararg)) {
+                          &has_stararg,
+                          &exact_match_required
+                         )) {
         return -1;
     }
     Py_INCREF(self->argnames);
@@ -161,6 +165,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->fallbackdef = NULL;
     self->interpdef = NULL;
     self->has_stararg = has_stararg;
+    self->exact_match_required = exact_match_required;
     return 0;
 }
 
@@ -246,7 +251,7 @@ static
 void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws)
 {
     explain_issue(dispatcher, args, kws, "_explain_ambiguous",
-                  "Ambigous overloading");
+                  "Ambiguous overloading");
 }
 
 static
@@ -529,10 +534,14 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
     }
 
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    self->exact_match_required |= self->can_compile;
+
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile);
+                               !self->can_compile, self->exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -548,7 +557,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         if (res > 0) {
             /* Retry with the newly registered conversions */
             cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                                       !self->can_compile);
+                                       !self->can_compile,
+                                       self->exact_match_required);
         }
     }
 

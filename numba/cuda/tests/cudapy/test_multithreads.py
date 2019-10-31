@@ -1,9 +1,10 @@
 import traceback
+import threading
 import multiprocessing
 import numpy as np
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 try:
     from concurrent.futures import ThreadPoolExecutor
@@ -44,7 +45,7 @@ def spawn_process_entry(q):
 
 
 @skip_on_cudasim('disabled for cudasim')
-class TestMultiThreadCompiling(unittest.TestCase):
+class TestMultiThreadCompiling(SerialMixin, unittest.TestCase):
 
     @unittest.skipIf(not has_concurrent_futures, "no concurrent.futures")
     def test_concurrent_compiling(self):
@@ -67,6 +68,30 @@ class TestMultiThreadCompiling(unittest.TestCase):
         if err is not None:
             raise AssertionError(err)
         self.assertEqual(p.exitcode, 0, 'test failed in child process')
+
+    def test_invalid_context_error_with_d2h(self):
+        def d2h(arr, out):
+            out[:] = arr.copy_to_host()
+
+        arr = np.arange(1, 4)
+        out = np.zeros_like(arr)
+        darr = cuda.to_device(arr)
+        th = threading.Thread(target=d2h, args=[darr, out])
+        th.start()
+        th.join()
+        np.testing.assert_equal(arr, out)
+
+    def test_invalid_context_error_with_d2d(self):
+        def d2d(dst, src):
+            dst.copy_to_device(src)
+
+        arr = np.arange(100)
+        common = cuda.to_device(arr)
+        darr = cuda.to_device(np.zeros(common.shape, dtype=common.dtype))
+        th = threading.Thread(target=d2d, args=[darr, common])
+        th.start()
+        th.join()
+        np.testing.assert_equal(darr.copy_to_host(), arr)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,82 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+import traceback
+
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .common import Opaque
+from .misc import unliteral
+from numba import errors
+
+# terminal color markup
+_termcolor = errors.termcolor()
+
+class _ResolutionFailures(object):
+    """Collect and format function resolution failures.
+    """
+    def __init__(self, context, function_type, args, kwargs):
+        self._context = context
+        self._function_type = function_type
+        self._args = args
+        self._kwargs = kwargs
+        self._failures = []
+
+    def __len__(self):
+        return len(self._failures)
+
+    def add_error(self, calltemplate, error):
+        """
+        Args
+        ----
+        calltemplate : CallTemplate
+        error : Exception or str
+            Error message
+        """
+        self._failures.append((calltemplate, error))
+
+    def format(self):
+        """Return a formatted error message from all the gathered errors.
+        """
+        indent = ' ' * 4
+        args = [str(a) for a in self._args]
+        args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
+        headtmp = 'Invalid use of {} with argument(s) of type(s): ({})'
+        msgbuf = [headtmp.format(self._function_type, ', '.join(args))]
+        explain = self._context.explain_function_type(self._function_type)
+        msgbuf.append(explain)
+        for i, (temp, error) in enumerate(self._failures):
+            msgbuf.append(_termcolor.errmsg("In definition {}:".format(i)))
+            msgbuf.append(_termcolor.highlight('{}{}'.format(
+                indent, self.format_error(error))))
+            loc = self.get_loc(temp, error)
+            if loc:
+                msgbuf.append('{}raised from {}'.format(indent, loc))
+
+        likely_cause = ("This error is usually caused by passing an argument "
+                        "of a type that is unsupported by the named function.")
+        msgbuf.append(_termcolor.errmsg(likely_cause))
+        return '\n'.join(msgbuf)
+
+    def format_error(self, error):
+        """Format error message or exception
+        """
+        if isinstance(error, Exception):
+            return '{}: {}'.format(type(error).__name__, error)
+        else:
+            return '{}'.format(error)
+
+    def get_loc(self, classtemplate, error):
+        """Get source location information from the error message.
+        """
+        if isinstance(error, Exception) and hasattr(error, '__traceback__'):
+            # traceback is unavailable in py2
+            frame = traceback.extract_tb(error.__traceback__)[-1]
+            return "{}:{}".format(frame[0], frame[1])
+
+    def raise_error(self):
+        for _tempcls, e in self._failures:
+            if isinstance(e, errors.ForceLiteralArg):
+                raise e
+        raise errors.TypingError(self.format())
 
 
 class BaseFunction(Callable):
@@ -10,12 +85,13 @@ class BaseFunction(Callable):
     """
 
     def __init__(self, template):
+
         if isinstance(template, (list, tuple)):
             self.templates = tuple(template)
             keys = set(temp.key for temp in self.templates)
             if len(keys) != 1:
                 raise ValueError("incompatible templates: keys = %s"
-                                 % (this,))
+                                 % (keys,))
             self.typing_key, = keys
         else:
             self.templates = (template,)
@@ -44,12 +120,34 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
+        failures = _ResolutionFailures(context, self, args, kws)
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            sig = temp.apply(args, kws)
-            if sig is not None:
-                self._impl_keys[sig.args] = temp.get_impl_key(sig)
-                return sig
+            for uselit in [True, False]:
+                try:
+                    if uselit:
+                        sig = temp.apply(args, kws)
+                    else:
+                        nolitargs = tuple([unliteral(a) for a in args])
+                        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+                        sig = temp.apply(nolitargs, nolitkws)
+                except Exception as e:
+                    sig = None
+                    failures.add_error(temp_cls, e)
+                else:
+                    if sig is not None:
+                        self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                        return sig
+                    else:
+                        haslit= '' if uselit else 'out'
+                        msg = "All templates rejected with%s literals." % haslit
+                        failures.add_error(temp_cls, msg)
+
+        if len(failures) == 0:
+            raise AssertionError("Internal Error. "
+                                 "Function resolution ended with no failures "
+                                 "or successfull signature")
+        failures.raise_error()
 
     def get_call_signatures(self):
         sigs = []
@@ -105,12 +203,29 @@ class BoundFunction(Callable, Opaque):
         return self.typing_key
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        template = self.template(context)
+        e = None
+        # Try with Literal
+        try:
+            out = template.apply(args, kws)
+        except Exception:
+            out = None
+        # If that doesn't work, remove literals
+        if out is None:
+            args = [unliteral(a) for a in args]
+            kws = {k: unliteral(v) for k, v in kws.items()}
+            out = template.apply(args, kws)
+        if out is None and e is not None:
+            raise e
+        return out
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
         is_param = hasattr(self.template, 'generic')
         return sigs, is_param
+
+class MakeFunctionLiteral(Literal, Opaque):
+    pass
 
 
 class WeakType(Type):
@@ -186,6 +301,12 @@ class Dispatcher(WeakType, Callable, Dummy):
         return self.get_overload(sig)
 
 
+class ObjModeDispatcher(Dispatcher):
+    """Dispatcher subclass that enters objectmode function.
+    """
+    pass
+
+
 class ExternalFunctionPointer(BaseFunction):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).
@@ -242,26 +363,6 @@ class ExternalFunction(Function):
     @property
     def key(self):
         return self.symbol, self.sig
-
-
-class NumbaFunction(Function):
-    """
-    A named native function with the Numba calling convention
-    (resolvable by LLVM).
-    For internal use only.
-    """
-
-    def __init__(self, fndesc, sig):
-        from .. import typing
-        self.fndesc = fndesc
-        self.sig = sig
-        template = typing.make_concrete_template(fndesc.qualname,
-                                                 fndesc.qualname, [sig])
-        super(NumbaFunction, self).__init__(template)
-
-    @property
-    def key(self):
-        return self.fndesc.unique_name, self.sig
 
 
 class NamedTupleClass(Callable, Opaque):

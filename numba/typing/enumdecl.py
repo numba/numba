@@ -1,12 +1,10 @@
 """
 Typing for enums.
 """
-
-import enum
-
-from numba import types, utils
+import operator
+from numba import types
 from numba.typing.templates import (AbstractTemplate, AttributeTemplate,
-                                    signature, Registry, bound_function)
+                                    signature, Registry)
 
 registry = Registry()
 infer = registry.register
@@ -34,19 +32,33 @@ class EnumClassAttribute(AttributeTemplate):
             return ty.member_type
 
 
+@infer
+class EnumClassStaticGetItem(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        enum, idx = args
+        if (isinstance(enum, types.EnumClass)
+                and idx in enum.instance_class.__members__):
+            return signature(enum.member_type, *args)
+
+
 class EnumCompare(AbstractTemplate):
 
     def generic(self, args, kws):
         [lhs, rhs] = args
         if (isinstance(lhs, types.EnumMember)
-            and isinstance(rhs, types.EnumMember)
-            and lhs == rhs):
+                and isinstance(rhs, types.EnumMember)
+                and lhs == rhs):
             return signature(types.boolean, lhs, rhs)
 
-@infer
-class EnumEq(EnumCompare):
-    key = '=='
 
-@infer
+@infer_global(operator.eq)
+class EnumEq(EnumCompare):
+    pass
+
+
+
+@infer_global(operator.ne)
 class EnumNe(EnumCompare):
-    key = '!='
+    pass

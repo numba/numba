@@ -8,7 +8,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, typeof, errors, types, utils
+from numba import jit, typeof, errors, types, utils, config, njit
 from .support import TestCase, tag
 
 
@@ -71,6 +71,12 @@ def enumerate_usecase():
 def enumerate_start_usecase():
     result = 0
     for i, j in enumerate((1., 2.5, 3.), 42):
+        result += i * j
+    return result
+
+def enumerate_invalid_start_usecase():
+    result = 0
+    for i, j in enumerate((1., 2.5, 3.), 3.14159):
         result += i * j
     return result
 
@@ -415,6 +421,25 @@ class TestBuiltins(TestCase):
     def test_enumerate_start_npm(self):
         self.test_enumerate_start(flags=no_pyobj_flags)
 
+    def test_enumerate_start_invalid_start_type(self):
+        pyfunc = enumerate_invalid_start_usecase
+        cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        with self.assertRaises(TypeError) as raises:
+            cr.entry_point()
+        if config.PYVERSION == (2, 7):
+            thing = 'index'
+        else:
+            thing = 'integer'
+        msg = "'float' object cannot be interpreted as an %s" % thing
+        self.assertIn(msg, str(raises.exception))
+
+    def test_enumerate_start_invalid_start_type_npm(self):
+        pyfunc = enumerate_invalid_start_usecase
+        with self.assertRaises(errors.TypingError) as raises:
+            cr = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        msg = "Only integers supported as start value in enumerate"
+        self.assertIn(msg, str(raises.exception))
+
     def test_filter(self, flags=enable_pyobj_flags):
         pyfunc = filter_usecase
         cr = compile_isolated(pyfunc, (types.Dummy('list'),
@@ -695,7 +720,7 @@ class TestBuiltins(TestCase):
         cfunc(1, [1])
 
     def test_max_1_invalid_types(self):
-        # Heterogenous ordering is valid in Python 2
+        # Heterogeneous ordering is valid in Python 2
         if utils.IS_PY3:
             with self.assertRaises(TypeError):
                 self.check_min_max_invalid_types(max_usecase1)
@@ -707,7 +732,7 @@ class TestBuiltins(TestCase):
             self.check_min_max_invalid_types(max_usecase1, flags=no_pyobj_flags)
 
     def test_min_1_invalid_types(self):
-        # Heterogenous ordering is valid in Python 2
+        # Heterogeneous ordering is valid in Python 2
         if utils.IS_PY3:
             with self.assertRaises(TypeError):
                 self.check_min_max_invalid_types(min_usecase1)
@@ -956,6 +981,37 @@ class TestBuiltins(TestCase):
                                     flags=no_pyobj_flags)
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_usecase(x, y))
+
+    def _check_min_max(self, pyfunc):
+        cfunc = njit()(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(expected, got)
+
+    def test_min_max_iterable_input(self):
+
+        @njit
+        def frange(start, stop, step):
+            i = start
+            while i < stop:
+                yield i
+                i += step
+
+        def sample_functions(op):
+            yield lambda: op(range(10))
+            yield lambda: op(range(4, 12))
+            yield lambda: op(range(-4, -15, -1))
+            yield lambda: op([6.6, 5.5, 7.7])
+            yield lambda: op([(3, 4), (1, 2)])
+            yield lambda: op(frange(1.1, 3.3, 0.1))
+            yield lambda: op([np.nan, -np.inf, np.inf, np.nan])
+            yield lambda: op([(3,), (1,), (2,)])
+
+        for fn in sample_functions(op=min):
+            self._check_min_max(fn)
+
+        for fn in sample_functions(op=max):
+            self._check_min_max(fn)
 
 
 if __name__ == '__main__':

@@ -61,7 +61,7 @@ Kernel invocation
 A kernel is typically launched in the following way::
 
     threadsperblock = 32
-    blockspergrid = (an_array.size + (threadsperblock - 1)) // threadperblock
+    blockspergrid = (an_array.size + (threadsperblock - 1)) // threadsperblock
     increment_by_one[blockspergrid, threadsperblock](an_array)
 
 We notice two steps here:
@@ -111,7 +111,7 @@ to know which array element(s) it is responsible for (complex algorithms
 may define more complex responsibilities, but the underlying principle
 is the same).
 
-One way is for the thread to determines its position in the grid and block
+One way is for the thread to determine its position in the grid and block
 and manually compute the corresponding array position::
 
     @cuda.jit

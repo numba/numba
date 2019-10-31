@@ -10,26 +10,30 @@ Programming
 Can I pass a function as an argument to a jitted function?
 ----------------------------------------------------------
 
-You can't, but in many cases you can use a closure to emulate it.
-For example, this example::
+As of Numba 0.39, you can, so long as the function argument has also been
+JIT-compiled::
 
    @jit(nopython=True)
    def f(g, x):
        return g(x) + g(-x)
 
-   result = f(my_g_function, 1)
+   result = f(jitted_g_function, 1)
 
-could be rewritten using a factory function::
+However, dispatching with arguments that are functions has extra overhead.
+If this matters for your application, you can also use a factory function to 
+capture the function argument in a closure::
 
    def make_f(g):
-       # Note: a new f() is compiled each time make_f() is called!
+       # Note: a new f() is created each time make_f() is called!
        @jit(nopython=True)
        def f(x):
            return g(x) + g(-x)
        return f
 
-   f = make_f(my_g_function)
+   f = make_f(jitted_g_function)
    result = f(1)
+
+Improving the dispatch performance of functions in Numba is an ongoing task.
 
 Numba doesn't seem to care when I modify a global variable
 ----------------------------------------------------------
@@ -74,6 +78,14 @@ variables.  On a 32-bit machine, you may sometimes need the magnitude of
 ``np.int64`` (for example ``np.int64(0)`` instead of ``0``).  It will
 propagate to all computations involving those variables.
 
+.. _parallel_faqs:
+
+How can I tell if ``parallel=True`` worked?
+-------------------------------------------
+
+If the ``parallel=True`` transformations failed for a function
+decorated as such, a warning will be displayed. See also
+:ref:`numba-parallel-diagnostics` for information about parallel diagnostics.
 
 Performance
 ===========
@@ -90,14 +102,70 @@ Does Numba vectorize array computations (SIMD)?
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
 
-Does Numba parallelize code?
-----------------------------
+Why my loop is not vectorized?
+------------------------------
 
-No, it doesn't.  If you want to run computations concurrently on multiple
-threads (by :ref:`releasing the GIL <jit-nogil>`) or processes, you'll
-have to handle the pooling and synchronisation yourself.
+Numba enables the loop-vectorize optimization in LLVM by default.
+While it is a powerful optimization, not all loops are applicable.
+Sometimes, loop-vectorization may fail due to subtle details like memory access
+pattern. To see additional diagnostic information from LLVM,
+add the following lines:
 
-Or, you can take a look at NumbaPro_.
+.. code-block:: python
+
+    import llvmlite.binding as llvm
+    llvm.set_option('', '--debug-only=loop-vectorize')
+
+This tells LLVM to print debug information from the **loop-vectorize**
+pass to stderr.  Each function entry looks like:
+
+.. code-block:: text
+
+    LV: Checking a loop in "<low-level symbol name>" from <function name>
+    LV: Loop hints: force=? width=0 unroll=0
+    ...
+    LV: Vectorization is possible but not beneficial.
+    LV: Interleaving is not beneficial.
+
+Each function entry is separated by an empty line.  The reason for rejecting
+the vectorization is usually at the end of the entry.  In the example above,
+LLVM rejected the vectorization because doing so will not speedup the loop.
+In this case, it can be due to memory access pattern.  For instance, the
+array being looped over may not be in contiguous layout.
+
+When memory access pattern is non-trivial such that it cannot determine the
+access memory region, LLVM may reject with the following message:
+
+.. code-block:: text
+
+    LV: Can't vectorize due to memory conflicts
+
+Another common reason is:
+
+.. code-block:: text
+
+    LV: Not vectorizing: loop did not meet vectorization requirements.
+
+In this case, vectorization is rejected because the vectorized code may behave
+differently.  This is a case to try turning on ``fastmath=True`` to allow
+fastmath instructions.
+
+
+Does Numba automatically parallelize code?
+------------------------------------------
+
+It can, in some cases:
+
+* Ufuncs and gufuncs with the ``target="parallel"`` option will run on multiple threads.
+* The ``parallel=True`` option to ``@jit`` will attempt to optimize array
+  operations and run them in parallel.  It also adds support for ``prange()`` to
+  explicitly parallelize a loop.
+
+You can also manually run computations on multiple threads yourself and use
+the ``nogil=True`` option (see :ref:`releasing the GIL <jit-nogil>`).  Numba
+can also target parallel execution on GPU architectures using its CUDA and HSA
+backends.
+
 
 Can Numba speed up short-running functions?
 -------------------------------------------
@@ -123,6 +191,30 @@ Try to pass ``cache=True`` to the ``@jit`` decorator.  It will keep the
 compiled version on disk for later use.
 
 A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
+
+
+GPU Programming
+===============
+
+How do I work around the ``CUDA intialized before forking`` error?
+------------------------------------------------------------------
+
+On Linux, the ``multiprocessing`` module in the Python standard library
+defaults to using the ``fork`` method for creating new processes.  Because of
+the way process forking duplicates state between the parent and child
+processes, CUDA will not work correctly in the child process if the CUDA
+runtime was initialized *prior* to the fork.  Numba detects this and raises a
+``CudaDriverError`` with the message ``CUDA initialized before forking``.
+
+One approach to avoid this error is to make all calls to ``numba.cuda``
+functions inside the child processes or after the process pool is created.
+However, this is not always possible, as you might want to query the number of
+available GPUs before starting the process pool.  In Python 3, you can change
+the process start method, as described in the `multiprocessing documentation
+<https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
+Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
+initalization issue, although the child processes will not inherit any global
+variables from their parent.
 
 
 Integration with other utilities
@@ -173,4 +265,21 @@ value, for example::
    locale.setlocale(locale.LC_NUMERIC, 'C')
 
 
-.. _NumbaPro: http://docs.continuum.io/numbapro/
+Miscellaneous
+=============
+
+Where does the project name "Numba" come from?
+----------------------------------------------
+
+"Numba" is a combination of "NumPy" and "Mamba". Mambas are some of the fastest
+snakes in the world, and Numba makes your Python code fast.
+
+How do I reference/cite/acknowledge Numba in other work?
+--------------------------------------------------------
+For academic use, the best option is to cite our ACM Proceedings: `Numba: a
+LLVM-based Python JIT compiler.
+<http://dl.acm.org/citation.cfm?id=2833162&dl=ACM&coll=DL>`_ You can also find
+`the sources on github <https://github.com/numba/Numba-SC15-Paper>`_, including
+`a pre-print pdf
+<https://github.com/numba/Numba-SC15-Paper/raw/master/numba_sc15.pdf>`_, in case
+you don't have access to the ACM site but would like to read the paper.

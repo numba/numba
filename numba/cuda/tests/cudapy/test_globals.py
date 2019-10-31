@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 N = 100
 
@@ -28,7 +28,7 @@ def coop_smem2d(ary):
     ary[i, j] = sm[i, j]
 
 
-class TestCudaTestGlobal(unittest.TestCase):
+class TestCudaTestGlobal(SerialMixin, unittest.TestCase):
     def test_global_int_const(self):
         """Test simple_smem
         """

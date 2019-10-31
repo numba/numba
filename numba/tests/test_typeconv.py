@@ -84,11 +84,11 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
         ]
 
         # allow_unsafe = True => a conversion from i32 to f32 is chosen
-        sel = tm.select_overload(sig, ovs, True)
+        sel = tm.select_overload(sig, ovs, True, False)
         self.assertEqual(sel, 1)
         # allow_unsafe = False => no overload available
         with self.assertRaises(TypeError):
-            sel = tm.select_overload(sig, ovs, False)
+            sel = tm.select_overload(sig, ovs, False, False)
 
     def test_default_rules(self):
         tm = rules.default_type_manager
@@ -107,8 +107,8 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
         ]
         # The first overload is unsafe, the second is safe => the second
         # is always chosen, regardless of allow_unsafe.
-        self.assertEqual(tm.select_overload(sig, ovs, True), 1)
-        self.assertEqual(tm.select_overload(sig, ovs, False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, True, False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, False, False), 1)
 
     def test_overload2(self):
         tm = rules.default_type_manager
@@ -126,13 +126,17 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
             # Two unsafe converts, one exact type
             (i16, i16, i16),
         ]
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False,
+                                            exact_match_required=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
+                                            exact_match_required=False), 1)
 
         # The same in reverse order
         ovs.reverse()
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False,
+                                            exact_match_required=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
+                                            exact_match_required=False), 1)
 
     def test_overload3(self):
         # Promotes should be preferred over safe converts
@@ -149,13 +153,17 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
             # Two safe converts
             (f64, f64),
         ]
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 0)
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 0)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False,
+                                            exact_match_required=False), 0)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
+                                            exact_match_required=False), 0)
 
         # The same in reverse order
         ovs.reverse()
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
-        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False,
+                                            exact_match_required=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True,
+                                            exact_match_required=False), 1)
 
     def test_type_casting_rules(self):
         tm = TypeManager()

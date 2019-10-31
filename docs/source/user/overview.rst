@@ -17,7 +17,7 @@ Numba's main features are:
 * :ref:`on-the-fly code generation <jit>` (at import time or runtime, at the
   user's preference)
 * native code generation for the CPU (default) and
-  :doc:`GPU hardware </cuda/index>`
+  :doc:`GPU hardware <../cuda/index>`
 * integration with the Python scientific software stack (thanks to Numpy)
 
 Here is how a Numba-optimized function, taking a Numpy array as argument,

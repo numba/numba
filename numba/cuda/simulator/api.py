@@ -8,6 +8,7 @@ from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
 from numba.typing import Signature
 from warnings import warn
+from ..args import In, Out, InOut
 
 
 def select_device(dev=0):
@@ -71,19 +72,19 @@ class Event(object):
 event = Event
 
 
-def jit(fn_or_sig=None, device=False, debug=False, argtypes=None, inline=False, restype=None,
-        fastmath=False, link=None):
+def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
+        inline=False, restype=None, fastmath=False, link=None):
     if link is not None:
         raise NotImplementedError('Cannot link PTX in the simulator')
     # Check for first argument specifying types - in that case the
     # decorator is not being passed a function
-    if fn_or_sig is None or isinstance(fn_or_sig, (str, tuple, Signature)):
+    if func_or_sig is None or isinstance(func_or_sig, (str, tuple, Signature)):
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,
                                   fastmath=fastmath)
         return jitwrapper
-    return FakeCUDAKernel(fn_or_sig, device=device)
+    return FakeCUDAKernel(func_or_sig, device=device)
 
 autojit = jit
 

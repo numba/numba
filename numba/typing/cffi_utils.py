@@ -7,8 +7,11 @@ from __future__ import print_function, division, absolute_import
 
 from types import BuiltinFunctionType
 import ctypes
+from functools import partial
+import numpy as np
 
 from numba import types
+from numba import numpy_support
 from numba.errors import TypingError
 from . import templates
 
@@ -64,6 +67,7 @@ def _type_map():
     global _cached_type_map
     if _cached_type_map is None:
         _cached_type_map = {
+            ffi.typeof('bool') :                types.boolean,
             ffi.typeof('char') :                types.char,
             ffi.typeof('short') :               types.short,
             ffi.typeof('int') :                 types.intc,
@@ -91,25 +95,40 @@ def _type_map():
     return _cached_type_map
 
 
-def map_type(cffi_type):
+def map_type(cffi_type, use_record_dtype=False):
     """
     Map CFFI type to numba type.
+
+    Parameters
+    ----------
+    cffi_type:
+        The CFFI type to be converted.
+    use_record_dtype: bool (default: False)
+        When True, struct types are mapped to a NumPy Record dtype.
+
     """
+    primed_map_type = partial(map_type, use_record_dtype=use_record_dtype)
     kind = getattr(cffi_type, 'kind', '')
     if kind == 'union':
         raise TypeError("No support for CFFI union")
     elif kind == 'function':
         if cffi_type.ellipsis:
             raise TypeError("vararg function is not supported")
-        restype = map_type(cffi_type.result)
-        argtypes = [map_type(arg) for arg in cffi_type.args]
+        restype = primed_map_type(cffi_type.result)
+        argtypes = [primed_map_type(arg) for arg in cffi_type.args]
         return templates.signature(restype, *argtypes)
     elif kind == 'pointer':
         pointee = cffi_type.item
         if pointee.kind == 'void':
             return types.voidptr
         else:
-            return types.CPointer(map_type(pointee))
+            return types.CPointer(primed_map_type(pointee))
+    elif kind == 'array':
+        dtype = primed_map_type(cffi_type.item)
+        nelem = cffi_type.length
+        return types.NestedArray(dtype=dtype, shape=(nelem,))
+    elif kind == 'struct' and use_record_dtype:
+        return map_struct_to_record_dtype(cffi_type)
     else:
         result = _type_map().get(cffi_type)
         if result is None:
@@ -117,14 +136,47 @@ def map_type(cffi_type):
         return result
 
 
-def make_function_type(cffi_func):
+def map_struct_to_record_dtype(cffi_type):
+    """Convert a cffi type into a NumPy Record dtype
+    """
+    fields = {
+            'names': [],
+            'formats': [],
+            'offsets': [],
+            'itemsize': ffi.sizeof(cffi_type),
+    }
+    is_aligned = True
+    for k, v in cffi_type.fields:
+        # guard unsupport values
+        if v.bitshift != -1:
+            msg = "field {!r} has bitshift, this is not supported"
+            raise ValueError(msg.format(k))
+        if v.flags != 0:
+            msg = "field {!r} has flags, this is not supported"
+            raise ValueError(msg.format(k))
+        if v.bitsize != -1:
+            msg = "field {!r} has bitsize, this is not supported"
+            raise ValueError(msg.format(k))
+        dtype = numpy_support.as_dtype(
+            map_type(v.type, use_record_dtype=True),
+        )
+        fields['names'].append(k)
+        fields['formats'].append(dtype)
+        fields['offsets'].append(v.offset)
+        # Check alignment
+        is_aligned &= (v.offset % dtype.alignment == 0)
+
+    return numpy_support.from_dtype(np.dtype(fields, align=is_aligned))
+
+
+def make_function_type(cffi_func, use_record_dtype=False):
     """
     Return a Numba type for the given CFFI function pointer.
     """
     cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
     if getattr(cffi_type, 'kind', '') == 'struct':
         raise TypeError('No support for CFFI struct values')
-    sig = map_type(cffi_type)
+    sig = map_type(cffi_type, use_record_dtype=use_record_dtype)
     return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
 
 
@@ -143,6 +195,9 @@ class FFI_from_buffer(templates.AbstractTemplate):
                               % (ary,))
         if ary.layout not in ('C', 'F'):
             raise TypingError("from_buffer() unsupported on non-contiguous buffers (got %s)"
+                              % (ary,))
+        if ary.layout != 'C' and ary.ndim > 1:
+            raise TypingError("from_buffer() only supports multidimensional arrays with C layout (got %s)"
                               % (ary,))
         ptr = types.CPointer(ary.dtype)
         return templates.signature(ptr, ary)

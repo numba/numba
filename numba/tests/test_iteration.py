@@ -4,8 +4,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import numpy_support, types
-from .support import TestCase, tag
+from numba import numpy_support, types, errors
+from .support import TestCase, MemoryLeakMixin, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -29,7 +29,7 @@ def float_tuple_iter_usecase():
     return res
 
 def tuple_tuple_iter_usecase():
-    # Recursively homogenous tuple type
+    # Recursively homogeneous tuple type
     res = 0.0
     for i in ((1.5, 2.0), (99.3, 3.4), (1.8, 2.5)):
         for j in i:
@@ -53,6 +53,15 @@ def nested_enumerate_usecase():
         res = res * 2
     return res
 
+
+def enumerate_array_usecase():
+    res = 0
+    arrays = (np.ones(4), np.ones(5))
+    for i, v in enumerate(arrays):
+        res += v.sum()
+    return res
+
+
 def scalar_iter_usecase(iterable):
     res = 0.0
     for x in iterable:
@@ -75,7 +84,7 @@ record_dtype = np.dtype([('a', np.float64),
                          ])
 
 
-class IterationTest(TestCase):
+class IterationTest(MemoryLeakMixin, TestCase):
 
     def run_nullary_func(self, pyfunc, flags):
         cr = compile_isolated(pyfunc, (), flags=flags)
@@ -119,6 +128,14 @@ class IterationTest(TestCase):
     @tag('important')
     def test_nested_enumerate_npm(self):
         self.test_nested_enumerate(flags=no_pyobj_flags)
+
+    def test_enumerate_refct(self):
+        # Test issue 3473
+        pyfunc = enumerate_array_usecase
+        cr = compile_isolated(pyfunc, ())
+        cfunc = cr.entry_point
+        expected = pyfunc()
+        self.assertPreciseEqual(cfunc(), expected)
 
     def run_array_1d(self, item_type, arg, flags):
         # Iteration over a 1d numpy array
@@ -176,6 +193,24 @@ class IterationTest(TestCase):
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
+    def test_array_2d_raises(self):
+
+        def foo(x):
+            for i in x:
+                pass
+
+        # 1D is fine
+        aryty = types.Array(types.int32, 1, 'C')
+        compile_isolated(foo, (aryty,))
+
+        # 2d is typing error
+        with self.assertRaises(errors.TypingError) as raises:
+            aryty = types.Array(types.int32, 2, 'C')
+            compile_isolated(foo, (aryty,))
+
+        self.assertIn("Direct iteration is not supported",
+                      str(raises.exception))
+
     def test_tuple_iter_issue1504(self):
         # The issue is due to `row` being typed as heterogeneous tuple.
         def bar(x, y):
@@ -191,6 +226,23 @@ class IterationTest(TestCase):
 
         expect = bar(x, y)
         got = cres.entry_point(x, y)
+        self.assertEqual(expect, got)
+
+    def test_tuple_of_arrays_iter(self):
+        # We used to leak a reference to each element of the tuple
+        def bar(arrs):
+            total = 0
+            for arr in arrs:
+                total += arr[0]
+
+            return total
+
+        x = y = np.arange(3, dtype=np.int32)
+        aryty = types.Array(types.int32, 1, 'C')
+        cres = compile_isolated(bar, (types.containers.UniTuple(aryty, 2),))
+
+        expect = bar((x, y))
+        got = cres.entry_point((x, y))
         self.assertEqual(expect, got)
 
 

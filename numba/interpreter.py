@@ -2,11 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
-import sys
-from copy import copy
+import operator
 
-from . import config, ir, controlflow, dataflow, utils, errors
+from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
+from .errors import NotDefinedError
+from .utils import (
+    BINOPS_TO_OPERATORS,
+    INPLACE_BINOPS_TO_OPERATORS,
+    UNARY_BUITINS_TO_OPERATORS,
+    OPERATORS_TO_BUILTINS,
+    )
 
 
 class Assigner(object):
@@ -142,6 +148,12 @@ class Interpreter(object):
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
+        # Check out-of-scope syntactic-block
+        while self.syntax_blocks:
+            if inst.offset >= self.syntax_blocks[-1].exit:
+                self.syntax_blocks.pop()
+            else:
+                break
 
     def _end_current_block(self):
         self._remove_unused_temporaries()
@@ -171,6 +183,7 @@ class Interpreter(object):
                                                       loc=self.loc)
             stmt = ir.Assign(value=self.get(varname), target=target,
                              loc=self.loc)
+            self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
                 self.current_block.append(stmt)
             else:
@@ -214,6 +227,10 @@ class Interpreter(object):
         return self.bytecode.co_names
 
     @property
+    def code_cellvars(self):
+        return self.bytecode.co_cellvars
+
+    @property
     def code_freevars(self):
         return self.bytecode.co_freevars
 
@@ -229,8 +246,15 @@ class Interpreter(object):
                 return fn(inst, **kws)
             except errors.NotDefinedError as e:
                 if e.loc is None:
-                    e.loc = self.loc
-                raise e
+                    loc = self.loc
+                else:
+                    loc = e.loc
+
+                err = errors.NotDefinedError(e.name, loc=loc)
+                if not config.FULL_TRACEBACKS:
+                    six.raise_from(err, None)
+                else:
+                    raise err
 
 
     # --- Scope operations ---
@@ -241,7 +265,8 @@ class Interpreter(object):
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
-            target = self.current_scope.redefine(name, loc=self.loc)
+            rename = not (name in self.code_cellvars)
+            target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
         if isinstance(value, ir.Var):
@@ -254,6 +279,11 @@ class Interpreter(object):
         """
         Get the variable (a Var instance) with the given *name*.
         """
+        # Implicit argument for comprehension starts with '.'
+        # See Parameter class in inspect.py (from Python source)
+        if name[0] == '.' and name[1:].isdigit():
+            name = 'implicit{}'.format(name[1:])
+
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)
@@ -568,15 +598,52 @@ class Interpreter(object):
         self.store(gl, res)
 
     def op_LOAD_DEREF(self, inst, res):
-        name = self.code_freevars[inst.arg]
-        value = self.get_closure_value(inst.arg)
-        gl = ir.FreeVar(inst.arg, name, value, loc=self.loc)
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            name = self.code_cellvars[inst.arg]
+            gl = self.get(name)
+        else:
+            idx = inst.arg - n_cellvars
+            name = self.code_freevars[idx]
+            value = self.get_closure_value(idx)
+            gl = ir.FreeVar(idx, name, value, loc=self.loc)
         self.store(gl, res)
+
+    def op_STORE_DEREF(self, inst, value):
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            dstname = self.code_cellvars[inst.arg]
+        else:
+            dstname = self.code_freevars[inst.arg - n_cellvars]
+        value = self.get(value)
+        self.store(value=value, name=dstname)
 
     def op_SETUP_LOOP(self, inst):
         assert self.blocks[inst.offset] is self.current_block
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
+
+    def op_SETUP_WITH(self, inst, contextmanager):
+        assert self.blocks[inst.offset] is self.current_block
+        exitpt = inst.next + inst.arg
+        wth = ir.With(inst.offset, exit=exitpt)
+        self.syntax_blocks.append(wth)
+        self.current_block.append(ir.EnterWith(
+            contextmanager=self.get(contextmanager),
+            begin=inst.offset, end=exitpt, loc=self.loc,
+            ))
+
+    def op_WITH_CLEANUP(self, inst):
+        "no-op"
+
+    def op_WITH_CLEANUP_START(self, inst):
+        "no-op"
+
+    def op_WITH_CLEANUP_FINISH(self, inst):
+        "no-op"
+
+    def op_END_FINALLY(self, inst):
+        "no-op"
 
     if PYVERSION < (3, 6):
 
@@ -637,12 +704,20 @@ class Interpreter(object):
             expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
             self.store(expr, res)
 
-    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+    def _build_tuple_unpack(self, inst, tuples, temps):
         first = self.get(tuples[0])
         for other, tmp in zip(map(self.get, tuples[1:]), temps):
-            out = ir.Expr.binop(fn='+', lhs=first, rhs=other, loc=self.loc)
+            out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
+                                loc=self.loc)
             self.store(out, tmp)
-            first = tmp
+            first = self.get(tmp)
+
+    def op_BUILD_TUPLE_UNPACK_WITH_CALL(self, inst, tuples, temps):
+        # just unpack the input tuple, call inst will be handled afterwards
+        self._build_tuple_unpack(inst, tuples, temps)
+
+    def op_BUILD_TUPLE_UNPACK(self, inst, tuples, temps):
+        self._build_tuple_unpack(inst, tuples, temps)
 
     def op_BUILD_CONST_KEY_MAP(self, inst, keys, keytmps, values, res):
         # Unpack the constant key-tuple and reused build_map which takes
@@ -756,15 +831,19 @@ class Interpreter(object):
         return self.store(expr, res)
 
     def _binop(self, op, lhs, rhs, res):
+        op = BINOPS_TO_OPERATORS[op]
         lhs = self.get(lhs)
         rhs = self.get(rhs)
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
     def _inplace_binop(self, op, lhs, rhs, res):
+        immuop = BINOPS_TO_OPERATORS[op]
+        op = INPLACE_BINOPS_TO_OPERATORS[op + '=']
         lhs = self.get(lhs)
         rhs = self.get(rhs)
-        expr = ir.Expr.inplace_binop(op + '=', op, lhs=lhs, rhs=rhs, loc=self.loc)
+        expr = ir.Expr.inplace_binop(op, immuop, lhs=lhs, rhs=rhs,
+                                     loc=self.loc)
         self.store(expr, res)
 
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
@@ -869,7 +948,16 @@ class Interpreter(object):
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
         op = dis.cmp_op[inst.arg]
-        self._binop(op, lhs, rhs, res)
+        if op == 'in' or op == 'not in':
+            lhs, rhs = rhs, lhs
+
+        if op == 'not in':
+            self._binop('in', lhs, rhs, res)
+            tmp = self.get(res)
+            out = ir.Expr.unary('not', value=tmp, loc=self.loc)
+            self.store(out, res)
+        else:
+            self._binop(op, lhs, rhs, res)
 
     def op_BREAK_LOOP(self, inst):
         loop = self.syntax_blocks[-1]
@@ -917,3 +1005,59 @@ class Interpreter(object):
         index = None
         inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
         return self.store(inst, res)
+
+    def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
+        if annotations != None:
+            raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
+        if kwdefaults != None:
+            raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
+        if isinstance(defaults, tuple):
+            defaults = tuple([self.get(name) for name in defaults])
+        fcode = self.definitions[code][0].value
+        if name:
+            name = self.get(name)
+        if closure:
+            closure = self.get(closure)
+        expr = ir.Expr.make_function(name, fcode, closure, defaults, self.loc)
+        self.store(expr, res)
+
+    def op_MAKE_CLOSURE(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
+        self.op_MAKE_FUNCTION(inst, name, code, closure, annotations, kwdefaults, defaults, res)
+
+    def op_LOAD_CLOSURE(self, inst, res):
+        n_cellvars = len(self.code_cellvars)
+        if inst.arg < n_cellvars:
+            name = self.code_cellvars[inst.arg]
+            try:
+                gl = self.get(name)
+            except NotDefinedError as e:
+                raise NotImplementedError("Unsupported use of op_LOAD_CLOSURE encountered")
+        else:
+            idx = inst.arg - n_cellvars
+            name = self.code_freevars[idx]
+            value = self.get_closure_value(idx)
+            gl = ir.FreeVar(idx, name, value, loc=self.loc)
+        self.store(gl, res)
+
+    def op_LIST_APPEND(self, inst, target, value, appendvar, res):
+        target = self.get(target)
+        value = self.get(value)
+        appendattr = ir.Expr.getattr(target, 'append', loc=self.loc)
+        self.store(value=appendattr, name=appendvar)
+        appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
+        self.store(value=appendinst, name=res)
+
+
+    # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
+    # however this means a new object (the bound-method instance) could be
+    # created. Conversely, using a pure LOAD_METHOD no intermediary is present
+    # and it is essentially like a pointer grab and forward to CALL_METHOD. The
+    # net outcome is that the implementation in Numba produces the same result,
+    # but in object mode it may be that it runs more slowly than it would if
+    # run in CPython.
+
+    def op_LOAD_METHOD(self, *args, **kws):
+        self.op_LOAD_ATTR(*args, **kws)
+
+    def op_CALL_METHOD(self, *args, **kws):
+        self.op_CALL_FUNCTION(*args, **kws)

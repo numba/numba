@@ -8,6 +8,7 @@ from numba.numpy_support import from_dtype
 from numba import types, njit, typeof, numpy_support
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.errors import TypingError
+from .test_parfors import skip_unsupported
 
 
 def array_dtype(a):
@@ -94,8 +95,12 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
     def check_unary(self, pyfunc, arr):
-        cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
+        aryty = typeof(arr)
+        cfunc = self.get_cfunc(pyfunc, (aryty,))
         expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+        # Retry with forced any layout
+        cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def check_unary_with_arrays(self, pyfunc,
@@ -162,9 +167,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        # Numpy 1.10 is more opportunistic when computing contiguousness
+        # Numpy 1.12+ is more opportunistic when computing contiguousness
         # of empty arrays.
-        use_reshaped_empty_array = numpy_support.version < (1, 10)
+        use_reshaped_empty_array = numpy_support.version > (1, 11)
         self.check_unary_with_arrays(array_flags_f_contiguous,
                                      use_reshaped_empty_array=use_reshaped_empty_array)
 
@@ -224,12 +229,53 @@ class TestSlicedArrayAttr(MemoryLeakMixin, unittest.TestCase):
             self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
 
 
-class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
+class TestArrayCTypes(MemoryLeakMixin, TestCase):
+
+    _numba_parallel_test_ = False
+
     def test_array_ctypes_data(self):
         pyfunc = array_ctypes_data
         cfunc = njit(pyfunc)
         arr = np.arange(3)
         self.assertEqual(pyfunc(arr), cfunc(arr))
+
+    @skip_unsupported
+    def test_array_ctypes_ref_error_in_parallel(self):
+        # Issue #2887
+        from ctypes import CFUNCTYPE, c_void_p, c_int32, c_double, c_bool
+
+        @CFUNCTYPE(c_bool, c_void_p, c_int32, c_void_p)
+        def callback(inptr, size, outptr):
+            # A ctypes callback that manipulate the incoming pointers.
+            try:
+                inbuf = (c_double * size).from_address(inptr)
+                outbuf = (c_double * 1).from_address(outptr)
+                a = np.ndarray(size, buffer=inbuf, dtype=np.float64)
+                b = np.ndarray(1, buffer=outbuf, dtype=np.float64)
+                b[0] = (a + a.size)[0]
+                return True
+            except:
+                import traceback
+                traceback.print_exception()
+                return False
+
+
+        # parallel=True is required to reproduce the error.
+        @njit(parallel=True)
+        def foo(size):
+            arr = np.ones(size)
+            out = np.empty(1)
+            # Exercise array.ctypes
+            inct = arr.ctypes
+            outct = out.ctypes
+            # The reference to `arr` is dead by now
+            status = callback(inct.data, size, outct.data)
+            return status, out[0]
+
+        size = 3
+        status, got = foo(size)
+        self.assertTrue(status)
+        self.assertPreciseEqual(got, (np.ones(size) + size)[0])
 
 
 class TestRealImagAttr(MemoryLeakMixin, TestCase):

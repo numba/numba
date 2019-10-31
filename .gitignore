@@ -6,7 +6,10 @@
 *.pdb
 *.egg-info
 *.sw[po]
+*.out
+*.ll
 .coverage
+.nfs*
 tags
 MANIFEST
 

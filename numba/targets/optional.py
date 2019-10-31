@@ -1,9 +1,11 @@
 from __future__ import print_function, absolute_import, division
 
-from numba import types, cgutils
+import operator
+
+from numba import types, cgutils, typing
 
 from .imputils import (lower_cast, lower_builtin, lower_getattr_generic,
-                       impl_ret_untracked)
+                       impl_ret_untracked, lower_setattr_generic)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -35,11 +37,11 @@ def optional_is_none(context, builder, sig, args):
 
 
 # None is/not None
-lower_builtin('is', types.none, types.none)(always_return_true_impl)
+lower_builtin(operator.is_, types.none, types.none)(always_return_true_impl)
 
 # Optional is None
-lower_builtin('is', types.Optional, types.none)(optional_is_none)
-lower_builtin('is', types.none, types.Optional)(optional_is_none)
+lower_builtin(operator.is_, types.Optional, types.none)(optional_is_none)
+lower_builtin(operator.is_, types.none, types.Optional)(optional_is_none)
 
 
 @lower_getattr_generic(types.Optional)
@@ -51,6 +53,21 @@ def optional_getattr(context, builder, typ, value, attr):
     val = context.cast(builder, value, typ, inner_type)
     imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
+
+
+@lower_setattr_generic(types.Optional)
+def optional_setattr(context, builder, sig, args, attr):
+    """
+    Optional.__setattr__ => redirect to the wrapped type.
+    """
+    basety, valty = sig.args
+    target, val = args
+    target_type = basety.type
+    target = context.cast(builder, target, basety, target_type)
+
+    newsig = typing.signature(sig.return_type, target_type, valty)
+    imp = context.get_setattr(attr, newsig)
+    return imp(builder, (target, val))
 
 
 @lower_cast(types.Optional, types.Optional)

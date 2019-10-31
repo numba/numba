@@ -1,3 +1,1639 @@
+Version 0.46.0
+--------------
+
+This release significantly reworked one of the main parts of Numba, the compiler
+pipeline, to make it more extensible and easier to use. The purpose of this was
+to continue enhancing Numba's ability for use as a compiler toolkit. In a
+similar vein, Numba now has an extension registration mechanism to allow other
+Numba-using projects to automatically have their Numba JIT compilable functions
+discovered. There were also a number of other related compiler toolkit
+enhancement added along with some more NumPy features and a lot of bug fixes.
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Aaron Meurer fixed some Python issues in the code base in #4345 and #4341.
+* Ashwin Srinath fixed a CUDA performance bug via #4576.
+* Ethan Pronovost added support for triangular indices functions in #4601 (the
+  NumPy functions ``tril_indices``, ``tril_indices_from``, ``triu_indices``, and
+  ``triu_indices_from``).
+* Gerald Dalley fixed a tear down race occurring in Python 2.
+* Gregory R. Lee fixed the use of deprecated ``inspect.getargspec``.
+* Guilherme Leobas contributed five PRs, adding support for ``np.append`` and
+  ``np.count_nonzero`` in #4518 and #4386. The typed List was fixed to accept
+  unsigned integers in #4510. #4463 made a fix to NamedTuple internals and #4397
+  updated the docs for ``np.sum``.
+* James Bourbeau added a new feature to permit the automatic application of the
+  `jit` decorator to a whole module in #4331. Also some small fixes to the docs
+  and the code base were made in #4447 and #4433, and a fix to inplace array
+  operation in #4228.
+* Jim Crist fixed a bug in the rendering of patched errors in #4464.
+* Leo Fang updated the CUDA Array Interface contract in #4609.
+* Pearu Peterson added support for Unicode based NumPy arrays in #4425.
+* Peter Andreas Entschev fixed a CUDA concurrency bug in #4581.
+* Lucio Fernandez-Arjona extended Numba's ``np.sum`` support to now accept the
+  ``dtype`` kwarg in #4472.
+* Pedro A. Morales Maries added support for ``np.cross`` in #4128 and also added
+  the necessary extension ``numba.numpy_extensions.cross2d`` in #4595.
+* David Hoese, Eric Firing, Joshua Adelman, and Juan Nunez-Iglesias all made
+  documentation fixes in #4565, #4482, #4455, #4375 respectively.
+* Vyacheslav Smirnov and Rujal Desai enabled support for ``count()`` on unicode
+  strings in #4606.
+
+General Enhancements:
+
+* PR #4113: Add rewrite for semantic constants.
+* PR #4128: Add np.cross support
+* PR #4162: Make IR comparable and legalize it.
+* PR #4208: R&D inlining, jitted and overloaded.
+* PR #4331: Automatic JIT of called functions
+* PR #4353: Inspection tool to check what numba supports
+* PR #4386: Implement np.count_nonzero
+* PR #4425: Unicode array support
+* PR #4427: Entrypoints for numba extensions
+* PR #4467: Literal dispatch
+* PR #4472: Allow dtype input argument in np.sum
+* PR #4513: New compiler.
+* PR #4518: add support for np.append
+* PR #4554: Refactor NRT C-API
+* PR #4556: 0.46 scheduled deprecations
+* PR #4567: Add env var to disable performance warnings.
+* PR #4568: add np.array_equal support
+* PR #4595: Implement numba.cross2d
+* PR #4601: Add triangular indices functions
+* PR #4606: Enable support for count() method for unicode string
+
+Fixes:
+
+* PR #4228: Fix inplace operator error for arrays
+* PR #4282: Detect and raise unsupported on generator expressions
+* PR #4305: Don't allow the allocation of mutable objects written into a
+  container to be hoisted.
+* PR #4311: Avoid deprecated use of inspect.getargspec
+* PR #4328:  Replace GC macro with function call 
+* PR #4330: Loosen up typed container casting checks
+* PR #4341: Fix some coding lines at the top of some files (utf8 -> utf-8)
+* PR #4345: Replace "import \*" with explicit imports in numba/types
+* PR #4346: Fix incorrect alg in isupper for ascii strings.
+* PR #4349: test using jitclass in typed-list
+* PR #4361: Add allocation hoisting info to LICM section at diagnostic L4
+* PR #4366: Offset search box to avoid wrapping on some pages with Safari.
+  Fixes #4365.
+* PR #4372: Replace all "except BaseException" with "except Exception".
+* PR #4407: Restore the "free" conda channel for NumPy 1.10 support.
+* PR #4408: Add lowering for constant bytes.
+* PR #4409: Add exception chaining for better error context
+* PR #4411: Name of type should not contain user facing description for debug.
+* PR #4412: Fix #4387. Limit the number of return types for recursive functions
+* PR #4426: Fixed two module teardown races in py2.
+* PR #4431: Fix and test numpy.random.random_sample(n) for np117
+* PR #4463: NamedTuple - Raises an error on non-iterable elements
+* PR #4464: Add a newline in patched errors
+* PR #4474: Fix liveness for remove dead of parfors (and other IR extensions)
+* PR #4510: Make List.__getitem__ accept unsigned parameters
+* PR #4512: Raise specific error at typing time for iteration on >1D array.
+* PR #4532: Fix static_getitem with Literal type as index
+* PR #4547: Update to inliner cost model information.
+* PR #4557: Use specific random number seed when generating arbitrary test data
+* PR #4559: Adjust test timeouts
+* PR #4564: Skip unicode array tests on ppc64le that trigger an LLVM bug
+* PR #4621: Fix packaging issue due to missing numba/cext
+* PR #4623: Fix issue 4520 due to storage model mismatch
+* PR #4644: Updates for llvmlite 0.30.0
+
+CUDA Enhancements/Fixes:
+
+* PR #4410: Fix #4111. cudasim mishandling recarray
+* PR #4576: Replace use of `np.prod` with `functools.reduce` for computing size
+  from shape
+* PR #4581: Prevent taking the GIL in ForAll
+* PR #4592: Fix #4589.  Just pass NULL for b2d_func for constant dynamic
+  sharedmem
+* PR #4609: Update CUDA Array Interface & Enforce Numba compliance
+* PR #4619: Implement math.{degrees, radians} for the CUDA target.
+
+Documentation Updates:
+
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs.  Closes #4316
+* PR #4375: Add docstrings to inspect methods
+* PR #4388: Update Python 2.7 EOL statement
+* PR #4397: Add note about np.sum
+* PR #4447: Minor parallel performance tips edits
+* PR #4455: Clarify docs for typed dict with regard to arrays
+* PR #4482: Fix example in guvectorize docstring.
+* PR #4541: fix two typos in architecture.rst
+* PR #4548: Document numba.extending.intrinsic and inlining.
+* PR #4565: Fix typo in jit-compilation docs
+* PR #4607: add dependency list to docs
+* PR #4614: Add documentation for implementing new compiler passes.
+
+CI Updates:
+
+* PR #4415: Make 32bit incremental builds on linux not use free channel
+* PR #4433: Removes stale azure comment
+* PR #4493: Fix Overload Inliner wrt CUDA Intrinsics
+* PR #4593: Enable Azure CI batching
+
+Contributors:
+
+* Aaron Meurer
+* Ashwin Srinath
+* David Hoese
+* Ehsan Totoni (core dev)
+* Eric Firing
+* Ethan Pronovost
+* Gerald Dalley
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Jim Crist
+* Joshua Adelman
+* Juan Nunez-Iglesias
+* Leo Fang
+* Lucio Fernandez-Arjona
+* Pearu Peterson
+* Pedro A. Morales Marie
+* Peter Andreas Entschev
+* Rujal Desai
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+* Vyacheslav Smirnov
+
+
+Version 0.45.1
+--------------
+
+This patch release addresses some regressions reported in the 0.45.0 release and
+adds support for NumPy 1.17:
+
+* PR #4325: accept scalar/0d-arrays
+* PR #4338: Fix #4299. Parfors reduction vars not deleted.
+* PR #4350: Use process level locks for fork() only.
+* PR #4354: Try to fix #4352.
+* PR #4357: Fix np1.17 isnan, isinf, isfinite ufuncs
+* PR #4363: Fix np.interp for np1.17 nan handling
+* PR #4371: Fix nump1.17 random function non-aliasing
+
+Contributors:
+
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.45.0
+--------------
+
+In this release, Numba gained an experimental :ref:`numba.typed.List
+<feature-typed-list>` container as a future replacement of the :ref:`reflected
+list <feature-reflected-list>`. In addition, functions decorated with
+``parallel=True`` can now be cached to reduce compilation overhead associated
+with the auto-parallelization.
+
+
+Enhancements from user contributed PRs (with thanks!):
+
+* James Bourbeau added the Numba version to reportable error messages in #4227,
+  added the ``signature`` parameter to ``inspect_types`` in #4200, improved the
+  docstring of ``normalize_signature`` in #4205, and fixed #3658 by adding
+  reference counting to ``register_dispatcher`` in #4254
+
+* Guilherme Leobas implemented the dominator tree and dominance frontier
+  algorithms in #4216 and #4149, respectively.
+
+* Nick White fixed the issue with ``round`` in the CUDA target in #4137.
+
+* Joshua Adelman added support for determining if a value is in a `range`
+  (i.e.  ``x in range(...)``) in #4129, and added windowing functions
+  (``np.bartlett``, ``np.hamming``, ``np.blackman``, ``np.hanning``,
+  ``np.kaiser``) from NumPy in #4076.
+
+* Lucio Fernandez-Arjona added support for ``np.select`` in #4077
+
+* Rob Ennis added support for ``np.flatnonzero`` in #4157
+
+* Keith Kraus extended the ``__cuda_array_interface__`` with an optional mask
+  attribute in #4199.
+
+* Gregory R. Lee replaced deprecated use of ``inspect.getargspec`` in #4311.
+
+
+General Enhancements:
+
+* PR #4328: Replace GC macro with function call
+* PR #4311: Avoid deprecated use of inspect.getargspec
+* PR #4296: Slacken window function testing tol on ppc64le
+* PR #4254: Add reference counting to register_dispatcher
+* PR #4239: Support len() of multi-dim arrays in array analysis
+* PR #4234: Raise informative error for np.kron array order
+* PR #4232: Add unicodetype db, low level str functions and examples.
+* PR #4229: Make hashing cacheable
+* PR #4227: Include numba version in reportable error message
+* PR #4216: Add dominator tree
+* PR #4200: Add signature parameter to inspect_types
+* PR #4196: Catch missing imports of internal functions.
+* PR #4180: Update use of unlowerable global message.
+* PR #4166: Add tests for PR #4149
+* PR #4157: Support for np.flatnonzero
+* PR #4149: Implement dominance frontier for SSA for the Numba IR
+* PR #4148: Call branch pruning in inline_closure_call()
+* PR #4132: Reduce usage of inttoptr
+* PR #4129: Support contains for range
+* PR #4112: better error messages for np.transpose and tuples
+* PR #4110: Add range attrs, start, stop, step
+* PR #4077: Add np select
+* PR #4076: Add numpy windowing functions support (np.bartlett, np.hamming,
+  np.blackman, np.hanning, np.kaiser)
+* PR #4095: Support ir.Global/FreeVar in find_const()
+* PR #3691: Make TypingError abort compiling earlier
+* PR #3646: Log internal errors encountered in typeinfer
+
+Fixes:
+
+* PR #4303: Work around scipy bug 10206
+* PR #4302: Fix flake8 issue on master
+* PR #4301: Fix integer literal bug in np.select impl
+* PR #4291: Fix pickling of jitclass type
+* PR #4262: Resolves #4251 - Fix bug in reshape analysis.
+* PR #4233: Fixes issue revealed by #4215
+* PR #4224: Fix #4223. Looplifting error due to StaticSetItem in objectmode
+* PR #4222: Fix bad python path.
+* PR #4178: Fix unary operator overload, check with unicode impl
+* PR #4173: Fix return type in np.bincount with weights
+* PR #4153: Fix slice shape assignment in array analysis
+* PR #4152: fix status check in dict lookup
+* PR #4145: Use callable instead of checking __module__
+* PR #4118: Fix inline assembly support on CPU.
+* PR #4088: Resolves #4075 - parfors array_analysis bug.
+* PR #4085: Resolves #3314 - parfors array_analysis bug with reshape.
+
+CUDA Enhancements/Fixes:
+
+* PR #4199: Extend `__cuda_array_interface__` with optional mask attribute,
+  bump version to 1
+* PR #4137: CUDA - Fix round Builtin
+* PR #4114: Support 3rd party activated CUDA context
+
+Documentation Updates:
+
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs. Closes #4316
+* PR #4295: Alter deprecation schedules
+* PR #4253: fix typo in pysupported docs
+* PR #4252: fix typo on repomap
+* PR #4241: remove unused import
+* PR #4240: fix typo in jitclass docs
+* PR #4205: Update return value order in normalize_signature docstring
+* PR #4237: Update doc links to point to latest not dev docs.
+* PR #4197: hyperlink repomap
+* PR #4170: Clarify docs on accumulating into arrays in prange
+* PR #4147: fix docstring for DictType iterables
+* PR #3951: A guide to overloading
+
+CI Updates:
+
+* PR #4300: AArch64 has no faulthandler package
+* PR #4273: pin to MKL BLAS for testing to get consistent results
+* PR #4209: Revert previous network tol patch and try with conda config
+* PR #4138: Remove tbb before Azure test only on Python 3, since it was already
+  removed for Python 2
+
+Contributors:
+
+* Ehsan Totoni (core dev)
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Joshua L. Adelman
+* Keith Kraus
+* Lucio Fernandez-Arjona
+* Nick White
+* Rob Ennis
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.44.1
+--------------
+
+This patch release addresses some regressions reported in the 0.44.0 release:
+
+- PR #4165: Fix #4164 issue with NUMBAPRO_NVVM.
+- PR #4172: Abandon branch pruning if an arg name is redefined. (Fixes #4163)
+- PR #4183: Fix #4156. Problem with defining in-loop variables.
+
+
+Version 0.44.0
+--------------
+
+IMPORTANT: In this release a few significant deprecations (and some less
+significant ones) are being made, users are encouraged to read the related
+documentation.
+
+General enhancements in this release include:
+
+- Numba is backed by LLVM 8 on all platforms apart from ppc64le, which, due to
+  bugs, remains on the LLVM 7.x series.
+- Numba's dictionary support now includes type inference for keys and values.
+- The .view() method now works for NumPy scalar types.
+- Newly supported NumPy functions added: np.delete, np.nanquantile, np.quantile,
+  np.repeat, np.shape.
+
+In addition considerable effort has been made to fix some long standing bugs and
+a large number of other bugs, the "Fixes" section is very large this time!
+
+Enhancements from user contributed PRs (with thanks!):
+
+- Max Bolingbroke added support for the selective use of ``fastmath`` flags in
+  #3847.
+- Rob Ennis made min() and max() work on iterables in #3820 and added
+  np.quantile and np.nanquantile in #3899.
+- Sergey Shalnov added numerous unicode string related features, zfill in #3978,
+  ljust in #4001, rjust and center in #4044 and strip, lstrip and rstrip in
+  #4048.
+- Guilherme Leobas added support for np.delete in #3890
+- Christoph Deil exposed the Numba CLI via ``python -m numba`` in #4066 and made
+  numerous documentation fixes.
+- Leo Schwarz wrote the bulk of the code for jitclass default constructor
+  arguments in #3852.
+- Nick White enhanced the CUDA backend to use min/max PTX instructions where
+  possible in #4054.
+- Lucio Fernandez-Arjona implemented the unicode string ``__mul__`` function in
+  #3952.
+- Dimitri Vorona wrote the bulk of the code to implement getitem and setitem for
+  jitclass in #3861.
+
+General Enhancements:
+
+* PR #3820: Min max on iterables
+* PR #3842: Unicode type iteration
+* PR #3847: Allow fine-grained control of fastmath flags to partially address #2923
+* PR #3852: Continuation of PR #2894
+* PR #3861: Continuation of PR #3730
+* PR #3890: Add support for np.delete
+* PR #3899: Support for np.quantile and np.nanquantile
+* PR #3900: Fix 3457 :: Implements np.repeat
+* PR #3928: Add .view() method for NumPy scalars
+* PR #3939: Update icc_rt clone recipe.
+* PR #3952: __mul__ for strings, initial implementation and tests
+* PR #3956: Type-inferred dictionary
+* PR #3959: Create a view for string slicing to avoid extra allocations
+* PR #3978: zfill operation implementation
+* PR #4001: ljust operation implementation
+* PR #4010: Support `dict()` and `{}`
+* PR #4022: Support for llvm 8
+* PR #4034: Make type.Optional str more representative
+* PR #4041: Deprecation warnings
+* PR #4044: rjust and center operations implementation
+* PR #4048: strip, lstrip and rstrip operations implementation
+* PR #4066: Expose numba CLI via python -m numba
+* PR #4081: Impl `np.shape` and support function for `asarray`.
+* PR #4091: Deprecate the use of iternext_impl without RefType
+
+CUDA Enhancements/Fixes:
+
+* PR #3933: Adds `.nbytes` property to CUDA device array objects.
+* PR #4011: Add .inspect_ptx() to cuda device function
+* PR #4054: CUDA: Use min/max PTX Instructions
+* PR #4096: Update env-vars for CUDA libraries lookup
+
+Documentation Updates:
+
+* PR #3867: Code repository map
+* PR #3918: adding Joris' Fosdem 2019 presentation
+* PR #3926: order talks on applications of Numba by date
+* PR #3943: fix two small typos in vectorize docs
+* PR #3944: Fixup jitclass docs
+* PR #3990: mention preprint repo in FAQ. Fixes #3981
+* PR #4012: Correct runtests command in contributing.rst
+* PR #4043: fix typo
+* PR #4047: Ambiguous Documentation fix for guvectorize.
+* PR #4060: Remove remaining mentions of autojit in docs
+* PR #4063: Fix annotate example in docstring
+* PR #4065: Add FAQ entry explaining Numba project name
+* PR #4079: Add Documentation for atomicity of typed.Dict
+* PR #4105: Remove info about CUDA ENVVAR potential replacement
+
+Fixes:
+
+* PR #3719: Resolves issue #3528.  Adds support for slices when not using parallel=True.
+* PR #3727: Remove dels for known dead vars.
+* PR #3845: Fix mutable flag transmission in .astype
+* PR #3853: Fix some minor issues in the C source.
+* PR #3862: Correct boolean reinterpretation of data
+* PR #3863: Comments out the appveyor badge
+* PR #3869: fixes flake8 after merge
+* PR #3871: Add assert to ir.py to help enforce correct structuring
+* PR #3881: fix preparfor dtype transform for datetime64
+* PR #3884: Prevent mutation of objmode fallback IR.
+* PR #3885: Updates for llvmlite 0.29
+* PR #3886: Use `safe_load` from pyyaml.
+* PR #3887: Add tolerance to network errors by permitting conda to retry
+* PR #3893: Fix casting in namedtuple ctor.
+* PR #3894: Fix array inliner for multiple array definition.
+* PR #3905: Cherrypick #3903 to main
+* PR #3920: Raise better error if unsupported jump opcode found.
+* PR #3927: Apply flake8 to the numpy related files
+* PR #3935: Silence DeprecationWarning
+* PR #3938: Better error message for unknown opcode
+* PR #3941: Fix typing of ufuncs in parfor conversion
+* PR #3946: Return variable renaming dict from inline_closurecall
+* PR #3962: Fix bug in alignment computation of `Record.make_c_struct`
+* PR #3967: Fix error with pickling unicode
+* PR #3964: Unicode split algo versioning
+* PR #3975: Add handler for unknown locale to numba -s
+* PR #3991: Permit Optionals in ufunc machinery
+* PR #3995: Remove assert in type inference causing poor error message.
+* PR #3996: add is_ascii flag to UnicodeType
+* PR #4009: Prevent zero division error in np.linalg.cond
+* PR #4014: Resolves #4007.
+* PR #4021: Add a more specific error message for invalid write to a global.
+* PR #4023: Fix handling of titles in record dtype
+* PR #4024: Do a check if a call is const before saying that an object is multiply defined.
+* PR #4027: Fix issue #4020.  Turn off no_cpython_wrapper flag when compiling for…
+* PR #4033: [WIP] Fixing wrong dtype of array inside reflected list #4028
+* PR #4061: Change IPython cache dir name to numba_cache
+* PR #4067: Delete examples/notebooks/LinearRegr.py
+* PR #4070: Catch writes to global typed.Dict and raise.
+* PR #4078: Check tuple length
+* PR #4084: Fix missing incref on optional return None
+* PR #4089: Make the warnings fixer flush work for warning comparing on type.
+* PR #4094: Fix function definition finding logic for commented def
+* PR #4100: Fix alignment check on 32-bit.
+* PR #4104: Use PEP 508 compliant env markers for install deps
+
+Contributors:
+
+* Benjamin Zaitlen
+* Christoph Deil
+* David Hirschfeld
+* Dimitri Vorona
+* Ehsan Totoni (core dev)
+* Guilherme Leobas
+* Leo Schwarz
+* Lucio Fernandez-Arjona
+* Max Bolingbroke
+* NanduTej
+* Nick White
+* Ravi Teja Gutta
+* Rob Ennis
+* Sergey Shalnov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.43.1
+--------------
+
+This is a bugfix release that provides minor changes to fix: a bug in branch
+pruning, bugs in `np.interp` functionality, and also fully accommodate the
+NumPy 1.16 release series.
+
+* PR #3826: NumPy 1.16 support
+* PR #3850: Refactor np.interp
+* PR #3883: Rewrite pruned conditionals as their evaluated constants.
+
+Contributors:
+
+* Rob Ennis
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+
+
+Version 0.43.0
+--------------
+
+In this release, the major new features are:
+
+- Initial support for statically typed dictionaries
+- Improvements to `hash()` to match Python 3 behavior
+- Support for the heapq module
+- Ability to pass C structs to Numba
+- More NumPy functions: asarray, trapz, roll, ptp, extract
+
+
+NOTE:
+
+The vast majority of NumPy 1.16 behaviour is supported, however
+``datetime`` and ``timedelta`` use involving ``NaT`` matches the behaviour
+present in earlier release. The ufunc suite has not been extending to
+accommodate the two new time computation related additions present in NumPy
+1.16. In addition the functions ``ediff1d`` and ``interp`` have known minor
+issues in replicating outputs exactly when ``NaN``'s occur in certain input
+patterns.
+
+General Enhancements:
+
+* PR #3563: Support for np.roll
+* PR #3572: Support for np.ptp
+* PR #3592: Add dead branch prune before type inference.
+* PR #3598: Implement np.asarray()
+* PR #3604: Support for np.interp
+* PR #3607: Some simplication to lowering
+* PR #3612: Exact match flag in dispatcher
+* PR #3627: Support for np.trapz
+* PR #3630: np.where with broadcasting
+* PR #3633: Support for np.extract
+* PR #3657: np.max, np.min, np.nanmax, np.nanmin - support for complex dtypes
+* PR #3661: Access C Struct as Numpy Structured Array
+* PR #3678: Support for str.split and str.join
+* PR #3684: Support C array in C struct
+* PR #3696: Add intrinsic to help debug refcount
+* PR #3703: Implementations of type hashing.
+* PR #3715: Port CPython3.7 dictionary for numba internal use
+* PR #3716: Support inplace concat of strings
+* PR #3718: Add location to ConstantInferenceError exceptions.
+* PR #3720: improve error msg about invalid signature
+* PR #3731: Support for heapq
+* PR #3754: Updates for llvmlite 0.28
+* PR #3760: Overloadable operator.setitem
+* PR #3775: Support overloading operator.delitem
+* PR #3777: Implement compiler support for dictionary
+* PR #3791: Implement interpreter-side interface for numba dict
+* PR #3799: Support refcount'ed types in numba dict
+
+CUDA Enhancements/Fixes:
+
+* PR #3713: Fix the NvvmSupportError message when CC too low
+* PR #3722: Fix #3705: slicing error with negative strides
+* PR #3755: Make cuda.to_device accept readonly host array
+* PR #3773: Adapt library search to accommodate multiple locations
+
+Documentation Updates:
+
+* PR #3651: fix link to berryconda in docs
+* PR #3668: Add Azure Pipelines build badge
+* PR #3749: DOC: Clarify when prange is different from range
+* PR #3771: fix a few typos
+* PR #3785: Clarify use of range as function only.
+* PR #3829: Add docs for typed-dict
+
+Fixes:
+
+* PR #3614: Resolve #3586
+* PR #3618: Skip gdb tests on ARM.
+* PR #3643: Remove support_literals usage
+* PR #3645: Enforce and fix that AbstractTemplate.generic must be returning a Signature
+* PR #3648: Fail on @overload signature mismatch.
+* PR #3660: Added Ignore message to test numba.tests.test_lists.TestLists.test_mul_error
+* PR #3662: Replace six with numba.six
+* PR #3663: Removes coverage computation from travisci builds
+* PR #3672: Avoid leaking memory when iterating over uniform tuple
+* PR #3676: Fixes constant string lowering inside tuples
+* PR #3677: Ensure all referenced compiled functions are linked properly
+* PR #3692: Fix test failure due to overly strict test on floating point values.
+* PR #3693: Intercept failed import to help users.
+* PR #3694: Fix memory leak in enumerate iterator
+* PR #3695: Convert return of None from intrinsic implementation to dummy value
+* PR #3697: Fix for issue #3687
+* PR #3701: Fix array.T analysis (fixes #3700)
+* PR #3704: Fixes for overload_method
+* PR #3706: Don't push call vars recursively into nested parfors. Resolves #3686.
+* PR #3710: Set as non-hoistable if a mutable variable is passed to a function in a loop. Resolves #3699.
+* PR #3712: parallel=True to use better builtin mechanism to resolve call types. Resolves issue #3671
+* PR #3725: Fix invalid removal of dead empty list
+* PR #3740: add uintp as a valid type to the tuple operator.getitem
+* PR #3758: Fix target definition update in inlining
+* PR #3782: Raise typing error on yield optional.
+* PR #3792: Fix non-module object used as the module of a function.
+* PR #3800: Bugfix for np.interp
+* PR #3808: Bump macro to include VS2014 to fix py3.5 build
+* PR #3809: Add debug guard to debug only C function.
+* PR #3816: Fix array.sum(axis) 1d input return type.
+* PR #3821: Replace PySys_WriteStdout with PySys_FormatStdout to ensure no truncation.
+* PR #3830: Getitem should not return optional type
+* PR #3832: Handle single string as path in find_file()
+
+Contributors:
+
+* Ehsan Totoni
+* Gryllos Prokopis
+* Jonathan J. Helmus
+* Kayla Ngan
+* lalitparate
+* luk-f-a
+* Matyt
+* Max Bolingbroke
+* Michael Seifert
+* Rob Ennis
+* Siu Kwan Lam
+* Stan Seibert
+* Stuart Archibald
+* Todd A. Anderson
+* Tao He
+* Valentin Haenel
+
+
+Version 0.42.1
+--------------
+
+Bugfix release to fix the incorrect hash in OSX wheel packages.
+No change in source code.
+
+
+Version 0.42.0
+--------------
+
+In this release the major features are:
+
+- The capability to launch and attach the GDB debugger from within a jitted
+  function.
+- The upgrading of LLVM to version 7.0.0.
+
+We added a draft of the project roadmap to the developer manual. The roadmap is
+for informational purposes only as priorities and resources may change.
+
+Here are some enhancements from contributed PRs:
+
+- #3532. Daniel Wennberg improved the ``cuda.{pinned, mapped}`` API so that
+  the associated memory is released immediately at the exit of the context
+  manager.
+- #3531. Dimitri Vorona enabled the inlining of jitclass methods.
+- #3516. Simon Perkins added the support for passing numpy dtypes (i.e.
+  ``np.dtype("int32")``) and their type constructor (i.e. ``np.int32``) into
+  a jitted function.
+- #3509. Rob Ennis added support for ``np.corrcoef``.
+
+A regression issue (#3554, #3461) relating to making an empty slice in parallel
+mode is resolved by #3558.
+
+General Enhancements:
+
+* PR #3392: Launch and attach gdb directly from Numba.
+* PR #3437: Changes to accommodate LLVM 7.0.x
+* PR #3509: Support for np.corrcoef
+* PR #3516: Typeof dtype values
+* PR #3520: Fix @stencil ignoring cval if out kwarg supplied.
+* PR #3531: Fix jitclass method inlining and avoid unnecessary increfs
+* PR #3538: Avoid future C-level assertion error due to invalid visibility
+* PR #3543: Avoid implementation error being hidden by the try-except
+* PR #3544: Add `long_running` test flag and feature to exclude tests.
+* PR #3549: ParallelAccelerator caching improvements
+* PR #3558: Fixes array analysis for inplace binary operators.
+* PR #3566: Skip alignment tests on armv7l.
+* PR #3567: Fix unifying literal types in namedtuple
+* PR #3576: Add special copy routine for NumPy out arrays
+* PR #3577: Fix example and docs typos for `objmode` context manager.
+  reorder statements.
+* PR #3580: Use alias information when determining whether it is safe to
+* PR #3583: Use `ir.unknown_loc` for unknown `Loc`, as #3390 with tests
+* PR #3587: Fix llvm.memset usage changes in llvm7
+* PR #3596: Fix Array Analysis for Global Namedtuples
+* PR #3597: Warn users if threading backend init unsafe.
+* PR #3605: Add guard for writing to read only arrays from ufunc calls
+* PR #3606: Improve the accuracy of error message wording for undefined type.
+* PR #3611: gdb test guard needs to ack ptrace permissions
+* PR #3616: Skip gdb tests on ARM.
+
+CUDA Enhancements:
+
+* PR #3532: Unregister temporarily pinned host arrays at once
+* PR #3552: Handle broadcast arrays correctly in host->device transfer.
+* PR #3578: Align cuda and cuda simulator kwarg names.
+
+Documentation Updates:
+
+* PR #3545: Fix @njit description in 5 min guide
+* PR #3570: Minor documentation fixes for numba.cuda
+* PR #3581: Fixing minor typo in `reference/types.rst`
+* PR #3594: Changing `@stencil` docs to correctly reflect `func_or_mode` param
+* PR #3617: Draft roadmap as of Dec 2018
+
+Contributors:
+
+* Aaron Critchley
+* Daniel Wennberg
+* Dimitri Vorona
+* Dominik Stańczak
+* Ehsan Totoni (core dev)
+* Iskander Sharipov
+* Rob Ennis
+* Simon Muller
+* Simon Perkins
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+
+
+Version 0.41.0
+--------------
+
+This release adds the following major features:
+
+* Diagnostics showing the optimizations done by ParallelAccelerator
+* Support for profiling Numba-compiled functions in Intel VTune
+* Additional NumPy functions: partition, nancumsum, nancumprod, ediff1d, cov,
+  conj, conjugate, tri, tril, triu
+* Initial support for Python 3 Unicode strings
+
+General Enhancements:
+
+* PR #1968: armv7 support
+* PR #2983: invert mapping b/w binop operators and the operator module #2297
+* PR #3160: First attempt at parallel diagnostics
+* PR #3307: Adding NUMBA_ENABLE_PROFILING envvar, enabling jit event
+* PR #3320: Support for np.partition
+* PR #3324: Support for np.nancumsum and np.nancumprod
+* PR #3325: Add location information to exceptions.
+* PR #3337: Support for np.ediff1d
+* PR #3345: Support for np.cov
+* PR #3348: Support user pipeline class in with lifting
+* PR #3363: string support
+* PR #3373: Improve error message for empty imprecise lists.
+* PR #3375: Enable overload(operator.getitem)
+* PR #3402: Support negative indexing in tuple.
+* PR #3414: Refactor Const type
+* PR #3416: Optimized usage of alloca out of the loop
+* PR #3424: Updates for llvmlite 0.26
+* PR #3462: Add support for `np.conj/np.conjugate`.
+* PR #3480: np.tri, np.tril, np.triu - default optional args
+* PR #3481: Permit dtype argument as sole kwarg in np.eye
+
+CUDA Enhancements:
+
+* PR #3399: Add max_registers Option to cuda.jit
+
+Continuous Integration / Testing:
+
+* PR #3303: CI with Azure Pipelines
+* PR #3309: Workaround race condition with apt
+* PR #3371: Fix issues with Azure Pipelines
+* PR #3362: Fix #3360: `RuntimeWarning: 'numba.runtests' found in sys.modules`
+* PR #3374: Disable openmp in wheel building
+* PR #3404: Azure Pipelines templates
+* PR #3419: Fix cuda tests and error reporting in test discovery
+* PR #3491: Prevent faulthandler installation on armv7l
+* PR #3493: Fix CUDA test that used negative indexing behaviour that's fixed.
+* PR #3495: Start Flake8 checking of Numba source
+
+Fixes:
+
+* PR #2950: Fix dispatcher to only consider contiguous-ness.
+* PR #3124: Fix 3119, raise for 0d arrays in reductions
+* PR #3228: Reduce redundant module linking
+* PR #3329: Fix AOT on windows.
+* PR #3335: Fix memory management of __cuda_array_interface__ views.
+* PR #3340: Fix typo in error name.
+* PR #3365: Fix the default unboxing logic
+* PR #3367: Allow non-global reference to objmode() context-manager
+* PR #3381: Fix global reference in objmode for dynamically created function
+* PR #3382: CUDA_ERROR_MISALIGNED_ADDRESS Using Multiple Const Arrays
+* PR #3384: Correctly handle very old versions of colorama
+* PR #3394: Add 32bit package guard for non-32bit installs
+* PR #3397: Fix with-objmode warning
+* PR #3403 Fix label offset in call inline after parfor pass
+* PR #3429: Fixes raising of user defined exceptions for exec(<string>).
+* PR #3432: Fix error due to function naming in CI in py2.7
+* PR #3444: Fixed TBB's single thread execution and test added for #3440
+* PR #3449: Allow matching non-array objects in find_callname()
+* PR #3455: Change getiter and iternext to not be pure. Resolves #3425
+* PR #3467: Make ir.UndefinedType singleton class.
+* PR #3478: Fix np.random.shuffle sideeffect
+* PR #3487: Raise unsupported for kwargs given to `print()`
+* PR #3488: Remove dead script.
+* PR #3498: Fix stencil support for boolean as return type
+* PR #3511: Fix handling make_function literals (regression of #3414)
+* PR #3514: Add missing unicode != unicode
+* PR #3527: Fix complex math sqrt implementation for large -ve values
+* PR #3530: This adds arg an check for the pattern supplied to Parfors.
+* PR #3536: Sets list dtor linkage to `linkonce_odr` to fix visibility in AOT
+
+Documentation Updates:
+
+* PR #3316: Update 0.40 changelog with additional PRs
+* PR #3318: Tweak spacing to avoid search box wrapping onto second line
+* PR #3321: Add note about memory leaks with exceptions to docs. Fixes #3263
+* PR #3322: Add FAQ on CUDA + fork issue. Fixes #3315.
+* PR #3343: Update docs for argsort, kind kwarg partially supported.
+* PR #3357: Added mention of njit in 5minguide.rst
+* PR #3434: Fix parallel reduction example in docs.
+* PR #3452: Fix broken link and mark up problem.
+* PR #3484: Size Numba logo in docs in em units. Fixes #3313
+* PR #3502: just two typos
+* PR #3506: Document string support
+* PR #3513: Documentation for parallel diagnostics.
+* PR #3526: Fix 5 min guide with respect to @njit decl
+
+Contributors:
+
+* Alex Ford
+* Andreas Sodeur
+* Anton Malakhov
+* Daniel Stender
+* Ehsan Totoni (core dev)
+* Henry Schreiner
+* Marcel Bargull
+* Matt Cooper
+* Nick White
+* Nicolas Hug
+* rjenc29
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+
+
+Version 0.40.1
+--------------
+
+This is a PyPI-only patch release to ensure that PyPI wheels can enable the
+TBB threading backend, and to disable the OpenMP backend in the wheels.
+Limitations of manylinux1 and variation in user environments can cause
+segfaults when OpenMP is enabled on wheel builds.  Note that this release has
+no functional changes for users who obtained Numba 0.40.0 via conda.
+
+Patches:
+
+* PR #3338: Accidentally left Anton off contributor list for 0.40.0
+* PR #3374: Disable OpenMP in wheel building
+* PR #3376: Update 0.40.1 changelog and docs on OpenMP backend
+
+Version 0.40.0
+--------------
+
+This release adds a number of major features:
+
+* A new GPU backend: kernels for AMD GPUs can now be compiled using the ROCm
+  driver on Linux.
+* The thread pool implementation used by Numba for automatic multithreading
+  is configurable to use TBB, OpenMP, or the old "workqueue" implementation.
+  (TBB is likely to become the preferred default in a future release.)
+* New documentation on thread and fork-safety with Numba, along with overall
+  improvements in thread-safety.
+* Experimental support for executing a block of code inside a nopython mode
+  function in object mode.
+* Parallel loops now allow arrays as reduction variables
+* CUDA improvements: FMA, faster float64 atomics on supporting hardware,
+  records in const memory, and improved datatime dtype support
+* More NumPy functions: vander, tri, triu, tril, fill_diagonal
+
+
+General Enhancements:
+
+* PR #3017: Add facility to support with-contexts
+* PR #3033: Add support for multidimensional CFFI arrays
+* PR #3122: Add inliner to object mode pipeline
+* PR #3127: Support for reductions on arrays.
+* PR #3145: Support for np.fill_diagonal
+* PR #3151: Keep a queue of references to last N deserialized functions.  Fixes #3026
+* PR #3154: Support use of list() if typeable.
+* PR #3166: Objmode with-block
+* PR #3179: Updates for llvmlite 0.25
+* PR #3181: Support function extension in alias analysis
+* PR #3189: Support literal constants in typing of object methods
+* PR #3190: Support passing closures as literal values in typing
+* PR #3199: Support inferring stencil index as constant in simple unary expressions
+* PR #3202: Threading layer backend refactor/rewrite/reinvention!
+* PR #3209: Support for np.tri, np.tril and np.triu
+* PR #3211: Handle unpacking in building tuple (BUILD_TUPLE_UNPACK opcode)
+* PR #3212: Support for np.vander
+* PR #3227: Add NumPy 1.15 support
+* PR #3272: Add MemInfo_data to runtime._nrt_python.c_helpers
+* PR #3273: Refactor. Removing thread-local-storage based context nesting.
+* PR #3278: compiler threadsafety lockdown
+* PR #3291: Add CPU count and CFS restrictions info to numba -s.
+
+CUDA Enhancements:
+
+* PR #3152: Use cuda driver api to get best blocksize for best occupancy
+* PR #3165: Add FMA intrinsic support
+* PR #3172: Use float64 add Atomics, Where Available
+* PR #3186: Support Records in CUDA Const Memory
+* PR #3191: CUDA: fix log size
+* PR #3198: Fix GPU datetime timedelta types usage
+* PR #3221: Support datetime/timedelta scalar argument to a CUDA kernel.
+* PR #3259: Add DeviceNDArray.view method to reinterpret data as a different type.
+* PR #3310: Fix IPC handling of sliced cuda array.
+
+ROCm Enhancements:
+
+* PR #3023: Support for AMDGCN/ROCm.
+* PR #3108: Add ROC info to `numba -s` output.
+* PR #3176: Move ROC vectorize init to npyufunc
+* PR #3177: Add auto_synchronize support to ROC stream
+* PR #3178: Update ROC target documentation.
+* PR #3294: Add compiler lock to ROC compilation path.
+* PR #3280: Add wavebits property to the HSA Agent.
+* PR #3281: Fix ds_permute types and add tests
+
+Continuous Integration / Testing:
+
+* PR #3091: Remove old recipes, switch to test config based on env var.
+* PR #3094: Add higher ULP tolerance for products in complex space.
+* PR #3096: Set exit on error in incremental scripts
+* PR #3109: Add skip to test needing jinja2 if no jinja2.
+* PR #3125: Skip cudasim only tests
+* PR #3126: add slack, drop flowdock
+* PR #3147: Improve error message for arg type unsupported during typing.
+* PR #3128: Fix recipe/build for jetson tx2/ARM
+* PR #3167: In build script activate env before installing.
+* PR #3180: Add skip to broken test.
+* PR #3216: Fix libcuda.so loading in some container setup
+* PR #3224: Switch to new Gitter notification webhook URL and encrypt it
+* PR #3235: Add 32bit Travis CI jobs
+* PR #3257: This adds scipy/ipython back into windows conda test phase.
+
+Fixes:
+
+* PR #3038: Fix random integer generation to match results from NumPy.
+* PR #3045: Fix #3027 - Numba reassigns sys.stdout
+* PR #3059: Handler for known LoweringErrors.
+* PR #3060: Adjust attribute error for NumPy functions.
+* PR #3067: Abort simulator threads on exception in thread block.
+* PR #3079: Implement +/-(types.boolean) Fix #2624
+* PR #3080: Compute np.var and np.std correctly for complex types.
+* PR #3088: Fix #3066 (array.dtype.type in prange)
+* PR #3089: Fix invalid ParallelAccelerator hoisting issue.
+* PR #3136: Fix #3135 (lowering error)
+* PR #3137: Fix for issue3103 (race condition detection)
+* PR #3142: Fix Issue #3139 (parfors reuse of reduction variable across prange blocks)
+* PR #3148: Remove dead array equal @infer code
+* PR #3153: Fix canonicalize_array_math typing for calls with kw args
+* PR #3156: Fixes issue with missing pygments in testing and adds guards.
+* PR #3168: Py37 bytes output fix.
+* PR #3171: Fix #3146.  Fix CFUNCTYPE void* return-type handling
+* PR #3193: Fix setitem/getitem resolvers
+* PR #3222: Fix #3214.  Mishandling of POP_BLOCK in while True loop.
+* PR #3230: Fixes liveness analysis issue in looplifting
+* PR #3233: Fix return type difference for 32bit ctypes.c_void_p
+* PR #3234: Fix types and layout for `np.where`.
+* PR #3237: Fix DeprecationWarning about imp module
+* PR #3241: Fix #3225.  Normalize 0nd array to scalar in typing of indexing code.
+* PR #3256: Fix #3251: Move imports of ABCs to collections.abc for Python >= 3.3
+* PR #3292: Fix issue3279.
+* PR #3302: Fix error due to mismatching dtype
+
+Documentation Updates:
+
+* PR #3104: Workaround for #3098 (test_optional_unpack Heisenbug)
+* PR #3132: Adds an ~5 minute guide to Numba.
+* PR #3194: Fix docs RE: np.random generator fork/thread safety
+* PR #3242: Page with Numba talks and tutorial links
+* PR #3258: Allow users to choose the type of issue they are reporting.
+* PR #3260: Fixed broken link
+* PR #3266: Fix cuda pointer ownership problem with user/externally allocated pointer
+* PR #3269: Tweak typography with CSS
+* PR #3270: Update FAQ for functions passed as arguments
+* PR #3274: Update installation instructions
+* PR #3275: Note pyobject and voidptr are types in docs
+* PR #3288: Do not need to call parallel optimizations "experimental" anymore
+* PR #3318: Tweak spacing to avoid search box wrapping onto second line
+
+Contributors:
+
+* Anton Malakhov
+* Alex Ford
+* Anthony Bisulco
+* Ehsan Totoni (core dev)
+* Leonard Lausen
+* Matthew Petroff
+* Nick White
+* Ray Donnelly
+* rjenc29
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Stuart Reynolds
+* Todd A. Anderson (core dev)
+
+
+Version 0.39.0
+--------------
+
+Here are the highlights for the Numba 0.39.0 release.
+
+* This is the first version that supports Python 3.7.
+* With help from Intel, we have fixed the issues with SVML support (related
+  issues #2938, #2998, #3006).
+* List has gained support for containing reference-counted types like NumPy
+  arrays and `list`.  Note, list still cannot hold heterogeneous types.
+* We have made a significant change to the internal calling-convention,
+  which should be transparent to most users, to allow for a future feature that
+  will permitting jumping back into python-mode from a nopython-mode function.
+  This also fixes a limitation to `print` that disabled its use from nopython
+  functions that were deep in the call-stack.
+* For CUDA GPU support, we added a `__cuda_array_interface__` following the
+  NumPy array interface specification to allow Numba to consume externally
+  defined device arrays.  We have opened a corresponding pull request to CuPy to
+  test out the concept and be able to use a CuPy GPU array.
+* The Numba dispatcher `inspect_types()` method now supports the kwarg `pretty`
+  which if set to `True` will produce ANSI/HTML output, showing the annotated
+  types, when invoked from ipython/jupyter-notebook respectively.
+* The NumPy functions `ndarray.dot`, `np.percentile` and `np.nanpercentile`, and
+  `np.unique` are now supported.
+* Numba now supports the use of a per-project configuration file to permanently
+  set behaviours typically set via `NUMBA_*` family environment variables.
+* Support for the `ppc64le` architecture has been added.
+
+Enhancements:
+
+* PR #2793: Simplify and remove javascript from html_annotate templates.
+* PR #2840: Support list of refcounted types
+* PR #2902: Support for np.unique
+* PR #2926: Enable fence for all architecture and add developer notes
+* PR #2928: Making error about untyped list more informative.
+* PR #2930: Add configuration file and color schemes.
+* PR #2932: Fix encoding to 'UTF-8' in `check_output` decode.
+* PR #2938: Python 3.7 compat: _Py_Finalizing becomes _Py_IsFinalizing()
+* PR #2939: Comprehensive SVML unit test
+* PR #2946: Add support for `ndarray.dot` method and tests.
+* PR #2953: percentile and nanpercentile
+* PR #2957: Add new 3.7 opcode support.
+* PR #2963: Improve alias analysis to be more comprehensive
+* PR #2984: Support for namedtuples in array analysis
+* PR #2986: Fix environment propagation
+* PR #2990: Improve function call matching for intrinsics
+* PR #3002: Second pass at error rewrites (interpreter errors).
+* PR #3004: Add numpy.empty to the list of pure functions.
+* PR #3008: Augment SVML detection with llvmlite SVML patch detection.
+* PR #3012: Make use of the common spelling of heterogeneous/homogeneous.
+* PR #3032: Fix pycc ctypes test due to mismatch in calling-convention
+* PR #3039: Add SVML detection to Numba environment diagnostic tool.
+* PR #3041: This adds @needs_blas to tests that use BLAS
+* PR #3056: Require llvmlite>=0.24.0
+
+CUDA Enhancements:
+
+* PR #2860: __cuda_array_interface__
+* PR #2910: More CUDA intrinsics
+* PR #2929: Add Flag To Prevent Unneccessary D->H Copies
+* PR #3037: Add CUDA IPC support on non-peer-accessible devices
+
+CI Enhancements:
+
+* PR #3021: Update appveyor config.
+* PR #3040: Add fault handler to all builds
+* PR #3042: Add catchsegv
+* PR #3077: Adds optional number of processes for `-m` in testing
+
+Fixes:
+
+* PR #2897: Fix line position of delete statement in numba ir
+* PR #2905: Fix for #2862
+* PR #3009: Fix optional type returning in recursive call
+* PR #3019: workaround and unittest for issue #3016
+* PR #3035: [TESTING] Attempt delayed removal of Env
+* PR #3048: [WIP] Fix cuda tests failure on buildfarm
+* PR #3054: Make test work on 32-bit
+* PR #3062: Fix cuda.In freeing devary before the kernel launch
+* PR #3073: Workaround #3072
+* PR #3076: Avoid ignored exception due to missing globals at interpreter teardown
+
+Documentation Updates:
+
+* PR #2966: Fix syntax in env var docs.
+* PR #2967: Fix typo in CUDA kernel layout example.
+* PR #2970: Fix docstring copy paste error.
+
+Contributors:
+
+The following people contributed to this release.
+
+* Anton Malakhov
+* Ehsan Totoni  (core dev)
+* Julia Tatz
+* Matthias Bussonnier
+* Nick White
+* Ray Donnelly
+* Siu Kwan Lam  (core dev)
+* Stan Seibert  (core dev)
+* Stuart Archibald  (core dev)
+* Todd A. Anderson  (core dev)
+* Rik-de-Kort
+* rjenc29
+
+
+Version 0.38.1
+--------------
+
+This is a critical bug fix release addressing:
+https://github.com/numba/numba/issues/3006
+
+The bug does not impact users using conda packages from Anaconda or Intel Python
+Distribution (but it does impact conda-forge). It does not impact users of pip
+using wheels from PyPI.
+
+This only impacts a small number of users where:
+
+ * The ICC runtime (specifically libsvml) is present in the user's environment.
+ * The user is using an llvmlite statically linked against a version of LLVM
+   that has not been patched with SVML support.
+ * The platform is 64-bit.
+
+The release fixes a code generation path that could lead to the production of
+incorrect results under the above situation.
+
+Fixes:
+
+* PR #3007: Augment SVML detection with llvmlite SVML patch detection.
+
+Contributors:
+
+The following people contributed to this release.
+
+* Stuart Archibald (core dev)
+
+
+Version 0.38.0
+--------------
+
+Following on from the bug fix focus of the last release, this release swings
+back towards the addition of new features and usability improvements based on
+community feedback. This release is comparatively large! Three key features/
+changes to note are:
+
+ * Numba (via llvmlite) is now backed by LLVM 6.0, general vectorization is
+   improved as a result. A significant long standing LLVM bug that was causing
+   corruption was also found and fixed.
+ * Further considerable improvements in vectorization are made available as
+   Numba now supports Intel's short vector math library (SVML).
+   Try it out with `conda install -c numba icc_rt`.
+ * CUDA 8.0 is now the minimum supported CUDA version.
+
+Other highlights include:
+
+ * Bug fixes to `parallel=True` have enabled more vectorization opportunities
+   when using the ParallelAccelerator technology.
+ * Much effort has gone into improving error reporting and the general usability
+   of Numba. This includes highlighted error messages and performance tips
+   documentation. Try it out with `conda install colorama`.
+ * A number of new NumPy functions are supported, `np.convolve`, `np.correlate`
+   `np.reshape`, `np.transpose`, `np.permutation`, `np.real`, `np.imag`, and
+   `np.searchsorted` now supports the`side` kwarg. Further, `np.argsort` now
+   supports the `kind` kwarg with `quicksort` and `mergesort` available.
+ * The Numba extension API has gained the ability operate more easily with
+   functions from Cython modules through the use of
+   `numba.extending.get_cython_function_address` to obtain function addresses
+   for direct use in `ctypes.CFUNCTYPE`.
+ * Numba now allows the passing of jitted functions (and containers of jitted
+   functions) as arguments to other jitted functions.
+ * The CUDA functionality has gained support for a larger selection of bit
+   manipulation intrinsics, also SELP, and has had a number of bugs fixed.
+ * Initial work to support the PPC64LE platform has been added, full support is
+   however waiting on the LLVM 6.0.1 release as it contains critical patches
+   not present in 6.0.0.
+   It is hoped that any remaining issues will be fixed in the next release.
+ * The capacity for advanced users/compiler engineers to define their own
+   compilation pipelines.
+
+Enhancements:
+
+* PR #2660: Support bools from cffi in nopython.
+* PR #2741: Enhance error message for undefined variables.
+* PR #2744: Add diagnostic error message to test suite discovery failure.
+* PR #2748: Added Intel SVML optimizations as opt-out choice working by default
+* PR #2762: Support transpose with axes arguments.
+* PR #2777: Add support for np.correlate and np.convolve
+* PR #2779: Implement np.random.permutation
+* PR #2801: Passing jitted functions as args
+* PR #2802: Support np.real() and np.imag()
+* PR #2807: Expose `import_cython_function`
+* PR #2821: Add kwarg 'side' to np.searchsorted
+* PR #2822: Adds stable argsort
+* PR #2832: Fixups for llvmlite 0.23/llvm 6
+* PR #2836: Support `index` method on tuples
+* PR #2839: Support for np.transpose and np.reshape.
+* PR #2843: Custom pipeline
+* PR #2847: Replace signed array access indices in unsiged prange loop body
+* PR #2859: Add support for improved error reporting.
+* PR #2880: This adds a github issue template.
+* PR #2881: Build recipe to clone Intel ICC runtime.
+* PR #2882: Update TravisCI to test SVML
+* PR #2893: Add reference to the data buffer in array.ctypes object
+* PR #2895: Move to CUDA 8.0
+
+Fixes:
+
+* PR #2737: Fix #2007 (part 1). Empty array handling in np.linalg.
+* PR #2738: Fix install_requires to allow pip getting pre-release version
+* PR #2740: Fix 2208. Generate better error message.
+* PR #2765: Fix Bit-ness
+* PR #2780: PowerPC reference counting memory fences
+* PR #2805: Fix six imports.
+* PR #2813: Fix #2812: gufunc scalar output bug.
+* PR #2814: Fix the build post #2727
+* PR #2831: Attempt to fix #2473
+* PR #2842: Fix issue with test discovery and broken CUDA drivers.
+* PR #2850: Add rtsys init guard and test.
+* PR #2852: Skip vectorization test with targets that are not x86
+* PR #2856: Prevent printing to stdout in `test_extending.py`
+* PR #2864: Correct C code to prevent compiler warnings.
+* PR #2889: Attempt to fix #2386.
+* PR #2891: Removed test skipping for inspect_cfg
+* PR #2898: Add guard to parallel test on unsupported platforms
+* PR #2907: Update change log for PPC64LE LLVM dependency.
+* PR #2911: Move build requirement to llvmlite>=0.23.0dev0
+* PR #2912: Fix random permutation test.
+* PR #2914: Fix MD list syntax in issue template.
+
+Documentation Updates:
+
+* PR #2739: Explicitly state default value of error_model in docstring
+* PR #2803: DOC: parallel vectorize requires signatures
+* PR #2829: Add Python 2.7 EOL plan to docs
+* PR #2838: Use automatic numbering syntax in list.
+* PR #2877: Add performance tips documentation.
+* PR #2883: Fix #2872: update rng doc about thread/fork-safety
+* PR #2908: Add missing link and ref to docs.
+* PR #2909: Tiny typo correction
+
+ParallelAccelerator enhancements/fixes:
+
+* PR #2727: Changes to enable vectorization in ParallelAccelerator.
+* PR #2816: Array analysis for transpose with arbitrary arguments
+* PR #2874: Fix dead code eliminator not to remove a call with side-effect
+* PR #2886: Fix ParallelAccelerator arrayexpr repr
+
+CUDA enhancements:
+
+* PR #2734: More Constants From cuda.h
+* PR #2767: Add len(..) Support to DeviceNDArray
+* PR #2778: Add More Device Array API Functions to CUDA Simulator
+* PR #2824: Add CUDA Primitives for Population Count
+* PR #2835: Emit selp Instructions to Avoid Branching
+* PR #2867: Full support for CUDA device attributes
+
+CUDA fixes:
+* PR #2768: Don't Compile Code on Every Assignment
+* PR #2878: Fixes a Win64 issue with the test in Pr/2865
+
+Contributors:
+
+The following people contributed to this release.
+
+* Abutalib Aghayev
+* Alex Olivas
+* Anton Malakhov
+* Dong-hee Na
+* Ehsan Totoni (core dev)
+* John Zwinck
+* Josh Wilson
+* Kelsey Jordahl
+* Nick White
+* Olexa Bilaniuk
+* Rik-de-Kort
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Thomas Arildsen
+* Todd A. Anderson (core dev)
+
+
+Version 0.37.0
+--------------
+
+This release focuses on bug fixing and stability but also adds a few new
+features including support for Numpy 1.14. The key change for Numba core was the
+long awaited addition of the final tranche of thread safety improvements that
+allow Numba to be run concurrently on multiple threads without hitting known
+thread safety issues inside LLVM itself. Further, a number of fixes and
+enhancements went into the CUDA implementation and ParallelAccelerator gained
+some new features and underwent some internal refactoring.
+
+Misc enhancements:
+
+* PR #2627: Remove hacks to make llvmlite threadsafe
+* PR #2672: Add ascontiguousarray
+* PR #2678: Add Gitter badge
+* PR #2691: Fix #2690: add intrinsic to convert array to tuple
+* PR #2703: Test runner feature: failed-first and last-failed
+* PR #2708: Patch for issue #1907
+* PR #2732: Add support for array.fill
+
+Misc Fixes:
+
+* PR #2610: Fix #2606 lowering of optional.setattr
+* PR #2650: Remove skip for win32 cosine test
+* PR #2668: Fix empty_like from readonly arrays.
+* PR #2682: Fixes 2210, remove _DisableJitWrapper
+* PR #2684: Fix #2340, generator error yielding bool
+* PR #2693: Add travis-ci testing of NumPy 1.14, and also check on Python 2.7
+* PR #2694: Avoid type inference failure due to a typing template rejection
+* PR #2695: Update llvmlite version dependency.
+* PR #2696: Fix tuple indexing codegeneration for empty tuple
+* PR #2698: Fix #2697 by deferring deletion in the simplify_CFG loop.
+* PR #2701: Small fix to avoid tempfiles being created in the current directory
+* PR #2725: Fix 2481, LLVM IR parsing error due to mutated IR
+* PR #2726: Fix #2673: incorrect fork error msg.
+* PR #2728: Alternative to #2620.  Remove dead code ByteCodeInst.get.
+* PR #2730: Add guard for test needing SciPy/BLAS
+
+Documentation updates:
+
+* PR #2670: Update communication channels
+* PR #2671: Add docs about diagnosing loop vectorizer
+* PR #2683: Add docs on const arg requirements and on const mem alloc
+* PR #2722: Add docs on numpy support in cuda
+* PR #2724: Update doc: warning about unsupported arguments
+
+ParallelAccelerator enhancements/fixes:
+
+Parallel support for `np.arange` and `np.linspace`, also `np.mean`, `np.std`
+and `np.var` are added. This was performed as part of a general refactor and
+cleanup of the core ParallelAccelerator code.
+
+* PR #2674: Core pa
+* PR #2704: Generate Dels after parfor sequential lowering
+* PR #2716: Handle matching directly supported functions
+
+CUDA enhancements:
+
+* PR #2665: CUDA DeviceNDArray: Support numpy tranpose API
+* PR #2681: Allow Assigning to DeviceNDArrays
+* PR #2702: Make DummyArray do High Dimensional Reshapes
+* PR #2714: Use CFFI to Reuse Code
+
+CUDA fixes:
+
+* PR #2667: Fix CUDA DeviceNDArray slicing
+* PR #2686: Fix #2663: incorrect offset when indexing cuda array.
+* PR #2687: Ensure Constructed Stream Bound
+* PR #2706: Workaround for unexpected warp divergence due to exception raising
+  code
+* PR #2707: Fix regression: cuda test submodules not loading properly in
+  runtests
+* PR #2731: Use more challenging values in slice tests.
+* PR #2720: A quick testsuite fix to not run the new cuda testcase in the
+  multiprocess pool
+
+Contributors:
+
+The following people contributed to this release.
+
+* Coutinho Menezes Nilo
+* Daniel
+* Ehsan Totoni
+* Nick White
+* Paul H. Liu
+* Siu Kwan Lam
+* Stan Seibert
+* Stuart Archibald
+* Todd A. Anderson
+
+
+Version 0.36.2
+--------------
+
+This is a bugfix release that provides minor changes to address:
+
+* PR #2645: Avoid CPython bug with ``exec`` in older 2.7.x.
+* PR #2652: Add support for CUDA 9.
+
+
+Version 0.36.1
+--------------
+
+This release continues to add new features to the work undertaken in partnership
+with Intel on ParallelAccelerator technology. Other changes of note include the
+compilation chain being updated to use LLVM 5.0 and the production of conda
+packages using conda-build 3 and the new compilers that ship with it.
+
+NOTE: A version 0.36.0 was tagged for internal use but not released.
+
+ParallelAccelerator:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+be considered experimental.
+
+New features relating to ParallelAccelerator, from work undertaken with Intel,
+include the addition of the `@stencil` decorator for ease of implementation of
+stencil-like computations, support for general reductions, and slice and
+range fusion for parallel slice/bit-array assignments. Documentation on both the
+use and implementation of the above has been added. Further, a new debug
+environment variable `NUMBA_DEBUG_ARRAY_OPT_STATS` is made available to give
+information about which operators/calls are converted to parallel for-loops.
+
+ParallelAccelerator features:
+
+* PR #2457: Stencil Computations in ParallelAccelerator
+* PR #2548: Slice and range fusion, parallelizing bitarray and slice assignment
+* PR #2516: Support general reductions in ParallelAccelerator
+
+ParallelAccelerator fixes:
+
+* PR #2540: Fix bug #2537
+* PR #2566: Fix issue #2564.
+* PR #2599: Fix nested multi-dimensional parfor type inference issue
+* PR #2604: Fixes for stencil tests and cmath sin().
+* PR #2605: Fixes issue #2603.
+
+Additional features of note:
+
+This release of Numba (and llvmlite) is updated to use LLVM version 5.0 as the
+compiler back end, the main change to Numba to support this was the addition of
+a custom symbol tracker to avoid the calls to LLVM's `ExecutionEngine` that was
+crashing when asking for non-existent symbol addresses. Further, the conda
+packages for this release of Numba are built using conda build version 3 and the
+new compilers/recipe grammar that are present in that release.
+
+* PR #2568: Update for LLVM 5
+* PR #2607: Fixes abort when getting address to "nrt_unresolved_abort"
+* PR #2615: Working towards conda build 3
+
+Thanks to community feedback and bug reports, the following fixes were also
+made.
+
+Misc fixes/enhancements:
+
+* PR #2534: Add tuple support to np.take.
+* PR #2551: Rebranding fix
+* PR #2552: relative doc links
+* PR #2570: Fix issue #2561, handle missing successor on loop exit
+* PR #2588: Fix #2555. Disable libpython.so linking on linux
+* PR #2601: Update llvmlite version dependency.
+* PR #2608: Fix potential cache file collision
+* PR #2612: Fix NRT test failure due to increased overhead when running in coverage
+* PR #2619: Fix dubious pthread_cond_signal not in lock
+* PR #2622: Fix `np.nanmedian` for all NaN case.
+* PR #2633: Fix markdown in CONTRIBUTING.md
+* PR #2635: Make the dependency on compilers for AOT optional.
+
+CUDA support fixes:
+
+* PR #2523: Fix invalid cuda context in memory transfer calls in another thread
+* PR #2575: Use CPU to initialize xoroshiro states for GPU RNG. Fixes #2573
+* PR #2581: Fix cuda gufunc mishandling of scalar arg as array and out argument
+
+
+Version 0.35.0
+--------------
+
+This release includes some exciting new features as part of the work
+performed in partnership with Intel on ParallelAccelerator technology.
+There are also some additions made to Numpy support and small but
+significant fixes made as a result of considerable effort spent chasing bugs
+and implementing stability improvements.
+
+
+ParallelAccelerator:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+be considered experimental.
+
+New features relating to ParallelAccelerator, from work undertaken with Intel,
+include support for a larger range of `np.random` functions in `parallel`
+mode, printing Numpy arrays in no Python mode, the capacity to initialize Numpy
+arrays directly from list comprehensions, and the axis argument to `.sum()`.
+Documentation on the ParallelAccelerator technology implementation has also
+been added. Further, a large amount of work on equivalence relations was
+undertaken to enable runtime checks of broadcasting behaviours in parallel mode.
+
+ParallelAccelerator features:
+
+* PR #2400: Array comprehension
+* PR #2405: Support printing Numpy arrays
+* PR #2438: from Support more np.random functions in ParallelAccelerator
+* PR #2482: Support for sum with axis in nopython mode.
+* PR #2487: Adding developer documentation for ParallelAccelerator technology.
+* PR #2492: Core PA refactor adds assertions for broadcast semantics
+
+ParallelAccelerator fixes:
+
+* PR #2478: Rename cfg before parfor translation (#2477)
+* PR #2479: Fix broken array comprehension tests on unsupported platforms
+* PR #2484: Fix array comprehension test on win64
+* PR #2506: Fix for 32-bit machines.
+
+
+Additional features of note:
+
+Support for `np.take`, `np.finfo`, `np.iinfo` and `np.MachAr` in no Python
+mode is added. Further, three new environment variables are added, two for
+overriding CPU target/features and another to warn if `parallel=True` was set
+no such transform was possible.
+
+* PR #2490: Implement np.take and ndarray.take
+* PR #2493: Display a warning if parallel=True is set but not possible.
+* PR #2513: Add np.MachAr, np.finfo, np.iinfo
+* PR #2515: Allow environ overriding of cpu target and cpu features.
+
+
+Due to expansion of the test farm and a focus on fixing bugs, the following
+fixes were also made.
+
+Misc fixes/enhancements:
+
+* PR #2455: add contextual information to runtime errors
+* PR #2470: Fixes #2458, poor performance in np.median
+* PR #2471: Ensure LLVM threadsafety in {g,}ufunc building.
+* PR #2494: Update doc theme
+* PR #2503: Remove hacky code added in 2482 and feature enhancement
+* PR #2505: Serialise env mutation tests during multithreaded testing.
+* PR #2520: Fix failing cpu-target override tests
+
+CUDA support fixes:
+
+* PR #2504: Enable CUDA toolkit version testing
+* PR #2509: Disable tests generating code unavailable in lower CC versions.
+* PR #2511: Fix Windows 64 bit CUDA tests.
+
+
+Version 0.34.0
+--------------
+
+This release adds a significant set of new features arising from combined work
+with Intel on ParallelAccelerator technology. It also adds list comprehension
+and closure support, support for Numpy 1.13 and a new, faster, CUDA reduction
+algorithm. For Linux users this release is the first to be built on Centos 6,
+which will be the new base platform for future releases. Finally a number of
+thread-safety, type inference and other smaller enhancements and bugs have been
+fixed.
+
+
+ParallelAccelerator features:
+
+NOTE: The ParallelAccelerator technology is under active development and should
+be considered experimental.
+
+The ParallelAccelerator technology is accessed via a new "nopython" mode option
+"parallel". The ParallelAccelerator technology attempts to identify operations
+which have parallel semantics (for instance adding a scalar to a vector), fuse
+together adjacent such operations, and then parallelize their execution across
+a number of CPU cores. This is essentially auto-parallelization.
+
+In addition to the auto-parallelization feature, explicit loop based
+parallelism is made available through the use of `prange` in place of `range`
+as a loop iterator.
+
+More information and examples on both auto-parallelization and `prange` are
+available in the documentation and examples directory respectively.
+
+As part of the necessary work for ParallelAccelerator, support for closures
+and list comprehensions is added:
+
+* PR #2318: Transfer ParallelAccelerator technology to Numba
+* PR #2379: ParallelAccelerator Core Improvements
+* PR #2367: Add support for len(range(...))
+* PR #2369: List comprehension
+* PR #2391: Explicit Parallel Loop Support (prange)
+
+The ParallelAccelerator features are available on all supported platforms and
+Python versions with the exceptions of (with view of supporting in a future
+release):
+
+* The combination of Windows operating systems with Python 2.7.
+* Systems running 32 bit Python.
+
+
+CUDA support enhancements:
+
+* PR #2377: New GPU reduction algorithm
+
+
+CUDA support fixes:
+
+* PR #2397: Fix #2393, always set alignment of cuda static memory regions
+
+
+Misc Fixes:
+
+* PR #2373, Issue #2372: 32-bit compatibility fix for parfor related code
+* PR #2376: Fix #2375 missing stdint.h for py2.7 vc9
+* PR #2378: Fix deadlock in parallel gufunc when kernel acquires the GIL.
+* PR #2382: Forbid unsafe casting in bitwise operation
+* PR #2385: docs: fix Sphinx errors
+* PR #2396: Use 64-bit RHS operand for shift
+* PR #2404: Fix threadsafety logic issue in ufunc compilation cache.
+* PR #2424: Ensure consistent iteration order of blocks for type inference.
+* PR #2425: Guard code to prevent the use of 'parallel' on win32 + py27
+* PR #2426: Basic test for Enum member type recovery.
+* PR #2433: Fix up the parfors tests with respect to windows py2.7
+* PR #2442: Skip tests that need BLAS/LAPACK if scipy is not available.
+* PR #2444: Add test for invalid array setitem
+* PR #2449: Make the runtime initialiser threadsafe
+* PR #2452: Skip CFG test on 64bit windows
+
+
+Misc Enhancements:
+
+* PR #2366: Improvements to IR utils
+* PR #2388: Update README.rst to indicate the proper version of LLVM
+* PR #2394: Upgrade to llvmlite 0.19.*
+* PR #2395: Update llvmlite version to 0.19
+* PR #2406: Expose environment object to ufuncs
+* PR #2407: Expose environment object to target-context inside lowerer
+* PR #2413: Add flags to pass through to conda build for buildbot
+* PR #2414: Add cross compile flags to local recipe
+* PR #2415: A few cleanups for rewrites
+* PR #2418: Add getitem support for Enum classes
+* PR #2419: Add support for returning enums in vectorize
+* PR #2421: Add copyright notice for Intel contributed files.
+* PR #2422: Patch code base to work with np 1.13 release
+* PR #2448: Adds in warning message when using 'parallel' if cache=True
+* PR #2450: Add test for keyword arg on .sum-like and .cumsum-like array
+  methods
+
+
 Version 0.33.0
 --------------
 
@@ -11,7 +1647,7 @@ There are also several enhancements to the CUDA GPU support:
 
 * A GPU random number generator based on `xoroshiro128+ algorithm <http://xoroshiro.di.unimi.it/>`_ is added.
   See details and examples in :ref:`documentation <cuda-random>`.
-* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit`` 
+* ``@cuda.jit`` CUDA kernels can now call ``@jit`` and ``@njit``
   CPU functions and they will automatically be compiled as CUDA device
   functions.
 * CUDA IPC memory API is exposed for sharing memory between proceses.
@@ -89,7 +1725,7 @@ version >= 7.0. The feature is enabled by setting the ``debug=True`` compiler
 option, which causes GDB compatible debug info to be generated.
 The CUDA backend also gained limited debugging support so that source locations
 are showed in memory-checking and profiling tools.
-For details, see :ref:`troubleshooting`.
+For details, see :ref:`numba-troubleshooting`.
 
 Also, we added the ``fastmath=True`` compiler option to enable unsafe
 floating-point transformations, which allows LLVM to auto-vectorize more code.
@@ -261,7 +1897,7 @@ Improvements:
 * PR #1987: Implement ``np.linalg.det`` and ``np.linalg.slogdet``.
 * Issue #1979: Document integer width inference and how to workaround.
 * PR #1938: Numba is now compatible with LLVM 3.8.
-* PR #1967: Restrict ``np.linalg`` functions to homogenous dtypes.  Users
+* PR #1967: Restrict ``np.linalg`` functions to homogeneous dtypes.  Users
   wanting to pass mixed-typed inputs have to convert explicitly, which
   makes the performance implications more obvious.
 
@@ -387,7 +2023,7 @@ Improvements:
 * PR #1749: Remove Numpy 1.6 compatibility.
 * PR #1748: Remove Python 2.6 and 3.3 compatibility.
 * PR #1735: Support the ``not in`` operator as well as operator.contains().
-* PR #1724: Support homogenous sets in nopython mode.
+* PR #1724: Support homogeneous sets in nopython mode.
 * Issue #875: make compilation of array constants faster.
 
 Fixes:
@@ -514,7 +2150,7 @@ Improvements:
 Fixes:
 
 * Issue #1603: Fix calling a non-cached function from a cached function
-* Issue #1594: Ensure a list is homogenous when unboxing
+* Issue #1594: Ensure a list is homogeneous when unboxing
 * Issue #1595: Replace deprecated use of get_pointer_to_function()
 * Issue #1586: Allow tests to be run by different users on the same machine
 * Issue #1587: Make CudaAPIError picklable

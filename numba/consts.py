@@ -5,7 +5,7 @@ from types import ModuleType
 import weakref
 
 from . import ir
-from .errors import ConstantInferenceError
+from .errors import ConstantInferenceError, NumbaError
 
 
 class ConstantInference(object):
@@ -23,7 +23,7 @@ class ConstantInference(object):
         self._func_ir = weakref.proxy(func_ir)
         self._cache = {}
 
-    def infer_constant(self, name):
+    def infer_constant(self, name, loc=None):
         """
         Infer a constant value for the given variable *name*.
         If no value can be inferred, numba.errors.ConstantInferenceError
@@ -41,11 +41,19 @@ class ConstantInference(object):
             return val
         else:
             exc, args = val
-            raise exc(*args)
+            if issubclass(exc, NumbaError):
+                raise exc(*args, loc=loc)
+            else:
+                raise exc(*args)
 
     def _fail(self, val):
+        # The location here is set to None because `val` is the ir.Var name
+        # and not the actual offending use of the var. When this is raised it is
+        # caught in the flow control of `infer_constant` and the class and args
+        # (the message) are captured and then raised again but with the location
+        # set to the expression that caused the constant inference error.
         raise ConstantInferenceError(
-            "constant inference not possible for %s" % (val,))
+            "Constant inference not possible for: %s" % (val,), loc=None)
 
     def _do_infer(self, name):
         if not isinstance(name, str):
@@ -67,25 +75,39 @@ class ConstantInference(object):
     def _infer_expr(self, expr):
         # Infer an expression: handle supported cases
         if expr.op == 'call':
-            func = self.infer_constant(expr.func.name)
+            func = self.infer_constant(expr.func.name, loc=expr.loc)
             return self._infer_call(func, expr)
         elif expr.op == 'getattr':
-            value = self.infer_constant(expr.value.name)
+            value = self.infer_constant(expr.value.name, loc=expr.loc)
             return self._infer_getattr(value, expr)
         elif expr.op == 'build_list':
-            return [self.infer_constant(i.name) for i in expr.items]
+            return [self.infer_constant(i.name, loc=expr.loc) for i in
+                    expr.items]
         elif expr.op == 'build_tuple':
-            return tuple(self.infer_constant(i.name) for i in expr.items)
+            return tuple(self.infer_constant(i.name, loc=expr.loc) for i in
+                         expr.items)
         self._fail(expr)
 
     def _infer_call(self, func, expr):
         if expr.kws or expr.vararg:
             self._fail(expr)
         # Check supported callables
-        if (func in (slice,) or
-            (isinstance(func, type) and issubclass(func, BaseException))):
-            args = [self.infer_constant(a.name) for a in expr.args]
-            return func(*args)
+        _slice = func in (slice,)
+        _exc = isinstance(func, type) and issubclass(func, BaseException)
+        if _slice or _exc:
+            args = [self.infer_constant(a.name, loc=expr.loc) for a in
+                    expr.args]
+            if _slice:
+                return func(*args)
+            elif _exc:
+                # If the exception class is user defined it may implement a ctor
+                # that does not pass the args to the super. Therefore return the
+                # raw class and the args so this can be instantiated at the call
+                # site in the way the user source expects it to be.
+                return func, args
+            else:
+                assert 0, 'Unreachable'
+
         self._fail(expr)
 
     def _infer_getattr(self, value, expr):

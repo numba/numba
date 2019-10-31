@@ -18,9 +18,10 @@ from numba import unittest_support as unittest
 from numba.utils import IS_PY3
 from numba import sigutils, types, typing
 from numba.types.abstract import _typecache
+from numba.typing.templates import make_overload_template
 from numba import jit, numpy_support, typeof
 from .support import TestCase, tag
-from .enum_usecases import *
+from .enum_usecases import Color, Shake, Shape
 
 
 Point = namedtuple('Point', ('x', 'y'))
@@ -210,6 +211,29 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
+    def test_list_type_getitem(self):
+        for listty in (types.int64, types.Array(types.float64, 1, 'C')):
+            l_int = types.List(listty)
+            self.assertTrue(isinstance(l_int, types.List))
+            self.assertTrue(isinstance(l_int[0], type(listty)))
+
+    def test_function_incompatible_templates(self):
+        # issue 4345
+        def func_stub():
+            pass
+
+        def func_stub2():
+            pass
+
+        def ol():
+            pass
+
+        template1 = make_overload_template(func_stub, ol, {}, True, 'never')
+        template2 = make_overload_template(func_stub2, ol, {}, True, 'never')
+
+        with self.assertRaises(ValueError) as raises:
+            types.Function((template1, template2))
+        self.assertIn("incompatible templates:", str(raises.exception))
 
 class TestNumbers(TestCase):
     """
@@ -498,8 +522,9 @@ class TestSignatures(TestCase):
         check("(complex64, int16)", (c64, i16), None)
         check(typing.signature(i16, c64), (c64,), i16)
 
-        check_error((types.Integer,), "invalid signature")
-        check_error((None,), "invalid signature")
+        msg = "invalid type in signature: expected a type instance"
+        check_error((types.Integer,), msg)
+        check_error((None,), msg)
         check_error([], "invalid signature")
 
 
@@ -551,6 +576,28 @@ class TestDType(TestCase):
         assert_matches(arr.astype(np.float64), 1.2, 1.2)
         assert_matches(arr.astype(np.complex128), 1.2, (1.2 + 0j))
         assert_matches(arr.astype(np.complex128), 1.2j, 1.2j)
+
+    def test_kind(self):
+        def tkind(A):
+            return A.dtype.kind=='f'
+        jit_tkind = jit(nopython=True)(tkind)
+        self.assertEqual(tkind(np.ones(3)), jit_tkind(np.ones(3)))
+        self.assertEqual(tkind(np.ones(3, dtype=np.intp)),
+                            jit_tkind(np.ones(3, dtype=np.intp)))
+
+    def test_dtype_with_type(self):
+        def impl():
+            a = np.dtype(np.float64)
+            return a.type(0)
+        jit_impl = jit(nopython=True)(impl)
+        self.assertEqual(impl(), jit_impl())
+
+    def test_dtype_with_string(self):
+        def impl():
+            a = np.dtype('float64')
+            return a.type(0)
+        jit_impl = jit(nopython=True)(impl)
+        self.assertEqual(impl(), jit_impl())
 
 
 if __name__ == '__main__':

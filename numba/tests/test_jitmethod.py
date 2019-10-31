@@ -4,7 +4,6 @@ import numpy as np
 
 from numba import config, jit, types
 from numba.compiler import compile_isolated
-from numba.decorators import _DisableJitWrapper
 from numba.tests.support import override_config
 
 
@@ -50,38 +49,23 @@ class TestJITMethod(unittest.TestCase):
 class TestDisabledJIT(unittest.TestCase):
     def test_decorated_function(self):
         with override_config('DISABLE_JIT', True):
-            @jit
             def method(x):
-                return x
+                return x          
+            jitted = jit(method)
 
-        self.assertIsInstance(method, _DisableJitWrapper)
-        self.assertIsNotNone(method.py_func)
+        self.assertEqual(jitted, method)
         self.assertEqual(10, method(10))
+        self.assertEqual(10, jitted(10))
 
     def test_decorated_function_with_kwargs(self):
-        with override_config('DISABLE_JIT', True):
-            @jit(nopython=True)
-            def method(x):
-                return x
-
-        self.assertIsInstance(method, _DisableJitWrapper)
-        self.assertIsNotNone(method.py_func)
-        self.assertEqual(10, method(10))
-
-    def test_py_func(self):
-        with override_config('DISABLE_JIT', True):
-            def method(x):
-                return x
-            jitted = jit(method)
-        self.assertEqual(jitted.py_func, method)
-
-    def test_py_func_with_kwargs(self):
         with override_config('DISABLE_JIT', True):
             def method(x):
                 return x
             jitted = jit(nopython=True)(method)
-        self.assertEqual(jitted.py_func, method)
 
+        self.assertEqual(jitted, method)
+        self.assertEqual(10, method(10))
+        self.assertEqual(10, jitted(10))
 
 if __name__ == '__main__':
     unittest.main()

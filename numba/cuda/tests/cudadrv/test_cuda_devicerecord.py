@@ -3,12 +3,12 @@ import ctypes
 from numba.cuda.cudadrv.devicearray import (DeviceRecord, from_record_like,
                                             auto_device)
 from numba import cuda, numpy_support
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba.cuda.testing import skip_on_cudasim
 import numpy as np
 
 @skip_on_cudasim('Device Record API unsupported in the simulator')
-class TestCudaDeviceRecord(unittest.TestCase):
+class TestCudaDeviceRecord(SerialMixin, unittest.TestCase):
     """
     Tests the DeviceRecord class with np.void host types.
     """

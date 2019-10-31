@@ -5,13 +5,20 @@ import contextlib
 import pickle
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant, LLVMException
+from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import numpy_support
+from numba import config
 from numba import types, utils, cgutils, lowering, _helperlib
+
+
+if PYVERSION >= (3,3):
+    PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
+    PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
+    PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -28,13 +35,13 @@ class _Registry(object):
             return func
         return decorator
 
-    def lookup(self, typeclass):
+    def lookup(self, typeclass, default=None):
         assert issubclass(typeclass, types.Type)
         for cls in typeclass.__mro__:
             func = self.functions.get(cls)
             if func is not None:
                 return func
-        return None
+        return default
 
 # Registries of boxing / unboxing implementations
 _boxers = _Registry()
@@ -128,6 +135,7 @@ class EnvironmentManager(object):
         A borrowed reference is returned.
         """
         assert index < len(self.env.consts)
+
         return self.pyapi.list_getitem(self.env_body.consts, index)
 
 
@@ -172,6 +180,11 @@ class PythonAPI(object):
             self.py_hash_t = self.py_ssize_t
         else:
             self.py_hash_t = self.long
+        if PYVERSION >= (3,3):
+            self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
+            self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
+            self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
+            self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -1116,6 +1129,39 @@ class PythonAPI(object):
 
         return (ok, buffer, self.builder.load(p_length))
 
+    def string_as_string_size_and_kind(self, strobj):
+        """
+        Returns a tuple of ``(ok, buffer, length, kind)``.
+        The ``ok`` is i1 value that is set if ok.
+        The ``buffer`` is a i8* of the output buffer.
+        The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
+        The ``kind`` is a i32 (int32) of the Unicode kind constant
+        The ``hash`` is a long/uint64_t (py_hash_t) of the Unicode constant hash
+        """
+        if PYVERSION >= (3, 3):
+            p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
+            p_kind = cgutils.alloca_once(self.builder, Type.int())
+            p_ascii = cgutils.alloca_once(self.builder, Type.int())
+            p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
+            fnty = Type.function(self.cstring, [self.pyobj,
+                                                self.py_ssize_t.as_pointer(),
+                                                Type.int().as_pointer(),
+                                                Type.int().as_pointer(),
+                                                self.py_hash_t.as_pointer()])
+            fname = "numba_extract_unicode"
+            fn = self._get_function(fnty, name=fname)
+
+            buffer = self.builder.call(
+                fn, [strobj, p_length, p_kind, p_ascii, p_hash])
+            ok = self.builder.icmp_unsigned('!=',
+                                            ir.Constant(buffer.type, None),
+                                            buffer)
+            return (ok, buffer, self.builder.load(p_length),
+                    self.builder.load(p_kind), self.builder.load(p_ascii),
+                    self.builder.load(p_hash))
+        else:
+            assert False, 'not supported on Python < 3.3'
+
     def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
@@ -1134,6 +1180,13 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string])
 
+    def string_from_kind_and_data(self, kind, string, size):
+        fnty = Type.function(self.pyobj, [Type.int(), self.cstring, self.py_ssize_t])
+        assert PYVERSION >= (3, 3), 'unsupported in this python-version'
+        fname = "PyUnicode_FromKindAndData"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [kind, string, size])
+
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
@@ -1142,6 +1195,12 @@ class PythonAPI(object):
             fname = "PyString_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
+
+    def object_hash(self, obj):
+        fnty = Type.function(self.py_hash_t, [self.pyobj,])
+        fname = "PyObject_Hash"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj,])
 
     def object_str(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -1158,7 +1217,10 @@ class PythonAPI(object):
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
-        fn = self._get_function(fnty, name="PySys_WriteStdout")
+        if PYVERSION >= (3, 2):
+            fn = self._get_function(fnty, name="PySys_FormatStdout")
+        else:
+            fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
 
     def object_dump(self, obj):
@@ -1189,6 +1251,51 @@ class PythonAPI(object):
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
                                       ndim, writable, dtypeptr])
+
+    def nrt_meminfo_new_from_pyobject(self, data, pyobj):
+        """
+        Allocate a new MemInfo with data payload borrowed from a python
+        object.
+        """
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [cgutils.voidptr_t, cgutils.voidptr_t],
+            )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name="NRT_meminfo_new_from_pyobject",
+            )
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [data, pyobj])
+
+    def nrt_meminfo_as_pyobject(self, miptr):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            self.pyobj,
+            [cgutils.voidptr_t]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_as_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miptr])
+
+    def nrt_meminfo_from_pyobject(self, miobj):
+        mod = self.builder.module
+        fnty = ir.FunctionType(
+            cgutils.voidptr_t,
+            [self.pyobj]
+        )
+        fn = mod.get_or_insert_function(
+            fnty,
+            name='NRT_meminfo_from_pyobject',
+        )
+        fn.return_value.add_attribute("noalias")
+        return self.builder.call(fn, [miobj])
 
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt
@@ -1277,7 +1384,7 @@ class PythonAPI(object):
         # First make the array constant
         data = pickle.dumps(obj, protocol=-1)
         assert len(data) < 2**31
-        name = ".const.pickledata.%s" % (id(obj))
+        name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
         arr = self.context.insert_unique_const(self.module, name, bdata)
         # Then populate the structure constant
@@ -1297,7 +1404,7 @@ class PythonAPI(object):
             gv = self.module.__serialized[obj]
         except KeyError:
             struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj))
+            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv
@@ -1311,10 +1418,9 @@ class PythonAPI(object):
         Unbox the Python object as the given Numba type.
         A NativeValue instance is returned.
         """
-        impl = _unboxers.lookup(typ.__class__)
-        if impl is None:
-            raise NotImplementedError("cannot convert %s to native value" % (typ,))
+        from numba.targets.boxing import unbox_unsupported
 
+        impl = _unboxers.lookup(typ.__class__, unbox_unsupported)
         c = _UnboxContext(self.context, self.builder, self)
         return impl(typ, obj, c)
 
@@ -1331,9 +1437,9 @@ class PythonAPI(object):
         pointer is returned (NULL if an error occurred).
         This method steals any native (NRT) reference embedded in *val*.
         """
-        impl = _boxers.lookup(typ.__class__)
-        if impl is None:
-            raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
+        from numba.targets.boxing import box_unsupported
+
+        impl = _boxers.lookup(typ.__class__, box_unsupported)
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
         return impl(typ, val, c)

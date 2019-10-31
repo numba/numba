@@ -1,20 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
-from .. import types, utils
+from .. import types, utils, errors
+import operator
 from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
                         infer_global, infer, infer_getattr,
                         signature, bound_function, make_callable_template)
 from .builtins import normalize_1d_index
 
 
-@infer
+@infer_global(operator.contains)
 class InContainer(AbstractTemplate):
-    key = "in"
+    key = operator.contains
 
     def generic(self, args, kws):
-        item, cont = args
+        cont, item = args
         if isinstance(cont, types.Container):
-            return signature(types.boolean, cont.dtype, cont)
+            return signature(types.boolean, cont, cont.dtype)
 
 @infer_global(len)
 class ContainerLen(AbstractTemplate):
@@ -26,9 +27,9 @@ class ContainerLen(AbstractTemplate):
             return signature(types.intp, val)
 
 
-@infer
+@infer_global(operator.truth)
 class SequenceBool(AbstractTemplate):
-    key = "is_true"
+    key = operator.truth
 
     def generic(self, args, kws):
         assert not kws
@@ -36,9 +37,10 @@ class SequenceBool(AbstractTemplate):
         if isinstance(val, (types.Sequence)):
             return signature(types.boolean, val)
 
-@infer
+
+@infer_global(operator.getitem)
 class GetItemSequence(AbstractTemplate):
-    key = "getitem"
+    key = operator.getitem
 
     def generic(self, args, kws):
         seq, idx = args
@@ -51,10 +53,8 @@ class GetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 return signature(seq.dtype, seq, idx)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemSequence(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         seq, idx, value = args
         if isinstance(seq, types.MutableSequence):
@@ -62,12 +62,14 @@ class SetItemSequence(AbstractTemplate):
             if isinstance(idx, types.SliceType):
                 return signature(types.none, seq, idx, seq)
             elif isinstance(idx, types.Integer):
+                if not self.context.can_convert(value, seq.dtype):
+                    msg = "invalid setitem with value of {} to element of {}"
+                    raise errors.TypingError(msg.format(types.unliteral(value), seq.dtype))
                 return signature(types.none, seq, idx, seq.dtype)
 
-@infer
-class DelItemSequence(AbstractTemplate):
-    key = "delitem"
 
+@infer_global(operator.delitem)
+class DelItemSequence(AbstractTemplate):
     def generic(self, args, kws):
         seq, idx = args
         if isinstance(seq, types.MutableSequence):

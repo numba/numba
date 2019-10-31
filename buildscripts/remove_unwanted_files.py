@@ -13,6 +13,8 @@ py2_only_files = []
 
 py3_only_files = [
     'numba/tests/annotation_usecases.py',
+    'numba/tests/overload_usecases.py',
+    'numba/tests/jitclass_usecases.py',
     ]
 
 

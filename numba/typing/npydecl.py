@@ -3,8 +3,9 @@ from __future__ import absolute_import, print_function
 import warnings
 
 import numpy as np
+import operator
 
-from .. import types, utils
+from .. import types, utils, config
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
                         Registry, signature)
 
@@ -13,8 +14,8 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
 from ..numpy_support import version as numpy_version
-from ..errors import TypingError
-from ..config import PerformanceWarning
+from ..errors import TypingError, NumbaPerformanceWarning
+from numba import pndindex
 
 registry = Registry()
 infer = registry.register
@@ -70,6 +71,10 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if not all(isinstance(output, types.ArrayCompatible)
                    for output in explicit_outputs):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
+            raise TypingError(msg=msg.format(ufunc.__name__))
+
+        if not all(output.mutable for output in explicit_outputs):
+            msg = "ufunc '{0}' called with an explicit output that is read-only"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
         # find the kernel to use, based only in the input types (as does NumPy)
@@ -141,14 +146,14 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
-@infer
+@infer_global(operator.pos)
 class UnaryPositiveArray(AbstractTemplate):
     '''Typing template class for +(array) expressions.  This operator is
     special because there is no Numpy ufunc associated with it; we
     include typing for it here (numba.typing.npydecl) because this is
     where the remaining array operators are defined.
     '''
-    key = "+"
+    key = operator.pos
 
     def generic(self, args, kws):
         assert not kws
@@ -159,26 +164,28 @@ class UnaryPositiveArray(AbstractTemplate):
 
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     _op_map = {
-         '+': "add",
-         '-': "subtract",
-         '*': "multiply",
-        '/?': "divide",
-         '/': "true_divide",
-        '//': "floor_divide",
-         '%': "remainder",
-        '**': "power",
-        '<<': "left_shift",
-        '>>': "right_shift",
-         '&': "bitwise_and",
-         '|': "bitwise_or",
-         '^': "bitwise_xor",
-        '==': "equal",
-         '>': "greater",
-        '>=': "greater_equal",
-         '<': "less",
-        '<=': "less_equal",
-        '!=': "not_equal",
+        operator.add: "add",
+        operator.sub: "subtract",
+        operator.mul: "multiply",
+        operator.truediv: "true_divide",
+        operator.floordiv: "floor_divide",
+        operator.mod: "remainder",
+        operator.pow: "power",
+        operator.lshift: "left_shift",
+        operator.rshift: "right_shift",
+        operator.and_: "bitwise_and",
+        operator.or_: "bitwise_or",
+        operator.xor: "bitwise_xor",
+        operator.eq: "equal",
+        operator.gt: "greater",
+        operator.ge: "greater_equal",
+        operator.lt: "less",
+        operator.le: "less_equal",
+        operator.ne: "not_equal",
     }
+
+    if not utils.IS_PY3:
+        _op_map[operator.div] = "divide"
 
     @property
     def ufunc(self):
@@ -187,8 +194,9 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     @classmethod
     def install_operations(cls):
         for op, ufunc_name in cls._op_map.items():
-            infer(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
-                         dict(key=op)))
+            infer_global(op)(
+                type("NumpyRulesArrayOperator_" + ufunc_name, (cls,), dict(key=op))
+            )
 
     def generic(self, args, kws):
         '''Overloads and calls base class generic() method, returning
@@ -217,9 +225,23 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
 _binop_map = NumpyRulesArrayOperator._op_map
 
 class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
-    _op_map = dict((inp, _binop_map[binop])
-                   for (inp, binop) in utils.inplace_map.items()
-                   if binop in _binop_map)
+    _op_map = {
+        operator.iadd: "add",
+        operator.isub: "subtract",
+        operator.imul: "multiply",
+        operator.itruediv: "true_divide",
+        operator.ifloordiv: "floor_divide",
+        operator.imod: "remainder",
+        operator.ipow: "power",
+        operator.ilshift: "left_shift",
+        operator.irshift: "right_shift",
+        operator.iand: "bitwise_and",
+        operator.ior: "bitwise_or",
+        operator.ixor: "bitwise_xor",
+    }
+
+    if not utils.IS_PY3:
+        _op_map[operator.idiv] = "divide"
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,
@@ -242,8 +264,8 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         # Positive is a special case since there is no Numpy ufunc
         # corresponding to it (it's essentially an identity operator).
         # See UnaryPositiveArray, above.
-        '-': "negative",
-        '~': "invert",
+        operator.neg: "negative",
+        operator.invert: "invert",
     }
 
     def generic(self, args, kws):
@@ -331,8 +353,12 @@ NumpyRulesArrayOperator.install_operations()
 NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
-    NumpyRulesUnaryArrayOperator._op_map.keys()).union(
-        NumpyRulesArrayOperator._op_map.keys())
+    NumpyRulesUnaryArrayOperator._op_map.keys()
+).union(
+    NumpyRulesArrayOperator._op_map.keys()
+).union(
+    NumpyRulesInplaceArrayOperator._op_map.keys()
+)
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
@@ -349,14 +375,36 @@ class Numpy_method_redirection(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        assert not kws
-        [arr] = args
+        pysig = None
+        if kws:
+            if self.method_name == 'sum':
+                if 'axis' in kws and 'dtype' not in kws:
+                    def sum_stub(arr, axis):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' not in kws:
+                    def sum_stub(arr, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' in kws:
+                    def sum_stub(arr, axis, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+            elif self.method_name == 'argsort':
+                def argsort_stub(arr, kind='quicksort'):
+                    pass
+                pysig = utils.pysignature(argsort_stub)
+            else:
+                fmt = "numba doesn't support kwarg for {}"
+                raise TypingError(fmt.format(self.method_name))
+
+        arr = args[0]
         # This will return a BoundFunction
         meth_ty = self.context.resolve_getattr(arr, self.method_name)
         # Resolve arguments on the bound function
         meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
         if meth_sig is not None:
-            return meth_sig.as_function()
+            return meth_sig.as_function().replace(pysig=pysig)
 
 
 # Function to glue attributes onto the numpy-esque object
@@ -375,7 +423,7 @@ for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as convertors to the equivalent Numba types
+# Register np.int8, etc. as converters to the equivalent Numba types
 np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
 np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
@@ -415,10 +463,10 @@ def _parse_nested_sequence(context, typ):
     """
     Parse a (possibly 0d) nested sequence type.
     A (ndim, dtype) tuple is returned.  Note the sequence may still be
-    heterogenous, as long as it converts to the given dtype.
+    heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogenous sequence" % typ)
+        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
@@ -436,7 +484,7 @@ def _parse_nested_sequence(context, typ):
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogenous type" % typ)
+            raise TypingError("cannot convert %r to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype
@@ -509,7 +557,7 @@ class NdConstructorLike(CallableTemplate):
             if nb_dtype is not None:
                 if isinstance(arg, types.Array):
                     layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout)
+                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
                 else:
                     return types.Array(nb_dtype, 0, 'C')
 
@@ -526,7 +574,10 @@ if numpy_version >= (1, 8):
         def generic(self):
             def typer(shape, fill_value, dtype=None):
                 if dtype is None:
-                    nb_dtype = fill_value
+                    if numpy_version < (1, 12):
+                        nb_dtype = types.float64
+                    else:
+                        nb_dtype = fill_value
                 else:
                     nb_dtype = _parse_dtype(dtype)
 
@@ -553,7 +604,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = arg
                 if nb_dtype is not None:
                     if isinstance(arg, types.Array):
-                        return arg.copy(dtype=nb_dtype)
+                        return arg.copy(dtype=nb_dtype, readonly=False)
                     else:
                         return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
@@ -580,21 +631,6 @@ class NdIdentity(AbstractTemplate):
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
-
-
-@infer_global(np.eye)
-class NdEye(CallableTemplate):
-
-    def generic(self):
-        def typer(N, M=None, k=None, dtype=None):
-            if dtype is None:
-                nb_dtype = types.float64
-            else:
-                nb_dtype = _parse_dtype(dtype)
-            if nb_dtype is not None:
-                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
-
-        return typer
 
 
 @infer_global(np.arange)
@@ -684,6 +720,17 @@ class AsFortranArray(CallableTemplate):
         return typer
 
 
+@infer_global(np.ascontiguousarray)
+class AsContiguousArray(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                return a.copy(layout='C', ndim=max(a.ndim, 1))
+
+        return typer
+
+
 @infer_global(np.copy)
 class NdCopy(CallableTemplate):
 
@@ -747,7 +794,7 @@ class NdAtLeast3d(BaseAtLeastNdTemplate):
         return a.copy(ndim=max(a.ndim, 3))
 
 
-def _homogenous_dims(context, func_name, arrays):
+def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
@@ -757,7 +804,7 @@ def _homogenous_dims(context, func_name, arrays):
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
-                        dim_chooser=_homogenous_dims):
+                        dim_chooser=_homogeneous_dims):
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
@@ -923,9 +970,11 @@ class MatMulTyperMixin(object):
         else:
             all_args = (a, b)
 
-        if not all(x.layout in 'CF' for x in (a, b)):
-            warnings.warn("%s is faster on contiguous arrays, called on %s"
-                          % (self.func_name, (a, b)), PerformanceWarning)
+        if not (config.DISABLE_PERFORMANCE_WARNINGS or
+                all(x.layout in 'CF' for x in (a, b))):
+            msg = ("%s is faster on contiguous arrays, called on %s" %
+                   (self.func_name, (a, b)))
+            warnings.warn(NumbaPerformanceWarning(msg))
         if not all(x.dtype == a.dtype for x in all_args):
             raise TypingError("%s arguments must all have "
                               "the same dtype" % (self.func_name,))
@@ -965,7 +1014,7 @@ class VDot(CallableTemplate):
                 raise TypingError("np.vdot() only supported on 1-D arrays")
             if not all(x.layout in 'CF' for x in (a, b)):
                 warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), PerformanceWarning)
+                              % ((a, b),), NumbaPerformanceWarning)
             if not all(x.dtype == a.dtype for x in (a, b)):
                 raise TypingError("np.vdot() arguments must all have "
                                   "the same dtype")
@@ -976,17 +1025,17 @@ class VDot(CallableTemplate):
 
         return typer
 
+if utils.HAS_MATMUL_OPERATOR:
+    @infer_global(operator.matmul)
+    class MatMul(MatMulTyperMixin, AbstractTemplate):
+        key = operator.matmul
+        func_name = "'@'"
 
-@infer
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = "@"
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
+        def generic(self, args, kws):
+            assert not kws
+            restype = self.matmul_typer(*args)
+            if restype is not None:
+                return signature(restype, *args)
 
 
 def _check_linalg_matrix(a, func_name):
@@ -1033,6 +1082,7 @@ class NdIter(AbstractTemplate):
         return signature(nditerty, *args)
 
 
+@infer_global(pndindex)
 @infer_global(np.ndindex)
 class NdIndex(AbstractTemplate):
 
@@ -1043,7 +1093,7 @@ class NdIndex(AbstractTemplate):
         if len(args) == 1 and isinstance(args[0], types.BaseTuple):
             tup = args[0]
             if tup.count > 0 and not isinstance(tup, types.UniTuple):
-                # Heterogenous tuple
+                # Heterogeneous tuple
                 return
             shape = list(tup)
         else:
@@ -1102,18 +1152,27 @@ class Where(AbstractTemplate):
             return signature(retty, ary)
 
         elif len(args) == 3:
-            # NOTE: contrary to Numpy, we only support homogenous arguments
             cond, x, y = args
+            retdty = from_dtype(np.promote_types(
+                        as_dtype(getattr(args[1], 'dtype', args[1])),
+                        as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
-                if (cond.ndim == x.ndim == y.ndim and
-                    x.dtype == y.dtype):
-                    retty = types.Array(x.dtype, x.ndim, x.layout)
+                if isinstance(x, types.Array) and isinstance(y, types.Array):
+                    if (cond.ndim == x.ndim == y.ndim):
+                        if x.layout == y.layout == cond.layout:
+                            retty = types.Array(retdty, x.ndim, x.layout)
+                        else:
+                            retty = types.Array(retdty, x.ndim, 'C')
+                        return signature(retty, *args)
+                else:
+                    # x and y both scalar
+                    retty = types.Array(retdty, cond.ndim, cond.layout)
                     return signature(retty, *args)
             else:
                 # scalar where()
-                if not isinstance(x, types.Array) and x == y:
-                    retty = types.Array(x, 0, 'C')
+                if not isinstance(x, types.Array):
+                    retty = types.Array(retdty, 0, 'C')
                     return signature(retty, *args)
 
 
@@ -1169,9 +1228,30 @@ class DiagCtor(CallableTemplate):
                     rdim = 1
                 else:
                     return None
-                return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
+                if isinstance(k, (int, types.Integer)):
+                    return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
         return typer
 
+
+@infer_global(np.take)
+class Take(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 2
+        arr, ind = args
+        if isinstance(ind, types.Number):
+            retty = arr.dtype
+        elif isinstance(ind, types.Array):
+            retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
+        elif isinstance(ind, types.List):
+            retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
+        elif isinstance(ind, types.BaseTuple):
+            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
+        else:
+            return None
+
+        return signature(retty, *args)
 
 # -----------------------------------------------------------------------------
 # Numba helpers

@@ -20,7 +20,7 @@ else:
     try:
         # May fail in IPython Notebook with UnsupportedOperation
         faulthandler.enable()
-    except BaseException as e:
+    except Exception as e:
         msg = "Failed to enable faulthandler due to:\n{err}"
         warnings.warn(msg.format(err=e))
 
@@ -35,8 +35,9 @@ def load_tests(loader, tests, pattern):
     ocl_dir = join(dirname(dirname(__file__)), 'ocl/tests')
     suite.addTests(loader.discover(ocl_dir))
 
-    #hsa_dir = join(dirname(dirname(__file__)), 'hsa/tests')
-    #suite.addTests(loader.discover(hsa_dir))
+    # Numba ROC tests are located in a separate directory
+    roc_dir = join(dirname(dirname(__file__)), 'roc/tests')
+    suite.addTests(loader.discover(roc_dir))
 
     return suite
 

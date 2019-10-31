@@ -9,12 +9,13 @@ import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils
+from numba import jit, types, utils, njit
 import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin, tag
 
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
+from numba.targets.mergesort import make_jit_mergesort
 from .timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
@@ -44,6 +45,12 @@ def sort_usecase(val):
 def argsort_usecase(val):
     return val.argsort()
 
+def argsort_kind_usecase(val, is_stable=False):
+    if is_stable:
+        return val.argsort(kind='mergesort')
+    else:
+        return val.argsort(kind='quicksort')
+
 def sorted_usecase(val):
     return sorted(val)
 
@@ -55,6 +62,12 @@ def np_sort_usecase(val):
 
 def np_argsort_usecase(val):
     return np.argsort(val)
+
+def np_argsort_kind_usecase(val, is_stable=False):
+    if is_stable:
+        return np.argsort(val, kind='mergesort')
+    else:
+        return np.argsort(val, kind='quicksort')
 
 def list_sort_usecase(n):
     np.random.seed(42)
@@ -750,10 +763,10 @@ class TestNumpySort(TestCase):
         # The original wasn't mutated
         self.assertPreciseEqual(val, orig)
 
-    def check_argsort(self, pyfunc, cfunc, val):
+    def check_argsort(self, pyfunc, cfunc, val, kwargs={}):
         orig = copy.copy(val)
-        expected = pyfunc(val)
-        got = cfunc(val)
+        expected = pyfunc(val, **kwargs)
+        got = cfunc(val, **kwargs)
         self.assertPreciseEqual(orig[got], np.sort(orig),
                                 msg="the array wasn't argsorted")
         # Numba and Numpy results may differ if there are duplicates
@@ -803,6 +816,18 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
+    def test_argsort_kind_int(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.int_arrays():
+                self.check_argsort(pyfunc, cfunc, orig,
+                                   dict(is_stable=is_stable))
+
+        check(argsort_kind_usecase, is_stable=True)
+        check(np_argsort_kind_usecase, is_stable=True)
+        check(argsort_kind_usecase, is_stable=False)
+        check(np_argsort_kind_usecase, is_stable=False)
+
     @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):
@@ -812,6 +837,19 @@ class TestNumpySort(TestCase):
 
         check(argsort_usecase)
         check(np_argsort_usecase)
+
+    @tag('important')
+    def test_argsort_float(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.float_arrays():
+                self.check_argsort(pyfunc, cfunc, orig,
+                                   dict(is_stable=is_stable))
+
+        check(argsort_kind_usecase, is_stable=True)
+        check(np_argsort_kind_usecase, is_stable=True)
+        check(argsort_kind_usecase, is_stable=False)
+        check(np_argsort_kind_usecase, is_stable=False)
 
 
 class TestPythonSort(TestCase):
@@ -858,6 +896,31 @@ class TestPythonSort(TestCase):
             got = cfunc(orig, b)
             self.assertPreciseEqual(got, expected)
             self.assertNotEqual(list(orig), got)   # sanity check
+
+
+class TestMergeSort(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(321)
+
+    def check_argsort_stable(self, sorter, low, high, count):
+        # make data with high possibility of duplicated key
+        data = np.random.randint(low, high, count)
+        expect = np.argsort(data, kind='mergesort')
+        got = sorter(data)
+        np.testing.assert_equal(expect, got)
+
+    def test_argsort_stable(self):
+        arglist = [
+            (-2, 2, 5),
+            (-5, 5, 10),
+            (0, 10, 101),
+            (0, 100, 1003),
+        ]
+        imp = make_jit_mergesort(is_argsort=True)
+        toplevel = imp.run_mergesort
+        sorter = njit(lambda arr: toplevel(arr))
+        for args in arglist:
+            self.check_argsort_stable(sorter, *args)
 
 
 if __name__ == '__main__':

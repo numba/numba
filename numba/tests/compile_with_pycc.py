@@ -5,6 +5,7 @@ import numpy as np
 from numba import float32
 from numba.pycc import CC, exportmany, export
 from numba.tests.matmul_usecase import has_blas
+from numba import typed
 
 
 #
@@ -90,6 +91,10 @@ if has_blas:
 def zeros(n):
     return np.zeros(n)
 
+# requires list dtor, #issue3535
+@cc_nrt.export('np_argsort', 'intp[:](float64[:])')
+def np_argsort(arr):
+    return np.argsort(arr)
 
 #
 # Legacy API
@@ -99,3 +104,14 @@ exportmany(['multf f4(f4,f4)', 'multi i4(i4,i4)'])(mult)
 # Needs to link to helperlib to due with complex arguments
 # export('multc c16(c16,c16)')(mult)
 export('mult f8(f8, f8)')(mult)
+
+
+@cc_nrt.export('dict_usecase', 'intp[:](intp[:])')
+def dict_usecase(arr):
+    d = typed.Dict()
+    for i in range(arr.size):
+        d[i] = arr[i]
+    out = np.zeros_like(arr)
+    for k, v in d.items():
+        out[k] = k * v
+    return out

@@ -1,25 +1,33 @@
 from __future__ import print_function, division, absolute_import
 
-import os
-import inspect
-from contextlib import contextmanager
-from collections import namedtuple, defaultdict
-from pprint import pprint
+from collections import namedtuple
 import sys
+import copy
 import warnings
-import traceback
-import threading
-from .tracing import trace, event
+from .tracing import event
 
-from numba import (bytecode, interpreter, funcdesc, postproc,
-                   typing, typeinfer, lowering, objmode, utils, config,
-                   errors, types, ir, types, rewrites, transforms)
+from numba import (bytecode, interpreter, postproc, typing,  utils, config,
+                   errors,)
 from numba.targets import cpu, callconv
-from numba.annotations import type_annotations
+from numba.parfor import ParforDiagnostics
+from numba.inline_closurecall import InlineClosureCallPass
+from numba.errors import CompilerError
 
+from .compiler_machinery import PassManager
 
-# Lock for the preventing multiple compiler execution
-lock_compiler = threading.RLock()
+from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                             IRProcessing, DeadBranchPrune,
+                             RewriteSemanticConstants, InlineClosureLikes,
+                             GenericRewrites, WithLifting, InlineInlinables,
+                             FindLiterallyCalls)
+
+from .typed_passes import (NopythonTypeInference, AnnotateTypes,
+                           NopythonRewrites, PreParforPass, ParforPass,
+                           DumpParforDiagnostics, IRLegalization,
+                           NoPythonBackend, InlineOverloads)
+
+from .object_mode_passes import (ObjectModeFrontEnd, ObjectModeBackEnd,
+                                 CompileInterpMode)
 
 
 class Flags(utils.ConfigOptions):
@@ -42,10 +50,16 @@ class Flags(utils.ConfigOptions):
         'boundcheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        # Enable automatic parallel optimization, can be fine-tuned by taking
+        # a dictionary of sub-options instead of a boolean, see parfor.py for
+        # detail.
+        'auto_parallel': cpu.ParallelOptions(False),
         'nrt': False,
         'no_rewrites': False,
         'error_model': 'python',
-        'fastmath': False,
+        'fastmath': cpu.FastMathOptions(False),
+        'noalias': False,
+        'inline': cpu.InlineOptions('never'),
     }
 
 
@@ -66,10 +80,18 @@ CR_FIELDS = ["typing_context",
              "library",
              "call_helper",
              "environment",
-             "has_dynamic_globals"]
+             "metadata",
+             # List of functions to call to initialize on unserialization
+             # (i.e cache load).
+             "reload_init",
+             ]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
+    """
+    A structure holding results from the compilation of a function.
+    """
+
     __slots__ = ()
 
     def _reduce(self):
@@ -84,11 +106,18 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc.typemap = fndesc.calltypes = None
 
         return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.interpmode, self.lifted, typeann)
+                self.objectmode, self.interpmode, self.lifted, typeann,
+                self.reload_init)
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, interpmode, lifted, typeann):
+                 signature, objectmode, interpmode, lifted, typeann,
+                 reload_init):
+        if reload_init:
+            # Re-run all
+            for fn in reload_init:
+                fn()
+
         library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
         cr = cls(target_context=target_context,
@@ -104,7 +133,8 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
-                 has_dynamic_globals=False,  # by definition
+                 metadata=None,  # Do not store, arbitrary and potentially large!
+                 reload_init=reload_init,
                  )
         return cr
 
@@ -114,7 +144,6 @@ _LowerResult = namedtuple("_LowerResult", [
     "call_helper",
     "cfunc",
     "env",
-    "has_dynamic_globals",
 ])
 
 
@@ -138,7 +167,8 @@ def compile_result(**kws):
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                      locals={}):
     """
-    Compile the function in an isolated environment (typing and target context).
+    Compile the function in an isolated environment (typing and target
+    context).
     Good for testing.
     """
     from .targets.registry import cpu_target
@@ -150,16 +180,22 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                              flags, locals)
 
 
-def run_frontend(func):
+def run_frontend(func, inline_closures=False):
     """
     Run the compiler frontend over the given Python function, and return
     the function's canonical Numba IR.
+
+    If inline_closures is Truthy then closure inlining will be run
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
     interp = interpreter.Interpreter(func_id)
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
+    if inline_closures:
+        inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
+                                            {}, False)
+        inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     return func_ir
@@ -167,7 +203,7 @@ def run_frontend(func):
 
 class _CompileStatus(object):
     """
-    Used like a C record
+    Describes the state of compilation. Used like a C record.
     """
     __slots__ = ['fail_reason', 'can_fallback', 'can_giveup']
 
@@ -184,492 +220,28 @@ class _CompileStatus(object):
 
 
 class _EarlyPipelineCompletion(Exception):
+    """
+    Raised to indicate that a pipeline has completed early
+    """
+
     def __init__(self, result):
         self.result = result
 
 
-class _PipelineManager(object):
-    def __init__(self):
-        self.pipeline_order = []
-        self.pipeline_stages = {}
-        self._finalized = False
-
-    def create_pipeline(self, pipeline_name):
-        assert not self._finalized, "Pipelines can no longer be added"
-        self.pipeline_order.append(pipeline_name)
-        self.pipeline_stages[pipeline_name] = []
-        self.current = pipeline_name
-
-    def add_stage(self, stage_function, stage_description):
-        assert not self._finalized, "Stages can no longer be added."
-        current_pipeline_name = self.pipeline_order[-1]
-        func_desc_tuple = (stage_function, stage_description)
-        self.pipeline_stages[current_pipeline_name].append(func_desc_tuple)
-
-    def finalize(self):
-        self._finalized = True
-
-    def _patch_error(self, desc, exc):
-        """
-        Patches the error to show the stage that it arose in.
-        """
-        newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
-
-        # For python2, attach the traceback of the previous exception.
-        if not utils.IS_PY3:
-            fmt = "Caused By:\n{tb}\n{newmsg}"
-            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=newmsg)
-
-        exc.args = (newmsg,)
-        return exc
-
-    def run(self, status):
-        assert self._finalized, "PM must be finalized before run()"
-        res = None
-        for pipeline_name in self.pipeline_order:
-            event(pipeline_name)
-            is_final_pipeline = pipeline_name == self.pipeline_order[-1]
-            for stage, stage_name in self.pipeline_stages[pipeline_name]:
-                try:
-                    event(stage_name)
-                    stage()
-                except _EarlyPipelineCompletion as e:
-                    return e.result
-                except BaseException as e:
-                    msg = "Failed at %s (%s)" % (pipeline_name, stage_name)
-                    patched_exception = self._patch_error(msg, e)
-                    # No more fallback pipelines?
-                    if is_final_pipeline:
-                        raise patched_exception
-                    # Go to next fallback pipeline
-                    else:
-                        status.fail_reason = patched_exception
-                        break
-            else:
-                return None
-
-        # TODO save all error information
-        raise CompilerError("All pipelines have failed")
-
-
-class Pipeline(object):
+class StateDict(dict):
     """
-    Stores and manages states for the compiler pipeline
+    A dictionary that has an overloaded getattr and setattr to permit getting
+    and setting key/values through the use of attributes.
     """
-    def __init__(self, typingctx, targetctx, library, args, return_type, flags,
-                 locals):
-        # Make sure the environment is reloaded
-        config.reload_config()
-        typingctx.refresh()
-        targetctx.refresh()
 
-        self.typingctx = typingctx
-        self.targetctx = _make_subtarget(targetctx, flags)
-        self.library = library
-        self.args = args
-        self.return_type = return_type
-        self.flags = flags
-        self.locals = locals
-
-        # Results of various steps of the compilation pipeline
-        self.bc = None
-        self.func_id = None
-        self.func_ir = None
-        self.func_ir_original = None  # used for fallback
-        self.lifted = None
-        self.lifted_from = None
-        self.typemap = None
-        self.calltypes = None
-        self.type_annotation = None
-
-        self.status = _CompileStatus(
-            can_fallback=self.flags.enable_pyobject,
-            can_giveup=config.COMPATIBILITY_MODE
-        )
-
-    @contextmanager
-    def fallback_context(self, msg):
-        """
-        Wraps code that would signal a fallback to object mode
-        """
+    def __getattr__(self, attr):
         try:
-            yield
-        except BaseException as e:
-            if not self.status.can_fallback:
-                raise
-            else:
-                if utils.PYVERSION >= (3,):
-                    # Clear all references attached to the traceback
-                    e = e.with_traceback(None)
-                warnings.warn_explicit('%s: %s' % (msg, e),
-                                       errors.NumbaWarning,
-                                       self.func_id.filename,
-                                       self.func_id.firstlineno)
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
-                raise
-
-    @contextmanager
-    def giveup_context(self, msg):
-        """
-        Wraps code that would signal a fallback to interpreter mode
-        """
-        try:
-            yield
-        except BaseException as e:
-            if not self.status.can_giveup:
-                raise
-            else:
-                if utils.PYVERSION >= (3,):
-                    # Clear all references attached to the traceback
-                    e = e.with_traceback(None)
-                warnings.warn_explicit('%s: %s' % (msg, e),
-                                       errors.NumbaWarning,
-                                       self.func_id.filename,
-                                       self.func_id.firstlineno)
-
-                raise
-
-    def extract_bytecode(self, func_id):
-        """
-        Extract bytecode from function
-        """
-        bc = bytecode.ByteCode(func_id)
-        if config.DUMP_BYTECODE:
-            print(bc.dump())
-
-        return bc
-
-    def compile_extra(self, func):
-        self.func_id = bytecode.FunctionIdentity.from_function(func)
-
-        try:
-            bc = self.extract_bytecode(self.func_id)
-        except BaseException as e:
-            if self.status.can_giveup:
-                self.stage_compile_interp_mode()
-                return self.cr
-            else:
-                raise e
-
-        self.bc = bc
-        self.lifted = ()
-        self.lifted_from = None
-        return self._compile_bytecode()
-
-    def compile_ir(self, func_ir, lifted=(), lifted_from=None):
-        self.func_id = func_ir.func_id
-        self.lifted = lifted
-        self.lifted_from = lifted_from
-
-        self._set_and_check_ir(func_ir)
-        return self._compile_ir()
-
-    def stage_analyze_bytecode(self):
-        """
-        Analyze bytecode and translating to Numba IR
-        """
-        func_ir = translate_stage(self.func_id, self.bc)
-        self._set_and_check_ir(func_ir)
-
-    def _set_and_check_ir(self, func_ir):
-        self.func_ir = func_ir
-        self.nargs = self.func_ir.arg_count
-        if not self.args and self.flags.force_pyobject:
-            # Allow an empty argument types specification when object mode
-            # is explicitly requested.
-            self.args = (types.pyobject,) * self.nargs
-        elif len(self.args) != self.nargs:
-            raise TypeError("Signature mismatch: %d argument types given, "
-                            "but function takes %d arguments"
-                            % (len(self.args), self.nargs))
-
-    def stage_process_ir(self):
-        ir_processing_stage(self.func_ir)
-
-    def stage_preserve_ir(self):
-        self.func_ir_original = self.func_ir.copy()
-
-    def frontend_looplift(self):
-        """
-        Loop lifting analysis and transformation
-        """
-        loop_flags = self.flags.copy()
-        outer_flags = self.flags.copy()
-        # Do not recursively loop lift
-        outer_flags.unset('enable_looplift')
-        loop_flags.unset('enable_looplift')
-        if not self.flags.enable_pyobject_looplift:
-            loop_flags.unset('enable_pyobject')
-
-        main, loops = transforms.loop_lifting(self.func_ir,
-                                              typingctx=self.typingctx,
-                                              targetctx=self.targetctx,
-                                              locals=self.locals,
-                                              flags=loop_flags)
-        if loops:
-            # Some loops were extracted
-            if config.DEBUG_FRONTEND or config.DEBUG:
-                for loop in loops:
-                    print("Lifting loop", loop.get_source_location())
-
-            cres = compile_ir(self.typingctx, self.targetctx, main,
-                              self.args, self.return_type,
-                              outer_flags, self.locals,
-                              lifted=tuple(loops), lifted_from=None)
-            return cres
-
-    def stage_objectmode_frontend(self):
-        """
-        Front-end: Analyze bytecode, generate Numba IR, infer types
-        """
-        self.func_ir = self.func_ir_original or self.func_ir
-        if self.flags.enable_looplift:
-            assert not self.lifted
-            cres = self.frontend_looplift()
-            if cres is not None:
-                raise _EarlyPipelineCompletion(cres)
-
-        # Fallback typing: everything is a python object
-        self.typemap = defaultdict(lambda: types.pyobject)
-        self.calltypes = defaultdict(lambda: types.pyobject)
-        self.return_type = types.pyobject
-
-    def stage_nopython_frontend(self):
-        """
-        Type inference and legalization
-        """
-        with self.fallback_context('Function "%s" failed type inference'
-                                   % (self.func_id.func_name,)):
-            # Type inference
-            self.typemap, self.return_type, self.calltypes = type_inference_stage(
-                self.typingctx,
-                self.func_ir,
-                self.args,
-                self.return_type,
-                self.locals)
-
-        with self.fallback_context('Function "%s" has invalid return type'
-                                   % (self.func_id.func_name,)):
-            legalize_return_type(self.return_type, self.func_ir,
-                                 self.targetctx)
-
-    def stage_generic_rewrites(self):
-        """
-        Perform any intermediate representation rewrites before type
-        inference.
-        """
-        assert self.func_ir
-        with self.fallback_context('Internal error in pre-inference rewriting '
-                                   'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_id.func_name,)):
-            rewrites.rewrite_registry.apply('before-inference',
-                                            self, self.func_ir)
-
-    def stage_nopython_rewrites(self):
-        """
-        Perform any intermediate representation rewrites after type
-        inference.
-        """
-        # Ensure we have an IR and type information.
-        assert self.func_ir
-        assert isinstance(getattr(self, 'typemap', None), dict)
-        assert isinstance(getattr(self, 'calltypes', None), dict)
-        with self.fallback_context('Internal error in post-inference rewriting '
-                                   'pass encountered during compilation of '
-                                   'function "%s"' % (self.func_id.func_name,)):
-            rewrites.rewrite_registry.apply('after-inference',
-                                            self, self.func_ir)
-
-    def stage_annotate_type(self):
-        """
-        Create type annotation after type inference
-        """
-        self.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=self.func_ir,
-            typemap=self.typemap,
-            calltypes=self.calltypes,
-            lifted=self.lifted,
-            lifted_from=self.lifted_from,
-            args=self.args,
-            return_type=self.return_type,
-            html_output=config.HTML)
-
-        if config.ANNOTATE:
-            print("ANNOTATION".center(80, '-'))
-            print(self.type_annotation)
-            print('=' * 80)
-        if config.HTML:
-            with open(config.HTML, 'w') as fout:
-                self.type_annotation.html_annotate(fout)
-
-    def backend_object_mode(self):
-        """
-        Object mode compilation
-        """
-        with self.giveup_context("Function %s failed at object mode lowering"
-                                 % (self.func_id.func_name,)):
-            if len(self.args) != self.nargs:
-                # append missing
-                self.args = (tuple(self.args) + (types.pyobject,) *
-                             (self.nargs - len(self.args)))
-
-            return py_lowering_stage(self.targetctx,
-                                     self.library,
-                                     self.func_ir,
-                                     self.flags)
-
-    def backend_nopython_mode(self):
-        """Native mode compilation"""
-        with self.fallback_context("Function %s failed at nopython "
-                                   "mode lowering" % (self.func_id.func_name,)):
-            return native_lowering_stage(
-                self.targetctx,
-                self.library,
-                self.func_ir,
-                self.typemap,
-                self.return_type,
-                self.calltypes,
-                self.flags)
-
-    def _backend(self, lowerfn, objectmode):
-        """
-        Back-end: Generate LLVM IR from Numba IR, compile to machine code
-        """
-        if self.library is None:
-            codegen = self.targetctx.codegen()
-            self.library = codegen.create_library(self.func_id.func_qualname)
-            # Enable object caching upfront, so that the library can
-            # be later serialized.
-            self.library.enable_object_caching()
-
-        lowered = lowerfn()
-        signature = typing.signature(self.return_type, *self.args)
-        self.cr = compile_result(typing_context=self.typingctx,
-                                 target_context=self.targetctx,
-                                 entry_point=lowered.cfunc,
-                                 typing_error=self.status.fail_reason,
-                                 type_annotation=self.type_annotation,
-                                 library=self.library,
-                                 call_helper=lowered.call_helper,
-                                 signature=signature,
-                                 objectmode=objectmode,
-                                 interpmode=False,
-                                 lifted=self.lifted,
-                                 fndesc=lowered.fndesc,
-                                 environment=lowered.env,
-                                 has_dynamic_globals=lowered.has_dynamic_globals,
-                                 )
-
-    def stage_objectmode_backend(self):
-        """
-        Lowering for object mode
-        """
-        lowerfn = self.backend_object_mode
-        self._backend(lowerfn, objectmode=True)
-
-        # Warn if compiled function in object mode and force_pyobject not set
-        if not self.flags.force_pyobject:
-            if len(self.lifted) > 0:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_id.func_name,)
-            else:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_id.func_name,)
-            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                   self.func_id.filename,
-                                   self.func_id.firstlineno)
-            if self.flags.release_gil:
-                warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
-                warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                       self.func_id.filename,
-                                       self.func_id.firstlineno)
-
-    def stage_nopython_backend(self):
-        """
-        Do lowering for nopython
-        """
-        lowerfn = self.backend_nopython_mode
-        self._backend(lowerfn, objectmode=False)
-
-    def stage_compile_interp_mode(self):
-        """
-        Just create a compile result for interpreter mode
-        """
-        args = [types.pyobject] * len(self.args)
-        signature = typing.signature(types.pyobject, *args)
-        self.cr = compile_result(typing_context=self.typingctx,
-                                 target_context=self.targetctx,
-                                 entry_point=self.func_id.func,
-                                 typing_error=self.status.fail_reason,
-                                 type_annotation="<Interpreter mode function>",
-                                 signature=signature,
-                                 objectmode=False,
-                                 interpmode=True,
-                                 lifted=(),
-                                 fndesc=None,)
-
-    def stage_cleanup(self):
-        """
-        Cleanup intermediate results to release resources.
-        """
-
-    def _compile_core(self):
-        """
-        Populate and run compiler pipeline
-        """
-        pm = _PipelineManager()
-
-        if not self.flags.force_pyobject:
-            pm.create_pipeline("nopython")
-            if self.func_ir is None:
-                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-            pm.add_stage(self.stage_process_ir, "processing IR")
-            if not self.flags.no_rewrites:
-                if self.status.can_fallback:
-                    pm.add_stage(self.stage_preserve_ir, "preserve IR for fallback")
-                pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
-            pm.add_stage(self.stage_annotate_type, "annotate type")
-            if not self.flags.no_rewrites:
-                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-            pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
-        if self.status.can_fallback or self.flags.force_pyobject:
-            pm.create_pipeline("object")
-            if self.func_ir is None:
-                pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-            pm.add_stage(self.stage_process_ir, "processing IR")
-            pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
-            pm.add_stage(self.stage_annotate_type, "annotate type")
-            pm.add_stage(self.stage_objectmode_backend, "object mode backend")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
-        if self.status.can_giveup:
-            pm.create_pipeline("interp")
-            pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
-            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
-
-        pm.finalize()
-        res = pm.run(self.status)
-        if res is not None:
-            # Early pipeline completion
-            return res
-        else:
-            assert self.cr is not None
-            return self.cr
-
-    def _compile_bytecode(self):
-        """
-        Populate and run pipeline for bytecode input
-        """
-        assert self.func_ir is None
-        return self._compile_core()
-
-    def _compile_ir(self):
-        """
-        Populate and run pipeline for IR input
-        """
-        assert self.func_ir is not None
-        return self._compile_core()
+    def __setattr__(self, attr, value):
+        self[attr] = value
 
 
 def _make_subtarget(targetctx, flags):
@@ -683,39 +255,341 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['enable_boundcheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
+    if flags.auto_parallel:
+        subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
-        subtargetoptions['enable_fastmath'] = True
+        subtargetoptions['fastmath'] = flags.fastmath
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
     return targetctx.subtarget(**subtargetoptions)
 
 
+class CompilerBase(object):
+    """
+    Stores and manages states for the compiler
+    """
+
+    def __init__(self, typingctx, targetctx, library, args, return_type, flags,
+                 locals):
+        # Make sure the environment is reloaded
+        config.reload_config()
+        typingctx.refresh()
+        targetctx.refresh()
+
+        self.state = StateDict()
+
+        self.state.typingctx = typingctx
+        self.state.targetctx = _make_subtarget(targetctx, flags)
+        self.state.library = library
+        self.state.args = args
+        self.state.return_type = return_type
+        self.state.flags = flags
+        self.state.locals = locals
+
+        # Results of various steps of the compilation pipeline
+        self.state.bc = None
+        self.state.func_id = None
+        self.state.func_ir = None
+        self.state.lifted = None
+        self.state.lifted_from = None
+        self.state.typemap = None
+        self.state.calltypes = None
+        self.state.type_annotation = None
+        self.state.metadata = {}  # holds arbitrary inter-pipeline stage meta data
+        self.state.reload_init = []
+        # hold this for e.g. with_lifting, null out on exit
+        self.state.pipeline = self
+
+        # parfor diagnostics info, add to metadata
+        self.state.parfor_diagnostics = ParforDiagnostics()
+        self.state.metadata['parfor_diagnostics'] = self.state.parfor_diagnostics
+
+        self.state.status = _CompileStatus(
+            can_fallback=self.state.flags.enable_pyobject,
+            can_giveup=config.COMPATIBILITY_MODE
+        )
+
+    def compile_extra(self, func):
+        self.state.func_id = bytecode.FunctionIdentity.from_function(func)
+        try:
+            ExtractByteCode().run_pass(self.state)
+        except Exception as e:
+            if self.state.status.can_giveup:
+                CompileInterpMode().run_pass(self.state)
+                return self.state.cr
+            else:
+                raise e
+
+        self.state.lifted = ()
+        self.state.lifted_from = None
+        return self._compile_bytecode()
+
+    def compile_ir(self, func_ir, lifted=(), lifted_from=None):
+        self.state.func_id = func_ir.func_id
+        self.state.lifted = lifted
+        self.state.lifted_from = lifted_from
+        self.state.func_ir = func_ir
+        self.state.nargs = self.state.func_ir.arg_count
+
+        FixupArgs().run_pass(self.state)
+        return self._compile_ir()
+
+    def define_pipelines(self):
+        """Child classes override this to customize the pipelines in use.
+        """
+        raise NotImplementedError()
+
+    def _compile_core(self):
+        """
+        Populate and run compiler pipeline
+        """
+        pms = self.define_pipelines()
+        for pm in pms:
+            pipeline_name = pm.pipeline_name
+            event("Pipeline: %s" % pipeline_name)
+            self.state.metadata['pipeline_times'] = {pipeline_name:
+                                                     pm.exec_times}
+            is_final_pipeline = pm == pms[-1]
+            res = None
+            try:
+                pm.run(self.state)
+                if self.state.cr is not None:
+                    break
+            except _EarlyPipelineCompletion as e:
+                res = e.result
+                break
+            except Exception as e:
+                self.state.status.fail_reason = e
+                if is_final_pipeline:
+                    raise e
+        else:
+            raise CompilerError("All available pipelines exhausted")
+
+        # Pipeline is done, remove self reference to release refs to user code
+        self.state.pipeline = None
+
+        # organise a return
+        if res is not None:
+            # Early pipeline completion
+            return res
+        else:
+            assert self.state.cr is not None
+            return self.state.cr
+
+    def _compile_bytecode(self):
+        """
+        Populate and run pipeline for bytecode input
+        """
+        assert self.state.func_ir is None
+        return self._compile_core()
+
+    def _compile_ir(self):
+        """
+        Populate and run pipeline for IR input
+        """
+        assert self.state.func_ir is not None
+        return self._compile_core()
+
+
+class Compiler(CompilerBase):
+    """The default compiler
+    """
+
+    def define_pipelines(self):
+        # this maintains the objmode fallback behaviour
+        pms = []
+        if not self.state.flags.force_pyobject:
+            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
+        if self.state.status.can_fallback or self.state.flags.force_pyobject:
+            pms.append(DefaultPassBuilder.define_objectmode_pipeline(self.state))
+        if self.state.status.can_giveup:
+            pms.append(DefaultPassBuilder.define_interpreted_pipeline(self.state))
+        return pms
+
+
+class DefaultPassBuilder(object):
+    """
+    This is the default pass builder, it contains the "classic" default
+    pipelines as pre-canned PassManager instances:
+      - nopython
+      - objectmode
+      - interpreted
+    """
+
+    @staticmethod
+    def define_nopython_pipeline(state, name='nopython'):
+        """Returns an nopython mode pipeline based PassManager
+        """
+        pm = PassManager(name)
+        if state.func_ir is None:
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
+
+        pm.add_pass(WithLifting, "Handle with contexts")
+
+        # pre typing
+        if not state.flags.no_rewrites:
+            pm.add_pass(GenericRewrites, "nopython rewrites")
+            pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+
+        # inline functions that have been determined as inlinable and rerun
+        # branch pruning this needs to be run after closures are inlined as
+        # the IR repr of a closure masks call sites if an inlinable is called
+        # inside a closure
+        pm.add_pass(InlineInlinables, "inline inlinable functions")
+        if not state.flags.no_rewrites:
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+
+        pm.add_pass(FindLiterallyCalls, "find literally calls")
+
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
+
+        # optimisation
+        pm.add_pass(InlineOverloads, "inline overloaded functions")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(ParforPass, "convert to parfors")
+
+        # legalise
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_objectmode_pipeline(state, name='object'):
+        """Returns an object-mode pipeline based PassManager
+        """
+        pm = PassManager(name)
+        if state.func_ir is None:
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
+
+        pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
+        pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")
+        pm.add_pass(AnnotateTypes, "annotate types")
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(ObjectModeBackEnd, "object mode backend")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_interpreted_pipeline(state, name="interpreted"):
+        """Returns an interpreted mode pipeline based PassManager
+        """
+        pm = PassManager(name)
+        pm.add_pass(CompileInterpMode,
+                    "compiling with interpreter mode")
+        pm.finalize()
+        return pm
+
+
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                  locals, library=None):
+                  locals, library=None, pipeline_class=Compiler):
+    """Compiler entry point
+
+    Parameter
+    ---------
+    typingctx :
+        typing context
+    targetctx :
+        target context
+    func : function
+        the python function to be compiled
+    args : tuple, list
+        argument types
+    return_type :
+        Use ``None`` to indicate void return
+    flags : numba.compiler.Flags
+        compiler flags
+    library : numba.codegen.CodeLibrary
+        Used to store the compiled code.
+        If it is ``None``, a new CodeLibrary is used.
+    pipeline_class : type like numba.compiler.CompilerBase
+        compiler pipeline
     """
-    Args
-    ----
-    - return_type
-        Use ``None`` to indicate
-    """
-    pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+    pipeline = pipeline_class(typingctx, targetctx, library,
+                              args, return_type, flags, locals)
     return pipeline.compile_extra(func)
 
 
 def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, library=None):
+               locals, lifted=(), lifted_from=None, is_lifted_loop=False,
+               library=None, pipeline_class=Compiler):
     """
     Compile a function with the given IR.
 
     For internal use only.
     """
 
-    pipeline = Pipeline(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
-    return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
-                               lifted_from=lifted_from)
+    # This is a special branch that should only run on IR from a lifted loop
+    if is_lifted_loop:
+        # This code is pessimistic and costly, but it is a not often trodden
+        # path and it will go away once IR is made immutable. The problem is
+        # that the rewrite passes can mutate the IR into a state that makes
+        # it possible for invalid tokens to be transmitted to lowering which
+        # then trickle through into LLVM IR and causes RuntimeErrors as LLVM
+        # cannot compile it. As a result the following approach is taken:
+        # 1. Create some new flags that copy the original ones but switch
+        #    off rewrites.
+        # 2. Compile with 1. to get a compile result
+        # 3. Try and compile another compile result but this time with the
+        #    original flags (and IR being rewritten).
+        # 4. If 3 was successful, use the result, else use 2.
+
+        # create flags with no rewrites
+        norw_flags = copy.deepcopy(flags)
+        norw_flags.no_rewrites = True
+
+        def compile_local(the_ir, the_flags):
+            pipeline = pipeline_class(typingctx, targetctx, library,
+                                      args, return_type, the_flags, locals)
+            return pipeline.compile_ir(func_ir=the_ir, lifted=lifted,
+                                       lifted_from=lifted_from)
+
+        # compile with rewrites off, IR shouldn't be mutated irreparably
+        norw_cres = compile_local(func_ir.copy(), norw_flags)
+
+        # try and compile with rewrites on if no_rewrites was not set in the
+        # original flags, IR might get broken but we've got a CompileResult
+        # that's usable from above.
+        rw_cres = None
+        if not flags.no_rewrites:
+            # Suppress warnings in compilation retry
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", errors.NumbaWarning)
+                try:
+                    rw_cres = compile_local(func_ir.copy(), flags)
+                except Exception:
+                    pass
+        # if the rewrite variant of compilation worked, use it, else use
+        # the norewrites backup
+        if rw_cres is not None:
+            cres = rw_cres
+        else:
+            cres = norw_cres
+        return cres
+
+    else:
+        pipeline = pipeline_class(typingctx, targetctx, library,
+                                  args, return_type, flags, locals)
+        return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
+                                   lifted_from=lifted_from)
 
 
 def compile_internal(typingctx, targetctx, library,
@@ -723,139 +597,6 @@ def compile_internal(typingctx, targetctx, library,
     """
     For internal use only.
     """
-    pipeline = Pipeline(typingctx, targetctx, library,
+    pipeline = Compiler(typingctx, targetctx, library,
                         args, return_type, flags, locals)
     return pipeline.compile_extra(func)
-
-
-def legalize_return_type(return_type, interp, targetctx):
-    """
-    Only accept array return type iff it is passed into the function.
-    Reject function object return types if in nopython mode.
-    """
-    if not targetctx.enable_nrt and isinstance(return_type, types.Array):
-        # Walk IR to discover all arguments and all return statements
-        retstmts = []
-        caststmts = {}
-        argvars = set()
-        for bid, blk in interp.blocks.items():
-            for inst in blk.body:
-                if isinstance(inst, ir.Return):
-                    retstmts.append(inst.value.name)
-                elif isinstance(inst, ir.Assign):
-                    if (isinstance(inst.value, ir.Expr)
-                        and inst.value.op == 'cast'):
-                        caststmts[inst.target.name] = inst.value
-                    elif isinstance(inst.value, ir.Arg):
-                        argvars.add(inst.target.name)
-
-        assert retstmts, "No return statements?"
-
-        for var in retstmts:
-            cast = caststmts.get(var)
-            if cast is None or cast.value.name not in argvars:
-                raise TypeError("Only accept returning of array passed into the "
-                                "function as argument")
-
-    elif (isinstance(return_type, types.Function) or
-            isinstance(return_type, types.Phantom)):
-        raise TypeError("Can't return function object in nopython mode")
-
-
-def translate_stage(func_id, bytecode):
-    interp = interpreter.Interpreter(func_id)
-    return interp.interpret(bytecode)
-
-
-def ir_processing_stage(func_ir):
-    post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
-
-    if config.DEBUG or config.DUMP_IR:
-        name = func_ir.func_id.func_qualname
-        print(("IR DUMP: %s" % name).center(80, "-"))
-        func_ir.dump()
-        if func_ir.is_generator:
-            print(("GENERATOR INFO: %s" % name).center(80, "-"))
-            func_ir.dump_generator_info()
-
-    return func_ir
-
-
-def type_inference_stage(typingctx, interp, args, return_type, locals={}):
-    if len(args) != interp.arg_count:
-        raise TypeError("Mismatch number of argument types")
-
-    warnings = errors.WarningsFixer(errors.NumbaWarning)
-    infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(infer, interp.func_id, args):
-        # Seed argument types
-        for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
-            infer.seed_argument(name, index, ty)
-
-        # Seed return type
-        if return_type is not None:
-            infer.seed_return(return_type)
-
-        # Seed local types
-        for k, v in locals.items():
-            infer.seed_type(k, v)
-
-        infer.build_constraint()
-        infer.propagate()
-        typemap, restype, calltypes = infer.unify()
-
-    # Output all Numba warnings
-    warnings.flush()
-
-    return typemap, restype, calltypes
-
-
-def native_lowering_stage(targetctx, library, interp, typemap, restype,
-                          calltypes, flags):
-    # Lowering
-    fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
-        interp, typemap, restype, calltypes, mangler=targetctx.mangler,
-        inline=flags.forceinline)
-
-    lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper(flags.release_gil)
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
-
-    if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
-    else:
-        # Prepare for execution
-        cfunc = targetctx.get_executable(library, fndesc, env)
-        # Insert native function for use by other jitted-functions.
-        # We also register its library to allow for inlining.
-        targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
-
-
-def py_lowering_stage(targetctx, library, interp, flags):
-    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
-    lower = objmode.PyLower(targetctx, library, fndesc, interp)
-    lower.lower()
-    if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper()
-    env = lower.env
-    call_helper = lower.call_helper
-    has_dynamic_globals = lower.has_dynamic_globals
-    del lower
-
-    if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
-                            has_dynamic_globals=has_dynamic_globals)
-    else:
-        # Prepare for execution
-        cfunc = targetctx.get_executable(library, fndesc, env)
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
-                            has_dynamic_globals=has_dynamic_globals)

@@ -1,4 +1,4 @@
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 from __future__ import print_function, division, absolute_import
 
@@ -9,15 +9,16 @@ import struct
 import sys
 import uuid
 import weakref
+from copy import deepcopy
 
-import numba
 from numba import _dispatcher, compiler, utils, types, config, errors
+from numba.compiler_lock import global_compiler_lock
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
-from numba.typing.typeof import Purpose, typeof, typeof_impl
+from numba.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, next
+from numba.six import create_bound_method, reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -38,13 +39,18 @@ class OmittedArg(object):
 
 
 class _FunctionCompiler(object):
-
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                 pipeline_class):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
+        self.pipeline_class = pipeline_class
+        # Remember key=(args, return_type) combinations that will fail
+        # compilation to avoid compilation attempt on them.  The values are
+        # the exceptions.
+        self._failed_cache = {}
 
     def fold_argument_types(self, args, kws):
         """
@@ -68,6 +74,28 @@ class _FunctionCompiler(object):
         return self.pysig, args
 
     def compile(self, args, return_type):
+        status, retval = self._compile_cached(args, return_type)
+        if status:
+            return retval
+        else:
+            raise retval
+
+    def _compile_cached(self, args, return_type):
+        key = tuple(args), return_type
+        try:
+            return False, self._failed_cache[key]
+        except KeyError:
+            pass
+
+        try:
+            retval = self._compile_core(args, return_type)
+        except errors.TypingError as e:
+            self._failed_cache[key] = e
+            return False, e
+        else:
+            return True, retval
+
+    def _compile_core(self, args, return_type):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
@@ -77,7 +105,8 @@ class _FunctionCompiler(object):
                                       self.targetdescr.target_context,
                                       impl,
                                       args=args, return_type=return_type,
-                                      flags=flags, locals=self.locals)
+                                      flags=flags, locals=self.locals,
+                                      pipeline_class=self.pipeline_class)
         # Check typing error if object mode is used
         if cres.typing_error is not None and not flags.enable_pyobject:
             raise cres.typing_error
@@ -95,9 +124,10 @@ class _FunctionCompiler(object):
 
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals):
+    def __init__(self, py_func, targetdescr, targetoptions, locals,
+                 pipeline_class):
         super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals)
+            py_func, targetdescr, targetoptions, locals, pipeline_class)
         self.impls = set()
 
     def get_globals_for_reduction(self):
@@ -163,7 +193,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func, pysig, can_fallback):
+    def __init__(self, arg_count, py_func, pysig, can_fallback,
+                 exact_match_required):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
@@ -188,7 +219,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         arg_count, self._fold_args,
                                         argnames, defargs,
                                         can_fallback,
-                                        has_stararg)
+                                        has_stararg,
+                                        exact_match_required)
 
         self.doc = py_func.__doc__
         self._compiling_counter = _CompilingCounter()
@@ -297,6 +329,20 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
+
+        def error_rewrite(e, issue_type):
+            """
+            Rewrite and raise Exception `e` with help supplied based on the
+            specified issue_type.
+            """
+            if config.SHOW_HELP:
+                help_msg = errors.error_extras[issue_type]
+                e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
+            if config.FULL_TRACEBACKS:
+                raise e
+            else:
+                reraise(type(e), e, None)
+
         argtypes = []
         for a in args:
             if isinstance(a, OmittedArg):
@@ -305,6 +351,30 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(self.typeof_pyval(a))
         try:
             return self.compile(tuple(argtypes))
+        except errors.ForceLiteralArg as e:
+            # Received request for compiler re-entry with the list of arguments
+            # indicated by e.requested_args.
+            # First, check if any of these args are already Literal-ized
+            already_lit_pos = [i for i in e.requested_args
+                               if isinstance(args[i], types.Literal)]
+            if already_lit_pos:
+                # Abort compilation if any argument is already a Literal.
+                # Letting this continue will cause infinite compilation loop.
+                m = ("Repeated literal typing request.\n"
+                     "{}.\n"
+                     "This is likely caused by an error in typing. "
+                     "Please see nested and suppressed exceptions.")
+                info = ', '.join('Arg #{} is {}'.format(i, args[i])
+                                 for i in  sorted(already_lit_pos))
+                raise errors.CompilerError(m.format(info))
+            # Convert requested arguments into a Literal.
+            args = [(types.literal
+                     if i in e.requested_args
+                     else lambda x: x)(args[i])
+                    for i, v in enumerate(args)]
+            # Re-enter compilation with the Literal-ized arguments
+            return self._compile_for_args(*args)
+
         except errors.TypingError as e:
             # Intercept typing error that may be due to an argument
             # that failed inferencing as a Numba type
@@ -327,9 +397,44 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     % "\n".join("- argument %d: %s" % (i, err)
                                 for i, err in failed_args))
                 e.patch_message(msg)
+
+            error_rewrite(e, 'typing')
+        except errors.UnsupportedError as e:
+            # Something unsupported is present in the user code, add help info
+            error_rewrite(e, 'unsupported_error')
+        except (errors.NotDefinedError, errors.RedefinedError,
+                errors.VerificationError) as e:
+            # These errors are probably from an issue with either the code supplied
+            # being syntactically or otherwise invalid
+            error_rewrite(e, 'interpreter')
+        except errors.ConstantInferenceError as e:
+            # this is from trying to infer something as constant when it isn't
+            # or isn't supported as a constant
+            error_rewrite(e, 'constant_inference')
+        except Exception as e:
+            if config.SHOW_HELP:
+                if hasattr(e, 'patch_message'):
+                    help_msg = errors.error_extras['reportable']
+                    e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
+            # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
 
     def inspect_llvm(self, signature=None):
+        """Get the LLVM intermediate representation generated by compilation.
+
+        Parameters
+        ----------
+        signature : tuple of numba types, optional
+            Specify a signature for which to obtain the LLVM IR. If None, the
+            IR is returned for all available signatures.
+
+        Returns
+        -------
+        llvm : dict[signature, str] or str
+            Either the LLVM IR string for the specified signature, or, if no
+            signature was given, a dictionary mapping signatures to LLVM IR
+            strings.
+        """
         if signature is not None:
             lib = self.overloads[signature].library
             return lib.get_llvm_str()
@@ -337,21 +442,75 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
 
     def inspect_asm(self, signature=None):
+        """Get the generated assembly code.
+
+        Parameters
+        ----------
+        signature : tuple of numba types, optional
+            Specify a signature for which to obtain the assembly code. If
+            None, the assembly code is returned for all available signatures.
+
+        Returns
+        -------
+        asm : dict[signature, str] or str
+            Either the assembly code for the specified signature, or, if no
+            signature was given, a dictionary mapping signatures to assembly
+            code.
+        """
         if signature is not None:
             lib = self.overloads[signature].library
             return lib.get_asm_str()
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None):
-        if file is None:
-            file = sys.stdout
+    def inspect_types(self, file=None, signature=None,
+                      pretty=False, style='default', **kwargs):
+        """Print/return Numba intermediate representation (IR)-annotated code.
 
-        for ver, res in utils.iteritems(self.overloads):
-            print("%s %s" % (self.py_func.__name__, ver), file=file)
-            print('-' * 80, file=file)
-            print(res.type_annotation, file=file)
-            print('=' * 80, file=file)
+        Parameters
+        ----------
+        file : file-like object, optional
+            File to which to print. Defaults to sys.stdout if None. Must be
+            None if ``pretty=True``.
+        signature : tuple of numba types, optional
+            Print/return the intermediate representation for only the given
+            signature. If None, the IR is printed for all available signatures.
+        pretty : bool, optional
+            If True, an Annotate object will be returned that can render the
+            IR with color highlighting in Jupyter and IPython. ``file`` must
+            be None if ``pretty`` is True. Additionally, the ``pygments``
+            library must be installed for ``pretty=True``.
+        style : str, optional
+            Choose a style for rendering. Ignored if ``pretty`` is ``False``.
+            This is directly consumed by ``pygments`` formatters. To see a
+            list of available styles, import ``pygments`` and run
+            ``list(pygments.styles.get_all_styles())``.
+
+        Returns
+        -------
+        annotated : Annotate object, optional
+            Only returned if ``pretty=True``, otherwise this function is only
+            used for its printing side effect. If ``pretty=True``, an Annotate
+            object is returned that can render itself in Jupyter and IPython.
+        """
+        overloads = self.overloads
+        if signature is not None:
+            overloads = {signature: self.overloads[signature]}
+
+        if not pretty:
+            if file is None:
+                file = sys.stdout
+
+            for ver, res in utils.iteritems(overloads):
+                print("%s %s" % (self.py_func.__name__, ver), file=file)
+                print('-' * 80, file=file)
+                print(res.type_annotation, file=file)
+                print('=' * 80, file=file)
+        else:
+            if file is not None:
+                raise ValueError("`file` must be None if `pretty=True`")
+            from .pretty_annotate import Annotate
+            return Annotate(self, signature=signature, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None):
         """
@@ -374,6 +533,22 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
                     for sig in self.signatures)
+
+    def get_annotation_info(self, signature=None):
+        """
+        Gets the annotation information for the function specified by
+        signature. If no signature is supplied a dictionary of signature to
+        annotation information is returned.
+        """
+        signatures = self.signatures if signature is None else [signature]
+        out = collections.OrderedDict()
+        for sig in signatures:
+            cres = self.overloads[sig]
+            ta = cres.type_annotation
+            key = (ta.func_id.filename + ':' + str(ta.func_id.firstlineno + 1),
+                   ta.signature)
+            out[key] = ta.annotate_raw()[key]
+        return out
 
     def _explain_ambiguous(self, *args, **kws):
         """
@@ -449,10 +624,14 @@ class Dispatcher(_DispatcherBase):
         }
     # A {uuid -> instance} mapping, for deserialization
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
     __uuid = None
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
+    def __init__(self, py_func, locals={}, targetoptions={},
+                 impl_kind='direct', pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -462,6 +641,10 @@ class Dispatcher(_DispatcherBase):
             the types deduced by the type inference engine.
         targetoptions: dict, optional
             Target-specific config options.
+        impl_kind: str
+            Select the compiler mode for `@jit` and `@generated_jit`
+        pipeline_class: type numba.compiler.CompilerBase
+            The compiler pipeline type.
         """
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
@@ -469,7 +652,9 @@ class Dispatcher(_DispatcherBase):
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
         can_fallback = not targetoptions.get('nopython', False)
-        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback)
+
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
+                                 exact_match_required=False)
 
         functools.update_wrapper(self, py_func)
 
@@ -479,12 +664,16 @@ class Dispatcher(_DispatcherBase):
         compiler_class = self._impl_kinds[impl_kind]
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
-                                        targetoptions, locals)
+                                        targetoptions, locals, pipeline_class)
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
+
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
 
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
@@ -550,36 +739,40 @@ class Dispatcher(_DispatcherBase):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
+    @global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                args, return_type = sigutils.normalize_signature(sig)
-                # Don't recompile if signature already exists
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
-
-                # Try to load from disk cache
-                cres = self._cache.load_overload(sig, self.targetctx)
-                if cres is not None:
-                    self._cache_hits[sig] += 1
-                    # XXX fold this in add_overload()? (also see compiler.py)
-                    if not cres.objectmode and not cres.interpmode:
-                        self.targetctx.insert_user_function(cres.entry_point,
-                                                    cres.fndesc, [cres.library])
-                    self.add_overload(cres)
-                    return cres.entry_point
-
-                self._cache_misses[sig] += 1
-                cres = self._compiler.compile(args, return_type)
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            args, return_type = sigutils.normalize_signature(sig)
+            # Don't recompile if signature already exists
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
+            # Try to load from disk cache
+            cres = self._cache.load_overload(sig, self.targetctx)
+            if cres is not None:
+                self._cache_hits[sig] += 1
+                # XXX fold this in add_overload()? (also see compiler.py)
+                if not cres.objectmode and not cres.interpmode:
+                    self.targetctx.insert_user_function(cres.entry_point,
+                                                cres.fndesc, [cres.library])
                 self.add_overload(cres)
-                self._cache.save_overload(sig, cres)
                 return cres.entry_point
+
+            self._cache_misses[sig] += 1
+            try:
+                cres = self._compiler.compile(args, return_type)
+            except errors.ForceLiteralArg as e:
+                def folded(args, kws):
+                    return self._compiler.fold_argument_types(args, kws)[1]
+                raise e.bind_fold_arguments(folded)
+            self.add_overload(cres)
+            self._cache.save_overload(sig, cres)
+            return cres.entry_point
 
     def recompile(self):
         """
@@ -606,10 +799,38 @@ class Dispatcher(_DispatcherBase):
             cache_misses=self._cache_misses,
             )
 
+    def parallel_diagnostics(self, signature=None, level=1):
+        """
+        Print parallel diagnostic information for the given signature. If no
+        signature is present it is printed for all known signatures. level is
+        used to adjust the verbosity, level=1 (default) is minimal verbosity,
+        and 2, 3, and 4 provide increasing levels of verbosity.
+        """
+        def dump(sig):
+            ol = self.overloads[sig]
+            pfdiag = ol.metadata.get('parfor_diagnostics', None)
+            if pfdiag is None:
+                msg = "No parfors diagnostic available, is 'parallel=True' set?"
+                raise ValueError(msg)
+            pfdiag.dump(level)
+        if signature is not None:
+            dump(signature)
+        else:
+            [dump(sig) for sig in self.signatures]
 
-class LiftedLoop(_DispatcherBase):
+    def get_metadata(self, signature=None):
+        """
+        Obtain the compilation metadata for a given signature.
+        """
+        if signature is not None:
+            return self.overloads[signature].metadata
+        else:
+            return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
+
+
+class LiftedCode(_DispatcherBase):
     """
-    Implementation of the hidden dispatcher objects used for lifted loop
+    Implementation of the hidden dispatcher objects used for lifted code
     (a lifted loop is really compiled as a separate function).
     """
     _fold_args = False
@@ -626,43 +847,137 @@ class LiftedLoop(_DispatcherBase):
         _DispatcherBase.__init__(self, self.func_ir.arg_count,
                                  self.func_ir.func_id.func,
                                  self.func_ir.func_id.pysig,
-                                 can_fallback=True)
+                                 can_fallback=True,
+                                 exact_match_required=False)
 
     def get_source_location(self):
         """Return the starting line number of the loop.
         """
         return self.func_ir.loc.line
 
+    def _pre_compile(self, args, return_type, flags):
+        """Pre-compile actions
+        """
+        pass
+
+    @global_compiler_lock
     def compile(self, sig):
-        # Use cache and compiler in a critical section
-        with compiler.lock_compiler:
-            # Use counter to track recursion compilation depth
-            with self._compiling_counter:
-                # XXX this is mostly duplicated from Dispatcher.
-                flags = self.flags
-                args, return_type = sigutils.normalize_signature(sig)
+        # Use counter to track recursion compilation depth
+        with self._compiling_counter:
+            # XXX this is mostly duplicated from Dispatcher.
+            flags = self.flags
+            args, return_type = sigutils.normalize_signature(sig)
 
-                # Don't recompile if signature already exists
-                # (e.g. if another thread compiled it before we got the lock)
-                existing = self.overloads.get(tuple(args))
-                if existing is not None:
-                    return existing.entry_point
+            # Don't recompile if signature already exists
+            # (e.g. if another thread compiled it before we got the lock)
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-                assert not flags.enable_looplift, "Enable looplift flags is on"
-                cres = compiler.compile_ir(typingctx=self.typingctx,
-                                           targetctx=self.targetctx,
-                                           func_ir=self.func_ir,
-                                           args=args, return_type=return_type,
-                                           flags=flags, locals=self.locals,
-                                           lifted=(),
-                                           lifted_from=self.lifted_from)
+            self._pre_compile(args, return_type, flags)
 
-                # Check typing error if object mode is used
-                if cres.typing_error is not None and not flags.enable_pyobject:
-                    raise cres.typing_error
+            # Clone IR to avoid (some of the) mutation in the rewrite pass
+            cloned_func_ir = self.func_ir.copy()
+            cres = compiler.compile_ir(typingctx=self.typingctx,
+                                       targetctx=self.targetctx,
+                                       func_ir=cloned_func_ir,
+                                       args=args, return_type=return_type,
+                                       flags=flags, locals=self.locals,
+                                       lifted=(),
+                                       lifted_from=self.lifted_from,
+                                       is_lifted_loop=True,)
 
-                self.add_overload(cres)
-                return cres.entry_point
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
+
+            self.add_overload(cres)
+            return cres.entry_point
+
+
+class LiftedLoop(LiftedCode):
+    def _pre_compile(self, args, return_type, flags):
+        assert not flags.enable_looplift, "Enable looplift flags is on"
+
+
+class LiftedWith(LiftedCode):
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        pysig = None
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
+
+
+class ObjModeLiftedWith(LiftedWith):
+    def __init__(self, *args, **kwargs):
+        self.output_types = kwargs.pop('output_types', None)
+        super(LiftedWith, self).__init__(*args, **kwargs)
+        if not self.flags.force_pyobject:
+            raise ValueError("expecting `flags.force_pyobject`")
+        if self.output_types is None:
+            raise TypeError('`output_types` must be provided')
+
+    @property
+    def _numba_type_(self):
+        return types.ObjModeDispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        assert not kws
+        self._legalize_arg_types(args)
+        # Coerce to object mode
+        args = [types.ffi_forced_object] * len(args)
+
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        signatures = [typing.signature(self.output_types, *args)]
+        pysig = None
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=signatures)
+
+        return call_template, pysig, args, kws
+
+    def _legalize_arg_types(self, args):
+        for i, a in enumerate(args, start=1):
+            if isinstance(a, types.List):
+                msg = (
+                    'Does not support list type inputs into '
+                    'with-context for arg {}'
+                )
+                raise errors.TypingError(msg.format(i))
+            elif isinstance(a, types.Dispatcher):
+                msg = (
+                    'Does not support function type inputs into '
+                    'with-context for arg {}'
+                )
+                raise errors.TypingError(msg.format(i))
 
 
 # Initialize typeof machinery

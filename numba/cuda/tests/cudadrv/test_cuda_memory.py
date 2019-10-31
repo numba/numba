@@ -15,6 +15,7 @@ class TestCudaMemory(CUDATestCase):
 
     def tearDown(self):
         del self.context
+        super(TestCudaMemory, self).tearDown()
 
     def _template(self, obj):
         self.assertTrue(driver.is_device_memory(obj))
@@ -66,6 +67,31 @@ class TestCudaMemory(CUDATestCase):
         check(m=m, offset=0)
         check(m=m, offset=1)
 
+    def test_user_extension(self):
+        # User can use MemoryPointer to wrap externally defined pointers.
+        # This test checks if the finalizer is invokded at correct time
+        fake_ptr = ctypes.c_void_p(0xdeadbeef)
+        dtor_invoked = [0]
+
+        def dtor():
+            dtor_invoked[0] += 1
+
+        # Ensure finalizer is called when pointer is deleted
+        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
+                                   size=40, finalizer=dtor)
+        self.assertEqual(dtor_invoked[0], 0)
+        del ptr
+        self.assertEqual(dtor_invoked[0], 1)
+
+        # Ensure removing derived pointer doesn't call finalizer
+        ptr = driver.MemoryPointer(context=self.context, pointer=fake_ptr,
+                                   size=40, finalizer=dtor)
+        owned = ptr.own()
+        del owned
+        self.assertEqual(dtor_invoked[0], 1)
+        del ptr
+        self.assertEqual(dtor_invoked[0], 2)
+
 
 @skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemoryFunctions(CUDATestCase):
@@ -74,6 +100,7 @@ class TestCudaMemoryFunctions(CUDATestCase):
 
     def tearDown(self):
         del self.context
+        super(TestCudaMemoryFunctions, self).tearDown()
 
     def test_memcpy(self):
         hstary = np.arange(100, dtype=np.uint32)

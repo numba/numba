@@ -1,5 +1,7 @@
 from __future__ import absolute_import, print_function
 
+import operator
+
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate,  Registry, signature, bound_function,
@@ -173,18 +175,20 @@ class SetComparison(AbstractTemplate):
             return signature(types.boolean, *args)
 
 
-for op_key in '&|^-':
-    @infer
+for op_key in (operator.add, operator.sub, operator.and_, operator.or_, operator.xor, operator.invert):
+    @infer_global(op_key)
     class ConcreteSetOperator(SetOperator):
         key = op_key
 
-    @infer
+
+for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operator.ixor):
+    @infer_global(op_key)
     class ConcreteInplaceSetOperator(SetOperator):
-        key = op_key + '='
+        key = op_key
 
 
-for op_key in ('==', '!=', '<', '<=', '>=', '>'):
-    @infer
+for op_key in (operator.eq, operator.ne, operator.lt, operator.le, operator.ge, operator.gt):
+    @infer_global(op_key)
     class ConcreteSetComparison(SetComparison):
         key = op_key
 

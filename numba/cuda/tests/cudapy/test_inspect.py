@@ -1,12 +1,16 @@
 from __future__ import print_function, division, absolute_import
 from numba import cuda, float64, intp
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 from numba.cuda.testing import skip_on_cudasim
 from numba.utils import StringIO
 
 
 @skip_on_cudasim('Simulator does not generate code to be inspected')
-class TestInspect(unittest.TestCase):
+class TestInspect(SerialMixin, unittest.TestCase):
+    @property
+    def cc(self):
+        return cuda.current_context().device.compute_capability
+
     def test_monotyped(self):
         @cuda.jit("(float32, int32)")
         def foo(x, y):
@@ -49,23 +53,23 @@ class TestInspect(unittest.TestCase):
         # Signature in LLVM dict
         llvmirs = foo.inspect_llvm()
         self.assertEqual(2, len(llvmirs), )
-        self.assertIn((intp, intp), llvmirs)
-        self.assertIn((float64, float64), llvmirs)
+        self.assertIn((self.cc, (intp, intp)), llvmirs)
+        self.assertIn((self.cc, (float64, float64)), llvmirs)
 
         # Function name in LLVM
-        self.assertIn("foo", llvmirs[intp, intp])
-        self.assertIn("foo", llvmirs[float64, float64])
+        self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
+        self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
 
         asmdict = foo.inspect_asm()
 
         # Signature in LLVM dict
         self.assertEqual(2, len(asmdict), )
-        self.assertIn((intp, intp), asmdict)
-        self.assertIn((float64, float64), asmdict)
+        self.assertIn((self.cc, (intp, intp)), asmdict)
+        self.assertIn((self.cc, (float64, float64)), asmdict)
 
         # NNVM inserted in PTX
-        self.assertIn("foo", asmdict[intp, intp])
-        self.assertIn("foo", asmdict[float64, float64])
+        self.assertIn("foo", asmdict[self.cc, (intp, intp)])
+        self.assertIn("foo", asmdict[self.cc, (float64, float64)])
 
 
 if __name__ == '__main__':

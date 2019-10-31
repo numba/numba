@@ -17,19 +17,22 @@ class RewriteConstRaises(Rewrite):
     def _is_exception_type(self, const):
         return isinstance(const, type) and issubclass(const, Exception)
 
-    def _break_constant(self, interp, const):
+    def _break_constant(self, const):
         """
         Break down constant exception.
         """
-        if isinstance(const, BaseException):
-            return const.__class__, const.args
+        if isinstance(const, tuple): # it's a tuple(exception class, args)
+            if not self._is_exception_type(const[0]):
+                raise NotImplementedError("unsupported exception constant %r"
+                                          % (const[0],))
+            return const[0], tuple(const[1])
         elif self._is_exception_type(const):
             return const, None
         else:
             raise NotImplementedError("unsupported exception constant %r"
                                       % (const,))
 
-    def match(self, interp, block, typemap, calltypes):
+    def match(self, func_ir, block, typemap, calltypes):
         self.raises = raises = {}
         self.block = block
         # Detect all raise statements and find which ones can be
@@ -40,8 +43,8 @@ class RewriteConstRaises(Rewrite):
                 exc_type, exc_args = None, None
             else:
                 # raise <something> => find the definition site for <something>
-                const = interp.infer_constant(inst.exception)
-                exc_type, exc_args = self._break_constant(interp, const)
+                const = func_ir.infer_constant(inst.exception)
+                exc_type, exc_args = self._break_constant(const)
             raises[inst] = exc_type, exc_args
 
         return len(raises) > 0

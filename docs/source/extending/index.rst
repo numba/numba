@@ -17,13 +17,14 @@ of APIs to this end:
   and experience with Numba internals.
 
 It may be helpful for readers of this chapter to also read some of the
-documents in the :doc:`developer manual </developer/index>`, especially
-the :doc:`architecture document </developer/architecture>`.
+documents in the :doc:`developer manual <../developer/index>`, especially
+the :doc:`architecture document <../developer/architecture>`.
 
 
 .. toctree::
-
    high-level.rst
    low-level.rst
    interval-example.rst
+   overloading-guide.rst
+   entrypoints.rst
 

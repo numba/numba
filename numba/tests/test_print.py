@@ -6,7 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, types, errors, utils
 from .support import captured_stdout, tag, TestCase
 
 
@@ -37,7 +37,6 @@ def print_vararg(a, b, c):
 
 def print_string_vararg(a, b, c):
     print(a, "hop!", b, *c)
-
 
 def make_print_closure(x):
     def print_closure():
@@ -94,7 +93,7 @@ class TestPrint(TestCase):
         cr = compile_isolated(pyfunc, (arraytype,), flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         with captured_stdout():
-            cfunc(np.arange(10))
+            cfunc(np.arange(10, dtype=np.int32))
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
@@ -162,6 +161,44 @@ class TestPrint(TestCase):
             cfunc(1, (2, 3), (4, 5j))
             self.assertEqual(sys.stdout.getvalue(), '1 hop! (2, 3) 4 5j\n')
 
+    def test_inner_fn_print(self):
+        @jit(nopython=True)
+        def foo(x):
+            print(x)
+
+        @jit(nopython=True)
+        def bar(x):
+            foo(x)
+            foo('hello')
+
+        # Printing an array requires the Env.
+        # We need to make sure the inner function can obtain the Env.
+        x = np.arange(5)
+        with captured_stdout():
+            bar(x)
+            self.assertEqual(sys.stdout.getvalue(), '[0 1 2 3 4]\nhello\n')
+
+    def test_print_w_kwarg_raises(self):
+        @jit(nopython=True)
+        def print_kwarg():
+            print('x', flush=True)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            print_kwarg()
+        expected = ("Numba's print() function implementation does not support "
+                    "keyword arguments.")
+        self.assertIn(raises.exception.msg, expected)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_print_no_truncation(self):
+        ''' See: https://github.com/numba/numba/issues/3811
+        '''
+        @jit(nopython=True)
+        def foo():
+            print(''.join(['a'] * 10000))
+        with captured_stdout():
+            foo()
+            self.assertEqual(sys.stdout.getvalue(), ''.join(['a'] * 10000) + '\n')
 
 if __name__ == '__main__':
     unittest.main()

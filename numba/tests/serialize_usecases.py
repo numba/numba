@@ -6,6 +6,7 @@ to avoid issues with __main__.
 import math
 
 from numba import jit, generated_jit, types
+from numba.six import exec_
 
 
 @jit((types.int32, types.int32))
@@ -106,7 +107,7 @@ def _get_dyn_func(**jit_args):
             return res
         """
     ns = {}
-    exec(code.strip(), ns)
+    exec_(code.strip(), ns)
     return jit(**jit_args)(ns['dyn_func'])
 
 dyn_func = _get_dyn_func(nopython=True)

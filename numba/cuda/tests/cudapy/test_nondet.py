@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, float32
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def generate_input(n):
@@ -10,7 +10,7 @@ def generate_input(n):
     return A, B
 
 
-class TestCudaNonDet(unittest.TestCase):
+class TestCudaNonDet(SerialMixin, unittest.TestCase):
     def test_for_pre(self):
         """Test issue with loop not running due to bad sign-extension at the for loop
         precondition.
@@ -32,10 +32,7 @@ class TestCudaNonDet(unittest.TestCase):
 
         A, B = generate_input(N)
 
-        E = np.zeros(A.shape, dtype=A.dtype)
         F = np.empty(A.shape, dtype=A.dtype)
-
-        E = np.dot(A, np.diag(B))
 
         blockdim = (32, 8)
         griddim = (1, 1)
@@ -44,9 +41,9 @@ class TestCudaNonDet(unittest.TestCase):
         dB = cuda.to_device(B)
         dF = cuda.to_device(F, copy=False)
         diagproduct[griddim, blockdim](dF, dA, dB)
-        dF.to_host()
 
-        self.assertTrue(np.allclose(F, E))
+        E = np.dot(A, np.diag(B))
+        np.testing.assert_array_almost_equal(dF.copy_to_host(), E)
 
 
 if __name__ == '__main__':

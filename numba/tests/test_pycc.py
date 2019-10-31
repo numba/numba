@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import skip
 from ctypes import *
 
 import numpy as np
@@ -21,6 +22,16 @@ from numba import unittest_support as unittest
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
+from numba.pycc.platform import _external_compiler_ok
+
+# if suitable compilers are not present then skip.
+_skip_reason = 'AOT compatible compilers missing'
+_skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
+                                          _skip_reason)
+_skip_reason = 'windows only'
+_windows_only = unittest.skipIf(not sys.platform.startswith('win'),
+                                _skip_reason)
+
 from .matmul_usecase import has_blas
 from .support import TestCase, tag, import_dynamic, temp_directory
 
@@ -34,6 +45,19 @@ def unset_macosx_deployment_target():
     """
     if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
+
+class TestCompilerChecks(TestCase):
+
+    # NOTE: THIS TEST MUST ALWAYS RUN ON WINDOWS, DO NOT SKIP
+    @_windows_only
+    def test_windows_compiler_validity(self):
+        # When inside conda-build VSINSTALLDIR should be set and windows should
+        # have a valid compiler available, `_external_compiler_ok` should  agree
+        # with this. If this is not the case then error out to alert devs.
+        is_running_conda_build = os.environ.get('CONDA_BUILD', None) is not None
+        if is_running_conda_build:
+            if os.environ.get('VSINSTALLDIR', None) is not None:
+                self.assertTrue(_external_compiler_ok)
 
 
 class BasePYCCTest(TestCase):
@@ -64,6 +88,7 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
+@_skip_missing_compilers
 class TestLegacyAPI(BasePYCCTest):
 
     def test_pycc_ctypes_lib(self):
@@ -78,20 +103,20 @@ class TestLegacyAPI(BasePYCCTest):
 
         main(args=['--debug', '-o', cdll_path, source])
         lib = CDLL(cdll_path)
-        lib.mult.argtypes = [POINTER(c_double), c_void_p, c_void_p,
+        lib.mult.argtypes = [POINTER(c_double), c_void_p,
                              c_double, c_double]
         lib.mult.restype = c_int
 
-        lib.multf.argtypes = [POINTER(c_float), c_void_p, c_void_p,
+        lib.multf.argtypes = [POINTER(c_float), c_void_p,
                               c_float, c_float]
         lib.multf.restype = c_int
 
         res = c_double()
-        lib.mult(byref(res), None, None, 123, 321)
+        lib.mult(byref(res), None, 123, 321)
         self.assertEqual(res.value, 123 * 321)
 
         res = c_float()
-        lib.multf(byref(res), None, None, 987, 321)
+        lib.multf(byref(res), None, 987, 321)
         self.assertEqual(res.value, 987 * 321)
 
     def test_pycc_pymodule(self):
@@ -136,6 +161,7 @@ class TestLegacyAPI(BasePYCCTest):
         self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
 
 
+@_skip_missing_compilers
 class TestCC(BasePYCCTest):
 
     def setUp(self):
@@ -252,8 +278,15 @@ class TestCC(BasePYCCTest):
             if has_blas:
                 res = lib.vector_dot(4)
                 self.assertPreciseEqual(res, 30.0)
+            # test argsort
+            val = np.float64([2., 5., 1., 3., 4.])
+            res = lib.np_argsort(val)
+            expected = np.argsort(val)
+            self.assertPreciseEqual(res, expected)
 
             code = """if 1:
+                from numpy.testing import assert_equal
+                from numpy import float64, argsort
                 res = lib.zero_scalar(1)
                 assert res == 0.0
                 res = lib.zeros(3)
@@ -261,10 +294,23 @@ class TestCC(BasePYCCTest):
                 if %(has_blas)s:
                     res = lib.vector_dot(4)
                     assert res == 30.0
+                val = float64([2., 5., 1., 3., 4.])
+                res = lib.np_argsort(val)
+                expected = argsort(val)
+                assert_equal(res, expected)
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    def test_c_extension_usecase(self):
+        # Test C-extensions
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            arr = np.arange(128, dtype=np.intp)
+            got = lib.dict_usecase(arr)
+            expect = arr * arr
+            self.assertPreciseEqual(got, expect)
 
+
+@_skip_missing_compilers
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):

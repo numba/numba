@@ -1,8 +1,3 @@
-/*
- * Copyright (c) 2012-2015 Continuum Analytics, Inc.
- * All Rights reserved.
- */
-
 #include "_internal.h"
 #include "Python.h"
 
@@ -170,7 +165,11 @@ _get_nin(PyObject * py_func_obj)
 
     inspect = PyImport_ImportModule("inspect");
     if (!inspect) goto _get_nin_cleanup;
+#if PY_MAJOR_VERSION >= 3
+    getargspec = PyObject_GetAttrString(inspect, "getfullargspec");
+#else
     getargspec = PyObject_GetAttrString(inspect, "getargspec");
+#endif
     if (!getargspec) goto _get_nin_cleanup;
     argspec = PyObject_CallFunctionObjArgs(getargspec, py_func_obj, NULL);
     if (!argspec) goto _get_nin_cleanup;
@@ -193,7 +192,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     PyUFuncObject *ufunc=NULL;
     int identity=PyUFunc_None;
     int nin=-1, nout=1;
-    char *name=NULL, *doc=NULL;
+    const char *name=NULL, *doc=NULL;
 
     static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
                               "nout", NULL};

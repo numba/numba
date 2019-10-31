@@ -1,7 +1,9 @@
 from __future__ import print_function, absolute_import
 
 import sys
+import platform
 
+import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, config
@@ -9,10 +11,16 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import callconv, codegen, externals, intrinsics, listobj, setobj
+from numba.targets import (
+    callconv, codegen, externals, intrinsics, listobj, setobj, dictimpl,
+)
 from .options import TargetOptions
 from numba.runtime import rtsys
+from numba.compiler_lock import global_compiler_lock
+import numba.entrypoints
 from . import fastmathpass
+from .cpu_options import ParallelOptions, FastMathOptions, InlineOptions
+
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -27,6 +35,17 @@ class EnvBody(cgutils.Structure):
     ]
 
 
+#ll.set_option('openmp', '-debug')
+ll.set_option('openmp', '-paropt=31')
+ll.set_option('openmp', '-fopenmp')
+#ll.set_option('openmp', '-fiopenmp')
+ll.set_option('openmp', '-fintel-compatibility')
+ll.set_option('openmp', '-mllvm')
+ll.set_option('openmp', '-fintel-openmp-region')
+ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
+#ll.set_option('openmp', '-print-after-all')
+#ll.set_option('openmp', '-debug-pass=Structure')
+
 class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
@@ -37,9 +56,27 @@ class CPUContext(BaseContext):
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
 
+    @global_compiler_lock
     def init(self):
+        """
+#        ll.set_option('openmp', '-debug')
+        ll.set_option('openmp', '-paropt=31')
+        ll.set_option('openmp', '-fopenmp')
+#        ll.set_option('openmp', '-fiopenmp')
+        ll.set_option('openmp', '-fintel-compatibility')
+        ll.set_option('openmp', '-mllvm')
+        ll.set_option('openmp', '-fintel-openmp-region')
+        ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
+        #ll.set_option('openmp', '-print-after-all')
+        #ll.set_option('openmp', '-debug-pass=Structure')
+        """
+
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+
+        # Add ARM ABI functions from libgcc_s
+        if platform.machine() == 'armv7l':
+            ll.load_library_permanently('libgcc_s.so.1')
 
         # Map external C functions.
         externals.c_math_functions.install(self)
@@ -47,18 +84,24 @@ class CPUContext(BaseContext):
         # Initialize NRT runtime
         rtsys.initialize(self)
 
+        # Initialize additional implementations
+        if utils.PY3:
+            import numba.unicode
+
     def load_additional_registries(self):
         # Add target specific implementations
-        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl, operatorimpl,
+        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl,
                        printimpl, randomimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
-        self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(randomimpl.registry)
+
+        # load 3rd party extensions
+        numba.entrypoints.init_all()
 
     @property
     def target_data(self):
@@ -76,20 +119,6 @@ class CPUContext(BaseContext):
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
-    def get_env_from_closure(self, builder, clo):
-        """
-        From the pointer *clo* to a _dynfunc.Closure, get a pointer
-        to the enclosed _dynfunc.Environment.
-        """
-        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
-            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
-            builder.unreachable()
-
-        clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
-        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
-        return clo_body.env
-
     def get_env_body(self, builder, envptr):
         """
         From the given *envptr* (a pointer to a _dynfunc.Environment object),
@@ -98,6 +127,15 @@ class CPUContext(BaseContext):
         body_ptr = cgutils.pointer_add(
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
+
+    def get_env_manager(self, builder):
+        envgv = self.declare_env_global(builder.module,
+                                        self.get_env_name(self.fndesc))
+        envarg = builder.load(envgv)
+        pyapi = self.get_python_api(builder)
+        pyapi.emit_environment_sentry(envarg)
+        env_body = self.get_env_body(builder, envarg)
+        return pyapi.get_env_manager(self.environment, env_body, envarg)
 
     def get_generator_state(self, builder, genptr, return_type):
         """
@@ -120,9 +158,15 @@ class CPUContext(BaseContext):
         """
         return setobj.build_set(self, builder, set_type, items)
 
+    def build_map(self, builder, dict_type, item_types, items):
+        from numba import dictobject
+
+        return dictobject.build_map(self, builder, dict_type, item_types, items)
+
+
     def post_lowering(self, mod, library):
-        if self.enable_fastmath:
-            fastmathpass.rewrite_module(mod)
+        if self.fastmath:
+            fastmathpass.rewrite_module(mod, self.fastmath)
 
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
@@ -140,6 +184,12 @@ class CPUContext(BaseContext):
                                 fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
         builder.build()
+        if config.DUMP_LLVM:
+            print(("LLVM WRAPPER DUMP %s" % fndesc).center(80, '-'))
+            print(wrapper_module)
+            print('=' * 80)
+            import sys
+            sys.stdout.flush()
         library.add_ir_module(wrapper_module)
 
     def get_executable(self, library, fndesc, env):
@@ -168,7 +218,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-
+        library.codegen.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):
@@ -177,6 +227,74 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
+
+
+class FastMathOptions(object):
+    """
+    Options for controlling fast math optimization.
+    """
+    def __init__(self, value):
+        # https://releases.llvm.org/7.0.0/docs/LangRef.html#fast-math-flags
+        valid_flags = {
+            'fast',
+            'nnan', 'ninf', 'nsz', 'arcp',
+            'contract', 'afn', 'reassoc',
+        }
+
+        if value is True:
+            self.flags = {'fast'}
+        elif value is False:
+            self.flags = set()
+        elif isinstance(value, set):
+            invalid = value - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = value
+        elif isinstance(value, dict):
+            invalid = set(value.keys()) - valid_flags
+            if invalid:
+                raise ValueError("Unrecognized fastmath flags: %s" % invalid)
+            self.flags = {v for v, enable in value.items() if enable}
+        else:
+            raise ValueError("Expected fastmath option(s) to be either a bool, dict or set")
+
+    def __bool__(self):
+        return bool(self.flags)
+
+    __nonzero__ = __bool__
+
+
+class ParallelOptions(object):
+    """
+    Options for controlling auto parallelization.
+    """
+    def __init__(self, value):
+        self.csa = False
+        self.gen_openmp = False
+        if isinstance(value, bool):
+            self.enabled = value
+            self.comprehension = value
+            self.reduction = value
+            self.setitem = value
+            self.numpy = value
+            self.stencil = value
+            self.fusion = value
+            self.prange = value
+        elif isinstance(value, dict):
+            self.enabled = True
+            self.comprehension = value.pop('comprehension', True)
+            self.reduction = value.pop('reduction', True)
+            self.setitem = value.pop('setitem', True)
+            self.numpy = value.pop('numpy', True)
+            self.stencil = value.pop('stencil', True)
+            self.fusion = value.pop('fusion', True)
+            self.prange = value.pop('prange', True)
+            self.csa = value.pop('csa', False)
+            self.gen_openmp = value.pop('openmp', False)
+            if value:
+                raise NameError("Unrecognized parallel options: %s" % value.keys())
+        else:
+            raise ValueError("Expect parallel option to be either a bool or a dict")
 
 
 # ----------------------------------------------------------------------------
@@ -193,8 +311,10 @@ class CPUTargetOptions(TargetOptions):
         "_nrt": bool,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,
-        "fastmath": bool,
+        "fastmath": FastMathOptions,
         "error_model": str,
+        "parallel": ParallelOptions,
+        "inline": InlineOptions,
     }
 
 

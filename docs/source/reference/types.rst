@@ -24,7 +24,7 @@ Signatures
 A signature specifies the type of a function.  Exactly which kind
 of signature is allowed depends on the context (:term:`AOT` or :term:`JIT`
 compilation), but signatures always involve some representation of Numba
-types to specifiy the concrete types for the function's arguments and,
+types to specify the concrete types for the function's arguments and,
 if required, the function's return type.
 
 An example function signature would be the string ``"f8(i4, i4)"``
@@ -100,6 +100,17 @@ the beginning or the end of the index specification::
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
 
+Miscellaneous Types
+-------------------
+
+There are some non-numerical types that do not fit into the other categories.
+
+===================   =================================================
+Type name(s)          Comments
+===================   =================================================
+pyobject              generic Python object
+voidptr               raw pointer, no operations can be performed on it
+===================   =================================================
 
 Advanced types
 ==============

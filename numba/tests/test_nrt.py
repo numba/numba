@@ -2,20 +2,38 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import os
+import platform
 import sys
 import re
 
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit
-from numba.compiler import compile_isolated, Flags, types
-from numba.runtime import rtsys
-from numba.runtime import nrtopt
-from .support import MemoryLeakMixin, TestCase
+from numba import njit, targets, typing, types
+from numba.compiler import compile_isolated, Flags
+from numba.runtime import (
+    rtsys,
+    nrtopt,
+    _nrt_python,
+    nrt,
+)
+from numba.extending import intrinsic, include_path
+from numba.typing import signature
+from numba.targets.imputils import impl_ret_untracked
+from llvmlite import ir
+import llvmlite.binding as llvm
+from numba import cffi_support
+from numba.unsafe.nrt import NRT_get_api
+
+from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
+
+linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
+                             'linux only test')
+x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'),
+                           'x86 only test')
 
 
 class Dummy(object):
@@ -28,14 +46,42 @@ class Dummy(object):
         type(self).alive -= 1
 
 
+class TestNrtMemInfoNotInitialized(unittest.TestCase):
+    """
+    Unit test for checking the use of the NRT fails if the
+    initialization sequence has not been run.
+    """
+    _numba_parallel_test_ = False
+
+    def test_init_fail(self):
+        methods = {'library': (),
+                   'meminfo_new': ((), ()),
+                   'meminfo_alloc': ((),),
+                   }
+
+        for meth, args in methods.items():
+            try:
+                with self.assertRaises(RuntimeError) as raises:
+                    rtsys._init = False
+                    fn = getattr(rtsys, meth)
+                    fn(*args)
+
+                msg = "Runtime must be initialized before use."
+                self.assertIn(msg, str(raises.exception))
+            finally:
+                rtsys._init = True
+
+
 class TestNrtMemInfo(unittest.TestCase):
     """
-    Unitest for core MemInfo functionality
+    Unit test for core MemInfo functionality
     """
 
     def setUp(self):
         # Reset the Dummy class
         Dummy.alive = 0
+        # initialize the NRT (in case the tests are run in isolation)
+        targets.cpu.CPUContext(typing.Context())
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -222,7 +268,10 @@ class TestTracemalloc(unittest.TestCase):
         stat = diff[0]
         # There is a slight overhead, so the allocated size won't exactly be N
         self.assertGreaterEqual(stat.size, N)
-        self.assertLess(stat.size, N * 1.01)
+        self.assertLess(stat.size, N * 1.015,
+                        msg=("Unexpected allocation overhead encountered. "
+                             "May be due to difference in CPython "
+                             "builds or running under coverage"))
         frame = stat.traceback[0]
         self.assertEqual(os.path.basename(frame.filename), "test_nrt.py")
         self.assertEqual(frame.lineno, alloc_lineno)
@@ -403,7 +452,7 @@ B40.backedge:                                     ; preds = %B108.endif.endif.en
 %.294 = icmp sgt i64 %lsr.iv.next, 1
 br i1 %.294, label %B42, label %B160
 }
-    '''
+    ''' # noqa
 
     def test_refct_pruning_op_recognize(self):
         input_ir = self.sample_llvm_ir
@@ -471,6 +520,151 @@ br i1 %.294, label %B42, label %B160
         llvmir = str(extend.inspect_llvm(extend.signatures[0]))
         refops = list(re.finditer(r'(NRT_incref|NRT_decref)\([^\)]+\)', llvmir))
         self.assertEqual(len(refops), 0)
+
+    @linux_only
+    @x86_only
+    def test_inline_asm(self):
+        """The InlineAsm class from llvmlite.ir has no 'name' attr the refcount
+        pruning pass should be tolerant to this"""
+        llvm.initialize()
+        llvm.initialize_native_target()
+        llvm.initialize_native_asmprinter()
+        llvm.initialize_native_asmparser()
+
+        @intrinsic
+        def bar(tyctx, x, y):
+            def codegen(cgctx, builder, sig, args):
+                (arg_0, arg_1) = args
+                fty = ir.FunctionType(ir.IntType(64), [ir.IntType(64),
+                                                       ir.IntType(64)])
+                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=r,r,r",
+                                  (arg_0, arg_1), name="asm_mul",
+                                  side_effect=False)
+                return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
+            return signature(x, x, x), codegen
+
+        @njit(['int64(int64)'])
+        def foo(x):
+            x += 1
+            z = bar(x, 2)
+            return z
+
+        self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
+
+
+@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
+    """Testing the use of externally compiled C code that use NRT
+    """
+
+    def compile_cffi_module(self, name, source, cdef):
+        from cffi import FFI
+
+        ffi = FFI()
+        ffi.set_source(name, source, include_dirs=[include_path()])
+        ffi.cdef(cdef)
+        tmpdir = temp_directory("cffi_test_{}".format(name))
+        ffi.compile(tmpdir=tmpdir)
+        sys.path.append(tmpdir)
+        try:
+            mod = import_dynamic(name)
+        finally:
+            sys.path.remove(tmpdir)
+
+        return ffi, mod
+
+    def get_nrt_api_table(self):
+        from cffi import FFI
+
+        ffi = FFI()
+        nrt_get_api = ffi.cast("void* (*)()", _nrt_python.c_helpers['get_api'])
+        table = nrt_get_api()
+        return table
+
+    def test_manage_memory(self):
+        name = "{}_test_manage_memory".format(self.__class__.__name__)
+        source = r"""
+#include <stdio.h>
+#include "numba/runtime/nrt_external.h"
+
+int status = 0;
+
+void my_dtor(void *ptr) {
+    free(ptr);
+    status = 0xdead;
+}
+
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
+    void * data = malloc(10);
+    NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
+    nrt->acquire(mi);
+    nrt->release(mi);
+    status = 0xa110c;
+    return mi;
+}
+        """
+        cdef = """
+void* test_nrt_api(void *nrt);
+int status;
+        """
+
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+        # Init status is 0
+        self.assertEqual(mod.lib.status, 0)
+        table = self.get_nrt_api_table()
+        out = mod.lib.test_nrt_api(table)
+        # status is now 0xa110c
+        self.assertEqual(mod.lib.status, 0xa110c)
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
+        del mi   # force deallocation on mi
+        # status is now 0xdead
+        self.assertEqual(mod.lib.status, 0xdead)
+
+    def test_allocate(self):
+        name = "{}_test_allocate".format(self.__class__.__name__)
+        source = r"""
+#include <stdio.h>
+#include "numba/runtime/nrt_external.h"
+
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
+    size_t *data = NULL;
+    NRT_MemInfo *mi = nrt->allocate(n);
+    data = nrt->get_data(mi);
+    data[0] = 0xded;
+    data[1] = 0xabc;
+    data[2] = 0xdef;
+    return mi;
+}
+        """
+        cdef = "void* test_nrt_api(void *nrt, size_t n);"
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+
+        table = self.get_nrt_api_table()
+
+        numbytes = 3 * np.dtype(np.intp).itemsize
+        out = mod.lib.test_nrt_api(table, numbytes)
+
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
+
+        buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
+        arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
+        np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
+
+    def test_get_api(self):
+        from cffi import FFI
+
+        @njit
+        def test_nrt_api():
+            return NRT_get_api()
+
+        ffi = FFI()
+        expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
+        got = test_nrt_api()
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':

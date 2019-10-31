@@ -3,11 +3,11 @@ from numba import vectorize
 from numba import cuda, float32
 import numpy as np
 from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import skip_on_cudasim, SerialMixin
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCudaVectorizeDeviceCall(unittest.TestCase):
+class TestCudaVectorizeDeviceCall(SerialMixin, unittest.TestCase):
     def test_cuda_vectorize_device_call(self):
 
         @cuda.jit(float32(float32, float32, float32), device=True)

@@ -7,7 +7,7 @@ from ..typing import npydecl
 from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
 from ..dispatcher import Dispatcher
-
+from .. import array_analysis
 
 def make_dufunc_kernel(_dufunc):
     from ..targets import npyimpl
@@ -40,8 +40,10 @@ def make_dufunc_kernel(_dufunc):
             entry_point = module.get_or_insert_function(
                 func_type, name=self.cres.fndesc.llvm_func_name)
             entry_point.attributes.add("alwaysinline")
+
             _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args, cast_args)
+                self.builder, entry_point, isig.return_type, isig.args,
+                cast_args)
             return self.cast(res, isig.return_type, osig.return_type)
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__
@@ -280,3 +282,5 @@ class DUFunc(_internal._DUFunc):
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
             [(self._lower_me, self, sig) for sig in (sig0, sig1)])
+
+array_analysis.MAP_TYPES.append(DUFunc)

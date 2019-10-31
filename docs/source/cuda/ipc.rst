@@ -20,6 +20,7 @@ process.
 
 
 .. automethod:: numba.cuda.cudadrv.devicearray.DeviceNDArray.get_ipc_handle
+    :noindex:
 
 .. autoclass:: numba.cuda.cudadrv.devicearray.IpcArrayHandle
     :members: open, close

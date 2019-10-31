@@ -12,13 +12,17 @@ from collections import namedtuple
 from llvmlite.llvmpy import core as lc
 
 import numpy as np
+import operator
 
 from . import builtins, callconv, ufunc_db, arrayobj
 from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
-from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
+from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from ..typing import npydecl
+from ..extending import overload, intrinsic
+
+from .. import errors
 
 registry = Registry()
 lower = registry.lower
@@ -157,13 +161,21 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     _ScalarHelper or _ArrayHelper) class to handle the argument.
     using the polymorphic interface of the Helper classes, scalar
     and array cases can be handled with the same code"""
+
+    # first un-Optional Optionals
+    if isinstance(tyinp, types.Optional):
+        oty = tyinp
+        tyinp = tyinp.type
+        inp = ctxt.cast(bld, inp, oty, tyinp)
+
+    # then prepare the arg for a concrete instance
     if isinstance(tyinp, types.ArrayCompatible):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
         shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif tyinp in types.number_domain | set([types.boolean]):
+    elif types.unliteral(tyinp) in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
         raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
@@ -252,6 +264,11 @@ def _build_array(context, builder, array_ty, input_types, inputs):
                                  builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
             msg = "unable to broadcast argument %d to output array" % (
                 arg_number,)
+
+            loc = errors.loc_info.get('loc', None)
+            if loc is not None:
+                msg += '\nFile "%s", line %d, ' % (loc.filename, loc.line)
+
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     real_array_ty = array_ty.as_array
@@ -460,7 +477,8 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     _kernels[ufunc] = kernel
 
 
-def register_unary_operator_kernel(operator, kernel):
+def register_unary_operator_kernel(operator, kernel, inplace=False):
+    assert not inplace  # are there any inplace unary operators?
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
@@ -468,7 +486,7 @@ def register_unary_operator_kernel(operator, kernel):
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
-def register_binary_operator_kernel(operator, kernel):
+def register_binary_operator_kernel(op, kernel, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
@@ -477,7 +495,7 @@ def register_binary_operator_kernel(operator, kernel):
         # The visible signature is (A, B) -> A
         # The implementation's signature (with explicit output)
         # is (A, B, A) -> A
-        args = args + (args[0],)
+        args = tuple(args) + (args[0],)
         sig = typing.signature(sig.return_type, *sig.args + (sig.args[0],))
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=True)
@@ -486,10 +504,11 @@ def register_binary_operator_kernel(operator, kernel):
     _arr_kind = types.Array
     formal_sigs = [(_arr_kind, _arr_kind), (_any, _arr_kind), (_arr_kind, _any)]
     for sig in formal_sigs:
-        lower(operator, *sig)(lower_binary_operator)
-        inplace = operator + '='
-        if inplace in utils.inplace_map:
-            lower(inplace, *sig)(lower_inplace_operator)
+        if not inplace:
+            lower(op, *sig)(lower_binary_operator)
+        else:
+            lower(op, *sig)(lower_inplace_operator)
+
 
 
 ################################################################################
@@ -504,7 +523,7 @@ for ufunc in ufunc_db.get_ufuncs():
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 
-@lower('+', types.Array)
+@lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator
@@ -520,7 +539,8 @@ def array_positive_impl(context, builder, sig, args):
 
 
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
-                npydecl.NumpyRulesArrayOperator._op_map):
+                npydecl.NumpyRulesArrayOperator._op_map,
+                ):
     for operator, ufunc_name in _op_map.items():
         ufunc = getattr(np, ufunc_name)
         kernel = _kernels[ufunc]
@@ -531,5 +551,54 @@ for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
         else:
             raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
+for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
+                ):
+    for operator, ufunc_name in _op_map.items():
+        ufunc = getattr(np, ufunc_name)
+        kernel = _kernels[ufunc]
+        if ufunc.nin == 1:
+            register_unary_operator_kernel(operator, kernel, inplace=True)
+        elif ufunc.nin == 2:
+            register_binary_operator_kernel(operator, kernel, inplace=True)
+        else:
+            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+
+
 
 del _kernels
+
+@intrinsic
+def _make_dtype_object(typingctx, desc):
+    """Given a string or NumberClass description *desc*, returns the dtype object.
+    """
+    def from_nb_type(nb_type):
+        return_type = types.DType(nb_type)
+        sig = return_type(desc)
+
+        def codegen(context, builder, signature, args):
+            # All dtype objects are dummy values in LLVM.
+            # They only exist in the type level.
+            return context.get_dummy_value()
+
+        return sig, codegen
+
+    if isinstance(desc, types.Literal):
+        # Convert the str description into np.dtype then to numba type.
+        nb_type = from_dtype(np.dtype(desc.literal_value))
+        return from_nb_type(nb_type)
+    elif isinstance(desc, types.functions.NumberClass):
+        thestr = str(desc.dtype)
+        # Convert the str description into np.dtype then to numba type.
+        nb_type = from_dtype(np.dtype(thestr))
+        return from_nb_type(nb_type)
+
+@overload(np.dtype)
+def numpy_dtype(desc):
+    """Provide an implementation so that numpy.dtype function can be lowered.
+    """
+    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
+        def imp(desc):
+            return _make_dtype_object(desc)
+        return imp
+    else:
+        raise TypeError('unknown dtype descriptor: {}'.format(desc))

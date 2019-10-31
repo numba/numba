@@ -1,43 +1,30 @@
 from __future__ import absolute_import, print_function
 
 
+import os
 from functools import reduce, wraps
 import operator
 import sys
 import threading
 import warnings
 
+import numpy as np
+
 from numba import ctypes_support as ctypes
 from numba import config, compiler, types, sigutils
 from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
+from numba.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
+from .args import wrap_arg
 
 
-_cuda_compiler_lock = threading.RLock()
-
-
-def nonthreadsafe(fn):
-    """
-    Wraps a function to prevent multiple threads from executing it in parallel
-    due to LLVM is not threadsafe.
-    This is preferred over contextmanager due to llvm.Module.__del__ being
-    non-threadsafe and it is cumbersome to manually keep track of when it is
-    triggered.
-    """
-    @wraps(fn)
-    def core(*args, **kwargs):
-        with _cuda_compiler_lock:
-            return fn(*args, **kwargs)
-    return core
-
-
-@nonthreadsafe
+@global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
@@ -69,13 +56,14 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
-@nonthreadsafe
+@global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False):
+                   fastmath=False, extensions=[], max_registers=None):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
-                                                          cres.signature.args)
+                                                          cres.signature.args,
+                                                          debug=debug)
 
     cukern = CUDAKernel(llvm_module=lib._final_module,
                         name=kernel.name,
@@ -85,7 +73,9 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         link=link,
                         debug=debug,
                         call_helper=cres.call_helper,
-                        fastmath=fastmath)
+                        fastmath=fastmath,
+                        extensions=extensions,
+                        max_registers=max_registers)
     return cukern
 
 
@@ -114,6 +104,8 @@ class DeviceFunctionTemplate(object):
 
         Each signature is compiled once by caching the compiled function inside
         this object.
+
+        Returns the `CompileResult`.
         """
         if args not in self._compileinfos:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
@@ -132,7 +124,46 @@ class DeviceFunctionTemplate(object):
         else:
             cres = self._compileinfos[args]
 
-        return cres.signature
+        return cres
+
+    def inspect_llvm(self, args):
+        """Returns the LLVM-IR text compiled for *args*.
+
+        Parameters
+        ----------
+        args: tuple[Type]
+            Argument types.
+
+        Returns
+        -------
+        llvmir : str
+        """
+        cres = self._compileinfos[args]
+        mod = cres.library._final_module
+        return str(mod)
+
+    def inspect_ptx(self, args, nvvm_options={}):
+        """Returns the PTX compiled for *args* for the currently active GPU
+
+        Parameters
+        ----------
+        args: tuple[Type]
+            Argument types.
+        nvvm_options : dict; optional
+            See `CompilationUnit.compile` in `numba/cuda/cudadrv/nvvm.py`.
+
+        Returns
+        -------
+        ptx : bytes
+        """
+        llvmir = self.inspect_llvm(args)
+        # Make PTX
+        cuctx = get_context()
+        device = cuctx.device
+        cc = device.compute_capability
+        arch = nvvm.get_arch_option(*cc)
+        ptx = nvvm.llvm_to_ptx(llvmir, opt=3, arch=arch, **nvvm_options)
+        return ptx
 
 
 def compile_device_template(pyfunc, debug=False, inline=False):
@@ -148,7 +179,7 @@ def compile_device_template(pyfunc, debug=False, inline=False):
 
         def generic(self, args, kws):
             assert not kws
-            return dft.compile(args)
+            return dft.compile(args).signature
 
     typingctx = CUDATargetDesc.typingctx
     typingctx.insert_user_function(dft, device_function_template)
@@ -222,19 +253,6 @@ class ExternFunction(object):
         self.sig = sig
 
 
-def _compute_thread_per_block(kernel, tpb):
-    if tpb != 0:
-        return tpb
-
-    else:
-        try:
-            tpb = kernel.autotune.best()
-        except ValueError:
-            warnings.warn('Could not autotune, using default tpb of 128')
-            tpb = 128
-
-        return tpb
-
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
         self.kernel = kernel
@@ -249,12 +267,44 @@ class ForAll(object):
         else:
             kernel = self.kernel
 
-        tpb = _compute_thread_per_block(kernel, self.thread_per_block)
+        tpb = self._compute_thread_per_block(kernel)
         tpbm1 = tpb - 1
         blkct = (self.ntasks + tpbm1) // tpb
 
         return kernel.configure(blkct, tpb, stream=self.stream,
                                 sharedmem=self.sharedmem)(*args)
+
+    def _compute_thread_per_block(self, kernel):
+        tpb = self.thread_per_block
+        # Prefer user-specified config
+        if tpb != 0:
+            return tpb
+        # Else, ask the driver to give a good cofnig
+        else:
+            ctx = get_context()
+            kwargs = dict(
+                func=kernel._func.get(),
+                b2d_func=0,     # dynamic-shared memory is constant to blksz
+                memsize=self.sharedmem,
+                blocksizelimit=1024,
+            )
+            try:
+                # Raises from the driver if the feature is unavailable
+                _, tpb = ctx.get_max_potential_block_size(**kwargs)
+            except AttributeError:
+                # Fallback to table-based approach.
+                tpb = self._fallback_autotune_best(kernel)
+                raise
+            return tpb
+
+    def _fallback_autotune_best(self, kernel):
+        try:
+            tpb = kernel.autotune.best()
+        except ValueError:
+            warnings.warn('Could not autotune, using default tpb of 128')
+            tpb = 128
+
+        return tpb
 
 
 class CUDAKernelBase(object):
@@ -355,12 +405,13 @@ class CachedCUFunction(object):
     Uses device ID as key for cache.
     """
 
-    def __init__(self, entry_name, ptx, linking):
+    def __init__(self, entry_name, ptx, linking, max_registers):
         self.entry_name = entry_name
         self.ptx = ptx
         self.linking = linking
         self.cache = {}
         self.ccinfos = {}
+        self.max_registers = max_registers
 
     def get(self):
         cuctx = get_context()
@@ -370,7 +421,7 @@ class CachedCUFunction(object):
             ptx = self.ptx.get()
 
             # Link
-            linker = driver.Linker()
+            linker = driver.Linker(max_registers=self.max_registers)
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
@@ -401,15 +452,15 @@ class CachedCUFunction(object):
             msg = ('cannot pickle CUDA kernel function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
-        args = (self.__class__, self.entry_name, self.ptx, self.linking)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking, self.max_registers)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, entry_name, ptx, linking):
+    def _rebuild(cls, entry_name, ptx, linking, max_registers):
         """
         Rebuild an instance.
         """
-        return cls(entry_name, ptx, linking)
+        return cls(entry_name, ptx, linking, max_registers)
 
 
 class CUDAKernel(CUDAKernelBase):
@@ -419,7 +470,8 @@ class CUDAKernel(CUDAKernelBase):
     specialized, and then launch the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None):
+                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 extensions=[], max_registers=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
@@ -430,7 +482,7 @@ class CUDAKernel(CUDAKernelBase):
                                 fma=True))
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
-        cufunc = CachedCUFunction(name, ptx, link)
+        cufunc = CachedCUFunction(name, ptx, link, max_registers)
         # populate members
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -439,9 +491,10 @@ class CUDAKernel(CUDAKernelBase):
         self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+        self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
         """
         Rebuild an instance.
         """
@@ -456,6 +509,7 @@ class CUDAKernel(CUDAKernelBase):
         instance._func = cufunc
         instance.debug = debug
         instance.call_helper = call_helper
+        instance.extensions = extensions
         # update config
         instance._deserialize_config(config)
         return instance
@@ -471,7 +525,7 @@ class CUDAKernel(CUDAKernelBase):
         config = self._serialize_config()
         args = (self.__class__, self.entry_name, self.argument_types,
                 self._func, self.linking, self.debug, self.call_helper,
-                config)
+                self.extensions, config)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -571,9 +625,18 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                exccls, exc_args = self.call_helper.get_exception(code)
+                exccls, exc_args, loc = self.call_helper.get_exception(code)
+                # Prefix the exception message with the source location
+                if loc is None:
+                    locinfo = ''
+                else:
+                    sym, filepath, lineno = loc
+                    filepath = os.path.relpath(filepath)
+                    locinfo = 'In function %r, file %s, line %s, ' % (
+                        sym, filepath, lineno,
+                        )
                 # Prefix the exception message with the thread position
-                prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
                 if exc_args:
                     exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
                 else:
@@ -588,16 +651,17 @@ class CUDAKernel(CUDAKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
+
+        # map the arguments using any extension you've registered
+        for extension in reversed(self.extensions):
+            ty, val = extension.prepare_args(
+                ty,
+                val,
+                stream=stream,
+                retr=retr)
+
         if isinstance(ty, types.Array):
-            if isinstance(ty, types.SmartArrayType):
-                devary = val.get('gpu')
-                retr.append(lambda: val.mark_changed('gpu'))
-                outer_parent = ctypes.c_void_p(0)
-                kernelargs.append(outer_parent)
-            else:
-                devary, conv = devicearray.auto_device(val, stream=stream)
-                if conv:
-                    retr.append(lambda: devary.copy_to_host(val, stream=stream))
+            devary = wrap_arg(val).to_device(retr, stream)
 
             c_intp = ctypes.c_ssize_t
 
@@ -640,20 +704,20 @@ class CUDAKernel(CUDAKernelBase):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
-        elif isinstance(ty, types.Record):
-            devrec, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
-                retr.append(lambda: devrec.copy_to_host(val, stream=stream))
+        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+            kernelargs.append(ctypes.c_int64(val.view(np.int64)))
 
+        elif isinstance(ty, types.Record):
+            devrec = wrap_arg(val).to_device(retr, stream)
             kernelargs.append(devrec)
 
         else:
             raise NotImplementedError(ty, val)
 
-
     @property
     def autotune(self):
         """Return the autotuner object associated with this kernel."""
+        warnings.warn(_deprec_warn_msg.format('autotune'), DeprecationWarning)
         has_autotune = hasattr(self, '_autotune')
         if has_autotune and self._autotune.dynsmem == self.sharedmem:
             return self._autotune
@@ -670,15 +734,21 @@ class CUDAKernel(CUDAKernelBase):
         number of warps that can be active on the multiprocessor at once.
         Calculate the theoretical occupancy of the kernel given the
         current configuration."""
+        warnings.warn(_deprec_warn_msg.format('occupancy'), DeprecationWarning)
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
+
+
+_deprec_warn_msg = ("The .{} attribute is is deprecated and will be "
+                    "removed in a future release")
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
     '''
     CUDA Kernel object. When called, the kernel object will specialize itself
     for the given arguments (if no suitable specialized version already exists)
-    and launch on the device associated with the current context.
+    & compute capability, and launch on the device associated with the current
+    context.
 
     Kernel objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
@@ -687,12 +757,40 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         super(AutoJitCUDAKernel, self).__init__()
         self.py_func = func
         self.bind = bind
+
+        # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
+
         self.targetoptions = targetoptions
+
+        # defensive copy
+        self.targetoptions['extensions'] = \
+            list(self.targetoptions.get('extensions', []))
 
         from .descriptor import CUDATargetDesc
 
         self.typingctx = CUDATargetDesc.typingctx
+
+    @property
+    def extensions(self):
+        '''
+        A list of objects that must have a `prepare_args` function. When a
+        specialized kernel is called, each argument will be passed through
+        to the `prepare_args` (from the last object in this list to the
+        first). The arguments to `prepare_args` are:
+
+        - `ty` the numba type of the argument
+        - `val` the argument value itself
+        - `stream` the CUDA stream used for the current call to the kernel
+        - `retr` a list of zero-arg functions that you may want to append
+          post-call cleanup work to.
+
+        The `prepare_args` function must return a tuple `(ty, val)`, which
+        will be passed in turn to the next right-most `extension`. After all
+        the extensions have been called, the resulting `(ty, val)` will be
+        passed into Numba's default argument marshalling logic.
+        '''
+        return self.targetoptions['extensions']
 
     def __call__(self, *args):
         '''
@@ -719,35 +817,39 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None
-        kernel = self.definitions.get(argtypes)
+        cc = get_current_device().compute_capability
+        kernel = self.definitions.get((cc, argtypes))
         if kernel is None:
             if 'link' not in self.targetoptions:
                 self.targetoptions['link'] = ()
             kernel = compile_kernel(self.py_func, argtypes,
                                     **self.targetoptions)
-            self.definitions[argtypes] = kernel
+            self.definitions[(cc, argtypes)] = kernel
             if self.bind:
                 kernel.bind()
         return kernel
 
-    def inspect_llvm(self, signature=None):
+    def inspect_llvm(self, signature=None, compute_capability=None):
         '''
         Return the LLVM IR for all signatures encountered thus far, or the LLVM
-        IR for a specific signature if given.
+        IR for a specific signature and compute_capability if given.
         '''
+        cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
-            return self.definitions[signature].inspect_llvm()
+            return self.definitions[(cc, signature)].inspect_llvm()
         else:
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
 
-    def inspect_asm(self, signature=None):
+    def inspect_asm(self, signature=None, compute_capability=None):
         '''
         Return the generated assembly code for all signatures encountered thus
-        far, or the LLVM IR for a specific signature if given.
+        far, or the LLVM IR for a specific signature and compute_capability
+        if given.
         '''
+        cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
-            return self.definitions[signature].inspect_asm()
+            return self.definitions[(cc, signature)].inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
                         for sig, defn in self.definitions.items())
@@ -761,7 +863,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         if file is None:
             file = sys.stdout
 
-        for ver, defn in utils.iteritems(self.definitions):
+        for _, defn in utils.iteritems(self.definitions):
             defn.inspect_types(file=file)
 
     @classmethod
@@ -777,7 +879,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
     def __reduce__(self):
         """
         Reduce the instance for serialization.
-        Compiled definitions are serialized in PTX form.
+        Compiled definitions are discarded.
         """
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
         func_reduced = serialize._reduce_function(self.py_func, glbls)

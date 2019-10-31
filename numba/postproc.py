@@ -55,6 +55,9 @@ class VariableLifetime(object):
         return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
                                           self.usedefs.defmap)
 
+# other packages that define new nodes add calls for inserting dels
+# format: {type:function}
+ir_extension_insert_dels = {}
 
 class PostProcessor(object):
     """
@@ -180,24 +183,31 @@ class PostProcessor(object):
                 # internal vars that are used here
                 live_set = set(v.name for v in stmt.list_vars())
                 dead_set = live_set & internal_dead_set
+                for T, def_func in ir_extension_insert_dels.items():
+                    if isinstance(stmt, T):
+                        done_dels = def_func(stmt, dead_set)
+                        dead_set -= done_dels
+                        internal_dead_set -= done_dels
                 # used here but not afterwards
                 delete_pts.append((stmt, dead_set))
                 internal_dead_set -= dead_set
 
             # rewrite body and insert dels
             body = []
+            lastloc = ir_block.loc
             for stmt, delete_set in reversed(delete_pts):
+                lastloc = stmt.loc
                 # Ignore dels (assuming no user inserted deletes)
                 if not isinstance(stmt, ir.Del):
                     body.append(stmt)
                 # note: the reverse sort is not necessary for correctness
                 #       it is just to minimize changes to test for now
                 for var_name in sorted(delete_set, reverse=True):
-                    body.append(ir.Del(var_name, loc=ir_block.loc))
+                    body.append(ir.Del(var_name, loc=lastloc))
             body.append(ir_block.body[-1])  # terminator
             ir_block.body = body
 
             # vars to delete at the start
             escape_dead_set = escaping_dead_map[offset]
             for var_name in sorted(escape_dead_set):
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
+                ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))

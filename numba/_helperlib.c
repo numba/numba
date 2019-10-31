@@ -5,12 +5,14 @@
  */
 
 #include "_pymodule.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <math.h>
 #include "_math_c99.h"
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
+    #define uint32_t unsigned __int32
 #else
     #include <stdint.h>
 #endif
@@ -575,16 +577,45 @@ import_cython_function(const char *module_name, const char *function_name)
     Py_DECREF(module);
     if (capi == NULL)
         return NULL;
-    cobj = PyMapping_GetItemString(capi, function_name);
+    cobj = PyMapping_GetItemString(capi, (char *)function_name);
     Py_DECREF(capi);
-    if (cobj == NULL)
+    if (cobj == NULL) {
+        PyErr_Clear();
+        PyErr_Format(PyExc_ValueError,
+                     "No function '%s' found in __pyx_capi__ of '%s'",
+                     function_name, module_name);
         return NULL;
+    }
     /* 2.7+ => Cython exports a PyCapsule */
     capsule_name = PyCapsule_GetName(cobj);
     if (capsule_name != NULL) {
         res = PyCapsule_GetPointer(cobj, capsule_name);
     }
     Py_DECREF(cobj);
+    return res;
+}
+
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_import_cython_function(PyObject *self, PyObject *args)
+{
+    const char *module_name;
+    const char *function_name;
+    void *p = NULL;
+    PyObject *res;
+
+    if (!PyArg_ParseTuple(args, "ss", &module_name, &function_name)) {
+        return NULL;
+    }
+    p = import_cython_function(module_name, function_name);
+    if (p == NULL) {
+        return NULL;
+    }
+    res = PyLong_FromVoidPtr(p);
+    if (res == NULL) {
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Could not convert function address to int");
+      return NULL;
+    }
     return res;
 }
 
@@ -789,83 +820,206 @@ numba_fatal_error(void)
     return 0; /* unreachable */
 }
 
+/* Insert a frame into the traceback for (funcname, filename, lineno). */
+/* This function is CPython's _PyTraceback_Add, renamed, see:
+ * https://github.com/python/cpython/blob/d545869d084e70d4838310e79b52a25a72a1ca56/Python/traceback.c#L246
+ * and modified for Python 2.x based on
+ * https://github.com/python/cpython/blob/2e1a34025cde19bddf12a2eac8fedb6afcca8339/Modules/_ctypes/callbacks.c#L151-L174
+ */
+static void traceback_add(const char *funcname, const char *filename, int lineno)
+{
+    PyObject *globals = NULL;
+    PyCodeObject *code = NULL;
+    PyFrameObject *frame = NULL;
+    PyObject *exc, *val, *tb;
+
+    /* Save and clear the current exception. Python functions must not be
+       called with an exception set. Calling Python functions happens when
+       the codec of the filesystem encoding is implemented in pure Python. */
+    PyErr_Fetch(&exc, &val, &tb);
+
+    globals = PyDict_New();
+    if (!globals)
+        goto error;
+    code = PyCode_NewEmpty(filename, funcname, lineno);
+    if (!code) {
+        goto error;
+    }
+    frame = PyFrame_New(PyThreadState_Get(), code, globals, NULL);
+    Py_DECREF(globals);
+    Py_DECREF(code);
+    if (!frame)
+        goto error;
+    frame->f_lineno = lineno;
+
+    PyErr_Restore(exc, val, tb);
+    PyTraceBack_Here(frame);
+    Py_DECREF(frame);
+    return;
+
+error:
+#if PY_MAJOR_VERSION >= 3
+    _PyErr_ChainExceptions(exc, val, tb);
+#else
+    Py_XDECREF(globals);
+    Py_XDECREF(code);
+    Py_XDECREF(frame);
+#endif
+}
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 NUMBA_EXPORT_FUNC(int)
-numba_do_raise(PyObject *exc)
+numba_do_raise(PyObject *exc_packed)
 {
-    PyObject *type = NULL, *value = NULL;
+    PyObject *exc = NULL, *type = NULL, *value = NULL, *loc = NULL;
+    const char *function_name_str = NULL, *filename_str = NULL;
+    PyObject *function_name = NULL, *filename = NULL, *lineno = NULL;
+    Py_ssize_t pos;
 
     /* We support the following forms of raise:
        raise
        raise <instance>
        raise <type> */
 
-    if (exc == Py_None) {
-        /* Reraise */
-        PyThreadState *tstate = PyThreadState_GET();
-        PyObject *tb;
-        Py_DECREF(exc);
-        type = tstate->exc_type;
-        value = tstate->exc_value;
-        tb = tstate->exc_traceback;
-        if (type == Py_None) {
-            PyErr_SetString(PyExc_RuntimeError,
-                            "No active exception to reraise");
-            return 0;
+    /* could be a tuple from npm (some exc like thing, args, location) */
+    if (PyTuple_CheckExact(exc_packed)) {
+        /* Unpack a (class/inst/tuple, arguments, location) tuple. */
+        if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
+            Py_DECREF(exc_packed);
+            goto raise_error_w_loc;
         }
-        Py_XINCREF(type);
-        Py_XINCREF(value);
-        Py_XINCREF(tb);
-        PyErr_Restore(type, value, tb);
-        return 1;
-    }
 
-    if (PyTuple_CheckExact(exc)) {
-        /* A (callable, arguments) tuple. */
-        if (!PyArg_ParseTuple(exc, "OO", &type, &value)) {
+        if (exc == Py_None) {
+            /* Reraise */
+            PyThreadState *tstate = PyThreadState_GET();
+            PyObject *tb;
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+            _PyErr_StackItem *tstate_exc = tstate->exc_info;
+#else
+            PyThreadState *tstate_exc = tstate;
+#endif
+            Py_DECREF(exc_packed);
+            type = tstate_exc->exc_type;
+            value = tstate_exc->exc_value;
+            tb = tstate_exc->exc_traceback;
+            if (type == Py_None) {
+                PyErr_SetString(PyExc_RuntimeError,
+                                "No active exception to reraise");
+                return 0;
+            }
+            Py_XINCREF(type);
+            Py_XINCREF(value);
+            Py_XINCREF(tb);
+            PyErr_Restore(type, value, tb);
+            return 1;
+        }
+
+        /* the unpacked exc should be a class, value and loc are set from above
+         */
+        Py_XINCREF(value);
+        Py_XINCREF(loc);
+        if (PyExceptionClass_Check(exc)) {
+            /* It is a class, type used here just as a tmp var */
+            type = PyObject_CallObject(exc, value);
+            if (type == NULL)
+                goto raise_error_w_loc;
+            if (!PyExceptionInstance_Check(type)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "exceptions must derive from BaseException");
+                goto raise_error_w_loc;
+            }
+            /* all ok, set type to the exc */
+            Py_DECREF(type);
+            type = exc;
+        } else {
+            /* this should be unreachable as typing should catch it */
+            /* Not something you can raise.  You get an exception
+            anyway, just not what you specified :-) */
+            Py_DECREF(exc_packed);
+            PyErr_SetString(PyExc_TypeError,
+                            "exceptions must derive from BaseException");
+            goto raise_error_w_loc;
+        }
+
+        /* as this branch is exited:
+         * - type should be an exception class
+         * - value should be the args for the exception class instantiation
+         * - loc should be the location information (or None)
+         */
+    } else {  /* could be a reraise or an exception from objmode */
+        exc = exc_packed;
+        if (exc == Py_None) {
+            /* Reraise */
+            PyThreadState *tstate = PyThreadState_GET();
+            PyObject *tb;
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+            _PyErr_StackItem *tstate_exc = tstate->exc_info;
+#else
+            PyThreadState *tstate_exc = tstate;
+#endif
             Py_DECREF(exc);
-            goto raise_error;
+            type = tstate_exc->exc_type;
+            value = tstate_exc->exc_value;
+            tb = tstate_exc->exc_traceback;
+            if (type == Py_None) {
+                PyErr_SetString(PyExc_RuntimeError,
+                                "No active exception to reraise");
+                return 0;
+            }
+            Py_XINCREF(type);
+            Py_XINCREF(value);
+            Py_XINCREF(tb);
+            PyErr_Restore(type, value, tb);
+            return 1;
         }
-        value = PyObject_CallObject(type, value);
-        Py_DECREF(exc);
-        type = NULL;
-        if (value == NULL)
-            goto raise_error;
-        if (!PyExceptionInstance_Check(value)) {
+
+        /* exc should be an exception class or an instance of an exception */
+        if (PyExceptionClass_Check(exc)) {
+            type = exc;
+            value = PyObject_CallObject(exc, value);
+            if (value == NULL)
+                goto raise_error;
+            if (!PyExceptionInstance_Check(value)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "exceptions must derive from BaseException");
+                goto raise_error;
+            }
+        }
+        else if (PyExceptionInstance_Check(exc)) {
+            value = exc;
+            type = PyExceptionInstance_Class(exc);
+            Py_INCREF(type);
+        }
+        else {
+            /* Not something you can raise.  You get an exception
+            anyway, just not what you specified :-) */
+            Py_DECREF(exc); // exc points to exc_packed
             PyErr_SetString(PyExc_TypeError,
                             "exceptions must derive from BaseException");
             goto raise_error;
         }
-        type = PyExceptionInstance_Class(value);
-        Py_INCREF(type);
-    }
-    else if (PyExceptionClass_Check(exc)) {
-        type = exc;
-        value = PyObject_CallObject(exc, NULL);
-        if (value == NULL)
-            goto raise_error;
-        if (!PyExceptionInstance_Check(value)) {
-            PyErr_SetString(PyExc_TypeError,
-                            "exceptions must derive from BaseException");
-            goto raise_error;
-        }
-    }
-    else if (PyExceptionInstance_Check(exc)) {
-        value = exc;
-        type = PyExceptionInstance_Class(exc);
-        Py_INCREF(type);
-    }
-    else {
-        /* Not something you can raise.  You get an exception
-           anyway, just not what you specified :-) */
-        Py_DECREF(exc);
-        PyErr_SetString(PyExc_TypeError,
-                        "exceptions must derive from BaseException");
-        goto raise_error;
     }
 
     PyErr_SetObject(type, value);
+
+raise_error_w_loc:
+    /* instance is instantiated/internal exception is raised, if loc is present
+     * add a frame for it into the traceback */
+    if(loc && loc != Py_None && PyTuple_Check(loc))
+    {
+        pos = 0;
+        function_name = PyTuple_GET_ITEM(loc, pos);
+        function_name_str = PyString_AsString(function_name);
+        pos = 1;
+        filename = PyTuple_GET_ITEM(loc, pos);
+        filename_str = PyString_AsString(filename);
+        pos = 2;
+        lineno = PyTuple_GET_ITEM(loc, pos);
+        traceback_add(function_name_str, filename_str, \
+                      (int)PyLong_AsLong(lineno));
+    }
+
     /* PyErr_SetObject incref's its arguments */
     Py_XDECREF(value);
     Py_XDECREF(type);
@@ -907,6 +1061,125 @@ numba_unpickle(const char *data, int n)
     return obj;
 }
 
+/*
+ * Unicode helpers
+ */
+
+/* Developer note:
+ *
+ * The hash value of unicode objects is obtained via:
+ * ((PyASCIIObject *)(obj))->hash;
+ * The use comes from this definition:
+ * https://github.com/python/cpython/blob/6d43f6f081023b680d9db4542d19b9e382149f0a/Objects/unicodeobject.c#L119-L120
+ * and it's used extensively throughout the `cpython/Object/unicodeobject.c`
+ * source, not least in `unicode_hash` itself:
+ * https://github.com/python/cpython/blob/6d43f6f081023b680d9db4542d19b9e382149f0a/Objects/unicodeobject.c#L11662-L11679
+ *
+ * The Unicode string struct layouts are described here:
+ * https://github.com/python/cpython/blob/6d43f6f081023b680d9db4542d19b9e382149f0a/Include/cpython/unicodeobject.h#L82-L161
+ * essentially, all the unicode string layouts start with a `PyASCIIObject` at
+ * offset 0 (as of commit 6d43f6f081023b680d9db4542d19b9e382149f0a, somewhere
+ * in the 3.8 development cycle).
+ *
+ * For safety against future CPython internal changes, the code checks that the
+ * _base members of the unicode structs are what is expected in 3.7, and that
+ * their offset is 0. It then walks the struct to the hash location to make sure
+ * the offset is indeed the same as PyASCIIObject->hash.
+ * Note: The large condition in the if should evaluate to a compile time
+ * constant.
+ */
+
+#define MEMBER_SIZE(structure, member) sizeof(((structure *)0)->member)
+
+NUMBA_EXPORT_FUNC(void *)
+numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
+                      unsigned int *ascii, Py_ssize_t *hash) {
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 3)
+    if (!PyUnicode_READY(obj)) {
+        *length = PyUnicode_GET_LENGTH(obj);
+        *kind = PyUnicode_KIND(obj);
+        /* could also use PyUnicode_IS_ASCII but it is not publicly advertised in https://docs.python.org/3/c-api/unicode.html */
+        *ascii = (unsigned int)(PyUnicode_MAX_CHAR_VALUE(obj) == (0x7f));
+        /* this is here as a crude check for safe casting of all unicode string
+         * structs to a PyASCIIObject */
+        if (MEMBER_SIZE(PyCompactUnicodeObject, _base) == sizeof(PyASCIIObject)             &&
+            MEMBER_SIZE(PyUnicodeObject, _base) == sizeof(PyCompactUnicodeObject)           &&
+            offsetof(PyCompactUnicodeObject, _base) == 0                                    &&
+            offsetof(PyUnicodeObject, _base) == 0                                           &&
+            offsetof(PyCompactUnicodeObject, _base.hash) == offsetof(PyASCIIObject, hash)   &&
+            offsetof(PyUnicodeObject, _base._base.hash) == offsetof(PyASCIIObject, hash)
+           ) {
+            /* Grab the hash from the type object cache, do not compute it. */
+            *hash = ((PyASCIIObject *)(obj))->hash;
+        }
+        else {
+            /* cast is not safe, fail */
+            return NULL;
+        }
+        return PyUnicode_DATA(obj);
+    } else {
+        return NULL;
+    }
+#else
+    /* this function only works in Python 3 */
+    return NULL;
+#endif
+}
+
+/* this is late included as it #defines e.g. SHIFT that should not impact
+ * the above */
+#include "_unicodetype_db.h"
+
+/* This function is a modified copy of the private function gettyperecord from
+ * CPython's Objects/unicodectype.c
+ *
+ * See:https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L45-L59
+ */
+NUMBA_EXPORT_FUNC(void)
+numba_gettyperecord(Py_UCS4 code, int *upper, int *lower, int *title,
+                    unsigned char *decimal, unsigned char *digit,
+                    unsigned short *flags)
+{
+    int index;
+    const numba_PyUnicode_TypeRecord *rec;
+
+    if (code >= 0x110000)
+        index = 0;
+    else
+    {
+        index = index1[(code>>SHIFT)];
+        index = index2[(index<<SHIFT)+(code&((1<<SHIFT)-1))];
+    }
+
+    rec = &numba_PyUnicode_TypeRecords[index];
+    *upper = rec->upper;
+    *lower = rec->lower;
+    *title = rec->title;
+    *decimal = rec->decimal;
+    *digit = rec->digit;
+    *flags = rec->flags;
+}
+
+/* This function provides a consistent access point for the
+ * _PyUnicode_ExtendedCase array defined in CPython's Objects/unicodectype.c
+ * and now also as numba_PyUnicode_ExtendedCase in Numba's _unicodetype_db.h
+ */
+NUMBA_EXPORT_FUNC(Py_UCS4)
+numba_get_PyUnicode_ExtendedCase(int code)
+{
+    return numba_PyUnicode_ExtendedCase[code];
+}
+
+/* from _unicodetype_db.h */
+#undef SHIFT
+
+/*
+ * defined break point for gdb
+ */
+NUMBA_EXPORT_FUNC(void)
+numba_gdb_breakpoint(void) {
+  /* does nothing */
+}
 
 /*
  * Define bridge for all math functions

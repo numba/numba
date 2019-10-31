@@ -1,9 +1,12 @@
 
+import os
 import inspect
 import uuid
 import weakref
+import collections
 
-from numba import types
+import numba
+from numba import types, config, errors, utils
 
 # Exported symbols
 from .typing.typeof import typeof_impl
@@ -13,6 +16,8 @@ from .targets.imputils import (
     lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
+from ._helperlib import _import_cython_function
+
 
 def type_callable(func):
     """
@@ -37,7 +42,7 @@ def type_callable(func):
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)
         infer(template)
-        if hasattr(func, '__module__'):
+        if callable(func):
             infer_global(func, types.Function(template))
 
     return decorate
@@ -48,7 +53,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}):
+def overload(func, jit_options={}, strict=True, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -69,6 +74,31 @@ def overload(func, jit_options={}):
 
     Compiler options can be passed as an dictionary using the **jit_options**
     argument.
+
+    Overloading strictness (that the typing and implementing signatures match)
+    is enforced by the **strict** keyword argument, it is recommended that this
+    is set to True (default).
+
+    To handle a function that accepts imprecise types, an overload
+    definition can return 2-tuple of ``(signature, impl_function)``, where
+    the ``signature`` is a ``typing.Signature`` specifying the precise
+    signature to be used; and ``impl_function`` is the same implementation
+    function as in the simple case.
+
+    If the kwarg inline determines whether the overload is inlined in the
+    calling function and can be one of three values:
+    * 'never' (default) - the overload is never inlined.
+    * 'always' - the overload is always inlined.
+    * a function that takes two arguments, both of which are instances of a
+      namedtuple with fields:
+        * func_ir
+        * typemap
+        * calltypes
+        * signature
+      The first argument holds the information from the caller, the second
+      holds the information from the callee. The function should return Truthy
+      to determine whether to inline, this essentially permitting custom
+      inlining rules (typical use might be cost models).
     """
     from .typing.templates import make_overload_template, infer_global
 
@@ -76,10 +106,12 @@ def overload(func, jit_options={}):
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
+
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts)
+        template = make_overload_template(func, overload_func, opts, strict,
+                                          inline)
         infer(template)
-        if hasattr(func, '__module__'):
+        if callable(func):
             infer_global(func, types.Function(template))
         return overload_func
 
@@ -105,7 +137,7 @@ def register_jitable(*args, **kwargs):
     """
     def wrap(fn):
         # It is just a wrapper for @overload
-        @overload(fn, jit_options=kwargs)
+        @overload(fn, jit_options=kwargs, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
         return fn
@@ -215,6 +247,10 @@ class _Intrinsic(object):
     Dummy callable for intrinsic
     """
     _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
+
     __uuid = None
 
     def __init__(self, name, defn):
@@ -239,6 +275,7 @@ class _Intrinsic(object):
         assert self.__uuid is None
         self.__uuid = u
         self._memo[u] = self
+        self._recent.append(self)
 
     def _register(self):
         from .typing.templates import make_intrinsic_template, infer_global
@@ -283,7 +320,7 @@ class _Intrinsic(object):
             return llc
 
 
-def intrinsic(func):
+def intrinsic(*args, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -319,7 +356,143 @@ def intrinsic(func):
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
     """
-    name = getattr(func, '__name__', str(func))
-    llc = _Intrinsic(name, func)
-    llc._register()
-    return llc
+    # Make inner function for the actual work
+    def _intrinsic(func):
+        name = getattr(func, '__name__', str(func))
+        llc = _Intrinsic(name, func, **kwargs)
+        llc._register()
+        return llc
+
+    if not kwargs:
+        # No option is given
+        return _intrinsic(*args)
+    else:
+        # options are given, create a new callable to recv the
+        # definition function
+        def wrapper(func):
+            return _intrinsic(func)
+        return wrapper
+
+
+def get_cython_function_address(module_name, function_name):
+    """
+    Get the address of a Cython function.
+
+    Args
+    ----
+    module_name:
+        Name of the Cython module
+    function_name:
+        Name of the Cython function
+
+    Returns
+    -------
+    A Python int containing the address of the function
+
+    """
+    return _import_cython_function(module_name, function_name)
+
+
+def include_path():
+    """Returns the C include directory path.
+    """
+    include_dir = os.path.dirname(os.path.dirname(numba.__file__))
+    path = os.path.abspath(include_dir)
+    return path
+
+
+def sentry_literal_args(pysig, literal_args, args, kwargs):
+    """Ensures that the given argument types (in *args* and *kwargs*) are
+    literally typed for a function with the python signature *pysig* and the
+    list of literal argument names in *literal_args*.
+
+    Alternatively, this is the same as::
+
+        SentryLiteralArgs(literal_args).for_pysig(pysig).bind(*args, **kwargs)
+    """
+    boundargs = pysig.bind(*args, **kwargs)
+
+    # Find literal argument positions and whether it is satisfied.
+    request_pos = set()
+    missing = False
+    for i, (k, v) in enumerate(boundargs.arguments.items()):
+        if k in literal_args:
+            request_pos.add(i)
+            if not isinstance(v, types.Literal):
+                missing = True
+    if missing:
+        # Yes, there are missing required literal arguments
+        e = errors.ForceLiteralArg(request_pos)
+        # A helper function to fold arguments
+        def folded(args, kwargs):
+            out = pysig.bind(*args, **kwargs).arguments.values()
+            return tuple(out)
+
+        raise e.bind_fold_arguments(folded)
+
+
+class SentryLiteralArgs(collections.namedtuple(
+        '_SentryLiteralArgs', ['literal_args'])):
+    """
+    Parameters
+    ----------
+    literal_args : Sequence[str]
+        A sequence of names for literal arguments
+
+    Examples
+    --------
+
+    The following line:
+
+    >>> SentryLiteralArgs(literal_args).for_pysig(pysig).bind(*args, **kwargs)
+
+    is equivalent to:
+
+    >>> sentry_literal_args(pysig, literal_args, args, kwargs)
+    """
+    def for_function(self, func):
+        """Bind the sentry to the signature of *func*.
+
+        Parameters
+        ----------
+        func : Function
+            A python function.
+
+        Returns
+        -------
+        obj : BoundLiteralArgs
+        """
+        return self.for_pysig(utils.pysignature(func))
+
+    def for_pysig(self, pysig):
+        """Bind the sentry to the given signature *pysig*.
+
+        Parameters
+        ----------
+        pysig : inspect.Signature
+
+
+        Returns
+        -------
+        obj : BoundLiteralArgs
+        """
+        return BoundLiteralArgs(
+            pysig=pysig,
+            literal_args=self.literal_args,
+        )
+
+
+class BoundLiteralArgs(collections.namedtuple(
+        'BoundLiteralArgs', ['pysig', 'literal_args'])):
+    """
+    This class is usually created by SentryLiteralArgs.
+    """
+    def bind(self, *args, **kwargs):
+        """Bind to argument types.
+        """
+        return sentry_literal_args(
+            self.pysig,
+            self.literal_args,
+            args,
+            kwargs,
+        )

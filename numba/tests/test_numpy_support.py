@@ -5,12 +5,14 @@ Test helper functions from numba.numpy_support.
 from __future__ import print_function
 
 import sys
+from itertools import product
 
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, numpy_support, types
+from numba import numpy_support, types
 from .support import TestCase, tag
+from .enum_usecases import Shake, RequestError
 
 
 class TestFromDtype(TestCase):
@@ -119,21 +121,40 @@ class TestFromDtype(TestCase):
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)])
         check(dtype,
-              fields={'a': (types.int16, 0),
-                      'b': (types.int32, 2)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 2, None, None)},
               size=6, aligned=False)
 
         dtype = np.dtype([('a', np.int16), ('b', np.int32)], align=True)
         check(dtype,
-              fields={'a': (types.int16, 0),
-                      'b': (types.int32, 4)},
+              fields={'a': (types.int16, 0, None, None),
+                      'b': (types.int32, 4, None, None)},
               size=8, aligned=True)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
         check(dtype,
-              fields={'m': (types.int32, 0),
-                      'n': (types.CharSeq(5), 4)},
+              fields={'m': (types.int32, 0, None, None),
+                      'n': (types.CharSeq(5), 4, None, None)},
               size=9, aligned=False)
+
+    @tag('important')
+    def test_enum_type(self):
+
+        def check(base_inst, enum_def, type_class):
+            np_dt = np.dtype(base_inst)
+            nb_ty = numpy_support.from_dtype(np_dt)
+            inst = type_class(enum_def, nb_ty)
+            recovered = numpy_support.as_dtype(inst)
+            self.assertEqual(np_dt, recovered)
+
+        dts = [np.float64, np.int32, np.complex128, np.bool]
+        enums = [Shake, RequestError]
+
+        for dt, enum in product(dts, enums):
+            check(dt, enum, types.EnumMember)
+
+        for dt, enum in product(dts, enums):
+            check(dt, enum, types.IntEnumMember)
 
 
 class ValueTypingTestBase(object):
@@ -166,7 +187,8 @@ class ValueTypingTestBase(object):
         f = func
         for unit in [
             '', 'Y', 'M', 'D', 'h', 'm', 's',
-            'ms', 'us', 'ns', 'ps', 'fs', 'as']:
+            'ms', 'us', 'ns', 'ps', 'fs', 'as',
+        ]:
             if unit:
                 t = np_type(3, unit)
             else:
@@ -236,6 +258,7 @@ class FakeUFunc(object):
             in_, out = self.types[0].split('->')
             assert len(in_) == self.nin
             assert len(out) == self.nout
+
 
 # Typical types for np.add, np.multiply, np.isnan
 _add_types = ['??->?', 'bb->b', 'BB->B', 'hh->h', 'HH->H', 'ii->i', 'II->I',
@@ -362,6 +385,48 @@ class TestUFuncs(TestCase):
         # No implicit casting from int64 to timedelta64 (Numpy would allow
         # this).
         check_no_match(np_add, (types.NPTimedelta('s'), types.int64))
+
+    def test_layout_checker(self):
+        def check_arr(arr):
+            dims = arr.shape
+            strides = arr.strides
+            itemsize = arr.dtype.itemsize
+            is_c = numpy_support.is_contiguous(dims, strides, itemsize)
+            is_f = numpy_support.is_fortran(dims, strides, itemsize)
+            expect_c = arr.flags['C_CONTIGUOUS']
+            expect_f = arr.flags['F_CONTIGUOUS']
+            self.assertEqual(is_c, expect_c)
+            self.assertEqual(is_f, expect_f)
+
+        arr = np.arange(24)
+        # 1D
+        check_arr(arr)
+        # 2D
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        # 3D
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        # middle axis is shape 1
+        check_arr(arr.reshape((2, 3, 4))[:, ::3])
+        check_arr(arr.reshape((2, 3, 4)).T[:, ::3])
+        if numpy_support.version > (1, 11):
+            # leading axis is shape 1
+            check_arr(arr.reshape((2, 3, 4))[::2])
+            check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
+            # 2 leading axis are shape 1
+            check_arr(arr.reshape((2, 3, 4))[::2, ::3])
+            check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
+            # single item slices for all axis
+            check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
+            check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
+            # 4D
+            check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
+            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
+            # outer zero dims
+            check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
+            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
 
 
 if __name__ == '__main__':

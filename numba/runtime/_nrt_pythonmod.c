@@ -81,7 +81,7 @@ meminfo_new(PyObject *self, PyObject *args) {
     addr_data = PyLong_AsVoidPtr(addr_data_obj);
     if (PyErr_Occurred())
         return NULL;
-    mi = meminfo_new_from_pyobject(addr_data, ownerobj);
+    mi = NRT_meminfo_new_from_pyobject(addr_data, ownerobj);
     return PyLong_FromVoidPtr(mi);
 }
 
@@ -156,6 +156,9 @@ build_c_helpers_dict(void)
 declmethod(adapt_ndarray_from_python);
 declmethod(adapt_ndarray_to_python);
 declmethod(adapt_buffer_from_python);
+declmethod(meminfo_new_from_pyobject);
+declmethod(meminfo_as_pyobject);
+declmethod(meminfo_from_pyobject);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);
@@ -163,12 +166,15 @@ declmethod(MemInfo_alloc_safe_aligned);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_call_dtor);
 declmethod(MemInfo_new_varsize);
+declmethod(MemInfo_new_varsize_dtor);
 declmethod(MemInfo_varsize_alloc);
+declmethod(MemInfo_data);
 declmethod(MemInfo_varsize_free);
 declmethod(MemInfo_varsize_realloc);
 declmethod(MemInfo_release);
 declmethod(Allocate);
 declmethod(Free);
+declmethod(get_api);
 
 
 #undef declmethod

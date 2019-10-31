@@ -1,10 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import numpy as np
+import operator
 from collections import namedtuple
 
-from numba import types
-from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    infer, infer_getattr, signature,
+from numba import types, utils
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate, infer,
+                                    infer_global, infer_getattr, signature,
                                     bound_function)
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
@@ -142,7 +144,11 @@ def get_array_index_type(ary, idx):
             elif not check_contiguity(right_indices[::-1]):
                 layout = 'A'
 
-        res = ary.copy(ndim=ndim, layout=layout)
+        if ndim == 0:
+            # Implicitly convert to a scalar if the output ndim==0
+            res = ary.dtype
+        else:
+            res = ary.copy(ndim=ndim, layout=layout)
 
     # Re-wrap indices
     if isinstance(idx, types.BaseTuple):
@@ -153,10 +159,8 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@infer
+@infer_global(operator.getitem)
 class GetItemBuffer(AbstractTemplate):
-    key = "getitem"
-
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
@@ -164,10 +168,8 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@infer
+@infer_global(operator.setitem)
 class SetItemBuffer(AbstractTemplate):
-    key = "setitem"
-
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
@@ -206,6 +208,14 @@ class SetItemBuffer(AbstractTemplate):
                     return
         elif not isinstance(val, types.Array):
             # Single item assignment
+            if not self.context.can_convert(val, res):
+                # if the array dtype is not yet defined
+                if not res.is_precise():
+                    # set the array type to use the dtype of value (RHS)
+                    newary = ary.copy(dtype=val)
+                    return signature(types.none, newary, idx, res)
+                else:
+                    return
             res = val
         else:
             return
@@ -282,9 +292,39 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
-        assert not args
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
-        return signature(self.resolve_T(ary))
+        if len(args) == 0:
+            return signature(self.resolve_T(ary))
+
+        if len(args) == 1:
+            shape, = args
+
+            if sentry_shape_scalar(shape):
+                assert ary.ndim == 1
+                return signature(ary, *args)
+
+            shape = normalize_shape(shape)
+            if shape is None:
+                return
+
+            assert ary.ndim == shape.count
+            return signature(self.resolve_T(ary), shape)
+
+        else:
+            if any(not sentry_shape_scalar(a) for a in args):
+                raise TypeError("transpose({0}) is not supported".format(
+                    ', '.join(args)))
+            assert ary.ndim == len(args)
+            return signature(self.resolve_T(ary), *args)
 
     @bound_function("array.copy")
     def resolve_copy(self, ary, args, kws):
@@ -358,7 +398,7 @@ class ArrayAttribute(AttributeTemplate):
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("reshape({0}) is not supported".format(
-                    ', '.join(args)))
+                    ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
@@ -373,9 +413,17 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.argsort")
     def resolve_argsort(self, ary, args, kws):
         assert not args
-        assert not kws
+        kwargs = dict(kws)
+        kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        if kwargs:
+            msg = "Unsupported keywords: {!r}"
+            raise TypingError(msg.format([k for k in kwargs.keys()]))
         if ary.ndim == 1:
-            return signature(types.Array(types.intp, 1, 'C'))
+            def argsort_stub(kind='quicksort'):
+                pass
+            pysig = utils.pysignature(argsort_stub)
+            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            return sig
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
@@ -401,7 +449,9 @@ class ArrayAttribute(AttributeTemplate):
                             "cannot convert from %s to %s"
                             % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
-        retty = ary.copy(dtype=dtype, layout=layout)
+        # reset the write bit irrespective of whether the cast type is the same
+        # as the current dtype, this replicates numpy
+        retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
         return signature(retty, *args)
 
     @bound_function("array.ravel")
@@ -418,6 +468,22 @@ class ArrayAttribute(AttributeTemplate):
         assert not args
         return signature(ary.copy(ndim=1, layout='C'))
 
+    @bound_function("array.take")
+    def resolve_take(self, ary, args, kws):
+        assert not kws
+        argty, = args
+        if isinstance(argty, types.Integer):
+            sig = signature(ary.dtype, *args)
+        elif isinstance(argty, types.Array):
+            sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
+        elif isinstance(argty, types.List): # 1d lists only
+            sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
+        elif isinstance(argty, types.BaseTuple):
+            sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
+        else:
+            raise TypeError("take(%s) not supported for %s" % argty)
+        return sig
+
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
@@ -433,6 +499,14 @@ class DTypeAttr(AttributeTemplate):
         # Wrap the numeric type in NumberClass
         return types.NumberClass(ary.dtype)
 
+    def resolve_kind(self, ary):
+        if isinstance(ary.key, types.scalars.Float):
+            val = 'f'
+        elif isinstance(ary.key, types.scalars.Integer):
+            val = 'i'
+        else:
+            return None  # other types not supported yet
+        return types.StringLiteral(val)
 
 @infer
 class StaticGetItemArray(AbstractTemplate):
@@ -444,7 +518,8 @@ class StaticGetItemArray(AbstractTemplate):
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
             isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
-                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                ret = ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+                return signature(ret, *args)
 
 
 @infer_getattr
@@ -466,7 +541,7 @@ class StaticGetItemRecord(AbstractTemplate):
         if isinstance(record, types.Record) and isinstance(idx, str):
             ret = record.typeof(idx)
             assert ret
-            return ret
+            return signature(ret, *args)
 
 @infer
 class StaticSetItemRecord(AbstractTemplate):
@@ -478,7 +553,7 @@ class StaticSetItemRecord(AbstractTemplate):
         if isinstance(record, types.Record) and isinstance(idx, str):
             expectedty = record.typeof(idx)
             if self.context.can_convert(value, expectedty) is not None:
-                return signature(types.void, record, types.Const(idx), value)
+                return signature(types.void, record, types.literal(idx), value)
 
 
 @infer_getattr
@@ -522,25 +597,111 @@ def _expand_integer(ty):
     else:
         return ty
 
+
 def generic_homog(self, args, kws):
     assert not args
     assert not kws
     return signature(self.this.dtype, recvr=self.this)
 
+
 def generic_expand(self, args, kws):
+    assert not args
+    assert not kws
     return signature(_expand_integer(self.this.dtype), recvr=self.this)
 
+
+def sum_expand(self, args, kws):
+    """
+    sum can be called with or without an axis parameter, and with or without
+    a dtype parameter
+    """
+    pysig = None
+    if 'axis' in kws and 'dtype' not in kws:
+        def sum_stub(axis):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis']]
+    elif 'dtype' in kws and 'axis' not in kws:
+        def sum_stub(dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['dtype']]
+    elif 'dtype' in kws and 'axis' in kws:
+        def sum_stub(axis, dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis'], kws['dtype']]
+
+    args_len = len(args)
+    assert args_len <= 2
+    if args_len == 0:
+        # No axis or dtype parameter so the return type of the summation is a scalar
+        # of the type of the array.
+        out = signature(_expand_integer(self.this.dtype), *args,
+                        recvr=self.this)
+    elif args_len == 1 and 'dtype' not in kws:
+        # There is an axis parameter, either arg or kwarg
+        if self.this.ndim == 1:
+            # 1d reduces to a scalar
+            return_type = self.this.dtype
+        else:
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                                    ndim=self.this.ndim-1, layout='C')
+        out = signature(return_type, *args, recvr=self.this)
+
+    elif args_len == 1 and 'dtype' in kws:
+        # No axis parameter so the return type of the summation is a scalar
+        # of the dtype parameter.
+        from .npydecl import _parse_dtype
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        out = signature(dtype, *args, recvr=self.this)
+
+    elif args_len == 2:
+        # There is an axis and dtype parameter, either arg or kwarg
+        from .npydecl import _parse_dtype
+        dtype = _parse_dtype(args[1])
+        return_type = dtype
+        if self.this.ndim != 1:
+            # 1d reduces to a scalar, 2d and above reduce dim by 1
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=return_type,
+                                    ndim=self.this.ndim-1, layout='C')
+        out = signature(return_type, *args, recvr=self.this)
+    else:
+        pass
+    return out.replace(pysig=pysig)
+
+
 def generic_expand_cumulative(self, args, kws):
+    assert not args
+    assert not kws
     assert isinstance(self.this, types.Array)
     return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=1, layout='C')
     return signature(return_type, recvr=self.this)
+
 
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
     if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
         return signature(types.float64, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
+
+def generic_hetero_always_real(self, args, kws):
+    assert not args
+    assert not kws
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
+        return signature(types.float64, recvr=self.this)
+    if isinstance(self.this.dtype, types.Complex):
+        return signature(self.this.dtype.underlying_float, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
 def generic_index(self, args, kws):
@@ -551,7 +712,6 @@ def generic_index(self, args, kws):
 def install_array_method(name, generic):
     my_attr = {"key": "array." + name, "generic": generic}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
-
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
 
@@ -562,25 +722,31 @@ for fname in ["min", "max"]:
     install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-for fname in ["sum", "prod"]:
-    install_array_method(fname, generic_expand)
+install_array_method("prod", generic_expand)
+install_array_method("sum", sum_expand)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "var", "std"]:
+for fName in ["mean"]:
     install_array_method(fName, generic_hetero_real)
+
+# var and std by definition return in real space and int arrays
+# get promoted to float64 return
+for fName in ["var", "std"]:
+    install_array_method(fName, generic_hetero_always_real)
+
 
 # Functions that return an index (intp)
 install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@infer
+@infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
-    key = '=='
+    #key = operator.eq
 
     def generic(self, args, kws):
         assert not kws

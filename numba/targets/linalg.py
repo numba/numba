@@ -9,6 +9,7 @@ import contextlib
 from llvmlite import ir
 
 import numpy as np
+import operator
 
 from numba import types, cgutils
 
@@ -21,6 +22,7 @@ from numba import types
 from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
+from ..utils import HAS_MATMUL_OPERATOR
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -518,7 +520,6 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 
 @lower_builtin(np.dot, types.Array, types.Array)
-@lower_builtin('@', types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
@@ -538,6 +539,9 @@ def dot_2(context, builder, sig, args):
             return dot_2_vv(context, builder, sig, args)
         else:
             assert 0
+
+if HAS_MATMUL_OPERATOR:
+    lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
 
 @lower_builtin(np.vdot, types.Array, types.Array)
@@ -736,14 +740,14 @@ def _check_linalg_matrix(a, func_name, la_prefix=True):
         a = a.type
     if not isinstance(a, types.Array):
         msg = "%s.%s() only supported for array types" % interp
-        raise TypingError(msg)
+        raise TypingError(msg, highlighting=False)
     if not a.ndim == 2:
         msg = "%s.%s() only supported on 2-D arrays." % interp
-        raise TypingError(msg)
+        raise TypingError(msg, highlighting=False)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
         msg = "%s.%s() only supported on "\
             "float and complex arrays." % interp
-        raise TypingError(msg)
+        raise TypingError(msg, highlighting=False)
 
 
 def _check_homogeneous_types(func_name, *types):
@@ -751,7 +755,7 @@ def _check_homogeneous_types(func_name, *types):
     for t in types[1:]:
         if t.dtype != t0:
             msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % func_name
-            raise TypingError(msg)
+            raise TypingError(msg, highlighting=False)
 
 
 @register_jitable
@@ -763,6 +767,11 @@ def _inv_err_handler(r):
         if r > 0:
             raise np.linalg.LinAlgError(
                 "Matrix is singular to machine precision.")
+
+@register_jitable
+def _dummy_liveness_func(a):
+    """pass a list of variables to be preserved through dead code elimination"""
+    return a[0]
 
 
 @overload(np.linalg.inv)
@@ -792,6 +801,9 @@ def inv_impl(a):
         else:
             acpy = np.asfortranarray(a)
 
+        if n == 0:
+            return acpy
+
         ipiv = np.empty(n, dtype=F_INT_nptype)
 
         r = numba_xxgetrf(kind, n, n, acpy.ctypes, n, ipiv.ctypes)
@@ -801,8 +813,7 @@ def inv_impl(a):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        ipiv.size
+        _dummy_liveness_func([acpy.size, ipiv.size])
         return acpy
 
     return inv_impl
@@ -857,6 +868,10 @@ if numpy_version >= (1, 8):
 
             # The output is allocated in C order
             out = a.copy()
+
+            if n == 0:
+                return out
+
             # Pass UP since xxpotrf() operates in F order
             # The semantics ensure this works fine
             # (out is really its Hermitian in F order, but UP instructs
@@ -916,6 +931,9 @@ if numpy_version >= (1, 8):
             vl = np.empty((n, ldvl), dtype=a.dtype)
             vr = np.empty((n, ldvr), dtype=a.dtype)
 
+            if n == 0:
+                return (wr, vr.T)
+
             r = numba_ez_rgeev(kind,
                                JOBVL,
                                JOBVR,
@@ -946,11 +964,7 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return (wr, vr.T)
 
         def cmplx_eig_impl(a):
@@ -975,6 +989,9 @@ if numpy_version >= (1, 8):
             vl = np.empty((n, ldvl), dtype=a.dtype)
             vr = np.empty((n, ldvr), dtype=a.dtype)
 
+            if n == 0:
+                return (w, vr.T)
+
             r = numba_ez_cgeev(kind,
                                JOBVL,
                                JOBVR,
@@ -990,10 +1007,7 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return (w, vr.T)
 
         if isinstance(a.dtype, types.scalars.Complex):
@@ -1036,6 +1050,10 @@ if numpy_version >= (1, 8):
             ldvl = 1
             ldvr = 1
             wr = np.empty(n, dtype=a.dtype)
+
+            if n == 0:
+                return wr
+
             wi = np.empty(n, dtype=a.dtype)
 
             # not referenced but need setting for MKL null check
@@ -1072,11 +1090,7 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            wr.size
-            wi.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
             return wr
 
         def cmplx_eigvals_impl(a):
@@ -1098,6 +1112,10 @@ if numpy_version >= (1, 8):
             ldvl = 1
             ldvr = 1
             w = np.empty(n, dtype=a.dtype)
+
+            if n == 0:
+                return w
+
             vl = np.empty((1), dtype=a.dtype)
             vr = np.empty((1), dtype=a.dtype)
 
@@ -1116,10 +1134,7 @@ if numpy_version >= (1, 8):
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
-            acpy.size
-            vl.size
-            vr.size
-            w.size
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
             return w
 
         if isinstance(a.dtype, types.scalars.Complex):
@@ -1162,6 +1177,9 @@ if numpy_version >= (1, 8):
 
             w = np.empty(n, dtype=w_dtype)
 
+            if n == 0:
+                return (w, acpy)
+
             r = numba_ez_xxxevd(kind,  # kind
                                 JOBZ,  # jobz
                                 UPLO,  # uplo
@@ -1173,9 +1191,7 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            _dummy_liveness_func([acpy.size, w.size])
             return (w, acpy)
 
         return eigh_impl
@@ -1215,6 +1231,9 @@ if numpy_version >= (1, 8):
 
             w = np.empty(n, dtype=w_dtype)
 
+            if n == 0:
+                return w
+
             r = numba_ez_xxxevd(kind,  # kind
                                 JOBZ,  # jobz
                                 UPLO,  # uplo
@@ -1226,9 +1245,7 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            w.size
-
+            _dummy_liveness_func([acpy.size, w.size])
             return w
 
         return eigvalsh_impl
@@ -1255,6 +1272,9 @@ if numpy_version >= (1, 8):
         def svd_impl(a, full_matrices=1):
             n = a.shape[-1]
             m = a.shape[-2]
+
+            if n == 0 or m == 0:
+                raise np.linalg.LinAlgError("Arrays cannot be empty")
 
             _check_finite_matrix(a)
 
@@ -1295,11 +1315,7 @@ if numpy_version >= (1, 8):
             _handle_err_maybe_convergence_problem(r)
 
             # help liveness analysis
-            acpy.size
-            vt.size
-            u.size
-            s.size
-
+            _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
             return (u.T, s, vt.T)
 
         return svd_impl
@@ -1327,6 +1343,9 @@ def qr_impl(a):
     def qr_impl(a):
         n = a.shape[-1]
         m = a.shape[-2]
+
+        if n == 0 or m == 0:
+            raise np.linalg.LinAlgError("Arrays cannot be empty")
 
         _check_finite_matrix(a)
 
@@ -1378,9 +1397,7 @@ def qr_impl(a):
         _handle_err_maybe_convergence_problem(ret)
 
         # help liveness analysis
-        tau.size
-        q.size
-
+        _dummy_liveness_func([tau.size, q.size])
         return (q[:, :minmn], r)
 
     return qr_impl
@@ -1456,7 +1473,36 @@ def _system_check_dimensionally_valid_impl(a, b):
         return twoD_impl
 
 
-def _lstsq_residual(b, n, rhs):
+def _system_check_non_empty(a, b):
+    """
+    Check that AX=B style system input is not empty.
+    """
+    raise NotImplementedError
+
+
+@overload(_system_check_non_empty)
+def _system_check_non_empty_impl(a, b):
+    ndim = b.ndim
+    if ndim == 1:
+        def oneD_impl(a, b):
+            am = a.shape[-2]
+            an = a.shape[-1]
+            bm = b.shape[-1]
+            if am == 0 or bm == 0 or an == 0:
+                raise np.linalg.LinAlgError('Arrays cannot be empty')
+        return oneD_impl
+    else:
+        def twoD_impl(a, b):
+            am = a.shape[-2]
+            an = a.shape[-1]
+            bm = b.shape[-2]
+            bn = b.shape[-1]
+            if am == 0 or bm == 0 or an == 0 or bn == 0:
+                raise np.linalg.LinAlgError('Arrays cannot be empty')
+        return twoD_impl
+
+
+def _lstsq_residual(b, n, nrhs):
     """
     Compute the residual from the 'b' scratch space.
     """
@@ -1464,7 +1510,7 @@ def _lstsq_residual(b, n, rhs):
 
 
 @overload(_lstsq_residual)
-def _lstsq_residual_impl(b, n, rhs):
+def _lstsq_residual_impl(b, n, nrhs):
     ndim = b.ndim
     dtype = b.dtype
     real_dtype = np_support.as_dtype(getattr(dtype, "underlying_float", dtype))
@@ -1561,7 +1607,10 @@ def lstsq_impl(a, b, rcond=-1.0):
         _check_finite_matrix(a)
         _check_finite_matrix(b)
 
-        # check the systems is dimensionally valid
+        # check the system is not empty
+        _system_check_non_empty(a, b)
+
+        # check the systems are dimensionally valid
         _system_check_dimensionally_valid(a, b)
 
         minmn = min(m, n)
@@ -1612,11 +1661,7 @@ def lstsq_impl(a, b, rcond=-1.0):
         x = _lstsq_solution(b, bcpy, n)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        s.size
-        rank_ptr.size
-
+        _dummy_liveness_func([acpy.size, bcpy.size, s.size, rank_ptr.size])
         return (x, res, rank, s[:minmn])
 
     return lstsq_impl
@@ -1681,6 +1726,9 @@ def solve_impl(a, b):
 
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, n), dtype=np_dt).T
+        if n == 0:
+            return _solve_compute_return(b, bcpy)
+
         # specialised copy in due to b being 1 or 2D
         _system_copy_in_b(bcpy, b, nrhs)
 
@@ -1700,10 +1748,7 @@ def solve_impl(a, b):
         _inv_err_handler(r)
 
         # help liveness analysis
-        acpy.size
-        bcpy.size
-        ipiv.size
-
+        _dummy_liveness_func([acpy.size, bcpy.size, ipiv.size])
         return _solve_compute_return(b, bcpy)
 
     return solve_impl
@@ -1786,6 +1831,9 @@ def pinv_impl(a, rcond=1.e-15):
         else:
             acpy = np.asfortranarray(a)
 
+        if m == 0 or n == 0:
+            return acpy.T.ravel().reshape(a.shape).T
+
         minmn = min(m, n)
 
         u = np.empty((minmn, m), dtype=a.dtype)
@@ -1862,13 +1910,14 @@ def pinv_impl(a, rcond=1.e-15):
         )
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-        one.size
-        zero.size
-
+        #acpy.size
+        #vt.size
+        #u.size
+        #s.size
+        #one.size
+        #zero.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size,
+            zero.size])
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
@@ -1924,11 +1973,17 @@ def slogdet_impl(a):
 
     diag_walker = _get_slogdet_diag_walker(a)
 
+    ONE = a.dtype(1)
+    ZERO = getattr(a.dtype, "underlying_float", a.dtype)(0)
+
     def slogdet_impl(a):
         n = a.shape[-1]
         if a.shape[-2] != n:
             msg = "Last 2 dimensions of the array must be square."
             raise np.linalg.LinAlgError(msg)
+
+        if n == 0:
+            return (ONE, ZERO)
 
         _check_finite_matrix(a)
 
@@ -1962,7 +2017,7 @@ def slogdet_impl(a):
             sgn = -1
 
         # help liveness analysis
-        ipiv.size
+        _dummy_liveness_func([ipiv.size])
         return diag_walker(n, acpy, sgn)
 
     return slogdet_impl
@@ -2005,7 +2060,7 @@ def _compute_singular_values_impl(a):
     np_ret_type = np_support.as_dtype(nb_ret_type)
     np_dtype = np_support.as_dtype(a.dtype)
 
-    # This are not referenced in the computation but must be set
+    # These are not referenced in the computation but must be set
     # for MKL.
     u = np.empty((1, 1), dtype=np_dtype)
     vt = np.empty((1, 1), dtype=np_dtype)
@@ -2020,17 +2075,18 @@ def _compute_singular_values_impl(a):
         # call LAPACK to shortcut doing the "reconstruct
         # singular vectors from reflectors" step and just
         # get back the singular values.
-        _check_finite_matrix(a)
         n = a.shape[-1]
         m = a.shape[-2]
+        if m == 0 or n == 0:
+            raise np.linalg.LinAlgError('Arrays cannot be empty')
+        _check_finite_matrix(a)
+
         ldu = m
         minmn = min(m, n)
 
         # need to be >=1 but aren't referenced
         ucol = 1
         ldvt = 1
-
-        _check_finite_matrix(a)
 
         if F_layout:
             acpy = np.copy(a)
@@ -2058,11 +2114,7 @@ def _compute_singular_values_impl(a):
         _handle_err_maybe_convergence_problem(r)
 
         # help liveness analysis
-        acpy.size
-        vt.size
-        u.size
-        s.size
-
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
         return s
 
     return sv_function
@@ -2103,9 +2155,9 @@ def _oneD_norm_2_impl(a):
             assert 0   # unreachable
 
         # help liveness analysis
-        ret.size
-        a.size
-
+        #ret.size
+        #a.size
+        _dummy_liveness_func([ret.size, a.size])
         return ret[0]
 
     return impl
@@ -2140,10 +2192,10 @@ def _get_norm_impl(a, ord_flag):
 
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
-            def oneD_impl(a, order=None):
+            def oneD_impl(a, ord=None):
                 return _oneD_norm_2(a)
         else:
-            def oneD_impl(a, order=None):
+            def oneD_impl(a, ord=None):
                 n = len(a)
 
                 # Shortcut to handle zero length arrays
@@ -2159,9 +2211,9 @@ def _get_norm_impl(a, ord_flag):
                 # This is the same as for ord=="None" but because
                 # we have to handle "None" specially this condition
                 # is separated
-                if order == 2:
+                if ord == 2:
                     return _oneD_norm_2(a)
-                elif order == np.inf:
+                elif ord == np.inf:
                     # max(abs(a))
                     ret = abs(a[0])
                     for k in range(1, n):
@@ -2170,7 +2222,7 @@ def _get_norm_impl(a, ord_flag):
                             ret = val
                     return ret
 
-                elif order == -np.inf:
+                elif ord == -np.inf:
                     # min(abs(a))
                     ret = abs(a[0])
                     for k in range(1, n):
@@ -2179,7 +2231,7 @@ def _get_norm_impl(a, ord_flag):
                             ret = val
                     return ret
 
-                elif order == 0:
+                elif ord == 0:
                     # sum(a != 0)
                     ret = 0.0
                     for k in range(n):
@@ -2187,7 +2239,7 @@ def _get_norm_impl(a, ord_flag):
                             ret += 1.
                     return ret
 
-                elif order == 1:
+                elif ord == 1:
                     # sum(abs(a))
                     ret = 0.0
                     for k in range(n):
@@ -2198,8 +2250,8 @@ def _get_norm_impl(a, ord_flag):
                     # sum(abs(a)**ord)**(1./ord)
                     ret = 0.0
                     for k in range(n):
-                        ret += abs(a[k])**order
-                    return ret**(1. / order)
+                        ret += abs(a[k])**ord
+                    return ret**(1. / ord)
         return oneD_impl
 
     elif a.ndim == 2:
@@ -2225,7 +2277,7 @@ def _get_norm_impl(a, ord_flag):
 
             # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
             # which is the L2-norm of A.ravel() and so can be computed via BLAS
-            def twoD_impl(a, order=None):
+            def twoD_impl(a, ord=None):
                 n = a.size
                 if n == 0:
                     # reshape() currently doesn't support zero-sized arrays
@@ -2236,7 +2288,7 @@ def _get_norm_impl(a, ord_flag):
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
 
-            def twoD_impl(a, order=None):
+            def twoD_impl(a, ord=None):
                 n = a.shape[-1]
                 m = a.shape[-2]
 
@@ -2247,7 +2299,7 @@ def _get_norm_impl(a, ord_flag):
                 if a.size == 0:
                     return 0.0
 
-                if order == np.inf:
+                if ord == np.inf:
                     # max of sum of abs across rows
                     # max(sum(abs(a)), axis=1)
                     global_max = 0.
@@ -2259,7 +2311,7 @@ def _get_norm_impl(a, ord_flag):
                             global_max = tmp
                     return global_max
 
-                elif order == -np.inf:
+                elif ord == -np.inf:
                     # min of sum of abs across rows
                     # min(sum(abs(a)), axis=1)
                     global_min = max_val
@@ -2270,7 +2322,7 @@ def _get_norm_impl(a, ord_flag):
                         if tmp < global_min:
                             global_min = tmp
                     return global_min
-                elif order == 1:
+                elif ord == 1:
                     # max of sum of abs across cols
                     # max(sum(abs(a)), axis=0)
                     global_max = 0.
@@ -2282,7 +2334,7 @@ def _get_norm_impl(a, ord_flag):
                             global_max = tmp
                     return global_max
 
-                elif order == -1:
+                elif ord == -1:
                     # min of sum of abs across cols
                     # min(sum(abs(a)), axis=0)
                     global_min = max_val
@@ -2296,10 +2348,10 @@ def _get_norm_impl(a, ord_flag):
 
                 # Results via SVD, singular values are sorted on return
                 # by definition.
-                elif order == 2:
+                elif ord == 2:
                     # max SV
                     return _compute_singular_values(a)[0]
-                elif order == -2:
+                elif ord == -2:
                     # min SV
                     return _compute_singular_values(a)[-1]
                 else:
@@ -2325,46 +2377,43 @@ def cond_impl(a, p=None):
 
     _check_linalg_matrix(a, "cond")
 
-    def _get_cond_impl(a, p):
-        # handle the p==None case separately for type inference to work ok
-        if p in (None, types.none):
-            def cond_none_impl(a, p=None):
-                s = _compute_singular_values(a)
-                return s[0] / s[-1]
-            return cond_none_impl
+    def impl(a, p=None):
+        # This is extracted for performance, numpy does approximately:
+        # `condition = norm(a) * norm(inv(a))`
+        # in the cases of `p == 2` or `p ==-2` singular values are used
+        # for computing norms. This costs numpy an svd of `a` then an
+        # inversion of `a` and another svd of `a`.
+        # Below is a different approach, which also gives a more
+        # accurate answer as there is no inversion involved.
+        # Recall that the singular values of an inverted matrix are the
+        # reciprocal of singular values of the original matrix.
+        # Therefore calling `svd(a)` once yields all the information
+        # needed about both `a` and `inv(a)` without the cost or
+        # potential loss of accuracy incurred through inversion.
+        # For the case of `p == 2`, the result is just the ratio of
+        # `largest singular value/smallest singular value`, and for the
+        # case of `p==-2` the result is simply the
+        # `smallest singular value/largest singular value`.
+        # As a result of this, numba accepts non-square matrices as
+        # input when p==+/-2 as well as when p==None.
+        if p == 2 or p == -2 or p is None:
+            s = _compute_singular_values(a)
+            if p == 2 or p is None:
+                r = np.divide(s[0], s[-1])
+            else:
+                r = np.divide(s[-1], s[0])
+        else:  # cases np.inf, -np.inf, 1, -1
+            norm_a = np.linalg.norm(a, p)
+            norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
+            r = norm_a * norm_inv_a
+        # NumPy uses a NaN mask, if the input has a NaN, it will return NaN,
+        # Numba calls ban NaN through the use of _check_finite_matrix but this
+        # catches cases where NaN occurs through floating point use
+        if np.isnan(r):
+            return np.inf
         else:
-            def cond_not_none_impl(a, p):
-                # This is extracted for performance, numpy does approximately:
-                # `condition = norm(a) * norm(inv(a))`
-                # in the cases of `p == 2` or `p ==-2` singular values are used
-                # for computing norms. This costs numpy an svd of `a` then an
-                # inversion of `a` and another svd of `a`.
-                # Below is a different approach, which also gives a more
-                # accurate answer as there is no inversion involved.
-                # Recall that the singular values of an inverted matrix are the
-                # reciprocal of singular values of the original matrix.
-                # Therefore calling `svd(a)` once yields all the information
-                # needed about both `a` and `inv(a)` without the cost or
-                # potential loss of accuracy incurred through inversion.
-                # For the case of `p == 2`, the result is just the ratio of
-                # `largest singular value/smallest singular value`, and for the
-                # case of `p==-2` the result is simply the
-                # `smallest singular value/largest singular value`.
-                # As a result of this, numba accepts non-square matrices as
-                # input when p==+/-2 as well as when p==None.
-                if p == 2 or p == -2:
-                    s = _compute_singular_values(a)
-                    if p == 2:
-                        return s[0] / s[-1]
-                    else:
-                        return s[-1] / s[0]
-                else:  # cases np.inf, -np.inf, 1, -1
-                    norm_a = np.linalg.norm(a, p)
-                    norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
-                    return norm_a * norm_inv_a
-            return cond_not_none_impl
-
-    return _get_cond_impl(a, p)
+            return r
+    return impl
 
 
 @register_jitable
@@ -2413,7 +2462,7 @@ def matrix_rank_impl(a, tol=None):
                 return _get_rank_from_singular_values(s, t)
             return _2d_tol_none_impl
         else:
-            def _2d_tol_not_none_impl(a, tol):
+            def _2d_tol_not_none_impl(a, tol=None):
                 s = _compute_singular_values(a)
                 return _get_rank_from_singular_values(s, tol)
             return _2d_tol_not_none_impl
@@ -2433,7 +2482,7 @@ def matrix_rank_impl(a, tol=None):
             # lead to a reported rank of 0 whereas a tol of 1e-15 should lead
             # to a reported rank of 1, numpy reports 1 regardless.
             # The code below replicates the numpy behaviour.
-            def _1d_matrix_rank_impl(a, tol):
+            def _1d_matrix_rank_impl(a, tol=None):
                 for k in range(len(a)):
                     if a[k] != 0.:
                         return 1
@@ -2470,6 +2519,14 @@ def matrix_power_impl(a, n):
             for k in range(a.shape[0]):
                 A[k, k] = 1.
             return A
+
+        am, an = a.shape[-1], a.shape[-2]
+        if am != an:
+            raise ValueError('input must be a square array')
+
+        # empty, return a copy
+        if am == 0:
+            return a.copy()
 
         # note: to be consistent over contiguousness, C order is
         # returned as that is what dot() produces and the most common
@@ -2518,14 +2575,14 @@ def matrix_power_impl(a, n):
 
 
 @overload(np.trace)
-def matrix_trace_impl(a, offset=types.int_):
+def matrix_trace_impl(a, offset=0):
     """
     Computes the trace of an array.
     """
 
     _check_linalg_matrix(a, "trace", la_prefix=False)
 
-    if not isinstance(offset, types.Integer):
+    if not isinstance(offset, (int, types.Integer)):
         raise TypeError("integer argument expected, got %s" % offset)
 
     def matrix_trace_impl(a, offset=0):
@@ -2555,7 +2612,7 @@ def _check_scalar_or_lt_2d_mat(a, func_name, la_prefix=True):
     if isinstance(a, types.Array):
         if not a.ndim <= 2:
             raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
-                              % interp)
+                              % interp, highlighting=False)
 
 
 def _get_as_array(x):
@@ -2626,7 +2683,11 @@ else:
 def _kron_normaliser_impl(x):
     # makes x into a 2d array
     if isinstance(x, types.Array):
-        if x.ndim == 2:
+        if x.layout not in ('C', 'F'):
+            raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
+                              "input arrays. Receieved an input of "
+                              "layout '{}'.".format(x.layout))
+        elif x.ndim == 2:
             @register_jitable
             def nrm_shape(x):
                 xn = x.shape[-1]

@@ -184,3 +184,24 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.sub`
 * :func:`operator.truediv`
 * :func:`operator.xor`
+
+
+Numpy support
+=============
+
+Due to the CUDA programming model, dynamic memory allocation inside a kernel is
+inefficient and is often not needed.  Numba disallows any memory allocating features.
+This disables a large number of NumPy APIs.  For best performance, users should write
+code such that each thread is dealing with a single element at a time.
+
+Supported numpy features:
+
+* accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
+* scalar ufuncs that have equivalents in the `math` module; i.e. ``np.sin(x[0])``, where x is a 1D array.
+* indexing and slicing works.
+
+Unsupported numpy features:
+
+* array creation APIs.
+* array methods.
+* functions that returns a new array.

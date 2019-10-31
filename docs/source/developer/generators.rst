@@ -156,8 +156,8 @@ Let's describe those fields in order.
   at which resumption point execution must resume.  By convention, it can
   have two special values: 0 means execution must start at the beginning of
   the generator (i.e. the first time :py:func:`next` is called); -1 means
-  the generator is exhauted and resumption must immediately raise StopIteration.
-  Other values indicate the yield point's index starting from 1
+  the generator is exhausted and resumption must immediately raise
+  StopIteration.  Other values indicate the yield point's index starting from 1
   (corresponding to the indices shown in the generator info above).
 
 * The second member, the *arguments structure* is read-only after it is first
@@ -263,7 +263,7 @@ represents the function's start, ``generator_resume1`` (resp.
 ``generator_resume2``) is the resumption point after the first
 (resp. second) yield point.
 
-After generation by LLVM, the whole native assembler code for this function
+After generation by LLVM, the whole native assembly code for this function
 may look like this (on x86-64):
 
 .. code-block:: asm

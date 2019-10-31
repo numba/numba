@@ -102,7 +102,9 @@ in your ``setup.py`` script, using distutils or setuptools::
 The ``source_module`` above is the module defining the ``cc`` object.
 Extensions compiled like this will be automatically included in the
 build files for your Python project, so you can distribute them inside
-binary packages such as wheels or Conda packages.
+binary packages such as wheels or Conda packages. Note that in the case of
+using conda, the compilers used for AOT need to be those that are available
+in the Anaconda distribution.
 
 
 Signature syntax
