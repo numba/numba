@@ -30,7 +30,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
                 # statement, which is not handled by the looplifting code.
                 # Thus, this loop is not a candidate.
                 _logger.debug("return-statement in loop.")
-                return True
+                return False
             outedges |= succs
         ok = len(outedges) == 1
         _logger.debug("same_exit_point=%s", ok)

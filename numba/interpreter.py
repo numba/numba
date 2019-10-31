@@ -96,22 +96,24 @@ class Interpreter(object):
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
-        # Control flow analysis
-        # self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        # self.cfa.run()
+        if PYVERSION < (3, 8):
+            # Control flow analysis
+            self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+            self.cfa.run()
+            if config.DUMP_CFG:
+                self.cfa.dump()
 
-        # self.cfa.dump()
-
-        # Data flow analysis
-        # self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        # self.dfa.run()
-        from numba.byteflow import Flow, AdaptDFA, AdaptCFA
-        flow = Flow(bytecode)
-        flow.run()
-        self.dfa = AdaptDFA(flow)
-        self.cfa = AdaptCFA(flow)
-        if config.DUMP_CFG:
-            self.cfa.dump()
+            # Data flow analysis
+            self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+            self.dfa.run()
+        else:
+            from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+            flow = Flow(bytecode)
+            flow.run()
+            self.dfa = AdaptDFA(flow)
+            self.cfa = AdaptCFA(flow)
+            if config.DUMP_CFG:
+                self.cfa.dump()
 
         # Temp states during interpretation
         self.current_block = None
