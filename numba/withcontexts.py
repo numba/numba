@@ -170,7 +170,7 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc):
+    def _legalize_args(self, extra, loc, additional_ns):
         """
         Legalize arguments to the context-manager
         """
@@ -189,14 +189,17 @@ class _ObjModeContextType(WithContext):
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
-
-            typeanns[k] = sigutils._parse_signature_string(v.value)
+            typeanns[k] = sigutils._parse_signature_string(
+                v.value, additional_ns=additional_ns,
+            )
 
         return typeanns
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
-        typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc)
+        ns = func_ir.func_id.func.__globals__
+        typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc,
+                                       additional_ns=ns)
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
