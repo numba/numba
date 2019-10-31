@@ -39,6 +39,7 @@ def get_thread_count():
         raise ValueError("Number of threads specified must be > 0.")
     return t
 
+
 #: The total (maximum) number of threads used by numba parallel.
 #:
 #: Defaults to the number of cores but can be overridden with the
@@ -529,6 +530,7 @@ def _set_num_threads_jit(n):
     _launch_threads() has not already been called.
     """
     return _set_num_threads(n)
+
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
