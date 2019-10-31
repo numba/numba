@@ -336,6 +336,7 @@ metadata = dict(
         "numba.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        "numba.ocl.tests.ocldrv.data": ["*.bc"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],

@@ -7,5 +7,5 @@ def init_jit():
 
 def initialize_all():
     from numba.targets.registry import dispatcher_registry
-    dispatcher_registry.ondemand['gpu'] = init_jit
+    #dispatcher_registry.ondemand['gpu'] = init_jit
     dispatcher_registry.ondemand['cuda'] = init_jit
