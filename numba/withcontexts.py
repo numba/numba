@@ -170,7 +170,7 @@ class _ObjModeContextType(WithContext):
     """
     is_callable = True
 
-    def _legalize_args(self, extra, loc, additional_ns):
+    def _legalize_args(self, extra, loc, additional_ns, freevars):
         """
         Legalize arguments to the context-manager
         """
@@ -184,22 +184,33 @@ class _ObjModeContextType(WithContext):
         callkwargs = extra['kwargs']
         typeanns = {}
         for k, v in callkwargs.items():
-            if not isinstance(v, ir.Const) or not isinstance(v.value, str):
+            if isinstance(v, ir.Const) and isinstance(v.value, str):
+                typeanns[k] = sigutils._parse_signature_string(
+                    v.value, additional_ns=additional_ns,
+                )
+            elif isinstance(v, ir.FreeVar):
+                typeanns[k] = freevars[v.name]
+            else:
                 raise errors.CompilerError(
                     "objectmode context requires constants string for "
                     "type annotation",
                 )
-            typeanns[k] = sigutils._parse_signature_string(
-                v.value, additional_ns=additional_ns,
-            )
 
         return typeanns
 
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
         ns = func_ir.func_id.func.__globals__
+
+        cellnames = func_ir.func_id.func.__code__.co_freevars
+        closures = func_ir.func_id.func.__closure__
+        if closures is not None:
+            freevars = {cellname: closure.cell_contents
+                        for cellname, closure in zip(cellnames, closures)}
+        else:
+            freevars = {}
         typeanns = self._legalize_args(extra, loc=blocks[blk_start].loc,
-                                       additional_ns=ns)
+                                       additional_ns=ns, freevars=freevars)
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
