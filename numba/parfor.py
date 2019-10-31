@@ -1507,12 +1507,6 @@ class ParforPass(object):
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
-        # run post processor again to generate Del nodes
-        post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run()
-        if self.func_ir.is_generator:
-            fix_generator_types(self.func_ir.generator_info, self.return_type,
-                                self.typemap)
         if sequential_parfor_lowering or self.options.gen_openmp != False:
             get_parfor_params(self.func_ir.blocks,
                               self.options.fusion,
@@ -1538,6 +1532,12 @@ class ParforPass(object):
                 else:
                     print('Function {} has no Parfor.'.format(name))
 
+        # run post processor again to generate Del nodes
+        post_proc = postproc.PostProcessor(self.func_ir)
+        post_proc.run()
+        if self.func_ir.is_generator:
+            fix_generator_types(self.func_ir.generator_info, self.return_type,
+                                self.typemap)
         return
 
     def _convert_numpy(self, blocks):
