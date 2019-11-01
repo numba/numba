@@ -72,6 +72,7 @@ def wrap_index(typingctx, idx, size):
         raise ValueError("Argument types for wrap_index must match")
 
     def codegen(context, builder, sig, args):
+        """
         assert(len(args) == 2)
         idx = args[0]
         size = args[1]
@@ -82,6 +83,19 @@ def wrap_index(typingctx, idx, size):
         is_oversize = builder.icmp_signed('>=', wrapped_rem, size)
         mod = builder.select(is_negative, wrapped_rem,
                 builder.select(is_oversize, rem, wrapped_rem))
+        return mod
+        """
+        idx = args[0]
+        size = args[1]
+        neg_size = builder.neg(size)
+        zero = llvmlite.ir.Constant(idx.type, 0)
+        idx_negative = builder.icmp_signed('<', idx, zero)
+        pos_oversize = builder.icmp_signed('>=', idx, size)
+        neg_oversize = builder.icmp_signed('<=', idx, neg_size)
+        pos_res = builder.select(pos_oversize, size, idx)
+        neg_res = builder.select(neg_oversize, zero, builder.add(idx, size))
+        mod = builder.select(idx_negative, neg_res, pos_res)
+        #cgutils.printf(builder, "wrap_index: idx=%d size=%d neg_size=%d idx_neg=%d pos_over=%d neg_over=%d pos_res=%d neg_res=%d mod=%d\n", idx, size, neg_size, idx_negative, pos_oversize, neg_oversize, pos_res, neg_res, mod)
         return mod
 
     return signature(idx, idx, size), codegen
@@ -1299,6 +1313,7 @@ class ArrayAnalysis(object):
             return dsize, None
 
         slice_typ = types.intp
+        orig_slice_typ = slice_typ
 
         size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
         size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
@@ -1336,6 +1351,7 @@ class ArrayAnalysis(object):
                 # remember the variable defining that size.
                 equiv_set.rel_map[size_rel] = size_var
 
+        """
         wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
         wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
         fnty = get_global_func_typ(wrap_index)
@@ -1351,6 +1367,37 @@ class ArrayAnalysis(object):
         stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
         stmts.append(ir.Assign(value=value, target=var, loc=loc))
         return var, replacement_slice_var
+        """
+
+        wrap_var = ir.Var(scope, mk_unique_var("wrap"), loc)
+        wrap_def = ir.Global('wrap_index', wrap_index, loc=loc)
+        fnty = get_global_func_typ(wrap_index)
+        sig = self.context.resolve_function_type(fnty, (orig_slice_typ, size_typ,), {})
+        self._define(equiv_set, wrap_var, fnty, wrap_def)
+
+        var1 = ir.Var(scope, mk_unique_var("var"), loc)
+        var1_typ = types.intp
+        value1 = ir.Expr.call(wrap_var, [lhs, dsize], {}, loc)
+        self._define(equiv_set, var1, var1_typ, value1)
+        self.calltypes[value1] = sig
+
+        var2 = ir.Var(scope, mk_unique_var("var"), loc)
+        var2_typ = types.intp
+        value2 = ir.Expr.call(wrap_var, [rhs, dsize], {}, loc)
+        self._define(equiv_set, var2, var2_typ, value2)
+        self.calltypes[value2] = sig
+
+        post_wrap_size_var = ir.Var(scope, mk_unique_var("slice_size"), loc)
+        post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
+        self.calltypes[post_wrap_size_val] = signature(slice_typ, var2_typ, var1_typ)
+        self._define(equiv_set, post_wrap_size_var, slice_typ, post_wrap_size_val)
+
+        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
+        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+        stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
+        stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
+        stmts.append(ir.Assign(value=post_wrap_size_val, target=post_wrap_size_var, loc=loc))
+        return post_wrap_size_var, replacement_slice_var
 
     def _index_to_shape(self, scope, equiv_set, var, ind_var):
         """For indexing like var[index] (either write or read), see if
