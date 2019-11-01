@@ -1504,6 +1504,33 @@ class ParforPass(object):
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
+
+        if config.DEBUG_ARRAY_OPT >= 3:
+            for(block_label, block) in self.func_ir.blocks.items():
+                new_block = []
+                scope = block.scope
+                for stmt in block.body:
+                    new_block.append(stmt)
+                    if isinstance(stmt, ir.Assign):
+                        loc = stmt.loc
+                        lhs = stmt.target
+                        rhs = stmt.value
+                        lhs_typ = self.typemap[lhs.name]
+                        print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
+                        if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
+                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            self.typemap[str_var.name] = types.StringLiteral(lhs.name)
+                            lhs_const = ir.Const(lhs.name, loc)
+                            str_assign = ir.Assign(lhs_const, str_var, loc)
+                            new_block.append(str_assign)
+                            str_print = ir.Print([str_var], None, loc)
+                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
+                            new_block.append(str_print)
+                            ir_print = ir.Print([lhs], None, loc)
+                            self.calltypes[ir_print] = signature(types.none, lhs_typ)
+                            new_block.append(ir_print)
+                block.body = new_block
+
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
         post_proc.run()
