@@ -32,8 +32,9 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
-                              _PyUnicode_ToLowerFull, _PyUnicode_ToTitleFull,
+from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+                              _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
+                              _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -1321,6 +1322,34 @@ def unicode_istitle(s):
     return impl
 
 
+@overload_method(types.UnicodeType, 'islower')
+def unicode_islower(data):
+    """
+    impl is an approximate translation of:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933    # noqa: E501
+    mixed with:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156    # noqa: E501
+    """
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsLowercase(_get_code_point(data, 0))
+        if length == 0:
+            return False
+
+        cased = False
+        for idx in range(length):
+            cp = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(cp) or _PyUnicode_IsTitlecase(cp):
+                return False
+            elif not cased and _PyUnicode_IsLowercase(cp):
+                cased = True
+        return cased
+    return impl
+
+
+
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
@@ -1352,7 +1381,7 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     if code_point == 0x3A3:
         mapped[0] = _handle_capital_sigma(data, length, idx)
         return 1
-    return _PyUnicode_ToLowerFull(_Py_UCS4(code_point), mapped)
+    return _PyUnicode_ToLowerFull(code_point, mapped)
 
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
@@ -1396,6 +1425,62 @@ def unicode_title(data):
         for i in range(newlength):
             _set_code_point(res, i, _get_code_point(tmp, i))
         return res
+    return impl
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
+@register_jitable
+def _do_upper_or_lower(data, length, res, maxchars, lower):
+    k = 0
+    for idx in range(length):
+        mapped = np.zeros(3, dtype=_Py_UCS4)
+        code_point = _get_code_point(data, idx)
+        if lower:
+            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        else:
+            # might be needed if call _do_upper_or_lower in unicode_upper
+            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+        for m in mapped[:n_res]:
+            maxchars[0] = max(maxchars[0], m)
+            _set_code_point(res, k, m)
+            k += 1
+    return k
+
+
+@overload_method(types.UnicodeType, 'lower')
+def unicode_lower(data):
+    """Implements .lower()"""
+    def impl(data):
+        # main structure is a translation of:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
+
+        # ASCII fast path
+        length = len(data)
+        if data._is_ascii:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
+            res = _empty_string(data._kind, length, data._is_ascii)
+            for idx in range(length):
+                code_point = _get_code_point(data, idx)
+                _set_code_point(res, idx, _Py_TOLOWER(code_point))
+            return res
+        else:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
+            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
+                                data._is_ascii)
+            # maxchar is inside of a list to be pass as argument by reference
+            maxchars = [0]
+            newlength = _do_upper_or_lower(data, length, tmp, maxchars,
+                                           lower=True)
+            maxchar = maxchars[0]
+            newkind = _codepoint_to_kind(maxchar)
+            res = _empty_string(newkind, newlength,
+                                _codepoint_is_ascii(maxchar))
+            for i in range(newlength):
+                _set_code_point(res, i, _get_code_point(tmp, i))
+            return res
+
     return impl
 
 

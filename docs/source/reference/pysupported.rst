@@ -182,6 +182,8 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.islower()``
+* ``.lower()``
 * ``.zfill()``
 * ``.count()``
 * ``.istitle()``

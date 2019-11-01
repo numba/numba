@@ -7,7 +7,6 @@ jobs:
   pool: 
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
       py27_np15:
         PYTHON: '2.7'
