@@ -146,6 +146,9 @@ class TestParforsBase(TestCase):
         # parfor result
         parfor_output = cpfunc.entry_point(*copy_args(*args))
 
+        #print("py_expected", py_expected)
+        #print("njit_output", njit_output)
+        #print("parfor_output", parfor_output)
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
@@ -2601,7 +2604,6 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,:-1] = a[0,-3:4]
             return b
 
@@ -2612,14 +2614,19 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,-(n-1):] = a[0,-3:4]
             return b
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
-    @skip_unsupported
+
+#    @skip_unsupported
+    @test_disabled
     def test_parfor_slice16(self):
+        """ This test is disabled because if n is larger than the array size
+            then n and n-1 will both be the end of the array and thus the
+            slices will in fact be of different sizes and unable to fuse.
+        """
         def test_impl(a, b, n):
             assert(a.shape == b.shape)
             a[1:n] = 10
@@ -2690,6 +2697,38 @@ class TestParforsSlice(TestParforsBase):
             return x
 
         self.check(test_impl, np.ones(10))
+
+    @skip_unsupported
+    def test_parfor_slice23(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[n:]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice24(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[:n]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice25(self):
+        def test_impl(a):
+            (n,) = a.shape
+            b = a.copy()
+            b[-(n-1):] = a[-3:4]
+            return b
+
+        self.check(test_impl, np.arange(4))
 
 class TestParforsOptions(TestParforsBase):
 
