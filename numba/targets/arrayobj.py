@@ -312,7 +312,7 @@ def iternext_array(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Basic indexing (with integers and slices only)
 
 def basic_indexing(context, builder, aryty, ary, index_types, indices):
@@ -535,7 +535,7 @@ def array_itemset(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Advanced / fancy indexing
 
 
@@ -1404,7 +1404,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     return context.get_dummy_value()
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Shape / layout altering
 
 def vararg_to_tuple(context, builder, sig, args):
@@ -1889,7 +1889,7 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 
 @overload(np.unique)
@@ -2001,7 +2001,7 @@ def array_view(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Array attributes
 
 @lower_getattr(types.Array, "dtype")
@@ -2182,7 +2182,7 @@ def array_flags_f_contiguous(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # .real / .imag
 
 @lower_getattr(types.Array, "real")
@@ -2271,7 +2271,7 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # DType attribute
 
 def dtype_type(context, builder, dtypety, dtypeval):
@@ -2283,7 +2283,7 @@ lower_getattr(types.DType, 'type')(dtype_type)
 lower_getattr(types.DType, 'kind')(dtype_type)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Structured / record lookup
 
 @lower_getattr_generic(types.Array)
@@ -2417,7 +2417,7 @@ def record_setitem(context, builder, sig, args):
     return impl(builder, (rec, val))
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Constant arrays and records
 
 
@@ -2447,7 +2447,7 @@ def constant_bytes(context, builder, ty, pyval):
     buf = np.array(bytearray(pyval), dtype=np.uint8)
     return context.make_constant_array(builder, ty, buf)
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Comparisons
 
 
@@ -2465,7 +2465,7 @@ def array_is(context, builder, sig, args):
     return context.compile_internal(builder, array_is_impl, sig, args)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # builtin `np.flat` implementation
 
 def make_array_flat_cls(flatiterty):
@@ -3671,7 +3671,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
     elif arg.ndim == 2:
         # matrix context
         def diag_impl(arr, k=0):
-            #Will return arr.diagonal(v, k) when axis args are supported
+            # Will return arr.diagonal(v, k) when axis args are supported
             rows, cols = arr.shape
             if k < 0:
                 rows = rows + k
@@ -3687,7 +3687,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
                     ret[i] = arr[i - k, i]
             return ret
     else:
-        #invalid input
+        # invalid input
         raise ValueError("Input must be 1- or 2-d.")
 
     res = context.compile_internal(builder, diag_impl, sig, args)
@@ -3716,7 +3716,7 @@ def numpy_take_2(context, builder, sig, args):
     def take_impl(a, indices):
         ret = np.empty(indices.size, dtype=a.dtype)
         if F_order:
-            walker = indices.copy() # get C order
+            walker = indices.copy()  # get C order
         else:
             walker = indices
         it = np.nditer(walker)
@@ -3765,7 +3765,7 @@ def _arange_dtype(*args):
         dtype = types.float64
     else:
         dtype = max(bounds)
-    
+
     return dtype
 
 
@@ -3826,7 +3826,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
     if (not isinstance(start, types.Number) or
         not isinstance(stop, (types.NoneType, types.Number)) or
         not isinstance(step, (types.NoneType, types.Number)) or
-        not isinstance(dtype, (types.NoneType, types.DTypeSpec))):
+            not isinstance(dtype, (types.NoneType, types.DTypeSpec))):
 
         return
 
@@ -3835,7 +3835,8 @@ def np_arange(start, stop=None, step=None, dtype=None):
     else:
         true_dtype = dtype.dtype
 
-    use_complex = any([isinstance(x, types.Complex) for x in (start, stop, step)]) 
+    use_complex = any([isinstance(x, types.Complex)
+                       for x in (start, stop, step)])
     if use_complex:
         def impl(start, stop=None, step=None, dtype=None):
             return _arange_impl_complex(start, stop, step, true_dtype)
