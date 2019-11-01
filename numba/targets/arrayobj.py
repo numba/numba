@@ -3756,70 +3756,94 @@ def numpy_take_3(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.arange, types.Number)
-def numpy_arange_1(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
+def _arange_dtype(*args):
+    bounds = [a for a in args if not isinstance(a, types.NoneType)]
 
-    def arange(stop):
-        return np.arange(0, stop, 1, dtype)
-
-    res = context.compile_internal(builder, arange, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.arange, types.Number, types.Number)
-def numpy_arange_2(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
-
-    def arange(start, stop):
-        return np.arange(start, stop, 1, dtype)
-
-    res = context.compile_internal(builder, arange, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.arange, types.Number, types.Number,
-               types.Number)
-def numpy_arange_3(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
-
-    def arange(start, stop, step):
-        return np.arange(start, stop, step, dtype)
-
-    res = context.compile_internal(builder, arange, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.arange, types.Number, types.Number,
-               types.Number, types.DTypeSpec)
-def numpy_arange_4(context, builder, sig, args):
-
-    if any(isinstance(a, types.Complex) for a in sig.args):
-        def arange(start, stop, step, dtype):
-            nitems_c = (stop - start) / step
-            nitems_r = math.ceil(nitems_c.real)
-            nitems_i = math.ceil(nitems_c.imag)
-            nitems = max(min(nitems_i, nitems_r), 0)
-            arr = np.empty(nitems, dtype)
-            val = start
-            for i in range(nitems):
-                arr[i] = val
-                val += step
-            return arr
+    if any(isinstance(a, types.Complex) for a in bounds):
+        dtype = types.complex128
+    elif any(isinstance(a, types.Float) for a in bounds):
+        dtype = types.float64
     else:
-        def arange(start, stop, step, dtype):
-            nitems_r = math.ceil((stop - start) / step)
-            nitems = max(nitems_r, 0)
-            arr = np.empty(nitems, dtype)
-            val = start
-            for i in range(nitems):
-                arr[i] = val
-                val += step
-            return arr
+        dtype = max(bounds)
+    
+    return dtype
 
-    res = context.compile_internal(builder, arange, sig, args,
-                                   locals={'nitems': types.intp})
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@register_jitable
+def _arange_impl_complex(_start, _stop, _step, dtype):
+    step = _step if _step is not None else 1
+    if _stop is None:
+        start, stop = 0, _start
+    else:
+        start, stop = _start, _stop
+
+    nitems_c = (stop - start) / step
+    nitems_r = math.ceil(nitems_c.real)
+    nitems_i = math.ceil(nitems_c.imag)
+    nitems = max(min(nitems_i, nitems_r), 0)
+    arr = np.empty(nitems, dtype)
+    val = start
+    for i in range(nitems):
+        arr[i] = val
+        val += step
+    return arr
+
+
+@register_jitable
+def _arange_impl_real(_start, _stop, _step, dtype):
+    step = _step if _step is not None else 1
+    if _stop is None:
+        start, stop = 0, _start
+    else:
+        start, stop = _start, _stop
+
+    nitems_r = math.ceil((stop - start) / step)
+    nitems = max(nitems_r, 0)
+    arr = np.empty(nitems, dtype)
+    val = start
+    for i in range(nitems):
+        arr[i] = val
+        val += step
+    return arr
+
+
+@overload(np.arange)
+def np_arange(start, stop=None, step=None, dtype=None):
+    if isinstance(stop, types.Optional):
+        stop = stop.type
+    if isinstance(step, types.Optional):
+        step = step.type
+    if isinstance(dtype, types.Optional):
+        dtype = dtype.type
+
+    if stop is None:
+        stop = types.none
+    if step is None:
+        step = types.none
+    if dtype is None:
+        dtype = types.none
+
+    if (not isinstance(start, types.Number) or
+        not isinstance(stop, (types.NoneType, types.Number)) or
+        not isinstance(step, (types.NoneType, types.Number)) or
+        not isinstance(dtype, (types.NoneType, types.DTypeSpec))):
+
+        return
+
+    if isinstance(dtype, types.NoneType):
+        true_dtype = _arange_dtype(start, stop, step)
+    else:
+        true_dtype = dtype.dtype
+
+    use_complex = any([isinstance(x, types.Complex) for x in (start, stop, step)]) 
+    if use_complex:
+        def impl(start, stop=None, step=None, dtype=None):
+            return _arange_impl_complex(start, stop, step, true_dtype)
+    else:
+        def impl(start, stop=None, step=None, dtype=None):
+            return _arange_impl_real(start, stop, step, true_dtype)
+
+    return impl
 
 
 @lower_builtin(np.linspace, types.Number, types.Number)
