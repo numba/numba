@@ -47,10 +47,12 @@ class CmdLine(object):
                "-o {fout} "
                "{fin}")
 
-    CMD_GEN = ("$SPIRVDIR/llc "
-               "-march=spirv64 "
-               "-o {fout} "
-               "{fin}")
+    #CMD_GEN = ("$SPIRVDIR/llc "
+    #           "-march=spirv64 "
+    #           "-o {fout} "
+    #          "{fin}")
+
+    CMD_GEN = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} --spirv-ocl-builtins-version=CL2.1")
 
     def assemble(self, ipath, opath):
         check_call(self.CMD_AS.format(fout=opath, fin=ipath), shell=True)
@@ -109,7 +111,7 @@ class Module(object):
         # Create temp file to store the input file
         tmp_llvm_ir, llvm_path = self._create_temp_file("llvm-friendly-spir")
         with tmp_llvm_ir:
-            tmp_llvm_ir.write(llvmir)
+            tmp_llvm_ir.write(llvmir.encode())
 
         self._llvmfile = llvm_path
 
@@ -156,5 +158,6 @@ class Module(object):
 
 def llvm_to_spirv(bitcode):
     mod = Module()
+    print(bitcode)
     mod.load_llvm(bitcode)
     return mod.finalize()

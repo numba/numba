@@ -17,6 +17,7 @@ import functools
 import threading
 from numba import servicelib
 from .driver import driver
+from setuptools.build_meta import _to_str
 
 
 class _ListWrapper(object):
@@ -182,7 +183,11 @@ class _Runtime(object):
         #self.kernel = _KernelList()
         #self.queues = _QueueList()
         #self.events = _EventList()
-
+        
+        print("Number of OCL Platforms: " + str(self.lst.__len__()))
+        for i in range(len(self.lst)):
+            print("Platform " + str(i) + " : " + self.lst[i].name.decode())
+        
         # A thread_local stack of items
         self.platform_stack = servicelib.TLStack()
         self.device_stack = servicelib.TLStack()
@@ -445,17 +450,24 @@ def devices():
 
 def init():
     """Initialize the OpenCL subsystem for the current thread"""
+    print("Initialize OpenCL")
     _runtime.reset()
     _runtime.init()
-
+    
+    ## For the time being
+    _runtime.push_platform(_runtime.platforms[0])
+    _runtime.push_device(_runtime.platforms[0].devices[0])
+'''
     # @@ OpenCL 2.1
     for plat in _runtime.platforms:
-        if "OpenCL 2.1" in plat.name:
+        print(plat.name.decode())
+        if "OpenCL 2.1" in plat.name.decode():
             _runtime.push_platform(plat)
             _runtime.push_device(plat.devices[0])
             break
     else:
         print("NB: no OpenCL 2.1 platform was found!")
+'''
 
 def reset():
     """Reset the OpenCL subsystem for the current thread.

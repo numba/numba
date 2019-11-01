@@ -58,7 +58,7 @@ def _find_driver():
         dll_loader = ct.CDLL
 
     dll_path = envpath or ct.util.find_library("OpenCL")
-
+    print("DLL PATH For OCL Driver :" + dll_path)
     if dll_path is None:
         _raise_driver_not_found()
 
@@ -397,7 +397,7 @@ class Device(OpenCLWrapper):
 
     @property
     def opencl_version(self):
-        ver = self.version # CL_DEVICE_VERSION looks like "OpenCL X.Y ..."
+        ver = self.version.decode() # CL_DEVICE_VERSION looks like "OpenCL X.Y ..."
         opencl, x, y = ver[0:6], int(ver[7]), int(ver[9])
         assert(opencl=='OpenCL' and x in {1,2} and y in {0,1,2})
         return (x,y)

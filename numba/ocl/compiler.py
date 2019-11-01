@@ -214,7 +214,8 @@ class _CachedProgram(object):
         if result is not None:
             program = result[1]
             kernel = result[2]
-        else: # The program has not been finalized for this device
+        else: 
+            # The program has not been finalized for this device
             # Build according to the OpenCL version, 2.0 or 2.1
             if device.opencl_version == (2,0):
                 spir2_bc = spir2.llvm_to_spir2(self._binary)

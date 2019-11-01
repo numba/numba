@@ -233,7 +233,7 @@ class CodeLibrary(object):
         """
         if config.DEBUG_ARRAY_OPT >= 1:
             print("CodeLibrary::finalize", self._name)
-        require_global_compiler_lock()
+        #require_global_compiler_lock()
 
         # Report any LLVM-related problems to the user
         self._codegen._check_llvm_bugs()

@@ -24,12 +24,12 @@ CC_SPIR_FUNC = "spir_func"
 class OCLTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         from . import ocldecl, mathdecl
-        from numba.typing import cmathdecl, operatordecl
+        from numba.typing import cmathdecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(cmathdecl.registry)
-        self.install_registry(operatordecl.registry)
+        #self.install_registry(operatordecl.registry)
 
 
 # -----------------------------------------------------------------------------
