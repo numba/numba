@@ -9,7 +9,7 @@ import numpy as np
 
 from numba.numpy_support import version as np_version
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, from_dtype, errors, typeof
+from numba import jit, njit, types, from_dtype, errors, typeof
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
 
@@ -87,6 +87,15 @@ def array_transpose_axes(arr, axes):
 
 def array_transpose_axes_copy(arr, axes):
     return arr.transpose(axes).copy()
+
+
+def transpose_issue_4708(m, n):
+    r1 = np.reshape(np.arange(m * n * 3), (m, 3, n))
+    r2 = np.reshape(np.arange(n * 3), (n, 3))
+    r_dif = (r1 - r2.T).T
+    r_dif = np.transpose(r_dif, (2, 0, 1))
+    z = r_dif + 1
+    return z
 
 
 def squeeze_array(a):
@@ -328,6 +337,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 neg_axes = tuple([x - ndim for x in axes])
                 check(arrs[i], axes)
                 check(arrs[i], neg_axes)
+
+        @from_generic([transpose_issue_4708])
+        def check_issue_4708(pyfunc, m, n):
+            expected = pyfunc(m, n)
+            got = njit(pyfunc)(m, n)
+            # values in arrays are equals,
+            # but stronger assertions not hold (layout and strides equality)
+            np.testing.assert_equal(got, expected)
+
+        check_issue_4708(3, 2)
+        check_issue_4708(2, 3)
+        check_issue_4708(5, 4)
 
         # Exceptions leak references
         self.disable_leak_check()
