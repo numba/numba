@@ -76,8 +76,18 @@ def numpy_transpose_array(a):
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
+
+def numpy_transpose_array_axes_kwarg_copy(arr, axes):
+    return np.transpose(arr, axes=axes).copy()
+
+
 def array_transpose_axes(arr, axes):
     return arr.transpose(axes)
+
+
+def array_transpose_axes_copy(arr, axes):
+    return arr.transpose(axes).copy()
+
 
 def squeeze_array(a):
     return a.squeeze()
@@ -266,7 +276,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_array_transpose_axes(self):
         pyfuncs_to_use = [numpy_transpose_array_axes_kwarg,
-                          array_transpose_axes]
+                          numpy_transpose_array_axes_kwarg_copy,
+                          array_transpose_axes,
+                          array_transpose_axes_copy]
 
         def run(pyfunc, arr, axes):
             cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
