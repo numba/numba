@@ -37,7 +37,7 @@ def from_generic(pyfuncs_to_use):
     """
     def decorator(func):
         def result(*args, **kwargs):
-            return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
+            return [func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use]
         return result
     return decorator
 
