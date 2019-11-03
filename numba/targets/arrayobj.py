@@ -3778,8 +3778,8 @@ def _arange_impl_complex(_start, _stop, _step, dtype):
         start, stop = _start, _stop
 
     nitems_c = (stop - start) / step
-    nitems_r = math.ceil(nitems_c.real)
-    nitems_i = math.ceil(nitems_c.imag)
+    nitems_r = int(math.ceil(nitems_c.real))
+    nitems_i = int(math.ceil(nitems_c.imag))
     nitems = max(min(nitems_i, nitems_r), 0)
     arr = np.empty(nitems, dtype)
     val = start
@@ -3797,7 +3797,7 @@ def _arange_impl_real(_start, _stop, _step, dtype):
     else:
         start, stop = _start, _stop
 
-    nitems_r = math.ceil((stop - start) / step)
+    nitems_r = int(math.ceil((stop - start) / step))
     nitems = max(nitems_r, 0)
     arr = np.empty(nitems, dtype)
     val = start
