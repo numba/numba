@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import Iterable
-
+from ..six import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
                        Sequence, Type, TypeRef)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
