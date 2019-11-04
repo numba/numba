@@ -278,7 +278,7 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power",
+                     "floor_divide", "negative", "power", "gcd",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",

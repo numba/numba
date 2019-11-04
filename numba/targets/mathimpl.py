@@ -10,9 +10,11 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
+from llvmlite import ir
 
 from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, cgutils, utils, config
+from numba.extending import intrinsic
 from numba.typing import signature
 
 
@@ -410,3 +412,45 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 def pow_impl(context, builder, sig, args):
     impl = context.get_function(operator.pow, sig)
     return impl(builder, args)
+
+# -----------------------------------------------------------------------------
+
+@intrinsic
+def _trailing_zeros(typeingctx, src):
+    assert isinstance(src, types.Integer)
+    def codegen(context, builder, signature, args):
+        [src] = args
+        return builder.sext(
+            builder.cttz(src, ir.Constant(ir.IntType(1), 0)),
+            ir.IntType(types.intp.bitwidth),
+        )
+    return types.intp(src), codegen
+
+@lower(math.gcd, types.Integer, types.Integer)
+def gcd_impl(context, builder, sig, args):
+    xty, yty = sig.args
+    assert xty == yty == sig.return_type
+    x, y = args
+
+    def gcd(a, b):
+        """
+        Stein's algorithm, heavily cribbed from Julia implementation.
+        """
+        T = type(a)
+        if a == 0: return abs(b)
+        if b == 0: return abs(a)
+        za = _trailing_zeros(a)
+        zb = _trailing_zeros(b)
+        k = min(za, zb)
+        u = types.uintp(abs(a >> za))
+        v = types.uintp(abs(b >> zb))
+        while u != v:
+            if u > v:
+                u, v = v, u
+            v -= u
+            v >>= _trailing_zeros(v)
+        r = u << k
+        return T(r)
+
+    res = context.compile_internal(builder, gcd, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
