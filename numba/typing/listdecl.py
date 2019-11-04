@@ -24,9 +24,9 @@ class ListBuiltin(AbstractTemplate):
             iterable, = args
             if isinstance(iterable, types.IterableType):
                 dtype = iterable.iterator_type.yield_type
-                return signature(types.List(dtype), iterable)
+                return signature(types.ListType(dtype), iterable)
         else:
-            return signature(types.List(types.undefined))
+            return signature(types.ListType(types.undefined))
 
 
 @infer_global(sorted)

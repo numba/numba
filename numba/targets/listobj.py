@@ -447,6 +447,7 @@ def build_list(context, builder, list_type, items):
     """
     Build a list of the given type, containing the given items.
     """
+    print("yes")
     nitems = len(items)
     inst = ListInstance.allocate(context, builder, list_type, nitems)
     # Populate list
@@ -469,10 +470,15 @@ def list_constructor(context, builder, sig, args):
 
 @lower_builtin(list)
 def list_constructor(context, builder, sig, args):
-    list_type = sig.return_type
-    list_len = 0
-    inst = ListInstance.allocate(context, builder, list_type, list_len)
-    return impl_ret_new_ref(context, builder, list_type, inst.value)
+    from numba.typed import List
+
+    listtype = sig.return_type
+    it = listtype.item_type
+
+    def call_ctor():
+        return List.empty_list(it)
+
+    return context.compile_internal(builder, call_ctor, sig, args)
 
 #-------------------------------------------------------------------------------
 # Various operations

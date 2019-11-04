@@ -259,7 +259,7 @@ class _BuildContainerConstraint(object):
 
 
 class BuildListConstraint(_BuildContainerConstraint):
-    container_type = types.List
+    container_type = types.ListType
 
 
 class BuildSetConstraint(_BuildContainerConstraint):

@@ -385,7 +385,10 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = create_list
         cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
         cfunc = cr.entry_point
-        self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
+        a = cfunc(1, 2, 3)
+        b = pyfunc(1, 2, 3)
+        print(a,b, type(a), type(b))
+        self.assertEqual(a, b)
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list

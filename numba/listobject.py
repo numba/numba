@@ -1224,3 +1224,27 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         else:
             # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+
+
+def build_list(context, builder, list_type, items):
+    from numba.typed import List
+
+    sig = typing.signature(list_type)
+    it = list_type.item_type
+
+    def make_list():
+        return List.empty_list(it)
+
+    l = context.compile_internal(builder, make_list, sig, ())
+
+    if items:
+        for i in items:
+            sig = typing.signature(types.void, list_type, it)
+            args = l, i
+
+            def append(l, i):
+                l.append(i)
+
+            context.compile_internal(builder, append, sig, args)
+
+    return l

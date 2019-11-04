@@ -126,7 +126,8 @@ class CPUContext(BaseContext):
         """
         Build a list from the Numba *list_type* and its initial *items*.
         """
-        return listobj.build_list(self, builder, list_type, items)
+        from numba import listobject
+        return listobject.build_list(self, builder, list_type, items)
 
     def build_set(self, builder, set_type, items):
         """
