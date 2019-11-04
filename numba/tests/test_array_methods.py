@@ -863,14 +863,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(pyfunc)
                 cfunc(2)
-            for keyword in ["missing", "argument", "start"]:
-                self.assertIn(keyword, str(raises.exception))
         for pyfunc in bad_funcs_2:
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(pyfunc)
                 cfunc(2, 6)
-            for keyword in ["missing", "argument", "start"]:
-                self.assertIn(keyword, str(raises.exception))
 
     def test_item(self):
         pyfunc = array_item
