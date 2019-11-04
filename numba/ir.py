@@ -61,11 +61,10 @@ class Loc(object):
                                                       self.line, self.col)
 
     def __str__(self):
-        shortfilename = os.path.basename(self.filename)
         if self.col is not None:
-            return "%s (%s:%s)" % (shortfilename, self.line, self.col)
+            return "%s (%s:%s)" % (self.filename, self.line, self.col)
         else:
-            return "%s (%s)" % (shortfilename, self.line)
+            return "%s (%s)" % (self.filename, self.line)
 
     def _find_definition(self):
         # try and find a def, go backwards from error line
@@ -1379,13 +1378,6 @@ class FunctionIR(object):
         for offset, block in sorted(self.blocks.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
-
-    def dump_to_string(self):
-        from io import StringIO
-        with StringIO() as sb:
-            self.dump(file=sb)
-            return sb.getvalue()
-
 
     def dump_generator_info(self, file=None):
         file = file or sys.stdout

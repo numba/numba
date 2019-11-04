@@ -14,6 +14,7 @@ from .utils import (
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
     )
+from numba.byteflow import Flow, AdaptDFA, AdaptCFA
 
 
 _logger = logging.getLogger(__name__)
@@ -107,7 +108,6 @@ class Interpreter(object):
             self.dfa = dataflow.DataFlowAnalysis(self.cfa)
             self.dfa.run()
         else:
-            from numba.byteflow import Flow, AdaptDFA, AdaptCFA
             flow = Flow(bytecode)
             flow.run()
             self.dfa = AdaptDFA(flow)
@@ -1067,7 +1067,6 @@ class Interpreter(object):
         self.store(value=appendattr, name=appendvar)
         appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
         self.store(value=appendinst, name=res)
-
 
     # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
     # however this means a new object (the bound-method instance) could be

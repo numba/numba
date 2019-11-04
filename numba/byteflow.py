@@ -26,6 +26,10 @@ class _lazy_pformat(object):
 
 
 class Flow(object):
+    """Data+Control Flow analysis.
+
+    Simulate execution to recover dataflow and controlflow information.
+    """
     def __init__(self, bytecode):
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
@@ -37,20 +41,28 @@ class Flow(object):
         runner = Runner(debug_filename=self._bytecode.func_id.filename)
         runner.pending.append(firststate)
 
+        # Enforce unique-ness on initial PC to avoid re-entering the PC with
+        # a different stack-depth. We don't know if such a case is ever
+        # possible, but no such cases has been encountered in our tests.
         first_encounter = UniqueDict()
+        # Loop over each pending state at a initial PC.
+        # Each state is tracing a basicblock
         while runner.pending:
             _logger.debug("pending: %s", runner.pending)
             state = runner.pending.pop()
             if state not in runner.finished:
-
                 _logger.debug("stack: %s", state._stack)
                 first_encounter[state.pc_initial] = state
+                # Loop over the state until it is terminated.
                 while True:
                     runner.dispatch(state)
+                    # Terminated?
                     if state.has_terminated():
                         break
+                    # Not yet?
                     else:
                         state.advance_pc()
+                        # Must the new PC be a new block?
                         if self._is_implicit_new_block(state):
                             state.split_new_block()
                             break
@@ -61,7 +73,7 @@ class Flow(object):
 
         # Complete Controlflow
         self._build_cfg(runner.finished)
-
+        # Prune redundant PHI-nodes
         self._prune_phis(runner)
         # Post process
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
@@ -83,7 +95,6 @@ class Flow(object):
         self.cfgraph = graph
 
     def _prune_phis(self, runner):
-        # XXX
         # Find phis that are unused in the local block
         _logger.debug("Prune PHIs".center(60, '-'))
 
@@ -101,9 +112,6 @@ class Flow(object):
                 phi_set |= phis
             return used_phis, phi_set
 
-        used_phis, phi_set = get_used_phis_per_state()
-        _logger.debug("Used_phis: %s", _lazy_pformat(used_phis))
-
         # Find use-defs
         def find_use_defs():
             defmap = {}
@@ -119,10 +127,7 @@ class Flow(object):
             _logger.debug("phismap: %s", _lazy_pformat(phismap))
             return defmap, phismap
 
-        defmap, phismap = find_use_defs()
-
-        def propagate_phi_map():
-
+        def propagate_phi_map(phismap):
             while True:
                 changing = False
                 for phi, defsites in sorted(list(phismap.items())):
@@ -136,10 +141,7 @@ class Flow(object):
                 if not changing:
                     break
 
-        propagate_phi_map()
-
-        #### WIP
-        def lastly():
+        def apply_changes(used_phis, phismap):
             keep = {}
             for state, used_set in used_phis.items():
                 for phi in used_set:
@@ -155,9 +157,11 @@ class Flow(object):
                 state._outgoing_phis.clear()
                 state._outgoing_phis.update(new_out[state])
 
-        lastly()
-
-
+        used_phis, phi_set = get_used_phis_per_state()
+        _logger.debug("Used_phis: %s", _lazy_pformat(used_phis))
+        defmap, phismap = find_use_defs()
+        propagate_phi_map(phismap)
+        apply_changes(used_phis, phismap)
         _logger.debug("DONE Prune PHIs".center(60, '-'))
 
     def _is_implicit_new_block(self, state):
@@ -172,6 +176,8 @@ class Flow(object):
 
 
 class Runner(object):
+    """Trace runner contains the states for the trace and the opcode dispatch.
+    """
     def __init__(self, debug_filename):
         self.debug_filename = debug_filename
         self.pending = []
@@ -868,6 +874,8 @@ class Runner(object):
 
 
 class State(object):
+    """Trace state
+    """
     def __init__(self, bytecode, pc, nstack, blockstack):
         self._bytecode = bytecode
         self._pc_initial = pc
@@ -1022,6 +1030,8 @@ Edge = namedtuple("Edge", ["pc", "stack", "blockstack"])
 
 
 class AdaptDFA(object):
+    """Adapt Flow to the old DFA class expected by Interpreter
+    """
     def __init__(self, flow):
         self._flow = flow
 
@@ -1052,6 +1062,8 @@ def _flatten_inst_regs(iterable):
 
 
 class AdaptCFA(object):
+    """Adapt Flow to the old CFA class expected by Interpreter
+    """
     def __init__(self, flow):
         self._flow = flow
         self._blocks = {}

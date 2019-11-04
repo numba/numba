@@ -119,6 +119,8 @@ else:
     NO_ARG_LEN = 0
 
 
+OPCODE_NOP = dis.opname.index('NOP')
+
 # Adapted from Lib/dis.py
 def _unpack_opargs(code):
     """
@@ -128,7 +130,7 @@ def _unpack_opargs(code):
     if sys.version_info[0] < 3:
         code = list(map(ord, code))
 
-    yield (0, dis.opname.index('NOP'), 0, _FIXED_OFFSET)
+    yield (0, OPCODE_NOP, 0, _FIXED_OFFSET)
 
     extended_arg = 0
     n = len(code)

@@ -701,10 +701,6 @@ class ControlFlowAnalysis(object):
         # function scope.
         inloopblocks = set()
 
-        # for b in self.blocks.keys():
-        #     for s, e in self._loops:
-        #         if s <= b < e:
-        #             inloopblocks.add(b)
         for b in self.blocks.keys():
             if self.graph.in_loops(b):
                 inloopblocks.add(b)
