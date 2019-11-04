@@ -30,7 +30,7 @@ class TestCase(unittest.TestCase):
         """
         lines = self.get_testsuite_listing(args)
         last_line = lines[-1]
-        self.assertTrue(last_line.endswith('tests found'))
+        self.assertTrue('tests found' in last_line)
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
