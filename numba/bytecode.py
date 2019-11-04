@@ -213,7 +213,8 @@ class ByteCode(object):
         for offset, lineno in dis.findlinestarts(code):
             if offset in table:
                 table[offset + _FIXED_OFFSET].lineno = lineno
-        known = -1
+        # Use line-0 as last known line so that LLVM will not complain
+        known = 0
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
