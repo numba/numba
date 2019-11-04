@@ -686,8 +686,8 @@ def np_isreal(x):
 
 @overload(np.iscomplexobj)
 def iscomplexobj(x):
-    # # Implementation based on NumPy
-    # # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
+    # Implementation based on NumPy
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
     dt = determine_dtype(x)
     iscmplx = np.issubdtype(dt, np.complexfloating)
     return lambda x: iscmplx
