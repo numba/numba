@@ -109,5 +109,17 @@ class TestCase(unittest.TestCase):
         l = [x for x in tmp if x.startswith('numba.')]
         self.assertEqual(len(l), 5)
 
+    def test_check_slicing_equivalent(self):
+        def filter_test(xs):
+            return [x for x in xs if x.startswith('numba.')]
+        full = filter_test(self.get_testsuite_listing([]))
+        sliced = []
+        for i in range(3):
+            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
+            sliced.extend(filter_test(subset))
+        # The tests must be equivalent
+        self.assertEqual(sorted(full), sorted(sliced))
+
+
 if __name__ == '__main__':
     unittest.main()
