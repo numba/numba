@@ -64,5 +64,5 @@ jobs:
         numba -s
         popd
         python -m numba.tests.test_runtests
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,19" -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,19"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test'

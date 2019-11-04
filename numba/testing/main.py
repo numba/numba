@@ -264,8 +264,9 @@ class NumbaTestProgram(unittest.main):
             if '-j' in argv:
                 # We want '-s' to work on all versions, emulate this option.
                 dashs_posn = argv.index('-j')
-                s_option = argv[dashs_posn + 1]
-                self.useslice = s_option
+                j_option = argv[dashs_posn + 1]
+                self.useslice = j_option
+                argv.remove(j_option)
                 argv.remove('-j')
 
             # handle tags
