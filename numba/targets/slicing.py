@@ -154,13 +154,18 @@ def slice_constructor_impl(context, builder, sig, args):
     default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
         [context.get_constant(types.intp, x) for x in get_defaults(context)]
 
-    # Fetch non-None arguments
     slice_args = [None] * 3
-    for i, (ty, val) in enumerate(zip(sig.args, args)):
-        if ty is types.none:
-            slice_args[i] = None
-        else:
-            slice_args[i] = val
+
+    # Fetch non-None arguments
+    if len(args) == 1:
+        if sig.args[0] is not types.none:
+            slice_args[1] = args[0]
+    else:
+        for i, (ty, val) in enumerate(zip(sig.args, args)):
+            if ty is types.none:
+                slice_args[i] = None
+            else:
+                slice_args[i] = val
 
     # Fill omitted arguments
     def get_arg_value(i, default):
