@@ -204,8 +204,8 @@ class TestCacheSpecificIssue(UfuncCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError("process failed with code %s: stderr follows"
+                                 "\n%s\n" % (popen.returncode, err.decode()))
 
     #
     # The following test issue #2198 that loading cached (g)ufunc first

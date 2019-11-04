@@ -29,7 +29,7 @@ def _get_commit():
 
 
 commit = _get_commit()
-github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'
+github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'    # noqa: E501
 
 
 def inspect_function(function, target=None):
@@ -96,7 +96,8 @@ def inspect_module(module, target=None, alias=None):
         if obj in alias:
             info['alias'] = alias[obj]
         else:
-            alias[obj] = "{module}.{name}".format(module=module.__name__, name=name)
+            alias[obj] = "{module}.{name}".format(module=module.__name__,
+                                                  name=name)
         info.update(inspect_function(obj, target=target))
         yield info
 
@@ -228,7 +229,8 @@ class HTMLFormatter(Formatter):
     def end_module_section(self):
         self.print('</ul>')
 
-    def write_supported_item(self, modname, itemname, typename, explained, sources, alias):
+    def write_supported_item(self, modname, itemname, typename, explained,
+                             sources, alias):
         self.print('<li>')
         self.print('{}.<b>{}</b>'.format(
             modname,
@@ -291,7 +293,8 @@ class ReSTFormatter(Formatter):
     def end_module_section(self):
         self.print()
 
-    def write_supported_item(self, modname, itemname, typename, explained, sources, alias):
+    def write_supported_item(self, modname, itemname, typename, explained,
+                             sources, alias):
         self.print('.. function:: {}.{}'.format(modname, itemname))
         self.print()
 
@@ -395,7 +398,8 @@ def write_listings(package_name, filename, output_format):
             fmtr = ReSTFormatter(fileobj=fout)
             _format_module_infos(fmtr, package_name, mods)
     else:
-        raise ValueError("Output format '{}' is not supported".format(output_format))
+        raise ValueError(
+            "Output format '{}' is not supported".format(output_format))
 
 
 program_description = """

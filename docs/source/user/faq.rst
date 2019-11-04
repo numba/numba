@@ -283,3 +283,9 @@ LLVM-based Python JIT compiler.
 `a pre-print pdf
 <https://github.com/numba/Numba-SC15-Paper/raw/master/numba_sc15.pdf>`_, in case
 you don't have access to the ACM site but would like to read the paper.
+
+Other related papers
+--------------------
+A paper describing ParallelAccelerator technology, that is activated when the
+``parallel=True`` jit option is used, can be found `here
+<http://drops.dagstuhl.de/opus/volltexte/2017/7269/pdf/LIPIcs-ECOOP-2017-4.pdf>`_.

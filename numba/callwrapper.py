@@ -31,7 +31,8 @@ class _ArgManager(object):
         # Unbox argument
         native = self.api.to_native_value(ty, obj)
 
-        # If an error occurred, go to the cleanup block for the previous argument.
+        # If an error occurred, go to the cleanup block for
+        # the previous argument
         with cgutils.if_unlikely(self.builder, native.is_error):
             self.builder.branch(self.nextblk)
 
@@ -53,7 +54,8 @@ class _ArgManager(object):
         self.cleanups.append(cleanup_arg)
 
         # Write the on-error cleanup block for this argument
-        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        cleanupblk = self.builder.append_basic_block(
+            "arg%d.err" % self.arg_count)
         with self.builder.goto_block(cleanupblk):
             cleanup_arg()
             # Go to next cleanup block
