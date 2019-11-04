@@ -217,8 +217,9 @@ class ByteCode(object):
             adj_offset = offset + _FIXED_OFFSET
             if adj_offset in table:
                 table[adj_offset].lineno = lineno
-        # Use line-0 as last known line so that LLVM will not complain
-        known = 0
+        # Assign unfilled lineno
+        # Start with first bytecode's lineno
+        known = table[_FIXED_OFFSET].lineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
