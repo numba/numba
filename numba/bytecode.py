@@ -121,6 +121,7 @@ else:
 
 OPCODE_NOP = dis.opname.index('NOP')
 
+
 # Adapted from Lib/dis.py
 def _unpack_opargs(code):
     """

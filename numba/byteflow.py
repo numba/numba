@@ -1060,7 +1060,6 @@ def _flatten_inst_regs(iterable):
                 yield x
 
 
-
 class AdaptCFA(object):
     """Adapt Flow to the old CFA class expected by Interpreter
     """
