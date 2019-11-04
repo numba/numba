@@ -214,8 +214,9 @@ class ByteCode(object):
         Compute the line numbers for all bytecode instructions.
         """
         for offset, lineno in dis.findlinestarts(code):
-            if offset in table:
-                table[offset + _FIXED_OFFSET].lineno = lineno
+            adj_offset = offset + _FIXED_OFFSET
+            if adj_offset in table:
+                table[adj_offset].lineno = lineno
         # Use line-0 as last known line so that LLVM will not complain
         known = 0
         for inst in table.values():
