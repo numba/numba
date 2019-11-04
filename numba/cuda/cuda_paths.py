@@ -130,7 +130,8 @@ def get_cuda_home(*subdirs):
     """
     cuda_home = os.environ.get('CUDA_HOME')
     if cuda_home is None:
-        cuda_home = os.environ.get('CUDA_PATH')  # Try Windows CUDA installation without Anaconda
+        # Try Windows CUDA installation without Anaconda
+        cuda_home = os.environ.get('CUDA_PATH')
     if cuda_home is not None:
         return os.path.join(cuda_home, *subdirs)
 
