@@ -40,8 +40,6 @@ Threading layer on top of OpenMP.
 static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #endif
 
-int num_threads = 0;
-
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
@@ -184,16 +182,6 @@ static void ready(void)
 {
 }
 
-static void set_num_threads(int count)
-{
-    num_threads = count;
-}
-
-static int get_num_threads(void)
-{
-    return num_threads;
-}
-
 MOD_INIT(omppool)
 {
     PyObject *m;
@@ -217,10 +205,5 @@ MOD_INIT(omppool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
     PyObject_SetAttrString(m, "openmp_vendor",
                            PyString_FromString(_OMP_VENDOR));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-
     return MOD_SUCCESS_VAL(m);
 }

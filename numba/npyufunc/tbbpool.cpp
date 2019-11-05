@@ -38,15 +38,6 @@ static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
 
-#ifdef _MSC_VER
-#define THREAD_LOCAL(ty) __declspec(thread) ty
-#else
-/* Non-standard C99 extension that's understood by gcc and clang */
-#define THREAD_LOCAL(ty) __thread ty
-#endif
-
-static THREAD_LOCAL(int) num_threads = 0;
-
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
@@ -215,17 +206,6 @@ static void ready(void)
 {
 }
 
-static int set_num_threads(int count)
-{
-    int old_num_threads = num_threads;
-    num_threads = count;
-    return old_num_threads;
-}
-
-static int get_num_threads(void)
-{
-    return num_threads;
-}
 
 MOD_INIT(tbbpool)
 {
@@ -255,10 +235,7 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
+
 
     return MOD_SUCCESS_VAL(m);
 }

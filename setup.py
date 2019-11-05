@@ -148,6 +148,10 @@ def get_ext_modules():
                                             "numba/_pymodule.h"],
                                    **np_compile_args)
 
+    ext_npyufunc_num_threads = Extension(name="numba.npyufunc._num_threads",
+                                         sources=["numba/npyufunc/_num_threads.c"],
+                                         depends=["numba/_pymodule.h"],
+                                         )
 
     ext_npyufunc_workqueue_impls = []
 
@@ -279,8 +283,8 @@ def get_ext_modules():
                                 include_dirs=["numba"])
 
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
-                   ext_jitclass_box, ext_cuda_extras]
+                   ext_npyufunc_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
+                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
 

@@ -18,6 +18,7 @@ import warnings
 from threading import RLock as threadRLock
 import multiprocessing
 from contextlib import contextmanager
+from ctypes import CFUNCTYPE, c_int
 
 import numpy as np
 
@@ -324,8 +325,6 @@ def _launch_threads():
             if _is_initialized:
                 return
 
-            from ctypes import CFUNCTYPE, c_int
-
             def select_known_backend(backend):
                 """
                 Loads a specific threading layer backend based on string
@@ -446,24 +445,30 @@ def _launch_threads():
             ll.add_symbol('numba_parallel_for', lib.parallel_for)
             ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
             ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
-            ll.add_symbol('get_num_threads', lib.get_num_threads)
-            ll.add_symbol('set_num_threads', lib.set_num_threads)
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
-
-            global _set_num_threads
-            _set_num_threads = CFUNCTYPE(c_int, c_int)(lib.set_num_threads)
-            _set_num_threads(NUM_THREADS)
-
-            global _get_num_threads
-            _get_num_threads = CFUNCTYPE(c_int)(lib.set_num_threads)
 
             # set library name so it can be queried
             global _threading_layer
             _threading_layer = libname
             _is_initialized = True
 
+
+def _load_num_threads_funcs():
+    from . import _num_threads as lib
+
+    ll.add_symbol('get_num_threads', lib.get_num_threads)
+    ll.add_symbol('set_num_threads', lib.set_num_threads)
+
+    global _set_num_threads
+    _set_num_threads = CFUNCTYPE(c_int, c_int)(lib.set_num_threads)
+    _set_num_threads(NUM_THREADS)
+
+    global _get_num_threads
+    _get_num_threads = CFUNCTYPE(c_int)(lib.set_num_threads)
+
+_load_num_threads_funcs()
 
 def set_num_threads(n):
     """

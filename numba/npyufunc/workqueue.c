@@ -51,8 +51,6 @@ typedef struct
     pthread_mutex_t mutex;
 } queue_condition_t;
 
-int num_threads = 0;
-
 static int
 queue_condition_init(queue_condition_t *qc)
 {
@@ -452,16 +450,6 @@ static void reset_after_fork(void)
     NUM_THREADS = -1;
 }
 
-static void set_num_threads(int count)
-{
-    num_threads = count;
-}
-
-static int get_num_threads(void)
-{
-    return num_threads;
-}
-
 MOD_INIT(workqueue)
 {
     PyObject *m;
@@ -483,10 +471,6 @@ MOD_INIT(workqueue)
                            PyLong_FromVoidPtr(&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr(&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
 
     return MOD_SUCCESS_VAL(m);
 }
