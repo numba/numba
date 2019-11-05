@@ -47,6 +47,9 @@ set +v
 source activate $CONDA_ENV
 set -v
 
+# gitpython needed for CI testing
+$CONDA_INSTALL gitpython
+
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
