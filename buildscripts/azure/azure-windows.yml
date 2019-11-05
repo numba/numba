@@ -64,5 +64,8 @@ jobs:
         numba -s
         popd
         python -m numba.tests.test_runtests
+        # Now run tests based on the changes identified via git
+        python -m numba.runtests -b -v -g -m 2 -- numba.tests
+        # Now run the rest with slice
         python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,19"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test'

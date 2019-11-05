@@ -189,6 +189,10 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
                             type=str, const="None",
                             help='Slice the test sequence')
+        parser.add_argument('-g', '--gitdiff', dest='gitdiff',
+                            action='store_true',
+                            help=('Run tests from changes made against'
+                                  'origin/master as identified by `git diff`'))
         return parser
 
     def _handle_tags(self, argv, tagstr):
@@ -269,6 +273,11 @@ class NumbaTestProgram(unittest.main):
                 argv.remove(j_option)
                 argv.remove('-j')
 
+            self.gitdiff = False
+            if '-g' in argv:
+                self.gitdiff = True
+                argv.remove('-g')
+
             # handle tags
             self._handle_tags(argv, '--tags')
             self._handle_tags(argv, '--exclude-tags')
@@ -292,6 +301,9 @@ class NumbaTestProgram(unittest.main):
         if self.random_select:
             self.test = _choose_random_tests(self.test, self.random_select,
                                              self.random_seed)
+
+        if self.gitdiff:
+            self.test = _choose_gitdiff_tests(self.test)
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -365,6 +377,23 @@ def _flatten_suite(test):
     else:
         return [test]
 
+def _choose_gitdiff_tests(tests):
+    try:
+        from git import Repo
+    except ImportError:
+        raise ValueError("gitpython needed for git functionality")
+    repo = Repo('.')
+    path = os.path.join('numba', 'tests')
+    gdiff = repo.git.diff('origin/master..HEAD', path, name_only=True).split()
+    selected = []
+    gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff]
+    for test in _flatten_suite(tests):
+        assert isinstance(test, unittest.TestCase)
+        fname = inspect.getsourcefile(test.__class__)
+        if fname in gdiff_paths:
+            selected.append(test)
+    print("Git diff identified %s tests" % len(selected))
+    return unittest.TestSuite(selected)
 
 def _choose_tagged_tests(tests, tags, mode='include'):
     """

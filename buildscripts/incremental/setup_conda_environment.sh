@@ -47,6 +47,15 @@ set +v
 source activate $CONDA_ENV
 set -v
 
+# gitpython needed for CI testing
+# pytest/attrs has some brokenness on the linux32 systems
+# https://github.com/pytest-dev/pytest/issues/3280
+if [[ $(uname) == "Linux" && ("$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes") ]] ; then
+    $CONDA_INSTALL gitpython attrs==19.1.0
+else
+    $CONDA_INSTALL gitpython
+fi
+
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
