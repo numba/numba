@@ -2038,8 +2038,8 @@ def convert_code_obj_to_function(code_obj, caller_ir):
         if isinstance(freevar_def, ir.Const):
             freevars.append(freevar_def.value)
         else:
-            msg = ("Cannot capture a non-constant value for variable '%s' in a "
-                   "function that will escape." % x)
+            msg = ("Cannot capture the non-constant value associated with "
+                   "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
     func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
