@@ -61,6 +61,10 @@ def test_mtime(x):
 
 
 def parse_slice(useslice):
+    """Parses the argument string "useslice" as the arguments to the `slice()`
+    constructor and returns a slice object that's been instantiated with those
+    arguments. i.e. input useslice="1,20,2" leads to output `slice(1, 20, 2)`.
+    """
     try:
         l = {}
         exec("sl = slice(%s)" % useslice, l)
