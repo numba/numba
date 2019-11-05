@@ -17,7 +17,7 @@ from numba import errors, utils
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
 # The following offset is used as a hack to inject a NOP at the start of the bytecode
-_FIXED_OFFSET = 2
+_FIXED_OFFSET = 2 if sys.version_info[0] >= 3 else 0
 
 
 def get_function_object(obj):
@@ -130,8 +130,8 @@ def _unpack_opargs(code):
     """
     if sys.version_info[0] < 3:
         code = list(map(ord, code))
-
-    yield (0, OPCODE_NOP, 0, _FIXED_OFFSET)
+    else:
+        yield (0, OPCODE_NOP, 0, _FIXED_OFFSET)
 
     extended_arg = 0
     n = len(code)

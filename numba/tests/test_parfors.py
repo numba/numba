@@ -1507,7 +1507,8 @@ def iterate_bytecode(code):
     if PYVERSION >= (3, 4):   # available since Py3.4
         return dis.Bytecode(code)
     else:
-        return ByteCodeIter(code)
+        offsets, insts = zip(*ByteCodeIter(code))
+        return insts
 
 
 class TestPrangeBase(TestParforsBase):
