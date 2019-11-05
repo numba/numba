@@ -625,6 +625,7 @@ class TestMathLib(TestCase):
         y_values = [x * 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
+    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd(self, flags=enable_pyobj_flags):
         pyfunc = gcd
         x_values, y_values = zip(
@@ -644,6 +645,7 @@ class TestMathLib(TestCase):
         x_types += x_utypes
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
+    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd_npm(self):
         self.test_gcd(flags=no_pyobj_flags)
 

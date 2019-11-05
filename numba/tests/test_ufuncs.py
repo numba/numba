@@ -375,7 +375,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                                positive_only=after_numpy_112)
 
     def test_gcd_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
+        if numpy_support.version >= (1, 15):
+            self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
 
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):

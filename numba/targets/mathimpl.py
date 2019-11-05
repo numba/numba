@@ -13,8 +13,8 @@ from llvmlite.llvmpy.core import Type
 from llvmlite import ir
 
 from numba.targets.imputils import Registry, impl_ret_untracked
-from numba import types, cgutils, utils, config
-from numba.extending import intrinsic
+from numba import types, typeof, cgutils, utils, config
+from numba.extending import intrinsic, overload
 from numba.typing import signature
 
 
@@ -414,19 +414,37 @@ def pow_impl(context, builder, sig, args):
     return impl(builder, args)
 
 # -----------------------------------------------------------------------------
+from numba.extending import intrinsic
+from numba import types, typeof, njit
+from llvmlite import ir
+
 
 @intrinsic
 def _trailing_zeros(typeingctx, src):
     assert isinstance(src, types.Integer)
     def codegen(context, builder, signature, args):
         [src] = args
-        return builder.sext(
-            builder.cttz(src, ir.Constant(ir.IntType(1), 0)),
-            ir.IntType(types.intp.bitwidth),
-        )
-    return types.intp(src), codegen
+        return builder.cttz(src, ir.Constant(ir.IntType(1), 0))
+    return src(src), codegen
 
-@lower(math.gcd, types.Integer, types.Integer)
+
+def _unsigned(T):
+    pass
+
+@overload(_unsigned)
+def _unsigned_impl(T):
+    if T in types.unsigned_domain:
+        return lambda T: T
+    elif T is types.int8:
+        return lambda T: types.uint8(T)
+    elif T is types.int16:
+        return lambda T: types.uint16(T)
+    elif T is types.int32:
+        return lambda T: types.uint32(T)
+    elif T is types.int64:
+        return lambda T: types.uint64(T)
+
+
 def gcd_impl(context, builder, sig, args):
     xty, yty = sig.args
     assert xty == yty == sig.return_type
@@ -442,6 +460,8 @@ def gcd_impl(context, builder, sig, args):
         za = _trailing_zeros(a)
         zb = _trailing_zeros(b)
         k = min(za, zb)
+        # u = _unsigned(abs(a >> za))
+        # v = _unsigned(abs(a >> zb))
         u = types.uintp(abs(a >> za))
         v = types.uintp(abs(b >> zb))
         while u != v:
@@ -454,3 +474,6 @@ def gcd_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, gcd, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+if utils.PYVERSION >= (3, 5):
+    lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
