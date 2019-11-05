@@ -597,37 +597,53 @@ def _expand_integer(ty):
     else:
         return ty
 
+
 def generic_homog(self, args, kws):
     assert not args
     assert not kws
     return signature(self.this.dtype, recvr=self.this)
+
 
 def generic_expand(self, args, kws):
     assert not args
     assert not kws
     return signature(_expand_integer(self.this.dtype), recvr=self.this)
 
+
 def sum_expand(self, args, kws):
     """
-    sum can be called with or without an axis parameter.
+    sum can be called with or without an axis parameter, and with or without
+    a dtype parameter
     """
     pysig = None
-    if kws:
+    if 'axis' in kws and 'dtype' not in kws:
         def sum_stub(axis):
             pass
         pysig = utils.pysignature(sum_stub)
         # rewrite args
         args = list(args) + [kws['axis']]
-        kws = None
+    elif 'dtype' in kws and 'axis' not in kws:
+        def sum_stub(dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['dtype']]
+    elif 'dtype' in kws and 'axis' in kws:
+        def sum_stub(axis, dtype):
+            pass
+        pysig = utils.pysignature(sum_stub)
+        # rewrite args
+        args = list(args) + [kws['axis'], kws['dtype']]
+
     args_len = len(args)
-    assert args_len <= 1
+    assert args_len <= 2
     if args_len == 0:
-        # No axis parameter so the return type of the summation is a scalar
+        # No axis or dtype parameter so the return type of the summation is a scalar
         # of the type of the array.
         out = signature(_expand_integer(self.this.dtype), *args,
                         recvr=self.this)
-    else:
-        # There is an axis parameter
+    elif args_len == 1 and 'dtype' not in kws:
+        # There is an axis parameter, either arg or kwarg
         if self.this.ndim == 1:
             # 1d reduces to a scalar
             return_type = self.this.dtype
@@ -637,7 +653,31 @@ def sum_expand(self, args, kws):
             return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                                     ndim=self.this.ndim-1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
+
+    elif args_len == 1 and 'dtype' in kws:
+        # No axis parameter so the return type of the summation is a scalar
+        # of the dtype parameter.
+        from .npydecl import _parse_dtype
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        out = signature(dtype, *args, recvr=self.this)
+
+    elif args_len == 2:
+        # There is an axis and dtype parameter, either arg or kwarg
+        from .npydecl import _parse_dtype
+        dtype = _parse_dtype(args[1])
+        return_type = dtype
+        if self.this.ndim != 1:
+            # 1d reduces to a scalar, 2d and above reduce dim by 1
+            # the return type of this summation is  an array of dimension one
+            # less than the input array.
+            return_type = types.Array(dtype=return_type,
+                                    ndim=self.this.ndim-1, layout='C')
+        out = signature(return_type, *args, recvr=self.this)
+    else:
+        pass
     return out.replace(pysig=pysig)
+
 
 def generic_expand_cumulative(self, args, kws):
     assert not args
@@ -646,6 +686,7 @@ def generic_expand_cumulative(self, args, kws):
     return_type = types.Array(dtype=_expand_integer(self.this.dtype),
                               ndim=1, layout='C')
     return signature(return_type, recvr=self.this)
+
 
 def generic_hetero_real(self, args, kws):
     assert not args

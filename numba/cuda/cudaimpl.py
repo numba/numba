@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 import operator
+import math
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
@@ -272,16 +273,21 @@ def ptx_warp_sync(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i4, types.i4, types.i4)
-@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i8, types.i4, types.i4)
-@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f4, types.i4, types.i4)
-@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f8, types.i4, types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i4, types.i4,
+       types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.i8, types.i4,
+       types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f4, types.i4,
+       types.i4)
+@lower(stubs.shfl_sync_intrinsic, types.i4, types.i4, types.f8, types.i4,
+       types.i4)
 def ptx_shfl_sync_i32(context, builder, sig, args):
     """
-    The NVVM intrinsic for shfl only supports i32, but the cuda intrinsic function supports
-    both 32 and 64 bit ints and floats, so for feature parity, i64, f32, and f64 are implemented.
-    Floats by way of bitcasting the float to an int, then shuffling, then bitcasting back.
-    And 64-bit values by packing them into 2 32bit values, shuffling thoose, and then packing back together.
+    The NVVM intrinsic for shfl only supports i32, but the cuda intrinsic
+    function supports both 32 and 64 bit ints and floats, so for feature parity,
+    i64, f32, and f64 are implemented. Floats by way of bitcasting the float to
+    an int, then shuffling, then bitcasting back. And 64-bit values by packing
+    them into 2 32bit values, shuffling thoose, and then packing back together.
     """
     mask, mode, value, index, clamp = args
     value_type = sig.args[2]
@@ -483,6 +489,22 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
+def gen_deg_rad(const):
+    def impl(context, builder, sig, args):
+        argty, = sig.args
+        factor = context.get_constant(argty, const)
+        return builder.fmul(factor, args[0])
+    return impl
+
+
+_deg2rad = math.pi / 180.
+_rad2deg = 180. / math.pi
+lower(math.radians, types.f4)(gen_deg_rad(_deg2rad))
+lower(math.radians, types.f8)(gen_deg_rad(_deg2rad))
+lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
+lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
+
+
 def _normalize_indices(context, builder, indty, inds):
     """
     Convert integer indices into tuple of intp
@@ -527,10 +549,12 @@ def _atomic_dispatcher(dispatch_fn):
 def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
     if dtype == types.float32:
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod),
+                            (ptr, val))
     elif dtype == types.float64:
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_add_float64(lmod),
+                            (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
@@ -542,9 +566,11 @@ def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
 def ptx_atomic_max(context, builder, dtype, ptr, val):
     lmod = builder.module
     if dtype == types.float64:
-        return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_max_float64(lmod),
+                            (ptr, val))
     elif dtype == types.float32:
-        return builder.call(nvvmutils.declare_atomic_max_float32(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_max_float32(lmod),
+                            (ptr, val))
     elif dtype in (types.int32, types.int64):
         return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
     elif dtype in (types.uint32, types.uint64):
@@ -560,9 +586,11 @@ def ptx_atomic_max(context, builder, dtype, ptr, val):
 def ptx_atomic_min(context, builder, dtype, ptr, val):
     lmod = builder.module
     if dtype == types.float64:
-        return builder.call(nvvmutils.declare_atomic_min_float64(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_min_float64(lmod),
+                            (ptr, val))
     elif dtype == types.float32:
-        return builder.call(nvvmutils.declare_atomic_min_float32(lmod), (ptr, val))
+        return builder.call(nvvmutils.declare_atomic_min_float32(lmod),
+                            (ptr, val))
     elif dtype in (types.int32, types.int64):
         return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
     elif dtype in (types.uint32, types.uint64):
@@ -582,9 +610,11 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, lary, (zero,))
     if aryty.dtype == types.int32:
         lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_cas_int32(lmod), (ptr, old, val))
+        return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),
+                            (ptr, old, val))
     else:
-        raise TypeError('Unimplemented atomic compare_and_swap with %s array' % dtype)
+        raise TypeError('Unimplemented atomic compare_and_swap '
+                        'with %s array' % dtype)
 
 
 # -----------------------------------------------------------------------------

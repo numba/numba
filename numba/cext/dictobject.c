@@ -123,7 +123,7 @@ converting the dict to the combined table.
  */
 #define D_MINSIZE 8
 
-#include "_dictobject.h"
+#include "dictobject.h"
 
 
 #if defined(_MSC_VER)
@@ -131,6 +131,7 @@ converting the dict to the combined table.
         typedef __int8 int8_t;
         typedef __int16 int16_t;
         typedef __int32 int32_t;
+        typedef __int64 int64_t;
 #   endif
     /* Use _alloca() to dynamically allocate on the stack on MSVC */
     #define STACK_ALLOC(Type, Name, Size) Type * const Name = _alloca(Size);
@@ -283,13 +284,6 @@ ix_size(Py_ssize_t size) {
     if ( size < 0xffff ) return 2;
     if ( size < 0xffffffff ) return 4;
     return sizeof(int64_t);
-}
-
-/* Align size *sz* to pointer width */
-static Py_ssize_t
-aligned_size(Py_ssize_t sz) {
-    Py_ssize_t alignment = sizeof(void*);
-    return sz + (alignment - sz % alignment) % alignment;
 }
 
 #ifndef NDEBUG

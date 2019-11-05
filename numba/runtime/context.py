@@ -224,3 +224,13 @@ class NRTContext(object):
         Recursively decref the given *value* and its members.
         """
         self._call_incref_decref(builder, typ, value, "NRT_decref")
+
+    def get_nrt_api(self, builder):
+        """Calls NRT_get_api(), which returns the NRT API function table.
+        """
+        self._require_nrt()
+
+        fnty = ir.FunctionType(cgutils.voidptr_t, ())
+        mod = builder.module
+        fn = mod.get_or_insert_function(fnty, name="NRT_get_api")
+        return builder.call(fn, ())

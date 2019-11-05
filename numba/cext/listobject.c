@@ -1,4 +1,4 @@
-#include "_listobject.h"
+#include "listobject.h"
 
 /* This implements the C component of the Numba typed list. It is loosely
  * inspired by the list implementation of the cpython list with some parts
@@ -329,8 +329,8 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
  * This will increase or decrease the size of the list, including reallocating
  * the required memory and increasing the total allocation (additional free
  * space to hold new items).
- * 
- * 
+ *
+ *
  * Adapted from CPython's list_resize().
  *
  * Ensure lp->items has room for at least newsize elements, and set
@@ -387,7 +387,7 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     return LIST_OK;
 }
 
-/* Delete a slice 
+/* Delete a slice
  *
  * start: the start index of ths slice
  * stop: the stop index of the slice (not included)
@@ -524,7 +524,7 @@ numba_list_iter_next(NB_ListIter *it, const char **item_ptr) {
     // get next element
     if (it->pos < lp->size) {
         *item_ptr = lp->items + lp->item_size * it->pos++;
-        return OK;
+        return LIST_OK;
     }else{
         return LIST_ERR_ITER_EXHAUSTED;
     }
@@ -639,7 +639,7 @@ numba_test_list(void) {
 
     // current contents of list
     test_items_1 = "def\x00ghi\x00jkl\x00";
-    while ( (status = numba_list_iter_next(&iter, &it_item)) == OK) {
+    while ( (status = numba_list_iter_next(&iter, &it_item)) == LIST_OK) {
         it_count += 1;
         CHECK(iter.pos == it_count); // check iterator position
         CHECK(it_item != NULL); // quick check item is non-null

@@ -42,7 +42,7 @@ def _confirm_gdb():
                    "Documentation for this module and the security "
                    "implications of making changes to its behaviour can be "
                    "found in the Linux Kernel documentation "
-                   "https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst"
+                   "https://www.kernel.org/doc/Documentation/admin-guide/LSM/Yama.rst"    # noqa: E501
                    "\n\nDocumentation on how to adjust the behaviour of Yama "
                    "on Ubuntu Linux with regards to 'ptrace_scope' can be "
                    "found here "
