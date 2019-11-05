@@ -266,9 +266,14 @@ _backend_init_thread_lock = threadRLock()
 _windows = sys.platform.startswith('win32')
 
 
-@contextmanager
-def _nop():
-    yield
+class _nop(object):
+    """A no-op contextmanager
+    """
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
 
 
 try:
