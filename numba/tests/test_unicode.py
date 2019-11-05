@@ -592,24 +592,6 @@ class TestUnicode(BaseTest):
                     msg = '"end" must be {}'.format(accepted_types)
                     self.assertIn(msg, str(raises.exception))
 
-    def test_rfind_with_start_end_optional(self):
-        pyfunc = rfind_with_start_end_usecase
-        sig_optional = types.int64(types.unicode_type,
-                                   types.unicode_type,
-                                   types.Optional(types.intp),
-                                   types.Optional(types.intp))
-        cfunc = njit([sig_optional])(pyfunc)
-
-        starts = list(range(-20, 20)) + [None]
-        ends = list(range(-20, 20)) + [None]
-        for s in UNICODE_EXAMPLES:
-            for sub_str in ['', 'xx', s[:-2], s[3:], s]:
-                for start, end in product(starts, ends):
-                    msg = 'Results of "{}".rfind("{}", {}, {}) must be equal'
-                    self.assertEqual(pyfunc(s, sub_str, start, end),
-                                     cfunc(s, sub_str, start, end),
-                                     msg=msg.format(s, sub_str, start, end))
-
     def test_rfind_wrong_start_end_optional(self):
         s = UNICODE_EXAMPLES[0]
         sub_str = s[1:-1]
