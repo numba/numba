@@ -384,9 +384,11 @@ def _choose_gitdiff_tests(tests):
         raise ValueError("gitpython needed for git functionality")
     repo = Repo('.')
     path = os.path.join('numba', 'tests')
-    gdiff = repo.git.diff('origin/master..HEAD', path, name_only=True).split()
+    target = 'origin/master..HEAD'
+    gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     selected = []
-    gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff]
+    if PYVERSION > (2, 7): # inspect output changes in py3
+        gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff_paths]
     for test in _flatten_suite(tests):
         assert isinstance(test, unittest.TestCase)
         fname = inspect.getsourcefile(test.__class__)
