@@ -22,13 +22,13 @@ _py34_or_later = sys.version_info[:2] >= (3, 4)
 
 if _py34_or_later:
     # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
     _hash_width = sys.hash_info.width
     _Py_hash_t = getattr(types, 'int%s' % _hash_width)
     _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
 
     # Constants from CPython source, obtained by various means:
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501
     _PyHASH_INF = sys.hash_info.inf
     _PyHASH_NAN = sys.hash_info.nan
     _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
@@ -73,7 +73,7 @@ def process_return(val):
     return asint
 
 # This is a translation of CPython's _Py_HashDouble:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129   # noqa: E501
 
 
 @register_jitable(locals={'x': _Py_uhash_t,
@@ -134,7 +134,7 @@ def _fpext(tyctx, val):
 
 # This is a translation of CPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/longobject.c#L2934-L2989
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/longobject.c#L2934-L2989    # noqa: E501
 # obdigit is a uint32_t which is typedef'd to digit
 # int32_t is typedef'd to sdigit
 
@@ -215,7 +215,7 @@ def int_hash(val):
     return impl
 
 # This is a translation of CPython's float_hash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/floatobject.c#L528-L532
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/floatobject.c#L528-L532    # noqa: E501
 
 
 @overload_method(types.Float, '__hash__')
@@ -233,7 +233,7 @@ def float_hash(val):
     return impl
 
 # This is a translation of CPython's complex_hash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/complexobject.c#L408-L428
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/complexobject.c#L408-L428    # noqa: E501
 
 
 @overload_method(types.Complex, '__hash__')
@@ -252,7 +252,7 @@ def complex_hash(val):
 
 
 # This is a translation of CPython's tuplehash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
 @register_jitable(locals={'x': _Py_uhash_t,
                           'y': _Py_hash_t,
                           'mult': _Py_uhash_t,
@@ -271,7 +271,7 @@ def _tuple_hash(tup):
     return process_return(x)
 
 # This is an obfuscated translation of CPython's tuplehash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
 # The obfuscation occurs for a heterogeneous tuple as each tuple member needs
 # a potentially different hash() function calling for it. This cannot be done at
 # runtime as there's no way to iterate a heterogeneous tuple, so this is
@@ -428,29 +428,29 @@ _hashsecret = _build_hashsecret()
 
 if _Py_hashfunc_name == 'siphash24':
     # This is a translation of CPython's siphash24 function:
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413    # noqa: E501
 
     # /* *********************************************************************
     # <MIT License>
     # Copyright (c) 2013  Marek Majkowski <marek@popcount.org>
 
-    # Permission is hereby granted, free of charge, to any person obtaining a copy
-    # of this software and associated documentation files (the "Software"), to deal
-    # in the Software without restriction, including without limitation the rights
-    # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    # copies of the Software, and to permit persons to whom the Software is
-    # furnished to do so, subject to the following conditions:
+    # Permission is hereby granted, free of charge, to any person obtaining a
+    # copy of this software and associated documentation files (the "Software"),
+    # to deal in the Software without restriction, including without limitation
+    # the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    # and/or sell copies of the Software, and to permit persons to whom the
+    # Software is furnished to do so, subject to the following conditions:
 
     # The above copyright notice and this permission notice shall be included in
     # all copies or substantial portions of the Software.
 
     # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    # AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-    # THE SOFTWARE.
+    # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+    # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    # DEALINGS IN THE SOFTWARE.
     # </MIT License>
 
     # Original location:
@@ -525,36 +525,42 @@ if _Py_hashfunc_name == 'siphash24':
             v0 ^= mi
 
         # this is the switch fallthrough:
-        # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400
+        # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400    # noqa: E501
         t = types.uint64(0x0)
         boffset = idx * 8
         ohexefef = types.uint64(0xff)
         if src_sz >= 7:
             jmp = (6 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6))
+                              << jmp)
         if src_sz >= 6:
             jmp = (5 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5))
+                              << jmp)
         if src_sz >= 5:
             jmp = (4 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4))
+                              << jmp)
         if src_sz >= 4:
             t &= types.uint64(0xffffffff00000000)
             for i in range(4):
                 jmp = i * 8
                 mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + i)) << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + i))
+                                  << jmp)
         if src_sz >= 3:
             jmp = (2 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2))
+                              << jmp)
         if src_sz >= 2:
             jmp = (1 * 8)
             mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1)) << jmp)
+            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1))
+                              << jmp)
         if src_sz >= 1:
             mask = ~(ohexefef)
             t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
@@ -614,7 +620,7 @@ def _impl_load_hashsecret(name):
 
 
 # This is a translation of CPythons's _Py_HashBytes:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L145-L191    # noqa: E501
 
 
 @register_jitable(locals={'_hash': _Py_uhash_t})
@@ -639,7 +645,7 @@ def _Py_HashBytes(val, _len):
     return process_return(_hash)
 
 # This is an approximate translation of CPython's unicode_hash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/unicodeobject.c#L11635-L11663
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/unicodeobject.c#L11635-L11663    # noqa: E501
 
 
 @overload_method(types.UnicodeType, '__hash__')

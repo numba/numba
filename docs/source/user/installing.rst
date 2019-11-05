@@ -67,18 +67,8 @@ the llvmlite wheel.
 
 To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
-:ref:`cudatoolkit-lookup` for details.
-
-.. note:: Previous versions suggest the following deprecated environment
-    variables to be set:
-
-    * ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
-    * ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
-    * ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory*
-      which contains .bc files
-
-    Numba should now be able to detect CUDA libraries installed system-wide on
-    Linux.
+:ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
+installed system-wide on Linux.
 
 Enabling AMD ROCm GPU Support
 -----------------------------
@@ -105,7 +95,7 @@ Installing on Linux ARMv7 Platforms
 `Berryconda <https://github.com/jjhelmus/berryconda>`_ is a
 conda-based Python distribution for the Raspberry Pi.  We are now uploading
 packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
-ARMv7-based boards, which currently incudes the the Raspberry Pi 2 and 3,
+ARMv7-based boards, which currently includes the Raspberry Pi 2 and 3,
 but not the Pi 1 or Zero.  These can be installed using conda from the
 ``numba`` channel::
 
@@ -165,9 +155,17 @@ Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
 * A C compiler compatible with your Python installation.  If you are using
-  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64``
-  and ``gxx_linux-64``, or macOS packages ``clang_osx-64`` and
-  ``clangxx_osx-64``.
+  Anaconda, you can use the following conda packages:
+
+  * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
+  * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
+  * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
+  * Linux ``ARM``: no conda packages, use the system compiler
+  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
+    ``/usr/bin/clang`` (Mojave onwards)
+  * Windows: a version of Visual Studio appropriate for the Python version in
+    use
+
 * `NumPy <http://www.numpy.org/>`_
 
 Then you can build and install Numba from the top level of the source tree::
@@ -175,6 +173,70 @@ Then you can build and install Numba from the top level of the source tree::
     $ python setup.py install
 
 .. _numba-source-install-check:
+
+Dependency List
+---------------
+
+Numba has numerous required and optional dependencies which additionally may
+vary with target operating system and hardware. The following lists them all
+(as of September 2019).
+
+* Required build time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+  * Compiler toolchain mentioned above
+
+* Optional build time:
+
+  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
+    Numba's threading backend
+  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
+    threading backend.
+  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
+    into Numba's threading backend
+
+* Required run time:
+
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+
+* Optional runtime are:
+
+  * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
+    support
+  * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
+    backend
+  * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
+    CLI
+  * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
+  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
+    threading backend
+  * ``ipython`` - if in use, caching will use IPython's cache
+    directories/caching still works
+  * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
+    file for storing per project configuration options
+  * ``colorama`` - makes error message highlighting work
+  * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
+    performance
+  * ``pygments`` - for "pretty" type annotation
+  * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
+    support
+  * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
+    Ahead-of-Time (AOT) compilation
+
+* To build the documentation:
+
+  * ``sphinx``
+  * ``pygments``
+  * ``sphinx-bootstrap``
+  * ``numpydoc``
+  * ``make`` as an executable on the ``$PATH``
 
 Checking your installation
 --------------------------

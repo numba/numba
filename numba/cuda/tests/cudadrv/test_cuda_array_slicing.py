@@ -57,8 +57,9 @@ class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
         for i in range(arr.shape[0]):
             for j in range(arr.shape[1]):
                 for k in range(arr.shape[2]):
-                    np.testing.assert_equal(arr[i::2, j::2, k::2],
-                                            darr[i::2, j::2, k::2].copy_to_host())
+                    np.testing.assert_equal(
+                        arr[i::2, j::2, k::2],
+                        darr[i::2, j::2, k::2].copy_to_host())
 
 
 class CudaArraySlicing(SerialMixin, unittest.TestCase):
@@ -109,12 +110,15 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
 
         for i in range(a.shape[0]):
             for j in range(a.shape[1]):
-                self.assertTrue(np.all(da[i, j, :].copy_to_host() == a[i, j, :]))
+                self.assertTrue(np.array_equal(da[i, j, :].copy_to_host(),
+                                               a[i, j, :]))
             for j in range(a.shape[2]):
-                self.assertTrue(np.all(da[i, :, j].copy_to_host() == a[i, :, j]))
+                self.assertTrue(np.array_equal(da[i, :, j].copy_to_host(),
+                                               a[i, :, j]))
         for i in range(a.shape[1]):
             for j in range(a.shape[2]):
-                self.assertTrue(np.all(da[:, i, j].copy_to_host() == a[:, i, j]))
+                self.assertTrue(np.array_equal(da[:, i, j].copy_to_host(),
+                                               a[:, i, j]))
 
     def test_select_c(self):
         a = np.arange(5 * 6 * 7).reshape(5, 6, 7, order='C')
@@ -122,12 +126,15 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
 
         for i in range(a.shape[0]):
             for j in range(a.shape[1]):
-                self.assertTrue(np.all(da[i, j, :].copy_to_host() == a[i, j, :]))
+                self.assertTrue(np.array_equal(da[i, j, :].copy_to_host(),
+                                               a[i, j, :]))
             for j in range(a.shape[2]):
-                self.assertTrue(np.all(da[i, :, j].copy_to_host() == a[i, :, j]))
+                self.assertTrue(np.array_equal(da[i, :, j].copy_to_host(),
+                                               a[i, :, j]))
         for i in range(a.shape[1]):
             for j in range(a.shape[2]):
-                self.assertTrue(np.all(da[:, i, j].copy_to_host() == a[:, i, j]))
+                self.assertTrue(np.array_equal(da[:, i, j].copy_to_host(),
+                                               a[:, i, j]))
 
     def test_prefix_select(self):
         arr = np.arange(5 * 7).reshape(5, 7, order='F')
@@ -157,8 +164,10 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
         # empty slice of empty slice
         self.assertFalse(darr[:0][:0].copy_to_host())
         # out-of-bound slice just produces empty slices
-        np.testing.assert_array_equal(darr[:0][:1].copy_to_host(), arr[:0][:1])
-        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
+        np.testing.assert_array_equal(darr[:0][:1].copy_to_host(),
+                                      arr[:0][:1])
+        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(),
+                                      arr[:0][-1:])
 
     def test_empty_slice_2d(self):
         arr = np.arange(5 * 7).reshape(5, 7)
@@ -169,7 +178,8 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
         self.assertFalse(darr[:0][:0].copy_to_host())
         # out-of-bound slice just produces empty slices
         np.testing.assert_array_equal(darr[:0][:1].copy_to_host(), arr[:0][:1])
-        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(), arr[:0][-1:])
+        np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(),
+                                      arr[:0][-1:])
 
 
 class CudaArraySetting(SerialMixin, unittest.TestCase):
@@ -256,7 +266,8 @@ class CudaArraySetting(SerialMixin, unittest.TestCase):
             member=str(e.exception),
             container=[
                 "Can't assign 3-D array to 1-D self",  # device
-                "could not broadcast input array from shape (2,3) into shape (35)",  # simulator
+                "could not broadcast input array from shape (2,3) "
+                "into shape (35)",  # simulator
             ])
 
     def test_incompatible_shape(self):
@@ -268,8 +279,10 @@ class CudaArraySetting(SerialMixin, unittest.TestCase):
         self.assertIn(
             member=str(e.exception),
             container=[
-                "Can't copy sequence with size 2 to array axis 0 with dimension 5",  # device
-                "cannot copy sequence with size 2 to array axis with dimension 5",  # simulator
+                "Can't copy sequence with size 2 to array axis 0 with "
+                "dimension 5",  # device
+                "cannot copy sequence with size 2 to array axis with "
+                "dimension 5",  # simulator
             ])
 
 

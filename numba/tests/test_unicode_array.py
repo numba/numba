@@ -499,7 +499,8 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array('1234'), (), '1234')
         self._test(pyfunc, cfunc, np.array(['1234']), 0, '1234')
         self._test(pyfunc, cfunc, np.array(['1234']), 0, 'abc')
-        #self._test(pyfunc, cfunc, b'12', 0, b'1')  # fails: No conversion from array(bool, 1d, C) to bool
+        # fails: No conversion from array(bool, 1d, C) to bool
+        #self._test(pyfunc, cfunc, b'12', 0, b'1')
         self._test(pyfunc, cfunc, np.array(b'12'), (), b'12')
         self._test(pyfunc, cfunc, np.array([b'12']), 0, b'12')
         self._test(pyfunc, cfunc, np.array([b'12']), 0, b'a')
@@ -577,7 +578,10 @@ class TestUnicodeArray(TestCase):
         pyfunc = return_hash
         cfunc = jit(nopython=True)(pyfunc)
 
-        assert pyfunc(np.array('123'), ()) == hash('123') == hash(np.array('123')[()])
+        hash1 = pyfunc(np.array('123'), ())
+        hash2 = hash('123')
+        hash3 = hash(np.array('123')[()])
+        self.assertTrue(hash1 == hash2 == hash3)
 
         self._test(pyfunc, cfunc, np.array('1234'), ())
         self._test(pyfunc, cfunc, np.array(['1234']), 0)
@@ -645,10 +649,12 @@ class TestUnicodeArray(TestCase):
         pyfunc = return_split3
         cfunc = jit(nopython=True)(pyfunc)
 
-        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), np.array(' '), (), 2)
+        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (),
+                   np.array(' '), (), 2)
         self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), (' ',), 0, 2)
         self._test(pyfunc, cfunc, ('1 2 3 4',), 0, np.array(' '), (), 2)
-        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), np.array(b' '), (), 2)
+        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (),
+                   np.array(b' '), (), 2)
         self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), (b' ',), 0, 2)
         self._test(pyfunc, cfunc, (b'1 2 3 4',), 0, np.array(b' '), (), 2)
 
@@ -663,10 +669,12 @@ class TestUnicodeArray(TestCase):
         pyfunc = return_ljust2
         cfunc = jit(nopython=True)(pyfunc)
 
-        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, np.array('='), ())
+        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40,
+                   np.array('='), ())
         self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, ('=',), 0)
         self._test(pyfunc, cfunc, ('1 2 3 4',), 0, 40, np.array('='), ())
-        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, np.array(b'='), ())
+        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40,
+                   np.array(b'='), ())
         self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, (b'=',), 0)
         self._test(pyfunc, cfunc, (b'1 2 3 4',), 0, 40, np.array(b'='), ())
 
@@ -681,10 +689,12 @@ class TestUnicodeArray(TestCase):
         pyfunc = return_rjust2
         cfunc = jit(nopython=True)(pyfunc)
 
-        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, np.array('='), ())
+        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40,
+                   np.array('='), ())
         self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, ('=',), 0)
         self._test(pyfunc, cfunc, ('1 2 3 4',), 0, 40, np.array('='), ())
-        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, np.array(b'='), ())
+        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40,
+                   np.array(b'='), ())
         self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, (b'=',), 0)
         self._test(pyfunc, cfunc, (b'1 2 3 4',), 0, 40, np.array(b'='), ())
 
@@ -699,24 +709,34 @@ class TestUnicodeArray(TestCase):
         pyfunc = return_center2
         cfunc = jit(nopython=True)(pyfunc)
 
-        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, np.array('='), ())
+        self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40,
+                   np.array('='), ())
         self._test(pyfunc, cfunc, np.array('1 2 3 4'), (), 40, ('=',), 0)
         self._test(pyfunc, cfunc, ('1 2 3 4',), 0, 40, np.array('='), ())
-        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, np.array(b'='), ())
+        self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40,
+                   np.array(b'='), ())
         self._test(pyfunc, cfunc, np.array(b'1 2 3 4'), (), 40, (b'=',), 0)
         self._test(pyfunc, cfunc, (b'1 2 3 4',), 0, 40, np.array(b'='), ())
 
     def test_return_join(self):
         pyfunc = return_join
         cfunc = jit(nopython=True)(pyfunc)
-        self._test(pyfunc, cfunc, np.array(','), (), np.array('abc'), (), np.array('123'), ())
-        self._test(pyfunc, cfunc, np.array(','), (), np.array('abc'), (), ('123',), 0)
-        self._test(pyfunc, cfunc, (',',), 0, np.array('abc'), (), np.array('123'), ())
-        self._test(pyfunc, cfunc, (',',), 0, np.array('abc'), (), ('123',), 0)
-        self._test(pyfunc, cfunc, np.array(b','), (), np.array(b'abc'), (), np.array(b'123'), ())
-        self._test(pyfunc, cfunc, np.array(b','), (), np.array(b'abc'), (), (b'123',), 0)
-        self._test(pyfunc, cfunc, (b',',), 0, np.array(b'abc'), (), np.array(b'123'), ())
-        self._test(pyfunc, cfunc, (b',',), 0, np.array(b'abc'), (), (b'123',), 0)
+        self._test(pyfunc, cfunc, np.array(','), (), np.array('abc'), (),
+                   np.array('123'), ())
+        self._test(pyfunc, cfunc, np.array(','), (), np.array('abc'), (),
+                   ('123',), 0)
+        self._test(pyfunc, cfunc, (',',), 0, np.array('abc'), (),
+                   np.array('123'), ())
+        self._test(pyfunc, cfunc, (',',), 0, np.array('abc'), (),
+                   ('123',), 0)
+        self._test(pyfunc, cfunc, np.array(b','), (), np.array(b'abc'), (),
+                   np.array(b'123'), ())
+        self._test(pyfunc, cfunc, np.array(b','), (), np.array(b'abc'), (),
+                   (b'123',), 0)
+        self._test(pyfunc, cfunc, (b',',), 0, np.array(b'abc'), (),
+                   np.array(b'123'), ())
+        self._test(pyfunc, cfunc, (b',',), 0, np.array(b'abc'), (),
+                   (b'123',), 0)
 
     def test_return_zfill(self):
         pyfunc = return_zfill

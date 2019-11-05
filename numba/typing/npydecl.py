@@ -378,9 +378,18 @@ class Numpy_method_redirection(AbstractTemplate):
         pysig = None
         if kws:
             if self.method_name == 'sum':
-                def sum_stub(arr, axis):
-                    pass
-                pysig = utils.pysignature(sum_stub)
+                if 'axis' in kws and 'dtype' not in kws:
+                    def sum_stub(arr, axis):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' not in kws:
+                    def sum_stub(arr, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
+                elif 'dtype' in kws and 'axis' in kws:
+                    def sum_stub(arr, axis, dtype):
+                        pass
+                    pysig = utils.pysignature(sum_stub)
             elif self.method_name == 'argsort':
                 def argsort_stub(arr, kind='quicksort'):
                     pass

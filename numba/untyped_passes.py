@@ -198,10 +198,11 @@ class InlineClosureLikes(FunctionPass):
         # no ability to resolve certain typed function calls in the array
         # inlining code, use this variable to indicate
         typed_pass = not isinstance(state.return_type, types.misc.PyObject)
-        inline_pass = InlineClosureCallPass(state.func_ir,
-                                            state.flags.auto_parallel,
-                                            state.parfor_diagnostics.replaced_fns,
-                                            typed_pass)
+        inline_pass = InlineClosureCallPass(
+            state.func_ir,
+            state.flags.auto_parallel,
+            state.parfor_diagnostics.replaced_fns,
+            typed_pass)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -373,11 +374,12 @@ class InlineInlinables(FunctionPass):
                                                     py_func_ir)
                         # if do_inline is True then inline!
                         if do_inline:
-                            inline_closure_call(state.func_ir,
-                                                pyfunc.__globals__,
-                                                block, i, pyfunc,
-                                                work_list=work_list,
-                                                callee_validator=callee_ir_validator)
+                            inline_closure_call(
+                                state.func_ir,
+                                pyfunc.__globals__,
+                                block, i, pyfunc,
+                                work_list=work_list,
+                                callee_validator=callee_ir_validator)
                             return True
         return False
 

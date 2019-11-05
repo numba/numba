@@ -135,9 +135,8 @@ def get_cuda_home(*subdirs):
 
 def _get_nvvm_path():
     by, path = _get_nvvm_path_decision()
-    if by != 'NUMBAPRO_NVVM':
-        candidates = find_lib('nvvm', path)
-        path = max(candidates) if candidates else None
+    candidates = find_lib('nvvm', path)
+    path = max(candidates) if candidates else None
     return _env_path_tuple(by, path)
 
 
