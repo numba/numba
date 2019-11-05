@@ -1517,7 +1517,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     calltypes.
     """
     from numba import typed_passes
-    # mk_func can be actual function or make_function node
+    # mk_func can be actual function or make_function node, or a njit function
     if hasattr(mk_func, 'code'):
         code = mk_func.code
     elif hasattr(mk_func, '__code__'):

@@ -235,6 +235,8 @@ class InlineClosureCallPass(object):
         return True
 
 def check_reduce_func(func_ir, func_var):
+    """Checks the function at func_var in func_ir to make sure it's amenable
+    for inlining. Returns the function itself"""
     reduce_func = guard(get_definition, func_ir, func_var)
     if reduce_func is None:
         raise ValueError("Reduce function cannot be found for njit \
@@ -252,7 +254,7 @@ def check_reduce_func(func_ir, func_var):
                                     else reduce_func.__code__)
     if not f_code.co_argcount == 2:
         raise TypeError("Reduction function should take 2 arguments")
-    return
+    return reduce_func
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,

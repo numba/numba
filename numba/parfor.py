@@ -2330,7 +2330,7 @@ class ParforPass(object):
         """
         from numba.inline_closurecall import check_reduce_func
         reduce_func = get_definition(self.func_ir, call_name)
-        check_reduce_func(self.func_ir, reduce_func)
+        fcode = check_reduce_func(self.func_ir, reduce_func)
 
         arr_typ = self.typemap[in_arr.name]
         in_typ = arr_typ.dtype
@@ -2345,7 +2345,7 @@ class ParforPass(object):
             in_typ, arr_typ, index_var_type)
         body_block.append(ir.Assign(getitem_call, tmp_var, loc))
 
-        reduce_f_ir = compile_to_numba_ir(reduce_func,
+        reduce_f_ir = compile_to_numba_ir(fcode,
                                         self.func_ir.func_id.func.__globals__,
                                         self.typingctx,
                                         (in_typ, in_typ),
