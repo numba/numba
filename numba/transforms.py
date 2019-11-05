@@ -61,10 +61,8 @@ def _extract_loop_lifting_candidates(cfg, blocks):
     candidates = []
     for loop in find_top_level_loops(cfg):
         _logger.debug("top-level loop: %s", loop)
-        loop_entry_is_entry = cfg.entry_point() in loop.entries
-        _logger.debug("loop_entry_is_entry: %s", loop_entry_is_entry)
-        # if not loop_entry_is_entry:
-        if same_exit_point(loop) and one_entry(loop) and cannot_yield(loop):
+        if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
+            cfg.entry_point() not in loop.entries):
             candidates.append(loop)
             _logger.debug("add candidate: %s", loop)
     return candidates
