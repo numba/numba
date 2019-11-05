@@ -414,9 +414,6 @@ def pow_impl(context, builder, sig, args):
     return impl(builder, args)
 
 # -----------------------------------------------------------------------------
-from numba.extending import intrinsic
-from numba import types, typeof, njit
-from llvmlite import ir
 
 
 @intrinsic
@@ -429,6 +426,7 @@ def _trailing_zeros(typeingctx, src):
 
 
 def _unsigned(T):
+    """Convert integer to unsigned integer of equivalent width."""
     pass
 
 @overload(_unsigned)
@@ -460,17 +458,16 @@ def gcd_impl(context, builder, sig, args):
         za = _trailing_zeros(a)
         zb = _trailing_zeros(b)
         k = min(za, zb)
-        # u = _unsigned(abs(a >> za))
-        # v = _unsigned(abs(a >> zb))
-        u = types.uintp(abs(a >> za))
-        v = types.uintp(abs(b >> zb))
+        # Uses np.*_shift instead of operators due to return types
+        u = _unsigned(abs(np.right_shift(a, za)))
+        v = _unsigned(abs(np.right_shift(b, zb)))
         while u != v:
             if u > v:
                 u, v = v, u
             v -= u
-            v >>= _trailing_zeros(v)
-        r = u << k
-        return T(r)
+            v = np.right_shift(v, _trailing_zeros(v))
+        r = np.left_shift(T(u), k)
+        return r
 
     res = context.compile_internal(builder, gcd, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
