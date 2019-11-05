@@ -28,6 +28,7 @@ from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
+import operator
 
 import warnings
 from ..errors import NumbaParallelSafetyWarning
@@ -366,8 +367,18 @@ def _lower_parfor_parallel(lowerer, parfor):
                     if isinstance(inst, ir.Assign):
                         rhs = inst.value
                         # We probably need to generalize this since it only does substitutions in
-                        # inplace_ginops.
+                        # inplace_binops.
                         if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and rhs.rhs.name == init_var.name:
+                            if config.DEBUG_ARRAY_OPT:
+                                print("Adding call to reduction", rhs)
+                            if rhs.fn == operator.isub:
+                                rhs.fn = operator.iadd
+                                rhs.immutable_fn = operator.add
+                            if rhs.fn == operator.itruediv or rhs.fn == operator.ifloordiv:
+                                rhs.fn = operator.imul
+                                rhs.immutable_fn = operator.mul
+                            if config.DEBUG_ARRAY_OPT:
+                                print("After changing sub to add or div to mul", rhs)
                             # Get calltype of rhs.
                             ct = lowerer.fndesc.calltypes[rhs]
                             assert(len(ct.args) == 2)
@@ -375,7 +386,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                             ctargs = (ct.args[0], redvar_typ)
                             # Update the signature of the call.
                             ct = ct.replace(args=ctargs)
-                            # Remove so we can re-insrt since calltypes is unique dict.
+                            # Remove so we can re-insert since calltypes is unique dict.
                             lowerer.fndesc.calltypes.pop(rhs)
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct

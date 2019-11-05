@@ -181,6 +181,10 @@ def rjust_usecase_fillchar(x, y, fillchar):
     return x.rjust(y, fillchar)
 
 
+def istitle_usecase(x):
+    return x.istitle()
+
+
 def iter_usecase(x):
     l = []
     for i in x:
@@ -217,6 +221,14 @@ def literal_iter_stopiteration_usecase():
     n = len(s)
     for _ in range(n + 1):
         next(i)
+
+
+def islower_usecase(x):
+    return x.islower()
+
+
+def lower_usecase(x):
+    return x.lower()
 
 
 class BaseTest(MemoryLeakMixin, TestCase):
@@ -929,6 +941,42 @@ class TestUnicode(BaseTest):
                                      "'%s'.%s('%s')?" % (string, case_name,
                                                          chars))
 
+    def test_istitle(self):
+        pyfunc = istitle_usecase
+        cfunc = njit(pyfunc)
+        error_msg = "'{0}'.py_istitle() = {1}\n'{0}'.c_istitle() = {2}"
+
+        unicode_title = [x.title() for x in UNICODE_EXAMPLES]
+        special = [
+            '',
+            '    ',
+            '  AA  ',
+            '  Ab  ',
+            '1',
+            'A123',
+            'A12Bcd',
+            '+abA',
+            '12Abc',
+            'A12abc',
+            '%^Abc 5 $% Def'
+            '𐐁𐐩',
+            '𐐧𐑎',
+            '𐐩',
+            '𐑎',
+            '🐍 Is',
+            '🐍 NOT',
+            '👯Is',
+            'ῼ',
+            'Greek ῼitlecases ...'
+        ]
+        ISTITLE_EXAMPLES = UNICODE_EXAMPLES + unicode_title + special
+
+        for s in ISTITLE_EXAMPLES:
+            py_result = pyfunc(s)
+            c_result = cfunc(s)
+            self.assertEqual(py_result, c_result,
+                             error_msg.format(s, py_result, c_result))
+
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
             return a[:]
@@ -1110,6 +1158,45 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+    def test_islower(self):
+        pyfunc = islower_usecase
+        cfunc = njit(pyfunc)
+        lowers = [x.lower() for x in UNICODE_EXAMPLES]
+        extras = ['AA12A', 'aa12a', '大AA12A', '大aa12a', 'AAAǄA', 'A 1 1 大']
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L586-L600    # noqa: E501
+        cpython = ['\u2167', '\u2177', '\U00010401', '\U00010427',
+                   '\U00010429', '\U0001044E', '\U0001F40D', '\U0001F46F']
+        cpython += [x * 4 for x in cpython]
+
+        msg = 'Results of "{}".islower() must be equal'
+        for s in UNICODE_EXAMPLES + lowers + [''] + extras + cpython:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
+    def test_lower(self):
+        pyfunc = lower_usecase
+        cfunc = njit(pyfunc)
+        extras = ['AA12A', 'aa12a', '大AA12A', '大aa12a', 'AAAǄA', 'A 1 1 大']
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L748-L758    # noqa: E501
+        cpython = ['\U00010401', '\U00010427', '\U0001044E', '\U0001F46F',
+                   '\U00010427\U00010427', '\U00010427\U0001044F',
+                   'X\U00010427x\U0001044F', '\u0130']
+
+        # special cases for sigma from CPython testing:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L759-L768    # noqa: E501
+        sigma = ['\u03a3', '\u0345\u03a3', 'A\u0345\u03a3', 'A\u0345\u03a3a',
+                 '\u03a3\u0345 ', '\U0008fffe', '\u2177']
+
+        extra_sigma = 'A\u03a3\u03a2'
+        sigma.append(extra_sigma)
+
+        msg = 'Results of "{}".lower() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + extras + cpython + sigma:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
 
 @unittest.skipUnless(_py34_or_later,

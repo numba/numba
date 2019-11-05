@@ -219,7 +219,7 @@ def np_int_urem_impl(context, builder, sig, args):
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
-        mod = builder.srem(num,den)
+        mod = builder.urem(num,den)
 
     result = builder.phi(lty)
     result.add_incoming(ZERO, bb_no_if)
