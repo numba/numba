@@ -37,10 +37,11 @@ class PrintItem(AbstractTemplate):
 @infer_global(abs)
 class Abs(ConcreteTemplate):
     int_cases = [signature(ty, ty) for ty in sorted(types.signed_domain)]
+    uint_cases = [signature(ty, ty) for ty in sorted(types.unsigned_domain)]
     real_cases = [signature(ty, ty) for ty in sorted(types.real_domain)]
     complex_cases = [signature(ty.underlying_float, ty)
                      for ty in sorted(types.complex_domain)]
-    cases = int_cases + real_cases + complex_cases
+    cases = int_cases + uint_cases +  real_cases + complex_cases
 
 
 @infer_global(slice)
