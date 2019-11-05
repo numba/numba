@@ -272,16 +272,19 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_power_impl,
     }
 
-    ufunc_db[np.gcd] = {
-        'bb->b': npyfuncs.np_gcd_impl,
-        'BB->B': npyfuncs.np_gcd_impl,
-        'hh->h': npyfuncs.np_gcd_impl,
-        'HH->H': npyfuncs.np_gcd_impl,
-        'ii->i': npyfuncs.np_gcd_impl,
-        'II->I': npyfuncs.np_gcd_impl,
-        'll->l': npyfuncs.np_gcd_impl,
-        'LL->L': npyfuncs.np_gcd_impl,
-    }
+    if v >= (1, 15):
+        ufunc_db[np.gcd] = {
+            'bb->b': npyfuncs.np_gcd_impl,
+            'BB->B': npyfuncs.np_gcd_impl,
+            'hh->h': npyfuncs.np_gcd_impl,
+            'HH->H': npyfuncs.np_gcd_impl,
+            'ii->i': npyfuncs.np_gcd_impl,
+            'II->I': npyfuncs.np_gcd_impl,
+            'll->l': npyfuncs.np_gcd_impl,
+            'LL->L': npyfuncs.np_gcd_impl,
+            'qq->q': npyfuncs.np_gcd_impl,
+            'QQ->Q': npyfuncs.np_gcd_impl,
+        }
 
     ufunc_db[np.rint] = {
         'f->f': npyfuncs.np_real_rint_impl,

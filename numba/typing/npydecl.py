@@ -278,12 +278,15 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power", "gcd",
+                     "floor_divide", "negative", "power",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
+
+if numpy_version >= (1, 15):
+    _math_operations.append("gcd")
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
