@@ -6,14 +6,13 @@ set -v -e
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
     if [[ "$BITS32" == "yes" ]]; then
-        wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86.sh -O miniconda.sh
+        wget https://repo.anaconda.com/pkgs/misc/conda-execs/conda-latest-linux-32.exe -O conda
     else
-        wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+        wget https://repo.anaconda.com/pkgs/misc/conda-execs/conda-latest-linux-64.exe -O conda
     fi
 elif [[ "$unamestr" == 'Darwin' ]]; then
-    wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh
+    wget https://repo.anaconda.com/pkgs/misc/conda-execs/conda-latest-osx-64.exe -O conda
 else
   echo Error
 fi
-chmod +x miniconda.sh
-./miniconda.sh -b
+chmod +x conda
