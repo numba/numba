@@ -443,4 +443,10 @@ class MakeFunctionToJitFunction(FunctionPass):
                                                  stmt.loc)
                             stmt.value = new_node
                             mutated |= True
+
+        # if a change was made the del ordering is probably wrong, patch up
+        if mutated:
+            post_proc = postproc.PostProcessor(func_ir)
+            post_proc.run()
+
         return mutated

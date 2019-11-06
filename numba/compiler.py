@@ -494,9 +494,8 @@ class DefaultPassBuilder(object):
                     "inline calls to locally defined closures")
         # convert any remaining closures into functions unless this is being
         # lifted as an objmode block
-        if not state.flags.enable_pyobject_looplift:
-            pm.add_pass(MakeFunctionToJitFunction,
-                        "convert make_function into JIT functions")
+        pm.add_pass(MakeFunctionToJitFunction,
+                    "convert make_function into JIT functions")
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
