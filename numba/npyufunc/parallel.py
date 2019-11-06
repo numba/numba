@@ -552,17 +552,6 @@ def ol_get_num_threads():
         return _get_num_threads()
     return impl
 
-@njit
-def _set_num_threads_jit(n):
-    """
-    Jitted version of set_num_threads for testing
-
-    It does not check that n is in the right range and it will fail if
-    _launch_threads() has not already been called.
-    """
-    return _set_num_threads(n)
-
-
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 
