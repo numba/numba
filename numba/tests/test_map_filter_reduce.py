@@ -80,8 +80,9 @@ class TestReduce(unittest.TestCase):
     def test_basic_reduce_closure(self):
 
         def impl():
-            def func(x, y): return x + y
-                return reduce(func, range(-10, 10), 100)
+            def func(x, y):
+                return x + y
+            return reduce(func, range(-10, 10), 100)
 
         cfunc = njit(impl)
 
