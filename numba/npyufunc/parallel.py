@@ -466,7 +466,7 @@ def _load_num_threads_funcs():
     _set_num_threads(NUM_THREADS)
 
     global _get_num_threads
-    _get_num_threads = CFUNCTYPE(c_int)(lib.set_num_threads)
+    _get_num_threads = CFUNCTYPE(c_int)(lib.get_num_threads)
 
 _load_num_threads_funcs()
 
