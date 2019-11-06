@@ -29,6 +29,7 @@ from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, config, utils, njit
 from numba.npyufunc.wrappers import _wrapper_info
+from numba.extending import overload
 
 
 def get_thread_count():
@@ -470,6 +471,23 @@ def _load_num_threads_funcs():
 
 _load_num_threads_funcs()
 
+# Some helpers to make set_num_threads jittable
+
+def snt_check(n):
+    from numba.config import NUMBA_NUM_THREADS
+    msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
+    if n > NUMBA_NUM_THREADS or n < 1:
+        raise ValueError(msg)
+
+@overload(snt_check)
+def ol_snt_check(n):
+    from numba.config import NUMBA_NUM_THREADS
+    msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
+    def impl(n):
+        if n > NUMBA_NUM_THREADS or n < 1:
+            raise ValueError(msg)
+    return impl
+
 def set_num_threads(n):
     """
     Set the number of threads to use for parallel execution.
@@ -497,11 +515,15 @@ def set_num_threads(n):
     """
     _launch_threads()
 
-    if n > NUM_THREADS or n < 1:
-        raise ValueError("The number of threads must be between 1 and %s" %
-                         NUM_THREADS)
-    return _set_num_threads(n)
+    snt_check(n)
+    _set_num_threads(n)
 
+@overload(set_num_threads)
+def ol_set_num_threads(n):
+    def impl(n):
+        snt_check(n)
+        _set_num_threads(n)
+    return impl
 
 def get_num_threads():
     """
@@ -522,9 +544,13 @@ def get_num_threads():
     set_num_threads, NUM_THREADS
 
     """
-    _launch_threads()
     return _get_num_threads()
 
+@overload(get_num_threads)
+def ol_get_num_threads():
+    def impl():
+        return _get_num_threads()
+    return impl
 
 @njit
 def _set_num_threads_jit(n):
