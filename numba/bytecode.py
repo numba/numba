@@ -92,7 +92,7 @@ class ByteCodeInst(object):
             return self.next + self.arg
         else:
             assert self.opcode in JABS_OPS
-            return self.arg + _FIXED_OFFSET
+            return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
@@ -131,8 +131,6 @@ def _unpack_opargs(code):
     """
     if sys.version_info[0] < 3:
         code = list(map(ord, code))
-    else:
-        yield (0, OPCODE_NOP, 0, _FIXED_OFFSET)
 
     extended_arg = 0
     n = len(code)
@@ -153,14 +151,29 @@ def _unpack_opargs(code):
             i += NO_ARG_LEN
 
         extended_arg = 0
-        yield (offset + _FIXED_OFFSET, op, arg, i + _FIXED_OFFSET)
+        yield (offset, op, arg, i)
         offset = i  # Mark inst offset at first extended
+
+
+def _patched_opargs(bc_stream):
+    """Patch the bytecode stream.
+
+    - Adds a NOP bytecode at the start to avoid jump target being at the entry.
+    """
+    # Injected NOP
+    yield (0, OPCODE_NOP, None, _FIXED_OFFSET)
+    # Adjust bytecode offset for the rest of the stream
+    for offset, opcode, arg, nextoffset in bc_stream:
+        # If the opcode has an absolute jump target, adjust it.
+        if opcode in JABS_OPS:
+            arg += _FIXED_OFFSET
+        yield offset + _FIXED_OFFSET, opcode, arg, nextoffset + _FIXED_OFFSET
 
 
 class ByteCodeIter(object):
     def __init__(self, code):
         self.code = code
-        self.iter = iter(_unpack_opargs(self.code.co_code))
+        self.iter = iter(_patched_opargs(_unpack_opargs(self.code.co_code)))
 
     def __iter__(self):
         return self
