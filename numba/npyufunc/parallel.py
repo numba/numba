@@ -17,7 +17,6 @@ import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
-from contextlib import contextmanager
 
 import numpy as np
 
