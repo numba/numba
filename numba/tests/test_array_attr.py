@@ -3,6 +3,7 @@ from __future__ import print_function
 import numpy as np
 
 import numba.unittest_support as unittest
+from numba import jitclass
 from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import types, njit, typeof, numpy_support
@@ -374,6 +375,22 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
         self.assertIn("cannot access .imag of array of Record",
                       str(raises.exception))
 
+class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
+    """Regression test for: https://github.com/numba/numba/issues/4775 """
+
+    def test(self):
+
+        @jitclass(dict())
+        class B:
+
+            def __init__(self):
+                pass
+
+            def foo(self, X):
+                X.flags
+
+        Z = B()
+        Z.foo(np.ones(4))
 
 if __name__ == '__main__':
     unittest.main()
