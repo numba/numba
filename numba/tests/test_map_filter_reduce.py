@@ -29,7 +29,7 @@ class TestMap(unittest.TestCase):
 
     def test_basic_map_closure_multiple_iterator(self):
         def impl():
-            args = range(10), range(9)
+            args = range(10), range(10, 20)
             return [y for y in map(lambda a, b: (a + 10, b + 5), *args)]
 
         cfunc = njit(impl)
