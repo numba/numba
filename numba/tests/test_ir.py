@@ -414,6 +414,7 @@ class TestIRCompounds(CheckEquality):
 
         z_ir = compiler.run_frontend(z)
 
+        change_set = set()
         for label in reversed(list(z_ir.blocks.keys())):
             blk = z_ir.blocks[label]
             ref = blk.body[:-1]
@@ -426,11 +427,16 @@ class TestIRCompounds(CheckEquality):
                     break
             if idx is not None:
                 b = blk.body
+                change_set.add(str(b[idx + 1]))
+                change_set.add(str(b[idx]))
                 b[idx], b[idx + 1] = b[idx + 1], b[idx]
                 break
 
         self.assertFalse(x_ir.equal_ir(z_ir))
-        check_diffstr(x_ir.diff_str(z_ir), ['del i', 'del h'])
+        self.assertEqual(len(change_set), 2)
+        for item in change_set:
+            self.assertTrue(item.startswith('del '))
+        check_diffstr(x_ir.diff_str(z_ir), change_set)
 
         def foo(a, b):
             c = a * 2
