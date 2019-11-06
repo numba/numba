@@ -3,7 +3,7 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba import njit, types, cgutils, unicode
+from numba import types, cgutils, unicode
 from numba.extending import (overload, intrinsic, overload_method, lower_cast,
                              register_jitable)
 
