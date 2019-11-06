@@ -2,6 +2,8 @@
 
 set -v -e
 
+export PATH="$PWD:$PATH" # so conda is found
+
 # first configure conda to have more tolerance of network problems, these
 # numbers are not scientifically chosen, just merely larger than defaults
 conda config --write-default
