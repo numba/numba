@@ -501,6 +501,13 @@ class Runner(object):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
+    def op_BREAK_LOOP(self, state, inst):
+        # NOTE: bytecode removed since py3.8
+        end = state.get_top_block('loop')['end']
+        state.append(inst, end=end)
+        state.pop_block()
+        state.fork(pc=end)
+
     def op_RETURN_VALUE(self, state, inst):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
@@ -538,6 +545,13 @@ class Runner(object):
 
     def op_WITH_CLEANUP_FINISH(self, state, inst):
         state.append(inst)
+
+    def op_SETUP_LOOP(self, state, inst):
+        # NOTE: bytecode removed since py3.8
+        state.push_block({
+            'kind': 'loop',
+            'end': inst.get_jump_target(),
+        })
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
@@ -989,6 +1003,11 @@ class State(object):
         _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack,
                       new_stack)
         self._stack = new_stack
+
+    def get_top_block(self, kind):
+        for bs in reversed(self._blockstack):
+            if bs['kind'] == kind:
+                return bs
 
     def get_varname(self, inst):
         """Get referenced variable name from the oparg

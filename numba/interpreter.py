@@ -97,7 +97,7 @@ class Interpreter(object):
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
-        if PYVERSION < (3, 8):
+        if PYVERSION < (3, 7):
             # Control flow analysis
             self.cfa = controlflow.ControlFlowAnalysis(bytecode)
             self.cfa.run()
@@ -980,10 +980,12 @@ class Interpreter(object):
         else:
             self._binop(op, lhs, rhs, res)
 
-    def op_BREAK_LOOP(self, inst):
-        loop = self.syntax_blocks[-1]
-        assert isinstance(loop, ir.Loop)
-        jmp = ir.Jump(target=loop.exit, loc=self.loc)
+    def op_BREAK_LOOP(self, inst, end=None):
+        if end is None:
+            loop = self.syntax_blocks[-1]
+            assert isinstance(loop, ir.Loop)
+            end = loop.exit
+        jmp = ir.Jump(target=end, loc=self.loc)
         self.current_block.append(jmp)
 
     def _op_JUMP_IF(self, inst, pred, iftrue):
