@@ -42,10 +42,6 @@ def get_thread_count():
     return t
 
 
-#: The total (maximum) number of threads used by numba parallel.
-#:
-#: Defaults to the number of cores but can be overridden with the
-#: envvar:`NUMBA_NUM_THREADS` environment variable.
 NUM_THREADS = get_thread_count()
 
 
@@ -492,25 +488,23 @@ def set_num_threads(n):
     """
     Set the number of threads to use for parallel execution.
 
-    By default, all :obj:`numba.npyufunc.parallel.NUM_THREADS` threads are
-    used.
+    By default, all :obj:`numba.config.NUMBA_NUM_THREADS` threads are used.
 
     This functionality works by masking out threads that are not used.
     Therefore, the number of threads *n* must be less than or equal to
-    :obj:`~.NUM_THREADS`, the total number of threads that are launched. See
-    its documentation for more details.
+    :obj:`~.NUMBA_NUM_THREADS`, the total number of threads that are launched.
+    See its documentation for more details.
+
+    This function can be used inside of a jitted function.
 
     Parameters
     ----------
-    n: The number of threads. Must be between 1 and NUM_THREADS.
-
-    Returns
-    -------
-    The old number of threads.
+    n: The number of threads. Must be between 1 and NUMBA_NUM_THREADS.
 
     See Also
     --------
-    get_num_threads, NUM_THREADS
+    get_num_threads, numba.config.NUMBA_NUM_THREADS,
+    numba.config.NUMBA_DEFAULT_NUM_THREADS, :envvar:`NUMBA_NUM_THREADS`
 
     """
     _launch_threads()
@@ -530,10 +524,12 @@ def get_num_threads():
     Get the number of threads used for parallel execution.
 
     By default (if :func:`~.set_num_threads` is never called), all
-    :obj:`numba.npyufunc.parallel.NUM_THREADS` threads are used.
+    :obj:`numba.config.NUMBA_NUM_THREADS` threads are used.
 
     This number is less than or equal to the total number of threads that are
-    launched, :obj:`numba.npyufunc.parallel.NUM_THREADS`.
+    launched, :obj:`numba.config.NUMBA_NUM_THREADS`.
+
+    This function can be used inside of a jitted function.
 
     Returns
     -------
@@ -541,7 +537,8 @@ def get_num_threads():
 
     See Also
     --------
-    set_num_threads, NUM_THREADS
+    set_num_threads, numba.config.NUMBA_NUM_THREADS,
+    numba.config.NUMBA_DEFAULT_NUM_THREADS, :envvar:`NUMBA_NUM_THREADS`
 
     """
     return _get_num_threads()

@@ -168,33 +168,49 @@ system level libraries, some additional things to note:
 * For Windows users running Python 2.7, the ``tbb`` threading layer is not
   available.
 
+.. _setting_the_number_of_threads:
+
 Setting the Number of Threads
 -----------------------------
 
 The number of threads used by numba is based on the number of CPU cores
-available (``multiprocessing.cpu_count()``), but it can be overridden with the
-:envvar:`NUMBA_NUM_THREADS` environment variable.
+available (see :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`), but it can be
+overridden with the :envvar:`NUMBA_NUM_THREADS` environment variable.
 
-The total number of threads is in the variable
-:obj:`numba.npyufunc.parallel.NUM_THREADS`.
+The total number of threads that numba launches is in the variable
+:obj:`numba.config.NUMBA_NUM_THREADS`.
 
 For some use cases, it may be desirable to set the number of threads to a
 lower value, so that numba can be used with higher level parallelism.
 
 The number of threads can be set dynamically at runtime using
-:func:`numba.npyufunc.parallel.set_num_threads`. Note that
-:func:`~.set_num_threads` only allows setting the number
-of threads to a smaller value than :obj:`~.NUM_THREADS`.
+:func:`numba.set_num_threads`. Note that :func:`~.set_num_threads` only allows
+setting the number of threads to a smaller value than
+:obj:`~.NUMBA_NUM_THREADS`. Numba always launches
+:obj:`numba.config.NUMBA_NUM_THREADS` threads, but :func:`~.set_num_threads`
+causes it to mask out unused threads so they aren't used in computations.
 
-The number of threads can be accessed with
-:func:`numba.npyufunc.parallel.get_num_threads`:
+The current number of threads used by numba can be accessed with
+:func:`numba.get_num_threads`. Both functions work inside of a jitted
+function.
 
 API Reference
 ~~~~~~~~~~~~~
 
-.. autodata:: numba.npyufunc.parallel.NUM_THREADS
-   :annotation:
+.. py:data:: numba.config.NUMBA_NUM_THREADS
 
-.. autofunction:: numba.npyufunc.parallel.set_num_threads
+   The total (maximum) number of threads launched by numba.
 
-.. autofunction:: numba.npyufunc.parallel.get_num_threads
+   Defaults :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`, but can be
+   overridden with the :envvar:`NUMBA_NUM_THREADS` environment variable.
+
+.. py:data:: numba.config.NUMBA_DEFAULT_NUM_THREADS
+
+   The number of CPU cores on the system (as determined by
+   ``multiprocessing.cpu_count()``). This is the default value for
+   :obj:`numba.config.NUMBA_NUM_THREADS` unless the
+   :envvar:`NUMBA_NUM_THREADS` environment variable is set.
+
+.. autofunction:: numba.set_num_threads
+
+.. autofunction:: numba.get_num_threads
