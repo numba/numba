@@ -19,6 +19,6 @@ def init_all():
     _already_initialized = True
 
     for entry_point in iter_entry_points('numba_extensions', 'init'):
-        logger.debug('Loading extension:', entry_point)
+        logger.debug('Loading extension:' + str(entry_point))
         func = entry_point.load()
         func()
