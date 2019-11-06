@@ -31,7 +31,8 @@ from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
                          jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from .npyufunc import (vectorize, guvectorize, threading_layer,
+                       get_num_threads, set_num_threads)
 
 # Re-export Numpy helpers
 from .numpy_support import carray, farray, from_dtype
