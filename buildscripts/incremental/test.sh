@@ -59,13 +59,18 @@ fi
 
 # First check that the test discovery works
 python -m numba.tests.test_runtests
-# Now run the Numba test suite
+
+# Now run tests based on the changes identified via git
+NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+
+
+# Now run the Numba test suite with slicing
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py -b --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,19" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,19" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi

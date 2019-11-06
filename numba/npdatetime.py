@@ -121,8 +121,8 @@ def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
     """
     Compute a possible conversion for combining *datetime_unit* and
     *timedelta_unit* (presumably for adding or subtracting).
-    Return (result unit, integer datetime multiplier, integer timedelta multiplier).
-    RuntimeError is raised if the combination is impossible.
+    Return (result unit, integer datetime multiplier, integer timedelta
+    multiplier). RuntimeError is raised if the combination is impossible.
     """
     # XXX now unused (I don't know where / how Numpy uses this)
     dt_unit_code = DATETIME_UNITS[datetime_unit]

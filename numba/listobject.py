@@ -51,6 +51,8 @@ _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
 INDEXTY = types.intp
 
+index_types = types.integer_domain
+
 
 @register_model(ListType)
 class ListModel(models.StructModel):
@@ -376,7 +378,8 @@ def _list_length(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_length')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_length')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -400,7 +403,8 @@ def _list_append(typingctx, l, item):
         )
         [l, item] = args
         [tl, titem] = sig.args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_append')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_append')
 
         dm_item = context.data_model_manager[titem]
 
@@ -460,7 +464,9 @@ def handle_index(l, index):
     """
     # convert negative indices to positive ones
     if index < 0:
-        index = len(l) + index
+        # len(l) has always type 'int64'
+        # while index can be an signed/unsigned integer
+        index = type(index)(len(l) + index)
     # check that the index is in range
     if not (0 <= index < len(l)):
         raise IndexError("list index out of range")
@@ -520,8 +526,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_{}'.format(op))
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_{}'.format(op))
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
@@ -537,7 +543,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
             ],
         )
         # Load item if output is available
-        found = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+        found = builder.icmp_signed('>=', status,
+                                    status.type(int(ListStatus.LIST_OK)))
 
         out = context.make_optional_none(builder, tl.item_type)
         pout = cgutils.alloca_once_value(builder, out)
@@ -562,7 +569,7 @@ def impl_getitem(l, index):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in index_types:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -584,7 +591,7 @@ def impl_getitem(l, index):
         return slice_impl
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @intrinsic
@@ -630,7 +637,7 @@ def impl_setitem(l, index, item):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in index_types:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -684,7 +691,8 @@ def impl_setitem(l, index, item):
             # Extended slices
             else:
                 if len(slice_range) != len(item):
-                    raise ValueError("length mismatch for extended slice and sequence")
+                    raise ValueError("length mismatch for extended slice "
+                                     "and sequence")
                 # extended slice can only replace
                 for i, j in zip(slice_range, item):
                     l[i] = j
@@ -692,7 +700,7 @@ def impl_setitem(l, index, item):
         return impl_slice
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @overload_method(types.ListType, 'pop')
@@ -704,7 +712,7 @@ def impl_pop(l, index=-1):
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
     if (isinstance(index, int)
-            or index in types.signed_domain
+            or index in index_types
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
             if len(l) == 0:
@@ -719,7 +727,7 @@ def impl_pop(l, index=-1):
         return impl
 
     else:
-        raise TypingError("argument for pop must be a signed integer")
+        raise TypingError("argument for pop must be an integer")
 
 
 @intrinsic
@@ -736,8 +744,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         )
         [l, start, stop, step] = args
         [tl, tstart, tstop, tstep] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_delete_slice')
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_delete_slice')
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
@@ -759,7 +767,7 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.signed_domain:
+    if index in index_types:
         def integer_impl(l, index):
             l.pop(index)
 
@@ -775,7 +783,7 @@ def impl_delitem(l, index):
         return slice_impl
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @overload(operator.contains)
@@ -861,7 +869,7 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.signed_domain:
+    if index in index_types:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
             # empty, just append.
@@ -895,7 +903,7 @@ def impl_insert(l, index, item):
             sig = typing.signature(types.void, l, INDEXTY, itemty)
             return sig, impl
     else:
-        raise TypingError("list insert indices must be signed integers")
+        raise TypingError("list insert indices must be integers")
 
 
 @overload_method(types.ListType, 'remove')
@@ -962,9 +970,9 @@ def impl_index(l, item, start=None, end=None):
 
     def check_arg(arg, name):
         if not (arg is None
-                or arg in types.signed_domain
+                or arg in index_types
                 or isinstance(arg, (types.Omitted, types.NoneType))):
-            raise TypingError("{} argument for index must be a signed integer"
+            raise TypingError("{} argument for index must be an integer"
                               .format(name))
     check_arg(start, "start")
     check_arg(end, "end")

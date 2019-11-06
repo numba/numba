@@ -163,6 +163,13 @@ def math_isinf(A, B):
     i = cuda.grid(1)
     B[i] = math.isinf(A[i])
 
+def math_degrees(A, B):
+    i = cuda.grid(1)
+    B[i] = math.degrees(A[i])
+
+def math_radians(A, B):
+    i = cuda.grid(1)
+    B[i] = math.radians(A[i])
 
 def math_pow_binop(A, B, C):
     i = cuda.grid(1)
@@ -516,6 +523,20 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
     def test_math_isinf(self):
         self.unary_bool_template_float32(math_isinf, np.isinf)
         self.unary_bool_template_float64(math_isinf, np.isinf)
+
+    #------------------------------------------------------------------------------
+    # test_math_degrees
+
+    def test_math_degrees(self):
+        self.unary_bool_template_float32(math_degrees, np.degrees)
+        self.unary_bool_template_float64(math_degrees, np.degrees)
+
+    #------------------------------------------------------------------------------
+    # test_math_radians
+
+    def test_math_radians(self):
+        self.unary_bool_template_float32(math_radians, np.radians)
+        self.unary_bool_template_float64(math_radians, np.radians)
 
 
 if __name__ == '__main__':

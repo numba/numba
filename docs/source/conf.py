@@ -301,13 +301,25 @@ numpydoc_show_class_members = False
 
 def _autogenerate():
     from numba.scripts.generate_lower_listing import gen_lower_listing
+    from numba.help.inspector import write_listings
 
     basedir = os.path.dirname(__file__)
     gen_lower_listing(os.path.join(basedir,
                                    'developer/autogen_lower_listing.rst'))
 
+    # Run inspector on supported packages
+    for package in ['builtins', 'math', 'cmath', 'numpy']:
+        write_listings(
+            package_name=package,
+            filename=os.path.join(
+                basedir, 'developer', 'autogen_{}_listing'.format(package),
+            ),
+            output_format='rst',
+        )
+
 
 _autogenerate()
+
 
 def setup(app):
     app.add_stylesheet("numba-docs.css")

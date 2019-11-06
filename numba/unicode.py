@@ -32,7 +32,9 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_UCS4, _PyUnicode_ToUpperFull,
+from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+                              _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
+                              _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
@@ -382,7 +384,8 @@ def _find(substr, s):
 
 @njit
 def _is_whitespace(code_point):
-    # list copied from https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
+    # list copied from
+    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
     return code_point == 0x0009 \
         or code_point == 0x000A \
         or code_point == 0x000B \
@@ -540,6 +543,42 @@ def unicode_find(a, b):
         return find_impl
 
 
+@overload_method(types.UnicodeType, 'count')
+def unicode_count(src, sub, start=None, end=None):
+
+    _count_args_types_check(start)
+    _count_args_types_check(end)
+
+    if isinstance(sub, types.UnicodeType):
+        def count_impl(src, sub, start=start, end=end):
+            count = 0
+            src_len = len(src)
+            sub_len = len(sub)
+
+            start = _normalize_slice_idx_count(start, src_len, 0)
+            end = _normalize_slice_idx_count(end, src_len, src_len)
+
+            if end - start < 0 or start > src_len:
+                return 0
+
+            src = src[start : end]
+            src_len = len(src)
+            start, end = 0, src_len
+            if sub_len == 0:
+                return src_len + 1
+
+            while(start + sub_len <= src_len):
+                if src[start : start + sub_len] == sub:
+                    count += 1
+                    start += sub_len
+                else:
+                    start += 1
+            return count
+        return count_impl
+    error_msg = "The substring must be a UnicodeType, not {}"
+    raise TypingError(error_msg.format(type(sub)))
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
@@ -662,7 +701,8 @@ def unicode_center(string, width, fillchar=' '):
             return string.center(width, str(fillchar))
         return center_impl
 
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+    if not (fillchar == ' ' or
+            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def center_impl(string, width, fillchar=' '):
@@ -670,7 +710,8 @@ def unicode_center(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -707,7 +748,8 @@ def unicode_ljust(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -728,7 +770,8 @@ def unicode_rjust(string, width, fillchar=' '):
             return string.rjust(width, str(fillchar))
         return rjust_impl
 
-    if not (fillchar == ' ' or isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+    if not (fillchar == ' ' or
+            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
         raise TypingError('The fillchar must be a UnicodeType')
 
     def rjust_impl(string, width, fillchar=' '):
@@ -736,7 +779,8 @@ def unicode_rjust(string, width, fillchar=' '):
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one character long')
+            raise ValueError('The fill character must be exactly one '
+                             'character long')
 
         if width <= str_len:
             return string
@@ -864,6 +908,15 @@ def unicode_strip_types_check(chars):
         raise TypingError('The arg must be a UnicodeType or None')
 
 
+def _count_args_types_check(arg):
+    if isinstance(arg, types.Optional):
+        arg = arg.type
+    if not (arg is None or isinstance(arg, (types.Omitted,
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError("The slice indices must be an Integer or None")
+
+
 @overload_method(types.UnicodeType, 'lstrip')
 def unicode_lstrip(string, chars=None):
 
@@ -942,6 +995,27 @@ def normalize_str_idx(idx, length, is_start=True):
         raise IndexError("string index out of range")
 
     return idx
+
+
+@register_jitable
+def _normalize_slice_idx_count(arg, slice_len, default):
+    """
+    Used for unicode_count
+
+    If arg < -slice_len, returns 0 (prevents circle)
+
+    If arg is within slice, e.g -slice_len <= arg < slice_len
+    returns its real index via arg % slice_len
+
+    If arg > slice_len, returns arg (in this case count must
+    return 0 if it is start index)
+    """
+
+    if arg is None:
+        return default
+    if -slice_len <= arg < slice_len:
+        return arg % slice_len
+    return 0 if arg < 0 else arg
 
 
 @intrinsic
@@ -1128,9 +1202,9 @@ def unicode_not(a):
 
 def _is_upper(is_lower, is_upper, is_title):
     # impl is an approximate translation of:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827    # noqa: E501
     # mixed with:
-    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242
+    # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L218-L242    # noqa: E501
     def impl(a):
         l = len(a)
         if l == 1:
@@ -1176,13 +1250,13 @@ def unicode_upper(a):
     """
     def impl(a):
         # main structure is a translation of:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316    # noqa: E501
 
         # ASCII fast path
         l = len(a)
         if a._is_ascii:
             # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300    # noqa: E501
             ret = _empty_string(a._kind, l, a._is_ascii)
             for idx in range(l):
                 code_point = _get_code_point(a, idx)
@@ -1190,8 +1264,8 @@ def unicode_upper(a):
             return ret
         else:
             # This part in an amalgamation of two algorithms:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908    # noqa: E501
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805    # noqa: E501
             #
             # The alg walks the string and writes the upper version of the code
             # point into a 4byte kind unicode string and at the same time
@@ -1217,6 +1291,147 @@ def unicode_upper(a):
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
+    return impl
+
+
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(s):
+    """
+    Implements UnicodeType.istitle()
+    The algorithm is an approximate translation from CPython:
+    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
+    """
+
+    def impl(s):
+        cased = False
+        previous_is_cased = False
+        for char in s:
+            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
+                if previous_is_cased:
+                    return False
+                cased = True
+                previous_is_cased = True
+            elif _PyUnicode_IsLowercase(char):
+                if not previous_is_cased:
+                    return False
+            else:
+                previous_is_cased = False
+
+        return cased
+    return impl
+
+
+@overload_method(types.UnicodeType, 'islower')
+def unicode_islower(data):
+    """
+    impl is an approximate translation of:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933    # noqa: E501
+    mixed with:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156    # noqa: E501
+    """
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsLowercase(_get_code_point(data, 0))
+        if length == 0:
+            return False
+
+        cased = False
+        for idx in range(length):
+            cp = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(cp) or _PyUnicode_IsTitlecase(cp):
+                return False
+            elif not cased and _PyUnicode_IsLowercase(cp):
+                cased = True
+        return cased
+    return impl
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
+@register_jitable
+def _handle_capital_sigma(data, length, idx):
+    """Handle capital sigma"""
+    c = 0
+    j = idx - 1
+    while j >= 0:
+        c = _get_code_point(data, j)
+        if not _PyUnicode_IsCaseIgnorable(c):
+            break
+        j -= 1
+    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
+    if final_sigma:
+        j = idx + 1
+        while j < length:
+            c = _get_code_point(data, j)
+            if not _PyUnicode_IsCaseIgnorable(c):
+                break
+            j += 1
+        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
+    return 0x3c2 if final_sigma else 0x3c3
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
+@register_jitable
+def _lower_ucs4(code_point, data, length, idx, mapped):
+    if code_point == 0x3A3:
+        mapped[0] = _handle_capital_sigma(data, length, idx)
+        return 1
+    return _PyUnicode_ToLowerFull(code_point, mapped)
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
+@register_jitable
+def _do_upper_or_lower(data, length, res, maxchars, lower):
+    k = 0
+    for idx in range(length):
+        mapped = np.zeros(3, dtype=_Py_UCS4)
+        code_point = _get_code_point(data, idx)
+        if lower:
+            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        else:
+            # might be needed if call _do_upper_or_lower in unicode_upper
+            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+        for m in mapped[:n_res]:
+            maxchars[0] = max(maxchars[0], m)
+            _set_code_point(res, k, m)
+            k += 1
+    return k
+
+
+@overload_method(types.UnicodeType, 'lower')
+def unicode_lower(data):
+    """Implements .lower()"""
+    def impl(data):
+        # main structure is a translation of:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
+
+        # ASCII fast path
+        length = len(data)
+        if data._is_ascii:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
+            res = _empty_string(data._kind, length, data._is_ascii)
+            for idx in range(length):
+                code_point = _get_code_point(data, idx)
+                _set_code_point(res, idx, _Py_TOLOWER(code_point))
+            return res
+        else:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
+            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
+                                data._is_ascii)
+            # maxchar is inside of a list to be pass as argument by reference
+            maxchars = [0]
+            newlength = _do_upper_or_lower(data, length, tmp, maxchars,
+                                           lower=True)
+            maxchar = maxchars[0]
+            newkind = _codepoint_to_kind(maxchar)
+            res = _empty_string(newkind, newlength,
+                                _codepoint_is_ascii(maxchar))
+            for i in range(newlength):
+                _set_code_point(res, i, _get_code_point(tmp, i))
+            return res
     return impl
 
 

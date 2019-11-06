@@ -546,7 +546,8 @@ class CallConstraint(object):
                 and isinstance(sig.return_type.dtype, types.Undefined)):
             typeinfer.refine_map[self.target] = self
         # DictType
-        if isinstance(target_type, types.DictType) and not target_type.is_precise():
+        if (isinstance(target_type, types.DictType) and
+                not target_type.is_precise()):
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):

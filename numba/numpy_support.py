@@ -205,7 +205,8 @@ def map_arrayscalar_type(val):
         try:
             dtype = np.dtype(type(val))
         except TypeError:
-            raise NotImplementedError("no corresponding numpy dtype for %r" % type(val))
+            raise NotImplementedError("no corresponding numpy dtype "
+                                      "for %r" % type(val))
     return from_dtype(dtype)
 
 
@@ -235,7 +236,8 @@ def select_array_wrapper(inputs):
     selected_index = None
     for index, ty in enumerate(inputs):
         # Ties are broken by choosing the first winner, as in Numpy
-        if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
+        if (isinstance(ty, types.ArrayCompatible) and
+                ty.array_priority > max_prio):
             selected_index = index
             max_prio = ty.array_priority
 
@@ -602,3 +604,8 @@ def type_can_asarray(arr):
     """
     ok = (types.Array, types.Sequence, types.Tuple, types.Number, types.Boolean)
     return isinstance(arr, ok)
+
+
+def is_nonelike(ty):
+    """ returns if 'ty' is none """
+    return (ty is None) or isinstance(ty, types.NoneType)

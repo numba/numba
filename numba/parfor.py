@@ -2969,8 +2969,13 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param])
-            init_val = guard(get_reduction_init, reduce_nodes)
-            reductions[param] = (init_val, reduce_nodes)
+            gri_out = guard(get_reduction_init, reduce_nodes)
+            if gri_out is not None:
+                init_val, redop = gri_out
+            else:
+                init_val = None
+                redop = None
+            reductions[param] = (init_val, reduce_nodes, redop)
     return reduce_varnames, reductions
 
 def get_reduction_init(nodes):
@@ -2984,11 +2989,13 @@ def get_reduction_init(nodes):
     require(nodes[-2].target.name == nodes[-1].value.name)
     acc_expr = nodes[-2].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd:
-        return 0
-    if acc_expr.fn == operator.imul:
-        return 1
-    return None
+    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
+        return 0, acc_expr.fn
+    if (  acc_expr.fn == operator.imul
+       or acc_expr.fn == operator.itruediv
+       or acc_expr.fn == operator.ifloordiv ):
+        return 1, acc_expr.fn
+    return None, None
 
 def get_reduce_nodes(name, nodes):
     """

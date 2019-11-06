@@ -553,7 +553,8 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
             # Extract members of the llarray
             nd = Constant.int(ll_int, argty.ndim)
             dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
-            strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
+            strides = builder.gep(array._get_ptr_by_name('strides'),
+                                  [zero, zero])
             data = builder.bitcast(array.data, ll_voidptr)
             dtype = np.dtype(str(argty.dtype))
 
