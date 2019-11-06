@@ -420,7 +420,8 @@ class TestIRCompounds(CheckEquality):
             idx = None
             for i in range(len(ref)):
                 # look for two adjacent Del
-                if isinstance(ref[i], ir.Del) and isinstance(ref[i + 1], ir.Del):
+                if (isinstance(ref[i], ir.Del) and
+                        isinstance(ref[i + 1], ir.Del)):
                     idx = i
                     break
             if idx is not None:

@@ -16,7 +16,8 @@ from numba import errors, utils
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
-# The following offset is used as a hack to inject a NOP at the start of the bytecode
+# The following offset is used as a hack to inject a NOP at the start of the
+# bytecode
 _FIXED_OFFSET = 2 if sys.version_info[0] >= 3 else 0
 
 

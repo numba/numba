@@ -46,7 +46,7 @@ class Flow(object):
         # possible, but no such cases has been encountered in our tests.
         first_encounter = UniqueDict()
         # Loop over each pending state at a initial PC.
-        # Each state is tracing a basicblock
+        # Each state is tracing a basic block
         while runner.pending:
             _logger.debug("pending: %s", runner.pending)
             state = runner.pending.pop()
@@ -71,7 +71,7 @@ class Flow(object):
                 out_states = state.get_outgoing_states()
                 runner.pending.extend(out_states)
 
-        # Complete Controlflow
+        # Complete controlflow
         self._build_cfg(runner.finished)
         # Prune redundant PHI-nodes
         self._prune_phis(runner)
@@ -394,7 +394,8 @@ class Runner(object):
         indexvar = state.make_temp()
         nonevar = state.make_temp()
         state.append(
-            inst, base=tos, slicevar=slicevar, indexvar=indexvar, nonevar=nonevar
+            inst, base=tos, slicevar=slicevar, indexvar=indexvar,
+            nonevar=nonevar,
         )
 
     def op_DELETE_SLICE_1(self, state, inst):
@@ -443,7 +444,8 @@ class Runner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         state.append(
-            inst, base=tos2, start=tos1, stop=tos, slicevar=slicevar, indexvar=indexvar
+            inst, base=tos2, start=tos1, stop=tos, slicevar=slicevar,
+            indexvar=indexvar
         )
 
     def op_BUILD_SLICE(self, state, inst):
@@ -706,7 +708,8 @@ class Runner(object):
             target = state.peek(index)
         appendvar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, value=value, appendvar=appendvar, res=res)
+        state.append(inst, target=target, value=value, appendvar=appendvar,
+                     res=res)
 
     def op_BUILD_MAP(self, state, inst):
         dct = state.make_temp()
@@ -739,7 +742,8 @@ class Runner(object):
         pair = state.make_temp()
         indval = state.make_temp()
         pred = state.make_temp()
-        state.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
+        state.append(inst, iterator=iterator, pair=pair, indval=indval,
+                     pred=pred)
         state.push(indval)
         end = inst.get_jump_target()
         state.fork(pc=end, npop=2)
@@ -982,7 +986,8 @@ class State(object):
     def pop_block(self):
         b = self._blockstack.pop()
         new_stack = self._stack[:b['stack_depth']]
-        _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack, new_stack)
+        _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack,
+                      new_stack)
         self._stack = new_stack
 
     def get_varname(self, inst):
@@ -1017,8 +1022,8 @@ class State(object):
         assert not self._outgoing_phis
         ret = []
         for edge in self._outedges:
-            state = State(bytecode=self._bytecode, pc=edge.pc, nstack=len(edge.stack),
-                          blockstack=edge.blockstack)
+            state = State(bytecode=self._bytecode, pc=edge.pc,
+                          nstack=len(edge.stack), blockstack=edge.blockstack)
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
