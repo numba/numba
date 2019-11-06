@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import njit, literally
+from numba import njit
 from numba.extending import overload
 import numpy as np
 

@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import njit
-import numpy as np
 
 from numba import unittest_support as unittest
 from functools import reduce
@@ -82,7 +81,7 @@ class TestReduce(unittest.TestCase):
 
         def impl():
             def func(x, y): return x + y
-            return reduce(func, range(-10, 10), 100)
+                return reduce(func, range(-10, 10), 100)
 
         cfunc = njit(impl)
 

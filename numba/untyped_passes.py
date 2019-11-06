@@ -439,7 +439,8 @@ class MakeFunctionToJitFunction(FunctionPass):
                             node = stmt.value
                             pyfunc = convert_code_obj_to_function(node, func_ir)
                             func = njit()(pyfunc)
-                            new_node = ir.Global(node.code.co_name, func, stmt.loc)
+                            new_node = ir.Global(node.code.co_name, func,
+                                                 stmt.loc)
                             stmt.value = new_node
                             mutated |= True
         return mutated

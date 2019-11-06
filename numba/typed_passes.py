@@ -387,7 +387,8 @@ class NoPythonBackend(FunctionPass):
             # be later serialized.
             state.library.enable_object_caching()
 
-        NativeLowering().run_pass(state)  # TODO: Pull this out into the pipeline
+        # TODO: Pull this out into the pipeline
+        NativeLowering().run_pass(state)
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
