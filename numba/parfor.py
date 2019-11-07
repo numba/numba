@@ -1541,9 +1541,6 @@ class ParforPass(object):
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
         avail_vars = []
-        # Remember getattrs on Numpy array to convert to parfor
-        # if they are called later.
-        numpy_array_getattr = {}
         for label in topo_order:
             block = blocks[label]
             new_body = []
@@ -1552,13 +1549,6 @@ class ParforPass(object):
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    # If we have lhs = numpy_array.something then remember
-                    # a mapping between lhs and the getattr expr.
-                    if isinstance(expr, ir.Expr) and expr.op == 'getattr':
-                        typ = self.typemap[expr.value.name]
-                        if (isinstance(typ, types.npytypes.Array) and
-                            guard(self._is_supported_ndarray_call, expr.attr)):
-                            numpy_array_getattr[lhs] = expr
                     if self._is_C_order(lhs.name):
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
@@ -1571,13 +1561,19 @@ class ParforPass(object):
                                 equiv_set, lhs, expr, avail_vars)
                     # If there is a call...
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        # and the target of the call has been remembered as
-                        # coming from a getattr on a numpy array...
-                        if expr.func in numpy_array_getattr:
+                        # and the target of the call is a parallelizable/supported
+                        # method on a numpy array.
+                        callname = guard(find_callname, self.func_ir, expr)
+                        if (callname is not None and
+                            len(callname) == 2 and
+                            isinstance(callname[1], ir.Var) and
+                            isinstance(self.typemap[callname[1].name], types.npytypes.Array) and
+                            guard(self._is_supported_ndarray_call, callname[0])):
                             # Try to parallelize this getattr call.
                             instr = self._ndarray_getattr_to_parfor(equiv_set,
                                 lhs,
-                                numpy_array_getattr[expr.func],
+                                callname[0],
+                                callname[1],
                                 expr.args)
                             # If conversion successful then add parfor to IR.
                             if isinstance(instr, tuple):
@@ -2352,10 +2348,10 @@ class ParforPass(object):
             parfor.dump()
         return parfor
 
-    def _ndarray_getattr_to_parfor(self, equiv_set, lhs, the_getattr, call_args):
+    def _ndarray_getattr_to_parfor(self, equiv_set, lhs, method_name, the_array, call_args):
         """Try to convert calls to numpy.ndarray.method to a parfor.
         """
-        if the_getattr.attr not in ['fill']:
+        if method_name not in ['fill']:
             # We should have previously checked and only get here for the above
             # set of methods.
             raise NotImplementedError("parfor translation failed for ", expr)
@@ -2364,7 +2360,6 @@ class ParforPass(object):
         loc = lhs.loc
         # For example, in a.fill(...), the_array to work on 'a' is the value
         # part of the getattr.
-        the_array = the_getattr.value
         # Get the type of the array.
         arr_typ = self.typemap[the_array.name]
         # Get the element type of the array.
@@ -2385,7 +2380,7 @@ class ParforPass(object):
         index_var, index_var_typ = self._make_index_var(
             scope, index_vars, body_block)
 
-        if the_getattr.attr == 'fill':
+        if method_name == 'fill':
             value = call_args[0]
         else:
             NotImplementedError(
@@ -2395,7 +2390,7 @@ class ParforPass(object):
         body_block.body.append(value_assign)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(the_getattr.attr,), 'ndarray mapping'),
+                        ('{} function'.format(method_name,), 'ndarray mapping'),
                         self.flags)
 
         setitem_node = ir.SetItem(the_array, index_var, expr_out_var, loc)
