@@ -187,6 +187,7 @@ The following functions, attributes and methods are currently supported:
 * ``.zfill()``
 * ``.count()``
 * ``.istitle()``
+* ``.rfind()``
 * ``.title()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
