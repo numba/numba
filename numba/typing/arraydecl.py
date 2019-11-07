@@ -312,6 +312,9 @@ class ArrayAttribute(AttributeTemplate):
                 assert ary.ndim == 1
                 return signature(ary, *args)
 
+            if isinstance(shape, types.NoneType):
+                return signature(self.resolve_T(ary))
+
             shape = normalize_shape(shape)
             if shape is None:
                 return
