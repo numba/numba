@@ -10,7 +10,7 @@ import re
 from itertools import chain, combinations
 
 import numba
-from numba import prange, unittest_support as unittest
+from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
 from numba.six import exec_
@@ -402,6 +402,17 @@ class TestSVML(TestCase):
             raise AssertionError(
                 "process failed with code %s: stderr follows\n%s\n" %
                 (popen.returncode, err.decode()))
+
+    def test_svml_working_in_non_isolated_context(self):
+        @njit(fastmath={'fast'}, error_model="numpy")
+        def impl(n):
+            x   = np.empty(n * 8, dtype=np.float64)
+            ret = np.empty_like(x)
+            for i in range(ret.size):
+                    ret[i] += math.cosh(x[i])
+            return ret
+        impl(1)
+        self.assertTrue('intel_svmlcc' in impl.inspect_llvm(impl.signatures[0]))
 
 
 if __name__ == '__main__':
