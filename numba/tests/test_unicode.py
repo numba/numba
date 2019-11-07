@@ -188,6 +188,10 @@ def iter_usecase(x):
     return l
 
 
+def title(x):
+    return x.title()
+
+
 def literal_iter_usecase():
     l = []
     for i in '大处着眼，小处着手。':
@@ -1147,6 +1151,22 @@ class TestUnicode(BaseTest):
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
+
+    def test_title(self):
+        pyfunc = title
+        cfunc = njit(pyfunc)
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L813-L828    # noqa: E501
+        cpython = ['\U0001044F', '\U0001044F\U0001044F',
+                   '\U0001044F\U0001044F \U0001044F\U0001044F',
+                   '\U00010427\U0001044F \U00010427\U0001044F',
+                   '\U0001044F\U00010427 \U0001044F\U00010427',
+                   'X\U00010427x\U0001044F X\U00010427x\U0001044F',
+                   'ﬁNNISH', 'A\u03a3 \u1fa1xy', 'A\u03a3A']
+
+        msg = 'Results of "{}".title() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
     def test_islower(self):
         pyfunc = islower_usecase
