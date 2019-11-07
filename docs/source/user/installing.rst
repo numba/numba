@@ -201,6 +201,7 @@ vary with target operating system and hardware. The following lists them all
 
 * Required run time:
 
+  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
   * ``funcsigs`` (Python 2)

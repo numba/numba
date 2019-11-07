@@ -40,6 +40,7 @@ requirements:
   run:
     - python
     - numpy x.x
+    - setuptools
     # On channel https://anaconda.org/numba/
     - llvmlite 0.30.*
     - funcsigs                 # [py27]

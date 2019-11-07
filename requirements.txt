@@ -1,3 +1,4 @@
+setuptools
 numpy>=1.10
 llvmlite>=0.30
 argparse
