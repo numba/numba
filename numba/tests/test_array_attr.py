@@ -381,7 +381,7 @@ class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
     def test(self):
 
         @jitclass(dict())
-        class B:
+        class B(object):
 
             def __init__(self):
                 pass
