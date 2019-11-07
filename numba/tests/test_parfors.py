@@ -2712,6 +2712,18 @@ class TestParforsSlice(TestParforsBase):
         x2 = np.random.rand(6)
         self.check(test_impl, x1, x2)
 
+    @skip_unsupported
+    def test_parfor_slice22(self):
+        def test_impl(x1, x2):
+            b = np.zeros((10,))
+            for i in prange(1):
+                b += x1[:, x2]
+            return b
+
+        x1 = np.zeros((10,7))
+        x2 = np.array(4)
+        self.check(test_impl, x1, x2)
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
