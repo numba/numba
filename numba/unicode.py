@@ -20,7 +20,6 @@ from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
-from numba import njit
 from numba.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
@@ -240,7 +239,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
     return sig, details
 
 
-@njit
+@register_jitable
 def _empty_string(kind, length, is_ascii=0):
     char_width = _kind_to_byte_width(kind)
     s = _malloc_string(kind, char_width, length, is_ascii)
@@ -249,7 +248,7 @@ def _empty_string(kind, length, is_ascii=0):
 
 
 # Disable RefCt for performance.
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _get_code_point(a, i):
     if a._kind == PY_UNICODE_1BYTE_KIND:
         return deref_uint8(a._data, i)
@@ -295,7 +294,7 @@ def set_uint32(typingctx, data, idx, ch):
     return sig, make_set_codegen(32)
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _set_code_point(a, i, ch):
     # WARNING: This method is very dangerous:
     #   * Assumes that data contents can be changed (only allowed for new
@@ -314,7 +313,7 @@ def _set_code_point(a, i, ch):
             "Unexpected unicode representation in _set_code_point")
 
 
-@njit
+@register_jitable
 def _pick_kind(kind1, kind2):
     if kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND:
         raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
@@ -332,14 +331,14 @@ def _pick_kind(kind1, kind2):
         raise AssertionError("Unexpected unicode representation in _pick_kind")
 
 
-@njit
+@register_jitable
 def _pick_ascii(is_ascii1, is_ascii2):
     if is_ascii1 == 1 and is_ascii2 == 1:
         return types.uint32(1)
     return types.uint32(0)
 
 
-@njit
+@register_jitable
 def _kind_to_byte_width(kind):
     if kind == PY_UNICODE_1BYTE_KIND:
         return 1
@@ -353,7 +352,7 @@ def _kind_to_byte_width(kind):
         raise AssertionError("Unexpected unicode encoding encountered")
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _cmp_region(a, a_offset, b, b_offset, n):
     if n == 0:
         return 0
@@ -373,7 +372,7 @@ def _cmp_region(a, a_offset, b, b_offset, n):
     return 0
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _find(substr, s):
     # Naive, slow string matching for now
     for i in range(len(s) - len(substr) + 1):
@@ -382,7 +381,7 @@ def _find(substr, s):
     return -1
 
 
-@njit
+@register_jitable
 def _is_whitespace(code_point):
     # list copied from
     # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
@@ -791,7 +790,7 @@ def unicode_rjust(string, width, fillchar=' '):
     return rjust_impl
 
 
-@njit
+@register_jitable
 def join_list(sep, parts):
     parts_len = len(parts)
     if parts_len == 0:
@@ -966,7 +965,7 @@ def unicode_strip(string, chars=None):
 
 # String creation
 
-@njit
+@register_jitable
 def normalize_str_idx(idx, length, is_start=True):
     """
     Parameters
@@ -1051,7 +1050,7 @@ def _slice_span(typingctx, sliceobj):
     return sig, codegen
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _strncpy(dst, dst_offset, src, src_offset, n):
     if src._kind == dst._kind:
         byte_width = _kind_to_byte_width(src._kind)
