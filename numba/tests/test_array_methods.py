@@ -575,8 +575,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             arr = np.array([v]).reshape(())
             check_arr(arr)
 
-        arr = np.array(["Hello", "", "world"])
-        check_arr(arr)
+        if sys.version_info >= (3,):
+            arr = np.array(["Hello", "", "world"])
+            check_arr(arr)
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
