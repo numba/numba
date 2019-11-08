@@ -70,6 +70,8 @@ class Dim(object):
             return ret
         else:
             sliced = self[item:item + 1]
+            if sliced.size != 1:
+                raise IndexError
             return Dim(
                 start=sliced.start,
                 stop=sliced.stop,

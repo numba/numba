@@ -2151,6 +2151,7 @@ def array_flags(context, builder, typ, value):
     flagsobj = context.make_helper(builder, types.ArrayFlags(typ))
     flagsobj.parent = value
     res = flagsobj._getvalue()
+    context.nrt.incref(builder, typ, value)
     return impl_ret_new_ref(context, builder, typ, res)
 
 

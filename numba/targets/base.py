@@ -107,7 +107,7 @@ class OverloadSelector(object):
 
     def _match_arglist(self, formal_args, actual_args):
         """
-        Returns True if the the signature is "matching".
+        Returns True if the signature is "matching".
         A formal signature is "matching" if the actual signature matches exactly
         or if the formal signature is a compatible generic signature.
         """
@@ -181,7 +181,7 @@ class BaseContext(object):
 
     Most objects are lowered as plain-old-data structure in the generated
     llvm.  They are passed around by reference (a pointer to the structure).
-    Only POD structure can life across function boundaries by copying the
+    Only POD structure can live across function boundaries by copying the
     data.
     """
     # True if the target requires strict alignment
@@ -217,7 +217,7 @@ class BaseContext(object):
     # Fast math flags
     fastmath = False
 
-    # python exceution environment
+    # python execution environment
     environment = None
 
     # the function descriptor
@@ -285,7 +285,7 @@ class BaseContext(object):
         return funcdesc.default_mangler(name, types)
 
     def get_env_name(self, fndesc):
-        """Get the environment name given a FunctionDescriptior.
+        """Get the environment name given a FunctionDescriptor.
 
         Use this instead of the ``fndesc.env_name`` so that the target-context
         can provide necessary mangling of the symbol to meet ABI requirements.
@@ -335,7 +335,7 @@ class BaseContext(object):
                 raise NameError("unknown option {0!r}".format(k))
             setattr(obj, k, v)
         if obj.codegen() is not self.codegen():
-            # We can't share functions accross different codegens
+            # We can't share functions across different codegens
             obj.cached_internal_func = {}
         return obj
 
@@ -1111,7 +1111,7 @@ class BaseContext(object):
             self._codelib_stack.pop()
 
     def add_linking_libs(self, libs):
-        """Add iterable of linking librarys to the *active_code_library*.
+        """Add iterable of linking libraries to the *active_code_library*.
         """
         colib = self.active_code_library
         for lib in libs:
