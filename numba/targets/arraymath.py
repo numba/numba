@@ -5,6 +5,7 @@ Implementation of math operations on Array objects.
 from __future__ import print_function, absolute_import, division
 
 import math
+import sys
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
@@ -712,7 +713,10 @@ def isneginf(x, out=None):
     if numpy_version <= (1, 12):
         wrapper = register_jitable(lambda x: np.asarray(x))
     else:
-        wrapper = register_jitable(lambda x: x[()])
+        if sys.version_info[0] >= 3:
+            wrapper = register_jitable(lambda x: x)
+        else:
+            wrapper = register_jitable(lambda x: x[()])
 
     if is_nonelike(out):
         if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
@@ -724,7 +728,7 @@ def isneginf(x, out=None):
         else:
             def impl(x, out=None):
                 out = np.isinf(x) and np.signbit(x)
-                return out
+                return wrapper(out)
     else:
         def impl(x, out=None):
             np.logical_and(np.isinf(x), np.signbit(x), out)
@@ -742,7 +746,10 @@ def isposinf(x, out=None):
     if numpy_version <= (1, 12):
         wrapper = register_jitable(lambda x: np.asarray(x))
     else:
-        wrapper = register_jitable(lambda x: x[()])
+        if sys.version_info[0] >= 3:
+            wrapper = register_jitable(lambda x: x)
+        else:
+            wrapper = register_jitable(lambda x: x[()])
 
     if is_nonelike(out):
         if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
@@ -754,7 +761,7 @@ def isposinf(x, out=None):
         else:
             def impl(x, out=None):
                 out = np.isinf(x) and ~np.signbit(x)
-                return out
+                return wrapper(out)
     else:
         def impl(x, out=None):
             np.logical_and(np.isinf(x), ~np.signbit(x), out)
