@@ -16,6 +16,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from numba.special import map_tuple
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
@@ -550,4 +551,24 @@ def ol_filter(func, iterable):
             for x in iterable:
                 if func(x):
                     yield x
+    return impl
+
+
+@overload(map_tuple)
+def _map_tuple(func, sequence):
+    """See docs in numba.special.map_tuple()
+    """
+    if not isinstance(sequence, types.BaseTuple):
+        msg = 'arg#2 must be a tuple; got {}'
+        raise errors.TypingError(msg.format(sequence))
+    nitem = len(sequence)
+    if nitem == 0:
+        # Special case for zero len tuple
+        def impl(func, sequence):
+            return ()
+    else:
+        def impl(func, sequence):
+            head = sequence[0]
+            tail = sequence[1:]
+            return (func(head),) + map_tuple(func, tail)
     return impl

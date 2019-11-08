@@ -88,6 +88,24 @@ def literally(obj):
     return obj
 
 
+def map_tuple(func, sequence):
+    """Map *func()* over all element in *sequence* and returning the results
+    as a tuple.
+
+    Parameters
+    ----------
+    func : function
+    sequence : tuple
+
+    Returns
+    -------
+    results : tuple
+    """
+    if not isinstance(sequence, tuple):
+        raise TypeError('arg#2 must be a tuple; got {}'.format(type(sequence)))
+    return tuple(func(item) for item in sequence)
+
+
 __all__ = [
     'typeof',
     'prange',
