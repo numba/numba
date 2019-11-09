@@ -5,7 +5,6 @@ Implementation of math operations on Array objects.
 from __future__ import print_function, absolute_import, division
 
 import math
-import sys
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
