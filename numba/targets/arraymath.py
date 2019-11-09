@@ -713,10 +713,7 @@ def isneginf(x, out=None):
     if numpy_version <= (1, 12):
         wrapper = register_jitable(lambda x: np.asarray(x))
     else:
-        if sys.version_info[0] >= 3:
-            wrapper = register_jitable(lambda x: x)
-        else:
-            wrapper = register_jitable(lambda x: x[()])
+        wrapper = register_jitable(lambda x: x)
 
     if is_nonelike(out):
         if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
@@ -746,10 +743,7 @@ def isposinf(x, out=None):
     if numpy_version <= (1, 12):
         wrapper = register_jitable(lambda x: np.asarray(x))
     else:
-        if sys.version_info[0] >= 3:
-            wrapper = register_jitable(lambda x: x)
-        else:
-            wrapper = register_jitable(lambda x: x[()])
+        wrapper = register_jitable(lambda x: x)
 
     if is_nonelike(out):
         if isinstance(x, (types.Array, types.Sequence, types.SliceType)):
