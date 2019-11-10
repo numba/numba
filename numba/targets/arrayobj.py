@@ -1892,13 +1892,51 @@ def np_shape(a):
 #-------------------------------------------------------------------------------
 
 
+
+
+
+@register_jitable
+def _np_unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    ar = np.asarray(ar).ravel()
+    optional_indices = return_index or return_inverse
+    if optional_indices:
+        if return_index:
+            perm = ar.argsort(kind='mergesort')
+        else:
+            perm = ar.argsort(kind='quicksort')
+        aux = ar[perm]
+        # print(aux.dtype)
+    else:
+        ar.sort()
+        aux = ar
+        # print(aux.dtype)
+    mask = np.empty(aux.shape, dtype=np.bool_)
+    mask[:1] = True
+    mask[1:] = aux[1:] != aux[:-1]
+    
+    ret_idx = perm[mask] if return_index else np.empty(0, dtype=np.int64)
+    
+    if return_inverse:
+        imask = np.cumsum(mask) - 1
+        ret_inv = np.empty(mask.shape, dtype=np.int64)
+        ret_inv[perm] = imask
+    else:
+        ret_inv = np.empty(0, dtype=np.int64)
+    
+    if return_counts:
+        idx = np.concatenate(np.nonzero(mask) + (np.asarray([mask.size]),))
+        ret_counts = np.diff(idx)
+    else:
+        ret_counts = np.empty(0, dtype=np.int64)
+    
+    return (np.asarray(aux[mask], dtype=ar.dtype), ret_idx, ret_inv, ret_counts)
+
 @overload(np.unique)
-def np_unique(a):
-    def np_unique_impl(a):
-        b = np.sort(a.ravel())
-        head = list(b[:1])
-        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
-        return np.array(head + tail)
+def np_unique(ar):
+    def np_unique_impl(ar):
+        if not type_can_asarray(ar):
+            raise errors.TypingError('The first argument "ar" must be array-like')
+        return _np_unique(ar)[0]
     return np_unique_impl
 
 
