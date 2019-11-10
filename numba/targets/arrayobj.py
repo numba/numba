@@ -1940,6 +1940,60 @@ def np_unique(ar):
     return np_unique_impl
 
 
+@register_jitable
+def in1d(ar1, ar2, assume_unique=False, invert=False):
+    ar1 = np.asarray(ar1).ravel()
+    ar2 = np.asarray(ar2).ravel()
+
+    if len(ar2) < 10 * len(ar1) ** 0.145:
+        if invert:
+            mask = np.ones(len(ar1), np.bool_) #by default is True
+            for a in ar2:
+                mask &= (ar1 != a)
+        else:
+            mask = np.zeros(len(ar1), np.bool_)
+            for a in ar2:
+                mask |= (ar1 == a)
+        return mask
+    # Otherwise use sorting
+    if not assume_unique:
+        ar1, _, rev_idx, _= _np_unique(ar1, return_inverse=True) #not using np overload here waiting for #2949
+        ar2 = np.unique(ar2)
+
+    ar = np.concatenate((ar1, ar2))
+    order = ar.argsort(kind='mergesort')
+    sar = ar[order]
+    if invert: 
+        bool_ar = (sar[1:] != sar[:-1]) 
+    else:
+        bool_ar = (sar[1:] == sar[:-1])
+    flag = np.concatenate((bool_ar, np.array([invert]))) 
+    ret = np.empty(ar.shape, np.bool_)
+    ret[order] = flag
+
+    if assume_unique:
+        return ret[:len(ar1)]
+    else:
+        return ret[rev_idx]
+
+@overload(np.isin)
+def np_isin(element, test_elements, assume_unique=False, invert=False):
+    #here you can perform some prep operation for numpy isin, if necessary
+    if not type_can_asarray(element):
+        raise errors.TypingError('The first argument "element" must be array-like')
+
+    if not type_can_asarray(test_elements):
+        raise errors.TypingError('The second argument "test_elements" must be '
+                                 'array-like')
+
+    element = np.asarray(element)
+    
+
+    def numba_isin(element, test_elements, assume_unique=False, invert=False):
+        return in1d(element, test_elements, assume_unique, invert)
+    return numba_isin
+
+
 @overload(np.repeat)
 def np_repeat(a, repeats):
     # Implementation for repeats being a scalar is a module global function
