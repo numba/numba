@@ -1958,7 +1958,7 @@ def in1d(ar1, ar2, assume_unique=False, invert=False):
     # Otherwise use sorting
     if not assume_unique:
         ar1, _, rev_idx, _= _np_unique(ar1, return_inverse=True) #not using np overload here waiting for #2949
-        ar2 = np.unique(ar2)
+        ar2 = _np_unique(ar2)[0]
 
     ar = np.concatenate((ar1, ar2))
     order = ar.argsort(kind='mergesort')
