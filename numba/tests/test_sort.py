@@ -51,6 +51,15 @@ def argsort_kind_usecase(val, is_stable=False):
     else:
         return val.argsort(kind='quicksort')
 
+def get_argsort_axis_usecase(axis, use_keyword=False):
+    if use_keyword:
+        def argsort_axis_usecase(val):
+            return val.argsort(axis=axis)
+    else:
+        def argsort_axis_usecase(val):
+            return val.argsort(axis)
+    return argsort_axis_usecase
+
 def sorted_usecase(val):
     return sorted(val)
 
@@ -68,6 +77,15 @@ def np_argsort_kind_usecase(val, is_stable=False):
         return np.argsort(val, kind='mergesort')
     else:
         return np.argsort(val, kind='quicksort')
+    
+def get_np_argsort_axis_usecase(axis, use_keyword=False):
+    if use_keyword:
+        def np_argsort_axis_usecase(val):
+            return np.argsort(val, axis=axis)
+    else:
+        def np_argsort_axis_usecase(val):
+            return np.argsort(val, axis)
+    return np_argsort_axis_usecase
 
 def list_sort_usecase(n):
     np.random.seed(42)
@@ -828,6 +846,32 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
+    def test_argsort_axis_int(self):
+        sizes = [
+            (5,),
+            (5, 5),
+            (3, 4, 5),
+            (6, 5, 4, 5)
+        ]
+
+        def check(get_pyfunc, axis, use_keyword):
+            pyfunc = get_pyfunc(axis, use_keyword=use_keyword)
+            cfunc = jit(nopython=True)(pyfunc)
+            for s in sizes:
+                if len(s) <= abs(axis):
+                    continue
+                val = np.random.randint(99, size=s)
+                expected = pyfunc(val)
+                got = cfunc(val)
+                self.assertPreciseEqual(expected, got)
+        
+        func = [get_np_argsort_axis_usecase, get_argsort_axis_usecase]
+        axis = [0, 1, 2, 3, -1, -2]
+        use_keyword = [True, False]
+
+        for t in itertools.product(func, axis, use_keyword):
+            check(*t)
+                
     @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):

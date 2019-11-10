@@ -29,7 +29,8 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     RefType)
 from numba.typing import signature
-from numba.extending import register_jitable, overload, overload_method
+from numba.errors import RequireLiteralValue, TypingError
+from numba.extending import register_jitable, overload, overload_method, intrinsic
 from . import quicksort, mergesort, slicing
 
 
@@ -4857,21 +4858,138 @@ def np_sort(context, builder, sig, args):
     return context.compile_internal(builder, np_sort_impl, sig, args)
 
 
-@lower_builtin("array.argsort", types.Array, types.StringLiteral)
-@lower_builtin(np.argsort, types.Array, types.StringLiteral)
-def array_argsort(context, builder, sig, args):
-    arytype, kind = sig.args
+@intrinsic
+def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
+    """
+    Generate a slice tuple to extract columns from the axis dimension, as indexed by value.
+    Concretely, if shape_tuple = (2, 3, 2) and axis = 0, then
+        value = 0 -> (:, 0, 0), value = 1 -> (:, 0, 1), value = 2 -> (:, 1, 0),
+        value = 3 -> (:, 1, 1), value = 4 -> (:, 2, 0), value = 5 -> (:, 2, 1)
+    If axis = 1, then
+        value = 0 -> (0, :, 0), value = 1 -> (0, :, 1), value = 2 -> (1, :, 0), value = 3 -> (1, :, 1)
+    And if axis = 2, then
+        value = 0 -> (0, 0, :), value = 1 -> (0, 1, :), value = 2 -> (0, 2, :),
+        value = 3 -> (1, 0, :), value = 4 -> (1, 1, :), value = 5 -> (1, 2, :) 
+
+    value should lie in range(np.prod(shape_tuple) // shape_tuple[axis]).
+    For this function to work, axis must be a literal integer.
+    """
+    if not isinstance(axis, types.Literal):
+        raise RequireLiteralValue('axis argument must be a constant')
+
+    # Get the value of the axis constant.
+    axis_value = axis.literal_value
+    # The length of the indexing tuple to be output.
+    nd = len(shape_tuple)
+
+    # If the axis value is impossible for the given size array then
+    # just fake it like it was for axis 0.  This will stop compile errors
+    # when it looks like it could be called from array_sum_axis but really
+    # can't because that routine checks the axis mismatch and raise an
+    # exception.
+    if axis_value >= nd:
+        axis_value = 0
+
+    # Calculate the type of the indexing tuple.  All the non-axis
+    # dimensions have slice2 type and the axis dimension has int type.
+    before = axis_value
+    after = nd - before - 1
+
+    types_list = []
+    types_list += [types.intp] * before
+    types_list += [types.slice2_type]
+    types_list += [types.intp] * after
+
+    # Creates the output type of the function.
+    tupty = types.Tuple(types_list)
+    # Defines the signature of the intrinsic.
+    function_sig = tupty(shape_tuple, value, axis)
+    
+    def codegen(cgctx, builder, signature, args):
+        lltupty = cgctx.get_value_type(tupty)
+        # Create an empty indexing tuple.
+        tup = cgutils.get_null_value(lltupty)
+
+        # We only need value of the axis dimension here.
+        # The rest are constants defined above.
+        [shape_arg, value_arg, _] = args
+
+        def create_full_slice():
+            return slice(None, None)
+
+        for i in range(nd - 1, axis_value, -1):
+            dim = builder.extract_value(shape_arg, i)
+            modulo = builder.srem(value_arg, dim)
+            tup = builder.insert_value(tup, modulo, i)
+            value_arg = builder.sdiv(value_arg, dim)
+
+        # compile and call create_full_slice
+        slice_data = cgctx.compile_internal(builder, create_full_slice,
+                                            types.slice2_type(),
+                                            [])
+        tup = builder.insert_value(tup, slice_data, axis_value)
+
+        for i in range(axis_value - 1, -1, -1):
+            dim = builder.extract_value(shape_arg, i)
+            modulo = builder.srem(value_arg, dim)
+            tup = builder.insert_value(tup, modulo, i)
+            value_arg = builder.sdiv(value_arg, dim)
+
+        return tup
+
+    return function_sig, codegen
+
+
+@overload_method(types.Array, "argsort")
+@overload(np.argsort)
+def np_argsort(a, axis=-1, kind="quicksort"):
+    if axis == -1:
+        axis = types.IntegerLiteral(axis)
+    if kind == "quicksort":
+        kind = types.StringLiteral(kind)
+
+    if (not isinstance(a, types.Array) or
+        not isinstance(axis, types.IntegerLiteral) or
+        not isinstance(kind, types.StringLiteral)):
+
+        return
+    
+    arytype = a 
+    
+    axis_value = axis.literal_value
+    if axis_value < 0:
+        axis_value += arytype.ndim
+    
+    if axis_value >= arytype.ndim:
+        raise ValueError("axis {} is out of bounds for array of dimension {}".format(axis_value, arytype.ndim))
+
     sort_func = get_sort_func(kind=kind.literal_value,
                               is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
-    def array_argsort_impl(arr):
-        return sort_func(arr)
+    # Optimized implementation for 1D arrays
+    if arytype.ndim == 1:
+        assert axis_value in (-1, 0)
+        
+        def array_argsort_impl(a, axis=-1, kind="quicksort"):
+            return sort_func(a)
+    else:
+        def array_argsort_impl(a, axis=-1, kind="quicksort"):
+            result = np.empty(a.shape, types.intp)
 
-    innersig = sig.replace(args=sig.args[:1])
-    innerargs = args[:1]
-    return context.compile_internal(builder, array_argsort_impl,
-                                    innersig, innerargs)
+            max_idx = 1
+            for i, v in enumerate(a.shape):
+                if i != axis_value:
+                    max_idx *= v
+
+            for idx in range(max_idx):
+                slice_tuple = _gen_slice_tuple(a.shape, idx, axis_value)
+                result[slice_tuple] = sort_func(a[slice_tuple])
+            
+            return result
+
+
+    return array_argsort_impl
 
 
 # -----------------------------------------------------------------------------
