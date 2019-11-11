@@ -1045,6 +1045,12 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_SetAttrString")
         return self.builder.call(fn, [obj, cstr, val])
 
+    def object_hasattr_string(self, obj, attr):
+        cstr = self.context.insert_const_string(self.module, attr)
+        fnty = Type.function(Type.int(), [self.pyobj, self.cstring])
+        fn = self._get_function(fnty, name="PyObject_HasAttrString")
+        return self.builder.call(fn, [obj, cstr])
+
     def object_setattr(self, obj, attr, val):
         fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttr")

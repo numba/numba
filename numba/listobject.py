@@ -289,7 +289,6 @@ def _make_list(typingctx, itemty, ptr):
         data_pointer = context.nrt.meminfo_data(builder, meminfo)
         data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
         builder.store(ptr, data_pointer)
-
         lstruct.meminfo = meminfo
 
         return lstruct._getvalue()

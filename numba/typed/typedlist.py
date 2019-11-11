@@ -325,17 +325,22 @@ def typedlist_empty(cls, item_type):
 
 @box(types.ListType)
 def box_lsttype(typ, val, c):
+
     context = c.context
     builder = c.builder
 
+    context.debug_print(builder, "beginning of boxing")
     # XXX deduplicate
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder, value=val)
     # Returns the plain MemInfo
+    context.debug_print(builder, "before boxing meminfo")
+    context.printf(builder, "meminfo: %p\n", lstruct.meminfo)
     boxed_meminfo = c.box(
         types.MemInfoPointer(types.voidptr),
         lstruct.meminfo,
     )
+    context.debug_print(builder, "after boxing meminfo")
 
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typedlist',
@@ -349,6 +354,7 @@ def box_lsttype(typ, val, c):
     c.pyapi.decref(fmp_fn)
     c.pyapi.decref(typedlist_mod)
     c.pyapi.decref(boxed_meminfo)
+    context.debug_print(builder, "end of boxing")
     return res
 
 
@@ -357,28 +363,119 @@ def unbox_listtype(typ, val, c):
     context = c.context
     builder = c.builder
 
-    miptr = c.pyapi.object_getattr_string(val, '_opaque')
-
-    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
-
-    mi = native.value
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder)
 
-    data_pointer = context.nrt.meminfo_data(builder, mi)
-    data_pointer = builder.bitcast(
-        data_pointer,
-        listobject.ll_list_type.as_pointer(),
-    )
+    has_opaque = c.pyapi.object_hasattr_string(val, '_opaque')
 
-    lstruct.data = builder.load(data_pointer)
-    lstruct.meminfo = mi
+    with c.builder.if_else(cgutils.is_not_scalar_zero(c.builder, has_opaque)) \
+        as (is_numba_typed_list, is_python_list):
+
+        with is_numba_typed_list:
+            miptr = c.pyapi.object_getattr_string(val, '_opaque')
+            context.printf(builder, "miptr: %p\n", miptr)
+            native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+
+            mi = native.value
+
+            data_pointer = context.nrt.meminfo_data(builder, mi)
+            data_pointer = builder.bitcast(
+                data_pointer,
+                listobject.ll_list_type.as_pointer(),
+            )
+
+            lstruct.data = builder.load(data_pointer)
+            lstruct.meminfo = mi
+            c.pyapi.decref(miptr)
+
+        with is_python_list:
+            from llvmlite import ir
+            ### start create ptr
+            itemty = typ.item_type
+            fnty = ir.FunctionType(
+                listobject.ll_status,
+                [listobject.ll_list_type.as_pointer(),
+                 listobject.ll_ssize_t,
+                 listobject.ll_ssize_t],
+            )
+            fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
+            # Determine sizeof item types
+
+            ll_item = context.get_data_type(itemty)
+            sz_item = context.get_abi_sizeof(ll_item)
+            reflp = cgutils.alloca_once(builder, listobject.ll_list_type, zfill=True)
+            status = builder.call(
+                fn,
+                [reflp, listobject.ll_ssize_t(sz_item), listobject.ll_ssize_t(0)],
+            )
+            ## This fails
+            #listobject._raise_if_error(
+            #    context, builder, status,
+            #    msg="Failed to allocate list",
+            #)
+            ptr = builder.load(reflp)
+            lstruct.data = ptr
+
+            vtablety = ir.LiteralStructType([
+                listobject.ll_voidptr_type,  # item incref
+                listobject.ll_voidptr_type,  # item decref
+            ])
+            setmethod_fnty = ir.FunctionType(
+                ir.VoidType(),
+                [listobject.ll_list_type, vtablety.as_pointer()]
+            )
+            setmethod_fn = ir.Function(
+                builder.module,
+                setmethod_fnty,
+                name='numba_list_set_method_table',
+            )
+            vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
+
+            # install item incref/decref
+            item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+            item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
+
+            dm_item = context.data_model_manager[itemty]
+            if dm_item.contains_nrt_meminfo():
+                item_incref, item_decref = listobject._get_incref_decref(
+                    context, builder.module, dm_item, "list"
+                )
+                builder.store(
+                    builder.bitcast(item_incref, item_incref_ptr.type.pointee),
+                    item_incref_ptr,
+                )
+                builder.store(
+                    builder.bitcast(item_decref, item_decref_ptr.type.pointee),
+                    item_decref_ptr,
+                )
+
+            builder.call(setmethod_fn, [ptr, vtable])
+
+            alloc_size = context.get_abi_sizeof(
+                context.get_value_type(types.voidptr),
+            )
+            dtor = listobject._imp_dtor(context, builder.module)
+            meminfo = context.nrt.meminfo_alloc_dtor(
+                builder,
+                context.get_constant(types.uintp, alloc_size),
+                dtor,
+            )
+            # End create pointer
+
+            data_pointer = context.nrt.meminfo_data(builder, meminfo)
+            data_pointer = builder.bitcast(
+                data_pointer,
+                listobject.ll_list_type.as_pointer(),
+            )
+            builder.store(ptr, data_pointer)
+            lstruct.meminfo = meminfo
+            context.printf(builder, "reflp: %p\n", reflp)
+            context.printf(builder, "ptr: %p\n", ptr)
+            context.printf(builder, "meminfo: %p\n", meminfo)
 
     lstobj = lstruct._getvalue()
-    c.pyapi.decref(miptr)
-
+    context.debug_print(builder, "end of unboxing")
     return NativeValue(lstobj)
-
 
 #
 # The following contains the logic for the type-inferred constructor
