@@ -43,7 +43,8 @@ def fallback_context(state, msg):
             raise
 
 
-def type_inference_stage(typingctx, interp, args, return_type, locals={}):
+def type_inference_stage(typingctx, interp, args, return_type, locals={},
+                         raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
@@ -63,8 +64,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
             infer.seed_type(k, v)
 
         infer.build_constraint()
-        infer.propagate()
-        typemap, restype, calltypes = infer.unify()
+        infer.propagate(raise_errors=raise_errors)
+        typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
 
     # Output all Numba warnings
     warnings.flush()
@@ -72,9 +73,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     return typemap, restype, calltypes
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
-class NopythonTypeInference(FunctionPass):
-    _name = "nopython_type_inference"
+class BaseTypeInference(FunctionPass):
+    _raise_errors = True
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -91,7 +91,8 @@ class NopythonTypeInference(FunctionPass):
                 state.func_ir,
                 state.args,
                 state.return_type,
-                state.locals)
+                state.locals,
+                raise_errors=self._raise_errors)
             state.typemap = typemap
             state.return_type = return_type
             state.calltypes = calltypes
@@ -136,6 +137,17 @@ class NopythonTypeInference(FunctionPass):
             legalize_return_type(state.return_type, state.func_ir,
                                  state.targetctx)
         return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NopythonTypeInference(BaseTypeInference):
+    _name = "nopython_type_inference"
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class PartialTypeInference(BaseTypeInference):
+    _name = "partial_type_inference"
+    _raise_errors = False
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)

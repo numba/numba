@@ -252,6 +252,16 @@ class _HeterogeneousTuple(BaseTuple):
             raise TypingError("Argument 'types' is not iterable")
 
 
+class UnionType(Type):
+    def __init__(self, types):
+        self.types = tuple(sorted(set(types), key=lambda x:x.name))
+        name = 'Union[{}]'.format(','.join(map(str, self.types)))
+        super(UnionType, self).__init__(name=name)
+
+    def get_type_tag(self, typ):
+        return self.types.index(typ)
+
+
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
@@ -265,6 +275,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
+        self.dtype = UnionType(types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
         super(Tuple, self).__init__(name)
 

@@ -981,7 +981,7 @@ class TypeInferer(object):
         if source_constraint is not None:
             source_constraint.refine(self, updated_type)
 
-    def unify(self):
+    def unify(self, raise_errors=True):
         """
         Run the final unification pass over all inferred types, and
         catch imprecise types.
@@ -1046,12 +1046,16 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         def check_var(name):
             tv = self.typevars[name]
             if not tv.defined:
-                offender = find_offender(name)
-                val = getattr(offender, 'value', 'unknown operation')
-                loc = getattr(offender, 'loc', ir.unknown_loc)
-                msg = ("Type of variable '%s' cannot be determined, operation:"
-                       " %s, location: %s")
-                raise TypingError(msg % (var, val, loc), loc)
+                if raise_errors:
+                    offender = find_offender(name)
+                    val = getattr(offender, 'value', 'unknown operation')
+                    loc = getattr(offender, 'loc', ir.unknown_loc)
+                    msg = ("Type of variable '%s' cannot be determined, "
+                           "operation: %s, location: %s")
+                    raise TypingError(msg % (var, val, loc), loc)
+                else:
+                    typdict[var] = types.unknown
+                    return
             tp = tv.getone()
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)

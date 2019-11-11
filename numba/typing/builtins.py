@@ -93,6 +93,11 @@ class GetIter(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [obj] = args
+        if isinstance(obj, types.Tuple):
+            return self.generic(args=[types.UniTuple(
+                types.UnionType(obj.types),
+                count=len(obj),
+            )], kws={})
         if isinstance(obj, types.IterableType):
             # Raise this here to provide a very specific message about this
             # common issue, delaying the error until later leads to something
