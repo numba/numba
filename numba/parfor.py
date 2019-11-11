@@ -824,10 +824,12 @@ class ParforDiagnostics(object):
         if level in (2, 3, 4):
             print_pre_optimised = True
 
+        if level in (3, 4):
+            print_allocation_hoist = True
+
         if level == 3:
             print_fusion_summary = True
             print_loopnest_rewrite = True
-            print_allocation_hoist = True
 
         if level == 4:
             print_fusion_search = True
@@ -1499,7 +1501,7 @@ class ParforPass(object):
         # simplify again
         simplify(self.func_ir, self.typemap, self.calltypes)
         dprint_func_ir(self.func_ir, "after optimization")
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
         # run post processor again to generate Del nodes
@@ -2132,7 +2134,7 @@ class ParforPass(object):
             types.none, self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             parfor.dump()
         return parfor
 
@@ -2225,7 +2227,7 @@ class ParforPass(object):
         if end_label:
             true_block.body.append(ir.Jump(end_label, loc))
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             parfor.dump()
         return parfor
 
@@ -2316,7 +2318,7 @@ class ParforPass(object):
             types.none, self.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("generated parfor for numpy map:")
             parfor.dump()
         return parfor
@@ -2967,8 +2969,13 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param])
-            init_val = guard(get_reduction_init, reduce_nodes)
-            reductions[param] = (init_val, reduce_nodes)
+            gri_out = guard(get_reduction_init, reduce_nodes)
+            if gri_out is not None:
+                init_val, redop = gri_out
+            else:
+                init_val = None
+                redop = None
+            reductions[param] = (init_val, reduce_nodes, redop)
     return reduce_varnames, reductions
 
 def get_reduction_init(nodes):
@@ -2982,11 +2989,13 @@ def get_reduction_init(nodes):
     require(nodes[-2].target.name == nodes[-1].value.name)
     acc_expr = nodes[-2].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd:
-        return 0
-    if acc_expr.fn == operator.imul:
-        return 1
-    return None
+    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
+        return 0, acc_expr.fn
+    if (  acc_expr.fn == operator.imul
+       or acc_expr.fn == operator.itruediv
+       or acc_expr.fn == operator.ifloordiv ):
+        return 1, acc_expr.fn
+    return None, None
 
 def get_reduce_nodes(name, nodes):
     """
@@ -3051,7 +3060,7 @@ def visit_parfor_pattern_vars(parfor, callback, cbdata):
                                                             callback, cbdata)
 
 def visit_vars_parfor(parfor, callback, cbdata):
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("visiting parfor vars for:", parfor)
         print("cbdata: ", sorted(cbdata.items()))
     for l in parfor.loop_nests:
@@ -3420,7 +3429,7 @@ def has_cross_iter_dep(parfor):
 
 
 def dprint(*s):
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(*s)
 
 def get_parfor_pattern_vars(parfor):
@@ -3507,9 +3516,10 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
             alias_lives = in_lives & alias_set
             for v in alias_lives:
                 in_lives |= alias_map[v]
-            if (isinstance(stmt, ir.SetItem) and stmt.index.name ==
-                    parfor.index_var.name and stmt.target.name not in in_lives and
-                    stmt.target.name not in arg_aliases):
+            if (isinstance(stmt, ir.SetItem) and
+                stmt.index.name == parfor.index_var.name and
+                stmt.target.name not in in_lives and
+                stmt.target.name not in arg_aliases):
                 continue
             in_lives |= {v.name for v in stmt.list_vars()}
             new_body.append(stmt)
@@ -3712,7 +3722,7 @@ def get_copies_parfor(parfor, typemap):
     last_label = max(parfor.loop_body.keys())
     gens = out_copies_parfor[last_label] & in_gen_copies[0]
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("copy propagate parfor gens:", gens, "kill_set", kill_set)
     return gens, kill_set
 

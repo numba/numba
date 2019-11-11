@@ -7,7 +7,6 @@ jobs:
   pool: 
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
       py27_np15:
         PYTHON: '2.7'
@@ -49,10 +48,16 @@ jobs:
       displayName: 'Build'
 
     - script: |
+        # One of the tbb tests is failing on Azure.  Removing tbb before
+        # testing until we can figure out why.  Only do this for Python 3
+        # because we already removed TBB before build on Python 2.
         call activate %CONDA_ENV%
-        # One of the tbb tests is failing on Azure.  Removing tbb from testing
-        # until we can figure out why
         conda remove -y tbb tbb-devel
+      displayName: 'Remove TBB'
+      condition: ne(variables['PYTHON'], '2.7')
+
+    - script: |
+        call activate %CONDA_ENV%
         pushd bin
         numba -s
         popd

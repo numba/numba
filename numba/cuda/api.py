@@ -30,6 +30,14 @@ def from_cuda_array_interface(desc, owner=None):
     The *owner* is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
     """
+    version = desc.get('version')
+    # Mask introduced in version 1
+    if 1 <= version:
+        mask = desc.get('mask')
+        # Would ideally be better to detect if the mask is all valid
+        if mask is not None:
+            raise NotImplementedError('Masked arrays are not supported')
+
     shape = desc['shape']
     strides = desc.get('strides')
     dtype = np.dtype(desc['typestr'])
@@ -48,7 +56,7 @@ def from_cuda_array_interface(desc, owner=None):
 
 def as_cuda_array(obj):
     """Create a DeviceNDArray from any object that implements
-    the cuda-array-interface.
+    the :ref:`cuda array interface <cuda-array-interface>`.
 
     A view of the underlying GPU buffer is created.  No copying of the data
     is done.  The resulting DeviceNDArray will acquire a reference from `obj`.
@@ -61,7 +69,7 @@ def as_cuda_array(obj):
 
 
 def is_cuda_array(obj):
-    """Test if the object has defined the `__cuda_array_interface__`.
+    """Test if the object has defined the `__cuda_array_interface__` attribute.
 
     Does not verify the validity of the interface.
     """

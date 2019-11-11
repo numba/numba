@@ -101,6 +101,8 @@ reduction, accumulation or broadcasting.  Using the example above::
 .. seealso::
    `Standard features of ufuncs <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#ufunc>`_ (NumPy documentation).
 
+.. note::
+   Only the broadcasting features of ufuncs are supported in compiled code.
 
 The :func:`~numba.vectorize` decorator supports multiple ufunc targets:
 

@@ -76,7 +76,7 @@ compiled functions:
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
 Attributes access are simply reading from a C structure.
-Using jitclasses from the intpreter has the same overhead of calling any
+Using jitclasses from the interpreter has the same overhead of calling any
 Numba compiled function from the interpreter.  Arguments and return values
 must be unboxed or boxed between Python objects and native representation.
 Values encapsulated by a jitclass does not get boxed into Python object when

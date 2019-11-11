@@ -205,6 +205,60 @@ class TestCudaArrayInterface(CUDATestCase):
         expected_msg = 'D->H copy not implemented for negative strides'
         self.assertIn(expected_msg, str(raises.exception))
 
+    def test_masked_array(self):
+        h_arr = np.random.random(10)
+        h_mask = np.random.randint(2, size=10, dtype='bool')
+        c_arr = cuda.to_device(h_arr)
+        c_mask = cuda.to_device(h_mask)
+
+        # Manually create a masked CUDA Array Interface dictionary
+        masked_cuda_array_interface = c_arr.__cuda_array_interface__.copy()
+        masked_cuda_array_interface['mask'] = c_mask
+
+        with self.assertRaises(NotImplementedError) as raises:
+            cuda.from_cuda_array_interface(masked_cuda_array_interface)
+        expected_msg = 'Masked arrays are not supported'
+        self.assertIn(expected_msg, str(raises.exception))
+
+    def test_zero_size_array(self):
+        # for #4175
+        c_arr = cuda.device_array(0)
+        self.assertEqual(c_arr.__cuda_array_interface__['data'][0], 0)
+
+        @cuda.jit
+        def add_one(arr):
+            x = cuda.grid(1)
+            N = arr.shape[0]
+            if x < N:
+                arr[x] += 1
+
+        d_arr = MyArray(c_arr)
+        add_one[1, 10](d_arr)  # this should pass
+
+    def test_strides(self):
+        # for #4175
+        # First, test C-contiguous array
+        c_arr = cuda.device_array((2, 3, 4))
+        self.assertEqual(c_arr.__cuda_array_interface__['strides'], None)
+
+        # Second, test non C-contiguous array
+        c_arr = c_arr[:, 1, :]
+        self.assertNotEqual(c_arr.__cuda_array_interface__['strides'], None)
+
+    def test_consuming_strides(self):
+        hostarray = np.arange(10).reshape(2, 5)
+        face = cuda.to_device(hostarray).__cuda_array_interface__
+        self.assertIsNone(face['strides'])
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
+        # Try non-NULL strides
+        face['strides'] = hostarray.strides
+        self.assertIsNotNone(face['strides'])
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
+
 
 if __name__ == "__main__":
     unittest.main()

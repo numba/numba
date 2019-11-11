@@ -13,6 +13,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import njit, jit, types, errors, typing, compiler
+from numba.typed_passes import type_inference_stage
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
@@ -411,6 +412,18 @@ def mk_func_test_impl():
     mk_func_input(lambda a: a)
 
 
+# -----------------------------------------------------------------------
+
+
+@overload(np.exp)
+def overload_np_exp(obj):
+    if isinstance(obj, MyDummyType):
+        def imp(obj):
+            # Returns a constant if a MyDummyType is seen
+            return 0xdeadbeef
+        return imp
+
+
 class TestLowLevelExtending(TestCase):
     """
     Test the low-level two-tier extension API.
@@ -447,7 +460,7 @@ class TestLowLevelExtending(TestCase):
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         typingctx.refresh()
-        typemap, _, _ = compiler.type_inference_stage(
+        typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         self.assertTrue(any(isinstance(a, types.MakeFunctionLiteral)
                             for a in typemap.values()))
@@ -962,6 +975,16 @@ class TestHighLevelExtending(TestCase):
         A = np.zeros(1)
         bar(A)
         self.assertEqual(bar(A), 0xcafe)
+
+    def test_overload_ufunc(self):
+        # Issue #4133.
+        # Use an extended type (MyDummyType) to use with a customized
+        # ufunc (np.exp).
+        @njit
+        def test():
+            return np.exp(mydummy)
+
+        self.assertEqual(test(), 0xdeadbeef)
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):

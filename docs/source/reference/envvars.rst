@@ -75,6 +75,11 @@ These variables influence what is printed out during compilation of
 
    *Default value:* ``no_color``. The type of the value is ``string``.
 
+.. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
+
+   If set to non-zero the issuing of performance warnings is disabled. Default
+   is zero.
+
 .. envvar:: NUMBA_DEBUG
 
    If set to non-zero, print out all possible debugging information during
@@ -107,11 +112,6 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out debugging information about type inference.
 
-.. envvar:: NUMBA_DEBUG_CACHE
-
-   If set to non-zero, print out information about operation of the
-   :ref:`JIT compilation cache <jit-cache>`.
-
 .. envvar:: NUMBA_ENABLE_PROFILING
 
    Enables JIT events of LLVM in order to support profiling of jitted functions.
@@ -137,25 +137,36 @@ These variables influence what is printed out during compilation of
    If set to non-zero, print out the Numba Intermediate Representation
    of compiled functions.
 
+.. envvar:: NUMBA_DEBUG_PRINT_AFTER
+
+   Dump the Numba IR after declared pass(es). This is useful for debugging IR
+   changes made by given passes. Accepted values are:
+
+   * Any pass name (as given by the ``.name()`` method on the class)
+   * Multiple pass names as a comma separated list, i.e. ``"foo_pass,bar_pass"``
+   * The token ``"all"``, which will print after all passes.
+
+   The default value is ``"none"`` so as to prevent output.
+
 .. envvar:: NUMBA_DUMP_ANNOTATION
 
    If set to non-zero, print out types annotations for compiled functions.
 
 .. envvar:: NUMBA_DUMP_LLVM
 
-   Dump the unoptimized LLVM assembler source of compiled functions.
+   Dump the unoptimized LLVM assembly source of compiled functions.
    Unoptimized code is usually very verbose; therefore,
    :envvar:`NUMBA_DUMP_OPTIMIZED` is recommended instead.
 
 .. envvar:: NUMBA_DUMP_FUNC_OPT
 
-   Dump the LLVM assembler source after the LLVM "function optimization"
+   Dump the LLVM assembly source after the LLVM "function optimization"
    pass, but before the "module optimization" pass.  This is useful mostly
    when developing Numba itself, otherwise use :envvar:`NUMBA_DUMP_OPTIMIZED`.
 
 .. envvar:: NUMBA_DUMP_OPTIMIZED
 
-   Dump the LLVM assembler source of compiled functions after all
+   Dump the LLVM assembly source of compiled functions after all
    optimization passes.  The output includes the raw function as well as
    its CPython-compatible wrapper (whose name begins with ``wrapper.``).
    Note that the function is often inlined inside the wrapper, as well.
@@ -184,7 +195,7 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
-   Dump the native assembler code of compiled functions.
+   Dump the native assembly code of compiled functions.
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
@@ -231,7 +242,8 @@ Compilation options
    calls the original Python function instead of a compiled version.  This
    can be useful if you want to run the Python debugger over your code.
 
-.. envvar:: NUMBA_CPU_NAME and NUMBA_CPU_FEATURES
+.. envvar:: NUMBA_CPU_NAME
+.. envvar:: NUMBA_CPU_FEATURES
 
     Override CPU and CPU features detection.
     By setting ``NUMBA_CPU_NAME=generic``, a generic CPU model is picked
@@ -264,7 +276,43 @@ Compilation options
     not a true LRU, but the large size of the cache should be sufficient for
     most situations.
 
+    Note: this is unrelated to the compilation cache.
+
     *Default value:* 128
+
+
+.. _numba-envvars-caching:
+
+Caching options
+---------------
+
+Options for the compilation cache.
+
+.. envvar:: NUMBA_DEBUG_CACHE
+
+   If set to non-zero, print out information about operation of the
+   :ref:`JIT compilation cache <jit-cache>`.
+
+.. envvar:: NUMBA_CACHE_DIR
+
+    Override the location of the cache directory. If defined, this should be
+    a valid directory path.
+
+    If not defined, Numba picks the cache directory in the following order:
+
+    1. In-tree cache. Put the cache next to the corresponding source file under
+       a ``__pycache__`` directory following how ``.pyc`` files are stored.
+    2. User-wide cache. Put the cache in the user's application directory using
+       ``appdirs.user_cache_dir`` from the
+       `Appdirs package <https://github.com/ActiveState/appdirs>`_.
+    3. IPython cache. Put the cache in an IPython specific application
+       directory.
+       Stores are made under the ``numba_cache`` in the directory returned by
+       ``IPython.paths.get_ipython_cache_dir()``.
+
+    Also see :ref:`docs on cache sharing <cache-sharing>` and
+    :ref:`docs on cache clearing <cache-clearing>`
+
 
 
 GPU support
@@ -299,8 +347,8 @@ Threading Control
 .. envvar:: NUMBA_THREADING_LAYER
 
    This environment variable controls the library used for concurrent execution
-   for the CPU parallel targets (``@vectorize(target='parallel')``, 
-   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The 
+   for the CPU parallel targets (``@vectorize(target='parallel')``,
+   ``@guvectorize(target='parallel')``  and ``@njit(parallel=True)``). The
    variable type is string and by default is ``default`` which will select a
    threading layer based on what is available in the runtime. The valid values
    are (for more information about these see

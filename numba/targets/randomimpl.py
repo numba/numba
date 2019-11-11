@@ -219,6 +219,9 @@ def random_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower("np.random.random")
+@lower("np.random.random_sample")
+@lower("np.random.sample")
+@lower("np.random.ranf")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
     res = get_next_double(context, builder, state_ptr)
@@ -1256,6 +1259,9 @@ for typing_key, arity in [
     ("np.random.poisson", 2),
     ("np.random.power", 2),
     ("np.random.random", 1),
+    ("np.random.random_sample", 1),
+    ("np.random.ranf", 1),
+    ("np.random.sample", 1),
     ("np.random.randint", 3),
     ("np.random.rayleigh", 2),
     ("np.random.standard_cauchy", 1),

@@ -12,6 +12,10 @@ from numba import sigutils, typing
 from numba.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
+from numba import cext
+
+
+extension_libs = cext.get_extension_libs()
 
 
 class CC(object):
@@ -23,7 +27,7 @@ class CC(object):
     # NOTE: using ccache can speed up repetitive builds
     # (especially for the mixin modules)
 
-    _mixin_sources = ['modulemixin.c', '../_math_c99.c']
+    _mixin_sources = ['modulemixin.c', '../_math_c99.c']  + extension_libs
 
     # -flto strips all unused helper functions, which 1) makes the
     # produced output much smaller and 2) can make the linking step faster.

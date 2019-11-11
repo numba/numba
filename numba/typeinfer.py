@@ -14,17 +14,21 @@ Constraints push types forward following the dataflow.
 
 from __future__ import print_function, division, absolute_import
 
+import logging
 import operator
 import contextlib
 import itertools
 from pprint import pprint
-import traceback
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from functools import reduce
 
 from numba import ir, types, utils, config, typing
 from .errors import (TypingError, UntypedAttributeError, new_error_context,
-                     termcolor, UnsupportedError)
+                     termcolor, UnsupportedError, ForceLiteralArg)
 from .funcdesc import qualifying_prefix
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NOTSET:
@@ -142,19 +146,25 @@ class ConstraintNetwork(object):
                                                    lineno=loc.line):
                 try:
                     constraint(typeinfer)
+                except ForceLiteralArg as e:
+                    errors.append(e)
                 except TypingError as e:
-                    e = TypingError(str(e),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
-                except Exception:
-                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                    e = TypingError(msg.format(con=constraint,
-                                               err=traceback.format_exc(),
-                                               sep='--%<' + '-' * 76),
-                                    loc=constraint.loc,
-                                    highlighting=False)
-                    errors.append(e)
+                    _logger.debug("captured error", exc_info=e)
+                    new_exc = TypingError(
+                        str(e), loc=constraint.loc,
+                        highlighting=False,
+                    )
+                    errors.append(utils.chain_exception(new_exc, e))
+                except Exception as e:
+                    _logger.debug("captured error", exc_info=e)
+                    msg = ("Internal error at {con}.\n"
+                           "{err}\nEnable logging at debug level for details.")
+                    new_exc = TypingError(
+                        msg.format(con=constraint, err=str(e)),
+                        loc=constraint.loc,
+                        highlighting=False,
+                    )
+                    errors.append(utils.chain_exception(new_exc, e))
         return errors
 
 
@@ -309,9 +319,9 @@ class ExhaustIterConstraint(object):
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
-            else:
-                raise TypingError("failed to unpack {}".format(tp),
-                                  loc=self.loc)
+                else:
+                    raise TypingError("failed to unpack {}".format(tp),
+                                      loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -471,8 +481,22 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
-        sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
-
+        try:
+            sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
+        except ForceLiteralArg as e:
+            folded = e.fold_arguments(self.args, self.kws)
+            requested = set()
+            unsatisified = set()
+            for idx in e.requested_args:
+                maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
+                if isinstance(maybe_arg, ir.Arg):
+                    requested.add(maybe_arg.index)
+                else:
+                    unsatisified.add(idx)
+            if unsatisified:
+                raise TypingError("Cannot request literal type.", loc=self.loc)
+            elif requested:
+                raise ForceLiteralArg(requested, loc=self.loc)
         if sig is None:
             # Note: duplicated error checking.
             #       See types.BaseFunction.get_call_type
@@ -522,7 +546,8 @@ class CallConstraint(object):
                 and isinstance(sig.return_type.dtype, types.Undefined)):
             typeinfer.refine_map[self.target] = self
         # DictType
-        if isinstance(target_type, types.DictType) and not target_type.is_precise():
+        if (isinstance(target_type, types.DictType) and
+                not target_type.is_precise()):
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
@@ -764,6 +789,9 @@ class TypeVarMap(dict):
 
 # A temporary mapping of {function name: dispatcher object}
 _temporary_dispatcher_map = {}
+# A temporary mapping of {function name: dispatcher object reference count}
+# Reference: https://github.com/numba/numba/issues/3658
+_temporary_dispatcher_map_ref_count = defaultdict(int)
 
 
 @contextlib.contextmanager
@@ -778,10 +806,13 @@ def register_dispatcher(disp):
     assert callable(disp.py_func)
     name = disp.py_func.__name__
     _temporary_dispatcher_map[name] = disp
+    _temporary_dispatcher_map_ref_count[name] += 1
     try:
         yield
     finally:
-        del _temporary_dispatcher_map[name]
+        _temporary_dispatcher_map_ref_count[name] -= 1
+        if not _temporary_dispatcher_map_ref_count[name]:
+            del _temporary_dispatcher_map[name]
 
 
 typeinfer_extensions = {}
@@ -849,6 +880,9 @@ class TypeInferer(object):
                 rets.append(inst.value)
         return rets
 
+    def get_argument_types(self):
+        return [self.typevars[k].getone() for k in self.arg_names.values()]
+
     def seed_argument(self, name, index, typ):
         name = self._mangle_arg_name(name)
         self.seed_type(name, typ)
@@ -912,7 +946,12 @@ class TypeInferer(object):
             self.debug.propagate_finished()
         if errors:
             if raise_errors:
-                raise errors[0]
+                force_lit_args = [e for e in errors
+                                  if isinstance(e, ForceLiteralArg)]
+                if not force_lit_args:
+                    raise errors[0]
+                else:
+                    raise reduce(operator.or_, force_lit_args)
             else:
                 return errors
 
@@ -1308,6 +1347,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
             sig = typing.signature(return_type, *args)
             sig.pysig = pysig
+            # Keep track of unique return_type
+            frame.add_return_type(return_type)
             return sig
         else:
             # Normal non-recursive call
@@ -1323,8 +1364,19 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
-                msg = _termcolor.errmsg("Untyped global name '%s':") + " %s"
-                e.patch_message(msg % (gvar.name, e))
+                nm = gvar.name
+                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                msg += " %s" # interps the actual error
+
+                # if the untyped global is a numba internal function then add
+                # to the error message asking if it's been imported.
+                from numba import special
+                if nm in special.__all__:
+                    tmp = ("\n'%s' looks like a Numba internal function, has "
+                           "it been imported (i.e. 'from numba import %s')?\n" %
+                           (nm, nm))
+                    msg += _termcolor.errmsg(tmp)
+                e.patch_message(msg % e)
                 raise
 
         if isinstance(typ, types.Dispatcher) and typ.dispatcher.is_compiling:

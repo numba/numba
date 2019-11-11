@@ -1,34 +1,33 @@
 # Tests numba.analysis functions
 from __future__ import print_function, absolute_import, division
+import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend
-from numba import types, rewrites, ir, jit, ir_utils
-from .support import TestCase, MemoryLeakMixin
+from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import types, rewrites, ir, jit, ir_utils, errors, njit
+from .support import TestCase, MemoryLeakMixin, SerialMixin
 
+from numba.analysis import dead_branch_prune, rewrite_semantic_constants
 
-from numba.analysis import dead_branch_prune
+_GLOBAL = 123
+
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
 
 
 def compile_to_ir(func):
     func_ir = run_frontend(func)
+    state = StateDict()
+    state.func_ir = func_ir
+    state.typemap = None
+    state.calltypes = None
 
-    class MockPipeline(object):
-        def __init__(self, func_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = func_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
     # call this to get print etc rewrites
-    rewrites.rewrite_registry.apply('before-inference', MockPipeline(func_ir),
-                                    func_ir)
+    rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
 
 
-class TestBranchPrune(MemoryLeakMixin, TestCase):
+class TestBranchPruneBase(MemoryLeakMixin, TestCase):
     """
     Tests branch pruning
     """
@@ -42,7 +41,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             branches.extend(tmp)
         return branches
 
-    def assert_prune(self, func, args_tys, prune, *args):
+    def assert_prune(self, func, args_tys, prune, *args, **kwargs):
         # This checks that the expected pruned branches have indeed been pruned.
         # func is a python function to assess
         # args_tys is the numba types arguments tuple
@@ -53,6 +52,9 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         # None: under no circumstances should this branch be pruned
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
+        # **kwargs:
+        #        - flags: compiler.Flags instance to pass to `compile_isolated`,
+        #          permits use of e.g. object mode
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -61,6 +63,7 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
             print("before prune")
             func_ir.dump()
 
+        rewrite_semantic_constants(func_ir, args_tys)
         dead_branch_prune(func_ir, args_tys)
 
         after = func_ir
@@ -81,6 +84,9 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
                 expect_removed.append(branch.falsebr)
             elif prune is None:
                 pass  # nothing should be removed!
+            elif prune == 'both':
+                expect_removed.append(branch.falsebr)
+                expect_removed.append(branch.truebr)
             else:
                 assert 0, "unreachable"
 
@@ -92,15 +98,24 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         try:
             self.assertEqual(new_labels, original_labels - set(expect_removed))
         except AssertionError as e:
-            print("new_labels", new_labels)
-            print("original_labels", original_labels)
-            print("expect_removed", expect_removed)
+            print("new_labels", sorted(new_labels))
+            print("original_labels", sorted(original_labels))
+            print("expect_removed", sorted(expect_removed))
             raise e
 
-        cres = compile_isolated(func, args_tys)
-        res = cres.entry_point(*args)
-        expected = func(*args)
+        supplied_flags = kwargs.pop('flags', False)
+        compiler_kws = {'flags': supplied_flags} if supplied_flags else {}
+        cres = compile_isolated(func, args_tys, **compiler_kws)
+        if args is None:
+            res = cres.entry_point()
+            expected = func()
+        else:
+            res = cres.entry_point(*args)
+            expected = func(*args)
         self.assertEqual(res, expected)
+
+
+class TestBranchPrune(TestBranchPruneBase, SerialMixin):
 
     def test_single_if(self):
 
@@ -364,15 +379,257 @@ class TestBranchPrune(MemoryLeakMixin, TestCase):
         # from the IR mutation
 
         @jit
-        def bug(a,b):
+        def bug(a, b):
             if a.ndim == 1:
                 if b is None:
-                    return 10
+                    return dict()
                 return 12
             return []
 
-        self.assertEqual(bug(np.arange(10), 4), 12)
-        self.assertEqual(bug(np.arange(10), None), 10)
+        self.assertEqual(bug(np.zeros(10), 4), 12)
+        self.assertEqual(bug(np.arange(10), None), dict())
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
         self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
         self.assertFalse(bug.nopython_signatures)
+
+    def test_global_bake_in(self):
+
+        def impl(x):
+            if _GLOBAL == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        global _GLOBAL
+        tmp = _GLOBAL
+
+        try:
+            _GLOBAL = 5
+
+            def impl(x):
+                if _GLOBAL == 123:
+                    return x
+                else:
+                    return x + 10
+
+            self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+        finally:
+            _GLOBAL = tmp
+
+    def test_freevar_bake_in(self):
+
+        _FREEVAR = 123
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [False], 1)
+
+        _FREEVAR = 12
+
+        def impl(x):
+            if _FREEVAR == 123:
+                return x
+            else:
+                return x + 10
+
+        self.assert_prune(impl, (types.IntegerLiteral(1),), [True], 1)
+
+    def test_redefined_variables_are_not_considered_in_prune(self):
+        # see issue #4163, checks that if a variable that is an argument is
+        # redefined in the user code it is not considered const
+
+        def impl(array, a=None):
+            if a is None:
+                a = 0
+            if a < 0:
+                return 10
+            return 30
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'),),
+                          [None, None],
+                          np.zeros((2, 3)), None)
+
+    def test_comparison_operators(self):
+        # see issue #4163, checks that a variable that is an argument and has
+        # value None survives TypeError from invalid comparison which should be
+        # dead
+
+        def impl(array, a=None):
+            x = 0
+            if a is None:
+                return 10 # dynamic exec would return here
+            # static analysis requires that this is executed with a=None,
+            # hence TypeError
+            if a < 0:
+                return 20
+            return x
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'),),
+                          [False, 'both'],
+                          np.zeros((2, 3)), None)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64,),
+                          [None, None],
+                          np.zeros((2, 3)), 12.)
+
+    def test_redefinition_analysis_same_block(self):
+        # checks that a redefinition in a block with prunable potential doesn't
+        # break
+
+        def impl(array, x, a=None):
+            b = 0
+            if x < 4:
+                b = 12
+            if a is None:
+                a = 0
+            else:
+                b = 12
+            if a < 0:
+                return 10
+            return 30 + b + a
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none'),),
+                          [None, None, None],
+                          np.zeros((2, 3)), 1., None)
+
+    def test_redefinition_analysis_different_block_can_exec(self):
+        # checks that a redefinition in a block that may be executed prevents
+        # pruning
+
+        def impl(array, x, a=None):
+            b = 0
+            if x > 5:
+                a = 11 # a redefined, cannot tell statically if this will exec
+            if x < 4:
+                b = 12
+            if a is None: # cannot prune, cannot determine if re-defn occurred
+                b += 5
+            else:
+                b += 7
+                if a < 0:
+                    return 10
+            return 30 + b
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none'),),
+                          [None, None, None, None],
+                          np.zeros((2, 3)), 1., None)
+
+    def test_redefinition_analysis_different_block_cannot_exec(self):
+        # checks that a redefinition in a block guarded by something that
+        # has prune potential
+
+        def impl(array, x=None, a=None):
+            b = 0
+            if x is not None:
+                a = 11
+            if a is None:
+                b += 5
+            else:
+                b += 7
+            return 30 + b
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'), types.NoneType('none')),
+                          [True, None],
+                          np.zeros((2, 3)), None, None)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.NoneType('none'), types.float64),
+                          [True, None],
+                          np.zeros((2, 3)), None, 1.2)
+
+        self.assert_prune(impl,
+                          (types.Array(types.float64, 2, 'C'),
+                           types.float64, types.NoneType('none')),
+                          [None, None],
+                          np.zeros((2, 3)), 1.2, None)
+
+
+class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
+    # Tests that semantic constants rewriting works by virtue of branch pruning
+
+    def test_array_ndim_attr(self):
+
+        def impl(array):
+            if array.ndim == 2:
+                if array.shape[1] == 2:
+                    return 1
+            else:
+                return 10
+
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False,
+                                                                        None],
+                          np.zeros((2, 3)))
+        self.assert_prune(impl, (types.Array(types.float64, 1, 'C'),), [True,
+                                                                        'both'],
+                          np.zeros((2,)))
+
+    def test_tuple_len(self):
+
+        def impl(tup):
+            if len(tup) == 3:
+                if tup[2] == 2:
+                    return 1
+            else:
+                return 0
+
+        self.assert_prune(impl, (types.UniTuple(types.int64, 3),), [False,
+                                                                    None],
+                          tuple([1, 2, 3]))
+        self.assert_prune(impl, (types.UniTuple(types.int64, 2),), [True,
+                                                                    'both'],
+                          tuple([1, 2]))
+
+    def test_attr_not_len(self):
+        # The purpose of this test is to make sure that the conditions guarding
+        # the rewrite part do not themselves raise exceptions.
+        # This produces an `ir.Expr` call node for `float.as_integer_ratio`,
+        # which is a getattr() on `float`.
+
+        @njit
+        def test():
+            float.as_integer_ratio(1.23)
+
+        # this should raise a TypingError
+        with self.assertRaises(errors.TypingError) as e:
+            test()
+
+        self.assertIn("Unknown attribute 'as_integer_ratio'", str(e.exception))
+
+    def test_ndim_not_on_array(self):
+
+        FakeArray = collections.namedtuple('FakeArray', ['ndim'])
+        fa = FakeArray(ndim=2)
+
+        def impl(fa):
+            if fa.ndim == 2:
+                return fa.ndim
+            else:
+                object()
+
+        # check prune works for array ndim
+        self.assert_prune(impl, (types.Array(types.float64, 2, 'C'),), [False],
+                          np.zeros((2, 3)))
+
+        # check prune fails for something with `ndim` attr that is not array
+        FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
+        self.assert_prune(impl, (FakeArrayType,), [None], fa,
+                          flags=enable_pyobj_flags)

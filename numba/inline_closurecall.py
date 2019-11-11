@@ -1,7 +1,10 @@
+from __future__ import print_function, absolute_import
+
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba
-from numba import config, ir, ir_utils, utils, prange, rewrites, types, typing
+from numba import (config, ir, ir_utils, utils, prange, rewrites, types, typing,
+                   errors)
 from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,
@@ -39,6 +42,17 @@ import operator
 Variable enable_inline_arraycall is only used for testing purpose.
 """
 enable_inline_arraycall = True
+
+
+def callee_ir_validator(func_ir):
+    """Checks the IR of a callee is supported for inlining
+    """
+    for blk in func_ir.blocks.values():
+        for stmt in blk.find_insts(ir.Assign):
+            if isinstance(stmt.value, ir.Yield):
+                msg = "The use of yield in a closure is unsupported."
+                raise errors.UnsupportedError(msg, loc=stmt.loc)
+
 
 class InlineClosureCallPass(object):
     """InlineClosureCallPass class looks for direct calls to locally defined
@@ -132,7 +146,8 @@ class InlineClosureCallPass(object):
             return s
         inline_closure_call(self.func_ir,
                         self.func_ir.func_id.func.__globals__,
-                        block, i, reduce_func, work_list=work_list)
+                        block, i, reduce_func, work_list=work_list,
+                        callee_validator=callee_ir_validator)
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
@@ -212,7 +227,8 @@ class InlineClosureCallPass(object):
                 func_def.op == "make_function")
         inline_closure_call(self.func_ir,
                             self.func_ir.func_id.func.__globals__,
-                            block, i, func_def, work_list=work_list)
+                            block, i, func_def, work_list=work_list,
+                            callee_validator=callee_ir_validator)
         return True
 
 def check_reduce_func(func_ir, func_var):
@@ -232,7 +248,8 @@ def check_reduce_func(func_ir, func_var):
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         arg_typs=None, typemap=None, calltypes=None,
-                        work_list=None):
+                        work_list=None, callee_validator=None,
+                        replace_freevars=True):
     """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
@@ -242,6 +259,9 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     make_function node. `typingctx`, `typemap` and `calltypes` are typing
     data structures of the caller, available if we are in a typed pass.
     `arg_typs` includes the types of the arguments at the callsite.
+    `callee_validator` is an optional callable which can be used to validate the
+    IR of the callee to ensure that it contains IR supported for inlining, it
+    takes one argument, the func_ir of the callee
 
     Returns IR blocks of the callee and the variable renaming dictionary used
     for them to facilitate further processing of new blocks.
@@ -253,10 +273,19 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("Found closure call: ", instr, " with callee = ", callee)
     # support both function object and make_function Expr
     callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
-    callee_defaults = callee.defaults if hasattr(callee, 'defaults') else callee.__defaults__
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
-    callee_ir = get_ir_of_code(glbls, callee_code)
+    if isinstance(callee, pytypes.FunctionType):
+        from numba import compiler
+        callee_ir = compiler.run_frontend(callee, inline_closures=True)
+    else:
+        callee_ir = get_ir_of_code(glbls, callee_code)
+
+    # check that the contents of the callee IR is something that can be inlined
+    # if a validator is supplied
+    if callee_validator is not None:
+        callee_validator(callee_ir)
+
     callee_blocks = callee_ir.blocks
 
     # 1. relabel callee_ir by adding an offset
@@ -288,25 +317,13 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _debug_dump(callee_ir)
 
     # 3. replace formal parameters with actual arguments
-    args = list(call_expr.args)
-    if callee_defaults:
-        debug_print("defaults = ", callee_defaults)
-        if isinstance(callee_defaults, tuple): # Python 3.5
-            args = args + list(callee_defaults)
-        elif isinstance(callee_defaults, ir.Var) or isinstance(callee_defaults, str):
-            defaults = func_ir.get_definition(callee_defaults)
-            assert(isinstance(defaults, ir.Const))
-            loc = defaults.loc
-            args = args + [ir.Const(value=v, loc=loc)
-                           for v in defaults.value]
-        else:
-            raise NotImplementedError(
-                "Unsupported defaults to make_function: {}".format(defaults))
+    args = _get_callee_args(call_expr, callee, block.body[i].loc, func_ir)
+
     debug_print("After arguments rename: ")
     _debug_dump(callee_ir)
 
     # 4. replace freevar with actual closure var
-    if callee_closure:
+    if callee_closure and replace_freevars:
         closure = func_ir.get_definition(callee_closure)
         debug_print("callee's closure = ", closure)
         if isinstance(closure, tuple):
@@ -324,12 +341,15 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         _debug_dump(callee_ir)
 
     if typingctx:
-        from numba import compiler
+        from numba import typed_passes
+        # call branch pruning to simplify IR and avoid inference errors
+        callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
+        numba.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
-        except BaseException:
-            f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+        except Exception:
+            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
             pass
         canonicalize_array_math(callee_ir, f_typemap,
@@ -378,11 +398,66 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
             work_list.append(block)
     return callee_blocks, var_dict
 
+
+def _get_callee_args(call_expr, callee, loc, func_ir):
+    """Get arguments for calling 'callee', including the default arguments.
+    keyword arguments are currently only handled when 'callee' is a function.
+    """
+    args = list(call_expr.args)
+    debug_print = _make_debug_print("inline_closure_call default handling")
+
+    # handle defaults and kw arguments using pysignature if callee is function
+    if isinstance(callee, pytypes.FunctionType):
+        pysig = numba.utils.pysignature(callee)
+        normal_handler = lambda index, param, default: default
+        default_handler = lambda index, param, default: ir.Const(default, loc)
+        # Throw error for stararg
+        # TODO: handle stararg
+        def stararg_handler(index, param, default):
+            raise NotImplementedError(
+                "Stararg not supported in inliner for arg {} {}".format(
+                    index, param))
+        kws = dict(call_expr.kws)
+        return numba.typing.fold_arguments(
+            pysig, args, kws, normal_handler, default_handler,
+            stararg_handler)
+    else:
+        # TODO: handle arguments for make_function case similar to function
+        # case above
+        callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
+                           else callee.__defaults__)
+        if callee_defaults:
+            debug_print("defaults = ", callee_defaults)
+            if isinstance(callee_defaults, tuple):  # Python 3.5
+                defaults_list = []
+                for x in callee_defaults:
+                    if isinstance(x, ir.Var):
+                        defaults_list.append(x)
+                    else:
+                        # this branch is predominantly for kwargs from
+                        # inlinable functions
+                        defaults_list.append(ir.Const(value=x, loc=loc))
+                args = args + defaults_list
+            elif (isinstance(callee_defaults, ir.Var)
+                    or isinstance(callee_defaults, str)):
+                defaults = func_ir.get_definition(callee_defaults)
+                assert(isinstance(defaults, ir.Const))
+                loc = defaults.loc
+                args = args + [ir.Const(value=v, loc=loc)
+                            for v in defaults.value]
+            else:
+                raise NotImplementedError(
+                    "Unsupported defaults to make_function: {}".format(
+                        defaults))
+        return args
+
+
 def _make_debug_print(prefix):
     def debug_print(*args):
         if config.DEBUG_INLINE_CLOSURE:
             print(prefix + ": " + "".join(str(x) for x in args))
     return debug_print
+
 
 def _debug_dump(func_ir):
     if config.DEBUG_INLINE_CLOSURE:
@@ -592,8 +667,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
                 if isinstance(func_def, ir.Expr) and func_def.op == 'getattr' \
                   and func_def.attr == 'append':
                     list_def = get_definition(func_ir, func_def.value)
-                    debug_print("list_def = ", list_def, list_def == list_var_def)
-                    if list_def == list_var_def:
+                    debug_print("list_def = ", list_def, list_def is list_var_def)
+                    if list_def is list_var_def:
                         # found matching append call
                         list_append_stmts.append((label, block, stmt))
 
@@ -648,7 +723,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Skip list construction and skip terminator, add the rest to stmts
     for i in range(len(loop_entry.body) - 1):
         stmt = loop_entry.body[i]
-        if isinstance(stmt, ir.Assign) and (stmt.value == list_def or is_removed(stmt.value, removed)):
+        if isinstance(stmt, ir.Assign) and (stmt.value is list_def or is_removed(stmt.value, removed)):
             removed.append(stmt.target)
         else:
             stmts.append(stmt)
@@ -770,7 +845,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
 
     # In append_block, change list_append into array assign
     for i in range(len(append_block.body)):
-        if append_block.body[i] == append_stmt:
+        if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
             append_block.body[i] = ir.SetItem(target=array_var, index=index_var,
                                               value=append_stmt.value.args[0], loc=append_stmt.loc)
@@ -833,7 +908,7 @@ def _fix_nested_array(func_ir):
                 inst = body[i]
                 if isinstance(inst, ir.Assign):
                     defined.add(inst.target.name)
-                    if inst.value == expr:
+                    if inst.value is expr:
                         new_varlist = []
                         for var in varlist:
                             # var must be defined before this inst, or live
@@ -925,9 +1000,9 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
     1D array creations from a constant list, and rewriting it into
     direct initialization of array elements without creating the list.
     '''
-    def __init__(self, pipeline, *args, **kws):
-        self.typingctx = pipeline.typingctx
-        super(RewriteArrayOfConsts, self).__init__(pipeline, *args, **kws)
+    def __init__(self, state, *args, **kws):
+        self.typingctx = state.typingctx
+        super(RewriteArrayOfConsts, self).__init__(*args, **kws)
 
     def match(self, func_ir, block, typemap, calltypes):
         if len(calltypes) == 0:
