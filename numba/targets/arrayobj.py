@@ -3769,44 +3769,6 @@ def _arange_dtype(*args):
     return dtype
 
 
-@register_jitable
-def _arange_impl_complex(_start, _stop, _step, dtype):
-    step = _step if _step is not None else 1
-    if _stop is None:
-        start, stop = 0, _start
-    else:
-        start, stop = _start, _stop
-
-    nitems_c = (stop - start) / step
-    nitems_r = int(math.ceil(nitems_c.real))
-    nitems_i = int(math.ceil(nitems_c.imag))
-    nitems = max(min(nitems_i, nitems_r), 0)
-    arr = np.empty(nitems, dtype)
-    val = start
-    for i in range(nitems):
-        arr[i] = val
-        val += step
-    return arr
-
-
-@register_jitable
-def _arange_impl_real(_start, _stop, _step, dtype):
-    step = _step if _step is not None else 1
-    if _stop is None:
-        start, stop = 0, _start
-    else:
-        start, stop = _start, _stop
-
-    nitems_r = int(math.ceil((stop - start) / step))
-    nitems = max(nitems_r, 0)
-    arr = np.empty(nitems, dtype)
-    val = start
-    for i in range(nitems):
-        arr[i] = val
-        val += step
-    return arr
-
-
 @overload(np.arange)
 def np_arange(start, stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
@@ -3837,12 +3799,28 @@ def np_arange(start, stop=None, step=None, dtype=None):
 
     use_complex = any([isinstance(x, types.Complex)
                        for x in (start, stop, step)])
-    if use_complex:
-        def impl(start, stop=None, step=None, dtype=None):
-            return _arange_impl_complex(start, stop, step, true_dtype)
-    else:
-        def impl(start, stop=None, step=None, dtype=None):
-            return _arange_impl_real(start, stop, step, true_dtype)
+
+    def impl(start, stop=None, step=None, dtype=None):
+        _step = step if step is not None else 1
+        if stop is None:
+            _start, _stop = 0, start
+        else:
+            _start, _stop = start, stop
+
+        nitems_c = (_stop - _start) / _step
+        nitems_r = int(math.ceil(nitems_c.real))
+        if use_complex == True:
+            nitems_i = int(math.ceil(nitems_c.imag))
+            nitems = max(min(nitems_i, nitems_r), 0)
+        else:
+            nitems = max(nitems_r, 0)
+        arr = np.empty(nitems, true_dtype)
+        val = _start
+        for i in range(nitems):
+            arr[i] = val
+            val += _step
+        return arr
+
 
     return impl
 
