@@ -1897,7 +1897,7 @@ def np_shape(a):
 
 @register_jitable
 def _np_unique(ar, return_index=False, return_inverse=False, return_counts=False):
-    ar = np.asarray(ar).ravel()
+    ar = np.asarray(ar).flatten()
     optional_indices = return_index or return_inverse
     if optional_indices:
         if return_index:
