@@ -1933,9 +1933,9 @@ def _np_unique(ar, return_index=False, return_inverse=False, return_counts=False
 
 @overload(np.unique)
 def np_unique(ar):
-    def np_unique_impl(ar):
-        if not type_can_asarray(ar):
+    if not type_can_asarray(ar):
             raise errors.TypingError('The first argument "ar" must be array-like')
+    def np_unique_impl(ar):
         return _np_unique(ar)[0]
     return np_unique_impl
 
