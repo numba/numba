@@ -1892,11 +1892,9 @@ def np_shape(a):
 #-------------------------------------------------------------------------------
 
 
-
-
-
 @register_jitable
-def _np_unique(ar, return_index=False, return_inverse=False, return_counts=False):
+def _np_unique(ar, return_index=False, return_inverse=False,
+               return_counts=False):
     ar = np.asarray(ar).flatten()
     optional_indices = return_index or return_inverse
     if optional_indices:
@@ -1913,28 +1911,30 @@ def _np_unique(ar, return_index=False, return_inverse=False, return_counts=False
     mask = np.empty(aux.shape, dtype=np.bool_)
     mask[:1] = True
     mask[1:] = aux[1:] != aux[:-1]
-    
+
     ret_idx = perm[mask] if return_index else np.empty(0, dtype=np.int64)
-    
+
     if return_inverse:
         imask = np.cumsum(mask) - 1
         ret_inv = np.empty(mask.shape, dtype=np.int64)
         ret_inv[perm] = imask
     else:
         ret_inv = np.empty(0, dtype=np.int64)
-    
+
     if return_counts:
         idx = np.concatenate(np.nonzero(mask) + (np.asarray([mask.size]),))
         ret_counts = np.diff(idx)
     else:
         ret_counts = np.empty(0, dtype=np.int64)
-    
+
     return (np.asarray(aux[mask], dtype=ar.dtype), ret_idx, ret_inv, ret_counts)
+
 
 @overload(np.unique)
 def np_unique(ar):
     if not type_can_asarray(ar):
-            raise errors.TypingError('The first argument "ar" must be array-like')
+        raise errors.TypingError('The first argument "ar" must be array-like')
+
     def np_unique_impl(ar):
         return _np_unique(ar)[0]
     return np_unique_impl
@@ -1957,17 +1957,17 @@ def in1d(ar1, ar2, assume_unique=False, invert=False):
         return mask
     # Otherwise use sorting
     if not assume_unique:
-        ar1, _, rev_idx, _= _np_unique(ar1, return_inverse=True) #not using np overload here waiting for #2949
+        ar1, _, rev_idx, _ = _np_unique(ar1, return_inverse=True)
         ar2 = _np_unique(ar2)[0]
 
     ar = np.concatenate((ar1, ar2))
     order = ar.argsort(kind='mergesort')
     sar = ar[order]
-    if invert: 
-        bool_ar = (sar[1:] != sar[:-1]) 
+    if invert:
+        bool_ar = (sar[1:] != sar[:-1])
     else:
         bool_ar = (sar[1:] == sar[:-1])
-    flag = np.concatenate((bool_ar, np.array([invert]))) 
+    flag = np.concatenate((bool_ar, np.array([invert])))
     ret = np.empty(ar.shape, np.bool_)
     ret[order] = flag
 
@@ -1976,21 +1976,23 @@ def in1d(ar1, ar2, assume_unique=False, invert=False):
     else:
         return ret[rev_idx]
 
+
 if numpy_version >= (1, 13):
     @overload(np.isin)
     def np_isin(element, test_elements, assume_unique=False, invert=False):
         #here you can perform some prep operation for numpy isin, if necessary
         if not type_can_asarray(element):
-            raise errors.TypingError('The first argument "element" must be array-like')
+            raise errors.TypingError('The first argument "element" must '
+                                     'be array-like')
 
         if not type_can_asarray(test_elements):
-            raise errors.TypingError('The second argument "test_elements" must be '
-                                    'array-like')
+            raise errors.TypingError('The second argument "test_elements" must '
+                                     'be array-like')
 
         element = np.asarray(element)
-        
 
-        def numba_isin(element, test_elements, assume_unique=False, invert=False):
+        def numba_isin(element, test_elements, assume_unique=False,
+                       invert=False):
             return in1d(element, test_elements, assume_unique, invert)
         return numba_isin
 
