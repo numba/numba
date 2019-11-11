@@ -37,6 +37,25 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), i)
 
 
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_list_allocation(self):
+        @njit
+        def foo_kwarg(n):
+            l = listobject.new_list(int32, allocated=n)
+            return l._allocated()
+
+        for i in range(16):
+            self.assertEqual(foo_kwarg(i), i)
+
+        @njit
+        def foo_posarg(n):
+            l = listobject.new_list(int32, n)
+            return l._allocated()
+        for i in range(16):
+            self.assertEqual(foo_posarg(i), i)
+
+
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):
 
     def test_list_to_from_meminfo(self):

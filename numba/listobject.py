@@ -389,6 +389,42 @@ def _list_length(typingctx, l):
     return sig, codegen
 
 
+@overload_method(types.ListType, "_allocated")
+def impl_allocated(l):
+    """list._allocated()
+    """
+    if isinstance(l, types.ListType):
+        def impl(l):
+            return _list_allocated(l)
+
+        return impl
+
+
+@intrinsic
+def _list_allocated(typingctx, l):
+    """Wrap numba_list_allocates
+
+    Returns the allocation of the list.
+    """
+    resty = types.intp
+    sig = resty(l)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_allocated')
+        [l] = args
+        [tl] = sig.args
+        lp = _container_get_data(context, builder, tl, l)
+        n = builder.call(fn, [lp])
+        return n
+
+    return sig, codegen
+
+
 @intrinsic
 def _list_append(typingctx, l, item):
     """Wrap numba_list_append
