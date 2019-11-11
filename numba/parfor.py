@@ -410,6 +410,30 @@ replace_functions_map = {
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
 
+def fill_parallel_impl(return_type, arr, val):
+    """Parallel implemention of ndarray.fill.  The array on
+       which to operate is retrieved from get_call_name and
+       is passed along with the value to fill.
+    """
+    if arr.ndim == 1:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                in_arr[i] = val
+            return None
+    else:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            val = zero
+            for i in numba.pndindex(in_arr.shape):
+                in_arr[i] = val
+            return None
+    return fill_1
+
+replace_functions_ndarray = {
+    'fill': fill_parallel_impl,
+}
+
 @register_jitable
 def max_checker(arr_size):
     if arr_size == 0:
@@ -1319,6 +1343,15 @@ class PreParforPass(object):
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
                             repl_func = replace_functions_map.get(callname, None)
+                            if (repl_func is None and
+                                len(callname) == 2 and
+                                isinstance(callname[1], ir.Var) and
+                                isinstance(self.typemap[callname[1].name],
+                                           types.npytypes.Array)):
+                                repl_func = replace_functions_ndarray.get(callname[0], None)
+                                # Add the array the method is on to the arg list.
+                                expr.args.insert(0, callname[1])
+
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:
@@ -1559,26 +1592,6 @@ class ParforPass(object):
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
-                    # If there is a call...
-                    if isinstance(expr, ir.Expr) and expr.op == 'call':
-                        # and the target of the call is a parallelizable/supported
-                        # method on a numpy array.
-                        callname = guard(find_callname, self.func_ir, expr)
-                        if (callname is not None and
-                            len(callname) == 2 and
-                            isinstance(callname[1], ir.Var) and
-                            isinstance(self.typemap[callname[1].name], types.npytypes.Array) and
-                            guard(self._is_supported_ndarray_call, callname[0])):
-                            # Try to parallelize this getattr call.
-                            instr = self._ndarray_getattr_to_parfor(equiv_set,
-                                lhs,
-                                callname[0],
-                                callname[1],
-                                expr.args)
-                            # If conversion successful then add parfor to IR.
-                            if isinstance(instr, tuple):
-                                pre_stmts, instr = instr
-                                new_body.extend(pre_stmts)
                     avail_vars.append(lhs.name)
                 new_body.append(instr)
             block.body = new_body
@@ -2271,11 +2284,6 @@ class ParforPass(object):
         # TODO: add more calls
         return False
 
-    def _is_supported_ndarray_call(self, call_name):
-        if call_name in ['fill']:
-            return True
-        return False
-
     def _get_ndims(self, arr):
         # return len(self.array_analysis.array_shape_classes[arr])
         return self.typemap[arr].ndim
@@ -2345,61 +2353,6 @@ class ParforPass(object):
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
             print("generated parfor for numpy map:")
-            parfor.dump()
-        return parfor
-
-    def _ndarray_getattr_to_parfor(self, equiv_set, lhs, method_name, the_array, call_args):
-        """Try to convert calls to numpy.ndarray.method to a parfor.
-        """
-        if method_name not in ['fill']:
-            # We should have previously checked and only get here for the above
-            # set of methods.
-            raise NotImplementedError("parfor translation failed for ", expr)
-
-        scope = lhs.scope
-        loc = lhs.loc
-        # For example, in a.fill(...), the_array to work on 'a' is the value
-        # part of the getattr.
-        # Get the type of the array.
-        arr_typ = self.typemap[the_array.name]
-        # Get the element type of the array.
-        el_typ = arr_typ.dtype
-
-        # generate loopnests and size variables from the_array correlations
-        size_vars = equiv_set.get_shape(the_array)
-        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
-
-        # generate init block and body
-        init_block = ir.Block(scope, loc)
-        # Nothing in init block for fill but that may need to change for others.
-        body_label = next_label()
-        body_block = ir.Block(scope, loc)
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
-        self.typemap[expr_out_var.name] = el_typ
-
-        index_var, index_var_typ = self._make_index_var(
-            scope, index_vars, body_block)
-
-        if method_name == 'fill':
-            value = call_args[0]
-        else:
-            NotImplementedError(
-                "ndarray getattr call of {} to parfor is not implemented".format(call_name))
-
-        value_assign = ir.Assign(value, expr_out_var, loc)
-        body_block.body.append(value_assign)
-
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(method_name,), 'ndarray mapping'),
-                        self.flags)
-
-        setitem_node = ir.SetItem(the_array, index_var, expr_out_var, loc)
-        self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[the_array.name], index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
-        parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("generated parfor for ndarray getattr call:")
             parfor.dump()
         return parfor
 
