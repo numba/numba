@@ -296,7 +296,7 @@ def _make_list(typingctx, itemty, ptr):
 
 
 @intrinsic
-def _list_new(typingctx, itemty):
+def _list_new(typingctx, itemty, allocated):
     """Wrap numba_list_new.
 
     Allocate a new list object with zero capacity.
@@ -308,7 +308,7 @@ def _list_new(typingctx, itemty):
 
     """
     resty = types.voidptr
-    sig = resty(itemty)
+    sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
@@ -322,7 +322,7 @@ def _list_new(typingctx, itemty):
         reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
         status = builder.call(
             fn,
-            [reflp, ll_ssize_t(sz_item), ll_ssize_t(0)],
+            [reflp, ll_ssize_t(sz_item), args[1]],
         )
         _raise_if_error(
             context, builder, status,
@@ -335,7 +335,7 @@ def _list_new(typingctx, itemty):
 
 
 @overload(new_list)
-def impl_new_list(item):
+def impl_new_list(item, allocated=0):
     """Creates a new list with *item* as the type
     of the list item.
     """
@@ -344,8 +344,8 @@ def impl_new_list(item):
 
     itemty = item
 
-    def imp(item):
-        lp = _list_new(itemty)
+    def imp(item, allocated=0):
+        lp = _list_new(itemty, allocated)
         _list_set_method_table(lp, itemty)
         l = _make_list(itemty, lp)
         return l
