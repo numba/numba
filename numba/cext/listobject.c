@@ -45,6 +45,7 @@
  * The following additional functions are implemented for the list, these are
  * needed to make the list work within Numba.
  *
+ * - Accessing the allocation numba_list_allocated
  * - Copying an item          copy_item
  * - Calling incref on item   list_incref_item
  * - Calling decref on item   list_decref_item
