@@ -362,6 +362,7 @@ def box_lsttype(typ, val, c):
 def unbox_listtype(typ, val, c):
     context = c.context
     builder = c.builder
+    context.debug_print(builder, "start of unboxing")
 
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder)
@@ -390,7 +391,7 @@ def unbox_listtype(typ, val, c):
 
         with is_python_list:
             from llvmlite import ir
-            ### start create ptr
+            ### Create ptr to new typed list
             itemty = typ.item_type
             fnty = ir.FunctionType(
                 listobject.ll_status,
@@ -408,7 +409,7 @@ def unbox_listtype(typ, val, c):
                 fn,
                 [reflp, listobject.ll_ssize_t(sz_item), listobject.ll_ssize_t(0)],
             )
-            ## This fails
+            ## FIXME: This fails
             #listobject._raise_if_error(
             #    context, builder, status,
             #    msg="Failed to allocate list",
@@ -416,6 +417,8 @@ def unbox_listtype(typ, val, c):
             ptr = builder.load(reflp)
             lstruct.data = ptr
 
+
+            ### Setup typed list method table
             vtablety = ir.LiteralStructType([
                 listobject.ll_voidptr_type,  # item incref
                 listobject.ll_voidptr_type,  # item decref
@@ -451,6 +454,7 @@ def unbox_listtype(typ, val, c):
 
             builder.call(setmethod_fn, [ptr, vtable])
 
+            ### Setup builder representation for typed-list
             alloc_size = context.get_abi_sizeof(
                 context.get_value_type(types.voidptr),
             )
@@ -460,7 +464,6 @@ def unbox_listtype(typ, val, c):
                 context.get_constant(types.uintp, alloc_size),
                 dtor,
             )
-            # End create pointer
 
             data_pointer = context.nrt.meminfo_data(builder, meminfo)
             data_pointer = builder.bitcast(
