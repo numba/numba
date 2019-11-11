@@ -217,6 +217,15 @@ numba_list_length(NB_List *lp) {
     return lp->size;
 }
 
+/* Return the current allocation of a list.
+ *
+ * lp: a list
+ */
+Py_ssize_t
+numba_list_allocated(NB_List *lp) {
+    return lp->allocated;
+}
+
 /* Set an item in a list.
  *
  * lp: a list
