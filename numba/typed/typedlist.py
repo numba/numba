@@ -476,6 +476,86 @@ def unbox_listtype(typ, val, c):
             context.printf(builder, "ptr: %p\n", ptr)
             context.printf(builder, "meminfo: %p\n", meminfo)
 
+            # now convert python list to typed list
+
+            errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+            size = c.pyapi.list_size(val)
+
+            from ..utils import IS_PY3
+
+            def check_element_type(nth, itemobj, expected_typobj):
+                typobj = nth.typeof(itemobj)
+                # Check if *typobj* is NULL
+                with c.builder.if_then(
+                        cgutils.is_null(c.builder, typobj),
+                        likely=False,
+                ):
+                    c.builder.store(cgutils.true_bit, errorptr)
+                    loop.do_break()
+                # Mandate that objects all have the same exact type
+                type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                      expected_typobj)
+
+                with c.builder.if_then(type_mismatch, likely=False):
+                    c.builder.store(cgutils.true_bit, errorptr)
+                    if IS_PY3:
+                        c.pyapi.err_format(
+                            "PyExc_TypeError",
+                            "can't unbox heterogeneous list: %S != %S",
+                            expected_typobj, typobj,
+                        )
+                    else:
+                        # Python2 doesn't have "%S" format string.
+                        c.pyapi.err_set_string(
+                            "PyExc_TypeError",
+                            "can't unbox heterogeneous list",
+                        )
+                    c.pyapi.decref(typobj)
+                    loop.do_break()
+                c.pyapi.decref(typobj)
+
+            zero = ir.Constant(size.type, 0)
+
+            fnty = ir.FunctionType(
+                listobject.ll_status,
+                [listobject.ll_list_type, listobject.ll_bytes],
+            )
+            fn = builder.module.get_or_insert_function(fnty,
+                                                       name='numba_list_append')
+            # Traverse Python list and unbox objects into typed list
+            from numba.targets.boxing import _NumbaTypeHelper
+            with _NumbaTypeHelper(c) as nth:
+                # Note: *expected_typobj* can't be NULL
+                expected_typobj = nth.typeof(c.pyapi.list_getitem(val, zero))
+                with cgutils.for_range(c.builder, size) as loop:
+                    itemobj = c.pyapi.list_getitem(val, loop.index)
+                    check_element_type(nth, itemobj, expected_typobj)
+                    # XXX we don't call native cleanup for each
+                    # list element, since that would require keeping
+                    # of which unboxings have been successful.
+                    native = c.unbox(typ.dtype, itemobj)
+                    #with c.builder.if_then(native.is_error, likely=False):
+                    #    c.builder.store(cgutils.true_bit, errorptr)
+                    #    loop.do_break()
+
+                    dm_item = context.data_model_manager[itemty]
+
+                    data_item = dm_item.as_data(builder, native.value)
+
+                    ptr_item = cgutils.alloca_once_value(builder, data_item)
+
+                    from numba.typedobjectutils import _as_bytes
+                    status = builder.call(
+                        fn,
+                        [
+                            ptr,
+                            _as_bytes(builder, ptr_item),
+                        ],
+                    )
+                    # FIXME: check status
+
+                c.pyapi.decref(expected_typobj)
+
     lstobj = lstruct._getvalue()
     context.debug_print(builder, "end of unboxing")
     return NativeValue(lstobj)
