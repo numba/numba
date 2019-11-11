@@ -1,17 +1,22 @@
-###############################################################################################################
+###############################################################################
 # Tools to ferry arbitrary Python objects through nopython mode
 #
 # This has two typical use-cases:
-#   1. ferrying data structures not currently supported by Numba into `objmode` blocks via `PassThruContainer`
-#   2. creating extension types that are simplified representations of the Python class and keep a link to the
-#      Python object
+#   1. ferrying data structures not currently supported by Numba into `objmode`
+#      blocks via `PassThruContainer`
+#   2. creating extension types that are simplified representations of the
+#      Python class and keep a link to the Python object
 #
-# Example for the latter case (``test.test_passthru.PassThruComplex`` for a working example):
+# Example for the latter case (``test.test_passthru.PassThruComplex`` for a
+# working example):
 #
 #   >>> class BloatedPythonClass(object):
-#   >>>     def __init__(numba_supported_attribute, not_numba_supported_attribute):
+#   >>>     def __init__(
+#   >>>         numba_supported_attribute, not_numba_supported_attribute
+#   >>>     ):
 #   >>>         self.numba_supported_attribute = numba_supported_attribute
-#   >>>         self.not_numba_supported_attribute = not_numba_supported_attribute
+#   >>>         self.not_numba_supported_attribute = (
+#   >>>                             not_numba_supported_attribute)
 #   >>>
 #   >>> BloatedPythonClassModel(models.StructModel):
 #   >>>     def __init__(self, dmm, fe_typ):
@@ -19,19 +24,26 @@
 #   >>>             ('parent', PassThruType('OpaqueBloatedPythonClass')),
 #   >>>             ('numba_supported_attribute', NumbaSupportedAttributeType),
 #   >>>         ]
-#   >>>         super(BloatedPythonClassModel, self).__init__(dmm, fe_typ, members)
+#   >>>         super(BloatedPythonClassModel, self).__init__(
+#   >>>             dmm, fe_typ, members
+#   >>>         )
 #   >>>
 #
-# The full Python object is passed through *nopython-mode* in the ``parent`` attribute (obviously nothing can
-# be done with it there), any Numba supported attributes could be made available for *nopython-mode*. Since the
-# boxer has access to the ``parent`` object you might even reflect changes done to the attributes available in
-# *nopython-mode* back onto the parent (though there are good reason to be careful with this, see history of
-# list/set support https://github.com/numba/numba/issues/3546).
-###############################################################################################################
+# The full Python object is passed through *nopython-mode* in the ``parent``
+# attribute (obviously nothing can be done with it there), any Numba supported
+# attributes could be made available for *nopython-mode*. Since the boxer has
+# access to the ``parent`` object you might even reflect changes done to the
+# attributes available in *nopython-mode* back onto the parent (though there
+# are good reason to be careful with this, see history of list/set
+# support https://github.com/numba/numba/issues/3546).
+###############################################################################
 
 from numba import cgutils, types
 from numba.datamodel import models
-from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
+from numba.extending import (
+    make_attribute_wrapper, overload, overload_method, register_model,
+    type_callable
+)
 from numba.pythonapi import NativeValue, unbox, box
 from numba.targets.hashing import _Py_hash_t
 from numba.targets.imputils import lower_builtin
@@ -49,8 +61,8 @@ opaque_pyobject = types.Opaque('Opaque(PyObject)')
 
 
 class PassThruType(types.Type):
-    """Wraps arbitrary Python objects to pass around *nopython-mode*. The created MemInfo will aquire a
-       reference to the Python object.
+    """Wraps arbitrary Python objects to pass around *nopython-mode*. The
+       created MemInfo will aquire a reference to the Python object.
     """
     def __init__(self, name=None):
         super(PassThruType, self).__init__(name or self.__class__.__name__)
@@ -70,7 +82,9 @@ class PassThruModel(models.StructModel):
 
 @unbox(PassThruType)
 def unbox_pass_thru_type(typ, obj, context):
-    pass_thru = cgutils.create_struct_proxy(typ)(context.context, context.builder)
+    pass_thru = cgutils.create_struct_proxy(typ)(
+        context.context, context.builder
+    )
     pass_thru.meminfo = context.pyapi.nrt_meminfo_new_from_pyobject(obj, obj)
 
     return NativeValue(pass_thru._getvalue())
@@ -78,7 +92,9 @@ def unbox_pass_thru_type(typ, obj, context):
 
 @box(PassThruType)
 def box_pass_thru_type(typ, val, context):
-    val = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
+    val = cgutils.create_struct_proxy(typ)(
+        context.context, context.builder, value=val
+    )
     obj = context.context.nrt.meminfo_data(context.builder, val.meminfo)
 
     context.pyapi.incref(obj)
@@ -88,9 +104,10 @@ def box_pass_thru_type(typ, val, context):
 
 
 class PassThruContainer(object):
-    """A container to ferry arbitrary Python objects through *nopython* mode. The only operation supported
-       in *nopython-mode* is ``==``. Two instances of ``PassThruContainer`` are equal if the wrapped objects
-       are identical, ie if ``a.obj is b.obj``.
+    """A container to ferry arbitrary Python objects through *nopython* mode.
+       The only operation supported in *nopython-mode* is ``==``. Two instances
+       of ``PassThruContainer`` are equal if the wrapped objects are identical,
+       ie if ``a.obj is b.obj``.
     """
     def __init__(self, obj):
         self._obj = obj
@@ -134,7 +151,9 @@ make_attribute_wrapper(PassThruContainerType, 'wrapped_obj', 'wrapped_obj')
 
 @unbox(PassThruContainerType)
 def unbox_pass_thru_container_type(typ, obj, context):
-    container = cgutils.create_struct_proxy(typ)(context.context, context.builder)
+    container = cgutils.create_struct_proxy(typ)(
+        context.context, context.builder
+    )
 
     container.container = context.unbox(pass_thru_type, obj).value
 
@@ -147,7 +166,9 @@ def unbox_pass_thru_container_type(typ, obj, context):
 
 @box(PassThruContainerType)
 def box_pass_thru_container_type(typ, val, context):
-    val = cgutils.create_struct_proxy(typ)(context.context, context.builder, value=val)
+    val = cgutils.create_struct_proxy(typ)(
+        context.context, context.builder, value=val
+    )
 
     return context.box(pass_thru_type, val.container)
 
@@ -169,10 +190,12 @@ def type_opaque_to_int(context):
 @lower_builtin(is_, types.Opaque, types.Opaque)
 def opaque_is(context, builder, sig, args):
     """
-    Implementation for `x is y` for Opaque types. `x is y` iff the pointers are equal
+    Implementation for `x is y` for Opaque types. `x is y` iff the pointers
+    are equal
     """
-    # TODO: would like to use high-level extension here (int(x) == int(y)), however
-    #  currently @overload(is_) does not seem to work, generic impl takes precedence
+    # TODO: would like to use high-level extension here (int(x) == int(y)),
+    #  however currently @overload(is_) does not seem to work, generic impl
+    #  takes precedence
 
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
