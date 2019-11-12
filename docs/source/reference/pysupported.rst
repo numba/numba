@@ -169,6 +169,7 @@ The following functions, attributes and methods are currently supported:
 * ``*`` (repetition of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
+* ``.casefold()``
 * ``.startswith()``
 * ``.endswith()``
 * ``.find()``

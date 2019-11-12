@@ -33,7 +33,7 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToTitleFull,
+                              _PyUnicode_ToFoldedFull, _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -1358,6 +1358,43 @@ def unicode_upper(a):
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
+@overload_method(types.UnicodeType, 'casefold')
+def unicode_casefold(data):
+    """Implements str.casefold()"""
+    def impl(data):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10782-L10791    # noqa: E501
+        def _do_casefold(data, length, res, maxchars):
+            """Translation of the function to case fold a unicode string."""
+            k = 0
+            mapped = np.zeros(3, dtype=_Py_UCS4)
+            for idx in range(length):
+                mapped.fill(0)
+                code_point = _get_code_point(data, idx)
+                n_res = _PyUnicode_ToFoldedFull(code_point, mapped)
+                for m in mapped[:n_res]:
+                    maxchar = maxchars[0]
+                    maxchars[0] = max(maxchar, m)
+                    _set_code_point(res, k, m)
+                    k += 1
+            return k
+
+        length = len(data)
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
+        maxchars = [0]
+        newlength = _do_casefold(data, length, tmp, maxchars)
+        maxchar = maxchars[0]
+        newkind = _codepoint_to_kind(maxchar)
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(res, i, _get_code_point(tmp, i))
+
+        return res
+
     return impl
 
 
