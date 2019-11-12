@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import njit
+from numba import njit, errors
 from numba.extending import overload
 import numpy as np
 
@@ -184,6 +184,101 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
         a = 0
         self.assertEqual(impl(a), cfunc(a))
+
+    # this needs true SSA to be able to work correctly, check error for now
+    def test_multiply_defined_freevar(self):
+
+        @njit
+        def impl(c):
+            if c:
+                x = 3
+
+                def inner(y):
+                    return y + x
+
+                r = consumer(inner, 1)
+            else:
+                x = 6
+
+                def inner(y):
+                    return y + x
+
+                r = consumer(inner, 2)
+            return r
+
+        with self.assertRaises(errors.TypingError) as e:
+            impl(1)
+
+        self.assertIn("Cannot capture a constant value for variable",
+                      str(e.exception))
+
+    def test_non_const_in_escapee(self):
+
+        @njit
+        def impl(x):
+            z = np.arange(x)
+
+            def inner(val):
+                return 1 + z + val  # z is non-const freevar
+            return consumer(inner, x)
+
+        with self.assertRaises(errors.TypingError) as e:
+            impl(1)
+
+        self.assertIn("Cannot capture the non-constant value associated",
+                      str(e.exception))
+
+    def test_escape_with_kwargs(self):
+
+        def impl_factory(consumer_func):
+            def impl():
+                t = 12
+
+                def inner(a, b, c, mydefault1=123, mydefault2=456):
+                    z = 4
+                    return mydefault1 + mydefault2 + z + t + a + b + c
+                # this is awkward, top and tail closure inlining with a escapees
+                # in the middle that do/don't have defaults.
+                return (inner(1, 2, 5, 91, 53),
+                        consumer_func(inner, 1, 2, 3, 73),
+                        consumer_func(inner, 1, 2, 3,),
+                        inner(1, 2, 4))
+            return impl
+
+        cfunc = njit(impl_factory(consumer))
+        impl = impl_factory(consumer.py_func)
+
+        np.testing.assert_allclose(impl(), cfunc())
+
+    def test_escape_with_kwargs_override_kwargs(self):
+
+        @njit
+        def specialised_consumer(func, *args):
+            x, y, z = args  # unpack to avoid `CALL_FUNCTION_EX`
+            a = func(x, y, z, mydefault1=1000)
+            b = func(x, y, z, mydefault2=1000)
+            c = func(x, y, z, mydefault1=1000, mydefault2=1000)
+            return a + b + c
+
+        def impl_factory(consumer_func):
+            def impl():
+                t = 12
+
+                def inner(a, b, c, mydefault1=123, mydefault2=456):
+                    z = 4
+                    return mydefault1 + mydefault2 + z + t + a + b + c
+                # this is awkward, top and tail closure inlining with a escapees
+                # in the middle that get defaults specified in the consumer
+                return (inner(1, 2, 5, 91, 53),
+                        consumer_func(inner, 1, 2, 11),
+                        consumer_func(inner, 1, 2, 3,),
+                        inner(1, 2, 4))
+            return impl
+
+        cfunc = njit(impl_factory(specialised_consumer))
+        impl = impl_factory(specialised_consumer.py_func)
+
+        np.testing.assert_allclose(impl(), cfunc())
 
 
 if __name__ == '__main__':
