@@ -759,21 +759,29 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 check_ok(params)
 
     def test_arange_1_arg(self):
-        pyfunc = np_arange_1
-        cfunc = jit(nopython=True)(pyfunc)
 
-        def check_ok(arg0):
-            expected = pyfunc(arg0)
-            got = cfunc(arg0)
-            self.assertEqual(got.dtype, expected.dtype)
-            self.assertPreciseEqual(got, expected, prec="double")
-        
-        check_ok(0)
-        check_ok(1)
-        check_ok(4)
-        check_ok(5.5)
-        check_ok(-3)
-        check_ok(np.complex(4, 4))
+        all_pyfuncs = (
+            np_arange_1,
+            lambda x: np.arange(x, 10),
+            lambda x: np.arange(7, step=abs(x))
+        )
+
+        for pyfunc in all_pyfuncs:
+            pyfunc = np_arange_1
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check_ok(arg0):
+                expected = pyfunc(arg0)
+                got = cfunc(arg0)
+                self.assertEqual(got.dtype, expected.dtype)
+                self.assertPreciseEqual(got, expected, prec="double")
+            
+            check_ok(0)
+            check_ok(1)
+            check_ok(4)
+            check_ok(5.5)
+            check_ok(-3)
+            check_ok(np.complex(4, 4))
     
     def test_arange_2_arg(self):
         def check_ok(arg0, arg1, pyfunc, cfunc):
@@ -781,11 +789,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             got = cfunc(arg0, arg1)
             self.assertEqual(got.dtype, expected.dtype)
             self.assertPreciseEqual(got, expected, prec="double")
+        
+        all_pyfuncs = (
+            np_arange_2, 
+            np_arange_start_stop, 
+            np_arange_1_stop, 
+            np_arange_1_step,
+            lambda x, y: np.arange(x, y, 5),
+            lambda x, y: np.arange(2, y, step=x),
+        )
 
-        for pyfunc in (np_arange_2, np_arange_start_stop, np_arange_1_stop, np_arange_1_step):
+        for pyfunc in all_pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
             
-            check_ok(0, 5, pyfunc, cfunc)
+            check_ok(-1, 5, pyfunc, cfunc)
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
             check_ok(0.5, 4, pyfunc, cfunc)
