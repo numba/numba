@@ -109,6 +109,11 @@ jobs:
         CONDA_ENV: travisci
         TEST_THREADING: workqueue
         TEST_START_INDEX: 16
+      py38_np117:
+        PYTHON: '3.8'
+        NUMPY: '1.17'
+        CONDA_ENV: travisci
+        TEST_START_INDEX: 19
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
