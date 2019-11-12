@@ -1266,38 +1266,34 @@ def unicode_not(a):
             return len(a) == 0
         return impl
 
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
-@register_jitable
-def _do_capitalize(data, length, res, maxchars):
-    """This is a translation of the function to capitalize a unicode string."""
-    k = 0
-    mapped = np.zeros(3, dtype=_Py_UCS4)
-
-    code_point = _get_code_point(data, 0)
-    n_res = _PyUnicode_ToUpperFull(code_point, mapped)
-    for m in mapped[:n_res]:
-        maxchar = maxchars[0]
-        maxchars[0] = max(maxchar, m)
-        _set_code_point(res, k, m)
-        k += 1
-
-    for idx in range(1, length):
-        code_point = _get_code_point(data, idx)
-        n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-        for m in mapped[:n_res]:
-            maxchar = maxchars[0]
-            maxchars[0] = max(maxchar, m)
-            _set_code_point(res, k, m)
-            k += 1
-
-    return k
-
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
 @overload_method(types.UnicodeType, 'capitalize')
 def unicode_capitalize(data):
     """Implements str.capitalize()"""
     def impl(data):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
+        def _do_capitalize(data, length, res, maxchars):
+            """Translation of the function to capitalize a unicode string."""
+            k = 0
+            mapped = np.zeros(3, dtype=_Py_UCS4)
+            code_point = _get_code_point(data, 0)
+            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+            for m in mapped[:n_res]:
+                maxchar = maxchars[0]
+                maxchars[0] = max(maxchar, m)
+                _set_code_point(res, k, m)
+                k += 1
+            for idx in range(1, length):
+                code_point = _get_code_point(data, idx)
+                n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+                for m in mapped[:n_res]:
+                    maxchar = maxchars[0]
+                    maxchars[0] = max(maxchar, m)
+                    _set_code_point(res, k, m)
+                    k += 1
+            return k
+
         length = len(data)
         if length == 0:
             return _empty_string(data._kind, length, data._is_ascii)
