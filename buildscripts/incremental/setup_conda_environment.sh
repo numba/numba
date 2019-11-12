@@ -48,7 +48,7 @@ source activate $CONDA_ENV
 set -v
 
 # gitpython needed for CI testing
-$CONDA_INSTALL gitpython
+$PIP_INSTALL gitpython
 
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
