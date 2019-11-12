@@ -183,6 +183,9 @@ class Runner(object):
         self.pending = []
         self.finished = set()
 
+    def get_debug_loc(self, lineno):
+        return Loc(self.debug_filename, lineno)
+
     def dispatch(self, state):
         inst = state.get_inst()
         _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
@@ -190,9 +193,8 @@ class Runner(object):
         if fn is not None:
             fn(state, inst)
         else:
-            l = Loc(self.debug_filename, inst.lineno)
             msg = "Use of unsupported opcode (%s) found" % inst.opname
-            raise UnsupportedError(msg, loc=l)
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
     def op_NOP(self, state, inst):
         state.append(inst)
@@ -529,21 +531,30 @@ class Runner(object):
         state.terminate()
 
     def op_BEGIN_FINALLY(self, state, inst):
+        res = state.make_temp()  # unused
+        state.push(res)
         state.append(inst)
 
     def op_END_FINALLY(self, state, inst):
-        state.pop()
         state.append(inst)
+        # actual bytecode has stack_effect of -6
+        # we don't emulate the exact stack behavior
+        state.pop()     # unsure but seems to work
+        state.pop()     # unsure but seems to work
 
     def op_POP_FINALLY(self, state, inst):
-        assert inst.arg == 0
-        pass #state.append(inst)
+        # we don't emulate the exact stack behavior
+        if inst.arg != 0:
+            msg = ('Unsupported use of bytecode related to try..finally'
+                   ' or a with-context')
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
     def op_WITH_CLEANUP_START(self, state, inst):
-        # state.pop()
+        # we don't emulate the exact stack behavior
         state.append(inst)
 
     def op_WITH_CLEANUP_FINISH(self, state, inst):
+        # we don't emulate the exact stack behavior
         state.append(inst)
 
     def op_SETUP_LOOP(self, state, inst):
