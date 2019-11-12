@@ -188,6 +188,7 @@ The following functions, attributes and methods are currently supported:
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
+* ``.swapcase()``
 * ``.title()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes

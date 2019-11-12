@@ -1293,6 +1293,25 @@ class TestUnicode(BaseTest):
         for s in UNICODE_EXAMPLES + [''] + cpython:
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
+    def test_swapcase(self):
+        def pyfunc(x):
+            return x.swapcase()
+
+        cfunc = njit(pyfunc)
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L834-L858    # noqa: E501
+        cpython = ['\U0001044F', '\U00010427', '\U0001044F\U0001044F',
+                   '\U00010427\U0001044F', '\U0001044F\U00010427',
+                   'X\U00010427x\U0001044F', 'ﬁ', '\u0130', '\u03a3',
+                   '\u0345\u03a3', 'A\u0345\u03a3', 'A\u0345\u03a3a',
+                   'A\u0345\u03a3', 'A\u03a3\u0345', '\u03a3\u0345 ',
+                   '\u03a3', 'ß', '\u1fd2']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L928    # noqa: E501
+        cpython_extras = ['\U00010000\U00100000']
+
+        msg = 'Results of "{}".swapcase() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_islower(self):
         pyfunc = islower_usecase
         cfunc = njit(pyfunc)
