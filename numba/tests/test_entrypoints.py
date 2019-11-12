@@ -39,10 +39,12 @@ class TestEntrypoints(TestCase):
                 attrs=['init_func'], # name of entry point object
                 dist=pkg_resources.get_distribution(dist)
             )
-            entrypoints.setdefault('numba_extensions', {})['init'] = my_entrypoint
+            entrypoints.setdefault('numba_extensions',
+                                   {})['init'] = my_entrypoint
 
             import numba.entrypoints
-            numba.entrypoints._already_initialized = False  # Allow reinitialization
+            # Allow reinitialization
+            numba.entrypoints._already_initialized = False
 
             numba.entrypoints.init_all()
 

@@ -184,7 +184,8 @@ class ObjectModeBackEnd(LoweringPass):
                    "object mode compilation path has been detected, this is "
                    "deprecated behaviour.\n\nFor more information visit %s" %
                    url)
-            warnings.warn(errors.NumbaDeprecationWarning(msg, state.func_ir.loc))
+            warnings.warn(errors.NumbaDeprecationWarning(msg,
+                                                         state.func_ir.loc))
             if state.flags.release_gil:
                 warn_msg = ("Code running in object mode won't allow parallel"
                             " execution despite nogil=True.")

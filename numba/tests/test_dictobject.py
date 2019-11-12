@@ -1255,7 +1255,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assertIn(expect, msg)
 
     def assert_disallow_key(self, ty):
-        msg = '{} as key is forbidded'.format(ty)
+        msg = '{} as key is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
@@ -1264,7 +1264,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
-        msg = '{} as value is forbidded'.format(ty)
+        msg = '{} as value is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit
