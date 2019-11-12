@@ -2034,7 +2034,14 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # these can be baked into the new function
     freevars = []
     for x in fcode.co_freevars:
-        freevar_def = caller_ir.get_definition(x)
+        # not using guard here to differentiate between multiple definition and
+        # non-const variable
+        try:
+            freevar_def = caller_ir.get_definition(x)
+        except KeyError:
+            msg = ("Cannot capture a constant value for variable '%s' as there "
+                   "are multiple definitions present." % x)
+            raise TypingError(msg, loc=code_obj.loc)
         if isinstance(freevar_def, ir.Const):
             freevars.append(freevar_def.value)
         else:
@@ -2044,7 +2051,28 @@ def convert_code_obj_to_function(code_obj, caller_ir):
 
     func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+    co_varnames = list(fcode.co_varnames)
+
+    # This is horrible. The code object knows about the number of args present
+    # it also knows the name of the args but these are bundled in with other
+    # vars in `co_varnames`. The make_function IR node knows what the defaults
+    # are, they are defined in the IR as consts. The following finds the total
+    # number of args (args + kwargs with defaults), finds the default values
+    # and infers the number of "kwargs with defaults" from this and then infers
+    # the number of actual arguments from that.
+    n_allargs = fcode.co_argcount
+    kwarg_defaults = caller_ir.get_definition(code_obj.defaults)
+    assert isinstance(kwarg_defaults, ir.Const)
+    kwarg_defaults_tup = kwarg_defaults.value
+    nkwargs = len(kwarg_defaults_tup)
+    nargs = n_allargs - nkwargs
+
+    func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
+    if nkwargs:
+        kw_const = ["%s = %s" % (co_varnames[i + nargs], kwarg_defaults_tup[i])
+                    for i in range(nkwargs)]
+        func_arg += ", "
+        func_arg += ", ".join(kw_const)
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
     loc = {}
