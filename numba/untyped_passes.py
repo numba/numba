@@ -437,6 +437,11 @@ class MakeFunctionToJitFunction(FunctionPass):
                     if isinstance(stmt.value, ir.Expr):
                         if stmt.value.op == "make_function":
                             node = stmt.value
+                            kw_default = func_ir.get_definition(node.defaults)
+                            if not (kw_default is None or
+                                    isinstance(kw_default, ir.Const)):
+                                continue
+
                             pyfunc = convert_code_obj_to_function(node, func_ir)
                             func = njit()(pyfunc)
                             new_node = ir.Global(node.code.co_name, func,

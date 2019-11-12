@@ -2060,17 +2060,18 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     # number of args (args + kwargs with defaults), finds the default values
     # and infers the number of "kwargs with defaults" from this and then infers
     # the number of actual arguments from that.
+    n_kwargs = 0
     n_allargs = fcode.co_argcount
     kwarg_defaults = caller_ir.get_definition(code_obj.defaults)
-    assert isinstance(kwarg_defaults, ir.Const)
-    kwarg_defaults_tup = kwarg_defaults.value
-    nkwargs = len(kwarg_defaults_tup)
-    nargs = n_allargs - nkwargs
+    if kwarg_defaults is not None:
+        kwarg_defaults_tup = kwarg_defaults.value
+        n_kwargs = len(kwarg_defaults_tup)
+    nargs = n_allargs - n_kwargs
 
     func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
-    if nkwargs:
+    if n_kwargs:
         kw_const = ["%s = %s" % (co_varnames[i + nargs], kwarg_defaults_tup[i])
-                    for i in range(nkwargs)]
+                    for i in range(n_kwargs)]
         func_arg += ", "
         func_arg += ", ".join(kw_const)
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
