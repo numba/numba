@@ -1266,6 +1266,56 @@ def unicode_not(a):
             return len(a) == 0
         return impl
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
+@register_jitable
+def _do_capitalize(data, length, res, maxchars):
+    """This is a translation of the function to capitalize a unicode string."""
+    k = 0
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+
+    code_point = _get_code_point(data, 0)
+    n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+    for m in mapped[:n_res]:
+        maxchar = maxchars[0]
+        maxchars[0] = max(maxchar, m)
+        _set_code_point(res, k, m)
+        k += 1
+
+    for idx in range(1, length):
+        code_point = _get_code_point(data, idx)
+        n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        for m in mapped[:n_res]:
+            maxchar = maxchars[0]
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+
+    return k
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
+@overload_method(types.UnicodeType, 'capitalize')
+def unicode_capitalize(data):
+    """Implements str.capitalize()"""
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return _empty_string(data._kind, length, data._is_ascii)
+
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
+        maxchars = [0]
+        newlength = _do_capitalize(data, length, tmp, maxchars)
+        maxchar = maxchars[0]
+        newkind = _codepoint_to_kind(maxchar)
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(res, i, _get_code_point(tmp, i))
+
+        return res
+
+    return impl
+
 
 def _is_upper(is_lower, is_upper, is_title):
     # impl is an approximate translation of:
