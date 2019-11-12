@@ -765,6 +765,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check_ok(arg0):
             expected = pyfunc(arg0)
             got = cfunc(arg0)
+            self.assertEqual(got.dtype, expected.dtype)
             self.assertPreciseEqual(got, expected, prec="double")
         
         check_ok(0)
@@ -778,6 +779,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check_ok(arg0, arg1, pyfunc, cfunc):
             expected = pyfunc(arg0, arg1)
             got = cfunc(arg0, arg1)
+            self.assertEqual(got.dtype, expected.dtype)
             self.assertPreciseEqual(got, expected, prec="double")
 
         for pyfunc in (np_arange_2, np_arange_start_stop, np_arange_1_stop, np_arange_1_step):
@@ -804,6 +806,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check_ok(arg0, arg1, arg2, pyfunc, cfunc):
             expected = pyfunc(arg0, arg1, arg2)
             got = cfunc(arg0, arg1, arg2)
+            self.assertEqual(got.dtype, expected.dtype)
             self.assertPreciseEqual(got, expected, prec="double")
         
         for pyfunc in (np_arange_3, np_arange_2_step, np_arange_start_stop_step):
@@ -834,6 +837,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             def check_ok(arg0, arg1, arg2, arg3):
                 expected = pyfunc(arg0, arg1, arg2, arg3)
                 got = cfunc(arg0, arg1, arg2, arg3)
+                self.assertEqual(got.dtype, expected.dtype)
                 self.assertPreciseEqual(got, expected, prec="double")
             
             check_ok(0, 5, 1, np.float64)

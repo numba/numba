@@ -312,7 +312,7 @@ def iternext_array(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Basic indexing (with integers and slices only)
 
 def basic_indexing(context, builder, aryty, ary, index_types, indices):
@@ -535,7 +535,7 @@ def array_itemset(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Advanced / fancy indexing
 
 
@@ -1404,7 +1404,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     return context.get_dummy_value()
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Shape / layout altering
 
 def vararg_to_tuple(context, builder, sig, args):
@@ -1889,7 +1889,7 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 
 @overload(np.unique)
@@ -2001,7 +2001,7 @@ def array_view(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Array attributes
 
 @lower_getattr(types.Array, "dtype")
@@ -2182,7 +2182,7 @@ def array_flags_f_contiguous(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # .real / .imag
 
 @lower_getattr(types.Array, "real")
@@ -2271,7 +2271,7 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # DType attribute
 
 def dtype_type(context, builder, dtypety, dtypeval):
@@ -2283,7 +2283,7 @@ lower_getattr(types.DType, 'type')(dtype_type)
 lower_getattr(types.DType, 'kind')(dtype_type)
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Structured / record lookup
 
 @lower_getattr_generic(types.Array)
@@ -2417,7 +2417,7 @@ def record_setitem(context, builder, sig, args):
     return impl(builder, (rec, val))
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Constant arrays and records
 
 
@@ -2447,7 +2447,7 @@ def constant_bytes(context, builder, ty, pyval):
     buf = np.array(bytearray(pyval), dtype=np.uint8)
     return context.make_constant_array(builder, ty, buf)
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Comparisons
 
 
@@ -2465,7 +2465,7 @@ def array_is(context, builder, sig, args):
     return context.compile_internal(builder, array_is_impl, sig, args)
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # builtin `np.flat` implementation
 
 def make_array_flat_cls(flatiterty):
@@ -3320,7 +3320,7 @@ def iternext_numpy_nditer2(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Numpy array constructors
 
 def _empty_nd_impl(context, builder, arrtype, shapes):
@@ -3764,7 +3764,7 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        dtype = max(bounds)
+        dtype = types.intp
 
     return dtype
 
@@ -3820,7 +3820,6 @@ def np_arange(start, stop=None, step=None, dtype=None):
             arr[i] = val
             val += _step
         return arr
-
 
     return impl
 
@@ -4803,7 +4802,7 @@ def array_dot(arr, other):
     return dot_impl
 
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Sorting
 
 _sorts = {}
@@ -4876,7 +4875,7 @@ def array_argsort(context, builder, sig, args):
                                     innersig, innerargs)
 
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Implicit cast
 
 @lower_cast(types.Array, types.Array)
@@ -4886,7 +4885,7 @@ def array_to_array(context, builder, fromty, toty, val):
     return val
 
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Stride tricks
 
 def reshape_unchecked(a, shape, strides):
