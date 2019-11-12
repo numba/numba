@@ -141,11 +141,11 @@ class Interpreter(object):
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
+            firstinst = self.bytecode[block.offset]
+            self.loc = self.loc.with_lineno(firstinst.lineno)
             self._start_new_block(block.offset)
             if blkct == 0:
                 # Is first block
-                firstinst = self.bytecode[block.body[0]]
-                self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
