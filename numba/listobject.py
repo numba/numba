@@ -353,17 +353,6 @@ def impl_new_list(item):
     return imp
 
 
-@overload(bool)
-def impl_bool(l):
-    """bool(list)
-    """
-    if isinstance(l, types.ListType):
-        def impl(l):
-            return _list_length(l) > 0
-
-        return impl
-
-
 @overload(len)
 def impl_len(l):
     """len(list)

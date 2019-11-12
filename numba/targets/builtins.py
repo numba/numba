@@ -16,6 +16,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from numba.extending import overload
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
@@ -364,6 +365,22 @@ def lower_empty_tuple(context, builder, sig, args):
 def lower_tuple(context, builder, sig, args):
     val, = args
     return impl_ret_untracked(context, builder, sig.return_type, val)
+
+@overload(bool)
+def bool_sequence(x):
+    valid_types = (
+        types.CharSeq,
+        types.UnicodeCharSeq,
+        types.DictType,
+        types.ListType,
+        types.UnicodeType,
+        types.Set,
+    )
+    
+    if isinstance(x, valid_types):
+        def bool_impl(x):
+            return len(x) > 0
+        return bool_impl
 
 # -----------------------------------------------------------------------------
 
