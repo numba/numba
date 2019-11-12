@@ -157,14 +157,11 @@ def slice_constructor_impl(context, builder, sig, args):
     slice_args = [None] * 3
 
     # Fetch non-None arguments
-    if len(args) == 1:
-        if sig.args[0] is not types.none:
-            slice_args[1] = args[0]
+    if len(args) == 1 and sig.args[0] is not types.none:
+        slice_args[1] = args[0]
     else:
         for i, (ty, val) in enumerate(zip(sig.args, args)):
-            if ty is types.none:
-                slice_args[i] = None
-            else:
+            if ty is not types.none:
                 slice_args[i] = val
 
     # Fill omitted arguments
