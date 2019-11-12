@@ -122,6 +122,14 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 )
                 with self.assertRaises(TypingError) as numba_e:
                     cfunc(args, array)
+                self.assertIn(
+                    "Invalid use of Function",
+                    str(numba_e.exception)
+                )
+                self.assertIn(
+                    ", ".join(str(typeof(arg)) for arg in args),
+                    str(numba_e.exception)
+                )
             except Exception as py_e:
                 with self.assertRaises(type(py_e)) as numba_e:
                     cfunc(args, array)
