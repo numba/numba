@@ -437,9 +437,17 @@ class MakeFunctionToJitFunction(FunctionPass):
                     if isinstance(stmt.value, ir.Expr):
                         if stmt.value.op == "make_function":
                             node = stmt.value
-                            kw_default = func_ir.get_definition(node.defaults)
-                            if not (kw_default is None or
+                            getdef = func_ir.get_definition
+                            kw_default = getdef(node.defaults)
+                            ok = False
+                            if (kw_default is None or
                                     isinstance(kw_default, ir.Const)):
+                                ok = True
+                            elif isinstance(kw_default, tuple):
+                                ok = all([isinstance(getdef(x), ir.Const)
+                                          for x in kw_default])
+
+                            if not ok:
                                 continue
 
                             pyfunc = convert_code_obj_to_function(node, func_ir)

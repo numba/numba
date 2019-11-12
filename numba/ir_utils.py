@@ -2064,7 +2064,11 @@ def convert_code_obj_to_function(code_obj, caller_ir):
     n_allargs = fcode.co_argcount
     kwarg_defaults = caller_ir.get_definition(code_obj.defaults)
     if kwarg_defaults is not None:
-        kwarg_defaults_tup = kwarg_defaults.value
+        if isinstance(kwarg_defaults, tuple):
+            d = [caller_ir.get_definition(x).value for x in kwarg_defaults]
+            kwarg_defaults_tup = tuple(d)
+        else:
+            kwarg_defaults_tup = kwarg_defaults.value
         n_kwargs = len(kwarg_defaults_tup)
     nargs = n_allargs - n_kwargs
 
