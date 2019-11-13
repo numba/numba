@@ -1298,6 +1298,18 @@ def unicode_capitalize(data):
         if length == 0:
             return _empty_string(data._kind, length, data._is_ascii)
 
+        if data._is_ascii:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L29-L30    # noqa: E501
+            res = _empty_string(data._kind, length, data._is_ascii)
+            code_point = _get_code_point(data, 0)
+            _set_code_point(res, 0, _Py_TOUPPER(code_point))
+            for idx in range(1, length):
+                code_point = _get_code_point(data, idx)
+                _set_code_point(res, idx, _Py_TOLOWER(code_point))
+
+            return res
+
         tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
         # maxchar should be inside of a list to be pass as argument by reference
         maxchars = [0]
