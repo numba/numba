@@ -197,6 +197,7 @@ class TraceRunner(object):
     def dispatch(self, state):
         inst = state.get_inst()
         _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
+        _logger.debug("stack %s", state._stack)
         fn = getattr(self, "op_{}".format(inst.opname), None)
         if fn is not None:
             fn(state, inst)
@@ -592,36 +593,39 @@ class TraceRunner(object):
         # Forces a new block
         state.fork(pc=inst.next)
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        state.append(inst)
-        state.push_block(
-            state.make_block(
-                kind='except',
-                end=inst.get_jump_target(),
-            )
-        )
+    def _setup_try_except(self, state, next, end):
         # Forces a new block
-        state.fork(pc=inst.next)
-        state.fork(pc=inst.get_jump_target(), npush=3)
-
-    def op_SETUP_FINALLY(self, state, inst):
-        state.append(inst)
-        state.push_block(
-            state.make_block(
-                kind='finally',
-                end=inst.get_jump_target(),
+        # Fork to the body of the finally
+        state.fork(
+            pc=next,
+            extra_block=state.make_block(
+                kind='try',
+                end=end,
                 reset_stack=False,
             )
         )
-        # Forces a new block
-        state.fork(pc=inst.next)
+        # Fork to the catch of the finally
         state.fork(
-            pc=inst.get_jump_target(),
-            npush=3,
+            pc=end,
+            npush=6,
             extra_block=state.make_block(
                 kind='except',
                 end=None,
+                reset_stack=False,
             )
+        )
+
+    def op_SETUP_EXCEPT(self, state, inst):
+        # Opcode removed since py3.8
+        state.append(inst)
+        self._setup_try_except(
+            state, next=inst.next, end=inst.get_jump_target(),
+        )
+
+    def op_SETUP_FINALLY(self, state, inst):
+        state.append(inst)
+        self._setup_try_except(
+            state, next=inst.next, end=inst.get_jump_target(),
         )
 
     def op_POP_EXCEPT(self, state, inst):
@@ -631,9 +635,16 @@ class TraceRunner(object):
                 "POP_EXCEPT got an unexpected block",
                 loc=self.get_debug_loc(inst.lineno),
             )
+        state.pop()
+        state.pop()
+        state.pop()
+        # Forces a new block
+        state.fork(pc=inst.next)
 
     def op_POP_BLOCK(self, state, inst):
         state.pop_block()
+        # Forces a new block
+        state.fork(pc=inst.next)
 
     def op_BINARY_SUBSCR(self, state, inst):
         index = state.pop()
@@ -958,6 +969,7 @@ class State(object):
         self._pc = pc
         self._nstack_initial = nstack
         self._stack = []
+        self._blockstack_initial = tuple(blockstack)
         self._blockstack = list(blockstack)
         self._temp_registers = []
         self._insts = []
@@ -1017,6 +1029,10 @@ class State(object):
         The values are the outgoing states.
         """
         return self._outgoing_phis
+
+    @property
+    def blockstack_initial(self):
+        return self._blockstack_initial
 
     def has_terminated(self):
         return self._terminated
@@ -1082,8 +1098,8 @@ class State(object):
     def pop_block(self):
         b = self._blockstack.pop()
         new_stack = self._stack[:b['stack_depth']]
-        _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack,
-                      new_stack)
+        _logger.debug("POP_BLOCK: %s\nold_stack=%s\nnew_stack=%s",
+                      b, self._stack, new_stack)
         self._stack = new_stack
         return b
 
@@ -1163,12 +1179,17 @@ class AdaptDFA(object):
         return self._flow.block_infos
 
 
-AdaptBlockInfo = namedtuple("AdaptBlockInfo", ["insts", "outgoing_phis"])
+AdaptBlockInfo = namedtuple(
+    "AdaptBlockInfo",
+    ["insts", "outgoing_phis", "blockstack"],
+)
 
 
 def adapt_state_infos(state):
     return AdaptBlockInfo(
-        insts=tuple(state.instructions), outgoing_phis=state.outgoing_phis
+        insts=tuple(state.instructions),
+        outgoing_phis=state.outgoing_phis,
+        blockstack=state.blockstack_initial,
     )
 
 
