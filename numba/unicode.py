@@ -36,7 +36,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _PyUnicode_IsAlpha,)
 
 # DATA MODEL
 
@@ -1265,6 +1266,26 @@ def unicode_not(a):
         def impl(a):
             return len(a) == 0
         return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
+@overload_method(types.UnicodeType, 'isalpha')
+def unicode_isalnum(data):
+    """Implements UnicodeType.isalpha()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsAlpha(code_point):
+                return False
+
+        return True
+
+    return impl
 
 
 def _is_upper(is_lower, is_upper, is_title):
