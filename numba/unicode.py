@@ -806,7 +806,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
                     if _PyUnicode_IsSpace(code_point):
                         break
                     i -= 1
-                result.append(data[i+1:j+1])
+                result.append(data[i + 1:j + 1])
                 maxsplit -= 1
 
             if i >= 0:
@@ -818,7 +818,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
                         break
                     i -= 1
                 if i >= 0:
-                    result.append(data[0:i+1])
+                    result.append(data[0:i + 1])
 
             return result[::-1]
 
@@ -838,13 +838,13 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
                     data_code_point = _get_code_point(data, i)
                     ch_code_point = _get_code_point(ch, 0)
                     if data_code_point == ch_code_point:
-                        result.append(data[i+1:j+1])
+                        result.append(data[i + 1:j + 1])
                         j = i = i - 1
                         break
                     i -= 1
                 maxsplit -= 1
             if j >= -1:
-                result.append(data[0:j+1])
+                result.append(data[0:j + 1])
 
             return result[::-1]
 
@@ -863,7 +863,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
             pos = data.rfind(sep, start=0, end=j)
             if pos < 0:
                 break
-            result.append(data[pos+sep_length:j])
+            result.append(data[pos + sep_length:j])
             j = pos
             maxsplit -= 1
 
