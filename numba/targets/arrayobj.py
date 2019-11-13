@@ -3412,7 +3412,7 @@ def _parse_shape(context, builder, ty, val):
         intp_t = context.get_value_type(types.intp)
         intp_width = intp_t.width
         intp_ir = ir.IntType(intp_width)
-        maxval = ir.Constant(intp_ir, ((1 << intp_width- 1) - 1))
+        maxval = ir.Constant(intp_ir, ((1 << intp_width - 1) - 1))
         if src_t.width < intp_width:
             res = builder.sext(src, intp_ir)
         elif src_t.width >= intp_width:
