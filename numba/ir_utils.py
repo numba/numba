@@ -1088,6 +1088,13 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
+                if isinstance(rhs, ir.Var):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.name)
+                        reverse_call_table[rhs.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.name)
             for T, f in call_table_extensions.items():
                 if isinstance(inst, T):
                     f(inst, call_table, reverse_call_table)
