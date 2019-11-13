@@ -1095,6 +1095,19 @@ class TestUnicode(BaseTest):
             self.assertEqual(py_result, c_result,
                              error_msg.format(s, py_result, c_result))
 
+    def test_isprintable(self):
+        def pyfunc(s):
+            return s.isprintable()
+
+        cfunc = njit(pyfunc)
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L710-L723    # noqa: E501
+        cpython = ['', ' ', 'abcdefg', 'abcdefg\n', '\u0374', '\u0378',
+                   '\ud800', '\U0001F46F', '\U000E0020']
+
+        msg = 'Results of "{}".isprintable() must be equal'
+        for s in UNICODE_EXAMPLES + cpython:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):
             return a[:]
