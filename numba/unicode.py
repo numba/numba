@@ -646,6 +646,42 @@ def unicode_count(src, sub, start=None, end=None):
     raise TypingError(error_msg.format(type(sub)))
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12979-L13033    # noqa: E501
+@overload_method(types.UnicodeType, 'rpartition')
+def unicode_rpartition(data, sep):
+    """Implements str.rpartition()"""
+    thety = sep
+    # if the type is omitted, the concrete type is the value
+    if isinstance(sep, types.Omitted):
+        thety = sep.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(sep, types.Optional):
+        thety = sep.type
+
+    accepted = (types.UnicodeType, types.UnicodeCharSeq)
+    if thety is not None and not isinstance(thety, accepted):
+        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        raise TypingError(msg)
+
+    def impl(data, sep):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
+        empty_str = _empty_string(PY_UNICODE_4BYTE_KIND, 0, data._is_ascii)
+        sep_length = len(sep)
+        if data._kind < sep._kind or len(data) < sep_length:
+            return empty_str, empty_str, data
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+
+        pos = data.rfind(sep)
+        if pos < 0:
+            return empty_str, empty_str, data
+
+        return data[0:pos], sep, data[pos + sep_length:len(data)]
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):

@@ -185,6 +185,7 @@ The following functions, attributes and methods are currently supported:
 * ``.islower()``
 * ``.lower()``
 * ``.zfill()``
+* ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``

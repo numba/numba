@@ -82,6 +82,10 @@ def find_usecase(x, y):
     return x.find(y)
 
 
+def rpartition_usecase(s, sep):
+    return s.rpartition(sep)
+
+
 def count_usecase(x, y):
     return x.count(y)
 
@@ -413,6 +417,44 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, substr),
                                  cfunc(a, substr),
                                  "'%s'.find('%s')?" % (a, substr))
+
+    def test_rpartition_exception_invalid_sep(self):
+        self.disable_leak_check()
+
+        pyfunc = rpartition_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        for func in [pyfunc, cfunc]:
+            with self.assertRaises(ValueError) as raises:
+                func('a', '')
+            self.assertIn('empty separator', str(raises.exception))
+
+        accepted_types = (types.UnicodeType, types.UnicodeCharSeq)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a', None)
+        msg = '"sep" must be {}, not none'.format(accepted_types)
+        self.assertIn(msg, str(raises.exception))
+
+    def test_rpartition(self):
+        pyfunc = rpartition_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', '⚡'),
+            ('abcabc', '⚡'),
+            ('🐍⚡', '⚡'),
+            ('🐍⚡🐍', '⚡'),
+            ('abababa', 'a'),
+            ('abababa', 'b'),
+            ('abababa', 'c'),
+            ('abababa', 'ab'),
+            ('abababa', 'aba'),
+        ]
+        msg = 'Results of "{}".rpartition("{}") must be equal'
+        for s, sep in CASES:
+            self.assertEqual(pyfunc(s, sep), cfunc(s, sep),
+                             msg=msg.format(s, sep))
 
     def test_count(self):
         pyfunc = count_usecase
