@@ -1,4 +1,5 @@
 import operator
+import sys
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
@@ -33,7 +34,7 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToTitleFull,
+                              _PyUnicode_ToTitleFull, _PyUnicode_IsSpace,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -756,6 +757,121 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             return parts
         return split_whitespace_impl
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13095-L13108    # noqa: E501
+@overload_method(types.UnicodeType, 'rsplit')
+def unicode_rsplit(data, sep=None, maxsplit=-1):
+    """Implements str.unicode_rsplit()"""
+
+    def _unicode_rsplit_check_type(ty, name, accepted):
+        """Check object belongs to one of specified types"""
+        thety = ty
+        # if the type is omitted, the concrete type is the value
+        if isinstance(ty, types.Omitted):
+            thety = ty.value
+        # if the type is optional, the concrete type is the captured type
+        elif isinstance(ty, types.Optional):
+            thety = ty.type
+
+        if thety is not None and not isinstance(thety, accepted):
+            raise TypingError(
+                '"{}" must be {}, not {}'.format(name, accepted, ty))
+
+    _unicode_rsplit_check_type(sep, 'sep', (types.UnicodeType,
+                                            types.UnicodeCharSeq,
+                                            types.NoneType))
+    _unicode_rsplit_check_type(maxsplit, 'maxsplit', (types.Integer, int))
+
+    if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
+
+        def rsplit_whitespace_impl(data, sep=None, maxsplit=-1):
+            # https://github.com/python/cpython/blob/master/Objects/stringlib/split.h#L192-L235    # noqa: E501
+            if maxsplit < 0:
+                maxsplit = sys.maxsize
+
+            result = []
+            i = len(data) - 1
+            while maxsplit > 0:
+                while i >= 0:
+                    code_point = _get_code_point(data, i)
+                    if not _PyUnicode_IsSpace(code_point):
+                        break
+                    i -= 1
+                if i < 0:
+                    break
+                j = i
+                i -= 1
+                while i >= 0:
+                    code_point = _get_code_point(data, i)
+                    if _PyUnicode_IsSpace(code_point):
+                        break
+                    i -= 1
+                result.append(data[i+1:j+1])
+                maxsplit -= 1
+
+            if i >= 0:
+                # Only occurs when maxsplit was reached
+                # Skip any remaining whitespace and copy to beginning of string
+                while i >= 0:
+                    code_point = _get_code_point(data, i)
+                    if not _PyUnicode_IsSpace(code_point):
+                        break
+                    i -= 1
+                if i >= 0:
+                    result.append(data[0:i+1])
+
+            return result[::-1]
+
+        return rsplit_whitespace_impl
+
+    def rsplit_impl(data, sep=None, maxsplit=-1):
+        # https://github.com/python/cpython/blob/master/Objects/stringlib/split.h#L286-L333    # noqa: E501
+        if data._kind < sep._kind or len(data) < len(sep):
+            return [data]
+
+        def _rsplit_char(data, ch, maxsplit):
+            # https://github.com/python/cpython/blob/master/Objects/stringlib/split.h#L242-L284    # noqa: E501
+            result = []
+            i = j = len(data) - 1
+            while i >= 0 and maxsplit > 0:
+                while i >= 0:
+                    data_code_point = _get_code_point(data, i)
+                    ch_code_point = _get_code_point(ch, 0)
+                    if data_code_point == ch_code_point:
+                        result.append(data[i+1:j+1])
+                        j = i = i - 1
+                        break
+                    i -= 1
+                maxsplit -= 1
+            if j >= -1:
+                result.append(data[0:j+1])
+
+            return result[::-1]
+
+        if maxsplit < 0:
+            maxsplit = sys.maxsize
+        sep_length = len(sep)
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+        if sep_length == 1:
+            return _rsplit_char(data, sep, maxsplit)
+
+        result = []
+        j = len(data)
+        while maxsplit > 0:
+            pos = data.rfind(sep, start=0, end=j)
+            if pos < 0:
+                break
+            result.append(data[pos+sep_length:j])
+            j = pos
+            maxsplit -= 1
+
+        result.append(data[0:j])
+
+        return result[::-1]
+
+    return rsplit_impl
 
 
 @overload_method(types.UnicodeType, 'center')
