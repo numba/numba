@@ -158,8 +158,20 @@ class Interpreter(object):
         self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            jmp = ir.Jump(offset, loc=self.loc)
-            oldblock.append(jmp)
+            # Handle try block
+            tryblk = self.dfainfo.active_try_block
+            if tryblk is not None:
+                branch = ir.Branch(
+                    cond=self.get('$exception_check'),
+                    truebr=tryblk['end'],
+                    falsebr=offset,
+                    loc=self.loc,
+                )
+                oldblock.append(branch)
+            # Handle normal case
+            else:
+                jmp = ir.Jump(offset, loc=self.loc)
+                oldblock.append(jmp)
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
@@ -171,6 +183,16 @@ class Interpreter(object):
                 break
 
     def _end_current_block(self):
+        # Handle try block
+        if not self.current_block.is_terminated:
+            tryblk = self.dfainfo.active_try_block
+            if tryblk is not None:
+                self.store(
+                    ir.Const(value=False, loc=self.loc),
+                    '$exception_check',
+                    redefine=True,
+                )
+        # Handle normal block cleanup
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
 

@@ -14,6 +14,8 @@ from numba.errors import UnsupportedError
 
 _logger = logging.getLogger(__name__)
 
+SYNTAX_BLOCK_KINDS = {'loop', 'try', 'except', 'with'}
+
 
 class _lazy_pformat(object):
     def __init__(self, *args, **kwargs):
@@ -67,7 +69,21 @@ class Flow(object):
                     # Terminated?
                     if state.has_terminated():
                         break
-                    # Not yet?
+                    elif state.has_active_try():
+                        state.fork(pc=state.get_inst().next)
+                        tryblk = state.get_top_block('try')
+                        nstack = state.stack_depth
+                        kwargs = {}
+                        if nstack > tryblk['entry_stack']:
+                            kwargs['npop'] = nstack - tryblk['entry_stack']
+                        kwargs['npush'] = 6
+                        kwargs['extra_block'] = state.make_block(
+                            kind='except',
+                            end=None,
+                            reset_stack=False,
+                        )
+                        state.fork(pc=tryblk['end'], **kwargs)
+                        break
                     else:
                         state.advance_pc()
                         # Must the new PC be a new block?
@@ -1034,6 +1050,10 @@ class State(object):
     def blockstack_initial(self):
         return self._blockstack_initial
 
+    @property
+    def stack_depth(self):
+        return len(self._stack)
+
     def has_terminated(self):
         return self._terminated
 
@@ -1088,7 +1108,8 @@ class State(object):
         self._blockstack.append(synblk)
 
     def make_block(self, kind, end, reset_stack=True):
-        d = {'kind': kind, 'end': end}
+        assert kind in SYNTAX_BLOCK_KINDS
+        d = {'kind': kind, 'end': end, 'entry_stack': len(self._stack)}
         if reset_stack:
             d['stack_depth'] = len(self._stack)
         else:
@@ -1108,6 +1129,9 @@ class State(object):
             if bs['kind'] == kind:
                 return bs
 
+    def has_active_try(self):
+        return self.get_top_block('try') is not None
+
     def get_varname(self, inst):
         """Get referenced variable name from the oparg
         """
@@ -1122,20 +1146,15 @@ class State(object):
         """Fork the state
         """
         # Handle changes on the stack
+        stack = list(self._stack)
         if npop:
-            assert npush == 0
             assert 0 <= npop <= len(self._stack)
             nstack = len(self._stack) - npop
-            stack = self._stack[:nstack]
-        elif npush:
-            assert npop == 0
+            stack = stack[:nstack]
+        if npush:
             assert 0 <= npush
-            stack = list(self._stack)
             for i in range(npush):
                 stack.append(self.make_temp())
-        else:
-            stack = list(self._stack)
-
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
         if extra_block:
@@ -1181,7 +1200,7 @@ class AdaptDFA(object):
 
 AdaptBlockInfo = namedtuple(
     "AdaptBlockInfo",
-    ["insts", "outgoing_phis", "blockstack"],
+    ["insts", "outgoing_phis", "blockstack", "active_try_block"],
 )
 
 
@@ -1190,6 +1209,7 @@ def adapt_state_infos(state):
         insts=tuple(state.instructions),
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
+        active_try_block=state.get_top_block('try'),
     )
 
 
