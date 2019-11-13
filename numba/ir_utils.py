@@ -1553,16 +1553,18 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
         calltypes.update(f_calltypes)
     return f_ir
 
-def get_ir_of_code(glbls, fcode):
+def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     """
-    Compile a code object to get its IR.
+    Creates a function from a code object. Args:
+    * fcode - the code object
+    * func_env - string for the freevar placeholders
+    * func_arg - string for the function args (e.g. "a, b, c, d=None")
+    * func_clo - string for the closure args
+    * glbls - the function globals
     """
-    nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
+    print(func_text)
     loc = {}
     exec_(func_text, glbls, loc)
 
@@ -1589,8 +1591,23 @@ def get_ir_of_code(glbls, fcode):
             fcode.co_cellvars)
 
     f = loc['g']()
+    # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
+    return f
+
+def get_ir_of_code(glbls, fcode):
+    """
+    Compile a code object to get its IR.
+    """
+    nfree = len(fcode.co_freevars)
+    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+
+    f = _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                       glbls)
+
     from numba import compiler
     ir = compiler.run_frontend(f)
     # we need to run the before inference rewrite pass to normalize the IR
@@ -2078,37 +2095,10 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                     for i in range(n_kwargs)]
         func_arg += ", "
         func_arg += ", ".join(kw_const)
-    func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
-        func_env, func_arg, func_clo)
-    loc = {}
+
     # globals are the same as those in the caller
     glbls = caller_ir.func_id.func.__globals__
-    exec_(func_text, glbls, loc)
 
-    # hack parameter name .0 for Python 3 versions < 3.6
-    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
-        co_varnames = list(fcode.co_varnames)
-        if len(co_varnames) > 0 and co_varnames[0] == ".0":
-            co_varnames[0] = "implicit0"
-        fcode = pytypes.CodeType(
-            fcode.co_argcount,
-            fcode.co_kwonlyargcount,
-            fcode.co_nlocals,
-            fcode.co_stacksize,
-            fcode.co_flags,
-            fcode.co_code,
-            fcode.co_consts,
-            fcode.co_names,
-            tuple(co_varnames),
-            fcode.co_filename,
-            fcode.co_name,
-            fcode.co_firstlineno,
-            fcode.co_lnotab,
-            fcode.co_freevars,
-            fcode.co_cellvars)
-
-    f = loc['g']()
-    # replace the code body
-    f.__code__ = fcode
-    f.__name__ = fcode.co_name
-    return f
+    # create the function and return it
+    return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                          glbls)
