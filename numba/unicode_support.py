@@ -221,7 +221,8 @@ def _PyUnicode_IsDigit(ch):
 
 @register_jitable
 def _PyUnicode_IsNumeric(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.NUMERIC_MASK != 0
 
 
 @register_jitable
