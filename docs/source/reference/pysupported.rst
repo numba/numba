@@ -182,9 +182,13 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.islower()``
+* ``.lower()``
 * ``.zfill()``
 * ``.count()``
 * ``.istitle()``
+* ``.rfind()``
+* ``.title()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -532,12 +536,14 @@ The following built-in functions are supported:
 * :class:`complex`
 * :func:`divmod`
 * :func:`enumerate`
+* :func:`filter`
 * :class:`float`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`
+* :func:`map`
 * :func:`max`
 * :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument

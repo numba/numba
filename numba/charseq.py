@@ -3,8 +3,9 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba import njit, types, cgutils, unicode
-from numba.extending import overload, intrinsic, overload_method, lower_cast
+from numba import types, cgutils, unicode
+from numba.extending import (overload, intrinsic, overload_method, lower_cast,
+                             register_jitable)
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
@@ -58,14 +59,14 @@ def deref_uint32(typingctx, data, offset):
     return sig, make_deref_codegen(32)
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def charseq_get_code(a, i):
     """Access i-th item of CharSeq object via code value
     """
     return deref_uint8(a, i)
 
 
-@njit
+@register_jitable
 def charseq_get_value(a, i):
     """Access i-th item of CharSeq object via code value.
 
@@ -77,7 +78,7 @@ def charseq_get_value(a, i):
     return code
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def unicode_charseq_get_code(a, i):
     """Access i-th item of UnicodeCharSeq object via code value
     """
@@ -92,14 +93,14 @@ def unicode_charseq_get_code(a, i):
             'unicode_charseq_get_code: unicode_byte_width not in [1, 2, 4]')
 
 
-@njit
+@register_jitable
 def unicode_get_code(a, i):
     """Access i-th item of UnicodeType object.
     """
     return unicode._get_code_point(a, i)
 
 
-@njit
+@register_jitable
 def bytes_get_code(a, i):
     """Access i-th item of Bytes object.
         """
@@ -129,7 +130,7 @@ def _is_bytes(a):
     return isinstance(a, (types.CharSeq, types.Bytes))
 
 
-@njit
+@register_jitable
 def unicode_charseq_get_value(a, i):
     """Access i-th item of UnicodeCharSeq object via unicode value
 
@@ -733,7 +734,7 @@ def unicode_charseq_endswith(a, b):
             return impl
 
 
-@njit
+@register_jitable
 def _map_bytes(seq):
     return [s._to_bytes() for s in seq]
 
