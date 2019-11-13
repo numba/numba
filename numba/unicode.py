@@ -36,7 +36,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric)
 
 # DATA MODEL
 
@@ -1385,6 +1386,26 @@ def unicode_istitle(s):
                 previous_is_cased = False
 
         return cased
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
+@overload_method(types.UnicodeType, 'isalnum')
+def unicode_isalnum(data):
+    """Implements UnicodeType.isalnum()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsNumeric(code_point) and not _PyUnicode_IsAlpha(code_point):
+                return False
+
+        return True
+
     return impl
 
 
