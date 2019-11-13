@@ -1498,37 +1498,46 @@ def unicode_title(data):
 def unicode_swapcase(data):
     """Implements str.swapcase()"""
     def impl(data):
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9761-L9784    # noqa: E501
-        def _do_swapcase(data, length, res, maxchars):
-            """Translation of the function to swap cases of a unicode string."""
-            k = 0
-            mapped = np.zeros(3, dtype=_Py_UCS4)
-            for idx in range(length):
-                mapped.fill(0)
-                code_point = _get_code_point(data, idx)
-                if _PyUnicode_IsUppercase(code_point):
-                    n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-                elif _PyUnicode_IsLowercase(code_point):
-                    n_res = _PyUnicode_ToUpperFull(code_point, mapped)
-                else:
-                    n_res = 1
-                    mapped[0] = code_point
-                for m in mapped[:n_res]:
-                    maxchar = maxchars[0]
-                    maxchars[0] = max(maxchar, m)
-                    _set_code_point(res, k, m)
-                    k += 1
-            return k
-
         length = len(data)
-        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
-        # maxchar should be inside of a list to be pass as argument by reference
-        maxchars = [0]
-        newlength = _do_swapcase(data, length, tmp, maxchars)
-        maxchar = maxchars[0]
+        if length == 0:
+            return _empty_string(data._kind, length, data._is_ascii)
+
+        if data._is_ascii:
+            res = _empty_string(data._kind, length, 1)
+            for idx in range(length):
+                code_point = _get_code_point(data, idx)
+                if _Py_ISUPPER(code_point):
+                    code_point = _Py_TOLOWER(code_point)
+                elif _Py_ISLOWER(code_point):
+                    code_point = _Py_TOUPPER(code_point)
+                _set_code_point(res, idx, code_point)
+
+            return res
+
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
+        # mixed with:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9761-L9784    # noqa: E501
+        k = 0
+        maxchar = 0
+        mapped = np.zeros(3, dtype=_Py_UCS4)
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length)
+        for idx in range(length):
+            mapped.fill(0)
+            code_point = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(code_point):
+                n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+            elif _PyUnicode_IsLowercase(code_point):
+                n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+            else:
+                n_res = 1
+                mapped[0] = code_point
+            for m in mapped[:n_res]:
+                maxchar = max(maxchar, m)
+                _set_code_point(tmp, k, m)
+                k += 1
         newkind = _codepoint_to_kind(maxchar)
-        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
-        for i in range(newlength):
+        res = _empty_string(newkind, k)
+        for i in range(k):
             _set_code_point(res, i, _get_code_point(tmp, i))
 
         return res
