@@ -201,12 +201,10 @@ def _PyUnicode_IsXidContinue(ch):
 
 @register_jitable
 def _PyUnicode_ToDecimalDigit(ch):
-    raise NotImplementedError
-
-
-@register_jitable
-def _PyUnicode_IsDecimalDigit(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    if ctype.flags & _PyUnicode_TyperecordMasks.DECIMAL_MASK:
+        return ctype.decimal
+    return -1
 
 
 @register_jitable
@@ -313,6 +311,14 @@ def _PyUnicode_IsCased(ch):
 def _PyUnicode_IsCaseIgnorable(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.CASE_IGNORABLE_MASK != 0
+
+
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L106-L118    # noqa: E501
+@register_jitable
+def _PyUnicode_IsDecimalDigit(ch):
+    if _PyUnicode_ToDecimalDigit(ch) < 0:
+        return 0
+    return 1
 
 
 @register_jitable

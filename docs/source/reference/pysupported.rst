@@ -184,6 +184,7 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.isdecimal()``
 * ``.islower()``
 * ``.lower()``
 * ``.zfill()``
