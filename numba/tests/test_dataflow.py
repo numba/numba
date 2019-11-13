@@ -82,10 +82,11 @@ def var_swapping(a, b, c, d, e):
     return a + b + c + d +e
 
 def unsupported_op_code():
-    # needs unsupported "MAKE_FUNCTION" opcode
-    def f():
+    # needs unsupported "SETUP_EXCEPT" opcode
+    try:
         pass
-    return f
+    except:
+        pass
 
 class TestDataFlow(TestCase):
 
@@ -198,10 +199,11 @@ class TestDataFlow(TestCase):
     def test_unsupported_op_code(self, flags=force_pyobj_flags):
         pyfunc = unsupported_op_code
         with self.assertRaises(errors.UnsupportedError) as raises:
-            cr = compile_isolated(pyfunc, (), flags=flags)
-        msg="make_function"
+            compile_isolated(pyfunc, (), flags=flags)
+        msg="SETUP_EXCEPT"
         self.assertIn(msg, str(raises.exception))
-        
+
+
 if __name__ == '__main__':
     unittest.main()
 
