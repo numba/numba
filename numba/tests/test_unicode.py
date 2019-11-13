@@ -995,6 +995,23 @@ class TestUnicode(BaseTest):
                                  cfunc(a, b),
                                  "'%s' + '%s'?" % (a, b))
 
+    def test_isidentifier(self):
+        def pyfunc(s):
+            return s.isidentifier()
+
+        cfunc = njit(pyfunc)
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L695-L708    # noqa: E501
+        cpython = ['a', 'Z', '_', 'b0', 'bc', 'b_', 'µ',
+                   '𝔘𝔫𝔦𝔠𝔬𝔡𝔢', ' ', '[', '©', '0']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L742-L749    # noqa: E501
+        cpython_extras = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF',
+                          'a\uD800b\uDFFF', 'a\uDFFFb\uD800',
+                          'a\uD800b\uDFFFa', 'a\uDFFFb\uD800a']
+
+        msg = 'Results of "{}".isidentifier() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_strip(self):
 
         STRIP_CASES = [
