@@ -492,8 +492,7 @@ class DefaultPassBuilder(object):
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
         pm.add_pass(InlineClosureLikes,
                     "inline calls to locally defined closures")
-        # convert any remaining closures into functions unless this is being
-        # lifted as an objmode block
+        # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
         pm.add_pass(AnnotateTypes, "annotate types")
