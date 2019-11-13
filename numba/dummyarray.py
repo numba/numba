@@ -350,8 +350,8 @@ class Array(object):
         if self.ndim <= 1:
             return self
 
-        elif (order == 'C' and self.is_c_contig or
-                          order == 'F' and self.is_f_contig):
+        elif (order in 'CA' and self.is_c_contig or
+                          order in 'FA' and self.is_f_contig):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
             arr = self.from_desc(self.extent.begin, newshape, newstrides,

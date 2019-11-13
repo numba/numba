@@ -43,6 +43,7 @@ class TestArrayAttr(SerialMixin, unittest.TestCase):
     def test_ravel_c(self):
         ary = np.arange(60)
         reshaped = ary.reshape(2, 5, 2, 3)
+
         expect = reshaped.ravel(order='C')
         dary = cuda.to_device(reshaped)
         dflat = dary.ravel()
@@ -50,15 +51,25 @@ class TestArrayAttr(SerialMixin, unittest.TestCase):
         self.assertTrue(flat.ndim == 1)
         self.assertTrue(np.all(expect == flat))
 
+        # explicit order kwarg
+        for order in 'CA':
+            expect = reshaped.ravel(order=order)
+            dary = cuda.to_device(reshaped)
+            dflat = dary.ravel(order=order)
+            flat = dflat.copy_to_host()
+            self.assertTrue(flat.ndim == 1)
+            self.assertTrue(np.all(expect == flat))
+
     def test_ravel_f(self):
         ary = np.arange(60)
         reshaped = np.asfortranarray(ary.reshape(2, 5, 2, 3))
-        expect = reshaped.ravel(order='F')
-        dary = cuda.to_device(reshaped)
-        dflat = dary.ravel(order='F')
-        flat = dflat.copy_to_host()
-        self.assertTrue(flat.ndim == 1)
-        self.assertTrue(np.all(expect == flat))
+        for order in 'FA':
+            expect = reshaped.ravel(order=order)
+            dary = cuda.to_device(reshaped)
+            dflat = dary.ravel(order=order)
+            flat = dflat.copy_to_host()
+            self.assertTrue(flat.ndim == 1)
+            self.assertTrue(np.all(expect == flat))
 
     def test_reshape_c(self):
         ary = np.arange(10)
