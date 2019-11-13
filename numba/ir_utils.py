@@ -1564,7 +1564,6 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     """
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
-    print(func_text)
     loc = {}
     exec_(func_text, glbls, loc)
 
