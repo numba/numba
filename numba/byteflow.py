@@ -567,10 +567,12 @@ class TraceRunner(object):
 
     def op_SETUP_LOOP(self, state, inst):
         # NOTE: bytecode removed since py3.8
-        state.push_block({
-            'kind': 'loop',
-            'end': inst.get_jump_target(),
-        })
+        state.push_block(
+            state.make_block(
+                kind='loop',
+                end=inst.get_jump_target(),
+            )
+        )
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
@@ -580,13 +582,55 @@ class TraceRunner(object):
         state.push(yielded)
         state.append(inst, contextmanager=cm)
 
-        state.push_block({
-            'kind': 'with',
-            'end': inst.get_jump_target(),
-        })
+        state.push_block(
+            state.make_block(
+                kind='with',
+                end=inst.get_jump_target(),
+            )
+        )
 
         # Forces a new block
         state.fork(pc=inst.next)
+
+    def op_SETUP_EXCEPT(self, state, inst):
+        state.append(inst)
+        state.push_block(
+            state.make_block(
+                kind='except',
+                end=inst.get_jump_target(),
+            )
+        )
+        # Forces a new block
+        state.fork(pc=inst.next)
+        state.fork(pc=inst.get_jump_target(), npush=3)
+
+    def op_SETUP_FINALLY(self, state, inst):
+        state.append(inst)
+        state.push_block(
+            state.make_block(
+                kind='finally',
+                end=inst.get_jump_target(),
+                reset_stack=False,
+            )
+        )
+        # Forces a new block
+        state.fork(pc=inst.next)
+        state.fork(
+            pc=inst.get_jump_target(),
+            npush=3,
+            extra_block=state.make_block(
+                kind='except',
+                end=None,
+            )
+        )
+
+    def op_POP_EXCEPT(self, state, inst):
+        blk = state.pop_block()
+        if blk['kind'] != 'except':
+            raise UnsupportedError(
+                "POP_EXCEPT got an unexpected block",
+                loc=self.get_debug_loc(inst.lineno),
+            )
 
     def op_POP_BLOCK(self, state, inst):
         state.pop_block()
@@ -1024,9 +1068,16 @@ class State(object):
         return self._stack.pop()
 
     def push_block(self, synblk):
-        d = synblk.copy()
-        d['stack_depth'] = len(self._stack)
-        self._blockstack.append(d)
+        assert 'stack_depth' in synblk
+        self._blockstack.append(synblk)
+
+    def make_block(self, kind, end, reset_stack=True):
+        d = {'kind': kind, 'end': end}
+        if reset_stack:
+            d['stack_depth'] = len(self._stack)
+        else:
+            d['stack_depth'] = None
+        return d
 
     def pop_block(self):
         b = self._blockstack.pop()
@@ -1034,6 +1085,7 @@ class State(object):
         _logger.debug("POP_BLOCK:\nold_stack=%s\nnew_stack=%s", self._stack,
                       new_stack)
         self._stack = new_stack
+        return b
 
     def get_top_block(self, kind):
         for bs in reversed(self._blockstack):
@@ -1050,14 +1102,30 @@ class State(object):
         """
         self._terminated = True
 
-    def fork(self, pc, npop=0):
+    def fork(self, pc, npop=0, npush=0, extra_block=None):
         """Fork the state
         """
-        assert 0 <= npop <= len(self._stack)
-        nstack = len(self._stack) - npop
-        stack = self._stack[:nstack]
+        # Handle changes on the stack
+        if npop:
+            assert npush == 0
+            assert 0 <= npop <= len(self._stack)
+            nstack = len(self._stack) - npop
+            stack = self._stack[:nstack]
+        elif npush:
+            assert npop == 0
+            assert 0 <= npush
+            stack = list(self._stack)
+            for i in range(npush):
+                stack.append(self.make_temp())
+        else:
+            stack = list(self._stack)
+
+        # Handle changes on the blockstack
+        blockstack = list(self._blockstack)
+        if extra_block:
+            blockstack.append(extra_block)
         self._outedges.append(Edge(pc=pc, stack=stack,
-                                   blockstack=tuple(self._blockstack)))
+                                   blockstack=tuple(blockstack)))
         self.terminate()
 
     def split_new_block(self):

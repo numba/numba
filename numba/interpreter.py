@@ -651,6 +651,13 @@ class Interpreter(object):
             begin=inst.offset, end=exitpt, loc=self.loc,
             ))
 
+    def op_SETUP_EXCEPT(self, inst):
+        # Removed since python3.8
+        pass
+
+    def op_SETUP_FINALLY(self, inst):
+        pass
+
     def op_WITH_CLEANUP(self, inst):
         "no-op"
 
