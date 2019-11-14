@@ -665,7 +665,7 @@ def unicode_rpartition(data, sep):
 
     def impl(data, sep):
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
-        empty_str = _empty_string(PY_UNICODE_4BYTE_KIND, 0, data._is_ascii)
+        empty_str = _empty_string(data._kind, 0, data._is_ascii)
         sep_length = len(sep)
         if data._kind < sep._kind or len(data) < sep_length:
             return empty_str, empty_str, data
