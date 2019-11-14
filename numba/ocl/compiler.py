@@ -177,7 +177,7 @@ class OCLKernelBase(object):
 
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
-        This assumes a the argument to be:
+        This assumes the argument to be:
             `griddim, blockdim, queue`
         The blockdim maps directly to local_size.
         The actual global_size is computed by multiplying the local_size to
@@ -217,6 +217,7 @@ class _CachedProgram(object):
         else: 
             # The program has not been finalized for this device
             # Build according to the OpenCL version, 2.0 or 2.1
+            print(device.opencl_version)
             if device.opencl_version == (2,0):
                 spir2_bc = spir2.llvm_to_spir2(self._binary)
                 program = context.create_program_from_binary(spir2_bc)
@@ -277,21 +278,24 @@ class OCLKernel(OCLKernelBase):
         for wb in retr:
             wb()
 
-
     def _unpack_argument(self, ty, val, queue, retr, kernelargs):
         """
         Convert arguments to ctypes and append to kernelargs
         """
         if isinstance(ty, types.Array):
-            if isinstance(ty, types.SmartArrayType):
-                devary = val.get('gpu')
-                retr.append(lambda: val.mark_changed('gpu'))
-                outer_parent = ctypes.c_void_p(0)
-                kernelargs.append(outer_parent)
-            else:
-                devary, conv = devicearray.auto_device(val, stream=queue)
-                if conv:
-                    retr.append(lambda: devary.copy_to_host(val, stream=queue))
+            
+            # DRD: This unpack routine is commented out for the time-being.
+            # NUMBA does not know anything about SmartArrayTypes.
+            
+            #if isinstance(ty, types.SmartArrayType):
+            #    devary = val.get('gpu')
+            #    retr.append(lambda: val.mark_changed('gpu'))
+            #    outer_parent = ctypes.c_void_p(0)
+            #    kernelargs.append(outer_parent)
+            #else:
+            devary, conv = devicearray.auto_device(val, stream=queue)
+            if conv:
+                retr.append(lambda: devary.copy_to_host(val, stream=queue))
 
             c_intp = ctypes.c_ssize_t
 
@@ -336,8 +340,6 @@ class OCLKernel(OCLKernelBase):
 
         else:
             raise NotImplementedError(ty, val)
-
-
 
 class AutoJitOCLKernel(OCLKernelBase):
     def __init__(self, func):
