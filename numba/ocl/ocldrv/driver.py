@@ -832,7 +832,7 @@ class Program(OpenCLWrapper):
             _raise_opencl_driver_error(err_str)
 
     def create_kernel(self, name, args=None):
-        name = ct.create_string_buffer(name)
+        name = ct.create_string_buffer(name.encode())
         kern = Kernel(driver.clCreateKernel(self.id, name), False)
         if args is not None:
             kern.set_args(args)
