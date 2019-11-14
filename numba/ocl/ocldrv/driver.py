@@ -58,7 +58,7 @@ def _find_driver():
         dll_loader = ct.CDLL
 
     dll_path = envpath or ct.util.find_library("OpenCL")
-    print("DLL PATH For OCL Driver :" + dll_path)
+    print("DLL PATH For OCL Driver : " + dll_path)
     if dll_path is None:
         _raise_driver_not_found()
 

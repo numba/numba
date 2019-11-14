@@ -56,8 +56,8 @@ class CmdLine(object):
     # DRD : The opt step is needed for:
     #     a) generate a bitcode file from the text IR file
     #     b) hoist all allocas to the enty block of the module
-    CMD_LLVM_AS = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/opt -O3 -o {fout} {fin}")
-    CMD_GEN = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} ")
+    CMD_LLVM_AS = ("/localdisk/work/diptorup/devel/llvm_sycl-public.install-Release/bin/opt -O3 -o {fout} {fin}")
+    CMD_GEN = ("/localdisk/work/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} ")
 
     def assemble(self, ipath, opath):
         check_call(self.CMD_AS.format(fout=opath, fin=ipath), shell=True)
