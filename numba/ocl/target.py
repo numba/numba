@@ -67,6 +67,7 @@ ocl_data_model_manager = _init_data_model_manager()
 class OCLTargetContext(BaseContext):
     implement_powi_as_math_call = True
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
+    context_name = "ocl.jit"
 
     def init(self):
         self._internal_codegen = codegen.JITOCLCodegen("numba.ocl.jit")
