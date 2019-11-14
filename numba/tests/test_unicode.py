@@ -1277,6 +1277,19 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_isascii(self):
+            def pyfunc(x):
+                return x.isascii()
+
+            cfunc = njit(pyfunc)
+            # Samples taken from CPython testing:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L654-657     # noqa: E501
+            cpython = ["\u20ac", "\U0010ffff"]
+            
+            msg = 'Results of "{}".isascii() must be equal'
+            for s in UNICODE_EXAMPLES + [''] + cpython:
+                self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_title(self):
         pyfunc = title
         cfunc = njit(pyfunc)
