@@ -1283,13 +1283,13 @@ class TestUnicode(BaseTest):
 
         cfunc = njit(pyfunc)
         # Samples taken from CPython testing:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L738-745     # noqa: E501
-        cpython = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF',
-                   'a\uD800b\uDFFF', 'a\uDFFFb\uD800',
-                   'a\uD800b\uDFFFa', 'a\uDFFFb\uD800a']
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L613-L621    # noqa: E501
-        extras = ['\u2167', '\u2177', '\U00010401', '\U00010427',
-                  '\U00010429', '\U0001044E', '\U0001F40D', '\U0001F46F']
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L642-652     # noqa: E501
+        cpython = ['\u1FFc', '\U00010401', '\U00010427', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L755-L762    # noqa: E501
+        extras = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF',
+                  'a\uD800b\uDFFF', 'a\uDFFFb\uD800',
+                  'a\uD800b\uDFFFa', 'a\uDFFFb\uD800a']
 
         msg = 'Results of "{}".isalpha() must be equal'
         for s in UNICODE_EXAMPLES + [''] + extras + cpython:

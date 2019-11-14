@@ -1270,13 +1270,18 @@ def unicode_not(a):
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
 @overload_method(types.UnicodeType, 'isalpha')
-def unicode_isalnum(data):
+def unicode_isalpha(data):
     """Implements UnicodeType.isalpha()"""
 
     def impl(data):
         length = len(data)
         if length == 0:
             return False
+
+        if data._is_ascii:
+            code_point = _get_code_point(data, i)
+            if not _Py_ISALPHA(code_point):
+                return False
 
         for i in range(length):
             code_point = _get_code_point(data, i)
