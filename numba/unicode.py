@@ -31,7 +31,7 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALPHA,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
                               _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
@@ -1279,9 +1279,10 @@ def unicode_isalpha(data):
             return False
 
         if data._is_ascii:
-            code_point = _get_code_point(data, i)
-            if not _Py_ISALPHA(code_point):
-                return False
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _Py_ISALPHA(code_point):
+                    return False
 
         for i in range(length):
             code_point = _get_code_point(data, i)
