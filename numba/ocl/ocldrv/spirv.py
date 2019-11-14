@@ -2,12 +2,13 @@
 # Currently, connect to commandline interface.
 from __future__ import print_function, absolute_import
 import sys, os
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, CalledProcessError, call
 import tempfile
 
 from numba import config
 
 os.environ['SPIRVDIR'] = os.environ.get('SPIRVDIR', '/opt/spirv')
+#os.environ['LLVMDIR'] = os.environ.get('LLVM_HOME', '/opt/llvm')
 
 _real_check_call = check_call
 
@@ -51,8 +52,12 @@ class CmdLine(object):
     #           "-march=spirv64 "
     #           "-o {fout} "
     #          "{fin}")
-
-    CMD_GEN = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} --spirv-ocl-builtins-version=CL2.1")
+    
+    # DRD : The opt step is needed for:
+    #     a) generate a bitcode file from the text IR file
+    #     b) hoist all allocas to the enty block of the module
+    CMD_LLVM_AS = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/opt -O3 -o {fout} {fin}")
+    CMD_GEN = ("/nfs/site/home/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} ")
 
     def assemble(self, ipath, opath):
         check_call(self.CMD_AS.format(fout=opath, fin=ipath), shell=True)
@@ -67,8 +72,10 @@ class CmdLine(object):
         check_call(self.CMD_OPT.format(fout=opath, fin=ipath), shell=True)
 
     def generate(self, ipath, opath):
-        check_call(self.CMD_GEN.format(fout=opath, fin=ipath), shell=True)
-
+        # DRD : Temporary changes to get SPIR-V code generation to work.
+        check_call(self.CMD_LLVM_AS.format(fout=ipath+'.bc', fin=ipath), shell=True)
+        check_call(self.CMD_GEN.format(fout=opath, fin=ipath+'.bc'), shell=True)
+        os.unlink(ipath+'.bc')
 
 class Module(object):
     def __init__(self):
@@ -129,6 +136,7 @@ class Module(object):
         try:
             self._cmd.validate(ipath=spirv_path)
         except CalledProcessError:
+            print("SPIR-V Validation failed...")
             pass
         else:
             # Optimize SPIR-V code
@@ -158,6 +166,5 @@ class Module(object):
 
 def llvm_to_spirv(bitcode):
     mod = Module()
-    print(bitcode)
     mod.load_llvm(bitcode)
     return mod.finalize()
