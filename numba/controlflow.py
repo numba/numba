@@ -82,8 +82,12 @@ class CFGraph(object):
         If such an edge already exists, it is replaced (duplicate edges
         are not possible).
         """
-        assert src in self._nodes
-        assert dest in self._nodes
+        if src not in self._nodes:
+            raise ValueError("Cannot add edge as src node %s not in nodes %s" %
+                             (src, self._nodes))
+        if dest not in self._nodes:
+            raise ValueError("Cannot add edge as dest node %s not in nodes %s" %
+                             (dest, self._nodes))
         self._add_edge(src, dest, data)
 
     def successors(self, src):
@@ -596,6 +600,23 @@ class CFGraph(object):
                          for src, dests in self._succs.items())
         import pprint
         pprint.pprint(adj_lists, stream=file)
+
+    def __eq__(self, other):
+        if not isinstance(other, CFGraph):
+            raise NotImplementedError
+
+        # A few derived items are checked to makes sure process() has been
+        # invoked equally.
+        for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs',
+                  '_doms', '_back_edges']:
+            this = getattr(self, x, None)
+            that = getattr(other, x, None)
+            if this != that:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class ControlFlowAnalysis(object):

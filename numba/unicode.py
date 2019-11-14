@@ -423,25 +423,43 @@ def unicode_len(s):
 
 @overload(operator.eq)
 def unicode_eq(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
+    a_unicode = isinstance(a, accept)
+    b_unicode = isinstance(b, accept)
+    if a_unicode and b_unicode:
         def eq_impl(a, b):
             if len(a) != len(b):
                 return False
             return _cmp_region(a, 0, b, 0, len(a)) == 0
         return eq_impl
+    elif a_unicode ^ b_unicode:
+        # one of the things is unicode, everything compares False
+        def eq_impl(a, b):
+            return False
+        return eq_impl
 
 
 @overload(operator.ne)
 def unicode_ne(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
+    a_unicode = isinstance(a, accept)
+    b_unicode = isinstance(b, accept)
+    if a_unicode and b_unicode:
         def ne_impl(a, b):
             return not (a == b)
         return ne_impl
+    elif a_unicode ^ b_unicode:
+        # one of the things is unicode, everything compares True
+        def eq_impl(a, b):
+            return True
+        return eq_impl
 
 
 @overload(operator.lt)
 def unicode_lt(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def lt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -455,7 +473,9 @@ def unicode_lt(a, b):
 
 @overload(operator.gt)
 def unicode_gt(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def gt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -469,7 +489,9 @@ def unicode_gt(a, b):
 
 @overload(operator.le)
 def unicode_le(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def le_impl(a, b):
             return not (a > b)
         return le_impl
@@ -477,7 +499,9 @@ def unicode_le(a, b):
 
 @overload(operator.ge)
 def unicode_ge(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def ge_impl(a, b):
             return not (a < b)
         return ge_impl

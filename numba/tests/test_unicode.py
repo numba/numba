@@ -368,6 +368,11 @@ class TestUnicode(BaseTest):
             for b in reversed(UNICODE_EXAMPLES):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b), '%s, %s' % (a, b))
+                # comparing against something that's not unicode
+                self.assertEqual(pyfunc(a, 1),
+                                 cfunc(a, 1), '%s, %s' % (a, 1))
+                self.assertEqual(pyfunc(1, b),
+                                 cfunc(1, b), '%s, %s' % (1, b))
 
     def _check_ordering_op(self, usecase):
         pyfunc = usecase

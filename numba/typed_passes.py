@@ -94,7 +94,8 @@ class BaseTypeInference(FunctionPass):
                 state.locals,
                 raise_errors=self._raise_errors)
             state.typemap = typemap
-            state.return_type = return_type
+            if self._raise_errors:
+                state.return_type = return_type
             state.calltypes = calltypes
 
         def legalize_return_type(return_type, interp, targetctx):
@@ -124,13 +125,16 @@ class BaseTypeInference(FunctionPass):
                 for var in retstmts:
                     cast = caststmts.get(var)
                     if cast is None or cast.value.name not in argvars:
-                        raise TypeError("Only accept returning of array passed "
-                                        "into the function as argument")
+                        if self._raise_errors:
+                            raise TypeError("Only accept returning of array "
+                                            "passed into the function as "
+                                            "argument")
 
             elif (isinstance(return_type, types.Function) or
                     isinstance(return_type, types.Phantom)):
-                msg = "Can't return function object ({}) in nopython mode"
-                raise TypeError(msg.format(return_type))
+                if self._raise_errors:
+                    msg = "Can't return function object ({}) in nopython mode"
+                    raise TypeError(msg.format(return_type))
 
         with fallback_context(state, 'Function "%s" has invalid return type'
                               % (state.func_id.func_name,)):
@@ -446,7 +450,7 @@ class InlineOverloads(FunctionPass):
     def run_pass(self, state):
         """Run inlining of overloads
         """
-        if config.DEBUG or self._DEBUG:
+        if self._DEBUG:
             print('before overload inline'.center(80, '-'))
             print(state.func_ir.dump())
             print(''.center(80, '-'))
@@ -471,7 +475,7 @@ class InlineOverloads(FunctionPass):
                             modified = True
                             break  # because block structure changed
 
-        if config.DEBUG or self._DEBUG:
+        if self._DEBUG:
             print('after overload inline'.center(80, '-'))
             print(state.func_ir.dump())
             print(''.center(80, '-'))
@@ -484,7 +488,7 @@ class InlineOverloads(FunctionPass):
             # functions introducing blocks
             state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
 
-        if config.DEBUG or self._DEBUG:
+        if self._DEBUG:
             print('after overload inline DCE'.center(80, '-'))
             print(state.func_ir.dump())
             print(''.center(80, '-'))
