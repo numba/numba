@@ -383,41 +383,6 @@ def _find(substr, s):
 
 
 @register_jitable
-def _is_whitespace(code_point):
-    # list copied from
-    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
-    return code_point == 0x0009 \
-        or code_point == 0x000A \
-        or code_point == 0x000B \
-        or code_point == 0x000C \
-        or code_point == 0x000D \
-        or code_point == 0x001C \
-        or code_point == 0x001D \
-        or code_point == 0x001E \
-        or code_point == 0x001F \
-        or code_point == 0x0020 \
-        or code_point == 0x0085 \
-        or code_point == 0x00A0 \
-        or code_point == 0x1680 \
-        or code_point == 0x2000 \
-        or code_point == 0x2001 \
-        or code_point == 0x2002 \
-        or code_point == 0x2003 \
-        or code_point == 0x2004 \
-        or code_point == 0x2005 \
-        or code_point == 0x2006 \
-        or code_point == 0x2007 \
-        or code_point == 0x2008 \
-        or code_point == 0x2009 \
-        or code_point == 0x200A \
-        or code_point == 0x2028 \
-        or code_point == 0x2029 \
-        or code_point == 0x202F \
-        or code_point == 0x205F \
-        or code_point == 0x3000
-
-
-@register_jitable
 def _codepoint_to_kind(cp):
     """
     Compute the minimum unicode kind needed to hold a given codepoint
@@ -734,7 +699,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             for idx in range(a_len):
                 code_point = _get_code_point(a, idx)
-                is_whitespace = _is_whitespace(code_point)
+                is_whitespace = _PyUnicode_IsSpace(code_point)
                 if in_whitespace_block:
                     if is_whitespace:
                         pass  # keep consuming space
