@@ -1414,12 +1414,14 @@ class TestUnicode(BaseTest):
 
         cfunc = njit(pyfunc)
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L646-L662    # noqa: E501
-        cpython = ['', 'a', '0', '\u2460', '\xbc', '\u0660', '0123456789', '0123456789a', '\U00010401', '\U00010427',
-                   '\U00010429', '\U0001044E', '\U0001F40D', '\U0001F46F', '\U00011065', '\U0001F107', '\U0001D7F6',
-                   '\U00011066', '\U000104A0']
+        cpython = ['', 'a', '0', '\u2460', '\xbc', '\u0660', '0123456789',
+                   '0123456789a', '\U00010401', '\U00010427', '\U00010429',
+                   '\U0001044E', '\U0001F40D', '\U0001F46F', '\U00011065',
+                   '\U0001F107', '\U0001D7F6', '\U00011066', '\U000104A0']
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L742-L749    # noqa: E501
-        cpython_extras = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF', 'a\uD800b\uDFFF', 'a\uDFFFb\uD800',
-                          'a\uD800b\uDFFFa', 'a\uDFFFb\uD800a']
+        cpython_extras = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF',
+                          'a\uD800b\uDFFF', 'a\uDFFFb\uD800', 'a\uD800b\uDFFFa',
+                          'a\uDFFFb\uD800a']
 
         msg = 'Results of "{}".isspace() must be equal'
         for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
