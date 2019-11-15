@@ -36,6 +36,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToTitleFull,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
+                              _PyUnicode_IsLineBreak, _Py_ISLINEBREAK,
+                              _Py_ISLINEFEED, _Py_ISCARRIAGERETURN,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
 # DATA MODEL
@@ -856,6 +858,72 @@ def unicode_rjust(string, width, fillchar=' '):
 
         return newstr
     return rjust_impl
+
+
+def generate_splitlines_func(is_line_break_func):
+    """Generate splitlines performer based on ascii or unicode line breaks."""
+    def impl(data, keepends):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L335-L389    # noqa: E501
+        length = len(data)
+        result = []
+        i = j = 0
+        while i < length:
+            # find a line and append it
+            while i < length:
+                code_point = _get_code_point(data, i)
+                if is_line_break_func(code_point):
+                    break
+                i += 1
+
+            # skip the line break reading CRLF as one line break
+            eol = i
+            if i < length:
+                if i + 1 < length:
+                    cur_cp = _get_code_point(data, i)
+                    next_cp = _get_code_point(data, i + 1)
+                    if _Py_ISCARRIAGERETURN(cur_cp) and _Py_ISLINEFEED(next_cp):
+                        i += 1
+                i += 1
+                if keepends:
+                    eol = i
+
+            result.append(data[j:eol])
+            j = i
+
+        return result
+
+    return impl
+
+
+_ascii_splitlines = register_jitable(generate_splitlines_func(_Py_ISLINEBREAK))
+_unicode_splitlines = register_jitable(generate_splitlines_func(
+    _PyUnicode_IsLineBreak))
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10196-L10229    # noqa: E501
+@overload_method(types.UnicodeType, 'splitlines')
+def unicode_splitlines(data, keepends=False):
+    """Implements str.splitlines()"""
+    thety = keepends
+    # if the type is omitted, the concrete type is the value
+    if isinstance(keepends, types.Omitted):
+        thety = keepends.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(keepends, types.Optional):
+        thety = keepends.type
+
+    accepted = (types.Integer, int, types.Boolean, bool)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError(
+            '"{}" must be {}, not {}'.format('keepends', accepted, keepends))
+
+    def splitlines_impl(data, keepends=False):
+        if data._is_ascii:
+            return _ascii_splitlines(data, keepends)
+
+        return _unicode_splitlines(data, keepends)
+
+    return splitlines_impl
 
 
 @register_jitable
