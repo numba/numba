@@ -34,7 +34,8 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToTitleFull, _PyUnicode_IsSpace,
+                              _PyUnicode_ToTitleFull,
+                              _PyUnicode_IsSpace, _Py_ISSPACE,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -758,6 +759,56 @@ def unicode_split(a, sep=None, maxsplit=-1):
             return parts
         return split_whitespace_impl
 
+
+def generate_rsplit_whitespace_impl(isspace_func):
+    """Generate whitespace rsplit func based on either ascii or unicode"""
+
+    def rsplit_whitespace_impl(data, sep=None, maxsplit=-1):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L192-L240    # noqa: E501
+        if maxsplit < 0:
+            maxsplit = sys.maxsize
+
+        result = []
+        i = len(data) - 1
+        while maxsplit > 0:
+            while i >= 0:
+                code_point = _get_code_point(data, i)
+                if not isspace_func(code_point):
+                    break
+                i -= 1
+            if i < 0:
+                break
+            j = i
+            i -= 1
+            while i >= 0:
+                code_point = _get_code_point(data, i)
+                if isspace_func(code_point):
+                    break
+                i -= 1
+            result.append(data[i + 1:j + 1])
+            maxsplit -= 1
+
+        if i >= 0:
+            # Only occurs when maxsplit was reached
+            # Skip any remaining whitespace and copy to beginning of string
+            while i >= 0:
+                code_point = _get_code_point(data, i)
+                if not isspace_func(code_point):
+                    break
+                i -= 1
+            if i >= 0:
+                result.append(data[0:i + 1])
+
+        return result[::-1]
+
+    return rsplit_whitespace_impl
+
+
+unicode_rsplit_whitespace_impl = register_jitable(
+    generate_rsplit_whitespace_impl(_PyUnicode_IsSpace))
+ascii_rsplit_whitespace_impl = register_jitable(
+    generate_rsplit_whitespace_impl(_Py_ISSPACE))
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13095-L13108    # noqa: E501
 @overload_method(types.UnicodeType, 'rsplit')
 def unicode_rsplit(data, sep=None, maxsplit=-1):
@@ -785,42 +836,9 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
     if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
 
         def rsplit_whitespace_impl(data, sep=None, maxsplit=-1):
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L192-L240    # noqa: E501
-            if maxsplit < 0:
-                maxsplit = sys.maxsize
-
-            result = []
-            i = len(data) - 1
-            while maxsplit > 0:
-                while i >= 0:
-                    code_point = _get_code_point(data, i)
-                    if not _PyUnicode_IsSpace(code_point):
-                        break
-                    i -= 1
-                if i < 0:
-                    break
-                j = i
-                i -= 1
-                while i >= 0:
-                    code_point = _get_code_point(data, i)
-                    if _PyUnicode_IsSpace(code_point):
-                        break
-                    i -= 1
-                result.append(data[i + 1:j + 1])
-                maxsplit -= 1
-
-            if i >= 0:
-                # Only occurs when maxsplit was reached
-                # Skip any remaining whitespace and copy to beginning of string
-                while i >= 0:
-                    code_point = _get_code_point(data, i)
-                    if not _PyUnicode_IsSpace(code_point):
-                        break
-                    i -= 1
-                if i >= 0:
-                    result.append(data[0:i + 1])
-
-            return result[::-1]
+            if data._is_ascii:
+                return ascii_rsplit_whitespace_impl(data, sep, maxsplit)
+            return unicode_rsplit_whitespace_impl(data, sep, maxsplit)
 
         return rsplit_whitespace_impl
 
