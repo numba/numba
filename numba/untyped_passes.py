@@ -488,11 +488,9 @@ class CanonicalizeLoopEntry(FunctionPass):
 
         # Find the start of loop entry statement that needs to be included.
         startpt = None
-        print('deps', deps)
         list_of_insts = list(entry_block.find_insts(ir.Assign))
         for assign in reversed(list_of_insts):
             if assign.target in deps:
-                print('got', assign)
                 rhs = assign.value
                 if isinstance(rhs, ir.Var):
                     if rhs.is_temp:
@@ -512,7 +510,6 @@ class CanonicalizeLoopEntry(FunctionPass):
                 elif isinstance(rhs, ir.Global) and rhs.value is range:
                     startpt = assign
 
-        print("START", startpt)
         if startpt is None:
             return
 
