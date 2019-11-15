@@ -8,6 +8,7 @@ from numba.tests.support import (
     captured_stdout,
     SerialMixin,
     redirect_c_stdout,
+    TestCase
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 
