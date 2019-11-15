@@ -193,6 +193,18 @@ def istitle_usecase(x):
     return x.istitle()
 
 
+def maketrans_usecase(x):
+    return str.maketrans(x)
+
+
+def maketrans_with_strs_usecase(x, y):
+    return str.maketrans(x, y)
+
+
+def maketrans_with_removable_str_usecase(x, y, z):
+    return str.maketrans(x, y, z)
+
+
 def iter_usecase(x):
     l = []
     for i in x:
@@ -1094,6 +1106,63 @@ class TestUnicode(BaseTest):
             c_result = cfunc(s)
             self.assertEqual(py_result, c_result,
                              error_msg.format(s, py_result, c_result))
+
+
+    def test_maketrans(self):
+        pyfunc = maketrans_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L312-L359    # noqa: E501
+        cpython = [
+            {ord('a'): None},
+            {ord('a'): None, ord('b'): ord('i')},
+            {ord('a'): None, ord('b'): ord('i'), ord('c'): 'x'},
+            {ord('a'): None, ord('b'): ''},
+            {ord('z'): 'yy'},
+            {'b': '<i>'},
+            {'a': None, 'b': '<i>'},
+            {'a': 'X'},
+            {'a': None},
+            {'a': 'XXX'},
+            {'a': '\xe9'},
+            {'a': None, 'b': '123'},
+            {'a': None, 'b': '\xe9'},
+            {'a': '<\xe9>'},
+            {'\xe9': 'a'},
+            {'\xe9': None},
+            {'\xe9': '123'},
+            {'a': '<\u20ac>'}
+        ]
+        msg = 'Results of str.maketrans({}) must be equal'
+        for d in [{}] + cpython:
+            self.assertEqual(pyfunc(d), cfunc(d), msg=msg.format(d))
+
+    def test_maketrans_with_strs(self):
+        pyfunc = maketrans_with_strs_usecase
+        cfunc = njit(pyfunc)
+
+        cases = ['a', 'b', '\xe9', '\u20ac']
+        msg = 'Results of str.maketrans("{}", "{}") must be equal'
+        for repeat in range(len(cases)):
+            all_cases = (''.join(p) for p in product(cases, repeat=repeat))
+            for x, y in product(all_cases, repeat=2):
+                self.assertEqual(pyfunc(x, y), cfunc(x, y),
+                                 msg=msg.format(x, y))
+
+
+    def test_maketrans_with_removable_str(self):
+        pyfunc = maketrans_with_removable_str_usecase
+        cfunc = njit(pyfunc)
+
+        cases = ['a', 'b', '\xe9', '\u20ac']
+        msg = 'Results of str.maketrans("{}", "{}", "{}") must be equal'
+        for repeat in range(len(cases)):
+            all_cases = (''.join(p) for p in product(cases, repeat=repeat))
+            for x, y, z in product(all_cases, repeat=3):
+                self.assertEqual(pyfunc(x, y, z), cfunc(x, y, z),
+                                 msg=msg.format(x, y, z))
+
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):

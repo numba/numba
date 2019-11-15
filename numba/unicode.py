@@ -1388,6 +1388,42 @@ def unicode_istitle(s):
     return impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13173-L13277    # noqa: E501
+@overload(str.maketrans)
+def unicode_maketrans(x, y, z):
+    """Implements str.maketrans()"""
+
+    if not isinstance(y, types.NoneType) and y is not None:
+        def maketrans_with_strs_impl(x, y, z):
+            result = {}
+            if len(x) != len(y):
+                raise ValueError('the first two maketrans '
+                                 'arguments must have equal length')
+
+            for i in range(len(x)):
+                result[_get_code_point(x, i)] = _get_code_point(y, i)
+            if z:
+                for i in range(len(z)):
+                    result[_get_code_point(z, i)] = None
+
+            return result
+
+        return maketrans_with_strs_impl
+
+    def maketrans_impl(x, y, z):
+        result = {}
+        for key, value in x.items():
+            if len(key) != 1:
+                raise ValueError('string keys in translate '
+                                 'table must be of length 1')
+
+            result[_get_code_point(key, 0)] = value
+
+        return result
+
+    return maketrans_impl
+
+
 @overload_method(types.UnicodeType, 'islower')
 def unicode_islower(data):
     """
