@@ -260,7 +260,24 @@ def find_top_level_loops(cfg):
     # find loop that is not part of other loops
     for loop in cfg.loops().values():
         if loop.header not in blocks_in_loop:
-            yield loop
+            yield _fix_loop_exit(cfg, loop)
+
+
+def _fix_loop_exit(cfg, loop):
+    """
+    Fixes loop.exits for Py3.8 bytecode CFG changes.
+    This is to handle `break` inside loops.
+    """
+    # Computes the common postdoms of exit nodes
+    postdoms = cfg.post_dominators()
+    exits = reduce(
+        operator.and_,
+        [postdoms[b] for b in loop.exits],
+        loop.exits,
+    )
+    # Put the non-common-exits as body nodes
+    body = loop.body | loop.exits - exits
+    return loop._replace(exits=exits, body=body)
 
 
 # Functions to manipulate IR
