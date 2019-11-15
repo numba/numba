@@ -1437,13 +1437,12 @@ _do_casefold = register_jitable(generate_case_operation_func(
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10782-L10791    # noqa: E501
+# mixed with
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
 @overload_method(types.UnicodeType, 'casefold')
 def unicode_casefold(data):
     """Implements str.casefold()"""
-    def impl(data):
-        return _do_casefold(data)
-
-    return impl
+    return _do_casefold
 
 
 @overload_method(types.UnicodeType, 'istitle')
