@@ -495,17 +495,20 @@ class CanonicalizeLoopEntry(FunctionPass):
                 print('got', assign)
                 rhs = assign.value
                 if isinstance(rhs, ir.Var):
-                    deps.add(rhs)
+                    if rhs.is_temp:
+                        deps.add(rhs)
                 elif isinstance(rhs, ir.Expr):
                     expr = rhs
                     if expr.op == 'getiter':
                         startpt = assign
-                        deps.add(expr.value)
+                        if expr.value.is_temp:
+                            deps.add(expr.value)
                     elif expr.op == 'call':
                         # XXX handle error
                         defn = fir.get_definition(expr.func)
                         if isinstance(defn, ir.Global):
-                            deps.add(expr.func)
+                            if expr.func.is_temp:
+                                deps.add(expr.func)
                 elif isinstance(rhs, ir.Global) and rhs.value is range:
                     startpt = assign
 
