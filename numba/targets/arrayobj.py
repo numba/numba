@@ -352,7 +352,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices, boundsche
             ind = fix_integer_index(context, builder, idxty, indexval,
                                     shapes[ax])
             if boundscheck:
-                cgutils.boundscheck(context, builder, ind, shapes[ax], ax)
+                cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))

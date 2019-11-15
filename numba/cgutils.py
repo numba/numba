@@ -657,13 +657,16 @@ def unpack_tuple(builder, tup, count=None):
 
 
 def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
     strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
     return get_item_pointer2(context, builder, data=ary.data, shape=shapes,
                              strides=strides, layout=aryty.layout, inds=inds,
                              wraparound=wraparound, boundscheck=boundscheck)
 
-def boundscheck(context, builder, ind, dimlen, axis=None):
+def do_boundscheck(context, builder, ind, dimlen, axis=None):
     if (config.BOUNDSCHECK is None and not context.enable_boundscheck) \
        or config.BOUNDSCHECK == 0:
         return
@@ -691,6 +694,9 @@ def boundscheck(context, builder, ind, dimlen, axis=None):
 
 def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
                       wraparound=False, boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     if wraparound:
         # Wraparound
         indices = []
@@ -703,7 +709,7 @@ def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
         indices = inds
     if boundscheck:
         for axis, (ind, dimlen) in enumerate(zip(indices, shape)):
-            boundscheck(context, builder, ind, dimlen, axis)
+            do_boundscheck(context, builder, ind, dimlen, axis)
 
     if not indices:
         # Indexing with empty tuple
