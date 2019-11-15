@@ -208,6 +208,8 @@ class _CachedProgram(object):
         from .ocldrv import devices
 
         device = devices.get_device()
+        print("DEBUG: Selected Device is :", device.name)
+        print("DEBUG: OpenCL version : ", device.opencl_version)
         context = devices.get_context()
 
         result = self._cache.get(context)
@@ -217,7 +219,6 @@ class _CachedProgram(object):
         else: 
             # The program has not been finalized for this device
             # Build according to the OpenCL version, 2.0 or 2.1
-            print(device.opencl_version)
             if device.opencl_version == (2,0):
                 spir2_bc = spir2.llvm_to_spir2(self._binary)
                 program = context.create_program_from_binary(spir2_bc)
