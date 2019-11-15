@@ -185,14 +185,18 @@ def _PyUnicode_IsTitlecase(ch):
     return ctype.flags & _PyUnicode_TyperecordMasks.TITLE_MASK != 0
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L86-L91    # noqa: E501
 @register_jitable
 def _PyUnicode_IsXidStart(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.XID_START_MASK != 0
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L96-L101    # noqa: E501
 @register_jitable
 def _PyUnicode_IsXidContinue(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.XID_CONTINUE_MASK != 0
 
 
 @register_jitable

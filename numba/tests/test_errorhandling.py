@@ -26,20 +26,6 @@ _global_dict = typed.Dict.empty(int64, int64)
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
 
-    expected_msg = ("Numba encountered the use of a language feature it does "
-                    "not support in this context: %s")
-
-    def test_unsupported_make_function_lambda(self):
-        def func(x):
-            f = lambda x: x  # requires `make_function`
-
-        for pipeline in jit, njit:
-            with self.assertRaises(errors.UnsupportedError) as raises:
-                pipeline(func)(1)
-
-            expected = self.expected_msg % "<lambda>"
-            self.assertIn(expected, str(raises.exception))
-
     def test_unsupported_make_function_return_inner_func(self):
         def func(x):
             """ return the closure """
@@ -50,11 +36,10 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
             return inner
 
         for pipeline in jit, njit:
-            with self.assertRaises(errors.UnsupportedError) as raises:
+            with self.assertRaises(errors.TypingError) as raises:
                 pipeline(func)(1)
 
-            expected = self.expected_msg % \
-                "<creating a function from a closure>"
+            expected = "Cannot capture the non-constant value"
             self.assertIn(expected, str(raises.exception))
 
 

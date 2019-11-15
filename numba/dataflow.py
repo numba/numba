@@ -733,7 +733,7 @@ class DataFlowAnalysis(object):
                 defaults = []
                 for i in range(num_posdefaults):
                     defaults.append(info.pop())
-                defaults = tuple(defaults)
+                defaults = tuple(reversed(defaults))
         elif utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
             num_posdefaults = inst.arg & 0xff
             num_kwdefaults = (inst.arg >> 8) & 0xff
@@ -753,7 +753,7 @@ class DataFlowAnalysis(object):
                 defaults = []
                 for i in range(num_posdefaults):
                     defaults.append(info.pop())
-                defaults = tuple(defaults)
+                defaults = tuple(reversed(defaults))
         else:
             if inst.arg & 0x8:
                 closure = info.pop()
