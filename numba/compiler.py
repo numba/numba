@@ -19,7 +19,9 @@ from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, InlineClosureLikes,
                              GenericRewrites, WithLifting, InlineInlinables,
-                             FindLiterallyCalls)
+                             FindLiterallyCalls, CanonicalizeLoopExit,
+                             CanonicalizeLoopEntry, PrintIRCFG,
+                             )
 
 from .typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
@@ -426,7 +428,6 @@ class DefaultPassBuilder(object):
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
-
         pm.add_pass(WithLifting, "Handle with contexts")
 
         # pre typing
@@ -479,6 +480,9 @@ class DefaultPassBuilder(object):
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
+
+        pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
+        pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
         pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")

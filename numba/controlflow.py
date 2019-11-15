@@ -81,7 +81,7 @@ class CFGraph(object):
         are not possible).
         """
         assert src in self._nodes
-        assert dest in self._nodes
+        assert dest in self._nodes, (dest, self._nodes)
         self._add_edge(src, dest, data)
 
     def successors(self, src):

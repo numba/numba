@@ -7,6 +7,7 @@ from .analysis import (
     dead_branch_prune,
     rewrite_semantic_constants,
     find_literally_calls,
+    compute_cfg_from_blocks,
 )
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass
@@ -410,4 +411,113 @@ class FindLiterallyCalls(FunctionPass):
 
     def run_pass(self, state):
         find_literally_calls(state.func_ir, state.args)
+        return False
+
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class CanonicalizeLoopExit(FunctionPass):
+    _name = "canonicalize_loop_exit"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        try:
+            cfg = compute_cfg_from_blocks(fir.blocks)
+        except:
+            return False
+        status = False
+        for loop in cfg.loops().values():
+            for exit_label in loop.exits:
+                if exit_label in cfg.exit_points():
+                    self._split_exit_block(fir, cfg, exit_label)
+                    status = True
+
+        fir._reset_analysis_variables()
+
+        vlt = postproc.VariableLifetime(fir.blocks)
+        fir.variable_lifetime = vlt
+        return status
+
+    def _split_exit_block(self, fir, cfg, exit_label):
+        curblock = fir.blocks[exit_label]
+        newlabel = exit_label + 1   # XXX
+        fir.blocks[newlabel] = curblock
+        newblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
+        newblock.append(ir.Jump(newlabel, loc=curblock.loc))
+        fir.blocks[exit_label] = newblock
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class CanonicalizeLoopEntry(FunctionPass):
+    _name = "canonicalize_loop_entry"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        try:
+            cfg = compute_cfg_from_blocks(fir.blocks)
+        except:
+            return False
+        status = False
+        for loop in cfg.loops().values():
+            if len(loop.entries) == 1:
+                [entry_label] = loop.entries
+                if entry_label == cfg.entry_point():
+                    self._split_entry_block(fir, cfg, loop, entry_label)
+                    status = True
+        fir._reset_analysis_variables()
+
+        vlt = postproc.VariableLifetime(fir.blocks)
+        fir.variable_lifetime = vlt
+        return status
+
+    def _split_entry_block(self, fir, cfg, loop, entry_label):
+        # Find iterator inputs into the for-loop header
+        header_block = fir.blocks[loop.header]
+        deps = set()
+        for expr in header_block.find_exprs(op="iternext"):
+            deps.add(expr.value)
+        # Find the getiter for each iterator
+        entry_block = fir.blocks[entry_label]
+
+        # XXX
+        # entry_block.dump() #XXX
+
+        startpt = None
+        for assign in entry_block.find_insts(ir.Assign):
+            if isinstance(assign.value, ir.Global):
+                global_expr = assign.value
+                if global_expr.value is range:
+                    startpt = assign
+
+        splitpt = entry_block.body.index(startpt)
+        new_block = entry_block.copy()
+        new_block.body = new_block.body[splitpt:]
+        new_label = entry_label + 1 # XXX
+        assert new_label not in fir.blocks
+
+        entry_block.body = entry_block.body[:splitpt]
+        entry_block.append(ir.Jump(new_label, loc=new_block.loc))
+
+        fir.blocks[new_label] = new_block
+
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class PrintIRCFG(FunctionPass):
+    _name = "print_ir_cfg"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+        self._ver = 0
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        self._ver += 1
+        fir.render_dot(filename_prefix='v{}'.format(self._ver)).render()
         return False
