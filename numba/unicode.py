@@ -1399,7 +1399,7 @@ def unicode_isprintable(data):
         if length == 1:
             return _PyUnicode_IsPrintable(_get_code_point(data, 0))
 
-        for i in range(len(data)):
+        for i in range(length):
             code_point = _get_code_point(data, i)
             if not _PyUnicode_IsPrintable(code_point):
                 return False
