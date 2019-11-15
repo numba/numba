@@ -311,6 +311,7 @@ class EnumModel(ProxyModel):
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
 @register_default(types.RecursiveCall)
+@register_default(types.MakeFunctionLiteral)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
