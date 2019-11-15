@@ -1407,7 +1407,8 @@ def unicode_isalnum(data):
 
         for i in range(length):
             code_point = _get_code_point(data, i)
-            if not _PyUnicode_IsNumeric(code_point) and not _PyUnicode_IsAlpha(code_point):
+            if (not _PyUnicode_IsNumeric(code_point) and 
+                not _PyUnicode_IsAlpha(code_point)):
                 return False
 
         return True
