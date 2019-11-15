@@ -809,6 +809,7 @@ unicode_rsplit_whitespace_impl = register_jitable(
 ascii_rsplit_whitespace_impl = register_jitable(
     generate_rsplit_whitespace_impl(_Py_ISSPACE))
 
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13095-L13108    # noqa: E501
 @overload_method(types.UnicodeType, 'rsplit')
 def unicode_rsplit(data, sep=None, maxsplit=-1):
