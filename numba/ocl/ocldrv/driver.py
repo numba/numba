@@ -21,6 +21,9 @@ import ctypes.util
 import os
 import sys
 
+# DRD: For debugging
+from inspect import currentframe, getframeinfo
+
 try:
     long
 except NameError:
@@ -40,6 +43,8 @@ def _ctypes_func_wraps(model):
 
 def _find_driver():
     envpath = os.environ.get('NUMBA_OPENCL_DRIVER', None)
+    frameinfo = getframeinfo(currentframe())
+    print("DEBUG[",frameinfo.filename,frameinfo.lineno,"]: NUMBA OPENCL DRIVER PATH : ", envpath)
     if envpath == '0':
         _raise_driver_not_found()
 

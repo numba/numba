@@ -174,7 +174,6 @@ class _Runtime(object):
     def __init__(self):
         # Avoid a race condition by which the driver releases before runtime
         self.driver = driver
-
         # List of OpenCL platforms
         self.lst = _PlatformList(driver)
         #self.devices = _DeviceList()
@@ -184,9 +183,9 @@ class _Runtime(object):
         #self.queues = _QueueList()
         #self.events = _EventList()
         
-        print("Number of OCL Platforms: " + str(self.lst.__len__()))
+        print("DEBUG: Number of OCL Platforms: " + str(self.lst.__len__()))
         for i in range(len(self.lst)):
-            print("Platform " + str(i) + " : " + self.lst[i].name.decode())
+            print("DEBUG: Platform " + str(i) + " : " + self.lst[i].name.decode())
         
         # A thread_local stack of items
         self.platform_stack = servicelib.TLStack()
@@ -225,7 +224,7 @@ class _Runtime(object):
         if self.platform_stack:
             return self.current_platform
         else: # select/push first platform
-            return self.select_platform(0)            
+            return self.select_platform(0)
 
     def select_platform(self,id_or_name):
         """Selects a platform according to the given _id_ or _name_"""
@@ -450,7 +449,7 @@ def devices():
 
 def init():
     """Initialize the OpenCL subsystem for the current thread"""
-    print("Initialize OpenCL")
+    print("DEBUG: Initialize the OpenCL subsystem for the current thread")
     _runtime.reset()
     _runtime.init()
     
