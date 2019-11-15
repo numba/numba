@@ -1,0 +1,195 @@
+meta:
+  version: 1
+style:
+  tags:
+    performance:
+      border: red
+tasks:
+  - label: Track allocations in functions
+    id: track_alloc
+    description: |
+      Maintain a list of allocations inside each function which can be used
+      for freeing things on return, and also for debugging memory usage.
+
+  - label: Catch exceptions
+    id: catch_exceptions
+    description: |
+      Allow exceptions raised in nopython mode to be caught in nopython mode.
+    depends_on:
+      - track_alloc
+
+
+  - label: New IR
+    id: new_ir
+    description: |
+      New intermediate representation for Numba that is backed by a dictionary
+
+  - label: New Type Matching DSL
+    id: type_matching
+    description: |
+      Replace the current DSL for Numba types with something more expressive
+      that can match type patterns
+
+  - label: Declarative type signatures\nfor @overload/@overload_method
+    id: declarative_overload
+    description: |
+      Replace the current DSL for Numba types with something more expressive\n
+      that can match type patterns
+    depends_on:
+      - type_matching
+
+  - label: Rewrite "old-style" implementations
+    id: rewrite_old_impls
+    description: |
+      Rewrite implementations of functions that use the old extension API that
+      separates typing from implementation, and often uses the LLVM builder
+      unnecessarily.
+    depends_on:
+      - declarative_overload
+      - improve_test_suite_tooling
+      - faster_pr_testing
+
+  - label: Unify and add more test suite tooling
+    id: improve_test_suite_tooling
+    description: |
+      Add tools to help with common patterns in testing and unify the ones we
+      have, there's no need for 12 spellings of "is this Python 3" Also decide
+      on "what to test", do all types need testing if inputs are being
+      "as_array"'d?
+
+  - label: Pipeline pass formalisation
+    id: pass_formalisation
+    description: |
+      Decide on a formal description of a compiler pass and create supporting
+      code for it
+
+  - label: Array expression fusion pass
+    id: new_array_expr_fusion_pass
+    description:
+        From parfors extract out the array expression fusion pass
+    depends_on:
+      - parfors_clean_up
+      - pass_formalisation
+
+  - label: LICM Pass
+    id: new_licm_pass
+    description: |
+      Create a LICM Pass
+    depends_on:
+      - parfors_clean_up
+      - pass_formalisation
+
+  - label: Clean up Parfors
+    id: parfors_clean_up
+    description: |
+      General clean up and refactoring of parfors ahead of any additional work
+
+  - label: Mode based pipeline
+    id: mode_based_pipeline
+    description: |
+      Switch the jit decorator to use a mode based pipeline with
+      `nopython=True` equivalent as default.
+
+  - label: Remove object mode fallback
+    id: remove_objmode_fallback
+    description: |
+      Remove the deprecated object mode fallback
+    depends_on:
+        - mode_based_pipeline
+
+  - label: Switch to ORC JIT
+    id: orc_jit
+    description: |
+      MCJIT has been deprecated for some time.  Need to switch to the newer
+      ORC JIT class.
+
+  - label: Performance analysis suite
+    id: perform_analysis_suite
+    description: |
+      Meta task for all performance analysis related functionality
+    depends_on:
+      - line_profiling
+      - assembly_analysis_tooling
+      - vectorisation_analysis
+
+  - label: Vectorisation analysis
+    id: vectorisation_analysis
+    description: |
+      Obtain LLVMs vectorisation reports and present these in a user friendly
+      manner
+
+  - label: Line profiling
+    id: line_profiling
+    description: |
+      Support collection of profiling statistics from compiled machine code
+      and map back to lines of Python.
+    depends_on:
+      - orc_jit
+      - assembly_analysis_tooling
+
+  - label: Assembly analysis tooling
+    id: assembly_analysis_tooling
+    description: |
+      Tie generated assembly back to python lines and annotate instruction
+      quality
+    depends_on:
+      - capstone
+
+  - label: Build capstone against llvmdev
+    id: capstone
+    description: |
+      Build capstone against llvmdev and create conda packages/wheels
+
+  - label: Increase JIT class method performance
+    id: jit_class_method_performance
+    description: |
+      Increase the performance of jitclass methods
+    depends_on:
+      - llvm_ref_count_pruning
+      - new_licm_pass
+
+  - label: LLVM level ref count pruning
+    id: llvm_ref_count_pruning
+    description: |
+      Add a LLVM compiler pass to prune refcounts across entire functions
+
+  - label: JITted coverage information
+    id: jitted_coverage_info
+    description: |
+      Work out how to leverage gcov support in LLVM to enable coverage
+      information
+    depends_on:
+      - compiler_rt
+
+  - label: LLVM compiler_rt support
+    id: compiler_rt
+    description: |
+      Work out how to build compiler_rt into LLVM and how to use it in Numba
+
+  - label: Switch to pytest
+    id: pytest
+    description: |
+      Make it possible to use pytest as test runner for Numba
+
+  - label: Option to run modified tests only
+    id: run_new_tests
+    description: |
+      Use / make pytest plugin to detect all test files which are new /
+      changed relative to a given branch, and run only those tests
+    depends_on:
+      - pytest
+
+  - label: Option to run 1/N slice of tests
+    id: run_test_slice
+    description: |
+      Use / make pytest plugin to run 1/N of enumerated tests.
+    depends_on:
+      - pytest
+
+  - label: Faster PR testing
+    id: faster_pr_testing
+    description: |
+      Make automated PR testing with public CI services give faster feedback.
+    depends_on:
+      - run_new_tests
+      - run_test_slice

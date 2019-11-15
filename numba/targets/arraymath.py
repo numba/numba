@@ -189,8 +189,8 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
         different instances that do take consts.  Supporting axis summation
         only up to the fourth dimension for now.
 
-        typing/arraydecl.py:sum_expand defines the return type for sum with axis.
-        It is one dimension less than the input array.
+        typing/arraydecl.py:sum_expand defines the return type for sum with
+        axis. It is one dimension less than the input array.
         """
         ndim = arr.ndim
 
@@ -558,8 +558,8 @@ def array_max(context, builder, sig, args):
 @lower_builtin("array.argmin", types.Array)
 def array_argmin(context, builder, sig, args):
     ty = sig.args[0].dtype
-    # NOTE: Under Numpy < 1.10, argmin() is inconsistent with min() on NaT values:
-    # https://github.com/numpy/numpy/issues/6030
+    # NOTE: Under Numpy < 1.10, argmin() is inconsistent with min()
+    # on NaT values: https://github.com/numpy/numpy/issues/6030
 
     if (numpy_version >= (1, 10) and
             isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
@@ -920,7 +920,7 @@ def _compute_current_val_impl_gen(op):
             # real and imaginary parts are non-nan then the order is determined
             # by the real parts except when they are equal, in which case the
             # order is determined by the imaginary parts.
-            # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877
+            # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877    # noqa: E501
             def impl(current_val, val):
                 if op(val.real, current_val.real):
                     return val
@@ -1363,7 +1363,8 @@ def valid_kths(a, kth):
     Values less than 0 are transformed to equivalent positive
     index values.
     """
-    kth_array = _asarray(kth).astype(np.int64)  # cast boolean to int, where relevant
+    # cast boolean to int, where relevant
+    kth_array = _asarray(kth).astype(np.int64)
 
     if kth_array.ndim != 1:
         raise ValueError('kth must be scalar or 1-D')
@@ -1393,7 +1394,8 @@ def np_partition(a, kth):
         raise TypeError('The first argument must be at least 1-D (found 0-D)')
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):  # bool gets cast to int subsequently
+    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+        # bool gets cast to int subsequently
         raise TypeError('Partition index must be integer')
 
     def np_partition_impl(a, kth):
@@ -1611,8 +1613,8 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
         if isinstance(ary, types.Array):
             if isinstance(ary.dtype, types.Boolean):
                 raise TypeError("Boolean dtype is unsupported (as per NumPy)")
-                # Numpy tries to do this: return ary[1:] - ary[:-1] which results in a
-                # TypeError exception being raised
+                # Numpy tries to do this: return ary[1:] - ary[:-1] which
+                # results in a TypeError exception being raised
 
         # since np 1.16 there are casting checks for to_end and to_begin to make
         # sure they are compatible with the ary
@@ -1640,12 +1642,14 @@ if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
             end = _prepare_array(to_end)
 
             out_dtype = mid.dtype
-            # output array dtype determined by ary dtype, per NumPy (for the most part);
-            # an exception to the rule is a zero length array-like, where NumPy falls back
-            # to np.float64; this behaviour is *not* replicated
+            # output array dtype determined by ary dtype, per NumPy
+            # (for the most part); an exception to the rule is a zero length
+            # array-like, where NumPy falls back to np.float64; this behaviour
+            # is *not* replicated
 
             if len(mid) > 0:
-                out = np.empty((len(start) + len(mid) + len(end) - 1), dtype=out_dtype)
+                out = np.empty((len(start) + len(mid) + len(end) - 1),
+                               dtype=out_dtype)
                 start_idx = len(start)
                 mid_idx = len(start) + len(mid) - 1
                 out[:start_idx] = start
@@ -1705,7 +1709,7 @@ def np_trapz(y, x=None, dx=1.0):
         # NumPy raises IndexError: list assignment index out of range
 
     # inspired by:
-    # https://github.com/numpy/numpy/blob/7ee52003/numpy/lib/function_base.py#L4040-L4065
+    # https://github.com/numpy/numpy/blob/7ee52003/numpy/lib/function_base.py#L4040-L4065    # noqa: E501
     def impl(y, x=None, dx=1.0):
         yarr = np.asarray(y)
         d = _get_d(x, dx)
@@ -1786,7 +1790,8 @@ def np_vander(x, N=None, increasing=False):
 
     if isinstance(x, types.Array):
         x_dt = as_dtype(x.dtype)
-        dtype = np.promote_types(x_dt, int)  # replicate numpy behaviour w.r.t. type promotion
+        # replicate numpy behaviour w.r.t.type promotion
+        dtype = np.promote_types(x_dt, int)
         return np_vander_impl
     elif isinstance(x, (types.Tuple, types.Sequence)):
         return np_vander_seq_impl
@@ -1825,9 +1830,9 @@ LIKELY_IN_CACHE_SIZE = 8
 def binary_search_with_guess(key, arr, length, guess):
     # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of binary_search_with_guess prior to 1.15:
-    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
-    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L447
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L447    # noqa: E501
     imin = 0
     imax = length
 
@@ -1894,9 +1899,9 @@ def binary_search_with_guess(key, arr, length, guess):
 def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
     # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp_complex prior to 1.16:
-    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
-    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L683
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L683    # noqa: E501
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -1993,9 +1998,9 @@ def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
         # this is a facsimile of arr_interp_complex post 1.16 with added
         # branching to support np1.17 style NaN handling.  (see
         # `np117_nan_handling` use)
-        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
         # Permanent reference:
-        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628
+        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628    # noqa: E501
         dz = np.asarray(x)
         dx = np.asarray(xp)
         dy = np.asarray(fp)
@@ -2095,9 +2100,9 @@ def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
 def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
     # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a copy of innermost part of arr_interp_complex post 1.17:
-    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c
+    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
-    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L798-L812
+    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L798-L812    # noqa: E501
 
     # If we get nan in one direction, try the other
     real = slope.real * (x_val - dx[j]) + dy[j].real
@@ -2119,9 +2124,9 @@ def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
 def np_interp_impl_inner(x, xp, fp, dtype):
     # NOTE: Do not refactor... see note in np_interp function impl below
     # this is a facsimile of arr_interp prior to 1.16:
-    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c
+    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
-    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532
+    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532    # noqa: E501
     dz = np.asarray(x)
     dx = np.asarray(xp)
     dy = np.asarray(fp)
@@ -2204,9 +2209,9 @@ def np_interp_impl_inner_factory(np117_nan_handling):
     def impl(x, xp, fp, dtype):
         # NOTE: Do not refactor... see note in np_interp function impl below
         # this is a facsimile of arr_interp post 1.16:
-        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c
+        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
         # Permanent reference:
-        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473
+        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473     # noqa: E501
         dz = np.asarray(x)
         dx = np.asarray(xp)
         dy = np.asarray(fp)
@@ -2276,14 +2281,14 @@ def np_interp_impl_inner_factory(np117_nan_handling):
                     dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
 
                     # NOTE: this is in np1.17
-                    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c
+                    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
                     # Permanent reference:
-                    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L610-L616
+                    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L610-L616    # noqa: E501
                     #
                     # If we get nan in one direction, try the other
                     if np117_nan_handling:
                         if np.isnan(dres.flat[i]):
-                            dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]
+                            dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]    # noqa: E501
                             if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
                                 dres.flat[i] = dy[j]
 
@@ -2515,7 +2520,8 @@ _handle_ddof_nop = register_jitable(lambda x: x)
 
 
 @register_jitable
-def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER):
+def _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER,
+                       _M_DIM_HANDLER):
     _M_DIM_HANDLER(m)
     _DDOF_HANDLER(ddof)
     return _prepare_cov_input_inner(m, y, rowvar, dtype)
@@ -2528,17 +2534,20 @@ def scalar_result_expected(mandatory_input, optional_input):
         return opt_is_none
 
     if isinstance(mandatory_input, types.BaseTuple):
-        if all(isinstance(x, (types.Number, types.Boolean)) for x in mandatory_input.types):
+        if all(isinstance(x, (types.Number, types.Boolean))
+               for x in mandatory_input.types):
             return opt_is_none
         else:
-            if len(mandatory_input.types) == 1 and isinstance(mandatory_input.types[0], types.BaseTuple):
+            if (len(mandatory_input.types) == 1 and
+                    isinstance(mandatory_input.types[0], types.BaseTuple)):
                 return opt_is_none
 
     if isinstance(mandatory_input, (types.Number, types.Boolean)):
         return opt_is_none
 
     if isinstance(mandatory_input, types.Sequence):
-        if not isinstance(mandatory_input.key[0], types.Sequence) and opt_is_none:
+        if (not isinstance(mandatory_input.key[0], types.Sequence) and
+                opt_is_none):
             return True
 
     return False
@@ -2556,7 +2565,8 @@ def _clip_complex(x):
     return real + 1j * imag
 
 
-if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix release
+# replicate behaviour post numpy 1.10 bugfix release
+if numpy_version >= (1, 10):
     @overload(np.cov)
     def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
@@ -2589,15 +2599,20 @@ if numpy_version >= (1, 10):  # replicate behaviour post numpy 1.10 bugfix relea
         dtype = np.result_type(m_dt, y_dt, np.float64)
 
         def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-            X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
+            X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER,
+                                   _M_DIM_HANDLER).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
-                return np.full((X.shape[0], X.shape[0]), fill_value=np.nan, dtype=dtype)
+                return np.full((X.shape[0], X.shape[0]),
+                               fill_value=np.nan,
+                               dtype=dtype)
             else:
                 return np_cov_impl_inner(X, bias, ddof)
 
-        def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False, ddof=None):
-            X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER, _M_DIM_HANDLER).astype(dtype)
+        def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False,
+                                        ddof=None):
+            X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER,
+                                   _M_DIM_HANDLER).astype(dtype)
 
             if np.any(np.array(X.shape) == 0):
                 variance = np.nan
@@ -3162,7 +3177,7 @@ np_delete_handler_isarray = register_jitable(lambda x : np.asarray(x))
 @overload(np.delete)
 def np_delete(arr, obj):
     # Implementation based on numpy
-    # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267
+    # https://github.com/numpy/numpy/blob/af66e487a57bfd4850f4306e3b85d1dac3c70412/numpy/lib/function_base.py#L4065-L4267    # noqa: E501
 
     if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
@@ -3286,13 +3301,14 @@ def np_bincount(a, weights=None):
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
         # weights is promoted to double in C impl
-        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95
+        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95    # noqa: E501
         out_dtype = np.float64
 
         @register_jitable
         def validate_inputs(a, weights):
             if len(a) != len(weights):
-                raise ValueError("bincount(): weights and list don't have the same length")
+                raise ValueError("bincount(): weights and list don't have "
+                                 "the same length")
 
         @register_jitable
         def count_item(out, idx, val, weights):
@@ -3316,7 +3332,8 @@ def np_bincount(a, weights=None):
         a_max = a[0] if n > 0 else -1
         for i in range(1, n):
             if a[i] < 0:
-                raise ValueError("bincount(): first argument must be non-negative")
+                raise ValueError("bincount(): first argument must be "
+                                 "non-negative")
             a_max = max(a_max, a[i])
 
         out = np.zeros(a_max + 1, out_dtype)
@@ -3406,7 +3423,8 @@ def np_digitize(x, bins, right=False):
                 is_increasing = is_increasing and not prev > cur
                 is_decreasing = is_decreasing and not prev < cur
                 if not is_increasing and not is_decreasing:
-                    raise ValueError("bins must be monotonically increasing or decreasing")
+                    raise ValueError("bins must be monotonically increasing "
+                                     "or decreasing")
                 prev = cur
         return is_increasing
 
@@ -3546,10 +3564,12 @@ def np_histogram(a, bins=10, range=None):
         else:
             def histogram_impl(a, bins=10, range=None):
                 if bins <= 0:
-                    raise ValueError("histogram(): `bins` should be a positive integer")
+                    raise ValueError("histogram(): `bins` should be a "
+                                     "positive integer")
                 bin_min, bin_max = range
                 if not bin_min <= bin_max:
-                    raise ValueError("histogram(): max must be larger than min in range parameter")
+                    raise ValueError("histogram(): max must be larger than "
+                                     "min in range parameter")
 
                 hist = np.zeros(bins, np.intp)
                 if bin_max > bin_min:
@@ -3573,7 +3593,8 @@ def np_histogram(a, bins=10, range=None):
             for i in _range(nbins):
                 # Note this also catches NaNs
                 if not bins[i] <= bins[i + 1]:
-                    raise ValueError("histogram(): bins must increase monotonically")
+                    raise ValueError("histogram(): bins must increase "
+                                     "monotonically")
 
             bin_min = bins[0]
             bin_max = bins[nbins]
@@ -3583,7 +3604,7 @@ def np_histogram(a, bins=10, range=None):
                 for view in np.nditer(a):
                     v = view.item()
                     if not bin_min <= v <= bin_max:
-                        # Value is out of bounds, ignore (this also catches NaNs)
+                        # Value is out of bounds, ignore (also catches NaNs)
                         continue
                     # Bisect in bins[:-1]
                     lo = 0
@@ -3698,7 +3719,7 @@ def _np_correlate_core(ap1, ap2, mode, direction):
 class _corr_conv_Mode(IntEnum):
     """
     Enumerated modes for correlate/convolve as per:
-    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870
+    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870    # noqa: E501
     """
     VALID = 0
     SAME = 1
@@ -3716,7 +3737,7 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
 
     def impl(ap1, ap2, mode, direction):
         # Implementation loosely based on `_pyarray_correlate` from
-        # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191
+        # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191    # noqa: E501
         # For "Mode":
         # Convolve uses 'full' by default, this is denoted by the number 2
         # Correlate uses 'valid' by default, this is denoted by the number 0
@@ -3899,7 +3920,8 @@ def np_select(condlist, choicelist, default=0):
 
     def np_select_arr_impl(condlist, choicelist, default=0):
         if len(condlist) != len(choicelist):
-            raise ValueError('list of cases must be same length as list of conditions')
+            raise ValueError('list of cases must be same length as list '
+                             'of conditions')
         out = default * np.ones(choicelist[0].shape, choicelist[0].dtype)
         # should use reversed+zip, but reversed is not available
         for i in range(len(condlist) - 1, -1, -1):
@@ -3934,7 +3956,8 @@ def np_select(condlist, choicelist, default=0):
                 and isinstance(condlist[0][0], types.Boolean)):
             raise TypeError('condlist tuples must only contain booleans')
     # the input types are correct, now we perform checks on the dimensions
-    if isinstance(condlist[0], types.Array) and condlist[0].ndim != choicelist[0].ndim:
+    if (isinstance(condlist[0], types.Array) and
+            condlist[0].ndim != choicelist[0].ndim):
         raise TypeError('condlist and choicelist elements must have the '
                         'same number of dimensions')
     if isinstance(condlist[0], types.Array) and condlist[0].ndim < 1:
@@ -3946,7 +3969,7 @@ def np_select(condlist, choicelist, default=0):
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
-#   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233
+#   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
 #   at commit: f1c4c758e1c24881560dd8ab1e64ae750
 
 @register_jitable

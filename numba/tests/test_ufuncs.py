@@ -275,15 +275,19 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
+            is_tuple = isinstance(input_operand, tuple)
+            lhs = input_operand[0] if is_tuple else input_operand
+            rhs = input_operand[1] if is_tuple else input_operand
+
             if input_type in skip_inputs:
                 continue
-            if positive_only and np.any(input_operand < 0):
+            if positive_only and np.any(lhs < 0):
                 continue
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
             # conversion has become stricter in 1.10.
             if (numpy_support.strict_ufunc_typing and
-                input_operand.dtype.kind not in kinds):
+                lhs.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -293,16 +297,16 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                                     flags=flags)
             cfunc = cr.entry_point
 
-            if isinstance(input_operand, np.ndarray):
-                result = np.zeros(input_operand.size,
+            if isinstance(lhs, np.ndarray):
+                result = np.zeros(lhs.size,
                                   dtype=output_type.dtype.name)
-                expected = np.zeros(input_operand.size,
+                expected = np.zeros(lhs.size,
                                     dtype=output_type.dtype.name)
             else:
                 result = np.zeros(1, dtype=output_type.dtype.name)
                 expected = np.zeros(1, dtype=output_type.dtype.name)
-            cfunc(input_operand, input_operand, result)
-            pyfunc(input_operand, input_operand, expected)
+            cfunc(lhs, rhs, result)
+            pyfunc(lhs, rhs, expected)
             np.testing.assert_array_almost_equal(expected, result)
 
     def unary_int_ufunc_test(self, name=None, flags=no_pyobj_flags):
@@ -376,7 +380,10 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_mod_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.mod, flags=flags)
+        self.binary_ufunc_test(np.mod, flags=flags, kinds='ifcu',
+            additional_inputs = [
+                ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
+            ])
 
     @tag('important')
     def test_fmod_ufunc(self, flags=no_pyobj_flags):

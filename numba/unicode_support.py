@@ -21,14 +21,14 @@ typerecord = namedtuple('typerecord',
                         'upper lower title decimal digit flags')
 
 # The Py_UCS4 type from CPython:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/unicodeobject.h#L112
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/unicodeobject.h#L112    # noqa: E501
 _Py_UCS4 = types.uint32
 
 # ------------------------------------------------------------------------------
 # Start code related to/from CPython's unicodectype impl
 #
 # NOTE: the original source at:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c   # noqa: E501
 # contains this statement:
 #
 # /*
@@ -45,7 +45,7 @@ _Py_UCS4 = types.uint32
 # This enum contains the values defined in CPython's Objects/unicodectype.c that
 # provide masks for use against the various members of the typerecord
 #
-# See: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L13-L27
+# See: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L13-L27    # noqa: E501
 #
 
 
@@ -169,7 +169,7 @@ def _PyUnicode_ExtendedCase(typingctx, index):
 # in CPython's Objects/unicodectype.c
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L64-L71
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L64-L71    # noqa: E501
 @register_jitable
 def _PyUnicode_ToTitlecase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -178,7 +178,7 @@ def _PyUnicode_ToTitlecase(ch):
     return ch + ctype.title
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L76-L81
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L76-L81    # noqa: E501
 @register_jitable
 def _PyUnicode_IsTitlecase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -225,14 +225,14 @@ def _PyUnicode_IsPrintable(ch):
     raise NotImplementedError
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L170-L175
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L170-L175    # noqa: E501
 @register_jitable
 def _PyUnicode_IsLowercase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.LOWER_MASK != 0
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L180-L185
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L180-L185    # noqa: E501
 @register_jitable
 def _PyUnicode_IsUppercase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -249,17 +249,35 @@ def _PyUnicode_ToLowercase(ch):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L211-L225    # noqa: E501
 @register_jitable
 def _PyUnicode_ToLowerFull(ch, res):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    if (ctype.flags & _PyUnicode_TyperecordMasks.EXTENDED_CASE_MASK):
+        index = ctype.lower & 0xFFFF
+        n = ctype.lower >> 24
+        for i in range(n):
+            res[i] = _PyUnicode_ExtendedCase(index + i)
+        return n
+    res[0] = ch + ctype.lower
+    return 1
 
 
+# From: https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodectype.c#L227-L241    # noqa: E501
 @register_jitable
 def _PyUnicode_ToTitleFull(ch, res):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    if (ctype.flags & _PyUnicode_TyperecordMasks.EXTENDED_CASE_MASK):
+        index = ctype.title & 0xFFFF
+        n = ctype.title >> 24
+        for i in range(n):
+            res[i] = _PyUnicode_ExtendedCase(index + i)
+        return n
+    res[0] = ch + ctype.title
+    return 1
 
 
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L243-L257
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L243-L257    # noqa: E501
 @register_jitable
 def _PyUnicode_ToUpperFull(ch, res):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -267,6 +285,7 @@ def _PyUnicode_ToUpperFull(ch, res):
         index = ctype.upper & 0xFFFF
         n = ctype.upper >> 24
         for i in range(n):
+            # Perhaps needed to use unicode._set_code_point() here
             res[i] = _PyUnicode_ExtendedCase(index + i)
         return n
     res[0] = ch + ctype.upper
@@ -278,14 +297,18 @@ def _PyUnicode_ToFoldedFull(ch, res):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L274-L279    # noqa: E501
 @register_jitable
 def _PyUnicode_IsCased(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.CASED_MASK != 0
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L281-L286    # noqa: E501
 @register_jitable
 def _PyUnicode_IsCaseIgnorable(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.CASE_IGNORABLE_MASK != 0
 
 
 @register_jitable
@@ -300,7 +323,7 @@ def _PyUnicode_IsAlpha(ch):
 # Start code related to/from CPython's pyctype
 
 # From the definition in CPython's Include/pyctype.h
-# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L5-L11
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L5-L11    # noqa: E501
 class _PY_CTF(IntEnum):
     LOWER = 0x01
     UPPER = 0x02
@@ -312,7 +335,7 @@ class _PY_CTF(IntEnum):
 
 
 # From the definition in CPython's Python/pyctype.c
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/pyctype.c#L5
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/pyctype.c#L5    # noqa: E501
 _Py_ctype_table = np.array([
     0,  # 0x0 '\x00'
     0,  # 0x1 '\x01'
@@ -454,7 +477,7 @@ _Py_ctype_table = np.array([
 
 
 # From the definition in CPython's Python/pyctype.c
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/pyctype.c#L145
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/pyctype.c#L145    # noqa: E501
 _Py_ctype_tolower = np.array([
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -530,7 +553,7 @@ _Py_ctype_toupper = np.array([
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pymacro.h#L25
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pymacro.h#L25    # noqa: E501
 @register_jitable
 def _Py_CHARMASK(ch):
     """
@@ -541,7 +564,7 @@ def _Py_CHARMASK(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L30
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L30    # noqa: E501
 @register_jitable
 def _Py_TOUPPER(ch):
     """
@@ -552,7 +575,7 @@ def _Py_TOUPPER(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L29
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L29    # noqa: E501
 @register_jitable
 def _Py_TOLOWER(ch):
     """
@@ -563,7 +586,7 @@ def _Py_TOLOWER(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L18
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L18    # noqa: E501
 @register_jitable
 def _Py_ISLOWER(ch):
     """
@@ -573,7 +596,7 @@ def _Py_ISLOWER(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L19
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L19    # noqa: E501
 @register_jitable
 def _Py_ISUPPER(ch):
     """
@@ -583,7 +606,7 @@ def _Py_ISUPPER(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L20
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L20    # noqa: E501
 @register_jitable
 def _Py_ISALPHA(ch):
     """
@@ -593,7 +616,7 @@ def _Py_ISALPHA(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L21
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L21    # noqa: E501
 @register_jitable
 def _Py_ISDIGIT(ch):
     """
@@ -603,7 +626,7 @@ def _Py_ISDIGIT(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L22
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L22    # noqa: E501
 @register_jitable
 def _Py_ISXDIGIT(ch):
     """
@@ -613,7 +636,7 @@ def _Py_ISXDIGIT(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L23
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L23    # noqa: E501
 @register_jitable
 def _Py_ISALNUM(ch):
     """
@@ -623,7 +646,7 @@ def _Py_ISALNUM(ch):
 
 
 # Translation of:
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L24
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pyctype.h#L24    # noqa: E501
 @register_jitable
 def _Py_ISSPACE(ch):
     """

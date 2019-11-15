@@ -25,8 +25,8 @@ def normalize_kernel_dimensions(griddim, blockdim):
         else:
             dim = list(dim)
         if len(dim) > 3:
-            raise ValueError('%s must be a sequence of 1, 2 or 3 integers, got %r'
-                             % (name, dim))
+            raise ValueError('%s must be a sequence of 1, 2 or 3 integers, '
+                             'got %r' % (name, dim))
         for v in dim:
             if not isinstance(v, numbers.Integral):
                 raise TypeError('%s must be a sequence of integers, got %r'
