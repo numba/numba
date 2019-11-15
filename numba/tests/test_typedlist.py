@@ -280,15 +280,18 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         # extend
         rl, tl = setup()
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
         # extend empty
         rl, tl = setup(0, 0)
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
         # extend singleton
         rl, tl = setup(0, 1)
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
 
         # prepend

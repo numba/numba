@@ -81,7 +81,8 @@ supported reductions.
 
 A reduction is inferred automatically if a variable is updated by a binary
 function/operator using its previous value in the loop body. The initial value
-of the reduction is inferred automatically for ``+=`` and ``*=`` operators.
+of the reduction is inferred automatically for the ``+=``, ``-=``,  ``*=``,
+and ``/=`` operators.
 For other functions/operators, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
 are supported for scalars and for arrays of arbitrary dimensions.

@@ -135,7 +135,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
-                 metadata=None,  # Do not store, arbitrary and potentially large!
+                 metadata=None, # Do not store, arbitrary and potentially large!
                  reload_init=reload_init,
                  )
         return cr
@@ -298,14 +298,16 @@ class CompilerBase(object):
         self.state.typemap = None
         self.state.calltypes = None
         self.state.type_annotation = None
-        self.state.metadata = {}  # holds arbitrary inter-pipeline stage meta data
+        # holds arbitrary inter-pipeline stage meta data
+        self.state.metadata = {}
         self.state.reload_init = []
         # hold this for e.g. with_lifting, null out on exit
         self.state.pipeline = self
 
         # parfor diagnostics info, add to metadata
         self.state.parfor_diagnostics = ParforDiagnostics()
-        self.state.metadata['parfor_diagnostics'] = self.state.parfor_diagnostics
+        self.state.metadata['parfor_diagnostics'] = \
+            self.state.parfor_diagnostics
 
         self.state.status = _CompileStatus(
             can_fallback=self.state.flags.enable_pyobject,
@@ -404,9 +406,13 @@ class Compiler(CompilerBase):
         if not self.state.flags.force_pyobject:
             pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
         if self.state.status.can_fallback or self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_objectmode_pipeline(self.state))
+            pms.append(
+                DefaultPassBuilder.define_objectmode_pipeline(self.state)
+            )
         if self.state.status.can_giveup:
-            pms.append(DefaultPassBuilder.define_interpreted_pipeline(self.state))
+            pms.append(
+                DefaultPassBuilder.define_interpreted_pipeline(self.state)
+            )
         return pms
 
 
@@ -485,7 +491,8 @@ class DefaultPassBuilder(object):
         pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
-        pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")

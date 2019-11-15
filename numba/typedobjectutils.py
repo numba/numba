@@ -156,7 +156,8 @@ def _get_equal(context, module, datamodel, container_type):
     fe_type = datamodel.fe_type
     data_ptr_ty = datamodel.get_data_type().as_pointer()
 
-    wrapfnty = context.call_conv.get_function_type(types.int32, [fe_type, fe_type])
+    wrapfnty = context.call_conv.get_function_type(types.int32,
+                                                   [fe_type, fe_type])
     argtypes = [fe_type, fe_type]
 
     def build_wrapper(fn):
