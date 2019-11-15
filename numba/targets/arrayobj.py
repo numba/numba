@@ -1019,7 +1019,7 @@ def fancy_getitem(context, builder, sig, args,
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
     ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
-                                    aryty.layout, indices, wraparound=False)
+                                    aryty.layout, indices, wraparound=False, boundscheck=True)
     val = load_item(context, builder, aryty, ptr)
 
     # Since the destination is C-contiguous, no need for multi-dimensional

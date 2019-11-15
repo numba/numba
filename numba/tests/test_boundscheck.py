@@ -4,7 +4,7 @@ import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
 from numba import typeof
-from numba.types import float64
+from numba.types import float64, intp
 from numba import unittest_support as unittest
 from .support import MemoryLeakMixin
 
@@ -18,6 +18,9 @@ def slice_array_access(a):
     # The first index (slice) is not bounds checked
     return a[10:, 10]
 
+def fancy_array_access(x):
+    a = np.array([1, 2, 3])
+    return x[a]
 
 class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
     def test_basic_array_boundscheck(self):
@@ -57,6 +60,35 @@ class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
                                            flags=DEFAULT_FLAGS)
         noboundscheck = c_noboundscheck.entry_point
         c_boundscheck = compile_isolated(slice_array_access, [at],
+                                         return_type=rt,
+                                         flags=BOUNDSCHECK_FLAGS)
+        boundscheck = c_boundscheck.entry_point
+        # Check that the default flag doesn't raise
+        noboundscheck(a)
+        noboundscheck(b)
+        with self.assertRaises(IndexError):
+            boundscheck(a)
+        # Doesn't raise
+        boundscheck(b)
+
+    def test_fancy_indexing_boundscheck(self):
+        a = np.arange(3)
+        b = np.arange(4)
+
+        # Check the numpy behavior to ensure the test is correct.
+        with self.assertRaises(IndexError):
+            # TODO: When we raise the same error message as numpy, test that
+            # they are the same
+            fancy_array_access(a)
+        fancy_array_access(b)
+
+        at = typeof(a)
+        rt = intp[:]
+        c_noboundscheck = compile_isolated(fancy_array_access, [at],
+                                           return_type=rt,
+                                           flags=DEFAULT_FLAGS)
+        noboundscheck = c_noboundscheck.entry_point
+        c_boundscheck = compile_isolated(fancy_array_access, [at],
                                          return_type=rt,
                                          flags=BOUNDSCHECK_FLAGS)
         boundscheck = c_boundscheck.entry_point
