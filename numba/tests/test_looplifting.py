@@ -8,13 +8,6 @@ from numba.compiler import compile_isolated, Flags
 from .support import TestCase, tag, MemoryLeakMixin
 
 
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
-)
-
-
-
 looplift_flags = Flags()
 looplift_flags.set("enable_pyobject")
 looplift_flags.set("enable_looplift")
@@ -120,7 +113,6 @@ def reject_npm1(x):
     return a
 
 
-@skip_py38_or_later
 class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
@@ -235,7 +227,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
-@skip_py38_or_later
 class TestLoopLiftingAnnotate(TestCase):
     def test_annotate_1(self):
         """
@@ -310,7 +301,6 @@ class TestLoopLiftingAnnotate(TestCase):
         self.assertIn("Loop at line {line}".format(line=line2), annotation)
 
 
-@skip_py38_or_later
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def assert_has_lifted(self, jitted, loopcount):
         lifted = jitted.overloads[jitted.signatures[0]].lifted
