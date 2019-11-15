@@ -1399,7 +1399,7 @@ if sys.version_info[:2] >= (3, 7):
             if data._is_ascii:
                 return True
             else:
-                return False                
+                return False
         return impl
 
 

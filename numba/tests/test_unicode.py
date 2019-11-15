@@ -1279,21 +1279,21 @@ class TestUnicode(BaseTest):
                              msg='failed on {}'.format(args))
 
     @unittest.skipUnless(_py37_or_later,
-                     'isascii method requires Python 3.7 or later')
+                         'isascii method requires Python 3.7 or later')
     def test_isascii(self):
-            def pyfunc(x):
-                return x.isascii()
+        def pyfunc(x):
+            return x.isascii()
 
-            cfunc = njit(pyfunc)
-            # Samples taken from CPython testing:
-            # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L913-L926     # noqa: E501
-            cpython = ['', '\x00', '\x7f', '\x00\x7f', '\x80', '\xe9']
-            
-            msg = 'Results of "{}".isascii() must be equal'
-            for s in UNICODE_EXAMPLES + [''] + cpython:
-                for i in range(8):
-                    s = s + ' ' * i
-                    self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+        cfunc = njit(pyfunc)
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L913-L926     # noqa: E501
+        cpython = ['', '\x00', '\x7f', '\x00\x7f', '\x80', '\xe9']
+
+        msg = 'Results of "{}".isascii() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython:
+            for i in range(8):
+                s = s + ' ' * i
+                self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
     def test_title(self):
         pyfunc = title
