@@ -64,7 +64,8 @@ class CFunc(object):
     @global_compiler_lock
     def compile(self):
         # Try to load from cache
-        cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
+        cres = self._cache.load_overload(self._sig,
+                                         self._targetdescr.target_context)
         if cres is None:
             cres = self._compile_uncached()
             self._cache.save_overload(self._sig, cres)
@@ -73,7 +74,8 @@ class CFunc(object):
 
         self._library = cres.library
         self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-        self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
+        self._wrapper_address = self._library.get_pointer_to_function(
+            self._wrapper_name)
 
     def _compile_uncached(self):
         sig = self._sig

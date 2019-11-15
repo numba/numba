@@ -1,11 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 import itertools
+from itertools import chain, product, starmap
 import sys
 
 from numba import unittest_support as unittest
-from numba import jit, typeof
-from .support import TestCase
+from numba import jit, typeof, utils, TypingError
+from .support import TestCase, MemoryLeakMixin
 
 
 def slice_passing(sl):
@@ -15,8 +16,11 @@ def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
+def slice_indices(s, *indargs):
+    return s.indices(*indargs)
 
-class TestSlices(TestCase):
+
+class TestSlices(MemoryLeakMixin, TestCase):
 
     def test_slice_passing(self):
         """
@@ -77,6 +81,55 @@ class TestSlices(TestCase):
                                ]:
             got = cfunc(*args)
             self.assertPreciseEqual(got, expected)
+
+    def test_slice_indices(self):
+        """Test that a numba slice returns same result for .indices as a python one."""
+        slices = starmap(
+            slice,
+            product(
+                chain(range(-5, 5), (None,)),
+                chain(range(-5, 5), (None,)),
+                chain(range(-5, 5), (None,))
+            )
+        )
+        lengths = range(-2, 3)
+
+        cfunc = jit(nopython=True)(slice_indices)
+
+        for s, l in product(slices, lengths):
+            if l < 0 and not utils.IS_PY3:
+                # Passing a negative length to slice.indices in python2 is
+                # undefined. See https://bugs.python.org/issue14794#msg174678
+                continue
+            try:
+                expected = slice_indices(s, l)
+            except Exception as py_e:
+                with self.assertRaises(type(py_e)) as numba_e:
+                    cfunc(s, l)
+                self.assertIn(
+                    str(py_e),
+                    str(numba_e.exception)
+                )
+            else:
+                self.assertPreciseEqual(expected, cfunc(s, l))
+
+    def test_slice_indices_examples(self):
+        """Tests for specific error cases."""
+        cslice_indices = jit(nopython=True)(slice_indices)
+
+        with self.assertRaises(TypingError) as e:
+            cslice_indices(slice(None), 1, 2, 3)
+        self.assertIn(
+             "indices() takes exactly one argument (3 given)",
+             str(e.exception)
+        )
+
+        with self.assertRaises(TypingError) as e:
+            cslice_indices(slice(None, None, 0), 1.2)
+        self.assertIn(
+            "'%s' object cannot be interpreted as an integer" % typeof(1.2),
+            str(e.exception)
+        )
 
 
 if __name__ == '__main__':

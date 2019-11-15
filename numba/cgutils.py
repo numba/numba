@@ -101,7 +101,8 @@ class _StructProxy(object):
         self._context = context
         self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
-            raise TypeError("Not a structure model: {0}".format(self._datamodel))
+            raise TypeError(
+                "Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
         self._be_type = self._get_be_type(self._datamodel)
@@ -1010,7 +1011,8 @@ def raw_memmove(builder, dst, src, count, itemsize, align=1):
     Emit a raw memmove() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
-    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
+                       itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):
@@ -1095,8 +1097,8 @@ def snprintf_stackbuffer(builder, bufsz, format, *args):
 if utils.PY3:
     def normalize_ir_text(text):
         """
-        Normalize the given string to latin1 compatible encoding that is suitable
-        for use in LLVM IR.
+        Normalize the given string to latin1 compatible encoding that is
+        suitable for use in LLVM IR.
         """
         # Just re-encoding to latin1 is enough
         return text.encode('utf8').decode('latin1')

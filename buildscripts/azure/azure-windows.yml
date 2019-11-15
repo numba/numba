@@ -7,16 +7,17 @@ jobs:
   pool: 
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
       py27_np15:
         PYTHON: '2.7'
         NUMPY: '1.15' 
         CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 17
       py37_np15:
         PYTHON: '3.7'
         NUMPY: '1.15' 
         CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 18
 
   steps:
     - task: CondaEnvironment@1
@@ -63,5 +64,8 @@ jobs:
         numba -s
         popd
         python -m numba.tests.test_runtests
-        python runtests.py -m 2 -b -- numba.tests
+        # Now run tests based on the changes identified via git
+        python -m numba.runtests -b -v -g -m 2 -- numba.tests
+        # Now run the rest with slice
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,19"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test'

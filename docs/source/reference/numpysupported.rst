@@ -336,7 +336,11 @@ The following top-level functions are supported:
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input
-  arrays should have `shape[-1] == 3`)
+  arrays should have ``shape[-1] == 3``)
+
+  * If ``shape[-1] == 2`` for both inputs, please replace your
+    :func:`numpy.cross` call with :func:`numba.numpy_extensions.cross2d`.
+
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
@@ -389,7 +393,11 @@ The following top-level functions are supported:
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
+* :func:`numpy.tril_indices` (all arguments must be integer)
+* :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
+* :func:`numpy.triu_indices` (all arguments must be integer)
+* :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
 * :func:`numpy.vstack`
