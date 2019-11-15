@@ -275,9 +275,12 @@ def _fix_loop_exit(cfg, loop):
         [postdoms[b] for b in loop.exits],
         loop.exits,
     )
-    # Put the non-common-exits as body nodes
-    body = loop.body | loop.exits - exits
-    return loop._replace(exits=exits, body=body)
+    if exits:
+        # Put the non-common-exits as body nodes
+        body = loop.body | loop.exits - exits
+        return loop._replace(exits=exits, body=body)
+    else:
+        return loop
 
 
 # Functions to manipulate IR
