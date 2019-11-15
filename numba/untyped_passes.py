@@ -485,15 +485,33 @@ class CanonicalizeLoopEntry(FunctionPass):
         # Find the getiter for each iterator
         entry_block = fir.blocks[entry_label]
 
-        # XXX
-        # entry_block.dump() #XXX
 
+        # Find the start of loop entry statement that needs to be included.
         startpt = None
-        for assign in entry_block.find_insts(ir.Assign):
-            if isinstance(assign.value, ir.Global):
-                global_expr = assign.value
-                if global_expr.value is range:
+        print('deps', deps)
+        list_of_insts = list(entry_block.find_insts(ir.Assign))
+        for assign in reversed(list_of_insts):
+            if assign.target in deps:
+                print('got', assign)
+                rhs = assign.value
+                if isinstance(rhs, ir.Var):
+                    deps.add(rhs)
+                elif isinstance(rhs, ir.Expr):
+                    expr = rhs
+                    if expr.op == 'getiter':
+                        startpt = assign
+                        deps.add(expr.value)
+                    elif expr.op == 'call':
+                        # XXX handle error
+                        defn = fir.get_definition(expr.func)
+                        if isinstance(defn, ir.Global):
+                            deps.add(expr.func)
+                elif isinstance(rhs, ir.Global) and rhs.value is range:
                     startpt = assign
+
+        print("START", startpt)
+        if startpt is None:
+            return
 
         splitpt = entry_block.body.index(startpt)
         new_block = entry_block.copy()
