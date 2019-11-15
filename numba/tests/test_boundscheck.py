@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
-from numba import typeof
+from numba import typeof, config
 from numba.types import float64, intp
 from numba import unittest_support as unittest
 from .support import MemoryLeakMixin
@@ -23,6 +23,10 @@ def fancy_array_access(x):
     return x[a]
 
 class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
+    def setUp(self):
+        self.old_boundscheck = config.BOUNDSCHECK
+        config.BOUNDSCHECK = None
+
     def test_basic_array_boundscheck(self):
         a = np.arange(5)
         # Check the numpy behavior to make sure the test is correct
@@ -96,9 +100,16 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         # Doesn't raise
         boundscheck(b)
 
+    def tearDown(self):
+        config.BOUNDSCHECK = self.old_boundscheck
+
 # This is a separate test because the jitted functions that raise exceptions
 # have memory leaks.
 class TestBoundsCheckError(unittest.TestCase):
+    def setUp(self):
+        self.old_boundscheck = config.BOUNDSCHECK
+        config.BOUNDSCHECK = None
+
     def test_basic_array_boundscheck(self):
         a = np.arange(5)
         # Check the numpy behavior to make sure the test is correct
@@ -153,6 +164,9 @@ class TestBoundsCheckError(unittest.TestCase):
         boundscheck = c_boundscheck.entry_point
         with self.assertRaises(IndexError):
             boundscheck(a)
+
+    def tearDown(self):
+        config.BOUNDSCHECK = self.old_boundscheck
 
 if __name__ == '__main__':
     unittest.main()
