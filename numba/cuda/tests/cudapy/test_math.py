@@ -4,6 +4,8 @@ import numpy as np
 from numba.cuda.testing import unittest, SerialMixin
 from numba import cuda, float32, float64, int32
 import math
+from scipy import special
+from scipy import linalg
 
 
 def math_acos(A, B):
@@ -14,7 +16,6 @@ def math_acos(A, B):
 def math_asin(A, B):
     i = cuda.grid(1)
     B[i] = math.asin(A[i])
-
 
 def math_atan(A, B):
     i = cuda.grid(1)
@@ -83,6 +84,22 @@ def math_erfc(A, B):
     i = cuda.grid(1)
     B[i] = math.erfc(A[i])
 
+def math_erfinv(A, B):
+    i = cuda.grid(1)
+    B[i] = special.erfinv(A[i])
+
+def math_erfcinv(A, B):
+    i = cuda.grid(1)
+    B[i] = special.erfcinv(A[i])
+
+def math_norm(A, B):
+    i = cuda.grid(1)
+    B[i] = linalg.norm(A[i])
+
+def math_modf(A, B):
+    i = cuda.grid(1)
+    B[i] = math.modf(A[i])
+
 def math_expm1(A, B):
     i = cuda.grid(1)
     B[i] = math.expm1(A[i])
@@ -104,6 +121,11 @@ def math_log(A, B):
     B[i] = math.log(A[i])
 
 
+def math_log2(A, B):
+    i = cuda.grid(1)
+    B[i] = math.log2(A[i])
+
+
 def math_log10(A, B):
     i = cuda.grid(1)
     B[i] = math.log10(A[i])
@@ -112,6 +134,11 @@ def math_log10(A, B):
 def math_log1p(A, B):
     i = cuda.grid(1)
     B[i] = math.log1p(A[i])
+
+
+def math_ldexp(A, B, C):
+    i = cuda.grid(1)
+    C[i] = math.ldexp(A[i], B[i])
 
 
 def math_sqrt(A, B):
@@ -149,9 +176,9 @@ def math_fmod(A, B, C):
     C[i] = math.fmod(A[i], B[i])
 
 
-def math_modf(A, B, C):
+def math_frexp(A, B):
     i = cuda.grid(1)
-    C[i] = math.modf(A[i], B[i])
+    B[i] = math.frexp(A [i])
 
 
 def math_isnan(A, B):
@@ -162,6 +189,12 @@ def math_isnan(A, B):
 def math_isinf(A, B):
     i = cuda.grid(1)
     B[i] = math.isinf(A[i])
+
+
+def math_isfinite(A, B):
+    i = cuda.grid(1)
+    B[i] = math.isfinite(A[i])
+
 
 def math_degrees(A, B):
     i = cuda.grid(1)
@@ -242,6 +275,7 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         for k in range(len(x)):
             ret[k] = mathfunc(x[k])
         return ret
+    
 
     #------------------------------------------------------------------------------
     # test_math_acos
@@ -323,7 +357,8 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.unary_template_float32(math_cosh, np.cosh)
         self.unary_template_float64(math_cosh, np.cosh)
 
-    #------------------------------------------------------------------------------
+    
+    #-------------------------------------------------------------------------------
     # test_math_sinh
 
 
@@ -368,6 +403,33 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.unary_template_float64(math_erfc, ufunc)
 
     #------------------------------------------------------------------------------
+    # test_math_erfinv
+
+
+    def test_math_erfinv(self):
+        def ufunc(x):
+            return self._math_vectorize(special.erfinv, x)
+        self.unary_template_float32(math_erfinv, ufunc)
+        self.unary_template_float64(math_erfinv, ufunc)
+
+    #--------------------------------------------------------------------------------
+    # test_math_erfcinv
+
+
+    def test_math_erfcinv(self):
+        def ufunc(x):
+            return self._math_vectorize(special.erfcinv, x)
+        self.unary_template_float32(math_erfcinv, ufunc)
+        self.unary_template_float64(math_erfcinv, ufunc)
+
+    #---------------------------------------------------------------------------------
+    # test_math_log2
+
+    def test_math_log2(self):
+        self.unary_template_float32(math_log2, np.log2)
+        self.unary_template_float64(math_log2, np.log2)
+
+    #---------------------------------------------------------------------------------
     # test_math_exp
 
 
@@ -410,7 +472,7 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.unary_template_float32(math_lgamma, ufunc, start=0.1)
         self.unary_template_float64(math_lgamma, ufunc, start=0.1)
 
-    #------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------
     # test_math_log
 
 
@@ -434,7 +496,7 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.unary_template_float32(math_log1p, np.log1p)
         self.unary_template_float64(math_log1p, np.log1p)
 
-    #------------------------------------------------------------------------------
+    #-------------------------------------------------------------------------------
     # test_math_sqrt
 
 
