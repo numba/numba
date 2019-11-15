@@ -22,7 +22,7 @@ def fancy_array_access(x):
     a = np.array([1, 2, 3])
     return x[a]
 
-class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
+class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
     def test_basic_array_boundscheck(self):
         a = np.arange(5)
         # Check the numpy behavior to make sure the test is correct
@@ -35,13 +35,9 @@ class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
         c_noboundscheck = compile_isolated(basic_array_access, [at],
                                            flags=DEFAULT_FLAGS)
         noboundscheck = c_noboundscheck.entry_point
-        c_boundscheck = compile_isolated(basic_array_access, [at],
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
         # Check that the default flag doesn't raise
         noboundscheck(a)
-        with self.assertRaises(IndexError):
-            boundscheck(a)
+        # boundscheck(a) is tested in TestBoundsCheckError below
 
     def test_slice_array_boundscheck(self):
         a = np.ones((5, 5))
@@ -66,8 +62,8 @@ class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
         # Check that the default flag doesn't raise
         noboundscheck(a)
         noboundscheck(b)
-        with self.assertRaises(IndexError):
-            boundscheck(a)
+        # boundscheck(a) is tested in TestBoundsCheckError below
+
         # Doesn't raise
         boundscheck(b)
 
@@ -95,10 +91,68 @@ class TestBoundsCheck(MemoryLeakMixin, unittest.TestCase):
         # Check that the default flag doesn't raise
         noboundscheck(a)
         noboundscheck(b)
-        with self.assertRaises(IndexError):
-            boundscheck(a)
+        # boundscheck(a) is tested in TestBoundsCheckError below
+
         # Doesn't raise
         boundscheck(b)
+
+# This is a separate test because the jitted functions that raise exceptions
+# have memory leaks.
+class TestBoundsCheckError(unittest.TestCase):
+    def test_basic_array_boundscheck(self):
+        a = np.arange(5)
+        # Check the numpy behavior to make sure the test is correct
+        with self.assertRaises(IndexError):
+            # TODO: When we raise the same error message as numpy, test that
+            # they are the same
+            basic_array_access(a)
+
+        at = typeof(a)
+        c_boundscheck = compile_isolated(basic_array_access, [at],
+                                         flags=BOUNDSCHECK_FLAGS)
+        boundscheck = c_boundscheck.entry_point
+
+        with self.assertRaises(IndexError):
+            boundscheck(a)
+
+    def test_slice_array_boundscheck(self):
+        a = np.ones((5, 5))
+        b = np.ones((5, 20))
+        with self.assertRaises(IndexError):
+            # TODO: When we raise the same error message as numpy, test that
+            # they are the same
+            slice_array_access(a)
+        # Out of bounds on a slice doesn't raise
+        slice_array_access(b)
+
+        at = typeof(a)
+        rt = float64[:]
+        c_boundscheck = compile_isolated(slice_array_access, [at],
+                                         return_type=rt,
+                                         flags=BOUNDSCHECK_FLAGS)
+        boundscheck = c_boundscheck.entry_point
+        with self.assertRaises(IndexError):
+            boundscheck(a)
+
+    def test_fancy_indexing_boundscheck(self):
+        a = np.arange(3)
+        b = np.arange(4)
+
+        # Check the numpy behavior to ensure the test is correct.
+        with self.assertRaises(IndexError):
+            # TODO: When we raise the same error message as numpy, test that
+            # they are the same
+            fancy_array_access(a)
+        fancy_array_access(b)
+
+        at = typeof(a)
+        rt = intp[:]
+        c_boundscheck = compile_isolated(fancy_array_access, [at],
+                                         return_type=rt,
+                                         flags=BOUNDSCHECK_FLAGS)
+        boundscheck = c_boundscheck.entry_point
+        with self.assertRaises(IndexError):
+            boundscheck(a)
 
 if __name__ == '__main__':
     unittest.main()
