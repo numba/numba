@@ -1333,6 +1333,9 @@ def unicode_isspace(data):
 
     def impl(data):
         length = len(data)
+        if length == 1:
+            return _PyUnicode_IsSpace(_get_code_point(data, 0))
+
         if length == 0:
             return False
 
