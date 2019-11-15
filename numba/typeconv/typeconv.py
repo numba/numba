@@ -13,10 +13,8 @@ except ImportError as e:
            "are undertaking Numba development work, you may need to re-run:\n\n"
            "python setup.py build_ext --inplace\n\n(Also, please check the "
            "development set up guide %s.)\n\nIf you are not working on Numba "
-           "development:\n%s\nThe original error was: '%s'\n" + dashes + "\nIt "
-           "is not compulsory, but it is incredibly helpful if the following "
-           "is included\nin your error report along with the traceback "
-           "(thanks!):\n\n"
+           "development:\n%s\nThe original error was: '%s'\n" + dashes + "\nIf "
+           "possible please include the following in your error report:\n\n"
            "sys.executable: %s\n")
     raise ImportError(msg % (url, reportme, str(e), sys.executable))
 
