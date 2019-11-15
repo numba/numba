@@ -523,6 +523,28 @@ class TestStencil(TestStencilBase):
         self.assertNotIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
+    def test_stencil_nested1(self):
+        """Tests whether nested stencil decorator works.
+        """
+        @njit(parallel=True)
+        def test_impl(n):
+            @stencil
+            def fun(a):
+                c = 2
+                return a[-c+1]
+            B = fun(n)
+            return B
+
+        def test_impl_seq(n):
+            B = np.zeros(len(n), dtype=int)
+            for i in range(1, len(n)):
+                B[i] = n[i-1]
+            return B
+
+        n = np.arange(10)
+        np.testing.assert_equal(test_impl(n), test_impl_seq(n))
+
+    @skip_unsupported
     def test_out_kwarg_w_cval(self):
         """ Issue #3518, out kwarg did not work with cval."""
         # test const value that matches the arg dtype, and one that can be cast

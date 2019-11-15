@@ -12,7 +12,7 @@ from .analysis import (
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass
 from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
-                       GuardException)
+                       GuardException, convert_code_obj_to_function)
 
 
 @contextmanager
@@ -416,7 +416,6 @@ class FindLiterallyCalls(FunctionPass):
         return False
 
 
-
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CanonicalizeLoopExit(FunctionPass):
     _name = "canonicalize_loop_exit"
@@ -426,10 +425,7 @@ class CanonicalizeLoopExit(FunctionPass):
 
     def run_pass(self, state):
         fir = state.func_ir
-        try:
-            cfg = compute_cfg_from_blocks(fir.blocks)
-        except:
-            return False
+        cfg = compute_cfg_from_blocks(fir.blocks)
         status = False
         for loop in cfg.loops().values():
             for exit_label in loop.exits:
@@ -461,10 +457,7 @@ class CanonicalizeLoopEntry(FunctionPass):
 
     def run_pass(self, state):
         fir = state.func_ir
-        try:
-            cfg = compute_cfg_from_blocks(fir.blocks)
-        except:
-            return False
+        cfg = compute_cfg_from_blocks(fir.blocks)
         status = False
         for loop in cfg.loops().values():
             if len(loop.entries) == 1:
@@ -486,7 +479,6 @@ class CanonicalizeLoopEntry(FunctionPass):
             deps.add(expr.value)
         # Find the getiter for each iterator
         entry_block = fir.blocks[entry_label]
-
 
         # Find the start of loop entry statement that needs to be included.
         startpt = None
@@ -528,7 +520,6 @@ class CanonicalizeLoopEntry(FunctionPass):
         fir.blocks[new_label] = new_block
 
 
-
 @register_pass(mutates_CFG=False, analysis_only=True)
 class PrintIRCFG(FunctionPass):
     _name = "print_ir_cfg"
@@ -542,3 +533,53 @@ class PrintIRCFG(FunctionPass):
         self._ver += 1
         fir.render_dot(filename_prefix='v{}'.format(self._ver)).render()
         return False
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class MakeFunctionToJitFunction(FunctionPass):
+    """
+    This swaps an ir.Expr.op == "make_function" i.e. a closure, for a compiled
+    function containing the closure body and puts it in ir.Global. It's a 1:1
+    statement value swap. `make_function` is already untyped
+    """
+    _name = "make_function_op_code_to_jit_function"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        from numba import njit
+        func_ir = state.func_ir
+        mutated = False
+        for idx, blk in func_ir.blocks.items():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Expr):
+                        if stmt.value.op == "make_function":
+                            node = stmt.value
+                            getdef = func_ir.get_definition
+                            kw_default = getdef(node.defaults)
+                            ok = False
+                            if (kw_default is None or
+                                    isinstance(kw_default, ir.Const)):
+                                ok = True
+                            elif isinstance(kw_default, tuple):
+                                ok = all([isinstance(getdef(x), ir.Const)
+                                          for x in kw_default])
+
+                            if not ok:
+                                continue
+
+                            pyfunc = convert_code_obj_to_function(node, func_ir)
+                            func = njit()(pyfunc)
+                            new_node = ir.Global(node.code.co_name, func,
+                                                 stmt.loc)
+                            stmt.value = new_node
+                            mutated |= True
+
+        # if a change was made the del ordering is probably wrong, patch up
+        if mutated:
+            post_proc = postproc.PostProcessor(func_ir)
+            post_proc.run()
+
+        return mutated
