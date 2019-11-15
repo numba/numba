@@ -3011,6 +3011,7 @@ def supported_reduction(x, func_ir):
         return True
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
+        callname = tuple(i if i != '__builtin__' else 'builtins' for i in callname)
         if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
             return True
     return False
