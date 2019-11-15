@@ -1,3 +1,4 @@
+import sys
 import operator
 
 import numpy as np
@@ -1388,17 +1389,18 @@ def unicode_istitle(s):
     return impl
 
 
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11806-L11814    # noqa: E501
-@overload_method(types.UnicodeType, 'isascii')
-def unicode_isalpha(data):
-    """Implements UnicodeType.isascii()"""
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11729-L11737    # noqa: E501
+if sys.version_info[:2] >= (3, 7):
+    @overload_method(types.UnicodeType, 'isascii')
+    def unicode_isalpha(data):
+        """Implements UnicodeType.isascii()"""
 
-    def impl(data):
-        if data._is_ascii:
-            return True
-        else:
-            return False
-    return impl
+        def impl(data):
+            if data._is_ascii:
+                return True
+            else:
+                return False                
+        return impl
 
 
 @overload_method(types.UnicodeType, 'islower')

@@ -15,6 +15,7 @@ from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
+_py37_or_later = sys.version_info[:2] >= (3, 7)
 
 
 def isascii(s):
@@ -1277,18 +1278,22 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    @unittest.skipUnless(_py37_or_later,
+                     'isascii method requires Python 3.7 or later')
     def test_isascii(self):
             def pyfunc(x):
                 return x.isascii()
 
             cfunc = njit(pyfunc)
             # Samples taken from CPython testing:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L654-657     # noqa: E501
-            cpython = ["\u20ac", "\U0010ffff"]
+            # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L913-L926     # noqa: E501
+            cpython = ['', '\x00', '\x7f', '\x00\x7f', '\x80', '\xe9']
             
             msg = 'Results of "{}".isascii() must be equal'
             for s in UNICODE_EXAMPLES + [''] + cpython:
-                self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+                for i in range(8):
+                    s = s + ' ' * i
+                    self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
     def test_title(self):
         pyfunc = title
