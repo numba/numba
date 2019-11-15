@@ -316,6 +316,12 @@ def _PyUnicode_IsCaseIgnorable(ch):
 
 
 @register_jitable
+def _PyUnicode_IsSpace(ch):
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.SPACE_MASK != 0
+
+
+@register_jitable
 def _PyUnicode_IsAlpha(ch):
     raise NotImplementedError
 
