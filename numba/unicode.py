@@ -1278,6 +1278,10 @@ def unicode_isalpha(data):
         if length == 0:
             return False
 
+        if length == 1:
+            code_point = _get_code_point(data, 0)
+            return _PyUnicode_IsAlpha(code_point)
+
         if data._is_ascii:
             for i in range(length):
                 code_point = _get_code_point(data, i)
