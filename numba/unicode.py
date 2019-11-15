@@ -35,6 +35,7 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
                               _PyUnicode_ToTitleFull,
                               _PyUnicode_IsPrintable,
+                              _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -647,6 +648,42 @@ def unicode_count(src, sub, start=None, end=None):
     raise TypingError(error_msg.format(type(sub)))
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12979-L13033    # noqa: E501
+@overload_method(types.UnicodeType, 'rpartition')
+def unicode_rpartition(data, sep):
+    """Implements str.rpartition()"""
+    thety = sep
+    # if the type is omitted, the concrete type is the value
+    if isinstance(sep, types.Omitted):
+        thety = sep.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(sep, types.Optional):
+        thety = sep.type
+
+    accepted = (types.UnicodeType, types.UnicodeCharSeq)
+    if thety is not None and not isinstance(thety, accepted):
+        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        raise TypingError(msg)
+
+    def impl(data, sep):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
+        empty_str = _empty_string(data._kind, 0, data._is_ascii)
+        sep_length = len(sep)
+        if data._kind < sep._kind or len(data) < sep_length:
+            return empty_str, empty_str, data
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+
+        pos = data.rfind(sep)
+        if pos < 0:
+            return empty_str, empty_str, data
+
+        return data[0:pos], sep, data[pos + sep_length:len(data)]
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
@@ -942,6 +979,30 @@ def unicode_zfill(string, width):
         return newstr
 
     return zfill_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
+@overload_method(types.UnicodeType, 'isidentifier')
+def unicode_isidentifier(data):
+    """Implements UnicodeType.isidentifier()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        first_cp = _get_code_point(data, 0)
+        if not _PyUnicode_IsXidStart(first_cp) and first_cp != 0x5F:
+            return False
+
+        for i in range(1, length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsXidContinue(code_point):
+                return False
+
+        return True
+
+    return impl
 
 
 @register_jitable

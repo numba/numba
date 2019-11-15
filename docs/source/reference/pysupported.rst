@@ -171,6 +171,7 @@ The following functions, attributes and methods are currently supported:
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
+* ``.isidentifier()``
 * ``.find()``
 * ``.center()``
 * ``.ljust()``
@@ -186,6 +187,7 @@ The following functions, attributes and methods are currently supported:
 * ``.lower()``
 * ``.isprintable()``
 * ``.zfill()``
+* ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
@@ -537,12 +539,14 @@ The following built-in functions are supported:
 * :class:`complex`
 * :func:`divmod`
 * :func:`enumerate`
+* :func:`filter`
 * :class:`float`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`
+* :func:`map`
 * :func:`max`
 * :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
