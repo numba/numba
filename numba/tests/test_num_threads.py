@@ -81,7 +81,7 @@ class TestNumThreads(TestCase):
             return buf
 
         out = test_func()
-        self.assertTrue(np.all(out == 2))
+        np.testing.assert_equal(out, 2)
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -98,7 +98,7 @@ class TestNumThreads(TestCase):
 
         mask = 2
         out = test_func(mask)
-        self.assertTrue(np.all(out == mask))
+        np.testing.assert_equal(out, mask)
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
