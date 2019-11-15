@@ -519,6 +519,7 @@ class CanonicalizeLoopEntry(FunctionPass):
         splitpt = entry_block.body.index(startpt)
         new_block = entry_block.copy()
         new_block.body = new_block.body[splitpt:]
+        new_block.loc = new_block.body[0].loc
         new_label = entry_label + 1 # XXX
         assert new_label not in fir.blocks
 
