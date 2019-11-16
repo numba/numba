@@ -1967,7 +1967,7 @@ def in1d(ar1, ar2, assume_unique=False, invert=False):
         bool_ar = (sar[1:] != sar[:-1])
     else:
         bool_ar = (sar[1:] == sar[:-1])
-    flag = np.concatenate((bool_ar, np.array([invert])))
+    flag = np.concatenate((bool_ar, np.asarray([invert])))
     ret = np.empty(ar.shape, np.bool_)
     ret[order] = flag
 
@@ -1993,7 +1993,9 @@ if numpy_version >= (1, 13):
 
         def numba_isin(element, test_elements, assume_unique=False,
                        invert=False):
-            return in1d(element, test_elements, assume_unique, invert)
+            return in1d(element, test_elements, assume_unique, invert) \
+                .reshape(np.shape(element))
+
         return numba_isin
 
 
