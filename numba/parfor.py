@@ -1366,8 +1366,9 @@ class PreParforPass(object):
                                 isinstance(self.typemap[callname[1].name],
                                            types.npytypes.Array)):
                                 repl_func = replace_functions_ndarray.get(callname[0], None)
-                                # Add the array the method is on to the arg list.
-                                expr.args.insert(0, callname[1])
+                                if repl_func is not None:
+                                    # Add the array that the method is on to the arg list.
+                                    expr.args.insert(0, callname[1])
 
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
