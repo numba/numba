@@ -118,6 +118,18 @@ def endswith_usecase(x, y):
     return x.endswith(y)
 
 
+def expandtabs_usecase(s):
+    return s.expandtabs()
+
+
+def expandtabs_with_tabsize_usecase(s, tabsize):
+    return s.expandtabs(tabsize)
+
+
+def expandtabs_with_tabsize_kwarg_usecase(s, tabsize):
+    return s.expandtabs(tabsize=tabsize)
+
+
 def split_usecase(x, y):
     return x.split(y)
 
@@ -397,6 +409,43 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
+
+    def test_expandtabs(self):
+        pyfunc = expandtabs_usecase
+        cfunc = njit(pyfunc)
+
+        cases = ['', '\t', 't\tt\t', 'a\t', '\t⚡', 'a\tbc\nab\tc',
+                 '🐍\t⚡', '🐍⚡\n\t\t🐍\t', 'ab\rab\t\t\tab\r\n\ta']
+
+        msg = 'Results of "{}".expandtabs() must be equal'
+        for s in cases:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
+    def test_expandtabs_with_tabsize(self):
+        pyfuncs = [expandtabs_with_tabsize_usecase,
+                  expandtabs_with_tabsize_kwarg_usecase]
+        messages = ['Results of "{}".expandtabs({}) must be equal',
+                    'Results of "{}".expandtabs(tabsize={}) must be equal']
+
+        cases = ['', '\t', 't\tt\t', 'a\t', '\t⚡', 'a\tbc\nab\tc',
+                 '🐍\t⚡', '🐍⚡\n\t\t🐍\t', 'ab\rab\t\t\tab\r\n\ta']
+
+        for s in cases:
+            for tabsize in range(-1, 10):
+                for pyfunc, msg in zip(pyfuncs, messages):
+                    cfunc = njit(pyfunc)
+                    self.assertEqual(pyfunc(s, tabsize), cfunc(s, tabsize),
+                                     msg=msg.format(s, tabsize))
+
+    def test_expandtabs_exception_noninteger_tabsize(self):
+        pyfunc = expandtabs_with_tabsize_usecase
+        cfunc = njit(pyfunc)
+
+        accepted_types = (types.Integer, int)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('\t', 2.4)
+        msg = '"tabsize" must be {}, not float'.format(accepted_types)
+        self.assertIn(msg, str(raises.exception))
 
     def test_in(self, flags=no_pyobj_flags):
         pyfunc = in_usecase

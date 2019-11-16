@@ -1,4 +1,5 @@
 import operator
+import sys
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
@@ -708,6 +709,71 @@ def unicode_endswith(a, b):
         def endswith_impl(a, b):
             return a.endswith(str(b))
         return endswith_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11519-L11595    # noqa: E501
+@overload_method(types.UnicodeType, 'expandtabs')
+def unicode_expandtabs(data, tabsize=8):
+    """Implements str.expandtabs()"""
+    thety = tabsize
+    if isinstance(tabsize, types.Omitted):
+        thety = tabsize.value
+        # if the type is optional, the concrete type is the captured type
+    elif isinstance(tabsize, types.Optional):
+        thety = tabsize.type
+
+    accepted = (types.Integer, int)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError(
+            '"tabsize" must be {}, not {}'.format(accepted, tabsize))
+
+    def expandtabs_impl(data, tabsize=8):
+        length = len(data)
+        j = line_pos = 0
+        found = False
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if code_point == 9: # 0x9 '\t'
+                found = True
+                if tabsize > 0:
+                    # cannot overflow
+                    incr = tabsize - (line_pos % tabsize)
+                    if j > sys.maxsize - incr:
+                        raise OverflowError('new string is too long')
+                    line_pos += incr
+                    j += incr
+            else:
+                if j > sys.maxsize - 1:
+                    raise OverflowError('new string is too long')
+                line_pos += 1
+                j += 1
+                if code_point in (10, 13): # (0xa '\n', 0xd '\r')
+                    line_pos = 0
+
+        if not found:
+            return data
+
+        res = _empty_string(data._kind, j, data._is_ascii)
+        j = line_pos = 0
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if code_point == 9:  # 0x9 '\t'
+                if tabsize > 0:
+                    incr = tabsize - (line_pos % tabsize)
+                    line_pos += incr
+                    for idx in range(j, j + incr):
+                        _set_code_point(res, idx, 32) # 0x20 ' '
+                    j += incr
+            else:
+                line_pos += 1
+                _set_code_point(res, j, code_point)
+                j += 1
+                if code_point in (10, 13): # (0xa '\n', 0xd '\r')
+                    line_pos = 0
+
+        return res
+
+    return expandtabs_impl
 
 
 @overload_method(types.UnicodeType, 'split')
