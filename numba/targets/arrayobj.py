@@ -29,8 +29,9 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     RefType)
 from numba.typing import signature
-from numba.errors import RequireLiteralValue, TypingError
-from numba.extending import register_jitable, overload, overload_method, intrinsic
+from numba.errors import RequireLiteralValue
+from numba.extending import (
+    register_jitable, overload, overload_method, intrinsic)
 from . import quicksort, mergesort, slicing
 
 
@@ -4861,15 +4862,16 @@ def np_sort(context, builder, sig, args):
 @intrinsic
 def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
     """
-    Generate a slice tuple to extract columns from the axis dimension, as indexed by value.
-    Concretely, if shape_tuple = (2, 3, 2) and axis = 0, then
+    Generate a slice tuple to extract columns from the axis dimension,
+    as indexed by value. Concretely, if shape_tuple = (2, 3, 2) and axis = 0,
         value = 0 -> (:, 0, 0), value = 1 -> (:, 0, 1), value = 2 -> (:, 1, 0),
         value = 3 -> (:, 1, 1), value = 4 -> (:, 2, 0), value = 5 -> (:, 2, 1)
     If axis = 1, then
-        value = 0 -> (0, :, 0), value = 1 -> (0, :, 1), value = 2 -> (1, :, 0), value = 3 -> (1, :, 1)
+        value = 0 -> (0, :, 0), value = 1 -> (0, :, 1),
+        value = 2 -> (1, :, 0), value = 3 -> (1, :, 1)
     And if axis = 2, then
         value = 0 -> (0, 0, :), value = 1 -> (0, 1, :), value = 2 -> (0, 2, :),
-        value = 3 -> (1, 0, :), value = 4 -> (1, 1, :), value = 5 -> (1, 2, :) 
+        value = 3 -> (1, 0, :), value = 4 -> (1, 1, :), value = 5 -> (1, 2, :)
 
     value should lie in range(np.prod(shape_tuple) // shape_tuple[axis]).
     For this function to work, axis must be a literal integer.
@@ -4904,7 +4906,7 @@ def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
     tupty = types.Tuple(types_list)
     # Defines the signature of the intrinsic.
     function_sig = tupty(shape_tuple, value, axis)
-    
+
     def codegen(cgctx, builder, signature, args):
         lltupty = cgctx.get_value_type(tupty)
         # Create an empty indexing tuple.
@@ -4951,54 +4953,60 @@ def np_argsort(a, axis=-1, kind="quicksort"):
     axis = getattr(axis, "value", axis)
     kind = getattr(kind, "value", kind)
 
+
     # Wrap python types
     if isinstance(axis, int):
         axis = types.IntegerLiteral(axis)
     if isinstance(kind, str):
         kind = types.StringLiteral(kind)
-    
-    if (not isinstance(a, types.Array) or
-        not isinstance(axis, types.IntegerLiteral) or
-        not isinstance(kind, types.StringLiteral)):
 
+    if not (isinstance(a, types.Array) and
+            isinstance(kind, types.StringLiteral)):
         return
-    
-    arytype = a 
-    
-    axis_value = axis.literal_value
-    if axis_value < 0:
-        axis_value += arytype.ndim
-    
-    if axis_value >= arytype.ndim:
-        raise ValueError("axis {} is out of bounds for array of dimension {}".format(axis_value, arytype.ndim))
+
+    arytype = a
 
     sort_func = get_sort_func(kind=kind.literal_value,
                               is_float=isinstance(arytype.dtype, types.Float),
                               is_argsort=True)
 
-    # Optimized implementation for 1D arrays
-    if arytype.ndim == 1:
-        assert axis_value in (-1, 0)
-        
+    # If axis is None, return 1D argsort on flattened array.
+    if axis in (None, types.none):
         def array_argsort_impl(a, axis=-1, kind="quicksort"):
-            return sort_func(a)
-    else:
-        def array_argsort_impl(a, axis=-1, kind="quicksort"):
-            result = np.empty(a.shape, types.intp)
+            return sort_func(a.flatten())
+        return array_argsort_impl
 
-            max_idx = 1
-            for i, v in enumerate(a.shape):
-                if i != axis_value:
-                    max_idx *= v
+    elif isinstance(axis, types.IntegerLiteral):
+        axis_value = axis.literal_value
+        if axis_value < 0:
+            axis_value += arytype.ndim
 
-            for idx in range(max_idx):
-                slice_tuple = _gen_slice_tuple(a.shape, idx, axis_value)
-                result[slice_tuple] = sort_func(a[slice_tuple])
-            
-            return result
+        if axis_value >= arytype.ndim:
+            raise ValueError("axis {} is out of bounds".format(axis_value) +
+                             " for array of dimension {}".format(arytype.ndim))
 
+        # Optimized implementation for 1D arrays
+        if arytype.ndim == 1:
+            assert axis_value in (-1, 0)
 
-    return array_argsort_impl
+            def array_argsort_impl(a, axis=-1, kind="quicksort"):
+                return sort_func(a)
+        else:
+            def array_argsort_impl(a, axis=-1, kind="quicksort"):
+                result = np.empty(a.shape, types.intp)
+
+                max_idx = 1
+                for i, v in enumerate(a.shape):
+                    if i != axis_value:
+                        max_idx *= v
+
+                for idx in range(max_idx):
+                    slice_tuple = _gen_slice_tuple(a.shape, idx, axis_value)
+                    result[slice_tuple] = sort_func(a[slice_tuple])
+
+                return result
+
+        return array_argsort_impl
 
 
 # -----------------------------------------------------------------------------
