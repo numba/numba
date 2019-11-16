@@ -33,7 +33,9 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToFoldedFull, _PyUnicode_ToTitleFull,
+                              _PyUnicode_ToFoldedFull,
+                              _PyUnicode_ToTitleFull, _PyUnicode_IsSpace,
+                              _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
@@ -383,41 +385,6 @@ def _find(substr, s):
 
 
 @register_jitable
-def _is_whitespace(code_point):
-    # list copied from
-    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
-    return code_point == 0x0009 \
-        or code_point == 0x000A \
-        or code_point == 0x000B \
-        or code_point == 0x000C \
-        or code_point == 0x000D \
-        or code_point == 0x001C \
-        or code_point == 0x001D \
-        or code_point == 0x001E \
-        or code_point == 0x001F \
-        or code_point == 0x0020 \
-        or code_point == 0x0085 \
-        or code_point == 0x00A0 \
-        or code_point == 0x1680 \
-        or code_point == 0x2000 \
-        or code_point == 0x2001 \
-        or code_point == 0x2002 \
-        or code_point == 0x2003 \
-        or code_point == 0x2004 \
-        or code_point == 0x2005 \
-        or code_point == 0x2006 \
-        or code_point == 0x2007 \
-        or code_point == 0x2008 \
-        or code_point == 0x2009 \
-        or code_point == 0x200A \
-        or code_point == 0x2028 \
-        or code_point == 0x2029 \
-        or code_point == 0x202F \
-        or code_point == 0x205F \
-        or code_point == 0x3000
-
-
-@register_jitable
 def _codepoint_to_kind(cp):
     """
     Compute the minimum unicode kind needed to hold a given codepoint
@@ -646,6 +613,42 @@ def unicode_count(src, sub, start=None, end=None):
     raise TypingError(error_msg.format(type(sub)))
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12979-L13033    # noqa: E501
+@overload_method(types.UnicodeType, 'rpartition')
+def unicode_rpartition(data, sep):
+    """Implements str.rpartition()"""
+    thety = sep
+    # if the type is omitted, the concrete type is the value
+    if isinstance(sep, types.Omitted):
+        thety = sep.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(sep, types.Optional):
+        thety = sep.type
+
+    accepted = (types.UnicodeType, types.UnicodeCharSeq)
+    if thety is not None and not isinstance(thety, accepted):
+        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        raise TypingError(msg)
+
+    def impl(data, sep):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
+        empty_str = _empty_string(data._kind, 0, data._is_ascii)
+        sep_length = len(sep)
+        if data._kind < sep._kind or len(data) < sep_length:
+            return empty_str, empty_str, data
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+
+        pos = data.rfind(sep)
+        if pos < 0:
+            return empty_str, empty_str, data
+
+        return data[0:pos], sep, data[pos + sep_length:len(data)]
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(a, b):
     if isinstance(b, types.UnicodeType):
@@ -734,7 +737,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             for idx in range(a_len):
                 code_point = _get_code_point(a, idx)
-                is_whitespace = _is_whitespace(code_point)
+                is_whitespace = _PyUnicode_IsSpace(code_point)
                 if in_whitespace_block:
                     if is_whitespace:
                         pass  # keep consuming space
@@ -941,6 +944,30 @@ def unicode_zfill(string, width):
         return newstr
 
     return zfill_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
+@overload_method(types.UnicodeType, 'isidentifier')
+def unicode_isidentifier(data):
+    """Implements UnicodeType.isidentifier()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        first_cp = _get_code_point(data, 0)
+        if not _PyUnicode_IsXidStart(first_cp) and first_cp != 0x5F:
+            return False
+
+        for i in range(1, length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsXidContinue(code_point):
+                return False
+
+        return True
+
+    return impl
 
 
 @register_jitable
@@ -1358,6 +1385,29 @@ def unicode_upper(a):
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
+@overload_method(types.UnicodeType, 'isspace')
+def unicode_isspace(data):
+    """Implements UnicodeType.isspace()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsSpace(_get_code_point(data, 0))
+
+        if length == 0:
+            return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsSpace(code_point):
+                return False
+
+        return True
+
     return impl
 
 
