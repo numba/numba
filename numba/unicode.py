@@ -497,43 +497,81 @@ def unicode_contains(a, b):
         return contains_impl
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
+@register_jitable
+def _adjust_indices(length, start, end):
+    if end > length:
+        end = length
+    if end < 0:
+        end += length
+        if end < 0:
+            end = 0
+    if start < 0:
+        start += length
+        if start < 0:
+            start = 0
+
+    return start, end
+
+
+def unicode_idx_check_type(ty, name):
+    """Check object belongs to one of specific types
+    ty: type
+        Type of the object
+    name: str
+        Name of the object
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
+
+    accepted = (types.Integer, types.NoneType)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+
+
 @overload_method(types.UnicodeType, 'find')
-def unicode_find(a, b):
-    if isinstance(b, types.UnicodeType):
-        def find_impl(a, b):
-            return _find(substr=b, s=a)
-        return find_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def find_impl(a, b):
-            return a.find(str(b))
-        return find_impl
+def unicode_find(s, substr, start=None, end=None):
+    """Implements str.find()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+
+    if not isinstance(substr, types.UnicodeType):
+        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
+        raise TypingError(msg)
+
+    def find_impl(s, substr, start=None, end=None):
+        length = len(s)
+        sub_length = len(substr)
+        if start is None:
+            start = 0
+        if end is None:
+            end = length
+
+        start, end = _adjust_indices(length, start, end)
+        if end - start < sub_length:
+            return -1
+
+        if sub_length == 0:
+            return start
+
+        for i in range(start, min(len(s), end) - len(substr) + 1):
+            if _cmp_region(s, i, substr, 0, len(substr)) == 0:
+                return i
+        return -1
+
+    return find_impl
 
 
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(s, substr, start=None, end=None):
     """Implements str.rfind()"""
-    def unicode_rfind_check_type(ty, name):
-        """Check object belongs to one of specific types
-        ty: type
-            Type of the object
-        name: str
-            Name of the object
-        """
-        thety = ty
-        # if the type is omitted, the concrete type is the value
-        if isinstance(ty, types.Omitted):
-            thety = ty.value
-        # if the type is optional, the concrete type is the captured type
-        elif isinstance(ty, types.Optional):
-            thety = ty.type
-
-        accepted = (types.Integer, types.NoneType)
-        if thety is not None and not isinstance(thety, accepted):
-            raise TypingError(
-                '"{}" must be {}, not {}'.format(name, accepted, ty))
-
-    unicode_rfind_check_type(start, 'start')
-    unicode_rfind_check_type(end, 'end')
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
 
     if not isinstance(substr, types.UnicodeType):
         msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
@@ -547,21 +585,6 @@ def unicode_rfind(s, substr, start=None, end=None):
         if end is None:
             end = length
 
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354
-        def _adjust_indices(length, start, end):
-            if end > length:
-                end = length
-            if end < 0:
-                end += length
-                if end < 0:
-                    end = 0
-            if start < 0:
-                start += length
-                if start < 0:
-                    start = 0
-
-            return start, end
-
         start, end = _adjust_indices(length, start, end)
         if end - start < sub_length:
             return -1
@@ -573,7 +596,25 @@ def unicode_rfind(s, substr, start=None, end=None):
             if _cmp_region(s, i, substr, 0, len(substr)) == 0:
                 return i
         return -1
+
     return rfind_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
+@overload_method(types.UnicodeType, 'index')
+def unicode_index(s, sub, start=None, end=None):
+    """Implements str.index()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+
+    def index_impl(s, sub, start=None, end=None):
+        result = s.find(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return index_impl
 
 
 @overload_method(types.UnicodeType, 'count')
