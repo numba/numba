@@ -172,6 +172,7 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.expandtabs()``
+* ``.isspace()``
 * ``.isidentifier()``
 * ``.find()``
 * ``.center()``

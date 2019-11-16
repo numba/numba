@@ -1167,6 +1167,23 @@ class TestUnicode(BaseTest):
                                      "'%s'.%s('%s')?" % (string, case_name,
                                                          chars))
 
+    def test_isspace(self):
+        def pyfunc(s):
+            return s.isspace()
+
+        cfunc = njit(pyfunc)
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L613-L621    # noqa: E501
+        cpython = ['\u2000', '\u200a', '\u2014', '\U00010401', '\U00010427',
+                   '\U00010429', '\U0001044E', '\U0001F40D', '\U0001F46F']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L742-L749    # noqa: E501
+        cpython_extras = ['\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF',
+                          'a\uD800b\uDFFF', 'a\uDFFFb\uD800',
+                          'a\uD800b\uDFFFa', 'a\uDFFFb\uD800a']
+
+        msg = 'Results of "{}".isspace() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_istitle(self):
         pyfunc = istitle_usecase
         cfunc = njit(pyfunc)
