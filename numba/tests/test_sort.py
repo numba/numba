@@ -60,6 +60,19 @@ def get_argsort_axis_usecase(axis, use_keyword=False):
             return val.argsort(axis)
     return argsort_axis_usecase
 
+def get_argsort_axis_kind_usecase(axis, kind, num_keywords=2):
+    if num_keywords == 0:
+        def argsort_axis_kind_usecase(val):
+            return val.argsort(axis, kind)
+    elif num_keywords == 1:
+        def argsort_axis_kind_usecase(val):
+            return val.argsort(axis, kind=kind)
+    elif num_keywords == 2:
+        def argsort_axis_kind_usecase(val):
+            return val.argsort(axis=axis, kind=kind)
+    
+    return argsort_axis_kind_usecase
+    
 def sorted_usecase(val):
     return sorted(val)
 
@@ -86,6 +99,19 @@ def get_np_argsort_axis_usecase(axis, use_keyword=False):
         def np_argsort_axis_usecase(val):
             return np.argsort(val, axis)
     return np_argsort_axis_usecase
+
+def get_np_argsort_axis_kind_usecase(axis, kind, num_keywords=2):
+    if num_keywords == 0:
+        def np_argsort_axis_kind_usecase(val):
+            return np.argsort(val, axis, kind)
+    elif num_keywords == 1:
+        def np_argsort_axis_kind_usecase(val):
+            return np.argsort(val, axis, kind=kind)
+    elif num_keywords == 2:
+        def np_argsort_axis_kind_usecase(val):
+            return np.argsort(val, axis=axis, kind=kind)
+    
+    return np_argsort_axis_kind_usecase
 
 def list_sort_usecase(n):
     np.random.seed(42)
@@ -870,6 +896,33 @@ class TestNumpySort(TestCase):
         use_keyword = [True, False]
 
         for t in itertools.product(func, axis, use_keyword):
+            check(*t)
+                
+    def test_argsort_axis_kind_int(self):
+        sizes = [
+            (5,),
+            (5, 5),
+            (3, 4, 5),
+            (6, 5, 4, 5)
+        ]
+
+        def check(get_pyfunc, axis, kind, num_keywords):
+            pyfunc = get_pyfunc(axis, kind, num_keywords=num_keywords)
+            cfunc = jit(nopython=True)(pyfunc)
+            for s in sizes:
+                if len(s) <= abs(axis):
+                    continue
+                val = np.random.randint(99, size=s)
+                expected = pyfunc(val)
+                got = cfunc(val)
+                self.assertPreciseEqual(expected, got)
+        
+        func = [get_np_argsort_axis_kind_usecase, get_argsort_axis_kind_usecase]
+        axis = [0, 1, 2, 3, -1, -2]
+        kind = ["quicksort", "mergesort"]
+        num_keywords = [0, 1, 2]
+
+        for t in itertools.product(func, axis, kind, num_keywords):
             check(*t)
                 
     @tag('important')

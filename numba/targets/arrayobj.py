@@ -4943,11 +4943,20 @@ def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
 @overload_method(types.Array, "argsort")
 @overload(np.argsort)
 def np_argsort(a, axis=-1, kind="quicksort"):
-    if axis == -1:
-        axis = types.IntegerLiteral(axis)
-    if kind == "quicksort":
-        kind = types.StringLiteral(kind)
+    # Unpack TypeRef
+    axis = getattr(axis, "instance_type", axis)
+    kind = getattr(kind, "instance_type", kind)
 
+    # Unpack Omitted
+    axis = getattr(axis, "value", axis)
+    kind = getattr(kind, "value", kind)
+
+    # Wrap python types
+    if isinstance(axis, int):
+        axis = types.IntegerLiteral(axis)
+    if isinstance(kind, str):
+        kind = types.StringLiteral(kind)
+    
     if (not isinstance(a, types.Array) or
         not isinstance(axis, types.IntegerLiteral) or
         not isinstance(kind, types.StringLiteral)):
