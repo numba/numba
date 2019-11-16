@@ -423,7 +423,7 @@ class TestUnicode(BaseTest):
 
     def test_expandtabs_with_tabsize(self):
         pyfuncs = [expandtabs_with_tabsize_usecase,
-                  expandtabs_with_tabsize_kwarg_usecase]
+                   expandtabs_with_tabsize_kwarg_usecase]
         messages = ['Results of "{}".expandtabs({}) must be equal',
                     'Results of "{}".expandtabs(tabsize={}) must be equal']
 
