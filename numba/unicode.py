@@ -386,41 +386,6 @@ def _find(substr, s):
 
 
 @register_jitable
-def _is_whitespace(code_point):
-    # list copied from
-    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
-    return code_point == 0x0009 \
-        or code_point == 0x000A \
-        or code_point == 0x000B \
-        or code_point == 0x000C \
-        or code_point == 0x000D \
-        or code_point == 0x001C \
-        or code_point == 0x001D \
-        or code_point == 0x001E \
-        or code_point == 0x001F \
-        or code_point == 0x0020 \
-        or code_point == 0x0085 \
-        or code_point == 0x00A0 \
-        or code_point == 0x1680 \
-        or code_point == 0x2000 \
-        or code_point == 0x2001 \
-        or code_point == 0x2002 \
-        or code_point == 0x2003 \
-        or code_point == 0x2004 \
-        or code_point == 0x2005 \
-        or code_point == 0x2006 \
-        or code_point == 0x2007 \
-        or code_point == 0x2008 \
-        or code_point == 0x2009 \
-        or code_point == 0x200A \
-        or code_point == 0x2028 \
-        or code_point == 0x2029 \
-        or code_point == 0x202F \
-        or code_point == 0x205F \
-        or code_point == 0x3000
-
-
-@register_jitable
 def _codepoint_to_kind(cp):
     """
     Compute the minimum unicode kind needed to hold a given codepoint
@@ -773,7 +738,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             for idx in range(a_len):
                 code_point = _get_code_point(a, idx)
-                is_whitespace = _is_whitespace(code_point)
+                is_whitespace = _PyUnicode_IsSpace(code_point)
                 if in_whitespace_block:
                     if is_whitespace:
                         pass  # keep consuming space
@@ -1552,6 +1517,29 @@ def unicode_upper(a):
             for i in range(newlength):
                 _set_code_point(ret, i, _get_code_point(tmp, i))
             return ret
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
+@overload_method(types.UnicodeType, 'isspace')
+def unicode_isspace(data):
+    """Implements UnicodeType.isspace()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsSpace(_get_code_point(data, 0))
+
+        if length == 0:
+            return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsSpace(code_point):
+                return False
+
+        return True
+
     return impl
 
 
