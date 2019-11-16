@@ -1912,20 +1912,20 @@ def _np_unique(ar, return_index=False, return_inverse=False,
     mask[:1] = True
     mask[1:] = aux[1:] != aux[:-1]
 
-    ret_idx = perm[mask] if return_index else np.empty(0, dtype=np.int64)
+    ret_idx = perm[mask] if return_index else None
 
     if return_inverse:
         imask = np.cumsum(mask) - 1
         ret_inv = np.empty(mask.shape, dtype=np.int64)
         ret_inv[perm] = imask
     else:
-        ret_inv = np.empty(0, dtype=np.int64)
+        ret_inv = None
 
     if return_counts:
         idx = np.concatenate(np.nonzero(mask) + (np.asarray([mask.size]),))
         ret_counts = np.diff(idx)
     else:
-        ret_counts = np.empty(0, dtype=np.int64)
+        ret_counts = None
 
     return (np.asarray(aux[mask], dtype=ar.dtype), ret_idx, ret_inv, ret_counts)
 
