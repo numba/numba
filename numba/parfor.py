@@ -122,7 +122,10 @@ class internal_prange(object):
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def min_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
             min_checker(len(in_arr))
@@ -141,7 +144,10 @@ def min_parallel_impl(return_type, arg):
     return min_1
 
 def max_parallel_impl(return_type, arg):
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def max_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
             max_checker(len(in_arr))
@@ -238,7 +244,10 @@ def dot_parallel_impl(return_type, atyp, btyp):
 def sum_parallel_impl(return_type, arg):
     zero = return_type(0)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def sum_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def sum_1(in_arr):
             numba.parfor.init_prange()
             val = zero
@@ -257,7 +266,10 @@ def sum_parallel_impl(return_type, arg):
 def prod_parallel_impl(return_type, arg):
     one = return_type(1)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def prod_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def prod_1(in_arr):
             numba.parfor.init_prange()
             val = one
@@ -278,7 +290,10 @@ def mean_parallel_impl(return_type, arg):
     # can't reuse sum since output type is different
     zero = return_type(0)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def mean_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def mean_1(in_arr):
             numba.parfor.init_prange()
             val = zero
@@ -295,8 +310,10 @@ def mean_parallel_impl(return_type, arg):
     return mean_1
 
 def var_parallel_impl(return_type, arg):
-
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def var_1(in_arr):
+            return 0
+    elif arg.ndim == 1:
         def var_1(in_arr):
             # Compute the mean
             m = in_arr.mean()
@@ -2330,7 +2347,7 @@ class ParforPass(object):
         """
         from numba.inline_closurecall import check_reduce_func
         reduce_func = get_definition(self.func_ir, call_name)
-        check_reduce_func(self.func_ir, reduce_func)
+        fcode = check_reduce_func(self.func_ir, reduce_func)
 
         arr_typ = self.typemap[in_arr.name]
         in_typ = arr_typ.dtype
@@ -2345,7 +2362,7 @@ class ParforPass(object):
             in_typ, arr_typ, index_var_type)
         body_block.append(ir.Assign(getitem_call, tmp_var, loc))
 
-        reduce_f_ir = compile_to_numba_ir(reduce_func,
+        reduce_f_ir = compile_to_numba_ir(fcode,
                                         self.func_ir.func_id.func.__globals__,
                                         self.typingctx,
                                         (in_typ, in_typ),

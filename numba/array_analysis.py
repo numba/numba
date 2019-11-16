@@ -349,8 +349,9 @@ class ShapeEquivSet(EquivSet):
                     isinstance(typ, types.ArrayCompatible)):
                 ndim = (typ.ndim if isinstance(typ, types.ArrayCompatible)
                         else len(typ))
+                # Treat 0d array as if it were a scalar.
                 if ndim == 0:
-                    return ()
+                    return (name,)
                 else:
                     return tuple("{}#{}".format(name, i) for i in range(ndim))
             else:
@@ -512,6 +513,9 @@ class ShapeEquivSet(EquivSet):
         if not (isinstance(typ, types.BaseTuple) or
                 isinstance(typ, types.SliceType) or
                 isinstance(typ, types.ArrayCompatible)):
+            return []
+        # Treat 0d arrays like scalars.
+        if isinstance(typ, types.ArrayCompatible) and typ.ndim == 0:
             return []
         names = self._get_names(name)
         inds = tuple(self._get_ind(name) for name in names)
