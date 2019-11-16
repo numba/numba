@@ -34,6 +34,7 @@ from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
                               _PyUnicode_ToTitleFull, _PyUnicode_IsPrintable,
+                              _PyUnicode_IsSpace,
                               _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
