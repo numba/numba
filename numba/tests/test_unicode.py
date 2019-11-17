@@ -406,7 +406,7 @@ class TestUnicode(BaseTest):
         self.disable_leak_check()
 
         pyfunc = encode_usecase
-        cfunc= njit(pyfunc)
+        cfunc = njit(pyfunc)
 
         msg = 'Results of "{}".encode() must be equal'
         for s in ['', 'a', 'abcabc', '123456']:
@@ -416,7 +416,7 @@ class TestUnicode(BaseTest):
         self.disable_leak_check()
 
         pyfunc = encode_usecase
-        cfunc= njit(pyfunc)
+        cfunc = njit(pyfunc)
 
         with self.assertRaises(ValueError) as raises:
             cfunc('\u20ac')
