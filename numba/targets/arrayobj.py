@@ -4876,8 +4876,8 @@ def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
     value should lie in range(np.prod(shape_tuple) // shape_tuple[axis]).
     For this function to work, axis must be a literal integer.
     """
-    if not isinstance(axis, types.Literal):
-        raise RequireLiteralValue('axis argument must be a constant')
+    if not isinstance(axis, types.IntegerLiteral):
+        raise RequireLiteralValue("axis argument must be a constant")
 
     # Get the value of the axis constant.
     axis_value = axis.literal_value
@@ -4891,6 +4891,9 @@ def _gen_slice_tuple(tyctx, shape_tuple, value, axis):
     # exception.
     if axis_value >= nd:
         axis_value = 0
+
+    if axis_value < 0:
+        axis_value += nd
 
     # Calculate the type of the indexing tuple.  All the non-axis
     # dimensions have slice2 type and the axis dimension has int type.
@@ -4953,7 +4956,6 @@ def np_argsort(a, axis=-1, kind="quicksort"):
     axis = getattr(axis, "value", axis)
     kind = getattr(kind, "value", kind)
 
-
     # Wrap python types
     if isinstance(axis, int):
         axis = types.IntegerLiteral(axis)
@@ -4976,7 +4978,10 @@ def np_argsort(a, axis=-1, kind="quicksort"):
             return sort_func(a.flatten())
         return array_argsort_impl
 
-    elif isinstance(axis, types.IntegerLiteral):
+    if not isinstance(axis, types.Integer):
+        return
+
+    if isinstance(axis, types.IntegerLiteral):
         axis_value = axis.literal_value
         if axis_value < 0:
             axis_value += arytype.ndim
@@ -4984,27 +4989,57 @@ def np_argsort(a, axis=-1, kind="quicksort"):
         if axis_value >= arytype.ndim:
             raise ValueError("axis {} is out of bounds".format(axis_value) +
                              " for array of dimension {}".format(arytype.ndim))
+        axis_is_const = True
+    else:
+        axis_value = 0
+        axis_is_const = False
 
         # Optimized implementation for 1D arrays
         if arytype.ndim == 1:
-            assert axis_value in (-1, 0)
-
             def array_argsort_impl(a, axis=-1, kind="quicksort"):
+                axis_val = axis_value if axis_is_const else axis
+                assert axis_val in (-1, 0)
                 return sort_func(a)
         else:
+            def gen_fill_loop(axis_val):
+                @register_jitable
+                def impl(arr):
+                    max_idx = 1
+                    for i, v in enumerate(arr.shape):
+                        if i != axis_val:
+                            max_idx *= v
+
+                    result = np.empty(arr.shape, types.intp)
+                    for idx in range(max_idx):
+                        slice_tuple = _gen_slice_tuple(arr.shape, idx, axis_val)
+                        result[slice_tuple] = sort_func(arr[slice_tuple])
+                    return result
+                return impl
+
+            fill_loop_const = gen_fill_loop(axis_value)
+            fill_loop_0 = gen_fill_loop(0)
+            fill_loop_1 = gen_fill_loop(1)
+            fill_loop_2 = gen_fill_loop(2)
+            fill_loop_3 = gen_fill_loop(3)
+            fill_loop_n1 = gen_fill_loop(-1)
+
             def array_argsort_impl(a, axis=-1, kind="quicksort"):
-                result = np.empty(a.shape, types.intp)
-
-                max_idx = 1
-                for i, v in enumerate(a.shape):
-                    if i != axis_value:
-                        max_idx *= v
-
-                for idx in range(max_idx):
-                    slice_tuple = _gen_slice_tuple(a.shape, idx, axis_value)
-                    result[slice_tuple] = sort_func(a[slice_tuple])
-
-                return result
+                if axis_is_const:
+                    return fill_loop_const(a)
+                elif axis == 0:
+                    return fill_loop_0(a)
+                elif axis == 1:
+                    return fill_loop_1(a)
+                elif axis == 2:
+                    return fill_loop_2(a)
+                elif axis == 3:
+                    return fill_loop_3(a)
+                elif axis == -1:
+                    return fill_loop_n1(a)
+                else:
+                    raise ValueError("Numba does not support argsort with "
+                                     "non-constant axis parameter outside the "
+                                     "range -1 to 3.")
 
         return array_argsort_impl
 

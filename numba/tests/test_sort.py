@@ -51,7 +51,16 @@ def argsort_kind_usecase(val, is_stable=False):
     else:
         return val.argsort(kind='quicksort')
 
-def get_argsort_axis_usecase(axis, use_keyword=False):
+def get_argsort_axis_usecase(use_keyword=False):
+    if use_keyword:
+        def argsort_axis_usecase(val, axis):
+            return val.argsort(axis=axis)
+    else:
+        def argsort_axis_usecase(val, axis):
+            return val.argsort(axis)
+    return argsort_axis_usecase
+
+def get_argsort_axis_lit_usecase(axis, use_keyword=False):
     if use_keyword:
         def argsort_axis_usecase(val):
             return val.argsort(axis=axis)
@@ -60,7 +69,20 @@ def get_argsort_axis_usecase(axis, use_keyword=False):
             return val.argsort(axis)
     return argsort_axis_usecase
 
-def get_argsort_axis_kind_usecase(axis, kind, num_keywords=2):
+def get_argsort_axis_kind_usecase(kind, num_keywords=2):
+    if num_keywords == 0:
+        def argsort_axis_kind_usecase(val, axis):
+            return val.argsort(axis, kind)
+    elif num_keywords == 1:
+        def argsort_axis_kind_usecase(val, axis):
+            return val.argsort(axis, kind=kind)
+    elif num_keywords == 2:
+        def argsort_axis_kind_usecase(val, axis):
+            return val.argsort(axis=axis, kind=kind)
+
+    return argsort_axis_kind_usecase
+
+def get_argsort_axis_lit_kind_usecase(axis, kind, num_keywords=2):
     if num_keywords == 0:
         def argsort_axis_kind_usecase(val):
             return val.argsort(axis, kind)
@@ -91,7 +113,16 @@ def np_argsort_kind_usecase(val, is_stable=False):
     else:
         return np.argsort(val, kind='quicksort')
 
-def get_np_argsort_axis_usecase(axis, use_keyword=False):
+def get_np_argsort_axis_usecase(use_keyword=False):
+    if use_keyword:
+        def np_argsort_axis_usecase(val, axis):
+            return np.argsort(val, axis=axis)
+    else:
+        def np_argsort_axis_usecase(val, axis):
+            return np.argsort(val, axis)
+    return np_argsort_axis_usecase
+
+def get_np_argsort_axis_lit_usecase(axis, use_keyword=False):
     if use_keyword:
         def np_argsort_axis_usecase(val):
             return np.argsort(val, axis=axis)
@@ -100,7 +131,20 @@ def get_np_argsort_axis_usecase(axis, use_keyword=False):
             return np.argsort(val, axis)
     return np_argsort_axis_usecase
 
-def get_np_argsort_axis_kind_usecase(axis, kind, num_keywords=2):
+def get_np_argsort_axis_kind_usecase(kind, num_keywords=2):
+    if num_keywords == 0:
+        def np_argsort_axis_kind_usecase(val, axis):
+            return np.argsort(val, axis, kind)
+    elif num_keywords == 1:
+        def np_argsort_axis_kind_usecase(val, axis):
+            return np.argsort(val, axis, kind=kind)
+    elif num_keywords == 2:
+        def np_argsort_axis_kind_usecase(val, axis):
+            return np.argsort(val, axis=axis, kind=kind)
+
+    return np_argsort_axis_kind_usecase
+
+def get_np_argsort_axis_lit_kind_usecase(axis, kind, num_keywords=2):
     if num_keywords == 0:
         def np_argsort_axis_kind_usecase(val):
             return np.argsort(val, axis, kind)
@@ -878,7 +922,7 @@ class TestNumpySort(TestCase):
         np.random.shuffle(arr)
         return arr.reshape(shape)
 
-    def test_argsort_axis_int(self):
+    def test_argsort_axis_lit_int(self):
         sizes = [
             (5,),
             (5, 5),
@@ -890,21 +934,47 @@ class TestNumpySort(TestCase):
             pyfunc = get_pyfunc(axis, use_keyword=use_keyword)
             cfunc = jit(nopython=True)(pyfunc)
             for s in sizes:
-                if isinstance(axis, int) and len(s) <= abs(axis):
+                if isinstance(axis, int) and (axis >= len(s) or -len(s) > axis):
                     continue
                 val = self._get_unique_int_array(s)
                 expected = pyfunc(val)
                 got = cfunc(val)
                 self.assertPreciseEqual(expected, got)
 
-        func = [get_np_argsort_axis_usecase, get_argsort_axis_usecase]
+        func = [get_np_argsort_axis_lit_usecase, get_argsort_axis_lit_usecase]
         axis = [0, 1, 2, 3, -1, -2, None]
         use_keyword = [True, False]
 
         for t in itertools.product(func, axis, use_keyword):
             check(*t)
 
-    def test_argsort_axis_kind_int(self):
+    def test_argsort_axis_int(self):
+        sizes = [
+            (5,),
+            (5, 5),
+            (3, 4, 5),
+            (6, 5, 4, 5)
+        ]
+
+        def check(get_pyfunc, axis, use_keyword):
+            pyfunc = get_pyfunc(use_keyword=use_keyword)
+            cfunc = jit(nopython=True)(pyfunc)
+            for s in sizes:
+                if isinstance(axis, int) and (axis >= len(s) or -len(s) > axis):
+                    continue
+                val = self._get_unique_int_array(s)
+                expected = pyfunc(val, axis)
+                got = cfunc(val, axis)
+                self.assertPreciseEqual(expected, got)
+
+        func = [get_np_argsort_axis_usecase, get_argsort_axis_usecase]
+        axis = [0, 1, 2, 3, -1, None]
+        use_keyword = [True, False]
+
+        for t in itertools.product(func, axis, use_keyword):
+            check(*t)
+
+    def test_argsort_axis_lit_kind_int(self):
         sizes = [
             (5,),
             (5, 5),
@@ -916,15 +986,42 @@ class TestNumpySort(TestCase):
             pyfunc = get_pyfunc(axis, kind, num_keywords=num_keywords)
             cfunc = jit(nopython=True)(pyfunc)
             for s in sizes:
-                if isinstance(axis, int) and len(s) <= abs(axis):
+                if isinstance(axis, int) and (axis >= len(s) or -len(s) > axis):
                     continue
                 val = self._get_unique_int_array(s)
                 expected = pyfunc(val)
                 got = cfunc(val)
                 self.assertPreciseEqual(expected, got)
 
-        func = [get_np_argsort_axis_kind_usecase, get_argsort_axis_kind_usecase]
+        func = [get_np_argsort_axis_lit_kind_usecase, get_argsort_axis_lit_kind_usecase]
         axis = [0, 1, 2, 3, -1, -2, None]
+        kind = ["quicksort", "mergesort"]
+        num_keywords = [0, 1, 2]
+
+        for t in itertools.product(func, axis, kind, num_keywords):
+            check(*t)
+
+    def test_argsort_axis_kind_int(self):
+        sizes = [
+            (5,),
+            (5, 5),
+            (3, 4, 5),
+            (6, 5, 4, 5)
+        ]
+
+        def check(get_pyfunc, axis, kind, num_keywords):
+            pyfunc = get_pyfunc(kind, num_keywords=num_keywords)
+            cfunc = jit(nopython=True)(pyfunc)
+            for s in sizes:
+                if isinstance(axis, int) and (axis >= len(s) or -len(s) > axis):
+                    continue
+                val = self._get_unique_int_array(s)
+                expected = pyfunc(val, axis)
+                got = cfunc(val, axis)
+                self.assertPreciseEqual(expected, got)
+
+        func = [get_np_argsort_axis_kind_usecase, get_argsort_axis_kind_usecase]
+        axis = [0, 1, 2, 3, -1, None]
         kind = ["quicksort", "mergesort"]
         num_keywords = [0, 1, 2]
 
