@@ -509,6 +509,26 @@ def unicode_find(a, b):
         return find_impl
 
 
+def unicode_idx_check_type(ty, name):
+    """Check object belongs to one of specific types
+    ty: type
+        Type of the object
+    name: str
+        Name of the object
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
+
+    accepted = (types.Integer, types.NoneType)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+
+
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(s, substr, start=None, end=None):
     """Implements str.rfind()"""
@@ -574,6 +594,23 @@ def unicode_rfind(s, substr, start=None, end=None):
                 return i
         return -1
     return rfind_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12831-L12857    # noqa: E501
+@overload_method(types.UnicodeType, 'rindex')
+def unicode_rindex(s, sub, start=None, end=None):
+    """Implements str.rindex()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+
+    def rindex_impl(s, sub, start=None, end=None):
+        result = s.rfind(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return rindex_impl
 
 
 @overload_method(types.UnicodeType, 'count')
