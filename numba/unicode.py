@@ -675,6 +675,21 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L3471-L3565    # noqa: E501
+@overload_method(types.UnicodeType, 'encode')
+def unicode_encode(data, encoding='utf-8', errors='strict'):
+    """Implements str.encode()"""
+    if isinstance(encoding, types.Omitted) or encoding == 'utf-8':
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L5181-L5216    # noqa: E501
+        def encode_impl(data, encoding='utf-8', errors='strict'):
+            return data._to_bytes()
+
+        return encode_impl
+
+    msg = 'The object {}\n given: {}\n expected: {}'
+    raise TypingError(msg.format('encoding', encoding, 'utf-8'))
+
+
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or

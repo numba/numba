@@ -118,6 +118,10 @@ def endswith_usecase(x, y):
     return x.endswith(y)
 
 
+def encode_usecase(s):
+    return s.encode()
+
+
 def split_usecase(x, y):
     return x.split(y)
 
@@ -397,6 +401,27 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
                                  '%s, %s' % (a, b))
+
+    def test_encode(self):
+        self.disable_leak_check()
+
+        pyfunc = encode_usecase
+        cfunc= njit(pyfunc)
+
+        msg = 'Results of "{}".encode() must be equal'
+        for s in ['', 'a', 'abcabc', '123456']:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
+    def test_encode_exception_unsupported_kind(self):
+        self.disable_leak_check()
+
+        pyfunc = encode_usecase
+        cfunc= njit(pyfunc)
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc('\u20ac')
+        msg = 'cannot cast higher than 8-bit unicode_type to bytes'
+        self.assertIn(msg, str(raises.exception))
 
     def test_in(self, flags=no_pyobj_flags):
         pyfunc = in_usecase
