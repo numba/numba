@@ -807,6 +807,14 @@ class TestUnicode(BaseTest):
         self.assertIn('Invalid use of Function(<built-in function mul>)',
                       str(raises.exception))
 
+    def test_format(self):
+        def pyfunc():
+            return '{} {}'.format('hello', 'world')
+
+        cfunc = njit(pyfunc)
+
+        self.assertEqual(pyfunc(), cfunc())
+
     def test_split_exception_empty_sep(self):
         self.disable_leak_check()
 

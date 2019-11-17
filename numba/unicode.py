@@ -675,6 +675,16 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L14938-L15019    # noqa: E501
+@overload_method(types.UnicodeType, 'format')
+def unicode_format(s, *args):
+    """Implements str.format()"""
+    def format_impl(s, *args):
+        pass
+
+    return format_impl
+
+
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or
