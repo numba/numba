@@ -305,6 +305,8 @@ def _list_new(typingctx, itemty, allocated):
     ----------
     itemty: Type
         Type of the items
+    allocated: int
+        number of items to pre-allocate
 
     """
     resty = types.voidptr
