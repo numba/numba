@@ -441,7 +441,6 @@ def fill_parallel_impl(return_type, arr, val):
     else:
         def fill_1(in_arr, val):
             numba.parfor.init_prange()
-            val = zero
             for i in numba.pndindex(in_arr.shape):
                 in_arr[i] = val
             return None
