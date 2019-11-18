@@ -209,6 +209,7 @@ def _PyUnicode_IsDecimalDigit(ch):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L123-L1128  # noqa: E501
 @register_jitable
 def _PyUnicode_ToDigit(ch):
     ctype = _PyUnicode_gettyperecord(ch)
