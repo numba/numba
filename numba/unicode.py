@@ -705,7 +705,7 @@ def unicode_startswith(s, substr, start=None, end=None):
             s = s[:end]
             return _cmp_region(s, start, substr, 0, len(substr)) == 0
         return startswith_impl
-        
+
     if isinstance(substr, types.UnicodeCharSeq):
         def startswith_impl(s, substr, start=None, end=None):
             return s.startswith(str(substr), start, end)
