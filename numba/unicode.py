@@ -497,16 +497,80 @@ def unicode_contains(a, b):
         return contains_impl
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
+@register_jitable
+def _adjust_indices(length, start, end):
+    if end > length:
+        end = length
+    if end < 0:
+        end += length
+        if end < 0:
+            end = 0
+    if start < 0:
+        start += length
+        if start < 0:
+            start = 0
+
+    return start, end
+
+
+def unicode_idx_check_type(ty, name):
+    """Check object belongs to one of specific types
+    ty: type
+        Type of the object
+    name: str
+        Name of the object
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
+
+    accepted = (types.Integer, types.NoneType)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+
+
 @overload_method(types.UnicodeType, 'find')
-def unicode_find(a, b):
-    if isinstance(b, types.UnicodeType):
-        def find_impl(a, b):
-            return _find(substr=b, s=a)
+def unicode_find(data, substr, start=None, end=None):
+    """Implements str.find()"""
+
+    if isinstance(substr, types.UnicodeCharSeq):
+        def find_impl(data, substr):
+            return data.find(str(substr))
         return find_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def find_impl(a, b):
-            return a.find(str(b))
-        return find_impl
+
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+
+    if not isinstance(substr, types.UnicodeType):
+        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
+        raise TypingError(msg)
+
+    def find_impl(data, substr, start=None, end=None):
+        length = len(data)
+        sub_length = len(substr)
+        if start is None:
+            start = 0
+        if end is None:
+            end = length
+
+        start, end = _adjust_indices(length, start, end)
+        if end - start < sub_length:
+            return -1
+
+        if sub_length == 0:
+            return start
+
+        for i in range(start, min(len(data), end) - len(substr) + 1):
+            if _cmp_region(data, i, substr, 0, len(substr)) == 0:
+                return i
+        return -1
+
+    return find_impl
 
 
 @overload_method(types.UnicodeType, 'rfind')
