@@ -336,8 +336,15 @@ def _list_new(typingctx, itemty, allocated):
 
 @overload(new_list)
 def impl_new_list(item, allocated=0):
-    """Creates a new list with *item* as the type
-    of the list item.
+    """Creates a new list.
+
+    Parameters
+    ----------
+    item: Numba type
+        type of the list item.
+    allocated: int
+        number of items to pre-allocate
+
     """
     if not isinstance(item, Type):
         raise TypeError("expecting *item* to be a numba Type")
