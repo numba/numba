@@ -151,8 +151,14 @@ class List(MutableSequence):
     """
     @classmethod
     def empty_list(cls, item_type, allocated=0):
-        """Create a new empty List with *item_type* as the type for the items
-        of the list .
+        """Create a new empty List.
+
+        Parameters
+        ----------
+        item_type: Numba type
+            type of the list item.
+        allocated: int
+            number of items to pre-allocate
         """
         return cls(lsttype=ListType(item_type), allocated=allocated)
 
@@ -167,6 +173,8 @@ class List(MutableSequence):
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
+        allocated: int; keyword-only
+            Used internally to pre-allocate space for items
         """
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
