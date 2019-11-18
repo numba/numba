@@ -66,14 +66,10 @@ def powi_implement(nvname):
 
 lower(math.pow, types.float32, types.int32)(powi_implement('__nv_powif'))
 lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
-lower(math.ldexp, types.float32, types.int32)(powi_implement('__nv_powif'))
-lower(math.ldexp, types.float64, types.int32)(powi_implement('__nv_powi'))
-
 
 booleans = []
 booleans += [('__nv_isnand', '__nv_isnanf', math.isnan)]
 booleans += [('__nv_isinfd', '__nv_isinff', math.isinf)]
-booleans += [('__nv_isfinite', '__nv_isfinitef', math.isfinite)]
 
 unarys = []
 unarys += [('__nv_ceil', '__nv_ceilf', math.ceil)]
@@ -87,13 +83,11 @@ unarys += [('__nv_erfinv', '__nv_erfinvf', special.erfinv)]
 unarys += [('__nv_erfcinv', '__nv_erfcinvf', special.erfcinv)]
 unarys += [('__nv_tgamma', '__nv_tgammaf', math.gamma)]
 unarys += [('__nv_lgamma', '__nv_lgammaf', math.lgamma)]
-unarys += [('__nv_modf', '__nv_modff', math.modf)]
 unarys += [('__nv_frexp', '__nv_frexpf', math.frexp)]
 unarys += [('__nv_norm', '__nv_normf', linalg.norm)]
 unarys += [('__nv_sqrt', '__nv_sqrtf', math.sqrt)]
 unarys += [('__nv_log', '__nv_logf', math.log)]
 unarys += [('__nv_log10', '__nv_log10f', math.log10)]
-unarys += [('__nv_log2', '__nv_log2f', math.log2)]
 unarys += [('__nv_log1p', '__nv_log1pf', math.log1p)]
 unarys += [('__nv_acosh', '__nv_acoshf', math.acosh)]
 unarys += [('__nv_acos', '__nv_acosf', math.acos)]
@@ -112,7 +106,6 @@ binarys = []
 binarys += [('__nv_copysign', '__nv_copysignf', math.copysign)]
 binarys += [('__nv_atan2', '__nv_atan2f', math.atan2)]
 binarys += [('__nv_pow', '__nv_powf', math.pow)]
-binarys += [('__nv_ldexp', '__nv_ldexpf', math.ldexp)]
 binarys += [('__nv_fmod', '__nv_fmodf', math.fmod)]
 binarys += [('__nv_hypot', '__nv_hypotf', math.hypot)]
 

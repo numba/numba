@@ -96,10 +96,6 @@ def math_norm(A, B):
     i = cuda.grid(1)
     B[i] = linalg.norm(A[i])
 
-def math_modf(A, B):
-    i = cuda.grid(1)
-    B[i] = math.modf(A[i])
-
 def math_expm1(A, B):
     i = cuda.grid(1)
     B[i] = math.expm1(A[i])
@@ -121,11 +117,6 @@ def math_log(A, B):
     B[i] = math.log(A[i])
 
 
-def math_log2(A, B):
-    i = cuda.grid(1)
-    B[i] = math.log2(A[i])
-
-
 def math_log10(A, B):
     i = cuda.grid(1)
     B[i] = math.log10(A[i])
@@ -134,11 +125,6 @@ def math_log10(A, B):
 def math_log1p(A, B):
     i = cuda.grid(1)
     B[i] = math.log1p(A[i])
-
-
-def math_ldexp(A, B, C):
-    i = cuda.grid(1)
-    C[i] = math.ldexp(A[i], B[i])
 
 
 def math_sqrt(A, B):
@@ -178,7 +164,7 @@ def math_fmod(A, B, C):
 
 def math_frexp(A, B):
     i = cuda.grid(1)
-    B[i] = math.frexp(A [i])
+    B[i] = math.frexp(A[i])
 
 
 def math_isnan(A, B):
@@ -191,14 +177,10 @@ def math_isinf(A, B):
     B[i] = math.isinf(A[i])
 
 
-def math_isfinite(A, B):
-    i = cuda.grid(1)
-    B[i] = math.isfinite(A[i])
-
-
 def math_degrees(A, B):
     i = cuda.grid(1)
     B[i] = math.degrees(A[i])
+
 
 def math_radians(A, B):
     i = cuda.grid(1)
@@ -423,13 +405,6 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.unary_template_float64(math_erfcinv, ufunc)
 
     #---------------------------------------------------------------------------------
-    # test_math_log2
-
-    def test_math_log2(self):
-        self.unary_template_float32(math_log2, np.log2)
-        self.unary_template_float64(math_log2, np.log2)
-
-    #---------------------------------------------------------------------------------
     # test_math_exp
 
 
@@ -530,7 +505,8 @@ class TestCudaMath(SerialMixin, unittest.TestCase):
         self.binary_template_float32(math_pow_binop, np.power)
         self.binary_template_float64(math_pow_binop, np.power)
 
-    #------------------------------------------------------------------------------
+
+    #-------------------------------------------------------------------------------
     # test_math_ceil
 
 

@@ -2,13 +2,9 @@ from __future__ import print_function, absolute_import, division
 import math
 from scipy import special
 from scipy import linalg
-from numba.extending import overload
-from numba import (
-     cuda, types, utils)
-from numba.typing.templates import (
-    AttributeTemplate, ConcreteTemplate,
-    signature, Registry)
-#from numba.errors import TypingError
+from numba import types, utils
+from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                    signature, Registry)
 
 registry = Registry()
 infer_global = registry.register_global
@@ -35,10 +31,8 @@ infer_global = registry.register_global
 @infer_global(math.gamma)
 @infer_global(math.lgamma)
 @infer_global(math.log)
-@infer_global(math.log2)
 @infer_global(math.log10)
 @infer_global(math.log1p)
-@infer_global(math.modf)
 @infer_global(linalg.norm)
 @infer_global(math.radians)
 @infer_global(math.sin)
@@ -79,7 +73,6 @@ class Math_hypot(ConcreteTemplate):
 
 
 @infer_global(math.copysign)
-@infer_global(math.ldexp)
 @infer_global(math.fmod)
 class Math_binary(ConcreteTemplate):
     cases = [
@@ -97,7 +90,7 @@ class Math_pow(ConcreteTemplate):
         signature(types.float64, types.float64, types.int32),
     ]
 
-@infer_global(math.isfinite)
+
 @infer_global(math.isinf)
 @infer_global(math.isnan)
 class Math_isnan(ConcreteTemplate):
