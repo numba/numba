@@ -1,6 +1,11 @@
 trigger:
   batch: true
 
+variables:
+  # Change the following along with adding new TEST_START_INDEX.
+  # There's another copy in azure-windows.yml
+  - TEST_COUNT: 20
+
 jobs:
 # Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
