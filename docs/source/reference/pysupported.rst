@@ -171,6 +171,8 @@ The following functions, attributes and methods are currently supported:
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
+* ``.isspace()``
+* ``.isidentifier()``
 * ``.find()``
 * ``.center()``
 * ``.ljust()``
@@ -185,6 +187,7 @@ The following functions, attributes and methods are currently supported:
 * ``.islower()``
 * ``.lower()``
 * ``.zfill()``
+* ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
