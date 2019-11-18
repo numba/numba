@@ -703,7 +703,7 @@ def unicode_startswith(s, substr, start=None, end=None):
                 return True
 
             s = s[:end]
-            return _cmp_region(s, start, substr, 0, len(substr)) == 0
+            return _cmp_region(s, start, substr, 0, sub_length) == 0
         return startswith_impl
 
     if isinstance(substr, types.UnicodeCharSeq):
