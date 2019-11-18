@@ -535,16 +535,15 @@ def unicode_idx_check_type(ty, name):
 
 
 @overload_method(types.UnicodeType, 'find')
-def unicode_find(s, substr, start=None, end=None):
-    def unicode_find(a, b):
-        if isinstance(b, types.UnicodeType):
-            def find_impl(a, b):
-                return _find(substr=b, s=a)
-
-            return find_impl
-        if isinstance(b, types.UnicodeCharSeq):
-            def find_impl(a, b):
-                return a.find(str(b))
+def unicode_find(a, b):
+    if isinstance(b, types.UnicodeType):
+        def find_impl(a, b):
+            return _find(substr=b, s=a)
+        return find_impl
+    if isinstance(b, types.UnicodeCharSeq):
+        def find_impl(a, b):
+            return a.find(str(b))
+        return find_impl
 
 
 @overload_method(types.UnicodeType, 'rfind')
