@@ -433,14 +433,9 @@ def _unsigned(T):
 def _unsigned_impl(T):
     if T in types.unsigned_domain:
         return lambda T: T
-    elif T is types.int8:
-        return lambda T: types.uint8(T)
-    elif T is types.int16:
-        return lambda T: types.uint16(T)
-    elif T is types.int32:
-        return lambda T: types.uint32(T)
-    elif T is types.int64:
-        return lambda T: types.uint64(T)
+    elif T in types.signed_domain:
+        newT = getattr(types, 'uint{}'.format(T.bitwidth))
+        return lambda T: newT(T)
 
 
 def gcd_impl(context, builder, sig, args):
