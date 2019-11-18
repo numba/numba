@@ -20,6 +20,12 @@ if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
 
 
+skip_py38_or_later = unittest.skipIf(
+    utils.PYVERSION >= (3, 8),
+    "unsupported on py3.8 or later"
+)
+
+
 def hash_usecase(x):
     return hash(x)
 
@@ -205,6 +211,7 @@ class TestNumberHashing(BaseTest):
             check(ty(a1), ty(a2), ty(a3))
 
 
+@skip_py38_or_later
 class TestTupleHashing(BaseTest):
     """
     Test hashing of tuples.
