@@ -409,7 +409,7 @@ def impl_allocated(l):
 
 @intrinsic
 def _list_allocated(typingctx, l):
-    """Wrap numba_list_allocates
+    """Wrap numba_list_allocated
 
     Returns the allocation of the list.
     """
