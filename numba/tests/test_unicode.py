@@ -110,6 +110,14 @@ def startswith_usecase(x, y):
     return x.startswith(y)
 
 
+def startswith_with_start_only_usecase(x, y, start):
+    return x.startswith(y, start)
+
+
+def startswith_with_start_end_usecase(x, y, start, end):
+    return x.startswith(y, start, end)
+
+
 def endswith_usecase(x, y):
     return x.endswith(y)
 
@@ -631,6 +639,115 @@ class TestUnicode(BaseTest):
         with self.assertRaises(TypingError) as raises:
             try_compile_wrong_end_optional(s, sub_str, 1, 0.1)
         self.assertIn(msg, str(raises.exception))
+
+    def test_startswith_default(self):
+        pyfunc = startswith_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L1001-L1047    # noqa: E501
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                msg = 'Results "{}".startswith("{}") must be equal'
+                self.assertEqual(pyfunc(s, sub_str), cfunc(s, sub_str),
+                                 msg=msg.format(s, sub_str))
+
+    def test_startswith_with_start(self):
+        pyfunc = startswith_with_start_only_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L1001-L1047    # noqa: E501
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    msg = 'Results "{}".startswith("{}", {}) must be equal'
+                    self.assertEqual(pyfunc(s, sub_str, start),
+                                     cfunc(s, sub_str, start),
+                                     msg=msg.format(s, sub_str, start))
+
+    def test_startswith_with_start_end(self):
+        pyfunc = startswith_with_start_end_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L1001-L1047    # noqa: E501
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    for end in list(range(-20, 20)) + [None]:
+                        msg = 'Results "{}".startswith("{}", {}, {})\
+                               must be equal'
+                        self.assertEqual(pyfunc(s, sub_str, start, end),
+                                         cfunc(s, sub_str, start, end),
+                                         msg=msg.format(s, sub_str, start, end))
+
+    def test_startswith_tuple(self):
+        pyfunc = startswith_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L1001-L1047    # noqa: E501
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                msg = 'Results "{}".startswith({}) must be equal'
+                tuple_subs = (sub_str, 'lo')
+                self.assertEqual(pyfunc(s, tuple_subs),
+                                 cfunc(s, tuple_subs),
+                                 msg=msg.format(s, tuple_subs))
+
+    def test_startswith_tuple_args(self):
+        pyfunc = startswith_with_start_end_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/string_tests.py#L1001-L1047    # noqa: E501
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    for end in list(range(-20, 20)) + [None]:
+                        msg = 'Results "{}".startswith("{}", {}, {})\
+                               must be equal'
+                        tuple_subs = (sub_str, 'lo')
+                        self.assertEqual(pyfunc(s, tuple_subs, start, end),
+                                         cfunc(s, tuple_subs, start, end),
+                                         msg=msg.format(s, tuple_subs,
+                                                        start, end))
 
     def test_getitem(self):
         pyfunc = getitem_usecase
