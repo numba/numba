@@ -50,7 +50,7 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data)
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-             size_t inner_ndim, size_t array_count)
+             size_t inner_ndim, size_t array_count, int num_threads)
 {
     static bool printed = false;
     if(!printed && _DEBUG)
@@ -83,49 +83,58 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
-    using range_t = tbb::blocked_range<size_t>;
-    tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
+    tbb::task_arena limited(num_threads);
+
+    limited.execute([&]
     {
-        size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
-        char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
-        memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-        count_space[0] = range.size();
-
-        if(_DEBUG && _TRACE_SPLIT > 1)
+        tg->run([=]
         {
-            printf("THREAD %p:", count_space);
-            printf("count_space: ");
-            for(size_t j = 0; j < arg_len; j++)
-                printf("%lu, ", count_space[j]);
-            printf("\n");
-        }
-        for(size_t j = 0; j < array_count; j++)
-        {
-            char * base = args[j];
-            size_t step = steps[j];
-            ptrdiff_t offset = step * range.begin();
-            array_arg_space[j] = base + offset;
-
-            if(_DEBUG && _TRACE_SPLIT > 2)
+            using range_t = tbb::blocked_range<size_t>;
+            tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
             {
-                printf("Index %ld\n", j);
-                printf("-->Got base %p\n", (void *)base);
-                printf("-->Got step %lu\n", step);
-                printf("-->Got offset %ld\n", offset);
-                printf("-->Got addr %p\n", (void *)array_arg_space[j]);
-            }
-        }
+                size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
+                char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
+                memcpy(count_space, dimensions, arg_len * sizeof(size_t));
+                count_space[0] = range.size();
 
-        if(_DEBUG && _TRACE_SPLIT > 2)
-        {
-            printf("array_arg_space: ");
-            for(size_t j = 0; j < array_count; j++)
-                printf("%p, ", (void *)array_arg_space[j]);
-            printf("\n");
-        }
-        auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
-        func(array_arg_space, count_space, steps, data);
+                if(_DEBUG && _TRACE_SPLIT > 1)
+                {
+                    printf("THREAD %p:", count_space);
+                    printf("count_space: ");
+                    for(size_t j = 0; j < arg_len; j++)
+                        printf("%lu, ", count_space[j]);
+                    printf("\n");
+                }
+                for(size_t j = 0; j < array_count; j++)
+                {
+                    char * base = args[j];
+                    size_t step = steps[j];
+                    ptrdiff_t offset = step * range.begin();
+                    array_arg_space[j] = base + offset;
+
+                    if(_DEBUG && _TRACE_SPLIT > 2)
+                    {
+                        printf("Index %ld\n", j);
+                        printf("-->Got base %p\n", (void *)base);
+                        printf("-->Got step %lu\n", step);
+                        printf("-->Got offset %ld\n", offset);
+                        printf("-->Got addr %p\n", (void *)array_arg_space[j]);
+                    }
+                }
+
+                if(_DEBUG && _TRACE_SPLIT > 2)
+                {
+                    printf("array_arg_space: ");
+                    for(size_t j = 0; j < array_count; j++)
+                        printf("%p, ", (void *)array_arg_space[j]);
+                    printf("\n");
+                }
+                auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
+                func(array_arg_space, count_space, steps, data);
+            });
+        });
     });
+    limited.execute([&]{ tg->wait(); });
 }
 
 void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
