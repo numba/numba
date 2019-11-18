@@ -8,7 +8,13 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit
 from numba.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
-from numba import errors
+from numba import errors, utils
+
+
+skip_py38_or_later = unittest.skipIf(
+    utils.PYVERSION >= (3, 8),
+    "unsupported on py3.8 or later"
+)
 
 
 class TestBuiltins(unittest.TestCase):
@@ -99,6 +105,7 @@ class TestBuiltins(unittest.TestCase):
 
             self.assertEqual(len(w), 0)
 
+    @skip_py38_or_later
     def test_loop_lift_warn(self):
         def do_loop(x):
             a = {} # noqa dead
