@@ -536,41 +536,15 @@ def unicode_idx_check_type(ty, name):
 
 @overload_method(types.UnicodeType, 'find')
 def unicode_find(s, substr, start=None, end=None):
-    """Implements str.find()"""
+    def unicode_find(a, b):
+        if isinstance(b, types.UnicodeType):
+            def find_impl(a, b):
+                return _find(substr=b, s=a)
 
-    if isinstance(substr, types.UnicodeCharSeq):
-        def find_impl(s, substr):
-            return s.find(str(substr))
-        return find_impl
-
-    unicode_idx_check_type(start, 'start')
-    unicode_idx_check_type(end, 'end')
-
-    if not isinstance(substr, types.UnicodeType):
-        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
-        raise TypingError(msg)
-
-    def find_impl(s, substr, start=None, end=None):
-        length = len(s)
-        sub_length = len(substr)
-        if start is None:
-            start = 0
-        if end is None:
-            end = length
-
-        start, end = _adjust_indices(length, start, end)
-        if end - start < sub_length:
-            return -1
-
-        if sub_length == 0:
-            return start
-
-        for i in range(start, min(len(s), end) - len(substr) + 1):
-            if _cmp_region(s, i, substr, 0, len(substr)) == 0:
-                return i
-        return -1
-
-    return find_impl
+            return find_impl
+        if isinstance(b, types.UnicodeCharSeq):
+            def find_impl(a, b):
+                return a.find(str(b))
 
 
 @overload_method(types.UnicodeType, 'rfind')

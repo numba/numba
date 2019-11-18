@@ -82,14 +82,6 @@ def find_usecase(x, y):
     return x.find(y)
 
 
-def find_with_start_only_usecase(x, y, start):
-    return x.find(y, start)
-
-
-def find_with_start_end_usecase(x, y, start, end):
-    return x.find(y, start, end)
-
-
 def rpartition_usecase(s, sep):
     return s.rpartition(sep)
 
@@ -428,6 +420,16 @@ class TestUnicode(BaseTest):
                                  cfunc(substr, a),
                                  "'%s' in '%s'?" % (substr, a))
 
+    def test_find(self, flags=no_pyobj_flags):
+        pyfunc = find_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES:
+            extras = ['', 'xx', a[::-1], a[:-2], a[3:], a, a + a]
+            for substr in [x for x in extras]:
+                self.assertEqual(pyfunc(a, substr),
+                                 cfunc(a, substr),
+                                 "'%s'.find('%s')?" % (a, substr))
+
     def test_rpartition_exception_invalid_sep(self):
         self.disable_leak_check()
 
@@ -683,70 +685,6 @@ class TestUnicode(BaseTest):
         with self.assertRaises(TypingError) as raises:
             try_compile_wrong_end_optional(s, sub_str, 1, 0.1)
         self.assertIn(msg, str(raises.exception))
-
-    def test_find(self):
-        pyfunc = find_usecase
-        cfunc = njit(pyfunc)
-
-        default_subs = [
-            (s, ['', 'xx', s[:-2], s[3:], s]) for s in UNICODE_EXAMPLES
-        ]
-        # Samples taken from CPython testing:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Lib/test/test_unicode.py#L202-L231    # noqa: E501
-        cpython_subs = [
-            ('a' * 100 + '\u0102', ['\u0102', '\u0201', '\u0120', '\u0220']),
-            ('a' * 100 + '\U00100304', ['\U00100304', '\U00100204',
-                                        '\U00102004']),
-            ('\u0102' * 100 + 'a', ['a']),
-            ('\U00100304' * 100 + 'a', ['a']),
-            ('\U00100304' * 100 + '\u0102', ['\u0102']),
-            ('a' * 100, ['\u0102', '\U00100304', 'a\u0102', 'a\U00100304']),
-            ('\u0102' * 100, ['\U00100304', '\u0102\U00100304']),
-            ('\u0102' * 100 + 'a_', ['a_']),
-            ('\U00100304' * 100 + 'a_', ['a_']),
-            ('\U00100304' * 100 + '\u0102_', ['\u0102_']),
-        ]
-        for s, subs in default_subs + cpython_subs:
-            for sub_str in subs:
-                msg = 'Results "{}".find("{}") must be equal'
-                self.assertEqual(pyfunc(s, sub_str), cfunc(s, sub_str),
-                                 msg=msg.format(s, sub_str))
-
-    def test_find_with_start_only(self):
-        pyfunc = find_with_start_only_usecase
-        cfunc = njit(pyfunc)
-
-        for s in UNICODE_EXAMPLES:
-            for sub_str in ['', 'xx', s[:-2], s[3:], s]:
-                for start in list(range(-20, 20)) + [None]:
-                    msg = 'Results "{}".find("{}", {}) must be equal'
-                    self.assertEqual(pyfunc(s, sub_str, start),
-                                     cfunc(s, sub_str, start),
-                                     msg=msg.format(s, sub_str, start))
-
-    def test_find_with_start_end(self):
-        pyfunc = find_with_start_end_usecase
-        cfunc = njit(pyfunc)
-
-        starts = ends = list(range(-20, 20)) + [None]
-        for s in UNICODE_EXAMPLES:
-            for sub_str in ['', 'xx', s[:-2], s[3:], s]:
-                for start, end in product(starts, ends):
-                    msg = 'Results of "{}".find("{}", {}, {}) must be equal'
-                    self.assertEqual(pyfunc(s, sub_str, start, end),
-                                     cfunc(s, sub_str, start, end),
-                                     msg=msg.format(s, sub_str, start, end))
-
-    def test_find_exception_noninteger_start_end(self):
-        pyfunc = find_with_start_end_usecase
-        cfunc = njit(pyfunc)
-
-        accepted = (types.Integer, types.NoneType)
-        for start, end, name in [(0.1, 5, 'start'), (0, 0.5, 'end')]:
-            with self.assertRaises(TypingError) as raises:
-                cfunc('ascii', 'sci', start, end)
-            msg = '"{}" must be {}, not float'.format(name, accepted)
-            self.assertIn(msg, str(raises.exception))
 
     def test_index(self):
         pyfunc = index_usecase
