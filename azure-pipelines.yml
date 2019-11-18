@@ -3,7 +3,6 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  # There's another copy in azure-windows.yml
   TEST_COUNT: 20
 
 jobs:
