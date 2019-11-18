@@ -5,7 +5,7 @@ parameters:
 variables:
   # Change the following along with adding new TEST_START_INDEX.
   # There's another copy in azure-pipelines.yml
-  - TEST_COUNT: 20
+  TEST_COUNT: 20
 
 jobs:
 - job: ${{ parameters.name }}
