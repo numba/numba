@@ -1396,14 +1396,17 @@ def unicode_isalnum(data):
 
     def impl(data):
         length = len(data)
-        if length == 0:
-            return False
 
         if length == 1:
             code_point = _get_code_point(data, 0)
+            if data._is_ascii:
+                return _Py_ISALNUM(code_point)
             result = (_PyUnicode_IsNumeric(code_point) or
                       _PyUnicode_IsAlpha(code_point))
             return result
+
+        if length == 0:
+            return False
 
         if data._is_ascii:
             for i in range(length):
