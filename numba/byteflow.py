@@ -13,7 +13,6 @@ from numba.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
 
 class _lazy_pformat(object):
