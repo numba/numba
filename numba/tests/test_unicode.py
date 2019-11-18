@@ -1423,7 +1423,7 @@ class TestUnicode(BaseTest):
                           'a\uD800b\uDFFF', 'a\uDFFFb\uD800', 'a\uD800b\uDFFFa',
                           'a\uDFFFb\uD800a']
 
-        msg = 'Results of "{}".isspace() must be equal'
+        msg = 'Results of "{}".isnumeric() must be equal'
         for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
