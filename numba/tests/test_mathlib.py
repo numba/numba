@@ -627,22 +627,15 @@ class TestMathLib(TestCase):
 
     @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd(self, flags=enable_pyobj_flags):
+        from itertools import product, repeat, chain
         pyfunc = gcd
-        x_values, y_values = zip(
-            *itertools.product([-2, -1, 0, 1, 2, 7, 10], repeat=2)
+        signed_args = product(
+            sorted(types.signed_domain), *repeat((-2, -1, 0, 1, 2, 7, 10), 2)
         )
-        x_types = [t for _, t in zip(
-            range(len(x_values)), itertools.cycle(types.signed_domain)
-        )]
-        x_uvalues, y_uvalues = zip(
-            *itertools.product([0, 1, 2, 7, 10], repeat=2)
+        unsigned_args = product(
+            sorted(types.unsigned_domain), *repeat((0, 1, 2, 7, 9, 16), 2)
         )
-        x_utypes = [t for _, t in zip(
-            range(len(x_uvalues)), itertools.cycle(types.unsigned_domain)
-        )]
-        x_values += x_uvalues
-        y_values += y_uvalues
-        x_types += x_utypes
+        x_types, x_values, y_values = zip(*chain(signed_args, unsigned_args))
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
     @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
