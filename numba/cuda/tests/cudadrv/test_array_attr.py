@@ -1,6 +1,7 @@
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest, TestCase, SerialMixin
+from numba.cuda.testing import unittest, SerialMixin
+from numba.tests.support import TestCase
 
 
 class TestArrayAttr(SerialMixin, TestCase):
