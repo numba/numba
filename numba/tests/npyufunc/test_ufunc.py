@@ -58,7 +58,8 @@ class TestUFuncs(TestCase):
         info = (cls, a.ndim)
         self.assertPreciseEqual(ufunc(a, b), a + b, msg=info)
         self.assertPreciseEqual(ufunc_reduce(ufunc, a), np.sum(a), msg=info)
-        self.assertPreciseEqual(ufunc.accumulate(a), np.add.accumulate(a), msg=info)
+        self.assertPreciseEqual(ufunc.accumulate(a), np.add.accumulate(a),
+                                msg=info)
         self.assertPreciseEqual(ufunc.outer(a, b), np.add.outer(a, b), msg=info)
 
     def _test_broadcasting(self, cls, a, b, c, d):

@@ -280,15 +280,18 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         # extend
         rl, tl = setup()
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
         # extend empty
         rl, tl = setup(0, 0)
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
         # extend singleton
         rl, tl = setup(0, 1)
-        rl[len(rl):], tl[len(tl):] = list(range(110, 120)), to_tl(range(110,120))
+        rl[len(rl):] = list(range(110, 120))
+        tl[len(tl):] = to_tl(range(110,120))
         self.assertEqual(rl, list(tl))
 
         # prepend
@@ -809,3 +812,20 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             np.testing.assert_allclose(one.array, two.array)
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
+
+    @skip_py2
+    def test_storage_model_mismatch(self):
+        # https://github.com/numba/numba/issues/4520
+        # check for storage model mismatch in refcount ops generation
+        lst = List()
+        ref = [
+            ("a", True, "a"),
+            ("b", False, "b"),
+            ("c", False, "c"),
+        ]
+        # populate
+        for x in ref:
+            lst.append(x)
+        # test
+        for i, x in enumerate(ref):
+            self.assertEqual(lst[i], ref[i])

@@ -7,6 +7,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER|int }}
+  string: np{{ NPY_VER }}py{{ PY_VER }}h{{ PKG_HASH }}_{{GIT_DESCRIBE_HASH}}_{{ GIT_DESCRIBE_NUMBER }}
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
@@ -31,7 +32,7 @@ requirements:
     - numpy x.x
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.29.*
+    - llvmlite 0.30.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
     # TBB devel version is to match TBB libs
@@ -39,8 +40,9 @@ requirements:
   run:
     - python
     - numpy x.x
+    - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.29.*
+    - llvmlite 0.30.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
   run_constrained:

@@ -298,8 +298,8 @@ class CallableTemplate(FunctionTemplate):
         if not isinstance(sig, Signature):
             # If not a signature, `sig` is assumed to be the return type
             if not isinstance(sig, types.Type):
-                raise TypeError("invalid return type for callable template: got %r"
-                                % (sig,))
+                raise TypeError("invalid return type for callable template: "
+                                "got %r" % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
             sig.recvr = self.recvr
@@ -716,7 +716,8 @@ class _OverloadAttributeTemplate(AttributeTemplate):
             sig_args = (typ,)
             sig_kws = {}
             typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
+            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr,
+                                                 sig_args, sig_kws)
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
             call = context.get_function(disp_type, sig)
@@ -739,8 +740,8 @@ class _OverloadAttributeTemplate(AttributeTemplate):
                 cls._impl_cache[cache_key] = None
                 return None, None
             elif isinstance(pyfunc, tuple):
-                # The implementation returned a signature that the type-inferencer
-                # should be using.
+                # The implementation returned a signature that the
+                # type-inferencer should be using.
                 sig, pyfunc = pyfunc
                 sig_args = sig.args
                 cache_key = None            # don't cache
@@ -751,9 +752,11 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
     def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
         """
-        Compute the actual implementation sig for the given formal argument types.
+        Compute the actual implementation sig for the given formal argument
+        types.
         """
-        disp, sig_args = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
+        disp, sig_args = self._get_dispatcher(self.context, typ, attr,
+                                              sig_args, sig_kws)
         if disp is None:
             return None
 
@@ -787,7 +790,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
             typing_context = context.typing_context
-            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
+            disp, sig_args = cls._get_dispatcher(typing_context, typ, attr,
+                                                 sig.args, {})
             disp_type = types.Dispatcher(disp)
             sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)

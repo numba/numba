@@ -11,7 +11,7 @@ from .analysis import (
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass
 from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
-                       GuardException)
+                       GuardException, convert_code_obj_to_function)
 
 
 @contextmanager
@@ -198,10 +198,11 @@ class InlineClosureLikes(FunctionPass):
         # no ability to resolve certain typed function calls in the array
         # inlining code, use this variable to indicate
         typed_pass = not isinstance(state.return_type, types.misc.PyObject)
-        inline_pass = InlineClosureCallPass(state.func_ir,
-                                            state.flags.auto_parallel,
-                                            state.parfor_diagnostics.replaced_fns,
-                                            typed_pass)
+        inline_pass = InlineClosureCallPass(
+            state.func_ir,
+            state.flags.auto_parallel,
+            state.parfor_diagnostics.replaced_fns,
+            typed_pass)
         inline_pass.run()
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -373,11 +374,12 @@ class InlineInlinables(FunctionPass):
                                                     py_func_ir)
                         # if do_inline is True then inline!
                         if do_inline:
-                            inline_closure_call(state.func_ir,
-                                                pyfunc.__globals__,
-                                                block, i, pyfunc,
-                                                work_list=work_list,
-                                                callee_validator=callee_ir_validator)
+                            inline_closure_call(
+                                state.func_ir,
+                                pyfunc.__globals__,
+                                block, i, pyfunc,
+                                work_list=work_list,
+                                callee_validator=callee_ir_validator)
                             return True
         return False
 
@@ -411,3 +413,53 @@ class FindLiterallyCalls(FunctionPass):
     def run_pass(self, state):
         find_literally_calls(state.func_ir, state.args)
         return False
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class MakeFunctionToJitFunction(FunctionPass):
+    """
+    This swaps an ir.Expr.op == "make_function" i.e. a closure, for a compiled
+    function containing the closure body and puts it in ir.Global. It's a 1:1
+    statement value swap. `make_function` is already untyped
+    """
+    _name = "make_function_op_code_to_jit_function"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        from numba import njit
+        func_ir = state.func_ir
+        mutated = False
+        for idx, blk in func_ir.blocks.items():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Expr):
+                        if stmt.value.op == "make_function":
+                            node = stmt.value
+                            getdef = func_ir.get_definition
+                            kw_default = getdef(node.defaults)
+                            ok = False
+                            if (kw_default is None or
+                                    isinstance(kw_default, ir.Const)):
+                                ok = True
+                            elif isinstance(kw_default, tuple):
+                                ok = all([isinstance(getdef(x), ir.Const)
+                                          for x in kw_default])
+
+                            if not ok:
+                                continue
+
+                            pyfunc = convert_code_obj_to_function(node, func_ir)
+                            func = njit()(pyfunc)
+                            new_node = ir.Global(node.code.co_name, func,
+                                                 stmt.loc)
+                            stmt.value = new_node
+                            mutated |= True
+
+        # if a change was made the del ordering is probably wrong, patch up
+        if mutated:
+            post_proc = postproc.PostProcessor(func_ir)
+            post_proc.run()
+
+        return mutated

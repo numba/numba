@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import Iterable
-
+from ..six import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
                        Sequence, Type, TypeRef)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
@@ -504,7 +503,7 @@ class ListType(IterableType):
 
 
 class ListTypeIterableType(SimpleIterableType):
-    """List iteratable type
+    """List iterable type
     """
     def __init__(self, parent):
         assert isinstance(parent, ListType)
@@ -527,9 +526,9 @@ class ListTypeIteratorType(SimpleIteratorType):
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
-        raise TypingError('{} as key is forbidded'.format(key))
+        raise TypingError('{} as key is forbidden'.format(key))
     if isinstance(value, (Set, List)):
-        raise TypingError('{} as value is forbidded'.format(value))
+        raise TypingError('{} as value is forbidden'.format(value))
 
 
 class DictType(IterableType):
@@ -586,7 +585,7 @@ class DictType(IterableType):
 
 
 class DictItemsIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iterable type for .items()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -598,7 +597,7 @@ class DictItemsIterableType(SimpleIterableType):
 
 
 class DictKeysIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .keys()
+    """Dictionary iterable type for .keys()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -610,7 +609,7 @@ class DictKeysIterableType(SimpleIterableType):
 
 
 class DictValuesIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .values()
+    """Dictionary iterable type for .values()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)

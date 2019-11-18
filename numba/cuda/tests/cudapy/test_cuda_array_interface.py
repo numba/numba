@@ -220,6 +220,45 @@ class TestCudaArrayInterface(CUDATestCase):
         expected_msg = 'Masked arrays are not supported'
         self.assertIn(expected_msg, str(raises.exception))
 
+    def test_zero_size_array(self):
+        # for #4175
+        c_arr = cuda.device_array(0)
+        self.assertEqual(c_arr.__cuda_array_interface__['data'][0], 0)
+
+        @cuda.jit
+        def add_one(arr):
+            x = cuda.grid(1)
+            N = arr.shape[0]
+            if x < N:
+                arr[x] += 1
+
+        d_arr = MyArray(c_arr)
+        add_one[1, 10](d_arr)  # this should pass
+
+    def test_strides(self):
+        # for #4175
+        # First, test C-contiguous array
+        c_arr = cuda.device_array((2, 3, 4))
+        self.assertEqual(c_arr.__cuda_array_interface__['strides'], None)
+
+        # Second, test non C-contiguous array
+        c_arr = c_arr[:, 1, :]
+        self.assertNotEqual(c_arr.__cuda_array_interface__['strides'], None)
+
+    def test_consuming_strides(self):
+        hostarray = np.arange(10).reshape(2, 5)
+        face = cuda.to_device(hostarray).__cuda_array_interface__
+        self.assertIsNone(face['strides'])
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
+        # Try non-NULL strides
+        face['strides'] = hostarray.strides
+        self.assertIsNotNone(face['strides'])
+        got = cuda.from_cuda_array_interface(face).copy_to_host()
+        np.testing.assert_array_equal(got, hostarray)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
+
 
 if __name__ == "__main__":
     unittest.main()

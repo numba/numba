@@ -1473,6 +1473,12 @@ class TestParfors(TestParforsBase):
         msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
 
+    @skip_unsupported
+    def test_0d_array(self):
+        def test_impl(n):
+            return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
+        self.check(test_impl, np.array(7), check_scheduling=False)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -1696,9 +1702,39 @@ class TestPrange(TestPrangeBase):
     @skip_unsupported
     def test_prange03(self):
         def test_impl():
-            s = 0
+            s = 10
             for i in range(10):
                 s += 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03mul(self):
+        def test_impl():
+            s = 3
+            for i in range(10):
+                s *= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03sub(self):
+        def test_impl():
+            s = 100
+            for i in range(10):
+                s -= 2
+            return s
+        self.prange_tester(test_impl, scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_unsupported
+    def test_prange03div(self):
+        def test_impl():
+            s = 10
+            for i in range(10):
+                s /= 2
             return s
         self.prange_tester(test_impl, scheduler_type='unsigned',
                            check_fastmath=True)
@@ -2691,6 +2727,18 @@ class TestParforsSlice(TestParforsBase):
 
     @skip_unsupported
     def test_parfor_slice22(self):
+        def test_impl(x1, x2):
+            b = np.zeros((10,))
+            for i in prange(1):
+                b += x1[:, x2]
+            return b
+
+        x1 = np.zeros((10,7))
+        x2 = np.array(4)
+        self.check(test_impl, x1, x2)
+
+    @skip_unsupported
+    def test_parfor_slice23(self):
         # issue #4630
         def test_impl(x):
             x[:0] = 2
@@ -2699,7 +2747,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.ones(10))
 
     @skip_unsupported
-    def test_parfor_slice23(self):
+    def test_parfor_slice24(self):
         def test_impl(m, A, n):
             B = np.zeros(m)
             C = B[n:]
@@ -2710,7 +2758,7 @@ class TestParforsSlice(TestParforsBase):
             self.check(test_impl, 10, np.ones(10), i)
 
     @skip_unsupported
-    def test_parfor_slice24(self):
+    def test_parfor_slice25(self):
         def test_impl(m, A, n):
             B = np.zeros(m)
             C = B[:n]
@@ -2721,7 +2769,7 @@ class TestParforsSlice(TestParforsBase):
             self.check(test_impl, 10, np.ones(10), i)
 
     @skip_unsupported
-    def test_parfor_slice25(self):
+    def test_parfor_slice26(self):
         def test_impl(a):
             (n,) = a.shape
             b = a.copy()
@@ -2848,6 +2896,10 @@ class TestParforsMisc(TestParforsBase):
     """
     _numba_parallel_test_ = False
 
+    def check(self, pyfunc, *args, **kwargs):
+        cfunc, cpfunc = self.compile_all(pyfunc, *args)
+        self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
+
     @skip_unsupported
     def test_no_warn_if_cache_set(self):
 
@@ -2901,6 +2953,17 @@ class TestParforsMisc(TestParforsBase):
             # recover global state
             numba.parfor.sequential_parfor_lowering = old_seq_flag
 
+    @skip_unsupported
+    def test_alias_analysis_for_parfor1(self):
+        def test_impl():
+            acc = 0
+            for _ in range(4):
+                acc += 1
+
+            data = np.zeros((acc,))
+            return data
+
+        self.check(test_impl)
 
 @skip_unsupported
 class TestParforsDiagnostics(TestParforsBase):
