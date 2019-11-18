@@ -38,7 +38,9 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _Py_TAB, _Py_LINEFEED,
+                              _Py_CARRIAGE_RETURN, _Py_SPACE)
 
 # DATA MODEL
 
@@ -681,9 +683,10 @@ def unicode_endswith(a, b):
 def unicode_expandtabs(data, tabsize=8):
     """Implements str.expandtabs()"""
     thety = tabsize
+    # if the type is omitted, the concrete type is the value
     if isinstance(tabsize, types.Omitted):
         thety = tabsize.value
-        # if the type is optional, the concrete type is the captured type
+    # if the type is optional, the concrete type is the captured type
     elif isinstance(tabsize, types.Optional):
         thety = tabsize.type
 
@@ -698,7 +701,7 @@ def unicode_expandtabs(data, tabsize=8):
         found = False
         for i in range(length):
             code_point = _get_code_point(data, i)
-            if code_point == 9: # 0x9 '\t'
+            if code_point == _Py_TAB:
                 found = True
                 if tabsize > 0:
                     # cannot overflow
@@ -712,7 +715,7 @@ def unicode_expandtabs(data, tabsize=8):
                     raise OverflowError('new string is too long')
                 line_pos += 1
                 j += 1
-                if code_point in (10, 13): # (0xa '\n', 0xd '\r')
+                if code_point in (_Py_LINEFEED, _Py_CARRIAGE_RETURN):
                     line_pos = 0
 
         if not found:
@@ -722,18 +725,18 @@ def unicode_expandtabs(data, tabsize=8):
         j = line_pos = 0
         for i in range(length):
             code_point = _get_code_point(data, i)
-            if code_point == 9:  # 0x9 '\t'
+            if code_point == _Py_TAB:
                 if tabsize > 0:
                     incr = tabsize - (line_pos % tabsize)
                     line_pos += incr
                     for idx in range(j, j + incr):
-                        _set_code_point(res, idx, 32) # 0x20 ' '
+                        _set_code_point(res, idx, _Py_SPACE)
                     j += incr
             else:
                 line_pos += 1
                 _set_code_point(res, j, code_point)
                 j += 1
-                if code_point in (10, 13): # (0xa '\n', 0xd '\r')
+                if code_point in (_Py_LINEFEED, _Py_CARRIAGE_RETURN):
                     line_pos = 0
 
         return res

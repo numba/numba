@@ -49,6 +49,12 @@ _Py_UCS4 = types.uint32
 #
 
 
+_Py_TAB = 0x9
+_Py_LINEFEED = 0xa
+_Py_CARRIAGE_RETURN = 0xd
+_Py_SPACE = 0x20
+
+
 class _PyUnicode_TyperecordMasks(IntEnum):
     ALPHA_MASK = 0x01
     DECIMAL_MASK = 0x02
