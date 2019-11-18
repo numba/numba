@@ -243,13 +243,16 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item):
+def new_list(item, allocated=0):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
     ----------
     item: TypeRef
         Item type of the new list.
+    allocated: int
+        number of items to pre-allocate
+
     """
     raise NotImplementedError
 
