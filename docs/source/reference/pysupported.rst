@@ -187,6 +187,7 @@ The following functions, attributes and methods are currently supported:
 * ``.zfill()``
 * ``.count()``
 * ``.istitle()``
+* ``.replace()``
 * ``.rfind()``
 * ``.title()``
 

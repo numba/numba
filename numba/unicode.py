@@ -1297,6 +1297,58 @@ _unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
                                                _PyUnicode_IsTitlecase))
 
 
+@overload_method(types.UnicodeType, 'replace')
+def unicode_replace(s, old_str, new_str, count=-1):
+    thety = count
+    if isinstance(count, types.Omitted):
+        thety = count.value
+    elif isinstance(count, types.Optional):
+        thety = count.type
+
+    if not isinstance(thety, (int, types.Integer)):
+        raise TypingError('Unsupported parameters. The parametrs '
+                          'must be Integer. Given count: {}'.format(count))
+
+    if not isinstance(old_str, (types.UnicodeType, types.NoneType)):
+        raise TypingError('The object must be a UnicodeType.'
+                          ' Given: {}'.format(old_str))
+
+    if not isinstance(new_str, types.UnicodeType):
+        raise TypingError('The object must be a UnicodeType.'
+                          ' Given: {}'.format(new_str))
+
+    def impl(s, old_str, new_str, count=-1):
+        if count == 0:
+            return s
+        if old_str == '' or old_str is None:
+            q = list(s)
+            if count == -1:
+                str_res = new_str.join(q)
+                str_result = new_str + str_res + new_str
+                return str_result
+            i = 0
+            str_result = new_str
+            if count > len(q):
+                counter = len(q)
+            else:
+                counter = count
+            while i < counter:
+                str_result += q[i]
+                if i + 1 != counter:
+                    str_result += new_str
+                else:
+                    str_result += ''.join(q[(i + 1):])
+                i += 1
+            if count > len(q):
+                str_result += new_str
+            return str_result
+        q = s.split(old_str, count)
+        str_result = new_str.join(q)
+        return str_result
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """

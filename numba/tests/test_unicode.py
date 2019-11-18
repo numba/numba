@@ -106,6 +106,14 @@ def rfind_with_start_end_usecase(x, y, start, end):
     return x.rfind(y, start, end)
 
 
+def replace_usecase(s, x, y):
+    return s.replace(x, y)
+
+
+def replace_with_count_usecase(s, x, y, count):
+    return s.replace(x, y, count)
+
+
 def startswith_usecase(x, y):
     return x.startswith(y)
 
@@ -908,6 +916,9 @@ class TestUnicode(BaseTest):
         ]
 
         for sep, parts in CASES:
+            print(sep)
+            print(parts)
+            print(cfunc(sep, parts))
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
@@ -1331,6 +1342,76 @@ class TestUnicode(BaseTest):
         msg = 'Results of "{}".lower() must be equal'
         for s in UNICODE_EXAMPLES + [''] + extras + cpython + sigma:
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
+    def test_replace(self):
+        pyfunc = replace_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('abc', '', 'A'),
+            ('', '⚡', 'A'),
+            ('abcabc', '⚡', 'A'),
+            ('🐍⚡', '⚡', 'A'),
+            ('🐍⚡🐍', '⚡', 'A'),
+            ('abababa', 'a', 'A'),
+            ('abababa', 'b', 'A'),
+            ('abababa', 'c', 'A'),
+            ('abababa', 'ab', 'A'),
+            ('abababa', 'aba', 'A'),
+        ]
+
+        for test_str, old_str, new_str in CASES:
+            self.assertEqual(pyfunc(test_str, old_str, new_str),
+                             cfunc(test_str, old_str, new_str),
+                             "'%s'.replace('%s', '%s')?" %
+                             (test_str, old_str, new_str))
+
+    def test_replace_with_count(self):
+        pyfunc = replace_with_count_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('abc', '', 'A'),
+            ('', '⚡', 'A'),
+            ('abcabc', '⚡', 'A'),
+            ('🐍⚡', '⚡', 'A'),
+            ('🐍⚡🐍', '⚡', 'A'),
+            ('abababa', 'a', 'A'),
+            ('abababa', 'b', 'A'),
+            ('abababa', 'c', 'A'),
+            ('abababa', 'ab', 'A'),
+            ('abababa', 'aba', 'A'),
+        ]
+
+        count_test = [-1, 1, 0, 5]
+
+        for test_str, old_str, new_str in CASES:
+            for count in count_test:
+                self.assertEqual(pyfunc(test_str, old_str, new_str, count),
+                                 cfunc(test_str, old_str, new_str, count),
+                                 "'%s'.replace('%s', '%s', '%s')?" %
+                                 (test_str, old_str, new_str, count))
+
+    def test_replace_unsupported(self):
+        def pyfunc(s, x, y, count):
+            return s.replace(x, y, count)
+
+        cfunc = njit(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ababababab', 'ba', 'qqq', 3.5)
+        msg = 'Unsupported parameters. The parametrs must be Integer.'
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ababababab', 0, 'qqq', 3)
+        msg = 'The object must be a UnicodeType.'
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('ababababab', 'ba', 0, 3)
+        msg = 'The object must be a UnicodeType.'
+        self.assertIn(msg, str(raises.exception))
 
 
 @unittest.skipUnless(_py34_or_later,
