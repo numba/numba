@@ -1401,9 +1401,8 @@ def unicode_isalnum(data):
             code_point = _get_code_point(data, 0)
             if data._is_ascii:
                 return _Py_ISALNUM(code_point)
-            result = (_PyUnicode_IsNumeric(code_point) or
-                      _PyUnicode_IsAlpha(code_point))
-            return result
+            return (_PyUnicode_IsNumeric(code_point) or
+                    _PyUnicode_IsAlpha(code_point))
 
         if length == 0:
             return False
