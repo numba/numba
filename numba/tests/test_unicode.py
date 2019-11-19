@@ -9,6 +9,7 @@ import sys
 from itertools import product
 from itertools import permutations
 
+import numba
 from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
@@ -195,6 +196,10 @@ def rjust_usecase_fillchar(x, y, fillchar):
 
 def istitle_usecase(x):
     return x.istitle()
+
+
+def translate_usecase(x, table):
+    return x.translate(table)
 
 
 def iter_usecase(x):
@@ -1170,6 +1175,54 @@ class TestUnicode(BaseTest):
             c_result = cfunc(s)
             self.assertEqual(py_result, c_result,
                              error_msg.format(s, py_result, c_result))
+
+    def test_translate(self):
+        pyfunc = translate_usecase
+        cfunc = njit(pyfunc)
+
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/865c3b257fe38154a4320c7ee6afb416f665b9c2/Lib/test/test_unicode.py#L313-L381     # noqa: E501
+        cpython = ['bbbc', 'abababc', 'iiic', 'iiix', 'c', 'xzx']
+        extra = ['处', '[a]', '[a\xe9]', '\u20aa', '\u20ac']
+        table = [
+            {ord('a'):ord('c'), ord('b') : ord('n')},
+            {ord('a'): ord(' '), ord('b'): ord('i'), ord('c'): ord('x')},
+        ]
+
+        table_extra = [
+            {ord('a'): ord('\x04'), ord('\xe9'): ord('t')},
+            {ord('\u20aa'): ord('\u20ac')}
+        ]
+
+        msg = 'Results "{}".translate({}) must be equal'
+        for s in UNICODE_EXAMPLES + cpython + extra:
+            for t in table + table_extra:
+                numba_t = numba.typed.Dict()
+                for key, value in t.items():
+                    numba_t[key] = value
+                self.assertEqual(pyfunc(s, t), cfunc(s, numba_t),
+                                 msg=msg.format(s, t))
+
+    @unittest.skip('Dont work in numba')
+    def test_translate_error(self):
+        pyfunc = translate_usecase
+        cfunc = njit(pyfunc)
+
+        data = ['处', 'aaabbbcil', '[a\xe9]', '\u20aa', '\u20ac']
+        table = [
+            {ord('a'):ord('\u20aa')},
+            {ord('\u20aa'): ord('a')},
+            {ord('a'):None},
+        ]
+
+        msg = 'Results "{}".translate({}) must be equal'
+        for s in data:
+            for t in table:
+                numba_t = numba.typed.Dict()
+                for key, value in t.items():
+                    numba_t[key] = value
+                self.assertEqual(pyfunc(s, t), cfunc(s, numba_t),
+                                 msg=msg.format(s, t))
 
     def test_pointless_slice(self, flags=no_pyobj_flags):
         def pyfunc(a):

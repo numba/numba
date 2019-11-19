@@ -675,6 +675,26 @@ def unicode_endswith(a, b):
         return endswith_impl
 
 
+@overload_method(types.UnicodeType, 'translate')
+def unicode_translate(data, table):
+    """Implements UnicodeType.translate()"""
+    if not isinstance(table, types.DictType):
+        raise TypingError('The arg must be a Dict')
+
+    def impl(data, table):
+        length = len(data)
+        res = _empty_string(data._kind, length, data._is_ascii)
+        for i in range(length):
+            _set_code_point(res, i, _get_code_point(data, i))
+        for key, value in table.items():
+            for i in range(length):
+                if _get_code_point(data, i) == key:
+                    _set_code_point(res, i, value)
+        return res
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or
