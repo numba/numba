@@ -27,6 +27,7 @@ def viewer(tyctx, val, viewty):
 
 @intrinsic
 def trailing_zeros(typeingctx, src):
+    """Counts trailing zeros in the binary representation of an integer."""
     assert isinstance(src, types.Integer)
 
     def codegen(context, builder, signature, args):
@@ -37,6 +38,7 @@ def trailing_zeros(typeingctx, src):
 
 @intrinsic
 def leading_zeros(typeingctx, src):
+    """Counts leading zeros in the binary representation of an integer."""
     assert isinstance(src, types.Integer)
 
     def codegen(context, builder, signature, args):
