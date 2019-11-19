@@ -49,7 +49,10 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
-
+skip_py38_or_later = unittest.skipIf(
+    utils.PYVERSION >= (3, 8),
+    "unsupported on py3.8 or later"
+)
 
 class CompilationCache(object):
     """

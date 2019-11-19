@@ -5,13 +5,7 @@ import numpy as np
 from numba import types, utils
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
-
-
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
-)
+from .support import TestCase, tag, MemoryLeakMixin, skip_py38_or_later
 
 
 

@@ -13,17 +13,12 @@ import numpy as np
 
 from numba import jit, types, utils
 import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache
+from .support import TestCase, tag, CompilationCache, skip_py38_or_later
 from numba.targets import hashing
 
 if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
 
-
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
-)
 
 
 def hash_usecase(x):
