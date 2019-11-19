@@ -5038,8 +5038,8 @@ def np_argsort(a, axis=-1, kind="quicksort"):
                 return fill_loop_n1(a)
             else:
                 raise ValueError("Numba does not support argsort with "
-                                    "non-constant axis parameter outside the "
-                                    "range -1 to 3.")
+                                 "non-constant axis parameter outside the "
+                                 "range -1 to 3.")
 
     return array_argsort_impl
 
