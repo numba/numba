@@ -10,12 +10,12 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
-from llvmlite import ir
 
 from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, typeof, cgutils, utils, config
-from numba.extending import intrinsic, overload
+from numba.extending import overload
 from numba.typing import signature
+from numba.unsafe.numbers import trailing_zeros
 
 
 registry = Registry()
@@ -416,15 +416,6 @@ def pow_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@intrinsic
-def _trailing_zeros(typeingctx, src):
-    assert isinstance(src, types.Integer)
-    def codegen(context, builder, signature, args):
-        [src] = args
-        return builder.cttz(src, ir.Constant(ir.IntType(1), 0))
-    return src(src), codegen
-
-
 def _unsigned(T):
     """Convert integer to unsigned integer of equivalent width."""
     pass
@@ -450,8 +441,8 @@ def gcd_impl(context, builder, sig, args):
         T = type(a)
         if a == 0: return abs(b)
         if b == 0: return abs(a)
-        za = _trailing_zeros(a)
-        zb = _trailing_zeros(b)
+        za = trailing_zeros(a)
+        zb = trailing_zeros(b)
         k = min(za, zb)
         # Uses np.*_shift instead of operators due to return types
         u = _unsigned(abs(np.right_shift(a, za)))
@@ -460,7 +451,7 @@ def gcd_impl(context, builder, sig, args):
             if u > v:
                 u, v = v, u
             v -= u
-            v = np.right_shift(v, _trailing_zeros(v))
+            v = np.right_shift(v, trailing_zeros(v))
         r = np.left_shift(T(u), k)
         return r
 

@@ -9,6 +9,7 @@ from numba.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.unsafe.bytes import memcpy_region
 from numba.unsafe.refcount import dump_refcount
+from numba.unsafe.numbers import trailing_zeros, leading_zeros
 from numba.errors import TypingError
 
 
@@ -152,3 +153,29 @@ class TestRefCount(TestCase):
         tupty = types.Tuple.from_types([aryty] * 2)
         self.assertIn(pat.format(aryty), output)
         self.assertIn(pat.format(tupty), output)
+
+
+class TestZeroCounts(TestCase):
+    def test_zero_count(self):
+        lz = njit(lambda x: leading_zeros(x))
+        tz = njit(lambda x: trailing_zeros(x))
+
+        evens = np.array([2, 42, 126, 128])
+
+        for T in types.unsigned_domain:
+            for i in np.arange(T.bitwidth):
+                val = T(2 ** i)
+                assert lz(val) + tz(val) + 1 == T.bitwidth
+            for n in evens:
+                assert tz(T(n)) > 0
+                assert tz(T(n + 1)) == 0
+
+        for T in types.signed_domain:
+            for i in np.arange(T.bitwidth - 1):
+                val = T(2 ** i)
+                assert lz(val) + tz(val) + 1 == T.bitwidth
+                assert lz(-val) == 0
+                assert tz(val) == tz(-val)
+            for n in evens:
+                assert tz(T(n)) > 0
+                assert tz(T(n + 1)) == 0

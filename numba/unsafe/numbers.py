@@ -23,3 +23,23 @@ def viewer(tyctx, val, viewty):
     retty = viewty.dtype
     sig = retty(val, viewty)
     return sig, codegen
+
+
+@intrinsic
+def trailing_zeros(typeingctx, src):
+    assert isinstance(src, types.Integer)
+
+    def codegen(context, builder, signature, args):
+        [src] = args
+        return builder.cttz(src, ir.Constant(ir.IntType(1), 0))
+    return src(src), codegen
+
+
+@intrinsic
+def leading_zeros(typeingctx, src):
+    assert isinstance(src, types.Integer)
+
+    def codegen(context, builder, signature, args):
+        [src] = args
+        return builder.ctlz(src, ir.Constant(ir.IntType(1), 0))
+    return src(src), codegen
