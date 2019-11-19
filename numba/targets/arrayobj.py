@@ -3820,7 +3820,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
         nitems_r = int(math.ceil(nitems_c.real))
 
         # Binary operator needed for compiler branch pruning.
-        if use_complex == True: # noqa 712
+        if use_complex is True:
             nitems_i = int(math.ceil(nitems_c.imag))
             nitems = max(min(nitems_i, nitems_r), 0)
         else:
