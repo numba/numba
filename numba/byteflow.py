@@ -541,7 +541,7 @@ class TraceRunner(object):
     def op_BEGIN_FINALLY(self, state, inst):
         res = state.make_temp()  # unused
         state.push(res)
-        state.append(inst)
+        state.append(inst, state=res)
 
     def op_END_FINALLY(self, state, inst):
         state.append(inst)
