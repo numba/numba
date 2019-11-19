@@ -160,11 +160,11 @@ class TestZeroCounts(TestCase):
         lz = njit(lambda x: leading_zeros(x))
         tz = njit(lambda x: trailing_zeros(x))
 
-        evens = np.array([2, 42, 126, 128])
+        evens = [2, 42, 126, 128]
 
         for T in types.unsigned_domain:
             assert tz(T(0)) == lz(T(0)) == T.bitwidth
-            for i in np.arange(T.bitwidth):
+            for i in range(T.bitwidth):
                 val = T(2 ** i)
                 assert lz(val) + tz(val) + 1 == T.bitwidth
             for n in evens:
@@ -173,7 +173,7 @@ class TestZeroCounts(TestCase):
 
         for T in types.signed_domain:
             assert tz(T(0)) == lz(T(0)) == T.bitwidth
-            for i in np.arange(T.bitwidth - 1):
+            for i in range(T.bitwidth - 1):
                 val = T(2 ** i)
                 assert lz(val) + tz(val) + 1 == T.bitwidth
                 assert lz(-val) == 0
