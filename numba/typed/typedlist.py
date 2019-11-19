@@ -329,18 +329,14 @@ def box_lsttype(typ, val, c):
     context = c.context
     builder = c.builder
 
-    context.debug_print(builder, "beginning of boxing")
     # XXX deduplicate
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder, value=val)
     # Returns the plain MemInfo
-    context.debug_print(builder, "before boxing meminfo")
-    context.printf(builder, "meminfo: %p\n", lstruct.meminfo)
     boxed_meminfo = c.box(
         types.MemInfoPointer(types.voidptr),
         lstruct.meminfo,
     )
-    context.debug_print(builder, "after boxing meminfo")
 
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typedlist',
@@ -354,7 +350,6 @@ def box_lsttype(typ, val, c):
     c.pyapi.decref(fmp_fn)
     c.pyapi.decref(typedlist_mod)
     c.pyapi.decref(boxed_meminfo)
-    context.debug_print(builder, "end of boxing")
     return res
 
 
@@ -362,7 +357,6 @@ def box_lsttype(typ, val, c):
 def unbox_listtype(typ, val, c):
     context = c.context
     builder = c.builder
-    context.debug_print(builder, "start of unboxing")
 
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder)
@@ -374,7 +368,6 @@ def unbox_listtype(typ, val, c):
 
         with is_numba_typed_list:
             miptr = c.pyapi.object_getattr_string(val, '_opaque')
-            context.printf(builder, "miptr: %p\n", miptr)
             native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
 
             mi = native.value
@@ -472,9 +465,6 @@ def unbox_listtype(typ, val, c):
             )
             builder.store(ptr, data_pointer)
             lstruct.meminfo = meminfo
-            context.printf(builder, "reflp: %p\n", reflp)
-            context.printf(builder, "ptr: %p\n", ptr)
-            context.printf(builder, "meminfo: %p\n", meminfo)
 
             # now convert python list to typed list
 
@@ -557,7 +547,6 @@ def unbox_listtype(typ, val, c):
                 c.pyapi.decref(expected_typobj)
 
     lstobj = lstruct._getvalue()
-    context.debug_print(builder, "end of unboxing")
     return NativeValue(lstobj)
 
 #
