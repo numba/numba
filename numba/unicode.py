@@ -525,6 +525,13 @@ def unicode_idx_check_type(ty, name):
         raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
 
 
+def unicode_sub_check_type(ty, name):
+    """Check object belongs to unicode type"""
+    if not isinstance(ty, types.UnicodeType):
+        msg = '"{}" must be {}, not {}'.format(name, types.UnicodeType, ty)
+        raise TypingError(msg)
+
+
 def generate_finder(find_func):
     """Generate finder either left or right."""
     def impl(data, substr, start=None, end=None):
@@ -580,10 +587,7 @@ def unicode_find(data, substr, start=None, end=None):
 
     unicode_idx_check_type(start, 'start')
     unicode_idx_check_type(end, 'end')
-
-    if not isinstance(substr, types.UnicodeType):
-        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
-        raise TypingError(msg)
+    unicode_sub_check_type(substr, 'substr')
 
     return _find
 
@@ -591,12 +595,14 @@ def unicode_find(data, substr, start=None, end=None):
 @overload_method(types.UnicodeType, 'rfind')
 def unicode_rfind(data, substr, start=None, end=None):
     """Implements str.rfind()"""
+    if isinstance(substr, types.UnicodeCharSeq):
+        def rfind_impl(data, substr):
+            return data.rfind(str(substr))
+        return rfind_impl
+
     unicode_idx_check_type(start, 'start')
     unicode_idx_check_type(end, 'end')
-
-    if not isinstance(substr, types.UnicodeType):
-        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
-        raise TypingError(msg)
+    unicode_sub_check_type(substr, 'substr')
 
     return _rfind
 
