@@ -163,6 +163,7 @@ class TestZeroCounts(TestCase):
         evens = np.array([2, 42, 126, 128])
 
         for T in types.unsigned_domain:
+            assert tz(T(0)) == lz(T(0)) == T.bitwidth
             for i in np.arange(T.bitwidth):
                 val = T(2 ** i)
                 assert lz(val) + tz(val) + 1 == T.bitwidth
@@ -171,6 +172,7 @@ class TestZeroCounts(TestCase):
                 assert tz(T(n + 1)) == 0
 
         for T in types.signed_domain:
+            assert tz(T(0)) == lz(T(0)) == T.bitwidth
             for i in np.arange(T.bitwidth - 1):
                 val = T(2 ** i)
                 assert lz(val) + tz(val) + 1 == T.bitwidth
