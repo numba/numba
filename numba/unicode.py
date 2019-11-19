@@ -953,10 +953,6 @@ def unicode_isidentifier(data):
 
     def impl(data):
         length = len(data)
-
-        if length == 1:
-            return _PyUnicode_IsDecimalDigit(_get_code_point(data, 0))
-
         if length == 0:
             return False
 
