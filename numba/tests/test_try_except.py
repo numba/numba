@@ -51,7 +51,7 @@ class TestTryExcept(TestCase):
         self.assertEqual(udt(1), "caught")
         self.assertEqual(udt(-1), "not raised")
 
-    def test_nested_try(self):
+    def _multi_inner(self):
         @njit
         def inner(x):
             if x == 1:
@@ -65,6 +65,11 @@ class TestTryExcept(TestCase):
                 raise MyError("three")
             else:
                 print("call_other")
+
+        return inner
+
+    def test_nested_try(self):
+        inner = self._multi_inner()
 
         @njit
         def udt(x, y, z):
@@ -107,6 +112,48 @@ class TestTryExcept(TestCase):
             stdout.getvalue().split(),
             ["A", "call_one", "C", "call_two", "E", "call_other", "F"],
         )
+
+    def test_loop_in_try(self):
+        inner = self._multi_inner()
+
+        @njit
+        def udt(x, n):
+            try:
+                print("A")
+                for i in range(n):
+                    print(i)
+                    if i == x:
+                        inner(i)
+            except:             # noqa: E722
+                print("B")
+            return i
+
+        # case 1
+        with captured_stdout() as stdout:
+            res = udt(3, 5)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "0", "1", "2", "3", "call_three", "B"],
+        )
+        self.assertEqual(res, 3)
+
+        # case 2
+        with captured_stdout() as stdout:
+            res = udt(1, 3)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "0", "1", "call_one", "B"],
+        )
+        self.assertEqual(res, 1)
+
+        # case 3
+        with captured_stdout() as stdout:
+            res = udt(0, 3)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "0", "call_other", "1", "2"],
+        )
+        self.assertEqual(res, 2)
 
 
 if __name__ == '__main__':
