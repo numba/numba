@@ -63,30 +63,50 @@ class TestTryExcept(TestCase):
             elif x == 3:
                 print("call_three")
                 raise MyError("three")
+            else:
+                print("call_other")
 
         @njit
-        def udt():
+        def udt(x, y, z):
             try:
                 try:
                     print("A")
-                    inner(1)
+                    inner(x)
                     print("B")
                 except:         # noqa: E722
                     print("C")
-                    inner(2)
+                    inner(y)
                     print("D")
             except:             # noqa: E722
                 print("E")
-                inner(3)
+                inner(z)
+                print("F")
 
+        # case 1
         with self.assertRaises(MyError) as raises:
             with captured_stdout() as stdout:
-                udt()
+                udt(1, 2, 3)
         self.assertEqual(
             stdout.getvalue().split(),
             ["A", "call_one", "C", "call_two", "E", "call_three"],
         )
         self.assertEqual(str(raises.exception), "three")
+
+        # case 2
+        with captured_stdout() as stdout:
+            udt(1, 0, 3)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "call_one", "C", "call_other", "D"],
+        )
+
+        # case 3
+        with captured_stdout() as stdout:
+            udt(1, 2, 0)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "call_one", "C", "call_two", "E", "call_other", "F"],
+        )
 
 
 if __name__ == '__main__':
