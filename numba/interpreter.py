@@ -187,14 +187,23 @@ class Interpreter(object):
         if not self.current_block.is_terminated:
             tryblk = self.dfainfo.active_try_block
             if tryblk is not None:
-                self.store(
-                    ir.Const(value=False, loc=self.loc),
-                    '$exception_check',
-                    redefine=True,
-                )
+                self._insert_exception_check()
         # Handle normal block cleanup
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
+
+    def _insert_exception_check(self):
+        """Called before the end of a block to inject
+        """
+        from numba.unsafe.eh import exception_check
+        from numba import types
+        gv_check_fn = ir.Global(
+            "exception_check", exception_check, loc=self.loc,
+        )
+        raise_check_name = 'raise_check_fn'
+        self.store(value=gv_check_fn, name=raise_check_name, redefine=True)
+        raised = ir.Expr.call(self.get(raise_check_name), (), (), loc=self.loc)
+        self.store(value=raised, name='$exception_check', redefine=True)
 
     def _remove_unused_temporaries(self):
         """

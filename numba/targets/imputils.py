@@ -192,7 +192,7 @@ def user_function(fndesc, libs):
         status, retval = context.call_conv.call_function(
             builder, func, fndesc.restype, fndesc.argtypes, args)
         with cgutils.if_unlikely(builder, status.is_error):
-            context.call_conv.return_status_propagate(builder, status)
+            context.call_conv.return_status_propagate(builder, status, eh=True)
         assert sig.return_type == fndesc.restype
         # Reconstruct optional return type
         retval = fix_returning_optional(context, builder, sig, status, retval)

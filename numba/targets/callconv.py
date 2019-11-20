@@ -346,7 +346,7 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
-                        func_name=None):
+                        func_name=None, eh=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -378,10 +378,11 @@ class CPUCallConv(BaseCallConv):
         builder.store(struct_gv, excptr)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
-    def return_status_propagate(self, builder, status):
+    def return_status_propagate(self, builder, status, eh=None):
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
-        self._return_errcode_raw(builder, status.code)
+        if not eh:
+            self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)

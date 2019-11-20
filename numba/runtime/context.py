@@ -234,3 +234,14 @@ class NRTContext(object):
         mod = builder.module
         fn = mod.get_or_insert_function(fnty, name="NRT_get_api")
         return builder.call(fn, ())
+
+    def eh_check(self, builder):
+        """Check if an exception is raised
+        """
+        ctx = self._context
+        cc = ctx.call_conv
+        # Inspect the excinfo argument on the function
+        excinfoptr = cc._get_excinfo_argument(builder.function)
+        excinfo = builder.load(excinfoptr)
+        has_raised = builder.not_(cgutils.is_null(builder, excinfo))
+        return has_raised
