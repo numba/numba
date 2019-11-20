@@ -1317,34 +1317,27 @@ def unicode_replace(s, old_str, new_str, count=-1):
         raise TypingError('The object must be a UnicodeType.'
                           ' Given: {}'.format(new_str))
 
-    def impl(s, old_str, new_str, count=-1):
+    def impl(s, old, new, count=-1):
         if count == 0:
             return s
-        if old_str == '' or old_str is None:
-            q = list(s)
+        if old == '':
+            schars = list(s)
             if count == -1:
-                str_res = new_str.join(q)
-                str_result = new_str + str_res + new_str
-                return str_result
-            i = 0
-            str_result = new_str
-            if count > len(q):
-                counter = len(q)
-            else:
-                counter = count
-            while i < counter:
-                str_result += q[i]
-                if i + 1 != counter:
-                    str_result += new_str
+                return new + new.join(schars) + new
+            split_result = [new]
+            min_count = min(len(schars), count)
+            for i in range(min_count):
+                split_result.append(schars[i])
+                if i + 1 != min_count:
+                    split_result.append(new)
                 else:
-                    str_result += ''.join(q[(i + 1):])
-                i += 1
-            if count > len(q):
-                str_result += new_str
-            return str_result
-        q = s.split(old_str, count)
-        str_result = new_str.join(q)
-        return str_result
+                    split_result.append(''.join(schars[(i + 1):]))
+            if count > len(schars):
+                split_result.append(new)
+            return ''.join(split_result)
+        schars = s.split(old, count)
+        result = new.join(schars)
+        return result
 
     return impl
 
