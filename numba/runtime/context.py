@@ -243,12 +243,9 @@ class NRTContext(object):
         # Inspect the excinfo argument on the function
         trystatus = cc.check_try_status(builder)
         excinfo = trystatus.excinfo
-        checked = builder.select(
-            trystatus.in_try,
-            cgutils.get_null_value(excinfo.type),
-            excinfo,
-        )
-        has_raised = builder.not_(cgutils.is_null(builder, checked))
+        has_raised = builder.not_(cgutils.is_null(builder, excinfo))
+        with builder.if_then(has_raised):
+            self.eh_end_try(builder)
         return has_raised
 
     def eh_try(self, builder):

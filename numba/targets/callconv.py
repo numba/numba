@@ -381,20 +381,42 @@ class CPUCallConv(BaseCallConv):
         builder.store(struct_gv, excptr)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
+    def _get_try_state(self, builder):
+        try:
+            return builder.__eh_try_state
+        except AttributeError:
+            ptr = cgutils.alloca_once(
+                builder, cgutils.intp_t, name='try_state', zfill=True,
+            )
+            builder.__eh_try_state = ptr
+            return ptr
+
     def check_try_status(self, builder):
+        try_state_ptr = self._get_try_state(builder)
+        try_depth = builder.load(try_state_ptr)
+        # try_depth > 0
+        in_try = builder.icmp_unsigned('>', try_depth, try_depth.type(0))
+
         excinfoptr = self._get_excinfo_argument(builder.function)
         excinfo = builder.load(excinfoptr)
-        void1 = builder.zext(cgutils.true_bit, cgutils.intp_t)
-        addr = builder.ptrtoint(excinfo, cgutils.intp_t)
-        masked = cgutils.as_bool_bit(builder, builder.and_(addr, void1))
-        return TryStatus(in_try=masked, excinfo=excinfo)
+
+        return TryStatus(in_try=in_try, excinfo=excinfo)
 
     def set_try_status(self, builder):
-        excinfoptr = self._get_excinfo_argument(builder.function)
-        void1 = builder.inttoptr(cgutils.true_bit, excinfoptr.type.pointee)
-        builder.store(void1, excinfoptr)
+        try_state_ptr = self._get_try_state(builder)
+        # Increment try depth
+        old = builder.load(try_state_ptr)
+        new = builder.add(old, old.type(1))
+        builder.store(new, try_state_ptr)
 
     def unset_try_status(self, builder):
+        try_state_ptr = self._get_try_state(builder)
+        # Decrement try depth
+        old = builder.load(try_state_ptr)
+        new = builder.sub(old, old.type(1))
+        builder.store(new, try_state_ptr)
+
+        # XXX: reset exception state
         excinfoptr = self._get_excinfo_argument(builder.function)
         null = cgutils.get_null_value(excinfoptr.type.pointee)
         builder.store(null, excinfoptr)
