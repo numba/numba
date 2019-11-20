@@ -76,14 +76,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest llvmlite build
-if [ $PYTHON \< "3.8" ]; then
-    $CONDA_INSTALL -c numba llvmlite
-else
-    $CONDA_INSTALL -c numba/label/dev_airflow llvmlite
-fi
-
-
-
+$CONDA_INSTALL -c numba llvmlite
 
 # Install enum34 and singledispatch for Python < 3.4
 if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi

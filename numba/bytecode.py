@@ -17,7 +17,8 @@ from numba import errors, utils
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
 # The following offset is used as a hack to inject a NOP at the start of the
-# bytecode
+# bytecode. So that function starting with `while True` will not have block-0
+# as a jump target. The Lowerer puts argument initialization at block-0.
 _FIXED_OFFSET = 2 if sys.version_info[0] >= 3 else 0
 
 

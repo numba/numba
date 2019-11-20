@@ -13,7 +13,6 @@ from numba.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
 
 class _lazy_pformat(object):
@@ -36,14 +35,23 @@ class Flow(object):
         self.block_infos = UniqueDict()
 
     def run(self):
+        """Run a trace over the bytecode over all reachable path.
+
+        The trace starts at bytecode offset 0 and gathers stack and control-
+        flow information by partially interpreting each bytecode.
+        Each ``State`` instance in the trace corresponds to a basic-block.
+        The State instances forks when a jump instruction is encountered.
+        A newly forked state is then added to the list of pending states.
+        The trace ends when there are no more pending states.
+        """
         firststate = State(bytecode=self._bytecode, pc=0, nstack=0,
                            blockstack=())
-        runner = Runner(debug_filename=self._bytecode.func_id.filename)
+        runner = TraceRunner(debug_filename=self._bytecode.func_id.filename)
         runner.pending.append(firststate)
 
         # Enforce unique-ness on initial PC to avoid re-entering the PC with
         # a different stack-depth. We don't know if such a case is ever
-        # possible, but no such cases has been encountered in our tests.
+        # possible, but no such case has been encountered in our tests.
         first_encounter = UniqueDict()
         # Loop over each pending state at a initial PC.
         # Each state is tracing a basic block
@@ -79,8 +87,6 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
-
-        assert self.block_infos
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -121,13 +127,15 @@ class Flow(object):
                     if rhs not in phi_set:
                         # Is a definition
                         defmap[phi] = state
-                    # else:
                     phismap[phi].add((rhs, state))
             _logger.debug("defmap: %s", _lazy_pformat(defmap))
             _logger.debug("phismap: %s", _lazy_pformat(phismap))
             return defmap, phismap
 
         def propagate_phi_map(phismap):
+            """An iterative dataflow algorithm to find the definition
+            (the source) of each PHI node.
+            """
             while True:
                 changing = False
                 for phi, defsites in sorted(list(phismap.items())):
@@ -175,7 +183,7 @@ class Flow(object):
             return False
 
 
-class Runner(object):
+class TraceRunner(object):
     """Trace runner contains the states for the trace and the opcode dispatch.
     """
     def __init__(self, debug_filename):
@@ -533,7 +541,7 @@ class Runner(object):
     def op_BEGIN_FINALLY(self, state, inst):
         res = state.make_temp()  # unused
         state.push(res)
-        state.append(inst)
+        state.append(inst, state=res)
 
     def op_END_FINALLY(self, state, inst):
         state.append(inst)
@@ -545,7 +553,7 @@ class Runner(object):
     def op_POP_FINALLY(self, state, inst):
         # we don't emulate the exact stack behavior
         if inst.arg != 0:
-            msg = ('Unsupported use of bytecode related to try..finally'
+            msg = ('Unsupported use of a bytecode related to try..finally'
                    ' or a with-context')
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
@@ -623,7 +631,7 @@ class Runner(object):
     def op_CALL_FUNCTION_EX(self, state, inst):
         if inst.arg & 1:
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
-            raise NotImplementedError(errmsg)
+            raise UnsupportedError(errmsg)
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
@@ -725,12 +733,8 @@ class Runner(object):
 
     def op_LIST_APPEND(self, state, inst):
         value = state.pop()
-        # Python 2.7+ added an argument to LIST_APPEND.
-        if PYVERSION == (2, 6):
-            target = state.pop()
-        else:
-            index = inst.arg
-            target = state.peek(index)
+        index = inst.arg
+        target = state.peek(index)
         appendvar = state.make_temp()
         res = state.make_temp()
         state.append(inst, target=target, value=value, appendvar=appendvar,
@@ -740,11 +744,10 @@ class Runner(object):
         dct = state.make_temp()
         count = inst.arg
         items = []
-        if PYVERSION >= (3, 5):
-            # In 3.5+, BUILD_MAP takes <count> pairs from the stack
-            for i in range(count):
-                v, k = state.pop(), state.pop()
-                items.append((k, v))
+        # In 3.5+, BUILD_MAP takes <count> pairs from the stack
+        for i in range(count):
+            v, k = state.pop(), state.pop()
+            items.append((k, v))
         state.append(inst, items=items[::-1], size=count, res=dct)
         state.push(dct)
 
@@ -827,22 +830,10 @@ class Runner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        if PYVERSION == (2, 7):
-            name = None
-        else:
-            name = state.pop()
+        name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION < (3, 0):
-            if MAKE_CLOSURE:
-                closure = state.pop()
-            num_posdefaults = inst.arg
-            if num_posdefaults > 0:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(state.pop())
-                defaults = tuple(defaults)
-        elif PYVERSION >= (3, 0) and PYVERSION < (3, 6):
+        if PYVERSION >= (3, 0) and PYVERSION < (3, 6):
             num_posdefaults = inst.arg & 0xFF
             num_kwdefaults = (inst.arg >> 8) & 0xFF
             num_annotations = (inst.arg >> 16) & 0x7FFF
@@ -903,9 +894,21 @@ class Runner(object):
 
 
 class State(object):
-    """Trace state
+    """State of the trace
     """
     def __init__(self, bytecode, pc, nstack, blockstack):
+        """
+        Parameters
+        ----------
+        bytecode : numba.bytecode.ByteCode
+            function bytecode
+        pc : int
+            program counter
+        nstack : int
+            stackdepth at entry
+        blockstack : Sequence[Dict]
+            A sequence of dictionary denoting entries on the blockstack.
+        """
         self._bytecode = bytecode
         self._pc_initial = pc
         self._pc = pc
@@ -940,18 +943,35 @@ class State(object):
 
     @property
     def pc_initial(self):
+        """The starting bytecode offset of this State.
+        The PC given to the constructor.
+        """
         return self._pc_initial
 
     @property
     def instructions(self):
+        """The list of instructions information as a 2-tuple of
+        ``(pc : int, register_map : Dict)``
+        """
         return self._insts
 
     @property
     def outgoing_edges(self):
+        """The list of outgoing edges.
+
+        Returns
+        -------
+        edges : List[State]
+        """
         return self._outedges
 
     @property
     def outgoing_phis(self):
+        """The dictionary of outgoing phi nodes.
+
+        The keys are the name of the PHI nodes.
+        The values are the outgoing states.
+        """
         return self._outgoing_phis
 
     def has_terminated(self):
@@ -1109,7 +1129,7 @@ class AdaptCFA(object):
         # Find backbone
         backbone = graph.backbone()
         # Filter out in loop blocks (Assuming no other cyclic control blocks)
-        # This is to unavoid variable defined in loops to be considered as
+        # This is to unavoid variables defined in loops being considered as
         # function scope.
         inloopblocks = set()
         for b in self.blocks.keys():
