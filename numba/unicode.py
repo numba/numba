@@ -683,7 +683,7 @@ def unicode_translate(data, table):
 
     def impl(data, table):
         length = len(data)
-        res = _empty_string(data._kind, length, data._is_ascii)
+        res = _empty_string(PY_UNICODE_4BYTE_KIND, length, data._is_ascii)
         for i in range(length):
             _set_code_point(res, i, _get_code_point(data, i))
         for key, value in table.items():

@@ -1191,7 +1191,9 @@ class TestUnicode(BaseTest):
 
         table_extra = [
             {ord('a'): ord('\x04'), ord('\xe9'): ord('t')},
-            {ord('\u20aa'): ord('\u20ac')}
+            {ord('\u20aa'): ord('\u20ac')},
+            {ord('a'):ord('\u20aa')},
+            {ord('\u20aa'): ord('a')},
         ]
 
         msg = 'Results "{}".translate({}) must be equal'
@@ -1203,18 +1205,16 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(s, t), cfunc(s, numba_t),
                                  msg=msg.format(s, t))
 
-    @unittest.skip('Dont work in numba')
+    @unittest.skip('Dict.value_type cannot be of type none')
     def test_translate_error(self):
         pyfunc = translate_usecase
         cfunc = njit(pyfunc)
 
         data = ['处', 'aaabbbcil', '[a\xe9]', '\u20aa', '\u20ac']
         table = [
-            {ord('a'):ord('\u20aa')},
-            {ord('\u20aa'): ord('a')},
             {ord('a'):None},
+            {ord('\u20aa'):None},
         ]
-
         msg = 'Results "{}".translate({}) must be equal'
         for s in data:
             for t in table:
