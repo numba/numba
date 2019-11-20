@@ -27,3 +27,14 @@ def mark_try_block(typingctx):
 
     restype = types.none
     return restype(), codegen
+
+
+@intrinsic
+def end_try_block(typingctx):
+    def codegen(context, builder, signature, args):
+        nrt = context.nrt
+        nrt.eh_end_try(builder)
+        return context.get_dummy_value()
+
+    restype = types.none
+    return restype(), codegen

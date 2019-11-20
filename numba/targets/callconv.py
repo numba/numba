@@ -394,11 +394,16 @@ class CPUCallConv(BaseCallConv):
         void1 = builder.inttoptr(cgutils.true_bit, excinfoptr.type.pointee)
         builder.store(void1, excinfoptr)
 
+    def unset_try_status(self, builder):
+        excinfoptr = self._get_excinfo_argument(builder.function)
+        null = cgutils.get_null_value(excinfoptr.type.pointee)
+        builder.store(null, excinfoptr)
+
     def return_status_propagate(self, builder, status):
         trystatus = self.check_try_status(builder)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
-        if not trystatus.in_try:
+        with builder.if_then(builder.not_(trystatus.in_try)):
             self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):

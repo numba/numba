@@ -182,10 +182,6 @@ class Interpreter(object):
             else:
                 break
 
-        if self.dfainfo.active_try_block is not None:
-            # Handle starting try block
-            self._insert_try_block_marker()
-
     def _end_current_block(self):
         # Handle try block
         if not self.current_block.is_terminated:
@@ -196,7 +192,7 @@ class Interpreter(object):
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
 
-    def _insert_try_block_marker(self):
+    def _insert_try_block_begin(self):
         from numba.unsafe.eh import mark_try_block
         gv_fn = ir.Global(
             "mark_try_block", mark_try_block, loc=self.loc,
@@ -205,6 +201,16 @@ class Interpreter(object):
         self.store(value=gv_fn, name=mark_try_name, redefine=True)
         mark_try = ir.Expr.call(self.get(mark_try_name), (), (), loc=self.loc)
         self.store(value=mark_try, name='$mark_try', redefine=True)
+
+    def _insert_try_block_end(self):
+        from numba.unsafe.eh import end_try_block
+        gv_fn = ir.Global(
+            "end_try_block", end_try_block, loc=self.loc,
+        )
+        end_try_name = 'end_try_fn'
+        self.store(value=gv_fn, name=end_try_name, redefine=True)
+        end_try = ir.Expr.call(self.get(end_try_name), (), (), loc=self.loc)
+        self.store(value=end_try, name='$end_try', redefine=True)
 
     def _insert_exception_check(self):
         """Called before the end of a block to inject
@@ -698,10 +704,10 @@ class Interpreter(object):
 
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
-        pass
+        self._insert_try_block_begin()
 
     def op_SETUP_FINALLY(self, inst):
-        pass
+        self._insert_try_block_begin()
 
     def op_WITH_CLEANUP(self, inst):
         "no-op"
@@ -1013,8 +1019,11 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst):
-        self.syntax_blocks.pop()
+    def op_POP_BLOCK(self, inst, kind=None):
+        if kind is None:
+            self.syntax_blocks.pop()
+        elif kind == 'try':
+            self._insert_try_block_end()
 
     def op_RETURN_VALUE(self, inst, retval, castval):
         self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)

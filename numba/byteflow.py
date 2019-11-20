@@ -658,7 +658,9 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
 
     def op_POP_BLOCK(self, state, inst):
-        state.pop_block()
+        blk = state.pop_block()
+        if blk['kind'] == 'try':
+            state.append(inst, kind='try')
         # Forces a new block
         state.fork(pc=inst.next)
 
