@@ -11,6 +11,9 @@ from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
 
 
+TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])
+
+
 Status = namedtuple("Status",
                     ("code",
                      # If the function returned ok (a value or None)
@@ -378,10 +381,24 @@ class CPUCallConv(BaseCallConv):
         builder.store(struct_gv, excptr)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
-    def return_status_propagate(self, builder, status, eh=None):
+    def check_try_status(self, builder):
+        excinfoptr = self._get_excinfo_argument(builder.function)
+        excinfo = builder.load(excinfoptr)
+        void1 = builder.zext(cgutils.true_bit, cgutils.intp_t)
+        addr = builder.ptrtoint(excinfo, cgutils.intp_t)
+        masked = cgutils.as_bool_bit(builder, builder.and_(addr, void1))
+        return TryStatus(in_try=masked, excinfo=excinfo)
+
+    def set_try_status(self, builder):
+        excinfoptr = self._get_excinfo_argument(builder.function)
+        void1 = builder.inttoptr(cgutils.true_bit, excinfoptr.type.pointee)
+        builder.store(void1, excinfoptr)
+
+    def return_status_propagate(self, builder, status):
+        trystatus = self.check_try_status(builder)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
-        if not eh:
+        if not trystatus.in_try:
             self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):

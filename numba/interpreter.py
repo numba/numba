@@ -158,7 +158,7 @@ class Interpreter(object):
         self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            # Handle try block
+            # Handle ending try block
             tryblk = self.dfainfo.active_try_block
             if tryblk is not None:
                 branch = ir.Branch(
@@ -182,6 +182,10 @@ class Interpreter(object):
             else:
                 break
 
+        if self.dfainfo.active_try_block is not None:
+            # Handle starting try block
+            self._insert_try_block_marker()
+
     def _end_current_block(self):
         # Handle try block
         if not self.current_block.is_terminated:
@@ -191,6 +195,16 @@ class Interpreter(object):
         # Handle normal block cleanup
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
+
+    def _insert_try_block_marker(self):
+        from numba.unsafe.eh import mark_try_block
+        gv_fn = ir.Global(
+            "mark_try_block", mark_try_block, loc=self.loc,
+        )
+        mark_try_name = 'mark_try_fn'
+        self.store(value=gv_fn, name=mark_try_name, redefine=True)
+        mark_try = ir.Expr.call(self.get(mark_try_name), (), (), loc=self.loc)
+        self.store(value=mark_try, name='$mark_try', redefine=True)
 
     def _insert_exception_check(self):
         """Called before the end of a block to inject

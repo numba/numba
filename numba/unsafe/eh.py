@@ -16,3 +16,14 @@ def exception_check(typingctx):
 
     restype = types.boolean
     return restype(), codegen
+
+
+@intrinsic
+def mark_try_block(typingctx):
+    def codegen(context, builder, signature, args):
+        nrt = context.nrt
+        nrt.eh_try(builder)
+        return context.get_dummy_value()
+
+    restype = types.none
+    return restype(), codegen

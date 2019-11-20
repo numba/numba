@@ -241,7 +241,17 @@ class NRTContext(object):
         ctx = self._context
         cc = ctx.call_conv
         # Inspect the excinfo argument on the function
-        excinfoptr = cc._get_excinfo_argument(builder.function)
-        excinfo = builder.load(excinfoptr)
-        has_raised = builder.not_(cgutils.is_null(builder, excinfo))
+        trystatus = cc.check_try_status(builder)
+        excinfo = trystatus.excinfo
+        checked = builder.select(
+            trystatus.in_try,
+            cgutils.get_null_value(excinfo.type),
+            excinfo,
+        )
+        has_raised = builder.not_(cgutils.is_null(builder, checked))
         return has_raised
+
+    def eh_try(self, builder):
+        ctx = self._context
+        cc = ctx.call_conv
+        cc.set_try_status(builder)
