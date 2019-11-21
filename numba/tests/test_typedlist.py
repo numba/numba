@@ -754,6 +754,17 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(received, expected)
         self.assertEqual(type(received), List)
 
+    def test_list_and_square_bracket_builtin_from_iter(self):
+        @njit
+        def foo():
+            l = list([1, 2, 3])
+            return l
+        expected = List()
+        [expected.append(i) for i in (1,2,3)]
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+
     def test_square_bracket_builtin_from_nested_iter(self):
         @njit
         def foo():
