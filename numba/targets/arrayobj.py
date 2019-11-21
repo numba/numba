@@ -3765,7 +3765,7 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        dtype = types.intc
+        dtype = max(bounds)
 
     return dtype
 
