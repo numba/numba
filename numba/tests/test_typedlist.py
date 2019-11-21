@@ -717,6 +717,44 @@ class TestListInferred(TestCase):
         self.assertEqual(0, got[0])
 
 
+class TestListBuiltinConstructors(TestCase):
+
+    def test_simple_refine_list_builtin(self):
+        @njit
+        def foo():
+            l = list()
+            l.append(1)
+            return l
+        expected = List()
+        expected.append(1)
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+
+    def test_simple_refine_square_braket_builtin(self):
+        @njit
+        def foo():
+            l = []
+            l.append(1)
+            return l
+        expected = List()
+        expected.append(1)
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+
+    def test_square_bracket_builtin_from_iter(self):
+        @njit
+        def foo():
+            l = [1, 2, 3]
+            return l
+        expected = List()
+        [expected.append(i) for i in (1,2,3)]
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+
+
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
