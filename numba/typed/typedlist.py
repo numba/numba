@@ -441,11 +441,9 @@ def unbox_listtype(typ, val, c):
                 ir.VoidType(),
                 [listobject.ll_list_type, vtablety.as_pointer()]
             )
-            setmethod_fn = ir.Function(
-                builder.module,
+            setmethod_fn = builder.module.get_or_insert_function(
                 setmethod_fnty,
-                name='numba_list_set_method_table',
-            )
+                name='numba_list_set_method_table')
             vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
             # install item incref/decref

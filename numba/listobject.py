@@ -166,11 +166,10 @@ def _list_set_method_table(typingctx, lp, itemty):
             ir.VoidType(),
             [ll_list_type, vtablety.as_pointer()]
         )
-        setmethod_fn = ir.Function(
-            builder.module,
+
+        setmethod_fn = builder.module.get_or_insert_function(
             setmethod_fnty,
-            name='numba_list_set_method_table',
-        )
+            name='numba_list_set_method_table')
         dp = args[0]
         vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
