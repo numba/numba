@@ -406,6 +406,8 @@ def unbox_listtype(typ, val, c):
 
         with is_python_list:
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+
+            size = c.pyapi.list_size(val)
             ### Create ptr to new typed list
             itemty = typ.item_type
             fnty = ir.FunctionType(
@@ -422,7 +424,7 @@ def unbox_listtype(typ, val, c):
             reflp = cgutils.alloca_once(builder, listobject.ll_list_type, zfill=True)
             status = builder.call(
                 fn,
-                [reflp, listobject.ll_ssize_t(sz_item), listobject.ll_ssize_t(0)],
+                [reflp, listobject.ll_ssize_t(sz_item), size],
             )
             _raise_if_error(builder, pyapi, errorptr, status,
                             "unable to allocate memory for unboxing list")
@@ -487,7 +489,6 @@ def unbox_listtype(typ, val, c):
 
             # now convert python list to typed list
 
-            size = c.pyapi.list_size(val)
 
             def check_element_type(nth, itemobj, expected_typobj):
                 typobj = nth.typeof(itemobj)
