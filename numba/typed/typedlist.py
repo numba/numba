@@ -22,6 +22,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.utils import IS_PY3
 
 
 @njit
@@ -353,10 +354,30 @@ def box_lsttype(typ, val, c):
     return res
 
 
+def _raise_if_error(builder, pyapi, errorptr, status, msg):
+    ok_status = status.type(int(listobject.ListStatus.LIST_OK))
+    with builder.if_then(builder.icmp_signed('!=', status, ok_status),
+                         likely=True):
+        if IS_PY3:
+            pyapi.err_format(
+                "PyExc_RuntimeError",
+                msg
+            )
+        else:
+            # Python2 doesn't have "%S" format string.
+            pyapi.err_set_string(
+                "PyExc_RuntimeError",
+                msg
+            )
+        builder.store(cgutils.true_bit, errorptr)
+        builder.ret(pyapi.get_null_object())
+
+
 @unbox(types.ListType)
 def unbox_listtype(typ, val, c):
     context = c.context
     builder = c.builder
+    pyapi = c.pyapi
 
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder)
@@ -384,6 +405,7 @@ def unbox_listtype(typ, val, c):
 
         with is_python_list:
             from llvmlite import ir
+            errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             ### Create ptr to new typed list
             itemty = typ.item_type
             fnty = ir.FunctionType(
@@ -402,12 +424,11 @@ def unbox_listtype(typ, val, c):
                 fn,
                 [reflp, listobject.ll_ssize_t(sz_item), listobject.ll_ssize_t(0)],
             )
-            ## FIXME: This fails
-            #listobject._raise_if_error(
-            #    context, builder, status,
-            #    msg="Failed to allocate list",
-            #)
+            _raise_if_error(builder, pyapi, errorptr, status,
+                            "unable to allocate memory for unboxing list")
+
             ptr = builder.load(reflp)
+
             lstruct.data = ptr
 
 
@@ -468,10 +489,7 @@ def unbox_listtype(typ, val, c):
 
             # now convert python list to typed list
 
-            errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             size = c.pyapi.list_size(val)
-
-            from ..utils import IS_PY3
 
             def check_element_type(nth, itemobj, expected_typobj):
                 typobj = nth.typeof(itemobj)
@@ -542,7 +560,8 @@ def unbox_listtype(typ, val, c):
                             _as_bytes(builder, ptr_item),
                         ],
                     )
-                    # FIXME: check status
+                    _raise_if_error(builder, pyapi, errorptr, status,
+                                    "failed to append to list during unboxing")
 
                 c.pyapi.decref(expected_typobj)
 
