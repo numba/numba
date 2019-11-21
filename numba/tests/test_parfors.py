@@ -3099,7 +3099,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.check(test_impl,)
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
-        self.assert_diagnostics(diagnostics, parfors_count=2)
+        self.assert_diagnostics(diagnostics, parfors_count=1)
 
     def test_allocation_hoisting(self):
         def test_impl():

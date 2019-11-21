@@ -577,7 +577,7 @@ class TestArrayAnalysis(TestCase):
             E = B + C
             return E
         self._compile_and_test(test_7, (types.intp,),
-                               asserts=[self.without_assert('B', 'C')],
+                               asserts=[self.with_assert('B', 'C')],
                                idempotent=False)
 
         def test_8(m):
@@ -605,7 +605,8 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.without_equiv('B', 'C'),
                                        self.with_equiv('A', 'm'),
                                        self.with_equiv('B', 'D'),
-                                       self.with_equiv('F', 'D'),],)
+                                       self.with_equiv('F', 'D'),],
+                               idempotent=False)
 
     def test_numpy_calls(self):
         def test_zeros(n):
