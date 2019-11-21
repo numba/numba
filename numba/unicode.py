@@ -1,3 +1,4 @@
+import sys
 import operator
 
 import numpy as np
@@ -1466,6 +1467,16 @@ def unicode_istitle(s):
 
         return cased
     return impl
+
+
+if sys.version_info[:2] >= (3, 7):
+    @overload_method(types.UnicodeType, 'isascii')
+    def unicode_isascii(data):
+        """Implements UnicodeType.isascii()"""
+
+        def impl(data):
+            return data._is_ascii
+        return impl
 
 
 @overload_method(types.UnicodeType, 'islower')
