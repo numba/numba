@@ -551,6 +551,7 @@ def generate_finder(find_func):
 
     return impl
 
+
 @register_jitable
 def _finder(data, substr, start, end):
     """Left finder."""
