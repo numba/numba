@@ -40,6 +40,7 @@ from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+import cmath
 
 
 
@@ -1038,6 +1039,20 @@ class TestParfors(TestParforsBase):
             with self.assertRaises(ValueError) as e:
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
+
+    @skip_unsupported
+    def test_use_of_reduction_var1(self):
+        def test_impl():
+            acc = 0
+            for i in prange(1):
+                acc = cmath.sqrt(acc)
+            return acc
+
+        # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_argmin(self):
