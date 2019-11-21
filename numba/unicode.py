@@ -613,6 +613,7 @@ def unicode_index(s, sub, start=None, end=None):
     """Implements str.index()"""
     unicode_idx_check_type(start, 'start')
     unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
 
     def index_impl(s, sub, start=None, end=None):
         result = s.find(sub, start, end)
