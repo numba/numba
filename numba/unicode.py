@@ -614,6 +614,7 @@ def unicode_rindex(s, sub, start=None, end=None):
     """Implements str.rindex()"""
     unicode_idx_check_type(start, 'start')
     unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
 
     def rindex_impl(s, sub, start=None, end=None):
         result = s.rfind(sub, start, end)
