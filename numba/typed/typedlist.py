@@ -23,6 +23,7 @@ from numba.extending import (
     type_callable,
 )
 from numba.utils import IS_PY3
+from llvmlite import ir
 
 
 @njit
@@ -404,7 +405,6 @@ def unbox_listtype(typ, val, c):
             c.pyapi.decref(miptr)
 
         with is_python_list:
-            from llvmlite import ir
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             ### Create ptr to new typed list
             itemty = typ.item_type
