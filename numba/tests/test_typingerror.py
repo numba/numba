@@ -146,7 +146,9 @@ class TestTypingError(unittest.TestCase):
             compile_isolated(using_imprecise_list, ())
 
         errmsg = str(raises.exception)
-        self.assertIn("Undecided type $0.6 := <undecided>", errmsg)
+        self.assertRegexpMatches(
+            errmsg, r"Undecided type \$[^\s]+ := <undecided>",
+        )
 
     def test_array_setitem_invalid_cast(self):
         with self.assertRaises(TypingError) as raises:
