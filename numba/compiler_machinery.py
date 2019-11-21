@@ -299,7 +299,10 @@ class PassManager(object):
 
         # debug print after this pass?
         if pss.name() in self._print_after:
-            print(("%s: %s" % (self.pipeline_name, pss.name())).center(80, '-'))
+            fid = internal_state.func_id
+            args = (fid.modname, fid.func_qualname, self.pipeline_name,
+                    pss.name())
+            print(("%s.%s: %s: %s" % args).center(80, '-'))
             internal_state.func_ir.dump()
 
     def run(self, state):

@@ -51,6 +51,38 @@ class TestBool(MemoryLeakMixin, TestCase):
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i > 0)
 
+            
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_list_allocation(self):
+        @njit
+        def foo_kwarg(n):
+            l = listobject.new_list(int32, allocated=n)
+            return l._allocated()
+
+        for i in range(16):
+            self.assertEqual(foo_kwarg(i), i)
+
+        @njit
+        def foo_posarg(n):
+            l = listobject.new_list(int32, n)
+            return l._allocated()
+        for i in range(16):
+            self.assertEqual(foo_posarg(i), i)
+
+    def test_list_allocation_negative(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32, -1)
+            return l._allocated()
+
+        with self.assertRaises(RuntimeError) as raises:
+            self.assertEqual(foo(), -1)
+        self.assertIn(
+            "expecting *allocated* to be >= 0",
+            str(raises.exception),
+        )
+
 
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):
 
