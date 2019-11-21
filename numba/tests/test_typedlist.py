@@ -754,6 +754,24 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(received, expected)
         self.assertEqual(type(received), List)
 
+    def test_square_bracket_builtin_from_nested_iter(self):
+        @njit
+        def foo():
+            l = [[1, 2, 3], [4, 5, 6]]
+            return l
+        a = List()
+        [a.append(i) for i in (1, 2, 3)]
+        b = List()
+        [b.append(i) for i in (4, 5, 6)]
+        expected = List()
+        expected.append(a)
+        expected.append(b)
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+        self.assertEqual(type(received[0]), List)
+        self.assertEqual(type(received[1]), List)
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
