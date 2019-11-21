@@ -471,7 +471,7 @@ class ListType(IterableType):
         self.item_type = itemty
         self.dtype = itemty
         self.mutable = mutable
-        name = '{}[{}, mutbale={}]'.format(
+        name = '{}[{}, mutable={}]'.format(
             self.__class__.__name__,
             itemty,
             self.mutable,
