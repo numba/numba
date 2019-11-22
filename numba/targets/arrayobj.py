@@ -3780,8 +3780,10 @@ def _arange_dtype(*args):
         #
         # Alg ref:
         # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/ctors.c#L3376-L3377    # noqa: E501
+        #
+        # Also not Py2.7 on 32 bit linux as a 32bit np.long where as Py3 has a
+        # 64bit, numba is not replicating this!
         dtype = max(bounds + [types.long_,])
-        print(bounds, "resolved", dtype, "long = ", types.long_)
 
     return dtype
 
