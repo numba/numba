@@ -169,7 +169,6 @@ def _typeof_list(val, c):
         raise ValueError(
             "Cannot type list element of {!r}".format(type(val[0])),
             )
-    #return types.List(ty, reflected=True)
     return types.ListType(ty, mutable=False)
 
 @typeof_impl.register(set)

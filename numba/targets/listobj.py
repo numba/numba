@@ -447,7 +447,6 @@ def build_list(context, builder, list_type, items):
     """
     Build a list of the given type, containing the given items.
     """
-    print("yes")
     nitems = len(items)
     inst = ListInstance.allocate(context, builder, list_type, nitems)
     # Populate list

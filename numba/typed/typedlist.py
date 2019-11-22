@@ -327,7 +327,6 @@ def typedlist_empty(cls, item_type):
 
 @box(types.ListType)
 def box_lsttype(typ, val, c):
-
     context = c.context
     builder = c.builder
 
