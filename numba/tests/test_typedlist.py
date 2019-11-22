@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 from itertools import product
+from textwrap import dedent
 
 import numpy as np
 
@@ -9,6 +10,8 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
+from numba.errors import TypingError
+from numba.six import exec_
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -820,6 +823,75 @@ class TestListBuiltinConstructors(TestCase):
         # FIXME: the error message could be more specific
         self.assertIn(
             "Type of variable 'l' cannot be determined",
+            str(raises.exception),
+        )
+
+
+class TestConversionListToImmutableTypedList(TestCase):
+
+    def test_simple_conversion(self):
+        @njit
+        def foo(lst):
+            return lst
+        # Python list goes in and Numba immutable typed list comes out
+        received = foo([1, 2, 3])
+        expected = List()
+        [expected.append(i) for i in (1, 2, 3)]
+        # FIXME: this may fail if mutability is included in equality
+        self.assertEqual(expected, received)
+
+    def test_nested_conversion(self):
+        @njit
+        def foo(lst):
+            return lst
+        a = List()
+        [a.append(i) for i in (1, 2, 3)]
+        b = List()
+        [b.append(i) for i in (4, 5, 6)]
+        expected = List()
+        expected.append(a)
+        expected.append(b)
+        received = foo([[1, 2, 3], [4, 5, 6]])
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+        self.assertEqual(type(received[0]), List)
+        self.assertEqual(type(received[1]), List)
+
+    def test_mutation_fails(self):
+        """ Test that any attempt to mutate an immutable typed list fails. """
+        def generate_function(line):
+            context = {}
+            exec_(dedent("""
+                def bar(lst):
+                    {}
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("lst.append(0)",
+                     "lst[0] = 0",
+                     "lst.pop()",
+                     "del lst[0]",
+                     "lst.extend((0,))",
+                     "lst.insert(0, 0)",
+                     "lst.clear()",
+                     "lst.reverse()",
+                     # FIXME: sort is missing because not implemented
+                     ):
+            with self.assertRaises(TypingError) as raises:
+                foo = generate_function(line)
+                foo([1, 2, 3])
+            self.assertIn(
+                "unable to mutate immutable typed list",
+                str(raises.exception),
+            )
+
+    def test_empty_list_raises_value_error(self):
+        @njit
+        def foo(lst):
+            return lst
+        with self.assertRaises(ValueError) as raises:
+            foo([])
+        self.assertIn(
+            "cannot compute fingerprint of empty list",
             str(raises.exception),
         )
 
