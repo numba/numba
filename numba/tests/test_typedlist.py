@@ -685,6 +685,19 @@ class TestListInferred(TestCase):
         self.assertEqual(list(got), [0, 1, 2])
         self.assertEqual(typeof(got).item_type, typeof(1))
 
+    def test_refine_list_extend_iter(self):
+        @njit
+        def foo():
+            l = List()
+            d = Dict()
+            d[0] = 0
+            # d.keys() provides a DictKeysIterableType
+            l.extend(d.keys())
+            return l
+
+        got = foo()
+        self.assertEqual(0, got[0])
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 

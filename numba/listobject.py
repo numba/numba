@@ -905,9 +905,11 @@ def impl_extend(l, iterable):
             ty = iterable.dtype
         elif hasattr(iterable, "item_type"):  # lists
             ty = iterable.item_type
+        elif hasattr(iterable, "yield_type"):  # iterators and generators
+            ty = iterable.yield_type
         else:
             raise TypingError("unable to extend list, iterable is missing "
-                              "either *dtype* or *item_type*")
+                              "either *dtype*, *item_type* or *yield_type*.")
         l = l.refine(ty)
         # Create the signature that we wanted this impl to have
         sig = typing.signature(types.void, l, iterable)
