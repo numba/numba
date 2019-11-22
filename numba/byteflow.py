@@ -254,6 +254,9 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
+    def op_DELETE_FAST(self, state, inst):
+        state.append(inst)
+
     def op_DELETE_ATTR(self, state, inst):
         target = state.pop()
         state.append(inst, target=target)

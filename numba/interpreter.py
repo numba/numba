@@ -631,6 +631,10 @@ class Interpreter(object):
         value = self.get(value)
         self.store(value=value, name=dstname)
 
+    def op_DELETE_FAST(self, inst):
+        dstname = self.code_locals[inst.arg]
+        self.current_block.append(ir.Del(dstname, loc=self.loc))
+
     def op_DUP_TOPX(self, inst, orig, duped):
         for src, dst in zip(orig, duped):
             self.store(value=self.get(src), name=dst)

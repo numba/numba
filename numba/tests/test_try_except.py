@@ -8,7 +8,14 @@ class MyError(Exception):
     pass
 
 
-class TestTryExcept(TestCase):
+class TestTryBareExcept(TestCase):
+    """Test the following pattern:
+
+        try:
+            <body>
+        except:
+            <handling>
+    """
     def test_try_inner_raise(self):
         @njit
         def inner(x):
@@ -187,6 +194,10 @@ class TestTryExcept(TestCase):
             ["A", "B"],
         )
         self.assertEqual(res, 123)
+
+
+# class TestTryExceptCaught(TestCase):
+    # def test_reraise
 
 
 if __name__ == '__main__':
