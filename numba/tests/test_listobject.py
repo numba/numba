@@ -51,7 +51,7 @@ class TestBool(MemoryLeakMixin, TestCase):
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i > 0)
 
-            
+
 class TestAllocation(MemoryLeakMixin, TestCase):
 
     def test_list_allocation(self):
