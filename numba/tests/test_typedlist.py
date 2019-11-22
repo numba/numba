@@ -798,6 +798,31 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(type(received[0]), List)
         self.assertEqual(type(received[1]), List)
 
+    def test_square_bracket_builtin_from_iter_type_coercion(self):
+        @njit
+        def foo():
+            l = [1, 1.0]
+            return l
+        expected = List()
+        expected.append(1.0)
+        expected.append(1.0)
+        received = foo()
+        # FIXME: the first item is coerced to float
+        self.assertEqual(expected, received)
+
+    def test_square_bracket_builtin_from_iter_type_exception(self):
+        @njit
+        def foo():
+            l = [1, "a"]
+            return l
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        # FIXME: the error message could be more specific
+        self.assertIn(
+            "Type of variable 'l' cannot be determined",
+            str(raises.exception),
+        )
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
