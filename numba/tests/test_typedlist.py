@@ -731,8 +731,8 @@ class TestListBuiltinConstructors(TestCase):
         expected = List()
         expected.append(1)
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
 
     def test_simple_refine_square_braket_builtin(self):
         @njit
@@ -743,8 +743,8 @@ class TestListBuiltinConstructors(TestCase):
         expected = List()
         expected.append(1)
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
 
     def test_square_bracket_builtin_from_iter(self):
         @njit
@@ -754,8 +754,8 @@ class TestListBuiltinConstructors(TestCase):
         expected = List()
         [expected.append(i) for i in (1,2,3)]
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
 
     def test_list_and_square_bracket_builtin_from_iter(self):
         @njit
@@ -765,8 +765,8 @@ class TestListBuiltinConstructors(TestCase):
         expected = List()
         [expected.append(i) for i in (1,2,3)]
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
 
     @unittest.expectedFailure
     def test_dict_in_list_for_square_bracket_builtin(self):
@@ -780,8 +780,8 @@ class TestListBuiltinConstructors(TestCase):
         d["a"] = 1
         expected.append(d)
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
 
     def test_square_bracket_builtin_from_nested_iter(self):
         @njit
@@ -796,10 +796,10 @@ class TestListBuiltinConstructors(TestCase):
         expected.append(a)
         expected.append(b)
         received = foo()
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
-        self.assertEqual(type(received[0]), List)
-        self.assertEqual(type(received[1]), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
+        self.assertEqual(List, type(received[0]))
+        self.assertEqual(List, type(received[1]))
 
     def test_square_bracket_builtin_from_iter_type_coercion(self):
         @njit
@@ -838,7 +838,7 @@ class TestConversionListToImmutableTypedList(TestCase):
         expected = List()
         [expected.append(i) for i in (1, 2, 3)]
         # FIXME: this may fail if mutability is included in equality
-        self.assertEqual(expected, received)
+        self.assertEqual(received, expected)
 
     def test_nested_conversion(self):
         @njit
@@ -852,10 +852,10 @@ class TestConversionListToImmutableTypedList(TestCase):
         expected.append(a)
         expected.append(b)
         received = foo([[1, 2, 3], [4, 5, 6]])
-        self.assertEqual(received, expected)
-        self.assertEqual(type(received), List)
-        self.assertEqual(type(received[0]), List)
-        self.assertEqual(type(received[1]), List)
+        self.assertEqual(expected, received)
+        self.assertEqual(List, type(received))
+        self.assertEqual(List, type(received[0]))
+        self.assertEqual(List, type(received[1]))
 
     def test_mutation_fails(self):
         """ Test that any attempt to mutate an immutable typed list fails. """
