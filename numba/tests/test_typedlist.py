@@ -765,6 +765,21 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(received, expected)
         self.assertEqual(type(received), List)
 
+    @unittest.expectedFailure
+    def test_dict_in_list_for_square_bracket_builtin(self):
+        # depends on fixing: https://github.com/numba/numba/issues/4879
+        @njit
+        def foo():
+            l = [{"a": 1}]
+            return l
+        expected = List()
+        d = Dict()
+        d["a"] = 1
+        expected.append(d)
+        received = foo()
+        self.assertEqual(received, expected)
+        self.assertEqual(type(received), List)
+
     def test_square_bracket_builtin_from_nested_iter(self):
         @njit
         def foo():
