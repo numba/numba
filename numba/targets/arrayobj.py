@@ -3781,6 +3781,7 @@ def _arange_dtype(*args):
         # Alg ref:
         # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/ctors.c#L3376-L3377    # noqa: E501
         dtype = max(bounds + [types.long_,])
+        print(bounds, "resolved", dtype, "long = ", types.long_)
 
     return dtype
 
