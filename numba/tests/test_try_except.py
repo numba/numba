@@ -155,6 +155,39 @@ class TestTryExcept(TestCase):
         )
         self.assertEqual(res, 2)
 
+    def test_raise_in_try(self):
+        @njit
+        def udt(x):
+            try:
+                print("A")
+                if x:
+                    raise MyError("my_error")
+                print("B")
+            except:             # noqa: E722
+                print("C")
+                return 321
+            return 123
+
+        # case 1
+        with captured_stdout() as stdout:
+            res = udt(True)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "C"],
+        )
+        self.assertEqual(res, 321)
+
+        # case 2
+        with captured_stdout() as stdout:
+            res = udt(False)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "B"],
+        )
+        self.assertEqual(res, 123)
+
 
 if __name__ == '__main__':
     unittest.main()

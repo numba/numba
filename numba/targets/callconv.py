@@ -348,8 +348,8 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
-                        func_name=None, eh=None):
+    def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
+                            func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -379,6 +379,12 @@ class CPUCallConv(BaseCallConv):
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)
+
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
+                        func_name=None):
+        self.set_static_user_exc(builder, exc, exc_args=exc_args,
+                                   loc=loc, func_name=func_name)
+        trystatus = self.check_try_status(builder)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def _get_try_state(self, builder):
@@ -420,6 +426,9 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = self._get_excinfo_argument(builder.function)
         null = cgutils.get_null_value(excinfoptr.type.pointee)
         builder.store(null, excinfoptr)
+
+    def set_exception(self, builder, exc):
+        self.set_static_user_exc(builder, exc=Exception)
 
     def return_status_propagate(self, builder, status):
         trystatus = self.check_try_status(builder)

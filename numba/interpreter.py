@@ -1083,8 +1083,15 @@ class Interpreter(object):
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:
             exc = self.get(exc)
-        stmt = ir.Raise(exception=exc, loc=self.loc)
-        self.current_block.append(stmt)
+        tryblk = self.dfainfo.active_try_block
+        if tryblk is not None:
+            # In a try block
+            stmt = ir.TryRaise(exception=exc, loc=self.loc)
+            self.current_block.append(stmt)
+            self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
+        else:
+            stmt = ir.Raise(exception=exc, loc=self.loc)
+            self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
         # initialize index to None.  it's being set later in post-processing

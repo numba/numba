@@ -710,6 +710,43 @@ class StaticRaise(Terminator):
         return []
 
 
+class TryRaise(Stmt):
+    """A raise statement inside a try-block
+    Similar to Raise but does not terminate.
+    """
+    def __init__(self, exception, loc):
+        assert exception is None or isinstance(exception, Var)
+        assert isinstance(loc, Loc)
+        self.exception = exception
+        self.loc = loc
+
+    def __str__(self):
+        return "try_raise %s" % self.exception
+
+
+class StaticTryRaise(Stmt):
+    """A raise statement inside a try-block.
+    Similar to StaticRaise but does not terminate.
+    """
+
+    def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return "static_try_raise"
+        elif self.exc_args is None:
+            return "static_try_raise %s" % (self.exc_class,)
+        else:
+            return "static_try_raise %s(%s)" % (self.exc_class,
+                                     ", ".join(map(repr, self.exc_args)))
+
+
 class Return(Terminator):
     """
     Return to caller.

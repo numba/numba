@@ -165,6 +165,12 @@ class BaseLower(object):
             loc=loc, func_name=self.func_ir.func_id.func_name,
         )
 
+    def set_exception(self, exc_class, exc_args=None, loc=None):
+        self.call_conv.set_static_user_exc(
+            self.builder, exc_class, exc_args,
+            loc=loc, func_name=self.func_ir.func_id.func_name,
+        )
+
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
         """
@@ -411,6 +417,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
+        elif isinstance(inst, ir.StaticTryRaise):
+            self.lower_static_try_raise(inst)
+
         else:
             for _class, func in lower_extensions.items():
                 if isinstance(inst, _class):
@@ -454,6 +463,13 @@ class Lower(BaseLower):
             self.return_exception(None, loc=self.loc)
         else:
             self.return_exception(inst.exc_class, inst.exc_args, loc=self.loc)
+
+    def lower_static_try_raise(self, inst):
+        if inst.exc_class is None:
+            # Reraise
+            self.set_exception(None, loc=self.loc)
+        else:
+            self.set_exception(inst.exc_class, inst.exc_args, loc=self.loc)
 
     def lower_assign(self, ty, inst):
         value = inst.value

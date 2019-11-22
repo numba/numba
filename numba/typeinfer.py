@@ -1201,7 +1201,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
-        elif isinstance(inst, ir.StaticRaise):
+        elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
