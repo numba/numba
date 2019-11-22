@@ -385,7 +385,7 @@ def unbox_listtype(typ, val, c):
     has_opaque = c.pyapi.object_hasattr_string(val, '_opaque')
 
     with c.builder.if_else(cgutils.is_not_scalar_zero(c.builder, has_opaque)) \
-        as (is_numba_typed_list, is_python_list):
+            as (is_numba_typed_list, is_python_list):
 
         with is_numba_typed_list:
             miptr = c.pyapi.object_getattr_string(val, '_opaque')
@@ -405,9 +405,9 @@ def unbox_listtype(typ, val, c):
 
         with is_python_list:
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
-
             size = c.pyapi.list_size(val)
-            ### Create ptr to new typed list
+
+            # create ptr to new typed list
             itemty = typ.item_type
             fnty = ir.FunctionType(
                 listobject.ll_status,
@@ -415,12 +415,12 @@ def unbox_listtype(typ, val, c):
                  listobject.ll_ssize_t,
                  listobject.ll_ssize_t],
             )
-            fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
-            # Determine sizeof item types
-
+            fn = builder.module.get_or_insert_function(
+                fnty, name='numba_list_new')
             ll_item = context.get_data_type(itemty)
             sz_item = context.get_abi_sizeof(ll_item)
-            reflp = cgutils.alloca_once(builder, listobject.ll_list_type, zfill=True)
+            reflp = cgutils.alloca_once(
+                builder, listobject.ll_list_type, zfill=True)
             status = builder.call(
                 fn,
                 [reflp, listobject.ll_ssize_t(sz_item), size],
@@ -432,8 +432,7 @@ def unbox_listtype(typ, val, c):
 
             lstruct.data = ptr
 
-
-            ### Setup typed list method table
+            # setup typed list method table
             vtablety = ir.LiteralStructType([
                 listobject.ll_voidptr_type,  # item incref
                 listobject.ll_voidptr_type,  # item decref
@@ -467,7 +466,7 @@ def unbox_listtype(typ, val, c):
 
             builder.call(setmethod_fn, [ptr, vtable])
 
-            ### Setup builder representation for typed-list
+            # setup builder representation for typed-list
             alloc_size = context.get_abi_sizeof(
                 context.get_value_type(types.voidptr),
             )
@@ -487,8 +486,6 @@ def unbox_listtype(typ, val, c):
             lstruct.meminfo = meminfo
 
             # now convert python list to typed list
-
-
             def check_element_type(nth, itemobj, expected_typobj):
                 typobj = nth.typeof(itemobj)
                 # Check if *typobj* is NULL
