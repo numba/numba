@@ -668,6 +668,11 @@ def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False, bound
                              wraparound=wraparound, boundscheck=boundscheck)
 
 def do_boundscheck(context, builder, ind, dimlen, axis=None):
+    # Boundschecking is always disabled for CUDA
+    from .cuda.target import CUDATargetContext
+    if isinstance(context, CUDATargetContext):
+        return
+
     if (config.BOUNDSCHECK is None and not context.enable_boundscheck) \
        or config.BOUNDSCHECK == 0:
         return

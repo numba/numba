@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
-from numba import typeof, config
+from numba import typeof, config, cuda
 from numba.types import float64, intp
 from numba import unittest_support as unittest
 from .support import MemoryLeakMixin
@@ -99,6 +99,12 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
 
         # Doesn't raise
         boundscheck(b)
+
+    def test_no_cuda_boundscheck(self):
+        with self.assertRaises(NotImplementedError):
+            @cuda.jit(boundscheck=True)
+            def func():
+                pass
 
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck

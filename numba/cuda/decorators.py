@@ -52,6 +52,9 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
+    if 'boundscheck' in kws:
+        raise NotImplementedError("bounds checking is not supported for CUDA")
+
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
@@ -126,4 +129,3 @@ def convert_types(restype, argtypes):
         argtypes, restype = sigutils.normalize_signature(restype)
 
     return restype, argtypes
-
