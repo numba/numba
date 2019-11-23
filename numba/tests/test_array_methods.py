@@ -2,6 +2,7 @@ from __future__ import division
 
 from itertools import product, cycle, permutations
 import sys
+import warnings
 
 import numpy as np
 
@@ -11,9 +12,11 @@ from numba.compiler import compile_isolated
 from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
-from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
+from .support import (TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin,
+                      tag, PY2, _32bit)
 from .matmul_usecase import needs_blas
 
+_PY2_32bit = PY2 and _32bit
 
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
@@ -121,7 +124,7 @@ def np_arange_start_stop_step(start, stop, step):
 
 def np_arange_start_stop_step_dtype(start, stop, step, dtype):
     return np.arange(start=start, stop=stop, step=step, dtype=dtype)
-    
+
 def array_fill(arr, val):
     return arr.fill(val)
 
@@ -777,27 +780,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             def check_ok(arg0):
                 expected = pyfunc(arg0)
                 got = cfunc(arg0)
-                self.assertEqual(got.dtype, expected.dtype)
-                self.assertPreciseEqual(got, expected, prec="double")
-            
+                np.testing.assert_allclose(expected, got)
+
             check_ok(0)
             check_ok(1)
             check_ok(4)
             check_ok(5.5)
             check_ok(-3)
             check_ok(np.complex(4, 4))
-    
+            check_ok(np.int8(0))
+
     def test_arange_2_arg(self):
         def check_ok(arg0, arg1, pyfunc, cfunc):
             expected = pyfunc(arg0, arg1)
             got = cfunc(arg0, arg1)
-            self.assertEqual(got.dtype, expected.dtype)
-            self.assertPreciseEqual(got, expected, prec="double")
-        
+            np.testing.assert_allclose(expected, got)
+
         all_pyfuncs = (
-            np_arange_2, 
-            np_arange_start_stop, 
-            np_arange_1_stop, 
+            np_arange_2,
+            np_arange_start_stop,
+            np_arange_1_stop,
             np_arange_1_step,
             lambda x, y: np.arange(x, y, 5),
             lambda x, y: np.arange(2, y, step=x),
@@ -805,7 +807,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         for pyfunc in all_pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
-            
+
             check_ok(-1, 5, pyfunc, cfunc)
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
@@ -813,23 +815,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(np.complex(1, 1), np.complex(4, 4), pyfunc, cfunc)
             check_ok(np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
             check_ok(3, None, pyfunc, cfunc)
-        
+
         pyfunc = np_arange_1_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(5, np.float32, pyfunc, cfunc)
         check_ok(2.0, np.int32, pyfunc, cfunc)
-        check_ok(10, np.complex128, pyfunc, cfunc)                        
-        check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)                        
-        check_ok(7, None, pyfunc, cfunc)                        
+        check_ok(10, np.complex128, pyfunc, cfunc)
+        check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
+        check_ok(7, None, pyfunc, cfunc)
+        check_ok(np.int8(0), None, pyfunc, cfunc)
 
     def test_arange_3_arg(self):
-        def check_ok(arg0, arg1, arg2, pyfunc, cfunc):
+        def check_ok(arg0, arg1, arg2, pyfunc, cfunc, check_dtype=False):
             expected = pyfunc(arg0, arg1, arg2)
             got = cfunc(arg0, arg1, arg2)
-            self.assertEqual(got.dtype, expected.dtype)
-            self.assertPreciseEqual(got, expected, prec="double")
-        
+            np.testing.assert_allclose(expected, got)
+            # 32bit py2 has a strange long size
+            if check_dtype and not _PY2_32bit:
+                 self.assertEqual(expected.dtype, got.dtype)
+
         for pyfunc in (np_arange_3, np_arange_2_step, np_arange_start_stop_step):
             cfunc = jit(nopython=True)(pyfunc)
 
@@ -841,15 +846,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
             check_ok(3, 6, None, pyfunc, cfunc)
             check_ok(3, None, None, pyfunc, cfunc)
+            check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
+            check_ok(np.int8(0), np.int16(5), np.int32(1), pyfunc, cfunc)
+            # check upcasting logic, this matters most on windows
+            i8 = np.int8
+            check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # np.long
+            check_ok(np.int64(0), i8(5), i8(1), pyfunc, cfunc, True) # int64
 
         pyfunc = np_arange_2_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(1, 5, np.float32, pyfunc, cfunc)
         check_ok(2.0, 8, np.int32, pyfunc, cfunc)
-        check_ok(-2, 10, np.complex128, pyfunc, cfunc)                        
-        check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)                        
-        check_ok(1, 7, None, pyfunc, cfunc)                        
+        check_ok(-2, 10, np.complex128, pyfunc, cfunc)
+        check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
+        check_ok(1, 7, None, pyfunc, cfunc)
+        check_ok(np.int8(0), np.int32(5), None, pyfunc, cfunc, True)
 
     def test_arange_4_arg(self):
         for pyfunc in (np_arange_4, np_arange_start_stop_step_dtype):
@@ -858,9 +870,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             def check_ok(arg0, arg1, arg2, arg3):
                 expected = pyfunc(arg0, arg1, arg2, arg3)
                 got = cfunc(arg0, arg1, arg2, arg3)
-                self.assertEqual(got.dtype, expected.dtype)
-                self.assertPreciseEqual(got, expected, prec="double")
-            
+                np.testing.assert_allclose(expected, got)
+
             check_ok(0, 5, 1, np.float64)
             check_ok(-8, -1, 3, np.int32)
             check_ok(0, -10, -2, np.float32)
@@ -892,6 +903,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc = jit(nopython=True)(pyfunc)
                 cfunc(2, 6)
+
+        # check step size = 0, this is nonsense
+        pyfunc = np_arange_3
+        cfunc = jit(nopython=True)(pyfunc)
+        for f in (pyfunc, cfunc,):
+            for inputs in [(1, np.int16(2), 0), (1, 2, 0)]:
+                # there's a different error depending on whether any of the
+                # input values are np scalars
+                permitted_errors = (ZeroDivisionError, ValueError)
+                with self.assertRaises(permitted_errors) as raises:
+                    # this will raise RuntimeWarning's about zero division
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        f(*inputs)
+                    self.assertIn("Maximum allowed size exceeded",
+                                str(raises.exception))
 
     def test_item(self):
         pyfunc = array_item
