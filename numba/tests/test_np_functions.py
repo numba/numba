@@ -287,6 +287,11 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_isin(element, test_elements, assume_unique=False, invert=False):
+    return np.isin(element, test_elements, assume_unique=assume_unique,
+                   invert=invert)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -3467,6 +3472,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'Inputs must be array-like.',
             str(raises.exception)
         )
+
+    @unittest.skipIf(np_version < (1, 13), "NumPy Unsupported")
+    def test_isin(self):
+        np_pyfunc = np_isin
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(element, test_elements, invert, assume_unique):
+            self.assertPreciseEqual(
+                np_pyfunc(element, test_elements,invert=invert,
+                          assume_unique=assume_unique),
+                np_nbfunc(element, test_elements, invert=invert,
+                          assume_unique=assume_unique))
+
+        target_numpy_values = [
+            np.ones(1),
+            np.arange(1000),
+            np.array([[0, 1], [2, 3]]),
+            np.array([]),
+            np.array([[], []]),
+            np.array([1, 2, 3, np.nan, 5, 6])
+        ]
+
+        for element in target_numpy_values:
+            for test_elements in target_numpy_values:
+                check(element, test_elements, False, False)
+                check(element, test_elements, True, False)
+                check(element, test_elements, False, True)
+                check(element, test_elements, True, True)
 
 
 class TestNPMachineParameters(TestCase):
