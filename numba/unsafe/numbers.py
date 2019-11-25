@@ -28,7 +28,11 @@ def viewer(tyctx, val, viewty):
 @intrinsic
 def trailing_zeros(typeingctx, src):
     """Counts trailing zeros in the binary representation of an integer."""
-    assert isinstance(src, types.Integer)
+    if not isinstance(src, types.Integer):
+        raise TypeError(
+            "trailing_zeros is only defined for integers, but passed value was"
+            " '{}'.".format(src)
+        )
 
     def codegen(context, builder, signature, args):
         [src] = args
@@ -39,7 +43,11 @@ def trailing_zeros(typeingctx, src):
 @intrinsic
 def leading_zeros(typeingctx, src):
     """Counts leading zeros in the binary representation of an integer."""
-    assert isinstance(src, types.Integer)
+    if not isinstance(src, types.Integer):
+        raise TypeError(
+            "leading_zeros is only defined for integers, but passed value was "
+            "'{}'.".format(src)
+        )
 
     def codegen(context, builder, signature, args):
         [src] = args

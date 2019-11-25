@@ -181,3 +181,35 @@ class TestZeroCounts(TestCase):
             for n in evens:
                 assert tz(T(n)) > 0
                 assert tz(T(n + 1)) == 0
+
+    def check_error_msg(self, func):
+        cfunc = njit(lambda *x: func(*x))
+        func_name = func._name
+
+        unsupported_types = filter(
+            lambda x: not isinstance(x, types.Integer), types.number_domain
+        )
+        for typ in unsupported_types:
+            with self.assertRaises(TypingError) as e:
+                cfunc(typ(2))
+            self.assertIn(
+                "{} is only defined for integers, but passed value was '{}'."
+                .format(func_name, typ),
+                str(e.exception),
+            )
+
+        # Testing w/ too many arguments
+        arg_cases = [(1, 2), ()]
+        for args in arg_cases:
+            with self.assertRaises(TypingError) as e:
+                cfunc(*args)
+            self.assertIn(
+                "Invalid use of Function({})".format(str(func)),
+                str(e.exception)
+            )
+
+    def test_trailing_zeros_error(self):
+        self.check_error_msg(trailing_zeros)
+
+    def test_leading_zeros_error(self):
+        self.check_error_msg(leading_zeros)
