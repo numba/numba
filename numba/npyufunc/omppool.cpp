@@ -40,6 +40,34 @@ Threading layer on top of OpenMP.
 static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #endif
 
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(int) num_threads = 0;
+
+static void
+set_num_threads(int count)
+{
+    num_threads = count;
+}
+
+static int
+get_num_threads(void)
+{
+    return num_threads;
+}
+
+static int
+get_thread_num(void)
+{
+    return omp_get_thread_num();
+}
+
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
@@ -90,6 +118,10 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // index variable in OpenMP 'for' statement must have signed integral type for MSVC
     const ptrdiff_t size = (ptrdiff_t)dimensions[0];
 
+    // holds the shared variable for `num_threads`, this is a bit superfluous
+    // but present to force thinking about the scope of validity
+    int agreed_nthreads = num_threads;
+
     if(_DEBUG)
     {
         printf("inner_ndim: %lu\n",inner_ndim);
@@ -107,12 +139,17 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
-    omp_set_num_threads(num_threads);
-
-    #pragma omp parallel
+    // Set the thread mask on the pragma such that the state is scope limited
+    // and passed via a register on the OMP region call site, this limiting
+    // global state and racing
+    #pragma omp parallel num_threads(num_threads), shared(agreed_nthreads)
     {
         size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
+
+        // tell the active thread team about the number of threads
+        set_num_threads(agreed_nthreads);
+
         #pragma omp for
         for(ptrdiff_t r = 0; r < size; r++)
         {
@@ -174,6 +211,7 @@ static void launch_threads(int count)
     if(count < 1)
         return;
     omp_set_num_threads(count);
+    omp_set_nested(0x1); // enable nesting, control depth with OMP env var
 }
 
 static void synchronize(void)
@@ -207,5 +245,11 @@ MOD_INIT(omppool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
     PyObject_SetAttrString(m, "openmp_vendor",
                            PyString_FromString(_OMP_VENDOR));
+    PyObject_SetAttrString(m, "set_num_threads",
+                           PyLong_FromVoidPtr((void*)&set_num_threads));
+    PyObject_SetAttrString(m, "get_num_threads",
+                           PyLong_FromVoidPtr((void*)&get_num_threads));
+    PyObject_SetAttrString(m, "get_thread_num",
+                           PyLong_FromVoidPtr((void*)&get_thread_num));
     return MOD_SUCCESS_VAL(m);
 }

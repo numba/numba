@@ -38,6 +38,49 @@ static tbb::task_group *tg = NULL;
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
 
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(int) num_threads = 0;
+
+static void
+set_num_threads(int count)
+{
+    num_threads = count;
+}
+
+static int
+get_num_threads(void)
+{
+    return num_threads;
+}
+
+static int
+get_thread_num(void)
+{
+    return tbb::task_arena::current_thread_index();
+}
+
+// watch the arena, if it decides to create more threads/add threads into the
+// arena then make sure they get the right thread count
+class fix_tls_observer: public tbb::task_scheduler_observer {
+    int mask_val;
+    void on_scheduler_entry( bool is_worker ) override;
+public:
+    fix_tls_observer(tbb::task_arena &arena, int mask) : tbb::task_scheduler_observer(arena), mask_val(mask)
+    {
+        observe(true);
+    }
+};
+
+void fix_tls_observer::on_scheduler_entry(bool worker) {
+    set_num_threads(mask_val);
+}
+
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
@@ -83,58 +126,65 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printf("\n");
     }
 
+    // This is making the assumption that the calling thread knows the truth
+    // about num_threads, which should be correct via the following:
+    // program starts/reinits and the threadpool launches, num_threads TLS is
+    // set as default. Any thread spawned on init making a call to this function
+    // will have a valid num_threads TLS slot and so the task_arena is sized
+    // appropriately and it's value is used in the observer that fixes the TLS
+    // slots of any subsequent threads joining the task_arena. This leads to
+    // all threads in a task_arena having valid num_threads TLS slots prior to
+    // doing any work. Any further call to query the TLS slot value made by any
+    // thread in the arena is then safe and were any thread to create a nested
+    // parallel region the same logic applies as per program start/reinit.
     tbb::task_arena limited(num_threads);
+    fix_tls_observer observer(limited, num_threads);
 
-    limited.execute([&]
-    {
-        tg->run([=]
+    limited.execute([&]{
+        using range_t = tbb::blocked_range<size_t>;
+        tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
         {
-            using range_t = tbb::blocked_range<size_t>;
-            tbb::parallel_for(range_t(0, dimensions[0]), [=](const range_t &range)
+            size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
+            char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
+            memcpy(count_space, dimensions, arg_len * sizeof(size_t));
+            count_space[0] = range.size();
+
+            if(_DEBUG && _TRACE_SPLIT > 1)
             {
-                size_t * count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
-                char ** array_arg_space = (char**)alloca(sizeof(char*) * array_count);
-                memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-                count_space[0] = range.size();
-
-                if(_DEBUG && _TRACE_SPLIT > 1)
-                {
-                    printf("THREAD %p:", count_space);
-                    printf("count_space: ");
-                    for(size_t j = 0; j < arg_len; j++)
-                        printf("%lu, ", count_space[j]);
-                    printf("\n");
-                }
-                for(size_t j = 0; j < array_count; j++)
-                {
-                    char * base = args[j];
-                    size_t step = steps[j];
-                    ptrdiff_t offset = step * range.begin();
-                    array_arg_space[j] = base + offset;
-
-                    if(_DEBUG && _TRACE_SPLIT > 2)
-                    {
-                        printf("Index %ld\n", j);
-                        printf("-->Got base %p\n", (void *)base);
-                        printf("-->Got step %lu\n", step);
-                        printf("-->Got offset %ld\n", offset);
-                        printf("-->Got addr %p\n", (void *)array_arg_space[j]);
-                    }
-                }
+                printf("THREAD %p:", count_space);
+                printf("count_space: ");
+                for(size_t j = 0; j < arg_len; j++)
+                    printf("%lu, ", count_space[j]);
+                printf("\n");
+            }
+            for(size_t j = 0; j < array_count; j++)
+            {
+                char * base = args[j];
+                size_t step = steps[j];
+                ptrdiff_t offset = step * range.begin();
+                array_arg_space[j] = base + offset;
 
                 if(_DEBUG && _TRACE_SPLIT > 2)
                 {
-                    printf("array_arg_space: ");
-                    for(size_t j = 0; j < array_count; j++)
-                        printf("%p, ", (void *)array_arg_space[j]);
-                    printf("\n");
+                    printf("Index %ld\n", j);
+                    printf("-->Got base %p\n", (void *)base);
+                    printf("-->Got step %lu\n", step);
+                    printf("-->Got offset %ld\n", offset);
+                    printf("-->Got addr %p\n", (void *)array_arg_space[j]);
                 }
-                auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
-                func(array_arg_space, count_space, steps, data);
-            });
+            }
+
+            if(_DEBUG && _TRACE_SPLIT > 2)
+            {
+                printf("array_arg_space: ");
+                for(size_t j = 0; j < array_count; j++)
+                    printf("%p, ", (void *)array_arg_space[j]);
+                printf("\n");
+            }
+            auto func = reinterpret_cast<void (*)(char **args, size_t *dims, size_t *steps, void *data)>(fn);
+            func(array_arg_space, count_space, steps, data);
         });
     });
-    limited.execute([&]{ tg->wait(); });
 }
 
 void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
@@ -244,7 +294,12 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-
+    PyObject_SetAttrString(m, "set_num_threads",
+                           PyLong_FromVoidPtr((void*)&set_num_threads));
+    PyObject_SetAttrString(m, "get_num_threads",
+                           PyLong_FromVoidPtr((void*)&get_num_threads));
+    PyObject_SetAttrString(m, "get_thread_num",
+                           PyLong_FromVoidPtr((void*)&get_thread_num));
 
     return MOD_SUCCESS_VAL(m);
 }

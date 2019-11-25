@@ -452,17 +452,19 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
+            _load_num_threads_funcs(lib) # load late
+
             # set library name so it can be queried
             global _threading_layer
             _threading_layer = libname
             _is_initialized = True
 
 
-def _load_num_threads_funcs():
-    from . import _num_threads as lib
+def _load_num_threads_funcs(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
     ll.add_symbol('set_num_threads', lib.set_num_threads)
+    ll.add_symbol('get_thread_num', lib.get_thread_num)
 
     global _set_num_threads
     _set_num_threads = CFUNCTYPE(None, c_int)(lib.set_num_threads)
@@ -471,8 +473,9 @@ def _load_num_threads_funcs():
     global _get_num_threads
     _get_num_threads = CFUNCTYPE(c_int)(lib.get_num_threads)
 
+    global _get_thread_num
+    _get_thread_num = CFUNCTYPE(c_int)(lib.get_thread_num)
 
-_load_num_threads_funcs()
 
 # Some helpers to make set_num_threads jittable
 
@@ -519,13 +522,13 @@ def set_num_threads(n):
 
     """
     _launch_threads()
-
     snt_check(n)
     _set_num_threads(n)
 
 
 @overload(set_num_threads)
 def ol_set_num_threads(n):
+    _launch_threads()
     def impl(n):
         snt_check(n)
         _set_num_threads(n)
@@ -554,15 +557,28 @@ def get_num_threads():
     numba.config.NUMBA_DEFAULT_NUM_THREADS, :envvar:`NUMBA_NUM_THREADS`
 
     """
+    _launch_threads()
     return _get_num_threads()
 
 
 @overload(get_num_threads)
 def ol_get_num_threads():
+    _launch_threads()
     def impl():
         return _get_num_threads()
     return impl
 
+def get_thread_num():
+    """
+    docs
+    """
+    return _get_thread_num()
+
+@overload(get_thread_num)
+def ol_get_thread_num():
+    def impl():
+        return _get_thread_num()
+    return impl
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))

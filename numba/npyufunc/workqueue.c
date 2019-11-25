@@ -114,6 +114,12 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)th;
 }
 
+static int
+get_thread_num(void)
+{
+    return pthread_self();
+}
+
 #endif
 
 /* Win Thread */
@@ -199,6 +205,12 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)handle;
 }
 
+static int
+get_thread_num(void)
+{
+    return GetCurrentThreadId();
+}
+
 #endif
 
 typedef struct Task
@@ -239,10 +251,41 @@ queue_state_wait(Queue *queue, int old, int repl)
 void debug_marker(void);
 void debug_marker() {};
 
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+static THREAD_LOCAL(int) num_threads = 0;
+
+static void
+set_num_threads(int count)
+{
+    num_threads = count;
+}
+
+static int
+get_num_threads(void)
+{
+    return num_threads;
+}
+
+
 // this complies to a launchable function from `add_task` like:
 // add_task(nopfn, NULL, NULL, NULL, NULL)
 // useful if you want to limit the number of threads locally
-void nopfn(void *args, void *dims, void *steps, void *data) {};
+// static void nopfn(void *args, void *dims, void *steps, void *data) {};
+
+
+// synchronize the TLS num_threads slot to value args[0]
+static void sync_tls(void *args, void *dims, void *steps, void *data) {
+    int nthreads = *((int *)(args));
+    num_threads = nthreads;
+};
+
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
@@ -257,17 +300,19 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     size_t * count_space = NULL;
     char ** array_arg_space = NULL;
     const size_t arg_len = (inner_ndim + 1);
-    size_t i, j, count, remain, total;
+    int i; // induction var for chunking, thread count unlikely to overflow int
+    size_t j, count, remain, total;
 
     ptrdiff_t offset;
     char * base;
+    int old_queue_count = -1;
 
     size_t step;
 
     debug_marker();
 
     total = *((size_t *)dimensions);
-    count = total / NUM_THREADS;
+    count = total / num_threads;
     remain = total;
 
     if(_DEBUG)
@@ -298,12 +343,24 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         }
     }
 
-
+    // sync the thread pool TLS slots, sync all slots, we don't know which
+    // threads will end up running.
     for (i = 0; i < NUM_THREADS; i++)
+    {
+        add_task(sync_tls, (void *)(&num_threads), NULL, NULL, NULL);
+    }
+    ready();
+    synchronize();
+
+    // This backend isn't threadsafe so just mutate the global
+    old_queue_count = queue_count;
+    queue_count = num_threads;
+
+    for (i = 0; i < num_threads; i++)
     {
         count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-        if(i == NUM_THREADS - 1)
+        if(i == num_threads - 1)
         {
             // Last thread takes all leftover
             count_space[0] = remain;
@@ -316,7 +373,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
         if(_DEBUG)
         {
-            printf("\n=================== THREAD %ld ===================\n", i);
+            printf("\n=================== THREAD %d ===================\n", i);
             printf("\ncount_space: ");
             for(j = 0; j < arg_len; j++)
             {
@@ -357,6 +414,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     ready();
     synchronize();
+
+    queue_count = old_queue_count;
 }
 
 static void
@@ -471,6 +530,11 @@ MOD_INIT(workqueue)
                            PyLong_FromVoidPtr(&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr(&do_scheduling_unsigned));
-
+    PyObject_SetAttrString(m, "set_num_threads",
+                           PyLong_FromVoidPtr((void*)&set_num_threads));
+    PyObject_SetAttrString(m, "get_num_threads",
+                           PyLong_FromVoidPtr((void*)&get_num_threads));
+    PyObject_SetAttrString(m, "get_thread_num",
+                           PyLong_FromVoidPtr((void*)&get_thread_num));
     return MOD_SUCCESS_VAL(m);
 }
