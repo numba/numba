@@ -117,7 +117,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 n_args = len(args)
                 self.assertRegexpMatches(
                     str(py_type_e),
-                    r"slice expected at (most|least) (3|1) arguments, got {}"
+                    r"slice expected at (most|least) (3|1) arguments?, got {}"
                     .format(n_args)
                 )
                 with self.assertRaises(TypingError) as numba_e:
