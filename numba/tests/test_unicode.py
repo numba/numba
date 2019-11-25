@@ -958,9 +958,6 @@ class TestUnicode(BaseTest):
         ]
 
         for sep, parts in CASES:
-            print(sep)
-            print(parts)
-            print(cfunc(sep, parts))
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
                              "'%s'.join('%s')?" % (sep, parts))
