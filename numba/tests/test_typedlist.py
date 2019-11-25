@@ -447,6 +447,22 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl, list(tl))
 
 
+class TestNoneType(MemoryLeakMixin, TestCase):
+
+    def test_square_bracket_builtin_with_None(self):
+        @njit
+        def foo():
+            l = [None, None, None]
+            return l
+        expected = List()
+        expected.append(None)
+        expected.append(None)
+        expected.append(None)
+        received = foo()
+        print(expected[0] == received[0])
+        self.assertEqual(expected, received)
+
+
 class TestAllocation(MemoryLeakMixin, TestCase):
 
     def test_allocation(self):

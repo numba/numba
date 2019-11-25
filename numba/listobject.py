@@ -566,7 +566,12 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
     pop and are the same.
     """
     assert(op in ("pop", "getitem"))
-    resty = types.Tuple([types.int32, types.Optional(l.item_type)])
+    # FIXME: typed lists with None as type have a quirky path
+    IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
+    if IS_NOT_NONE:
+        resty = types.Tuple([types.int32, types.Optional(l.item_type)])
+    else:
+        resty = types.Tuple([types.int32, types.Optional(types.int64)])
     sig = resty(l, index)
 
     def codegen(context, builder, sig, args):
@@ -595,19 +600,22 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         # Load item if output is available
         found = builder.icmp_signed('>=', status,
                                     status.type(int(ListStatus.LIST_OK)))
-
-        out = context.make_optional_none(builder, tl.item_type)
+        if IS_NOT_NONE:
+            out = context.make_optional_none(builder, tl.item_type)
+        else:
+            out = context.make_optional_none(builder, types.int64)
         pout = cgutils.alloca_once_value(builder, out)
 
         with builder.if_then(found):
-            item = dm_item.load_from_data_pointer(builder, ptr_item)
-            context.nrt.incref(builder, tl.item_type, item)
-            loaded = context.make_optional_value(builder, tl.item_type, item)
-            builder.store(loaded, pout)
+            if IS_NOT_NONE:
+                item = dm_item.load_from_data_pointer(builder, ptr_item)
+                context.nrt.incref(builder, tl.item_type, item)
+                loaded = context.make_optional_value(
+                    builder, tl.item_type, item)
+                builder.store(loaded, pout)
 
         out = builder.load(pout)
         return context.make_tuple(builder, resty, [status, out])
-
     return sig, codegen
 
 
@@ -618,6 +626,7 @@ def impl_getitem(l, index):
 
     indexty = INDEXTY
     itemty = l.item_type
+    IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
 
     if index in index_types:
         def integer_impl(l, index):
@@ -625,7 +634,10 @@ def impl_getitem(l, index):
             castedindex = _cast(index, indexty)
             status, item = _list_getitem(l, castedindex)
             if status == ListStatus.LIST_OK:
-                return _nonoptional(item)
+                if IS_NOT_NONE:
+                    return _nonoptional(item)
+                else:
+                    return None
             else:
                 raise AssertionError("internal list error during getitem")
 
@@ -1081,7 +1093,13 @@ def compare(this, other):
         return -1 if len(this) < len(other) else 1
     for i in range(len(this)):
         this_item, other_item = this[i], other[i]
-        if this_item != other_item:
+        if this_item is None:
+            if other_item is not None:
+                return -1
+        elif other_item is None:
+            if this_item is not None:
+                return 1
+        elif this_item != other_item:
             return -1 if this_item < other_item else 1
     else:
         return 0
