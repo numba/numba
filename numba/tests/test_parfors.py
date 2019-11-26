@@ -20,7 +20,7 @@ from collections import defaultdict
 
 import numba
 from numba import unittest_support as unittest
-from .support import TestCase, captured_stdout, MemoryLeakMixin
+from .support import TestCase, captured_stdout, MemoryLeakMixin, override_env_config
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
@@ -2447,10 +2447,12 @@ class TestParforsVectorizer(TestPrangeBase):
                 A += i
             return A
 
-        signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
-                                         fastmath=True)
-        unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
-                                           fastmath=True)
+        # Boundschecking breaks the diff check below because of the pickled exception
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
+                                             fastmath=True)
+            unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
+                                               fastmath=True)
 
         def strip_instrs(asm):
             acc = []
