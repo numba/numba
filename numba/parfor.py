@@ -2231,14 +2231,13 @@ class ParforPass(object):
         if isinstance(value_typ, types.npytypes.Array):
             value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
             self.typemap[value_var.name] = value_typ.dtype
-            # Disable boundschecking, as this could be part of a slice
-            getitem_call = ir.Expr.getitem(value, index_var, loc, boundscheck=False)
+            getitem_call = ir.Expr.getitem(value, index_var, loc)
             self.calltypes[getitem_call] = signature(
                 value_typ.dtype, value_typ, index_var_typ)
             true_block.body.append(ir.Assign(getitem_call, value_var, loc))
         else:
             value_var = value
-        setitem_node = ir.SetItem(target, index_var, value_var, loc, boundscheck=False)
+        setitem_node = ir.SetItem(target, index_var, value_var, loc)
         self.calltypes[setitem_node] = signature(
             types.none, self.typemap[target.name], index_var_typ, el_typ)
         true_block.body.append(setitem_node)

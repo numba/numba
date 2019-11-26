@@ -486,12 +486,12 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
-    def getitem(cls, value, index, loc, boundscheck=None):
+    def getitem(cls, value, index, loc):
         assert isinstance(value, Var)
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
         op = 'getitem'
-        return cls(op=op, loc=loc, value=value, index=index, boundscheck=boundscheck)
+        return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
     def static_getitem(cls, value, index, index_var, loc):
@@ -552,7 +552,7 @@ class SetItem(Stmt):
     target[index] = value
     """
 
-    def __init__(self, target, index, value, loc, boundscheck=None):
+    def __init__(self, target, index, value, loc):
         assert isinstance(target, Var)
         assert isinstance(index, Var)
         assert isinstance(value, Var)
@@ -561,7 +561,6 @@ class SetItem(Stmt):
         self.index = index
         self.value = value
         self.loc = loc
-        self.boundscheck = boundscheck
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)

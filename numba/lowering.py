@@ -357,7 +357,7 @@ class Lower(BaseLower):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
             return self.lower_setitem(inst.target, inst.index, inst.value,
-                                      signature, boundscheck=inst.boundscheck)
+                                      signature)
 
         elif isinstance(inst, ir.StoreMap):
             signature = self.fndesc.calltypes[inst]
@@ -417,7 +417,7 @@ class Lower(BaseLower):
                     return
             raise NotImplementedError(type(inst))
 
-    def lower_setitem(self, target_var, index_var, value_var, signature, boundscheck=None):
+    def lower_setitem(self, target_var, index_var, value_var, signature):
         target = self.loadvar(target_var.name)
         value = self.loadvar(value_var.name)
         index = self.loadvar(index_var.name)
@@ -445,15 +445,7 @@ class Lower(BaseLower):
         value = self.context.cast(self.builder, value, valuety,
                                   signature.args[2])
 
-
-        old_boundscheck = config.BOUNDSCHECK
-        if boundscheck is not None:
-            config.BOUNDSCHECK = boundscheck
-
-        try:
-            return impl(self.builder, (target, index, value))
-        finally:
-            config.BOUNDSCHECK = old_boundscheck
+        return impl(self.builder, (target, index, value))
 
     def lower_static_raise(self, inst):
         if inst.exc_class is None:
@@ -600,7 +592,7 @@ class Lower(BaseLower):
         res = impl(self.builder, (lhs, rhs))
         return cast_result(res)
 
-    def lower_getitem(self, resty, expr, value, index, signature, boundscheck=None):
+    def lower_getitem(self, resty, expr, value, index, signature):
         baseval = self.loadvar(value.name)
         indexval = self.loadvar(index.name)
         # Get implementation of getitem
@@ -617,16 +609,7 @@ class Lower(BaseLower):
         castvals = [self.context.cast(self.builder, av, at, ft)
                     for av, at, ft in zip(argvals, argtyps,
                                           signature.args)]
-
-        old_boundscheck = config.BOUNDSCHECK
-        if boundscheck is not None:
-            config.BOUNDSCHECK = boundscheck
-
-        try:
-            res = impl(self.builder, castvals)
-        finally:
-            config.BOUNDSCHECK = old_boundscheck
-
+        res = impl(self.builder, castvals)
         return self.context.cast(self.builder, res,
                                  signature.return_type,
                                  resty)
@@ -1074,7 +1057,7 @@ class Lower(BaseLower):
         elif expr.op == "getitem":
             signature = self.fndesc.calltypes[expr]
             return self.lower_getitem(resty, expr, expr.value, expr.index,
-                                      signature, boundscheck=expr.boundscheck)
+                                      signature)
 
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
