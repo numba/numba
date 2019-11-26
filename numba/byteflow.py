@@ -4,7 +4,8 @@ Implement python 3.8+ bytecode analysis
 
 from pprint import pformat
 import logging
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, deque
+from functools import total_ordering
 
 from numba.utils import UniqueDict, PYVERSION
 from numba.controlflow import NEW_BLOCKERS, CFGraph
@@ -14,7 +15,32 @@ from numba.errors import UnsupportedError
 
 _logger = logging.getLogger(__name__)
 
-SYNTAX_BLOCK_KINDS = {'loop', 'try', 'except', 'with'}
+
+@total_ordering
+class BlockKind(object):
+    _members = frozenset({'LOOP', 'TRY', 'EXCEPT', 'FINALLY', 'WITH'})
+
+    def __init__(self, value):
+        assert value in self._members
+        self._value = value
+
+    def __hash__(self):
+        return hash((type(self), self._value))
+
+    def __lt__(self, other):
+        if isinstance(other, BlockKind):
+            return self._value < other._value
+        else:
+            raise TypeError('cannot compare to {!r}'.format(type(other)))
+
+    def __eq__(self, other):
+        if isinstance(other, BlockKind):
+            return self._value == other._value
+        else:
+            raise TypeError('cannot compare to {!r}'.format(type(other)))
+
+    def __repr__(self):
+        return "BlockKind({})".format(self._value)
 
 
 class _lazy_pformat(object):
@@ -71,14 +97,14 @@ class Flow(object):
                         break
                     elif state.has_active_try():
                         state.fork(pc=state.get_inst().next)
-                        tryblk = state.get_top_block('try')
+                        tryblk = state.get_top_block('TRY')
                         nstack = state.stack_depth
                         kwargs = {}
                         if nstack > tryblk['entry_stack']:
                             kwargs['npop'] = nstack - tryblk['entry_stack']
                         kwargs['npush'] = 6
                         kwargs['extra_block'] = state.make_block(
-                            kind='except',
+                            kind='EXCEPT',
                             end=None,
                             reset_stack=False,
                         )
@@ -204,7 +230,7 @@ class TraceRunner(object):
     """
     def __init__(self, debug_filename):
         self.debug_filename = debug_filename
-        self.pending = []
+        self.pending = deque()
         self.finished = set()
 
     def get_debug_loc(self, lineno):
@@ -589,7 +615,7 @@ class TraceRunner(object):
         # NOTE: bytecode removed since py3.8
         state.push_block(
             state.make_block(
-                kind='loop',
+                kind='LOOP',
                 end=inst.get_jump_target(),
             )
         )
@@ -604,7 +630,7 @@ class TraceRunner(object):
 
         state.push_block(
             state.make_block(
-                kind='with',
+                kind='WITH',
                 end=inst.get_jump_target(),
             )
         )
@@ -612,46 +638,48 @@ class TraceRunner(object):
         # Forces a new block
         state.fork(pc=inst.next)
 
-    def _setup_try_except(self, state, next, end):
+    def _setup_try(self, kind, state, next, end):
+        handler_block = state.make_block(
+            kind=kind,
+            end=None,
+            reset_stack=False,
+        )
         # Forces a new block
         # Fork to the body of the finally
         state.fork(
             pc=next,
             extra_block=state.make_block(
-                kind='try',
+                kind='TRY',
                 end=end,
                 reset_stack=False,
+                handler=handler_block,
             )
         )
         # Fork to the catch of the finally
         state.fork(
             pc=end,
             npush=6,
-            extra_block=state.make_block(
-                kind='except',
-                end=None,
-                reset_stack=False,
-            )
+            extra_block=handler_block
         )
 
     def op_SETUP_EXCEPT(self, state, inst):
         # Opcode removed since py3.8
         state.append(inst)
-        self._setup_try_except(
-            state, next=inst.next, end=inst.get_jump_target(),
+        self._setup_try(
+            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
         )
 
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
-        self._setup_try_except(
-            state, next=inst.next, end=inst.get_jump_target(),
+        self._setup_try(
+            'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
     def op_POP_EXCEPT(self, state, inst):
         blk = state.pop_block()
-        if blk['kind'] != 'except':
+        if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
             raise UnsupportedError(
-                "POP_EXCEPT got an unexpected block",
+                "POP_EXCEPT got an unexpected block: {}".format(blk['kind']),
                 loc=self.get_debug_loc(inst.lineno),
             )
         state.pop()
@@ -662,7 +690,7 @@ class TraceRunner(object):
 
     def op_POP_BLOCK(self, state, inst):
         blk = state.pop_block()
-        if blk['kind'] == 'try':
+        if blk['kind'] == BlockKind('TRY'):
             state.append(inst, kind='try')
         # Forces a new block
         state.fork(pc=inst.next)
@@ -1112,13 +1140,17 @@ class State(object):
         assert 'stack_depth' in synblk
         self._blockstack.append(synblk)
 
-    def make_block(self, kind, end, reset_stack=True):
-        assert kind in SYNTAX_BLOCK_KINDS
-        d = {'kind': kind, 'end': end, 'entry_stack': len(self._stack)}
+    def make_block(self, kind, end, reset_stack=True, handler=None):
+        d = {
+            'kind': BlockKind(kind),
+            'end': end,
+            'entry_stack': len(self._stack),
+        }
         if reset_stack:
             d['stack_depth'] = len(self._stack)
         else:
             d['stack_depth'] = None
+        d['handler'] = handler
         return d
 
     def pop_block(self):
@@ -1130,12 +1162,13 @@ class State(object):
         return b
 
     def get_top_block(self, kind):
+        kind = BlockKind(kind)
         for bs in reversed(self._blockstack):
             if bs['kind'] == kind:
                 return bs
 
     def has_active_try(self):
-        return self.get_top_block('try') is not None
+        return self.get_top_block('TRY') is not None
 
     def get_varname(self, inst):
         """Get referenced variable name from the oparg
@@ -1214,7 +1247,7 @@ def adapt_state_infos(state):
         insts=tuple(state.instructions),
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
-        active_try_block=state.get_top_block('try'),
+        active_try_block=state.get_top_block('TRY'),
     )
 
 
