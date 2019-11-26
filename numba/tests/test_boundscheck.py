@@ -11,16 +11,20 @@ from .support import MemoryLeakMixin
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
 BOUNDSCHECK_FLAGS.set('boundscheck', True)
 
+
 def basic_array_access(a):
     return a[10]
+
 
 def slice_array_access(a):
     # The first index (slice) is not bounds checked
     return a[10:, 10]
 
+
 def fancy_array_access(x):
     a = np.array([1, 2, 3])
     return x[a]
+
 
 class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
@@ -109,6 +113,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
 
+
 # This is a separate test because the jitted functions that raise exceptions
 # have memory leaks.
 class TestBoundsCheckError(unittest.TestCase):
@@ -173,6 +178,7 @@ class TestBoundsCheckError(unittest.TestCase):
 
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
+
 
 if __name__ == '__main__':
     unittest.main()

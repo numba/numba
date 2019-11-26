@@ -315,7 +315,8 @@ def iternext_array(context, builder, sig, args, result):
 #-------------------------------------------------------------------------------
 # Basic indexing (with integers and slices only)
 
-def basic_indexing(context, builder, aryty, ary, index_types, indices, boundscheck=True):
+def basic_indexing(context, builder, aryty, ary, index_types, indices,
+                   boundscheck=True):
     """
     Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
@@ -1028,7 +1029,8 @@ def fancy_getitem(context, builder, sig, args,
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
     ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
-                                    aryty.layout, indices, wraparound=False, boundscheck=True)
+                                    aryty.layout, indices, wraparound=False,
+                                    boundscheck=True)
     val = load_item(context, builder, aryty, ptr)
 
     # Since the destination is C-contiguous, no need for multi-dimensional
@@ -1178,7 +1180,8 @@ def maybe_copy_source(context, builder, use_copy,
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
                 builder.store(
-                    cgutils.get_item_pointer2(context, builder, builder.load(copy_data),
+                    cgutils.get_item_pointer2(context, builder,
+                                              builder.load(copy_data),
                                               copy_shapes, copy_strides,
                                               copy_layout, source_indices,
                                               wraparound=False),
@@ -3118,8 +3121,9 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     index = builder.udiv(index, shapes[dim])
                 indices.reverse()
 
-                ptr = cgutils.get_item_pointer2(context, builder, arr.data, shapes,
-                                                strides, arrty.layout, indices)
+                ptr = cgutils.get_item_pointer2(context, builder, arr.data,
+                                                shapes, strides, arrty.layout,
+                                                indices)
                 return ptr
 
             def getitem(self, context, builder, arrty, arr, index):

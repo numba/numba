@@ -145,7 +145,8 @@ class _EnvReloader(object):
         COLOR_SCHEME = _readenv("NUMBA_COLOR_SCHEME", str, "no_color")
 
         # Whether to globally enable bounds checking. The default None means
-        # to use the value of the flag to @njit. 0 or 1 overrides the flag globally.
+        # to use the value of the flag to @njit. 0 or 1 overrides the flag
+        # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
         # Debug flag to control compiler debug print
