@@ -163,24 +163,24 @@ class TestZeroCounts(TestCase):
         evens = [2, 42, 126, 128]
 
         for T in types.unsigned_domain:
-            assert tz(T(0)) == lz(T(0)) == T.bitwidth
+            self.assertTrue(tz(T(0)) == lz(T(0)) == T.bitwidth)
             for i in range(T.bitwidth):
                 val = T(2 ** i)
-                assert lz(val) + tz(val) + 1 == T.bitwidth
+                self.assertEqual(lz(val) + tz(val) + 1, T.bitwidth)
             for n in evens:
-                assert tz(T(n)) > 0
-                assert tz(T(n + 1)) == 0
+                self.assertGreater(tz(T(n)), 0)
+                self.assertEqual(tz(T(n + 1)), 0)
 
         for T in types.signed_domain:
-            assert tz(T(0)) == lz(T(0)) == T.bitwidth
+            self.assertTrue(tz(T(0)) == lz(T(0)) == T.bitwidth)
             for i in range(T.bitwidth - 1):
                 val = T(2 ** i)
-                assert lz(val) + tz(val) + 1 == T.bitwidth
-                assert lz(-val) == 0
-                assert tz(val) == tz(-val)
+                self.assertEqual(lz(val) + tz(val) + 1, T.bitwidth)
+                self.assertEqual(lz(-val), 0)
+                self.assertEqual(tz(val), tz(-val))
             for n in evens:
-                assert tz(T(n)) > 0
-                assert tz(T(n + 1)) == 0
+                self.assertGreater(tz(T(n)), 0)
+                self.assertEqual(tz(T(n + 1)), 0)
 
     def check_error_msg(self, func):
         cfunc = njit(lambda *x: func(*x))
