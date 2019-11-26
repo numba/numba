@@ -2400,11 +2400,13 @@ class TestParforsVectorizer(TestPrangeBase):
 
         arg = np.zeros(10)
 
-        novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
-                                        fastmath=True)
+        # Boundschecking breaks vectorization
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
+                                            fastmath=True)
 
-        vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
-                                      fastmath=True)
+            vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
+                                          fastmath=True)
 
         for v in novec_asm.values():
             # vector variant should not be present
