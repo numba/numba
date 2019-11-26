@@ -13,10 +13,8 @@ from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import (TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin,
-                      tag, PY2, _32bit)
+                      tag)
 from .matmul_usecase import needs_blas
-
-_PY2_32bit = PY2 and _32bit
 
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
@@ -827,9 +825,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(arg0, arg1, arg2)
             got = cfunc(arg0, arg1, arg2)
             np.testing.assert_allclose(expected, got)
-            # 32bit py2 has a strange long size
-            if check_dtype and not _PY2_32bit:
-                 self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.dtype, got.dtype)
 
         for pyfunc in (np_arange_3, np_arange_2_step, np_arange_start_stop_step):
             cfunc = jit(nopython=True)(pyfunc)
