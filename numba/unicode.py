@@ -1279,7 +1279,7 @@ def unicode_capitalize(data):
         if data._is_ascii:
             # https://github.com/python/cpython/blob/593bb30e82eded7f2ec02f7d1aa49742e6962113/Objects/bytes_methods.c#L361-L368    # noqa: E501
             # mixed with:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L299-L307    # noqa: E501
+            # https://github.com/python/cpython/blob/593bb30e82eded7f2ec02f7d1aa49742e6962113/Objects/bytes_methods.c#L299-L307    # noqa: E501
             res = _empty_string(data._kind, length, 1)
             code_point = _get_code_point(data, 0)
             _set_code_point(res, 0, _Py_TOUPPER(code_point))
