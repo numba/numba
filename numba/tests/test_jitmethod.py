@@ -4,10 +4,11 @@ import numpy as np
 
 from numba import config, jit, types
 from numba.compiler import compile_isolated
-from numba.tests.support import override_config
+from numba.tests.support import override_config, skip_py38_or_later
 
 
 class TestJITMethod(unittest.TestCase):
+    @skip_py38_or_later
     def test_bound_jit_method_with_loop_lift(self):
         class Something(object):
             def __init__(self, x0):
@@ -50,7 +51,7 @@ class TestDisabledJIT(unittest.TestCase):
     def test_decorated_function(self):
         with override_config('DISABLE_JIT', True):
             def method(x):
-                return x          
+                return x
             jitted = jit(method)
 
         self.assertEqual(jitted, method)
