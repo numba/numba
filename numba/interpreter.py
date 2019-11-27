@@ -245,10 +245,10 @@ class Interpreter(object):
         to subsequent blocks.
         """
         for phiname, varname in self.dfainfo.outgoing_phis.items():
+            value = self.get(varname)
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=self.get(varname), target=target,
-                             loc=self.loc)
+            stmt = ir.Assign(value=value, target=target, loc=self.loc)
             self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
                 self.current_block.append(stmt)

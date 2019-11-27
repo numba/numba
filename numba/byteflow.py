@@ -85,7 +85,7 @@ class Flow(object):
         # Each state is tracing a basic block
         while runner.pending:
             _logger.debug("pending: %s", runner.pending)
-            state = runner.pending.pop()
+            state = runner.pending.popleft()
             if state not in runner.finished:
                 _logger.debug("stack: %s", state._stack)
                 first_encounter[state.pc_initial] = state
@@ -129,6 +129,32 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
+
+    def _render_dot(self, statemap, bytecodemap):
+        try:
+            import graphviz as gv
+        except ImportError:
+            raise ImportError(
+                "The feature requires `graphviz` but it is not available. "
+                "Please install with `pip install graphviz`"
+            )
+
+        g = gv.Digraph()
+        for k, st in statemap.items():
+            lines = [str(st) + '\n']
+            lines += [r'\l{}:{}'.format(k, bytecodemap[k])
+                      for k, v in st.instructions]
+            body = ''.join(lines)
+            g.node(str(k), shape='rect', label=body)
+        for k, st in statemap.items():
+            for edge in st.outgoing_edges:
+                dst = edge.pc
+                edgelabel = "nstack={} nblock={}".format(
+                    len(edge.stack), len(edge.blockstack),
+                )
+                g.edge(str(k), str(dst), label=edgelabel)
+
+        g.view()
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -1140,6 +1166,13 @@ class State(object):
         assert 'stack_depth' in synblk
         self._blockstack.append(synblk)
 
+    def reset_stack(self, depth):
+        """Reset the stack to the given stack depth.
+        Returning the popped items
+        """
+        self._stack, popped = self._stack[:depth], self._stack[depth:]
+        return popped
+
     def make_block(self, kind, end, reset_stack=True, handler=None):
         d = {
             'kind': BlockKind(kind),
@@ -1155,10 +1188,7 @@ class State(object):
 
     def pop_block(self):
         b = self._blockstack.pop()
-        new_stack = self._stack[:b['stack_depth']]
-        _logger.debug("POP_BLOCK: %s\nold_stack=%s\nnew_stack=%s",
-                      b, self._stack, new_stack)
-        self._stack = new_stack
+        self.reset_stack(b['stack_depth'])
         return b
 
     def get_top_block(self, kind):
