@@ -60,6 +60,7 @@ class Flags(utils.ConfigOptions):
         'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
         'inline': cpu.InlineOptions('never'),
+        'disable_reflected_list': False,
     }
 
 
@@ -259,6 +260,8 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
         subtargetoptions['fastmath'] = flags.fastmath
+    if flags.disable_reflected_list:
+        subtargetoptions['disable_reflected_list'] = flags.disable_reflected_list
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
@@ -278,8 +281,9 @@ class CompilerBase(object):
         targetctx.refresh()
 
         self.state = StateDict()
-
-        self.state.typingctx = typingctx
+        typingctx_copy = copy.copy(typingctx)
+        typingctx_copy.disable_reflected_list = flags.disable_reflected_list
+        self.state.typingctx = typingctx_copy
         self.state.targetctx = _make_subtarget(targetctx, flags)
         self.state.library = library
         self.state.args = args

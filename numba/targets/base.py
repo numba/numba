@@ -223,6 +223,9 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
+    # disable reflected list
+    disable_reflected_list = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
 

@@ -259,6 +259,10 @@ class _BuildContainerConstraint(object):
 
 
 class BuildListConstraint(_BuildContainerConstraint):
+    container_type = types.List
+
+
+class BuildTypedListConstraint(_BuildContainerConstraint):
     container_type = types.ListType
 
 
@@ -1452,8 +1456,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                               loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'build_list':
-            constraint = BuildListConstraint(target.name, items=expr.items,
-                                             loc=inst.loc)
+            if self.context.disable_reflected_list:
+                constraint = BuildTypedListConstraint(
+                    target.name, items=expr.items, loc=inst.loc)
+            else:
+                constraint = BuildListConstraint(
+                    target.name, items=expr.items, loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'build_set':
             constraint = BuildSetConstraint(target.name, items=expr.items,

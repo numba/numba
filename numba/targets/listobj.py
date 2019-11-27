@@ -469,15 +469,19 @@ def list_constructor(context, builder, sig, args):
 
 @lower_builtin(list)
 def list_constructor(context, builder, sig, args):
-    from numba.typed import List
+    if context.disable_reflected_list:
+        listtype = sig.return_type
+        it = listtype.item_type
 
-    listtype = sig.return_type
-    it = listtype.item_type
+        def call_ctor():
+            return List.empty_list(it)
 
-    def call_ctor():
-        return List.empty_list(it)
-
-    return context.compile_internal(builder, call_ctor, sig, args)
+        return context.compile_internal(builder, call_ctor, sig, args)
+    else:
+        list_type = sig.return_type
+        list_len = 0
+        inst = ListInstance.allocate(context, builder, list_type, list_len)
+        return impl_ret_new_ref(context, builder, list_type, inst.value)
 
 #-------------------------------------------------------------------------------
 # Various operations

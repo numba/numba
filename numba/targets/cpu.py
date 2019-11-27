@@ -126,8 +126,11 @@ class CPUContext(BaseContext):
         """
         Build a list from the Numba *list_type* and its initial *items*.
         """
-        from numba import listobject
-        return listobject.build_list(self, builder, list_type, items)
+        if self.disable_reflected_list:
+            from numba import listobject
+            return listobject.build_list(self, builder, list_type, items)
+        else:
+            return listobj.build_list(self, builder, list_type, items)
 
     def build_set(self, builder, set_type, items):
         """
@@ -218,6 +221,7 @@ class CPUTargetOptions(TargetOptions):
         "error_model": str,
         "parallel": ParallelOptions,
         "inline": InlineOptions,
+        "disable_reflected_list": bool,
     }
 
 
