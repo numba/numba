@@ -1043,8 +1043,7 @@ def equals(this, other):
     if len(this) != len(other):
         return False
     for i in range(len(this)):
-        this_item, other_item = this[i], other[i]
-        if this_item != other_item:
+        if this[i] != other[i]:
             return False
     else:
         return True
