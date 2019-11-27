@@ -742,8 +742,10 @@ class Interpreter(object):
     def op_END_FINALLY(self, inst):
         "no-op"
 
-    def op_BEGIN_FINALLY(self, inst):
-        "no-op"
+    def op_BEGIN_FINALLY(self, inst, temps):
+        for tmp in temps:
+            self.store(ir.Const(None, loc=self.loc),
+                       name=tmp)
 
     if PYVERSION < (3, 6):
 

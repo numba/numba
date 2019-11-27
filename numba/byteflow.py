@@ -620,9 +620,12 @@ class TraceRunner(object):
         state.terminate()
 
     def op_BEGIN_FINALLY(self, state, inst):
+        temps = []
         for i in range(6):
-            state.push(state.make_temp())
-        state.append(inst)
+            tmp = state.make_temp()
+            temps.append(tmp)
+            state.push(tmp)
+        state.append(inst, temps=temps)
 
     def op_END_FINALLY(self, state, inst):
         blk = state.pop_block()
@@ -657,10 +660,8 @@ class TraceRunner(object):
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
-        state.push(cm)
 
         yielded = state.make_temp()
-        state.push(yielded)
         state.append(inst, contextmanager=cm)
 
         state.push_block(
@@ -670,13 +671,15 @@ class TraceRunner(object):
             )
         )
 
+        state.push(cm)
+        state.push(yielded)
+
         state.push_block(
             state.make_block(
                 kind='WITH',
                 end=inst.get_jump_target(),
             )
         )
-
         # Forces a new block
         state.fork(pc=inst.next)
 
