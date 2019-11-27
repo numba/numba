@@ -16,6 +16,15 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from ..extending import overload
+
+
+@overload(operator.truth)
+def ol_truth(val):
+    if isinstance(val, types.Boolean):
+        def impl(val):
+            return val
+        return impl
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)

@@ -1038,40 +1038,33 @@ def impl_index(l, item, start=None, end=None):
     return impl
 
 
-@register_jitable
-def equals(this, other):
-    if len(this) != len(other):
-        return False
-    for i in range(len(this)):
-        if this[i] != other[i]:
-            return False
-    else:
-        return True
-
-
-def _equals_helper(this, other, op):
+def _equals_helper(this, other, OP):
     if not isinstance(this, types.ListType):
         return
     if not isinstance(other, types.ListType):
         return lambda this, other: False
 
-    if op == "equals":
-        def impl(this, other):
-            return equals(this, other)
-    elif op == "not_equals":
-        def impl(this, other):
-            return not equals(this, other)
+    def impl(this, other):
+        def equals(this, other):
+            if len(this) != len(other):
+                return False
+            for i in range(len(this)):
+                if this[i] != other[i]:
+                    return False
+            else:
+                return True
+        return OP(equals(this, other))
     return impl
 
 
 @overload(operator.eq)
 def impl_equals(this, other):
-    return _equals_helper(this, other, "equals")
+    return _equals_helper(this, other, operator.truth)
 
 
 @overload(operator.ne)
 def impl_not_equals(this, other):
-    return _equals_helper(this, other, "not_equals")
+    return _equals_helper(this, other, operator.not_)
 
 
 @register_jitable
