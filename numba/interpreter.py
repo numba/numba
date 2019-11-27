@@ -212,11 +212,28 @@ class Interpreter(object):
         end_try = ir.Expr.call(self.get(end_try_name), (), (), loc=self.loc)
         self.store(value=end_try, name='$end_try', redefine=True)
 
+    def _insert_exception_variables(self):
+        tryblk = self.dfainfo.active_try_block
+        # Fill exception variables
+        endblk = tryblk['end']
+        edgepushed = self.dfainfo.outgoing_edgepushed.get(endblk)
+        # Note: the last value on the stack is the exception value
+        if edgepushed:
+            scope = self.current_scope
+            const_none = ir.Const(value=None, loc=self.loc)
+            for var in edgepushed:
+                try:
+                    scope.get(var)
+                except ir.NotDefinedError:
+                    self.store(value=const_none, name=var)
+
     def _insert_exception_check(self):
         """Called before the end of a block to inject
         """
         from numba.unsafe.eh import exception_check
-        from numba import types
+
+        self._insert_exception_variables()
+        # Do exception check
         gv_check_fn = ir.Global(
             "exception_check", exception_check, loc=self.loc,
         )
@@ -725,10 +742,8 @@ class Interpreter(object):
     def op_END_FINALLY(self, inst):
         "no-op"
 
-    def op_BEGIN_FINALLY(self, inst, state):
+    def op_BEGIN_FINALLY(self, inst):
         "no-op"
-        none = ir.Const(None, loc=self.loc)
-        self.store(value=none, name=state)
 
     if PYVERSION < (3, 6):
 
@@ -1044,6 +1059,20 @@ class Interpreter(object):
             tmp = self.get(res)
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
+        elif op == 'exception match':
+            from numba.unsafe.eh import exception_match
+
+            gv_fn = ir.Global(
+                "exception_match", exception_match, loc=self.loc,
+            )
+            exc_match_name = '$exc_match'
+            self.store(value=gv_fn, name=exc_match_name, redefine=True)
+            lhs = self.get(lhs)
+            rhs = self.get(rhs)
+            exc = ir.Expr.call(
+                self.get(exc_match_name), args=(lhs, rhs), kws=(), loc=self.loc,
+            )
+            self.store(exc, res)
         else:
             self._binop(op, lhs, rhs, res)
 
@@ -1092,6 +1121,7 @@ class Interpreter(object):
             # In a try block
             stmt = ir.TryRaise(exception=exc, loc=self.loc)
             self.current_block.append(stmt)
+            self._insert_try_block_end()
             self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
         else:
             stmt = ir.Raise(exception=exc, loc=self.loc)

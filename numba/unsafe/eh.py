@@ -2,7 +2,7 @@
 Exception handling intrinsics.
 """
 
-from numba import types
+from numba import types, cgutils, errors
 from numba.extending import intrinsic
 
 
@@ -38,3 +38,16 @@ def end_try_block(typingctx):
 
     restype = types.none
     return restype(), codegen
+
+
+@intrinsic
+def exception_match(typingctx, exc_value, exc_class):
+    if exc_class.exc_class is not Exception:
+        msg = "Exception matching is limited to {}"
+        raise errors.UnsupportedError(msg.format(Exception))
+
+    def codegen(context, builder, signature, args):
+        return cgutils.true_bit
+
+    restype = types.boolean
+    return restype(exc_value, exc_class), codegen

@@ -196,8 +196,108 @@ class TestTryBareExcept(TestCase):
         self.assertEqual(res, 123)
 
 
-# class TestTryExceptCaught(TestCase):
-    # def test_reraise
+class TestTryExceptCaught(TestCase):
+    def test_catch_exception(self):
+        @njit
+        def udt(x):
+            try:
+                print("A")
+                if x:
+                    raise ZeroDivisionError("321")
+                print("B")
+            except Exception:
+                print("C")
+            print("D")
+
+        # case 1
+        with captured_stdout() as stdout:
+            udt(True)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "C", "D"],
+        )
+
+        # case 2
+        with captured_stdout() as stdout:
+            udt(False)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "B", "D"],
+        )
+
+    def test_return_in_catch(self):
+        @njit
+        def udt(x):
+            try:
+                print("A")
+                if x:
+                    raise ZeroDivisionError
+                print("B")
+                r = 123
+            except Exception:
+                print("C")
+                r = 321
+                return r
+            print("D")
+            return r
+
+        # case 1
+        with captured_stdout() as stdout:
+            res = udt(True)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "C"],
+        )
+        self.assertEqual(res, 321)
+
+        # case 2
+        with captured_stdout() as stdout:
+            res = udt(False)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "B", "D"],
+        )
+        self.assertEqual(res, 123)
+
+    def test_save_caught(self):
+        @njit
+        def udt(x):
+            try:
+                print("A")
+                if x:
+                    raise ZeroDivisionError
+                print("B")
+                r = 123
+            except Exception as e:  # noqa: F841
+                print("C")
+                r = 321
+                return r
+            print("D")
+            return r
+
+        # case 1
+        with captured_stdout() as stdout:
+            res = udt(True)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "C"],
+        )
+        self.assertEqual(res, 321)
+
+        # case 2
+        with captured_stdout() as stdout:
+            res = udt(False)
+
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["A", "B", "D"],
+        )
+        self.assertEqual(res, 123)
 
 
 if __name__ == '__main__':

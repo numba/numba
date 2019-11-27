@@ -189,8 +189,7 @@ BINOPS_TO_OPERATORS = {
     'is': operator.is_,
     'is not': operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains,
-    'exception match': operator.eq
+    'in': operator.contains
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {

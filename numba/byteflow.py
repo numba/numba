@@ -16,9 +16,16 @@ from numba.errors import UnsupportedError
 _logger = logging.getLogger(__name__)
 
 
+_FINALLY_POP = 6 if PYVERSION >= (3, 8) else 1
+
+
 @total_ordering
 class BlockKind(object):
-    _members = frozenset({'LOOP', 'TRY', 'EXCEPT', 'FINALLY', 'WITH'})
+    _members = frozenset({
+        'LOOP',
+        'TRY', 'EXCEPT', 'FINALLY',
+        'WITH', 'WITH_FINALLY',
+    })
 
     def __init__(self, value):
         assert value in self._members
@@ -98,16 +105,17 @@ class Flow(object):
                     elif state.has_active_try():
                         state.fork(pc=state.get_inst().next)
                         tryblk = state.get_top_block('TRY')
+                        state.pop_block_and_above(tryblk)
                         nstack = state.stack_depth
                         kwargs = {}
                         if nstack > tryblk['entry_stack']:
                             kwargs['npop'] = nstack - tryblk['entry_stack']
-                        kwargs['npush'] = 6
-                        kwargs['extra_block'] = state.make_block(
-                            kind='EXCEPT',
-                            end=None,
-                            reset_stack=False,
-                        )
+                        handler = tryblk['handler']
+                        kwargs['npush'] = {
+                            BlockKind('EXCEPT'): 6,
+                            BlockKind('FINALLY'): _FINALLY_POP
+                        }[handler['kind']]
+                        kwargs['extra_block'] = handler
                         state.fork(pc=tryblk['end'], **kwargs)
                         break
                     else:
@@ -149,8 +157,9 @@ class Flow(object):
         for k, st in statemap.items():
             for edge in st.outgoing_edges:
                 dst = edge.pc
-                edgelabel = "nstack={} nblock={}".format(
+                edgelabel = "nstack={} nblock={} npush={}".format(
                     len(edge.stack), len(edge.blockstack),
+                    edge.npush,
                 )
                 g.edge(str(k), str(dst), label=edgelabel)
 
@@ -611,16 +620,13 @@ class TraceRunner(object):
         state.terminate()
 
     def op_BEGIN_FINALLY(self, state, inst):
-        res = state.make_temp()  # unused
-        state.push(res)
-        state.append(inst, state=res)
+        for i in range(6):
+            state.push(state.make_temp())
+        state.append(inst)
 
     def op_END_FINALLY(self, state, inst):
-        state.append(inst)
-        # actual bytecode has stack_effect of -6
-        # we don't emulate the exact stack behavior
-        state.pop()     # unsure but seems to work
-        state.pop()     # unsure but seems to work
+        blk = state.pop_block()
+        state.reset_stack(blk['entry_stack'])
 
     def op_POP_FINALLY(self, state, inst):
         # we don't emulate the exact stack behavior
@@ -628,6 +634,9 @@ class TraceRunner(object):
             msg = ('Unsupported use of a bytecode related to try..finally'
                    ' or a with-context')
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+
+    def op_CALL_FINALLY(self, state, inst):
+        pass
 
     def op_WITH_CLEANUP_START(self, state, inst):
         # we don't emulate the exact stack behavior
@@ -656,6 +665,13 @@ class TraceRunner(object):
 
         state.push_block(
             state.make_block(
+                kind='WITH_FINALLY',
+                end=inst.get_jump_target(),
+            )
+        )
+
+        state.push_block(
+            state.make_block(
                 kind='WITH',
                 end=inst.get_jump_target(),
             )
@@ -680,12 +696,6 @@ class TraceRunner(object):
                 reset_stack=False,
                 handler=handler_block,
             )
-        )
-        # Fork to the catch of the finally
-        state.fork(
-            pc=end,
-            npush=6,
-            extra_block=handler_block
         )
 
     def op_SETUP_EXCEPT(self, state, inst):
@@ -1113,6 +1123,11 @@ class State(object):
     def stack_depth(self):
         return len(self._stack)
 
+    def initial_try_block(self):
+        for blk in reversed(self._blockstack_initial):
+            if blk['kind'] == BlockKind('TRY'):
+                return blk
+
     def has_terminated(self):
         return self._terminated
 
@@ -1191,6 +1206,11 @@ class State(object):
         self.reset_stack(b['stack_depth'])
         return b
 
+    def pop_block_and_above(self, blk):
+        idx = self._blockstack.index(blk)
+        assert 0 <= idx < len(self._blockstack)
+        self._blockstack = self._blockstack[:idx]
+
     def get_top_block(self, kind):
         kind = BlockKind(kind)
         for bs in reversed(self._blockstack):
@@ -1227,8 +1247,10 @@ class State(object):
         blockstack = list(self._blockstack)
         if extra_block:
             blockstack.append(extra_block)
-        self._outedges.append(Edge(pc=pc, stack=stack,
-                                   blockstack=tuple(blockstack)))
+        self._outedges.append(Edge(
+            pc=pc, stack=tuple(stack), npush=npush,
+            blockstack=tuple(blockstack),
+        ))
         self.terminate()
 
     def split_new_block(self):
@@ -1251,8 +1273,20 @@ class State(object):
                 self._outgoing_phis[phi] = edge.stack[i]
         return ret
 
+    def get_outgoing_edgepushed(self):
+        """
+        Returns
+        -------
+        Dict[int, int]
+            where keys are the PC
+                  values are the edge-pushed stack values
+        """
 
-Edge = namedtuple("Edge", ["pc", "stack", "blockstack"])
+        return {edge.pc: tuple(edge.stack[-edge.npush:])
+                for edge in self._outedges}
+
+
+Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
 
 
 class AdaptDFA(object):
@@ -1268,7 +1302,8 @@ class AdaptDFA(object):
 
 AdaptBlockInfo = namedtuple(
     "AdaptBlockInfo",
-    ["insts", "outgoing_phis", "blockstack", "active_try_block"],
+    ["insts", "outgoing_phis", "blockstack", "active_try_block",
+     "outgoing_edgepushed"],
 )
 
 
@@ -1277,7 +1312,8 @@ def adapt_state_infos(state):
         insts=tuple(state.instructions),
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
-        active_try_block=state.get_top_block('TRY'),
+        active_try_block=state.initial_try_block(),
+        outgoing_edgepushed=state.get_outgoing_edgepushed(),
     )
 
 
