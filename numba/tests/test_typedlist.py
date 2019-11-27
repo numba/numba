@@ -863,3 +863,22 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # test
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
+
+    @skip_py2
+    def test_equals_on_list_with_dict(self):
+        # https://github.com/numba/numba/issues/4879
+        a = List()
+        b = Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c = List()
+        d = Dict()
+        d["a"] = 1
+        c.append(d)
+
+        self.assertEqual(a, c)
+
+        d["a"] = 2
+
+        self.assertNotEqual(a, c)
