@@ -1277,12 +1277,20 @@ def unicode_capitalize(data):
             return _empty_string(data._kind, length, data._is_ascii)
 
         if data._is_ascii:
+            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L361-L382    # noqa: E501
             res = _empty_string(data._kind, length, 1)
             code_point = _get_code_point(data, 0)
-            _set_code_point(res, 0, _Py_TOUPPER(code_point))
+            if _Py_ISLOWER(code_point):
+                _set_code_point(res, 0, _Py_TOUPPER(code_point))
+            else:
+                _set_code_point(res, 0, code_point)
+
             for idx in range(1, length):
                 code_point = _get_code_point(data, idx)
-                _set_code_point(res, idx, _Py_TOLOWER(code_point))
+                if _Py_ISUPPER(code_point):
+                    _set_code_point(res, idx, _Py_TOLOWER(code_point))
+                else:
+                    _set_code_point(res, idx, code_point)
 
             return res
 
