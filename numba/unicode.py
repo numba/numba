@@ -1,3 +1,4 @@
+import sys
 import operator
 
 import numpy as np
@@ -37,6 +38,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+
+_py38_or_later = sys.version_info[:2] >= (3, 8)
 
 # DATA MODEL
 
@@ -1297,7 +1300,13 @@ def unicode_capitalize(data):
         mapped = np.zeros(3, dtype=_Py_UCS4)
         tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length)
         code_point = _get_code_point(data, 0)
-        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+
+        # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
+        if _py38_or_later:
+            n_res = _PyUnicode_ToTitleFull(code_point, mapped)
+        else:
+            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+
         for m in mapped[:n_res]:
             maxchar = max(maxchar, m)
             _set_code_point(tmp, k, m)
