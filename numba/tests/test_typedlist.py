@@ -610,22 +610,10 @@ class TestComparisons(MemoryLeakMixin, TestCase):
         expected = False, False, False, True, True, True
         self._cmp_dance(expected, pa, pb, na, nb)
 
-    def test_typing_mimatch(self):
-        self.disable_leak_check()
+    def test_equals_non_list(self):
         l = to_tl([1, 2, 3])
-
-        with self.assertRaises(TypingError) as raises:
-            cmp.py_func(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
-        with self.assertRaises(TypingError) as raises:
-            cmp(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
+        self.assertFalse(any(cmp.py_func(l, 1)))
+        self.assertFalse(any(cmp(l, 1)))
 
 
 class TestListInferred(TestCase):
