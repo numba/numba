@@ -243,13 +243,16 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item):
+def new_list(item, allocated=0):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
     ----------
     item: TypeRef
         Item type of the new list.
+    allocated: int
+        number of items to pre-allocate
+
     """
     raise NotImplementedError
 
@@ -296,7 +299,7 @@ def _make_list(typingctx, itemty, ptr):
 
 
 @intrinsic
-def _list_new(typingctx, itemty):
+def _list_new(typingctx, itemty, allocated):
     """Wrap numba_list_new.
 
     Allocate a new list object with zero capacity.
@@ -305,10 +308,12 @@ def _list_new(typingctx, itemty):
     ----------
     itemty: Type
         Type of the items
+    allocated: int
+        number of items to pre-allocate
 
     """
     resty = types.voidptr
-    sig = resty(itemty)
+    sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
@@ -322,7 +327,7 @@ def _list_new(typingctx, itemty):
         reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
         status = builder.call(
             fn,
-            [reflp, ll_ssize_t(sz_item), ll_ssize_t(0)],
+            [reflp, ll_ssize_t(sz_item), args[1]],
         )
         _raise_if_error(
             context, builder, status,
@@ -335,17 +340,26 @@ def _list_new(typingctx, itemty):
 
 
 @overload(new_list)
-def impl_new_list(item):
-    """Creates a new list with *item* as the type
-    of the list item.
+def impl_new_list(item, allocated=0):
+    """Creates a new list.
+
+    Parameters
+    ----------
+    item: Numba type
+        type of the list item.
+    allocated: int
+        number of items to pre-allocate
+
     """
     if not isinstance(item, Type):
         raise TypeError("expecting *item* to be a numba Type")
 
     itemty = item
 
-    def imp(item):
-        lp = _list_new(itemty)
+    def imp(item, allocated=0):
+        if allocated < 0:
+            raise RuntimeError("expecting *allocated* to be >= 0")
+        lp = _list_new(itemty, allocated)
         _list_set_method_table(lp, itemty)
         l = _make_list(itemty, lp)
         return l
@@ -380,6 +394,42 @@ def _list_length(typingctx, l):
         )
         fn = builder.module.get_or_insert_function(fnty,
                                                    name='numba_list_length')
+        [l] = args
+        [tl] = sig.args
+        lp = _container_get_data(context, builder, tl, l)
+        n = builder.call(fn, [lp])
+        return n
+
+    return sig, codegen
+
+
+@overload_method(types.ListType, "_allocated")
+def impl_allocated(l):
+    """list._allocated()
+    """
+    if isinstance(l, types.ListType):
+        def impl(l):
+            return _list_allocated(l)
+
+        return impl
+
+
+@intrinsic
+def _list_allocated(typingctx, l):
+    """Wrap numba_list_allocated
+
+    Returns the allocation of the list.
+    """
+    resty = types.intp
+    sig = resty(l)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_allocated')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)

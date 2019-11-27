@@ -15,7 +15,7 @@ from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization
 from numba.untyped_passes import PreserveIR
 from itertools import product
-from .support import TestCase, unittest
+from .support import TestCase, unittest, skip_py38_or_later
 
 
 class InlineTestPipeline(numba.compiler.CompilerBase):
@@ -410,6 +410,7 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
 
+    @skip_py38_or_later
     def test_inline_involved(self):
 
         fortran = njit(inline='always')(_gen_involved())

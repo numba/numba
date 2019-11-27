@@ -193,6 +193,13 @@ class Loc(object):
         """
         return type(self)(self.filename, line, col)
 
+    def short(self):
+        """
+        Returns a short string
+        """
+        shortfilename = os.path.basename(self.filename)
+        return "%s:%s" % (shortfilename, self.line)
+
 
 # Used for annotating errors when source location is unknown.
 unknown_loc = Loc("unknown location", 0, 0)
@@ -932,7 +939,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __repr__(self):
-        return 'Var(%s, %s)' % (self.name, self.loc)
+        return 'Var(%s, %s)' % (self.name, self.loc.short())
 
     def __str__(self):
         return self.name
@@ -1378,6 +1385,11 @@ class FunctionIR(object):
         for offset, block in sorted(self.blocks.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
+
+    def dump_to_string(self):
+        with StringIO() as sb:
+            self.dump(file=sb)
+            return sb.getvalue()
 
     def dump_generator_info(self, file=None):
         file = file or sys.stdout

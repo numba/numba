@@ -13,11 +13,12 @@ import numpy as np
 
 from numba import jit, types, utils
 import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache
+from .support import TestCase, tag, CompilationCache, skip_py38_or_later
 from numba.targets import hashing
 
 if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
+
 
 
 def hash_usecase(x):
@@ -205,6 +206,7 @@ class TestNumberHashing(BaseTest):
             check(ty(a1), ty(a2), ty(a3))
 
 
+@skip_py38_or_later
 class TestTupleHashing(BaseTest):
     """
     Test hashing of tuples.
