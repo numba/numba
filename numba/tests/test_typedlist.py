@@ -853,20 +853,42 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(lst[i], ref[i])
 
     @skip_py2
-    def test_equals_on_list_with_dict(self):
+    def test_equals_on_list_with_dict_for_equal_lists(self):
         # https://github.com/numba/numba/issues/4879
-        a = List()
-        b = Dict()
+        a, b = List(), Dict()
         b["a"] = 1
         a.append(b)
 
-        c = List()
-        d = Dict()
+        c, d = List(), Dict()
         d["a"] = 1
         c.append(d)
 
         self.assertEqual(a, c)
 
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_dicts(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
         d["a"] = 2
+        c.append(d)
+
+        self.assertNotEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d, e = List(), Dict(), Dict()
+        d["a"] = 1
+        e["b"] = 2
+        c.append(d)
+        c.append(e)
 
         self.assertNotEqual(a, c)
