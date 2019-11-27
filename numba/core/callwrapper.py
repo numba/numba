@@ -77,15 +77,16 @@ class _GilManager(object):
     again.
     """
 
-    def __init__(self, builder, api, argman):
+    def __init__(self, builder, api, release_gil):
         self.builder = builder
         self.api = api
-        self.argman = argman
-        self.thread_state = api.save_thread()
+        self.release_gil = release_gil
+        if release_gil:
+            self.thread_state = api.save_thread()
 
     def emit_cleanup(self):
-        self.api.restore_thread(self.thread_state)
-        self.argman.emit_cleanup()
+        if self.release_gil:
+            self.api.restore_thread(self.thread_state)
 
 
 class PyCallWrapper(object):
@@ -155,28 +156,41 @@ class PyCallWrapper(object):
                 val = cleanup_manager.add_arg(builder.load(obj), ty)
                 innerargs.append(val)
 
-        if self.release_gil:
-            cleanup_manager = _GilManager(builder, api, cleanup_manager)
+        gil_manager = _GilManager(builder, api, self.release_gil)
 
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
             innerargs)
-        # Do clean up
-        self.debug_print(builder, "# callwrapper: emit_cleanup")
-        cleanup_manager.emit_cleanup()
-        self.debug_print(builder, "# callwrapper: emit_cleanup end")
+
+        # re-aquire the gil if it got released
+        gil_manager.emit_cleanup()
 
         # Determine return status
         with builder.if_then(status.is_ok, likely=True):
             # Ok => return boxed Python value
             with builder.if_then(status.is_none):
+                # Do clean up
+                self.debug_print(builder, "# callwrapper: emit_cleanup")
+                cleanup_manager.emit_cleanup()
+                self.debug_print(builder, "# callwrapper: emit_cleanup end")
+
                 api.return_none()
 
             retty = self._simplified_return_type()
             obj = api.from_native_return(retty, retval, env_manager)
+
+            # Do clean up
+            self.debug_print(builder, "# callwrapper: emit_cleanup")
+            cleanup_manager.emit_cleanup()
+            self.debug_print(builder, "# callwrapper: emit_cleanup end")
+
             builder.ret(obj)
 
-        # Error out
+        # Error out but clean up first
+        self.debug_print(builder, "# callwrapper: emit_cleanup")
+        cleanup_manager.emit_cleanup()
+        self.debug_print(builder, "# callwrapper: emit_cleanup end")
+
         self.context.call_conv.raise_error(builder, api, status)
         builder.ret(api.get_null_object())
 
