@@ -525,3 +525,29 @@ def redirect_type_ctor(context, builder, sig, args):
             context.make_tuple(builder, sig.args[1], args))
 
     return context.compile_internal(builder, call_ctor, sig, args)
+
+# ------------------------------------------------------------------------------
+# map, filter, reduce
+
+
+@overload(map)
+def ol_map(func, iterable, *args):
+    def impl(func, iterable, *args):
+        for x in zip(iterable, *args):
+            yield func(*x)
+    return impl
+
+
+@overload(filter)
+def ol_filter(func, iterable):
+    if (func is None) or isinstance(func, types.NoneType):
+        def impl(func, iterable):
+            for x in iterable:
+                if x:
+                    yield x
+    else:
+        def impl(func, iterable):
+            for x in iterable:
+                if func(x):
+                    yield x
+    return impl

@@ -9,6 +9,7 @@ from math import sqrt
 import numbers
 import re
 import sys
+import dis
 import platform
 import types as pytypes
 import warnings
@@ -19,6 +20,7 @@ import operator
 from collections import defaultdict
 
 import numba
+from numba.utils import PYVERSION
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout, MemoryLeakMixin
 from numba import njit, prange, stencil, inline_closurecall
@@ -38,6 +40,7 @@ from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+import cmath
 
 
 
@@ -1038,6 +1041,20 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
+    def test_use_of_reduction_var1(self):
+        def test_impl():
+            acc = 0
+            for i in prange(1):
+                acc = cmath.sqrt(acc)
+            return acc
+
+        # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
+
+    @skip_unsupported
     def test_argmin(self):
         def test_impl1(A):
             return A.argmin()
@@ -1470,6 +1487,12 @@ class TestParfors(TestParforsBase):
         msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
 
+    @skip_unsupported
+    def test_0d_array(self):
+        def test_impl(n):
+            return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
+        self.check(test_impl, np.array(7), check_scheduling=False)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -1500,6 +1523,15 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
 
+
+def iterate_bytecode(code):
+    if PYVERSION >= (3, 4):   # available since Py3.4
+        return dis.Bytecode(code)
+    else:
+        offsets, insts = zip(*ByteCodeIter(code))
+        return insts
+
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -1527,7 +1559,7 @@ class TestPrangeBase(TestParforsBase):
             range_idx = pyfunc_code.co_names.index('range')
             range_locations = []
             # look for LOAD_GLOBALs that point to 'range'
-            for _, instr in ByteCodeIter(pyfunc_code):
+            for instr in iterate_bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
                     if instr.arg == range_idx:
                         range_locations.append(instr.offset + 1)
@@ -1545,6 +1577,9 @@ class TestPrangeBase(TestParforsBase):
 
         # create new code parts
         co_args = [pyfunc_code.co_argcount]
+
+        if sys.version_info >= (3, 8):
+            co_args.append(pyfunc_code.co_posonlyargcount)
         if sys.version_info > (3, 0):
             co_args.append(pyfunc_code.co_kwonlyargcount)
         co_args.extend([pyfunc_code.co_nlocals,
@@ -2710,6 +2745,18 @@ class TestParforsSlice(TestParforsBase):
 
         x1 = np.random.rand(5)
         x2 = np.random.rand(6)
+        self.check(test_impl, x1, x2)
+
+    @skip_unsupported
+    def test_parfor_slice22(self):
+        def test_impl(x1, x2):
+            b = np.zeros((10,))
+            for i in prange(1):
+                b += x1[:, x2]
+            return b
+
+        x1 = np.zeros((10,7))
+        x2 = np.array(4)
         self.check(test_impl, x1, x2)
 
 class TestParforsOptions(TestParforsBase):
