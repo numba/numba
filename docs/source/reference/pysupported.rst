@@ -671,6 +671,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.floor`
 * :func:`math.frexp`
 * :func:`math.gamma`
+* :func:`math.gcd`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
