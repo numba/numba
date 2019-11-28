@@ -23,6 +23,9 @@ force_pyobj_flags.set("force_pyobject")
 
 Point = namedtuple('Point', ('a', 'b'))
 
+@jit(nopython=True)
+def intp_np_arange(stop):
+    return np.arange(stop).astype(np.intp)
 
 def noop(x):
     pass
@@ -922,7 +925,7 @@ class TestListManagedElements(ManagedListTestCase):
 
     def _check_element_equal(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-        con = [np.arange(3).astype(np.intp), np.arange(5).astype(np.intp)]
+        con = [intp_np_arange(3), intp_np_arange(5)]
         expect = list(con)
         pyfunc(expect)
         got = list(con)
@@ -938,13 +941,13 @@ class TestListManagedElements(ManagedListTestCase):
 
     def test_reflect_appended(self):
         def pyfunc(con):
-            con.append(np.arange(10).astype(np.intp))
+            con.append(intp_np_arange(10))
 
         self._check_element_equal(pyfunc)
 
     def test_reflect_setitem(self):
         def pyfunc(con):
-            con[1] = np.arange(10)
+            con[1] = intp_np_arange(10)
 
         self._check_element_equal(pyfunc)
 
@@ -958,7 +961,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(300):
-                con.append(np.arange(i, ).astype(np.intp))
+                con.append(intp_np_arange(i))
             return con
 
         cfunc = jit(nopython=True)(pyfunc)
@@ -974,7 +977,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(300):
-                con.append(np.arange(i))
+                con.append(intp_np_arange(i))
             c = 0.0
             for arr in con:
                 c += arr.sum() / (1 + arr.size)
@@ -990,8 +993,8 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(5):
-                con.append(np.arange(2))
-            con[0] = np.arange(4)
+                con.append(intp_np_arange(2))
+            con[0] = intp_np_arange(4)
             return con
 
         cfunc = jit(nopython=True)(pyfunc)
@@ -1006,7 +1009,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(5):
-                con.append(np.arange(2))
+                con.append(intp_np_arange(2))
             return con[2:4]
 
         cfunc = jit(nopython=True)(pyfunc)
@@ -1021,7 +1024,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(5):
-                con.append(np.arange(2))
+                con.append(intp_np_arange(2))
             con[1:3] = con[2:4]
             return con
 
@@ -1037,7 +1040,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(20):
-                con.append(np.arange(i + 1))
+                con.append(intp_np_arange(i + 1))
             while len(con) > 2:
                 con.pop()
             return con
@@ -1054,7 +1057,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(1000):
-                con.append(np.arange(i + 1))
+                con.append(intp_np_arange(i + 1))
             while len(con) > 2:
                 con.pop(1)
             return con
@@ -1071,7 +1074,7 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(20):
-                con.append(np.arange(i + 1))
+                con.append(intp_np_arange(i + 1))
             del con[3:10]
             return con
 
@@ -1248,7 +1251,7 @@ class TestListOfList(ManagedListTestCase):
             f[0] = 1
             return f
 
-        r = [[np.arange(3)]]
+        r = [[intp_np_arange(3)]]
 
         with self.assertRaises(errors.TypingError) as raises:
             self.compile_and_test(bar, r)
@@ -1266,7 +1269,7 @@ class TestListOfList(ManagedListTestCase):
             f[0][0] = 10
             return f
 
-        r = [[np.arange(3)]]
+        r = [[intp_np_arange(3)]]
         with self.assertRaises(errors.TypingError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn(
@@ -1282,20 +1285,20 @@ class TestListOfList(ManagedListTestCase):
     def test_c05(self):
         def bar(x):
             f = x
-            f[0][0] = np.array([x for x in np.arange(10).astype(np.intp)])
+            f[0][0] = np.array([x for x in intp_np_arange(10)])
             return f
 
-        r = [[np.arange(3).astype(np.intp)]]
+        r = [[intp_np_arange(3)]]
         self.compile_and_test(bar, r)
 
     @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
     def test_c06(self):
         def bar(x):
             f = x
-            f[0][0] = np.array([x + 1j for x in np.arange(10)])
+            f[0][0] = np.array([x + 1j for x in intp_np_arange(10)])
             return f
 
-        r = [[np.arange(3)]]
+        r = [[intp_np_arange(3)]]
         with self.assertRaises(errors.TypingError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn("invalid setitem with value", str(raises.exception))
@@ -1307,7 +1310,7 @@ class TestListOfList(ManagedListTestCase):
         def bar(x):
             return x[-7]
 
-        r = [[np.arange(3)]]
+        r = [[intp_np_arange(3)]]
         cfunc = jit(nopython=True)(bar)
         with self.assertRaises(IndexError) as raises:
             cfunc(r)
