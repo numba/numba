@@ -470,6 +470,7 @@ def list_constructor(context, builder, sig, args):
 @lower_builtin(list)
 def list_constructor(context, builder, sig, args):
     if context.disable_reflected_list:
+        from numba.typed import List
         listtype = sig.return_type
         it = listtype.item_type
 
