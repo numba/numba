@@ -1088,6 +1088,13 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
+                if isinstance(rhs, ir.Var):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.name)
+                        reverse_call_table[rhs.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.name)
             for T, f in call_table_extensions.items():
                 if isinstance(inst, T):
                     f(inst, call_table, reverse_call_table)
@@ -1517,7 +1524,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     calltypes.
     """
     from numba import typed_passes
-    # mk_func can be actual function or make_function node
+    # mk_func can be actual function or make_function node, or a njit function
     if hasattr(mk_func, 'code'):
         code = mk_func.code
     elif hasattr(mk_func, '__code__'):
@@ -1553,14 +1560,15 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
         calltypes.update(f_calltypes)
     return f_ir
 
-def get_ir_of_code(glbls, fcode):
+def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     """
-    Compile a code object to get its IR.
+    Creates a function from a code object. Args:
+    * fcode - the code object
+    * func_env - string for the freevar placeholders
+    * func_arg - string for the function args (e.g. "a, b, c, d=None")
+    * func_clo - string for the closure args
+    * glbls - the function globals
     """
-    nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
     loc = {}
@@ -1589,8 +1597,23 @@ def get_ir_of_code(glbls, fcode):
             fcode.co_cellvars)
 
     f = loc['g']()
+    # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
+    return f
+
+def get_ir_of_code(glbls, fcode):
+    """
+    Compile a code object to get its IR.
+    """
+    nfree = len(fcode.co_freevars)
+    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+
+    f = _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                       glbls)
+
     from numba import compiler
     ir = compiler.run_frontend(f)
     # we need to run the before inference rewrite pass to normalize the IR
@@ -2020,3 +2043,68 @@ def check_and_legalize_ir(func_ir):
         msg +=  func_ir.diff_str(orig_ir)
         warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
 
+
+def convert_code_obj_to_function(code_obj, caller_ir):
+    """
+    Converts a code object from a `make_function.code` attr in the IR into a
+    python function, caller_ir is the FunctionIR of the caller and is used for
+    the resolution of freevars.
+    """
+    fcode = code_obj.code
+    nfree = len(fcode.co_freevars)
+
+    # try and resolve freevars if they are consts in the caller's IR
+    # these can be baked into the new function
+    freevars = []
+    for x in fcode.co_freevars:
+        # not using guard here to differentiate between multiple definition and
+        # non-const variable
+        try:
+            freevar_def = caller_ir.get_definition(x)
+        except KeyError:
+            msg = ("Cannot capture a constant value for variable '%s' as there "
+                   "are multiple definitions present." % x)
+            raise TypingError(msg, loc=code_obj.loc)
+        if isinstance(freevar_def, ir.Const):
+            freevars.append(freevar_def.value)
+        else:
+            msg = ("Cannot capture the non-constant value associated with "
+                   "variable '%s' in a function that will escape." % x)
+            raise TypingError(msg, loc=code_obj.loc)
+
+    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    co_varnames = list(fcode.co_varnames)
+
+    # This is horrible. The code object knows about the number of args present
+    # it also knows the name of the args but these are bundled in with other
+    # vars in `co_varnames`. The make_function IR node knows what the defaults
+    # are, they are defined in the IR as consts. The following finds the total
+    # number of args (args + kwargs with defaults), finds the default values
+    # and infers the number of "kwargs with defaults" from this and then infers
+    # the number of actual arguments from that.
+    n_kwargs = 0
+    n_allargs = fcode.co_argcount
+    kwarg_defaults = caller_ir.get_definition(code_obj.defaults)
+    if kwarg_defaults is not None:
+        if isinstance(kwarg_defaults, tuple):
+            d = [caller_ir.get_definition(x).value for x in kwarg_defaults]
+            kwarg_defaults_tup = tuple(d)
+        else:
+            kwarg_defaults_tup = kwarg_defaults.value
+        n_kwargs = len(kwarg_defaults_tup)
+    nargs = n_allargs - n_kwargs
+
+    func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
+    if n_kwargs:
+        kw_const = ["%s = %s" % (co_varnames[i + nargs], kwarg_defaults_tup[i])
+                    for i in range(n_kwargs)]
+        func_arg += ", "
+        func_arg += ", ".join(kw_const)
+
+    # globals are the same as those in the caller
+    glbls = caller_ir.func_id.func.__globals__
+
+    # create the function and return it
+    return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                          glbls)

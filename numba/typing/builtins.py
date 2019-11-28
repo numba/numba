@@ -46,7 +46,8 @@ class Abs(ConcreteTemplate):
 @infer_global(slice)
 class Slice(ConcreteTemplate):
     cases = [
-        signature(types.slice2_type),
+        signature(types.slice2_type, types.intp),
+        signature(types.slice2_type, types.none),
         signature(types.slice2_type, types.none, types.none),
         signature(types.slice2_type, types.none, types.intp),
         signature(types.slice2_type, types.intp, types.none),
@@ -54,7 +55,11 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
+        signature(types.slice3_type, types.intp, types.intp, types.none),
+        signature(types.slice3_type, types.intp, types.none, types.none),
+        signature(types.slice3_type, types.none, types.intp, types.none),
         signature(types.slice3_type, types.none, types.none, types.intp),
+        signature(types.slice3_type, types.none, types.none, types.none),
     ]
 
 
