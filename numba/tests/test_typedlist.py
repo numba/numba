@@ -445,6 +445,40 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl, list(tl))
 
 
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_allocation(self):
+        # kwarg version
+        for i in range(16):
+            tl = List.empty_list(types.int32, allocated=i)
+            self.assertEqual(tl._allocated(), i)
+
+        # posarg version
+        for i in range(16):
+            tl = List.empty_list(types.int32, i)
+            self.assertEqual(tl._allocated(), i)
+
+    def test_growth_and_shrinkage(self):
+        tl = List.empty_list(types.int32)
+        growth_before = {0: 0, 4:4, 8:8, 16:16}
+        growth_after = {0: 4, 4:8, 8:16, 16:25}
+        for i in range(17):
+            if i in growth_before:
+                self.assertEqual(growth_before[i], tl._allocated())
+            tl.append(i)
+            if i in growth_after:
+                self.assertEqual(growth_after[i], tl._allocated())
+
+        shrink_before = {17: 25, 12:25, 9:18, 6:12, 4:8, 3:6, 2:5, 1:4}
+        shrink_after = {17: 25, 12:18, 9:12, 6:8, 4:6, 3:5, 2:4, 1:0}
+        for i in range(17, 0, -1):
+            if i in shrink_before:
+                self.assertEqual(shrink_before[i], tl._allocated())
+            tl.pop()
+            if i in shrink_after:
+                self.assertEqual(shrink_after[i], tl._allocated())
+
+
 class TestExtend(MemoryLeakMixin, TestCase):
 
     def test_extend_other(self):

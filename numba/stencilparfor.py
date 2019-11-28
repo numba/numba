@@ -48,10 +48,11 @@ class StencilPass(object):
         stencil_calls = []
         stencil_dict = {}
         for call_varname, call_list in call_table.items():
-            if len(call_list)==1 and isinstance(call_list[0], StencilFunc):
-                # Remember all calls to StencilFuncs.
-                stencil_calls.append(call_varname)
-                stencil_dict[call_varname] = call_list[0]
+            for one_call in call_list:
+                if isinstance(one_call, StencilFunc):
+                    # Remember all calls to StencilFuncs.
+                    stencil_calls.append(call_varname)
+                    stencil_dict[call_varname] = one_call
         if not stencil_calls:
             return  # return early if no stencil calls found
 
