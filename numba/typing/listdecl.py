@@ -15,20 +15,6 @@ infer_global = registry.register_global
 infer_getattr = registry.register_attr
 
 
-@infer_global(list)
-class ListBuiltin(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        if args:
-            iterable, = args
-            if isinstance(iterable, types.IterableType):
-                dtype = iterable.iterator_type.yield_type
-                return signature(types.ListType(dtype), iterable)
-        else:
-            return signature(types.ListType(types.undefined))
-
-
 @infer_global(sorted)
 class SortedBuiltin(CallableTemplate):
 

@@ -261,7 +261,8 @@ def _make_subtarget(targetctx, flags):
     if flags.fastmath:
         subtargetoptions['fastmath'] = flags.fastmath
     if flags.disable_reflected_list:
-        subtargetoptions['disable_reflected_list'] = flags.disable_reflected_list
+        subtargetoptions['disable_reflected_list'] = \
+            flags.disable_reflected_list
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
@@ -284,6 +285,46 @@ class CompilerBase(object):
         typingctx_copy = copy.copy(typingctx)
         typingctx_copy.disable_reflected_list = flags.disable_reflected_list
         self.state.typingctx = typingctx_copy
+
+        from numba.typing.templates import (AbstractTemplate,
+                                            Registry,
+                                            signature,
+                                            )
+        from numba import types
+        registry = Registry()
+
+        infer_global = registry.register_global
+
+        if flags.disable_reflected_list:
+            @infer_global(list)
+            class ListBuiltin(AbstractTemplate):
+
+                def generic(self, args, kws):
+                    assert not kws
+                    if args:
+                        iterable, = args
+                        if isinstance(iterable, types.IterableType):
+                            dtype = iterable.iterator_type.yield_type
+                            return signature(types.ListType(dtype), iterable)
+                    else:
+                        return signature(types.ListType(types.undefined))
+        else:
+            @infer_global(list)
+            class ListBuiltin(AbstractTemplate):
+
+                def generic(self, args, kws):
+                    assert not kws
+                    if args:
+                        iterable, = args
+                        if isinstance(iterable, types.IterableType):
+                            dtype = iterable.iterator_type.yield_type
+                            return signature(types.List(dtype), iterable)
+                    else:
+                        return signature(types.List(types.undefined))
+
+        self.state.typingctx.install_registry(registry)
+        self.state.typingctx.refresh()
+
         self.state.targetctx = _make_subtarget(targetctx, flags)
         self.state.library = library
         self.state.args = args
