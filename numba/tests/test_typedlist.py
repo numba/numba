@@ -722,29 +722,38 @@ class TestListInferred(TestCase):
 
 class TestListBuiltinConstructors(TestCase):
 
+    def _njit_both(self, func):
+        return (njit(func, disable_reflected_list=p) for p in (True, False))
+
     def test_simple_refine_list_builtin(self):
-        @njit
         def foo():
             l = list()
             l.append(1)
             return l
-        expected = List()
-        expected.append(1)
-        received = foo()
-        self.assertEqual(expected, received)
-        self.assertEqual(List, type(received))
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_received, foo_false_received = foo_true(), foo_false()
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_received, foo_false_received = foo_true(), foo_false()
+        foo_true_expected, foo_false_expected = List(), list([1])
+        foo_true_expected.append(1)
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(List, type(foo_true_received))
+        self.assertEqual(list, type(foo_false_received))
 
     def test_simple_refine_square_braket_builtin(self):
-        @njit
         def foo():
             l = []
             l.append(1)
             return l
-        expected = List()
-        expected.append(1)
-        received = foo()
-        self.assertEqual(expected, received)
-        self.assertEqual(List, type(received))
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_received, foo_false_received = foo_true(), foo_false()
+        foo_true_expected, foo_false_expected = List(), list([1])
+        foo_true_expected.append(1)
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(List, type(foo_true_received))
+        self.assertEqual(list, type(foo_false_received))
 
     def test_square_bracket_builtin_from_iter(self):
         @njit
