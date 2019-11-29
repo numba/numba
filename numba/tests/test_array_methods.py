@@ -652,7 +652,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
             got = cres.entry_point(arr, x, y)
-            # Contiguity of result varies accross Numpy versions, only
+            # Contiguity of result varies across Numpy versions, only
             # check contents. NumPy 1.11+ seems to stabilize.
             if numpy_version < (1, 11):
                 self.assertEqual(got.dtype, expected.dtype)
