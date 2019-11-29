@@ -720,8 +720,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([1, 2, 3])
             yield 3
             yield 1 + 4j
+            yield 10 + 0j
             yield (1 + 4j, 2 + 0j)
             yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+            yield 'string'
 
         pyfuncs = [iscomplex, isreal]
         for pyfunc in pyfuncs:
@@ -740,6 +742,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.NINF, np.zeros(1, dtype=np.bool)
             yield np.inf, np.zeros(1, dtype=np.bool)
             yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.empty(12)
             yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
 
         pyfuncs = [isneginf, isposinf]
