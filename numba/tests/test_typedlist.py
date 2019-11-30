@@ -756,26 +756,30 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(list, type(foo_false_received))
 
     def test_square_bracket_builtin_from_iter(self):
-        @njit
         def foo():
             l = [1, 2, 3]
             return l
-        expected = List()
-        [expected.append(i) for i in (1,2,3)]
-        received = foo()
-        self.assertEqual(expected, received)
-        self.assertEqual(List, type(received))
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_received, foo_false_received = foo_true(), foo_false()
+        foo_true_expected, foo_false_expected = List(), list([1, 2, 3])
+        [foo_true_expected.append(i) for i in (1, 2, 3)]
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(List, type(foo_true_received))
+        self.assertEqual(list, type(foo_false_received))
 
     def test_list_and_square_bracket_builtin_from_iter(self):
-        @njit
         def foo():
             l = list([1, 2, 3])
             return l
-        expected = List()
-        [expected.append(i) for i in (1,2,3)]
-        received = foo()
-        self.assertEqual(expected, received)
-        self.assertEqual(List, type(received))
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_received, foo_false_received = foo_true(), foo_false()
+        foo_true_expected, foo_false_expected = List(), list([1, 2, 3])
+        [foo_true_expected.append(i) for i in (1, 2, 3)]
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(List, type(foo_true_received))
+        self.assertEqual(list, type(foo_false_received))
 
     @unittest.expectedFailure
     def test_dict_in_list_for_square_bracket_builtin(self):

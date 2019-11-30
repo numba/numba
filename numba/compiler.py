@@ -287,6 +287,7 @@ class CompilerBase(object):
         typingctx_copy = copy.copy(typingctx)
         typingctx_copy.disable_reflected_list = flags.disable_reflected_list
         self.state.typingctx = typingctx_copy
+        self.state.typingctx._globals = copy.copy(typingctx._globals)
 
         from numba.typing.templates import (AbstractTemplate,
                                             Registry,
