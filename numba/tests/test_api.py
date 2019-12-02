@@ -17,9 +17,6 @@ class TestNumbaModule(TestCase):
 
     @tag('important')
     def test_numba_module(self):
-        # bogus line to force a test to fail
-        self.assertTrue(False)
-        
         # jit
         self.check_member("jit")
         self.check_member("vectorize")
