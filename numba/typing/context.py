@@ -140,6 +140,7 @@ class BaseContext(object):
         self._attributes = defaultdict(list)
         self._globals = utils.UniqueDict()
         self.tm = rules.default_type_manager
+        self.disable_reflected_list = False
         self.callstack = CallStack()
 
         # Initialize
