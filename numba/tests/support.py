@@ -53,6 +53,15 @@ skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
 )
+skip_tryexcept_unsupported = unittest.skipIf(
+    utils.PYVERSION < (3, 7),
+    "try-except unsupported on py3.6 or earlier"
+)
+skip_tryexcept_supported = unittest.skipIf(
+    utils.PYVERSION >= (3, 7),
+    "try-except supported on py3.7 or later"
+)
+
 
 class CompilationCache(object):
     """

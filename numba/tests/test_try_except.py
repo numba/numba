@@ -1,13 +1,18 @@
 from __future__ import print_function
 
 from numba import njit
-from .support import TestCase, unittest, captured_stdout
+from numba.errors import UnsupportedError
+from .support import (
+    TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
+    skip_tryexcept_supported,
+)
 
 
 class MyError(Exception):
     pass
 
 
+@skip_tryexcept_unsupported
 class TestTryBareExcept(TestCase):
     """Test the following pattern:
 
@@ -196,6 +201,7 @@ class TestTryBareExcept(TestCase):
         self.assertEqual(res, 123)
 
 
+@skip_tryexcept_unsupported
 class TestTryExceptCaught(TestCase):
     def test_catch_exception(self):
         @njit
@@ -298,6 +304,37 @@ class TestTryExceptCaught(TestCase):
             ["A", "B", "D"],
         )
         self.assertEqual(res, 123)
+
+
+@skip_tryexcept_supported
+class TestTryExceptUnsupported(TestCase):
+
+    msg_pattern = "'try' block not supported until python3.7 or later"
+
+    def check(self, call, *args):
+        with self.assertRaises(UnsupportedError) as raises:
+            call(*args)
+        self.assertIn(self.msg_pattern, str(raises.exception))
+
+    def test_try_except(self):
+        @njit
+        def foo(x):
+            try:
+                if x:
+                    raise MyError
+            except:   # noqa: E722
+                pass
+        self.check(foo, True)
+
+    def test_try_finally(self):
+        @njit
+        def foo(x):
+            try:
+                if x:
+                    raise MyError
+            finally:
+                pass
+        self.check(foo, True)
 
 
 if __name__ == '__main__':
