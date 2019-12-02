@@ -58,14 +58,23 @@ jobs:
       displayName: 'Remove TBB'
       condition: ne(variables['PYTHON'], '2.7')
 
+    # not working on windows?
+    #- script: |
+    #    call activate %CONDA_ENV%
+    #    numba.exe -s
+    #  displayName: 'Display numba system information'
+
     - script: |
         call activate %CONDA_ENV%
-        pushd bin
-        numba -s
-        popd
         python -m numba.tests.test_runtests
-        # Now run tests based on the changes identified via git
+      displayName: 'Verify runtests'
+
+    - script: |
+        call activate %CONDA_ENV%
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
-        # Now run the rest with slice
+      displayName: 'Test modified test files'
+
+    - script: |
+        call activate %CONDA_ENV%
         python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
-      displayName: 'Test'
+      displayName: 'Test slice of test files'
