@@ -58,10 +58,11 @@ jobs:
       displayName: 'Remove TBB'
       condition: ne(variables['PYTHON'], '2.7')
 
-    - script: |
-        call activate %CONDA_ENV%
-        numba.exe -s
-      displayName: 'Display numba system information'
+    # not working on windows?
+    #- script: |
+    #    call activate %CONDA_ENV%
+    #    numba.exe -s
+    #  displayName: 'Display numba system information'
 
     - script: |
         call activate %CONDA_ENV%
