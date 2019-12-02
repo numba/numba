@@ -3765,14 +3765,11 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # NPY_LONG required as the return type, this is a np.dtype('l') which is
-        # not the same as a np.long and a np.int or a Python long or int.
-        #
-        # Alg ref:
-        # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/ctors.c#L3376-L3377    # noqa: E501
-        #
-        NPY_LONG = getattr(types, "int%s" % (8 * np.dtype('l').itemsize))
-        dtype = max(bounds + [NPY_LONG,])
+        # numerous attempts were made at guessing this type from the NumPy
+        # source but it turns out on running `np.arange(10).dtype` on pretty
+        # much all platform and python combinations that it matched np.int?!
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
+        dtype = max(bounds + [NPY_TY,])
 
     return dtype
 
