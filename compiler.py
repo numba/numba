@@ -10,7 +10,7 @@ from numba import ctypes_support as ctypes
 from numba.oneapi.oneapidriver import spirv_generator
 
 
-def compile_oneapi(pyfunc, return_type, args, debug):
+def compile_with_oneapi(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
     from .descriptor import OneAPITargetDesc
 
@@ -40,89 +40,13 @@ def compile_oneapi(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(pyfunc, args, debug=False):
-    cres = compile_oneapi(pyfunc, types.void, args, debug=debug)
+    cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
     oclkern = OneAPIKernel(llvm_module=kernel.module,
                            name=kernel.name,
                            argtypes=cres.signature.args)
     return oclkern
-
-
-def compile_device(pyfunc, return_type, args, debug=False):
-    cres = compile_oneapi(pyfunc, return_type, args, debug=debug)
-    func = cres.library.get_function(cres.fndesc.llvm_func_name)
-    cres.target_context.mark_ocl_device(func)
-    devfn = DeviceFunction(cres)
-
-    class device_function_template(ConcreteTemplate):
-        key = devfn
-        cases = [cres.signature]
-
-    cres.typing_context.insert_user_function(devfn, device_function_template)
-    libs = [cres.library]
-    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
-    return devfn
-
-
-def compile_device_template(pyfunc):
-    """Compile a DeviceFunctionTemplate
-    """
-    from .descriptor import OneAPITargetDesc
-
-    dft = DeviceFunctionTemplate(pyfunc)
-
-    class device_function_template(AbstractTemplate):
-        key = dft
-
-        def generic(self, args, kws):
-            assert not kws
-            return dft.compile(args)
-
-    typingctx = OneAPITargetDesc.typingctx
-    typingctx.insert_user_function(dft, device_function_template)
-    return dft
-
-
-class DeviceFunctionTemplate(object):
-    """Unmaterialized device function
-    """
-    def __init__(self, pyfunc, debug=False):
-        self.py_func = pyfunc
-        self.debug = debug
-        # self.inline = inline
-        self._compileinfos = {}
-
-    def compile(self, args):
-        """Compile the function for the given argument types.
-
-        Each signature is compiled once by caching the compiled function inside
-        this object.
-        """
-        if args not in self._compileinfos:
-            cres = compile_oneapi(self.py_func, None, args, debug=self.debug)
-            func = cres.library.get_function(cres.fndesc.llvm_func_name)
-            cres.target_context.mark_ocl_device(func)
-            first_definition = not self._compileinfos
-            self._compileinfos[args] = cres
-            libs = [cres.library]
-
-            if first_definition:
-                # First definition
-                cres.target_context.insert_user_function(self, cres.fndesc,
-                                                         libs)
-            else:
-                cres.target_context.add_user_function(self, cres.fndesc, libs)
-
-        else:
-            cres = self._compileinfos[args]
-
-        return cres.signature
-
-
-class DeviceFunction(object):
-    def __init__(self, cres):
-        self.cres = cres
 
 
 def _ensure_list(val):

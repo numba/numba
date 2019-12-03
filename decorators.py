@@ -1,39 +1,23 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import (compile_kernel, compile_device, AutoJitOneAPIKernel,
-                       compile_device_template)
+from .compiler import (compile_kernel, AutoJitOneAPIKernel)
 
 
-def jit(signature=None, device=False, debug=False):
+def jit(signature=None, debug=False):
     """JIT compile a python function conforming using the
     Numba-OneAPI backend
     """
     if signature is None:
-        return autojit(device=device, debug=False)
+        return autojit(debug=False)
     elif not sigutils.is_signature(signature):
         func = signature
-        return autojit(device=device, debug=False)(func)
+        return autojit(debug=False)(func)
     else:
-        if device:
-            return _device_jit(signature, debug)
-        else:
-            return _kernel_jit(signature, debug)
+        return _kernel_jit(signature, debug)
 
 
-def autojit(device=False, debug=False):
-    if device:
-        return _device_autojit
-    else:
-        return _kernel_autojit
-
-
-def _device_jit(signature, debug):
-    argtypes, restype = sigutils.normalize_signature(signature)
-
-    def _wrapped(pyfunc):
-        return compile_device(pyfunc, restype, argtypes, debug)
-
-    return _wrapped
+def autojit(debug=False):
+    return _kernel_autojit
 
 
 def _kernel_jit(signature, debug):
@@ -47,10 +31,6 @@ def _kernel_jit(signature, debug):
         return compile_kernel(pyfunc, argtypes, debug)
 
     return _wrapped
-
-
-def _device_autojit(pyfunc):
-    return compile_device_template(pyfunc)
 
 
 def _kernel_autojit(pyfunc):
