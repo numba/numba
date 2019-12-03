@@ -38,7 +38,7 @@ else:
 dA = device.copy_array_to_device(a)
 dB = device.copy_array_to_device(b)
 
-data_parallel_sum[global_size,local_size](a,b,c)
+data_parallel_sum[device,global_size,local_size](a,b,c)
 
 """
 ts = time()
