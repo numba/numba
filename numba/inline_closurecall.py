@@ -434,7 +434,10 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             raise NotImplementedError(
                 "Stararg not supported in inliner for arg {} {}".format(
                     index, param))
-        kws = dict(call_expr.kws)
+        if call_expr.op == 'call':
+            kws = dict(call_expr.kws)
+        else:
+            kws = {}
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
