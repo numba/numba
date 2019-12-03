@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 # Re export
-from .stubs import (
+from .ocl.stubs import (
     get_global_id,
     get_global_size,
     get_local_id,
