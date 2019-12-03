@@ -1,9 +1,14 @@
 from __future__ import print_function
 
+import warnings
 from itertools import product
 
-from numba import njit, typed, objmode
-from numba.errors import UnsupportedError, CompilerError
+import numpy as np
+
+from numba import njit, typed, objmode, prange
+from numba.errors import (
+    UnsupportedError, CompilerError, NumbaPerformanceWarning,
+)
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
     skip_tryexcept_supported, MemoryLeakMixin
@@ -509,6 +514,84 @@ class TestTryExceptOtherControlFlow(TestCase):
             "Does not support with-context that contain branches",
             str(raises.exception),
         )
+
+
+class TestTryExceptParfors(TestCase):
+    @unittest.expectedFailure
+    def test_try_in_prange_reduction(self):
+        # Related issue https://github.com/numba/numba/issues/4922
+        # The try-except is transformed basically into chains of if-else
+        def udt(n):
+            c = 0
+            for i in prange(n):
+                try:
+                    c += 1
+                except Exception:
+                    c += 1
+            return c
+
+        args = [10]
+        expect = udt(*args)
+        self.assertEqual(njit(parallel=False)(udt)(*args), expect)
+        self.assertEqual(njit(parallel=True)(udt)(*args), expect)
+
+    def test_try_outside_prange_reduction(self):
+        # Related issue https://github.com/numba/numba/issues/4922
+        # The try-except is transformed basically into chains of if-else
+        def udt(n):
+            c = 0
+            try:
+                for i in prange(n):
+                    c += 1
+            except Exception:
+                return 0xdead
+            else:
+                return c
+
+        args = [10]
+        expect = udt(*args)
+        self.assertEqual(njit(parallel=False)(udt)(*args), expect)
+        # Parfors transformation didn't happen
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaPerformanceWarning)
+            self.assertEqual(njit(parallel=True)(udt)(*args), expect)
+        self.assertEqual(len(w), 1)
+        self.assertIn("no transformation for parallel execution was possible",
+                      str(w[0]))
+
+    def test_try_in_prange_map(self):
+        def udt(arr, x):
+            out = arr.copy()
+            for i in prange(arr.size):
+                try:
+                    if i == x:
+                        raise ValueError
+                    out[i] = arr[i] + i
+                except Exception:
+                    out[i] = -1
+            return out
+
+        args = [np.arange(10), 6]
+        expect = udt(*args)
+        self.assertPreciseEqual(njit(parallel=False)(udt)(*args), expect)
+        self.assertPreciseEqual(njit(parallel=True)(udt)(*args), expect)
+
+    def test_try_outside_prange_map(self):
+        def udt(arr, x):
+            out = arr.copy()
+            try:
+                for i in prange(arr.size):
+                    if i == x:
+                        raise ValueError
+                    out[i] = arr[i] + i
+            except Exception:
+                out[i] = -1
+            return out
+
+        args = [np.arange(10), 6]
+        expect = udt(*args)
+        self.assertPreciseEqual(njit(parallel=False)(udt)(*args), expect)
+        self.assertPreciseEqual(njit(parallel=True)(udt)(*args), expect)
 
 
 if __name__ == '__main__':
