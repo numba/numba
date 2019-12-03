@@ -45,6 +45,13 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         # Insert 100 entries
         self.assertEqual(foo(n=100), 100)
 
+    def test_dict_create_no_jit(self):
+        """
+        Exercise dictionary creation with JIT disabled.
+        """
+        d = dictobject.new_dict(int32, float32)
+        self.assertTrue(isinstance(d, dict))
+
     def test_dict_get(self):
         """
         Exercise dictionary creation, insertion and get
