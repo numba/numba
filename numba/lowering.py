@@ -185,7 +185,7 @@ class BaseLower(object):
     def lower(self):
         # DRD : Add this hack for the time ebing. Having a global env pointer, 
         # even if it is a null pointer, breaks spirv-val. 
-        if not self.context.context_name == "ocl.jit":
+        if not self.context.context_name in ("ocl.jit", "oneapi.jit"):
             # Emit the Env into the module
             self.emit_environment_object()
 
