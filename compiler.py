@@ -46,7 +46,6 @@ def compile_with_oneapi(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(device, pyfunc, args, debug=False):
-    print("Args : ", args)
     cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
@@ -114,7 +113,6 @@ class OneAPIKernelBase(object):
         griddim.
         """
 
-        print("Get getitem args...")
         device = args[0]
         griddim = _ensure_list(args[1])
         blockdim = _ensure_list(args[2])
