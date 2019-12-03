@@ -77,6 +77,9 @@ numba_list_free(NB_List *lp);
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_length(NB_List *lp);
 
+NUMBA_EXPORT_FUNC(Py_ssize_t)
+numba_list_allocated(NB_List *lp);
+
 NUMBA_EXPORT_FUNC(int)
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item);
 

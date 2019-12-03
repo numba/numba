@@ -3,8 +3,9 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba import njit, types, cgutils, unicode
-from numba.extending import overload, intrinsic, overload_method, lower_cast
+from numba import types, cgutils, unicode
+from numba.extending import (overload, intrinsic, overload_method, lower_cast,
+                             register_jitable)
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
@@ -24,7 +25,8 @@ bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
 u1_dtype = np.dtype('U1')
 unicode_byte_width = u1_dtype.itemsize
 unicode_uint = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unicode_byte_width]
-unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND, 2: unicode.PY_UNICODE_2BYTE_KIND,
+unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND,
+                2: unicode.PY_UNICODE_2BYTE_KIND,
                 4: unicode.PY_UNICODE_4BYTE_KIND}[unicode_byte_width]
 
 
@@ -57,14 +59,14 @@ def deref_uint32(typingctx, data, offset):
     return sig, make_deref_codegen(32)
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def charseq_get_code(a, i):
     """Access i-th item of CharSeq object via code value
     """
     return deref_uint8(a, i)
 
 
-@njit
+@register_jitable
 def charseq_get_value(a, i):
     """Access i-th item of CharSeq object via code value.
 
@@ -76,7 +78,7 @@ def charseq_get_value(a, i):
     return code
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def unicode_charseq_get_code(a, i):
     """Access i-th item of UnicodeCharSeq object via code value
     """
@@ -91,14 +93,14 @@ def unicode_charseq_get_code(a, i):
             'unicode_charseq_get_code: unicode_byte_width not in [1, 2, 4]')
 
 
-@njit
+@register_jitable
 def unicode_get_code(a, i):
     """Access i-th item of UnicodeType object.
     """
     return unicode._get_code_point(a, i)
 
 
-@njit
+@register_jitable
 def bytes_get_code(a, i):
     """Access i-th item of Bytes object.
         """
@@ -128,7 +130,7 @@ def _is_bytes(a):
     return isinstance(a, (types.CharSeq, types.Bytes))
 
 
-@njit
+@register_jitable
 def unicode_charseq_get_value(a, i):
     """Access i-th item of UnicodeCharSeq object via unicode value
 
@@ -215,7 +217,8 @@ def charseq_to_bytes(context, builder, fromty, toty, val):
 def unicode_to_bytes_cast(context, builder, fromty, toty, val):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
-    notkind1 = builder.icmp_unsigned('!=', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
+    notkind1 = builder.icmp_unsigned('!=', uni_str.kind,
+                                     ir.Constant(uni_str.kind.type, 1))
     src_length = uni_str.length
 
     with builder.if_then(notkind1):
@@ -246,9 +249,12 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
     src2 = builder.bitcast(uni_str.data, ir.IntType(16).as_pointer())
     src4 = builder.bitcast(uni_str.data, ir.IntType(32).as_pointer())
-    kind1 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 1))
-    kind2 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 2))
-    kind4 = builder.icmp_unsigned('==', uni_str.kind, ir.Constant(uni_str.kind.type, 4))
+    kind1 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 1))
+    kind2 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 2))
+    kind4 = builder.icmp_unsigned('==', uni_str.kind,
+                                  ir.Constant(uni_str.kind.type, 4))
     src_length = uni_str.length
 
     lty = context.get_value_type(toty)
@@ -362,19 +368,23 @@ def charseq_len(s):
 def charseq_concat(a, b):
     if not _same_kind(a, b):
         return
-    if (isinstance(a, types.UnicodeCharSeq) and isinstance(b, types.UnicodeType)):
+    if (isinstance(a, types.UnicodeCharSeq) and
+            isinstance(b, types.UnicodeType)):
         def impl(a, b):
             return str(a) + b
         return impl
-    if (isinstance(b, types.UnicodeCharSeq) and isinstance(a, types.UnicodeType)):
+    if (isinstance(b, types.UnicodeCharSeq) and
+            isinstance(a, types.UnicodeType)):
         def impl(a, b):
             return a + str(b)
         return impl
-    if (isinstance(a, types.UnicodeCharSeq) and isinstance(b, types.UnicodeCharSeq)):
+    if (isinstance(a, types.UnicodeCharSeq) and
+            isinstance(b, types.UnicodeCharSeq)):
         def impl(a, b):
             return str(a) + str(b)
         return impl
-    if (isinstance(a, (types.CharSeq, types.Bytes)) and isinstance(b, (types.CharSeq, types.Bytes))):
+    if (isinstance(a, (types.CharSeq, types.Bytes)) and
+            isinstance(b, (types.CharSeq, types.Bytes))):
         def impl(a, b):
             return (a._to_str() + b._to_str())._to_bytes()
         return impl
@@ -684,6 +694,36 @@ def unicode_charseq_find(a, b):
             return impl
 
 
+@overload_method(types.UnicodeCharSeq, 'rfind')
+@overload_method(types.CharSeq, 'rfind')
+@overload_method(types.Bytes, 'rfind')
+def unicode_charseq_rfind(a, b):
+    if isinstance(a, types.UnicodeCharSeq):
+        if isinstance(b, types.UnicodeCharSeq):
+            def impl(a, b):
+                return str(a).rfind(str(b))
+            return impl
+        if isinstance(b, types.UnicodeType):
+            def impl(a, b):
+                return str(a).rfind(b)
+            return impl
+    if isinstance(a, types.CharSeq):
+        if isinstance(b, (types.CharSeq, types.Bytes)):
+            def impl(a, b):
+                return a._to_str().rfind(b._to_str())
+            return impl
+    if isinstance(a, types.UnicodeType):
+        if isinstance(b, types.UnicodeCharSeq):
+            def impl(a, b):
+                return a.rfind(str(b))
+            return impl
+    if isinstance(a, types.Bytes):
+        if isinstance(b, types.CharSeq):
+            def impl(a, b):
+                return a._to_str().rfind(b._to_str())
+            return impl
+
+
 @overload_method(types.UnicodeCharSeq, 'startswith')
 @overload_method(types.CharSeq, 'startswith')
 @overload_method(types.Bytes, 'startswith')
@@ -724,7 +764,7 @@ def unicode_charseq_endswith(a, b):
             return impl
 
 
-@njit
+@register_jitable
 def _map_bytes(seq):
     return [s._to_bytes() for s in seq]
 
@@ -757,7 +797,8 @@ def unicode_charseq_split(a, sep=None, maxsplit=-1):
     if isinstance(a, (types.CharSeq, types.Bytes)):
         if isinstance(sep, (types.CharSeq, types.Bytes)):
             def impl(a, sep, maxsplit=-1):
-                return _map_bytes(a._to_str().split(sep._to_str(), maxsplit=maxsplit))
+                return _map_bytes(a._to_str().split(sep._to_str(),
+                                                    maxsplit=maxsplit))
             return impl
         if isinstance(sep, types.NoneType) or sep is None:
             if maxsplit == -1:

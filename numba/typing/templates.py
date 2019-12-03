@@ -298,8 +298,8 @@ class CallableTemplate(FunctionTemplate):
         if not isinstance(sig, Signature):
             # If not a signature, `sig` is assumed to be the return type
             if not isinstance(sig, types.Type):
-                raise TypeError("invalid return type for callable template: got %r"
-                                % (sig,))
+                raise TypeError("invalid return type for callable template: "
+                                "got %r" % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
             sig.recvr = self.recvr

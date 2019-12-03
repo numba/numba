@@ -24,7 +24,7 @@ from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization
 from numba.untyped_passes import PreserveIR
 from itertools import product
-from .support import TestCase, unittest
+from .support import TestCase, unittest, skip_py38_or_later
 
 
 class InlineTestPipeline(numba.compiler.CompilerBase):
@@ -32,8 +32,8 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
     metadata store"""
 
     def define_pipelines(self):
-        pipeline = DefaultPassBuilder.define_nopython_pipeline(self.state,
-                                                               "inliner_custom_pipe")
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "inliner_custom_pipe")
         # mangle the default pipeline and inject DCE and IR preservation ahead
         # of legalisation
 
@@ -419,6 +419,7 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
 
+    @skip_py38_or_later
     def test_inline_involved(self):
 
         fortran = njit(inline='always')(_gen_involved())
@@ -487,6 +488,37 @@ class TestOverloadInlining(InliningBase):
             return foo()
 
         self.check(impl, inline_expect={'foo': True})
+
+    def test_inline_always_kw_no_default(self):
+        # pass call arg by name that doesn't have default value
+        def foo(a, b):
+            return a + b
+
+        @overload(foo, inline='always')
+        def overload_foo(a, b):
+            return lambda a, b: a + b
+
+        def impl():
+            return foo(3, b=4)
+
+        self.check(impl, inline_expect={'foo': True})
+
+    def test_inline_stararg_error(self):
+        def foo(a, *b):
+            return a + b[0]
+
+        @overload(foo, inline='always')
+        def overload_foo(a, *b):
+            return lambda a, *b: a + b[0]
+
+        def impl():
+            return foo(3, 3, 5)
+
+        with self.assertRaises(NotImplementedError) as e:
+            self.check(impl, inline_expect={'foo': True})
+
+        self.assertIn("Stararg not supported in inliner for arg 1 *b",
+                      str(e.exception))
 
     def test_basic_inline_combos(self):
 
@@ -741,7 +773,8 @@ class TestOverloadInlining(InliningBase):
         def impl():
             a = bar(1)  # integer literal, should inline
             b = bar(2.3)  # float literal, should not inline
-            c = bar(3j)  # complex literal, should inline by virtue of cost model
+            # complex literal, should inline by virtue of cost model
+            c = bar(3j)
             return a + b + c
 
         # there should still be a `bar` not inlined
@@ -921,3 +954,7 @@ class TestInlineOptions(TestCase):
         self.assertFalse(model.is_never_inline)
         self.assertTrue(model.has_cost_model)
         self.assertIs(model.value, cost_model)
+
+
+if __name__ == '__main__':
+    unittest.main()

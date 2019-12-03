@@ -28,6 +28,7 @@ from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
+import operator
 
 import warnings
 from ..errors import NumbaParallelSafetyWarning
@@ -95,7 +96,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_output_arrays = numba.parfor.get_parfor_outputs(
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor.params, lowerer.fndesc.calltypes)
+        lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -366,8 +367,18 @@ def _lower_parfor_parallel(lowerer, parfor):
                     if isinstance(inst, ir.Assign):
                         rhs = inst.value
                         # We probably need to generalize this since it only does substitutions in
-                        # inplace_ginops.
+                        # inplace_binops.
                         if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and rhs.rhs.name == init_var.name:
+                            if config.DEBUG_ARRAY_OPT:
+                                print("Adding call to reduction", rhs)
+                            if rhs.fn == operator.isub:
+                                rhs.fn = operator.iadd
+                                rhs.immutable_fn = operator.add
+                            if rhs.fn == operator.itruediv or rhs.fn == operator.ifloordiv:
+                                rhs.fn = operator.imul
+                                rhs.immutable_fn = operator.mul
+                            if config.DEBUG_ARRAY_OPT:
+                                print("After changing sub to add or div to mul", rhs)
                             # Get calltype of rhs.
                             ct = lowerer.fndesc.calltypes[rhs]
                             assert(len(ct.args) == 2)
@@ -375,7 +386,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                             ctargs = (ct.args[0], redvar_typ)
                             # Update the signature of the call.
                             ct = ct.replace(args=ctargs)
-                            # Remove so we can re-insrt since calltypes is unique dict.
+                            # Remove so we can re-insert since calltypes is unique dict.
                             lowerer.fndesc.calltypes.pop(rhs)
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
@@ -730,6 +741,12 @@ def legalize_names_with_typemap(names, typemap):
             typemap[y] = typemap[x]
     return outdict
 
+def to_scalar_from_0d(x):
+    if isinstance(x, types.ArrayCompatible):
+        if x.ndim == 0:
+            return x.dtype
+    return x
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -772,7 +789,7 @@ def _create_gufunc_for_parfor_body(
     # Get all parfor reduction vars, and operators.
     typemap = lowerer.fndesc.typemap
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor_params, lowerer.fndesc.calltypes)
+        lowerer.func_ir, parfor, parfor_params, lowerer.fndesc.calltypes)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(
         list(
@@ -846,7 +863,7 @@ def _create_gufunc_for_parfor_body(
             print("pd type = ", typemap[pd], " ", type(typemap[pd]))
 
     # Get the types of each parameter.
-    param_types = [typemap[v] for v in parfor_params]
+    param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
     # Calculate types of args passed to gufunc.
     func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)] + parfor_red_arg_types
 

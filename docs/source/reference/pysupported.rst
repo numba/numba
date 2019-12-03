@@ -171,6 +171,8 @@ The following functions, attributes and methods are currently supported:
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
+* ``.isspace()``
+* ``.isidentifier()``
 * ``.find()``
 * ``.center()``
 * ``.ljust()``
@@ -182,7 +184,14 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.islower()``
+* ``.lower()``
 * ``.zfill()``
+* ``.rpartition()``
+* ``.count()``
+* ``.istitle()``
+* ``.rfind()``
+* ``.title()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -404,8 +413,10 @@ objects of different types, even if the types are compatible (for example,
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
-dict
-----
+.. _feature-typed-dict:
+
+Typed Dict
+''''''''''
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change
@@ -528,12 +539,14 @@ The following built-in functions are supported:
 * :class:`complex`
 * :func:`divmod`
 * :func:`enumerate`
+* :func:`filter`
 * :class:`float`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`
+* :func:`map`
 * :func:`max`
 * :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument

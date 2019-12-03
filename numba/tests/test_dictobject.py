@@ -1229,6 +1229,23 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Value is correctly updated
         self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
+    @skip_py2
+    def test_storage_model_mismatch(self):
+        # https://github.com/numba/numba/issues/4520
+        # check for storage model mismatch in refcount ops generation
+        dct = Dict()
+        ref = [
+            ("a", True, "a"),
+            ("b", False, "b"),
+            ("c", False, "c"),
+        ]
+        # populate
+        for x in ref:
+            dct[x] = x
+        # test
+        for i, x in enumerate(ref):
+            self.assertEqual(dct[x], x)
+
 
 class TestDictForbiddenTypes(TestCase):
     def assert_disallow(self, expect, callable):
@@ -1238,7 +1255,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assertIn(expect, msg)
 
     def assert_disallow_key(self, ty):
-        msg = '{} as key is forbidded'.format(ty)
+        msg = '{} as key is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
@@ -1247,7 +1264,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
-        msg = '{} as value is forbidded'.format(ty)
+        msg = '{} as value is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit

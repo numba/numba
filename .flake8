@@ -7,7 +7,7 @@ ignore =
     E741,  # Ambiguous variable names
     W503,  # line break before binary operator
     W504,  # line break after binary operator
-max-line-length = 120
+max-line-length = 80
 
 exclude =
     __pycache__
@@ -243,7 +243,6 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
@@ -333,7 +332,6 @@ exclude =
     numba/tests/npyufunc/test_errors.py
     numba/tests/npyufunc/test_vectorize_decor.py
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
-    numba/tests/npyufunc/test_dufunc.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
     numba/typing/cmathdecl.py
@@ -394,8 +392,6 @@ exclude =
     numba/testing/main.py
     numba/unsafe/ndarray.py
     numba/npyufunc/deviceufunc.py
-    numba/npyufunc/dufunc.py
-    numba/npyufunc/ufuncbuilder.py
     numba/npyufunc/sigparse.py
     numba/npyufunc/parfor.py
     numba/npyufunc/array_exprs.py

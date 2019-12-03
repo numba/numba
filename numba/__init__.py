@@ -26,8 +26,6 @@ from .errors import *
 # Re-export all type names
 from .types import *
 
-from .smartarray import SmartArray
-
 # Re-export decorators
 from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
                          jit_module)
@@ -44,9 +42,6 @@ from .jitclass import jitclass
 # Initialize withcontexts
 import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode
-
-# Initialize typed containers
-import numba.typed
 
 # Enable bytes/unicode array support (Python 3.x only)
 from .utils import IS_PY3
@@ -78,7 +73,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 29, 0)
+_min_llvmlite_version = (0, 31, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():
@@ -188,3 +183,15 @@ import llvmlite
 Is set to True if Intel SVML is in use.
 """
 config.USING_SVML = _try_enable_svml()
+
+
+# ---------------------- WARNING WARNING WARNING ----------------------------
+# The following imports occur below here (SVML init) because somewhere in their
+# import sequence they have a `@njit` wrapped function. This triggers too early
+# a bind to the underlying LLVM libraries which then irretrievably sets the LLVM
+# SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
+# context.
+# ---------------------- WARNING WARNING WARNING ----------------------------
+
+# Initialize typed containers
+import numba.typed

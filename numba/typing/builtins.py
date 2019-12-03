@@ -46,7 +46,8 @@ class Abs(ConcreteTemplate):
 @infer_global(slice)
 class Slice(ConcreteTemplate):
     cases = [
-        signature(types.slice2_type),
+        signature(types.slice2_type, types.intp),
+        signature(types.slice2_type, types.none),
         signature(types.slice2_type, types.none, types.none),
         signature(types.slice2_type, types.none, types.intp),
         signature(types.slice2_type, types.intp, types.none),
@@ -54,7 +55,11 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
+        signature(types.slice3_type, types.intp, types.intp, types.none),
+        signature(types.slice3_type, types.intp, types.none, types.none),
+        signature(types.slice3_type, types.none, types.intp, types.none),
         signature(types.slice3_type, types.none, types.none, types.intp),
+        signature(types.slice3_type, types.none, types.none, types.none),
     ]
 
 
@@ -725,6 +730,20 @@ class SliceAttribute(AttributeTemplate):
 
     def resolve_step(self, ty):
         return types.intp
+
+    @bound_function("slice.indices")
+    def resolve_indices(self, ty, args, kws):
+        assert not kws
+        if len(args) != 1:
+            raise TypeError(
+                "indices() takes exactly one argument (%d given)" % len(args)
+            )
+        typ, = args
+        if not isinstance(typ, types.Integer):
+            raise TypeError(
+                "'%s' object cannot be interpreted as an integer" % typ
+            )
+        return signature(types.UniTuple(types.intp, 3), types.intp)
 
 
 #-------------------------------------------------------------------------------

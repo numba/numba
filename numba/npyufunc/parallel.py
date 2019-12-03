@@ -17,7 +17,6 @@ import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
-from contextlib import contextmanager
 
 import numpy as np
 
@@ -266,9 +265,14 @@ _backend_init_thread_lock = threadRLock()
 _windows = sys.platform.startswith('win32')
 
 
-@contextmanager
-def _nop():
-    yield
+class _nop(object):
+    """A no-op contextmanager
+    """
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
 
 
 try:
@@ -291,8 +295,8 @@ except OSError as e:
            "A likely cause of this problem is '/dev/shm' is missing or"
            "read-only such that necessary semaphores cannot be written.\n"
            "*** The responsibility of ensuring multiprocessing safe access to "
-           "this initialization sequence/module import is deferred to the user! "
-           "***\n")
+           "this initialization sequence/module import is deferred to the "
+           "user! ***\n")
     warnings.warn(msg % str(e))
 
     _backend_init_process_lock = _nop()
@@ -333,8 +337,8 @@ def _launch_threads():
                     except ImportError:
                         pass
                 elif backend.startswith("omp"):
-                    # TODO: Check that if MKL is present that it is a version that
-                    # understands GNU OMP might be present
+                    # TODO: Check that if MKL is present that it is a version
+                    # that understands GNU OMP might be present
                     try:
                         from . import omppool as lib
                     except ImportError:

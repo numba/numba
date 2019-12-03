@@ -24,6 +24,7 @@ Build and Packaging
   installed package from git tags
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
+- :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 - :ghfile:`buildscripts/remove_unwanted_files.py` - Helper script to remove
   files that will not compile under Python 2. Used by build recipes.
@@ -335,13 +336,6 @@ a function and convert it into multithreaded gufunc calls.
   ParallelAccelerator
 
 
-Deprecated Functionality
-''''''''''''''''''''''''
-
-- :ghfile:`numba/smartarray.py` - Experiment with an array object that has
-  both CPU and GPU backing.  Should be removed in future.
-
-
 Debugging Support
 '''''''''''''''''
 
@@ -416,7 +410,6 @@ typing and implementation to be specified together.
 - :ghfile:`numba/targets/options.py` - Container for options that control
   lowering
 - :ghfile:`numba/targets/printimpl.py` - Print function
-- :ghfile:`numba/targets/smartarray.py` - Smart array (deprecated)
 - :ghfile:`numba/targets/cmathimpl.py` - Python complex math module
 - :ghfile:`numba/targets/optional.py` - Special type representing value or
   ``None``
