@@ -170,6 +170,8 @@ class OneAPIKernel(OneAPIKernelBase):
         # cached finalized program
         #self._cacheprog = _CachedProgram(entry_name=self.entry_name,
         #                                 binary=self.binary)
+        # First-time compilation using SPIRV-Tools
+        self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
 
     #def bind(self):
     #    """
@@ -179,8 +181,6 @@ class OneAPIKernel(OneAPIKernelBase):
 
     def __call__(self, *args):
 
-        # First-time compilation using SPIRV-Tools
-        spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
         
         # Make a library call that does the following:
         #    i.   create a program
