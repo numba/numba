@@ -39,7 +39,7 @@ ffibuilder.cdef("""
                     NUMBA_ONEAPI_SUCCESS = 0,
                     NUMBA_ONEAPI_FAILURE = -1
                 };
-                
+
 
                 typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
                 {
@@ -47,8 +47,8 @@ ffibuilder.cdef("""
                     NUMBA_ONEAPI_WRITE_ONLY,
                     NUMBA_ONEAPI_READ_ONLY,
                 } mem_flags_t;
-                
-                
+
+
                 struct numba_oneapi_device_info_t
                 {
                     void *device;
@@ -56,44 +56,43 @@ ffibuilder.cdef("""
                     void *queue;
                     unsigned int max_work_item_dims;
                 };
-                
-                
+
+
                 typedef struct numba_oneapi_device_info_t device_t;
-                
+
                 struct numba_oneapi_platform_t
                 {
                     char *platform_name;
                     unsigned num_devices;
                 };
-                
-                
+
                 typedef struct numba_oneapi_platform_t platform_t;
-                
-                
+
+
                 struct numba_oneapi_buffer_t
                 {
                     void *buffer;
                 };
-                
+
                 typedef struct numba_oneapi_buffer_t* buffer_t;
-                
-                
+
+
                 struct numba_oneapi_kernel_t
                 {
                     void *kernel;
                 };
-                
+
                 typedef struct numba_oneapi_kernel_t kernel_t;
-                
-                
+
+
                 struct numba_oneapi_program_t
                 {
                     void *program;
                 };
-                
+
                 typedef struct numba_oneapi_program_t program_t;
-                
-                
+
+
                 struct numba_oneapi_runtime_t
                 {
                     unsigned num_platforms;
@@ -104,10 +103,10 @@ ffibuilder.cdef("""
                     device_t first_cpu_device;
                     device_t first_gpu_device;
                 };
-                
+
                 typedef struct numba_oneapi_runtime_t* runtime_t;
-                
-                
+
+
                 int create_numba_oneapi_runtime (runtime_t *rt);
                 int destroy_numba_oneapi_runtime (runtime_t *rt);
                 int create_numba_oneapi_rw_mem_buffer (const void *context_ptr,
@@ -132,8 +131,10 @@ ffibuilder.cdef("""
                                                               void* d_ptr);
             """)
 
+ffi_lib_name = "numba.oneapi.oneapidriver._numba_oneapi_pybindings"
+
 ffibuilder.set_source(
-    "_numba_oneapi_pybindings",
+    ffi_lib_name,
     """
          #include "numba_oneapi_glue.h"   // the C header of the library
     """,
