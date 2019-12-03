@@ -9,7 +9,7 @@ from numba.oneapi.oneapidriver import driver as oneapidrv
 
 @oneapi.jit
 def data_parallel_sum(a, b, c):
-    i = ocl.get_global_id(0)
+    i = oneapi.get_global_id(0)
     c[i] = a[i] + b[i]
 
 
