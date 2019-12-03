@@ -2,8 +2,8 @@ from __future__ import print_function
 
 from itertools import product
 
-from numba import njit, typed
-from numba.errors import UnsupportedError
+from numba import njit, typed, objmode
+from numba.errors import UnsupportedError, CompilerError
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
     skip_tryexcept_supported, MemoryLeakMixin
@@ -477,6 +477,38 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(list(out), [0xbe11] + list(range(5)))
         out = udt(10, raise_at=10)
         self.assertEqual(list(out), [0xbe11] + list(range(10)))
+
+
+class TestTryExceptOtherControlFlow(TestCase):
+    def test_yield(self):
+        @njit
+        def udt(n, x):
+            for i in range(n):
+                try:
+                    if i == x:
+                        raise ValueError
+                    yield i
+                except Exception:
+                    return
+
+        self.assertEqual(list(udt(10, 5)), list(range(5)))
+        self.assertEqual(list(udt(10, 10)), list(range(10)))
+
+    def test_objmode(self):
+        @njit
+        def udt():
+            try:
+                with objmode():
+                    print(object())
+            except Exception:
+                return
+
+        with self.assertRaises(CompilerError) as raises:
+            udt()
+        self.assertIn(
+            "Does not support with-context that contain branches",
+            str(raises.exception),
+        )
 
 
 if __name__ == '__main__':
