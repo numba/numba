@@ -821,11 +821,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_ok(np.int8(0), None, pyfunc, cfunc)
 
     def test_arange_3_arg(self):
+        windows64 = sys.platform.startswith('win32') and sys.maxsize > 2 ** 32
+
         def check_ok(arg0, arg1, arg2, pyfunc, cfunc, check_dtype=False):
             expected = pyfunc(arg0, arg1, arg2)
             got = cfunc(arg0, arg1, arg2)
             np.testing.assert_allclose(expected, got)
-            self.assertEqual(expected.dtype, got.dtype)
+            # windows 64 cannot differentiate between a python int and a
+            # np.int64 which means the result from numba is int64 more often
+            # than in NumPy.
+            if not windows64:
+                self.assertEqual(expected.dtype, got.dtype)
 
         for pyfunc in (np_arange_3, np_arange_2_step, np_arange_start_stop_step):
             cfunc = jit(nopython=True)(pyfunc)
@@ -842,7 +848,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(np.int8(0), np.int16(5), np.int32(1), pyfunc, cfunc)
             # check upcasting logic, this matters most on windows
             i8 = np.int8
-            check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # np.long
+            check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # C int
             check_ok(np.int64(0), i8(5), i8(1), pyfunc, cfunc, True) # int64
 
         pyfunc = np_arange_2_dtype
