@@ -306,12 +306,14 @@ def find_packages(root_dir, root_name):
 
 packages = find_packages("numba", "numba")
 
-build_requires = ['numpy']
+build_requires = ['numpy', 'cffi>=1.0.0']
 
-install_requires = ['llvmlite>=0.30.0dev0', 'numpy']
+install_requires = ['llvmlite>=0.30.0dev0', 'numpy', 'cffi>=1.0.0']
 install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
 install_requires.extend(['funcsigs; python_version < "3.3"'])
+
+modules_with_cffi=['./numba/oneapi/oneapidriver/driverapi.py:ffibuilder']
 
 metadata = dict(
     name='numba',
@@ -353,6 +355,7 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
+    cffi_modules=modules_with_cffi,
     license="BSD",
     cmdclass=cmdclass,
     )
