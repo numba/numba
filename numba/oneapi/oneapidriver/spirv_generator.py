@@ -1,29 +1,73 @@
 # A wrapper to connect to the SPIR-V binaries (Tools, Translator).
 # Currently, connect to commandline interface.
 from __future__ import print_function, absolute_import
-import sys, os
+import sys
+import os
 from subprocess import check_call, CalledProcessError, call
 import tempfile
 
 from numba import config
 
-os.environ['SPIRVDIR'] = os.environ.get('SPIRVDIR', '/opt/spirv')
-#os.environ['LLVMDIR'] = os.environ.get('LLVM_HOME', '/opt/llvm')
+BAD_spirv_tools_home_PATH_ERRMSG = """
+SPIRV_TOOLS_HOME is set to '{0}' which is not a valid path. Set this to the
+location where you installed SPIRV-Tools.
+"""
+
+BAD_LLVM_HOME_PATH_ERRMSG = """
+LLVM_HOME is set to '{0}' which is not a valid path. Set this to the
+location where the LLVM toolchain is installed.
+"""
+
+spirv_tools_home = os.environ.get('SPIRV_TOOLS_HOME', None)
+llvm_home = os.environ.get('LLVM_HOME', None)
+
+
+def _raise_bad_env_path(msg, path, extra=None):
+    error_message = msg.format(path)
+    if extra is not None:
+        error_message += extra
+    raise ValueError(error_message)
+
+
+if spirv_tools_home is None:
+    raise ValueError("FATAL: Correctly set the spirv_tools_home environment "
+                     "variable.")
+
+if spirv_tools_home is not None:
+    try:
+        oneapi_glue_home = os.path.abspath(spirv_tools_home)
+    except ValueError:
+        _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG, spirv_tools_home)
+
+    if not os.path.isfile(spirv_tools_home + "/bin/spirv-val"):
+        _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG,
+                            spirv_tools_home + "/bin/spirv-val")
+
+if llvm_home is not None:
+    try:
+        oneapi_glue_home = os.path.abspath(llvm_home)
+    except ValueError:
+        _raise_bad_env_path(BAD_LLVM_HOME_PATH_ERRMSG, llvm_home)
+
+    if not os.path.isfile(llvm_home + "/bin/opt"):
+        _raise_bad_env_path(BAD_LLVM_HOME_PATH_ERRMSG,
+                            llvm_home + "/bin/opt")
 
 _real_check_call = check_call
+
 
 def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
 
 
 class CmdLine(object):
-    CMD_AS = ("$SPIRVDIR/spirv-as "
+    CMD_AS = (spirv_tools_home + "/bin/spirv-as "
               # "--preserve-numeric-ids"
               # "--target_env {vulkan1.0|spv1.0|spv1.1|spv1.2}"
               "-o {fout} "
               "{fin}")
 
-    CMD_DIS = ("$SPIRVDIR/spirv-dis "
+    CMD_DIS = (spirv_tools_home + "/bin/spirv-dis "
                # "--no-indent"
                # "--no-header"
                # "--raw-id"
@@ -31,11 +75,11 @@ class CmdLine(object):
                "-o {fout} "
                "{fin}")
 
-    CMD_VAL = ("$SPIRVDIR/spirv-val "
+    CMD_VAL = (spirv_tools_home + "/bin/spirv-val "
                # "--target_env {vulkan1.0|spv1.0|spv1.1|spv1.2}"
                "{fin}")
 
-    CMD_OPT = ("$SPIRVDIR/spirv-opt "
+    CMD_OPT = (spirv_tools_home + "/bin/spirv-opt "
                # "--strip-debug"
                # "--freeze-spec-const"
                # "--eliminate-dead-const"
@@ -51,8 +95,8 @@ class CmdLine(object):
     # DRD : The opt step is needed for:
     #     a) generate a bitcode file from the text IR file
     #     b) hoist all allocas to the enty block of the module
-    CMD_LLVM_AS = ("/localdisk/work/diptorup/devel/llvm_sycl-public.install-Release/bin/opt -O3 -o {fout} {fin}")
-    CMD_GEN = ("/localdisk/work/diptorup/devel/llvm_sycl-public.install-Release/bin/llvm-spirv -o {fout} {fin} ")
+    CMD_LLVM_AS = (llvm_home + "/bin/opt -O3 -o {fout} {fin}")
+    CMD_GEN = (llvm_home + "/bin/llvm-spirv -o {fout} {fin} ")
 
     def assemble(self, ipath, opath):
         check_call(self.CMD_AS.format(fout=opath, fin=ipath), shell=True)
@@ -68,9 +112,12 @@ class CmdLine(object):
 
     def generate(self, ipath, opath):
         # DRD : Temporary hack to get SPIR-V code generation to work.
-        check_call(self.CMD_LLVM_AS.format(fout=ipath+'.bc', fin=ipath), shell=True)
-        check_call(self.CMD_GEN.format(fout=opath, fin=ipath+'.bc'), shell=True)
-        os.unlink(ipath+'.bc')
+        check_call(self.CMD_LLVM_AS.format(fout=ipath + '.bc', fin=ipath),
+                   shell=True)
+        check_call(self.CMD_GEN.format(
+            fout=opath, fin=ipath + '.bc'), shell=True)
+        os.unlink(ipath + '.bc')
+
 
 class Module(object):
     def __init__(self):
@@ -103,7 +150,7 @@ class Module(object):
         self._tempfiles.append(path)
         return path
 
-    #def _preprocess(self, llvmir):
+    # def _preprocess(self, llvmir):
     #    return adapt_llvm_version(llvmir)
 
     def load_llvm(self, llvmir):
