@@ -36,6 +36,10 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i)
 
+    def test_list_create_no_jit(self):
+        l = listobject.new_list(int32)
+        self.assertTrue(isinstance(l, list))
+
 
 class TestAllocation(MemoryLeakMixin, TestCase):
 
