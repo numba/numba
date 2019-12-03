@@ -30,7 +30,7 @@ def _raise_bad_env_path(msg, path, extra=None):
 
 
 if spirv_tools_home is None:
-    raise ValueError("FATAL: Correctly set the spirv_tools_home environment "
+    raise ValueError("FATAL: Correctly set the SPIRV_TOOLS_HOME environment "
                      "variable.")
 
 if spirv_tools_home is not None:
@@ -43,6 +43,9 @@ if spirv_tools_home is not None:
         _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG,
                             spirv_tools_home + "/bin/spirv-val")
 
+if llvm_home is None:
+    raise ValueError("FATAL: Correctly set the LLVM_HOME environment variable.")
+    
 if llvm_home is not None:
     try:
         oneapi_glue_home = os.path.abspath(llvm_home)

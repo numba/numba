@@ -7,6 +7,8 @@ from numpy import ndarray
 ffi = FFI()
 
 # Exception classes ######################################################
+
+
 class OneapiGlueDriverError(Exception):
     """A problem with the Numba-OneApi-Glue Python driver code
     """
@@ -87,6 +89,8 @@ class DeviceArray:
         return ffi.cast("void*", self._ndarray.ctypes.data)
 
 ############################## Device class ##############################
+
+
 class Device():
 
     _device_ptr = None
@@ -170,8 +174,12 @@ class Device():
             print("Error Code  : ", retval)
             _raise_driver_error("read_numba_oneapi_mem_buffer_from_device", -1)
 
+    def get_context(self):
+        return self._context_ptr
 
 ################################## Runtime class #########################
+
+
 class _Runtime():
     """Runtime is a singleton class that creates a numba_oneapi_runtime
     object. The numba_oneapi_runtime (runtime) object on creation
