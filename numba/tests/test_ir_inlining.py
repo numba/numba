@@ -867,7 +867,6 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             block_count=1,
         )
 
-
     def test_overload_attribute_always(self):
         @overload_attribute(self.DummyType, "inlineme", inline='always')
         def _get_inlineme(obj):

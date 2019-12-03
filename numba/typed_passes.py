@@ -482,7 +482,9 @@ class InlineOverloads(FunctionPass):
     def _do_work_getattr(self, state, work_list, block, i, expr):
         recv_type = state.type_annotation.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
-        matched = state.typingctx.find_matching_getattr_template(recv_type, expr.attr)
+        matched = state.typingctx.find_matching_getattr_template(
+            recv_type, expr.attr,
+        )
         if not matched:
             return False
         template = matched['template']
