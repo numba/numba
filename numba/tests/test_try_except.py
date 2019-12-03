@@ -2,11 +2,11 @@ from __future__ import print_function
 
 from itertools import product
 
-from numba import njit
+from numba import njit, typed
 from numba.errors import UnsupportedError
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
-    skip_tryexcept_supported,
+    skip_tryexcept_supported, MemoryLeakMixin
 )
 
 
@@ -431,6 +431,52 @@ class TestTryExceptUnsupported(TestCase):
             finally:
                 pass
         self.check(foo, True)
+
+
+class TestTryExceptRefct(MemoryLeakMixin, TestCase):
+    def test_list_direct_raise(self):
+        @njit
+        def udt(n, raise_at):
+            lst = typed.List()
+            try:
+                for i in range(n):
+                    if i == raise_at:
+                        raise IndexError
+                    lst.append(i)
+            except Exception:
+                return lst
+            else:
+                return lst
+
+        out = udt(10, raise_at=5)
+        self.assertEqual(list(out), list(range(5)))
+        out = udt(10, raise_at=10)
+        self.assertEqual(list(out), list(range(10)))
+
+    def test_list_indirect_raise(self):
+        @njit
+        def appender(lst, n, raise_at):
+            for i in range(n):
+                if i == raise_at:
+                    raise IndexError
+                lst.append(i)
+            return lst
+
+        @njit
+        def udt(n, raise_at):
+            lst = typed.List()
+            lst.append(0xbe11)
+            try:
+                appender(lst, n, raise_at)
+            except Exception:
+                return lst
+            else:
+                return lst
+
+        out = udt(10, raise_at=5)
+        self.assertEqual(list(out), [0xbe11] + list(range(5)))
+        out = udt(10, raise_at=10)
+        self.assertEqual(list(out), [0xbe11] + list(range(10)))
 
 
 if __name__ == '__main__':
