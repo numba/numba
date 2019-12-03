@@ -10,6 +10,12 @@ from numba import ctypes_support as ctypes
 from numba.oneapi.oneapidriver import spirv_generator
 
 
+def _raise_no_device_found_error():
+    error_message = ("No OpenCL device specified. "
+                     "Usage : jit_fn[device, globalsize, localsize](...)")
+    raise ValueError(error_message)
+
+
 def compile_with_oneapi(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
     from .descriptor import OneAPITargetDesc
@@ -39,11 +45,13 @@ def compile_with_oneapi(pyfunc, return_type, args, debug):
     return cres
 
 
-def compile_kernel(pyfunc, args, debug=False):
+def compile_kernel(device, pyfunc, args, debug=False):
+    print("Args : ", args)
     cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = OneAPIKernel(llvm_module=kernel.module,
+    oclkern = OneAPIKernel(device=device,
+                           llvm_module=kernel.module,
                            name=kernel.name,
                            argtypes=cres.signature.args)
     return oclkern
@@ -69,14 +77,13 @@ class OneAPIKernelBase(object):
     def __init__(self):
         self.global_size = (1,)
         self.local_size = (1,)
-        self.queue = None
+        self.device = None
 
     def copy(self):
         return copy.copy(self)
 
-    def configure(self, global_size, local_size=None, queue=None):
-        """Configure the OpenCL kernel
-        local_size can be None
+    def configure(self, device, global_size, local_size=None):
+        """Configure the OpenCL kernel local_size can be None
         """
         global_size = _ensure_list(global_size)
 
@@ -89,7 +96,7 @@ class OneAPIKernelBase(object):
         clone = self.copy()
         clone.global_size = tuple(global_size)
         clone.local_size = tuple(local_size) if local_size else None
-        clone.queue = queue
+        clone.device = device
 
         return clone
 
@@ -106,64 +113,56 @@ class OneAPIKernelBase(object):
         The actual global_size is computed by multiplying the local_size to
         griddim.
         """
-        griddim = _ensure_list(args[0])
-        blockdim = _ensure_list(args[1])
+
+        print("Get getitem args...")
+        device = args[0]
+        griddim = _ensure_list(args[1])
+        blockdim = _ensure_list(args[2])
         size = max(len(griddim), len(blockdim))
         _ensure_size_or_append(griddim, size)
         _ensure_size_or_append(blockdim, size)
         # Compute global_size
         gs = [g * l for g, l in zip(griddim, blockdim)]
-        return self.configure(gs, blockdim, *args[2:])
+        return self.configure(device, gs, blockdim)
 
 
-_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
-                                          'kernarg_region'])
+#_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
+#                                          'kernarg_region'])
 
 
-class _CachedProgram(object):
-    def __init__(self, entry_name, binary):
-        self._entry_name = entry_name
-        self._binary = binary
-        # key: ocl context
-        self._cache = {}
-
-    def get(self):
-        from .ocldrv import devices
-
-        device = devices.get_device()
-
-        print("DEBUG: Selected Device is :", devices.gpu.name.decode())
-        print("DEBUG: OpenCL version : ", device.opencl_version)
-        context = devices.get_context()
-
-        result = self._cache.get(context)
-        if result is not None:
-            program = result[1]
-            kernel = result[2]
-        else: 
-            # The program has not been finalized for this device
-            # Build according to the OpenCL version, 2.0 or 2.1
-            if device.opencl_version == (2,0):
-                spir2_bc = spir2.llvm_to_spir2(self._binary)
-                program = context.create_program_from_binary(spir2_bc)
-            elif device.opencl_version == (2,1):
-                spirv_bc = spirv.llvm_to_spirv(self._binary)
-                program = context.create_program_from_il(spirv_bc)
-
-            program.build()
-            kernel = program.create_kernel(self._entry_name)
-
-            # Cache the just built cl_program, its cl_device and a cl_kernel
-            self._cache[context] = (device,program,kernel)
-
-        return context, device, program, kernel
+#class _CachedProgram(object):
+#    def __init__(self, entry_name, binary):
+#        self._entry_name = entry_name
+#        self._binary = binary
+#        # key: ocl context
+#        self._cache = {}
+#
+#    def get(self, device):
+#        context = device.get_context()
+#        result = self._cache.get(context)
+#
+#        if result is not None:
+#            program = result[1]
+#            kernel = result[2]
+#        else:
+#            # First-time compilation
+#            spirv_bc = spirv.llvm_to_spirv(self._binary)
+#            program = context.create_program_from_il(spirv_bc)
+#            program.build()
+#            kernel = program.create_kernel(self._entry_name)
+#
+#            # Cache the just built cl_program, its cl_device and a cl_kernel
+#            self._cache[context] = (device, program, kernel)
+#
+#        return context, device, program, kernel
 
 
 class OneAPIKernel(OneAPIKernelBase):
     """
     A OCL kernel object
     """
-    def __init__(self, llvm_module, name, argtypes):
+
+    def __init__(self, device, llvm_module, name, argtypes):
         super(OneAPIKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
@@ -171,53 +170,66 @@ class OneAPIKernel(OneAPIKernelBase):
         self.argument_types = tuple(argtypes)
         self._argloc = []
         # cached finalized program
-        self._cacheprog = _CachedProgram(entry_name=self.entry_name,
-                                         binary=self.binary)
+        #self._cacheprog = _CachedProgram(entry_name=self.entry_name,
+        #                                 binary=self.binary)
 
-    def bind(self):
-        """
-        Bind kernel to device
-        """
-        return self._cacheprog.get()
-
+    #def bind(self):
+    #    """
+    #    Bind kernel to device
+    #    """
+    #    return self._cacheprog.get(self.device)
 
     def __call__(self, *args):
-        context, device, program, kernel = self.bind()
-        queue = devices.get_queue()
+
+        # First-time compilation using SPIRV-Tools
+        spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
+        
+        # Make a library call that does the following:
+        #    i.   create a program
+        #    ii.  create a kernel
+        #    iii. sets args to the kernel
+        #    iv.  enqueues the kernel
+        raise ValueError("TODO")
+        #program = context.create_program_from_il(spirv_bc)
+        #program.build()
+        #kernel = program.create_kernel(self._entry_name)
+
+        #context, device, program, kernel = self.bind()
+        #queue = devices.get_queue()
 
         # Unpack pyobject values into ctypes scalar values
-        retr = []  # hold functors for writeback
-        kernelargs = []
-        for ty, val in zip(self.argument_types, args):
-            self._unpack_argument(ty, val, queue, retr, kernelargs)
+        #retr = []  # hold functors for writeback
+        #kernelargs = []
+        #for ty, val in zip(self.argument_types, args):
+        #    self._unpack_argument(ty, val, queue, retr, kernelargs)
 
         # Insert kernel arguments
-        kernel.set_args(kernelargs)
+        #kernel.set_args(kernelargs)
 
         # Invoke kernel
-        queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
-                                      self.global_size, self.local_size)
-        queue.finish()
+        #queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
+        #                              self.global_size, self.local_size)
+        #queue.finish()
 
         # retrieve auto converted arrays
-        for wb in retr:
-            wb()
+        #for wb in retr:
+        #    wb()
 
     def _unpack_argument(self, ty, val, queue, retr, kernelargs):
         """
         Convert arguments to ctypes and append to kernelargs
         """
         if isinstance(ty, types.Array):
-            
+
             # DRD: This unpack routine is commented out for the time-being.
             # NUMBA does not know anything about SmartArrayTypes.
-            
-            #if isinstance(ty, types.SmartArrayType):
+
+            # if isinstance(ty, types.SmartArrayType):
             #    devary = val.get('gpu')
             #    retr.append(lambda: val.mark_changed('gpu'))
             #    outer_parent = ctypes.c_void_p(0)
             #    kernelargs.append(outer_parent)
-            #else:
+            # else:
             devary, conv = devicearray.auto_device(val, stream=queue)
             if conv:
                 retr.append(lambda: devary.copy_to_host(val, stream=queue))
@@ -228,7 +240,7 @@ class OneAPIKernel(OneAPIKernelBase):
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
             itemsize = c_intp(devary.dtype.itemsize)
-            data = driver.device_pointer(devary) # @@
+            data = driver.device_pointer(devary)  # @@
             kernelargs.append(meminfo)
             kernelargs.append(parent)
             kernelargs.append(nitems)
@@ -266,8 +278,10 @@ class OneAPIKernel(OneAPIKernelBase):
         else:
             raise NotImplementedError(ty, val)
 
+
 class AutoJitOneAPIKernel(OneAPIKernelBase):
     def __init__(self, func):
+        print("AutoJITOneAPIKernel init...")
         super(AutoJitOneAPIKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
@@ -277,16 +291,18 @@ class AutoJitOneAPIKernel(OneAPIKernelBase):
         self.typingctx = OneAPITargetDesc.typingctx
 
     def __call__(self, *args):
+        if self.device is None:
+            _raise_no_device_found_error()
         kernel = self.specialize(*args)
-        cfg = kernel.configure(self.global_size, self.local_size, self.queue)
+        cfg = kernel.configure(self.device, self.global_size, self.local_size)
         cfg(*args)
 
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
         kernel = self.definitions.get(argtypes)
+
         if kernel is None:
-            kernel = compile_kernel(self.py_func, argtypes)
+            kernel = compile_kernel(self.device, self.py_func, argtypes)
             self.definitions[argtypes] = kernel
         return kernel
-
