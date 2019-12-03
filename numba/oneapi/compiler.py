@@ -44,8 +44,8 @@ def compile_kernel(pyfunc, args, debug=False):
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
     oclkern = OneAPIKernel(llvm_module=kernel.module,
-                        name=kernel.name,
-                        argtypes=cres.signature.args)
+                           name=kernel.name,
+                           argtypes=cres.signature.args)
     return oclkern
 
 
@@ -235,12 +235,12 @@ class _CachedProgram(object):
         return context, device, program, kernel
 
 
-class OneApiKernel(OneAPIKernelBase):
+class OneAPIKernel(OneAPIKernelBase):
     """
     A OCL kernel object
     """
     def __init__(self, llvm_module, name, argtypes):
-        super(OneApiKernel, self).__init__()
+        super(OneAPIKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
         self.entry_name = name
