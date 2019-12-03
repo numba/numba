@@ -12,7 +12,7 @@ from numba import cgutils
 from numba import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from numba.oneapi import target
-from numba.oneapi import stubs
+from . import stubs
 from numba.oneapi import enums
 from numba.oneapi.codegen import SPIR_DATA_LAYOUT
 

@@ -4,7 +4,8 @@ from numba.typing.npydecl import register_number_classes
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, MacroTemplate,
                                     signature, Registry)
-from numba import ocl
+#from numba import ocl
+from . import stubs as ocl
 
 registry = Registry()
 intrinsic = registry.register
@@ -75,16 +76,16 @@ class Ocl_sub_group_barrier(ConcreteTemplate):
 
 # ocl.shared submodule -------------------------------------------------------
 
-class Ocl_shared_array(MacroTemplate):
-    key = ocl.shared.array
+#class Ocl_shared_array(MacroTemplate):
+#    key = ocl.shared.array
 
 
 @intrinsic_attr
-class OclSharedTemplate(AttributeTemplate):
-    key = types.Module(ocl.shared)
+#class OclSharedTemplate(AttributeTemplate):
+#    key = types.Module(ocl.shared)
 
-    def resolve_array(self, mod):
-        return types.Macro(Ocl_shared_array)
+#    def resolve_array(self, mod):
+#        return types.Macro(Ocl_shared_array)
 
 # OpenCL module --------------------------------------------------------------
 
@@ -122,8 +123,8 @@ class OclModuleTemplate(AttributeTemplate):
     def resolve_sub_group_barrier(self, mod):
         return types.Function(Ocl_sub_group_barrier)
 
-    def resolve_shared(self, mod):
-        return types.Module(ocl.shared)
+#    def resolve_shared(self, mod):
+#        return types.Module(ocl.shared)
 
 # intrinsic
 
