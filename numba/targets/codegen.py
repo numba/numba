@@ -284,10 +284,6 @@ class CodeLibrary(object):
         """
         Make the underlying LLVM module ready to use.
         """
-        if self._name == "f1":
-            import pdb
-            #pdb.set_trace()
-
         self._finalize_dynamic_globals()
         self._verify_declare_only_symbols()
 
