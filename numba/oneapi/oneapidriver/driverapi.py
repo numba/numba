@@ -131,6 +131,24 @@ ffibuilder.cdef("""
                                                               size_t offset,
                                                               size_t buffersize,
                                                               void* d_ptr);
+                int create_and_build_numba_oneapi_program_from_spirv (
+                                                      const device_t *d_ptr,
+                                                      const void *il,
+                                                      size_t length,
+                                                      program_t *program_ptr);
+                int create_and_build_numba_oneapi_program_from_source (
+                                                       const device_t *d_ptr,
+                                                       unsigned int count,
+                                                       const char **strings,
+                                                       const size_t *lengths,
+                                                       program_t *program_ptr);
+                int destroy_numba_oneapi_program (program_t *program_ptr);
+                int create_numba_oneapi_kernel (
+                                void *context_ptr,
+                                program_t program_ptr,
+                                const char *kernel_name,
+                                kernel_t *kernel_ptr);
+                int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr);
             """)
 
 ffi_lib_name = "numba.oneapi.oneapidriver._numba_oneapi_pybindings"

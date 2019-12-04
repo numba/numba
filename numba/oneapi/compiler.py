@@ -172,6 +172,7 @@ class OneAPIKernel(OneAPIKernelBase):
         #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
+        print("OneAPIKernel:", self.spirv_bc, type(self.spirv_bc))
 
     #def bind(self):
     #    """
