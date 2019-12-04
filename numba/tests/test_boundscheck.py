@@ -189,6 +189,7 @@ class TestBoundsCheckError(unittest.TestCase):
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
 
+
 class TestBoundsEnvironmentVariable(unittest.TestCase):
     def setUp(self):
         self.old_boundscheck = config.BOUNDSCHECK
@@ -241,6 +242,7 @@ class TestBoundsEnvironmentVariable(unittest.TestCase):
 
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
+
 
 if __name__ == '__main__':
     unittest.main()
