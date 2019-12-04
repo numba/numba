@@ -609,6 +609,24 @@ def unicode_rfind(data, substr, start=None, end=None):
     return _rfind
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
+@overload_method(types.UnicodeType, 'index')
+def unicode_index(s, sub, start=None, end=None):
+    """Implements str.index()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
+
+    def index_impl(s, sub, start=None, end=None):
+        result = s.find(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return index_impl
+
+
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 
