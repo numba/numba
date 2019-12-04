@@ -84,7 +84,7 @@ ffibuilder.cdef("""
                     void *kernel;
                 };
 
-                typedef struct numba_oneapi_kernel_t kernel_t;
+                typedef struct numba_oneapi_kernel_t* kernel_t;
 
 
                 struct numba_oneapi_program_t
@@ -92,7 +92,7 @@ ffibuilder.cdef("""
                     void *program;
                 };
 
-                typedef struct numba_oneapi_program_t program_t;
+                typedef struct numba_oneapi_program_t* program_t;
 
 
                 struct numba_oneapi_runtime_t
@@ -131,11 +131,11 @@ ffibuilder.cdef("""
                                                               size_t offset,
                                                               size_t buffersize,
                                                               void* d_ptr);
-                int create_and_build_numba_oneapi_program_from_spirv (
-                                                      const device_t *d_ptr,
-                                                      const void *il,
-                                                      size_t length,
-                                                      program_t *program_ptr);
+                //int create_and_build_numba_oneapi_program_from_spirv (
+                //                                      const device_t *d_ptr,
+                //                                      const void *il,
+                //                                      size_t length,
+                //                                      program_t *program_ptr);
                 int create_and_build_numba_oneapi_program_from_source (
                                                        const device_t *d_ptr,
                                                        unsigned int count,
