@@ -1046,7 +1046,7 @@ def _count_args_types_check(arg):
 def unicode_lstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def lstrip_impl(string, chars):
+        def lstrip_impl(string, chars=None):
             return string.lstrip(str(chars))
         return lstrip_impl
 
