@@ -2959,7 +2959,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.assertEqual(a, b)
 
     def _fusion_equivalent(self, thing):
-        # parfors indexes the Parfors class instance id's from whereever the
+        # parfors indexes the Parfors class instance id's from wherever the
         # internal state happens to be. To assert fusion equivalence we just
         # check that the relative difference between fusion adjacency lists
         # is the same. For example:

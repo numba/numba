@@ -219,9 +219,11 @@ def _PyUnicode_IsDigit(ch):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L140-L145    # noqa: E501
 @register_jitable
 def _PyUnicode_IsNumeric(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.NUMERIC_MASK != 0
 
 
 @register_jitable
@@ -326,6 +328,7 @@ def _PyUnicode_IsSpace(ch):
 def _PyUnicode_IsAlpha(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.ALPHA_MASK != 0
+
 
 # End code related to/from CPython's unicodectype impl
 # ------------------------------------------------------------------------------
