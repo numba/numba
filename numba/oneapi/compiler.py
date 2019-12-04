@@ -128,7 +128,7 @@ class OneAPIKernelBase(object):
 #                                          'kernarg_region'])
 
 
-#class _CachedProgram(object):
+# class _CachedProgram(object):
 #    def __init__(self, entry_name, binary):
 #        self._entry_name = entry_name
 #        self._binary = binary
@@ -168,10 +168,10 @@ class OneAPIKernel(OneAPIKernelBase):
         self.argument_types = tuple(argtypes)
         self._argloc = []
         # cached finalized program
-        #self._cacheprog = _CachedProgram(entry_name=self.entry_name,
+        # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
         #                                 binary=self.binary)
 
-    #def bind(self):
+    # def bind(self):
     #    """
     #    Bind kernel to device
     #    """
@@ -181,36 +181,37 @@ class OneAPIKernel(OneAPIKernelBase):
 
         # First-time compilation using SPIRV-Tools
         spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
-        
+
         # Make a library call that does the following:
         #    i.   create a program
         #    ii.  create a kernel
         #    iii. sets args to the kernel
         #    iv.  enqueues the kernel
+
         raise ValueError("TODO")
         #program = context.create_program_from_il(spirv_bc)
-        #program.build()
+        # program.build()
         #kernel = program.create_kernel(self._entry_name)
 
         #context, device, program, kernel = self.bind()
         #queue = devices.get_queue()
 
         # Unpack pyobject values into ctypes scalar values
-        #retr = []  # hold functors for writeback
+        # retr = []  # hold functors for writeback
         #kernelargs = []
-        #for ty, val in zip(self.argument_types, args):
+        # for ty, val in zip(self.argument_types, args):
         #    self._unpack_argument(ty, val, queue, retr, kernelargs)
 
         # Insert kernel arguments
-        #kernel.set_args(kernelargs)
+        # kernel.set_args(kernelargs)
 
         # Invoke kernel
-        #queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
+        # queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
         #                              self.global_size, self.local_size)
-        #queue.finish()
+        # queue.finish()
 
         # retrieve auto converted arrays
-        #for wb in retr:
+        # for wb in retr:
         #    wb()
 
     def _unpack_argument(self, ty, val, queue, retr, kernelargs):
@@ -279,7 +280,6 @@ class OneAPIKernel(OneAPIKernelBase):
 
 class AutoJitOneAPIKernel(OneAPIKernelBase):
     def __init__(self, func):
-        print("AutoJITOneAPIKernel init...")
         super(AutoJitOneAPIKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
