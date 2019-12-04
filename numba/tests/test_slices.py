@@ -1,8 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+from functools import partial
 import itertools
 from itertools import chain, product, starmap
 import sys
+
+import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, typeof, utils, TypingError
@@ -16,9 +19,12 @@ def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
 
+def slice_construct_and_use(args, l):
+    sl = slice(*args)
+    return l[sl]
+
 def slice_indices(s, *indargs):
     return s.indices(*indargs)
-
 
 class TestSlices(MemoryLeakMixin, TestCase):
 
@@ -60,27 +66,79 @@ class TestSlices(MemoryLeakMixin, TestCase):
 
     def test_slice_constructor(self):
         """
-        Test the slice() constructor in nopython mode.
+        Test the 'happy path' for slice() constructor in nopython mode.
         """
         maxposint = sys.maxsize
         maxnegint = -maxposint - 1
+        a = np.arange(10)
         cfunc = jit(nopython=True)(slice_constructor)
-        for args, expected in [((), (0, maxposint, 1)),
-                               ((None, None), (0, maxposint, 1)),
-                               ((1, None), (1, maxposint, 1)),
-                               ((None, 2), (0, 2, 1)),
-                               ((1, 2), (1, 2, 1)),
-                               ((None, None, 3), (0, maxposint, 3)),
-                               ((None, 2, 3), (0, 2, 3)),
-                               ((1, None, 3), (1, maxposint, 3)),
-                               ((1, 2, 3), (1, 2, 3)),
-                               ((None, None, -1), (maxposint, maxnegint, -1)),
-                               ((10, None, -1), (10, maxnegint, -1)),
-                               ((None, 5, -1), (maxposint, 5, -1)),
-                               ((10, 5, -1), (10, 5, -1)),
-                               ]:
+        cfunc_use = jit(nopython=True)(slice_construct_and_use)
+        for args, expected in [
+            ((None,), (0, maxposint, 1)),
+            ((5,), (0, 5, 1)),
+            ((None, None), (0, maxposint, 1)),
+            ((1, None), (1, maxposint, 1)),
+            ((None, 2), (0, 2, 1)),
+            ((1, 2), (1, 2, 1)),
+            ((None, None, 3), (0, maxposint, 3)),
+            ((None, 2, 3), (0, 2, 3)),
+            ((1, None, 3), (1, maxposint, 3)),
+            ((1, 2, 3), (1, 2, 3)),
+            ((None, None, -1), (maxposint, maxnegint, -1)),
+            ((10, None, -1), (10, maxnegint, -1)),
+            ((None, 5, -1), (maxposint, 5, -1)),
+            ((10, 5, -1), (10, 5, -1)),
+        ]:
             got = cfunc(*args)
             self.assertPreciseEqual(got, expected)
+            usage = slice_construct_and_use(args, a)
+            cusage = cfunc_use(args, a)
+            self.assertPreciseEqual(usage, cusage)
+
+    def test_slice_constructor_cases(self):
+        """
+        Test that slice constructor behaves same in python and compiled code.
+        """
+        options = (None, -1, 0, 1)
+        arg_cases = chain.from_iterable(
+            product(options, repeat=n) for n in range(5)
+        )
+        array = np.arange(10)
+
+        cfunc = jit(nopython=True)(slice_construct_and_use)
+
+        self.disable_leak_check()
+        for args in arg_cases:
+            try:
+                expected = slice_construct_and_use(args, array)
+            except TypeError as py_type_e:
+                # Catch cases of 0, or more than 3 arguments.
+                # This becomes a typing error in numba
+                n_args = len(args)
+                self.assertRegexpMatches(
+                    str(py_type_e),
+                    r"slice expected at (most|least) (3|1) arguments?, got {}"
+                    .format(n_args)
+                )
+                with self.assertRaises(TypingError) as numba_e:
+                    cfunc(args, array)
+                self.assertIn(
+                    "Invalid use of Function",
+                    str(numba_e.exception)
+                )
+                self.assertIn(
+                    ", ".join(str(typeof(arg)) for arg in args),
+                    str(numba_e.exception)
+                )
+            except Exception as py_e:
+                with self.assertRaises(type(py_e)) as numba_e:
+                    cfunc(args, array)
+                self.assertIn(
+                    str(py_e),
+                    str(numba_e.exception)
+                )
+            else:
+                self.assertPreciseEqual(expected, cfunc(args, array))
 
     def test_slice_indices(self):
         """Test that a numba slice returns same result for .indices as a python one."""

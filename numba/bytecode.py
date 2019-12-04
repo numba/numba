@@ -16,6 +16,11 @@ from numba import errors, utils
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
+# The following offset is used as a hack to inject a NOP at the start of the
+# bytecode. So that function starting with `while True` will not have block-0
+# as a jump target. The Lowerer puts argument initialization at block-0.
+_FIXED_OFFSET = 2 if sys.version_info[0] >= 3 else 0
+
 
 def get_function_object(obj):
     """
@@ -116,6 +121,9 @@ else:
     NO_ARG_LEN = 0
 
 
+OPCODE_NOP = dis.opname.index('NOP')
+
+
 # Adapted from Lib/dis.py
 def _unpack_opargs(code):
     """
@@ -148,10 +156,25 @@ def _unpack_opargs(code):
         offset = i  # Mark inst offset at first extended
 
 
+def _patched_opargs(bc_stream):
+    """Patch the bytecode stream.
+
+    - Adds a NOP bytecode at the start to avoid jump target being at the entry.
+    """
+    # Injected NOP
+    yield (0, OPCODE_NOP, None, _FIXED_OFFSET)
+    # Adjust bytecode offset for the rest of the stream
+    for offset, opcode, arg, nextoffset in bc_stream:
+        # If the opcode has an absolute jump target, adjust it.
+        if opcode in JABS_OPS:
+            arg += _FIXED_OFFSET
+        yield offset + _FIXED_OFFSET, opcode, arg, nextoffset + _FIXED_OFFSET
+
+
 class ByteCodeIter(object):
     def __init__(self, code):
         self.code = code
-        self.iter = iter(_unpack_opargs(self.code.co_code))
+        self.iter = iter(_patched_opargs(_unpack_opargs(self.code.co_code)))
 
     def __iter__(self):
         return self
@@ -184,7 +207,7 @@ class ByteCode(object):
     def __init__(self, func_id):
         code = func_id.code
 
-        labels = set(dis.findlabels(code.co_code))
+        labels = set(x + _FIXED_OFFSET for x in dis.findlabels(code.co_code))
         labels.add(0)
 
         # A map of {offset: ByteCodeInst}
@@ -206,9 +229,12 @@ class ByteCode(object):
         Compute the line numbers for all bytecode instructions.
         """
         for offset, lineno in dis.findlinestarts(code):
-            if offset in table:
-                table[offset].lineno = lineno
-        known = -1
+            adj_offset = offset + _FIXED_OFFSET
+            if adj_offset in table:
+                table[adj_offset].lineno = lineno
+        # Assign unfilled lineno
+        # Start with first bytecode's lineno
+        known = table[_FIXED_OFFSET].lineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
