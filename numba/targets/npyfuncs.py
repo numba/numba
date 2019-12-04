@@ -462,6 +462,14 @@ def np_complex_power_impl(context, builder, sig, args):
 
 
 ########################################################################
+# numpy greatest common denominator
+
+def np_gcd_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    return mathimpl.gcd_impl(context, builder, sig, args)
+
+
+########################################################################
 # Numpy style complex sign
 
 def np_complex_sign_impl(context, builder, sig, args):

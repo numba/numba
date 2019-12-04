@@ -1,3 +1,4 @@
+import sys
 import operator
 
 import numpy as np
@@ -31,13 +32,14 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
                               _PyUnicode_ToTitleFull, _PyUnicode_IsSpace,
                               _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric)
 
 # DATA MODEL
 
@@ -374,15 +376,6 @@ def _cmp_region(a, a_offset, b, b_offset, n):
     return 0
 
 
-@register_jitable(_nrt=False)
-def _find(substr, s):
-    # Naive, slow string matching for now
-    for i in range(len(s) - len(substr) + 1):
-        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
 @register_jitable
 def _codepoint_to_kind(cp):
     """
@@ -493,87 +486,145 @@ def unicode_contains(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def contains_impl(a, b):
             # note parameter swap: contains(a, b) == b in a
-            return _find(substr=b, s=a) > -1
+            return _find(a, b) > -1
         return contains_impl
 
 
-@overload_method(types.UnicodeType, 'find')
-def unicode_find(a, b):
-    if isinstance(b, types.UnicodeType):
-        def find_impl(a, b):
-            return _find(substr=b, s=a)
-        return find_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def find_impl(a, b):
-            return a.find(str(b))
-        return find_impl
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
+@register_jitable
+def _adjust_indices(length, start, end):
+    if end > length:
+        end = length
+    if end < 0:
+        end += length
+        if end < 0:
+            end = 0
+    if start < 0:
+        start += length
+        if start < 0:
+            start = 0
+
+    return start, end
 
 
-@overload_method(types.UnicodeType, 'rfind')
-def unicode_rfind(s, substr, start=None, end=None):
-    """Implements str.rfind()"""
-    def unicode_rfind_check_type(ty, name):
-        """Check object belongs to one of specific types
-        ty: type
-            Type of the object
-        name: str
-            Name of the object
-        """
-        thety = ty
-        # if the type is omitted, the concrete type is the value
-        if isinstance(ty, types.Omitted):
-            thety = ty.value
-        # if the type is optional, the concrete type is the captured type
-        elif isinstance(ty, types.Optional):
-            thety = ty.type
+def unicode_idx_check_type(ty, name):
+    """Check object belongs to one of specific types
+    ty: type
+        Type of the object
+    name: str
+        Name of the object
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
 
-        accepted = (types.Integer, types.NoneType)
-        if thety is not None and not isinstance(thety, accepted):
-            raise TypingError(
-                '"{}" must be {}, not {}'.format(name, accepted, ty))
+    accepted = (types.Integer, types.NoneType)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
 
-    unicode_rfind_check_type(start, 'start')
-    unicode_rfind_check_type(end, 'end')
 
-    if not isinstance(substr, types.UnicodeType):
-        msg = 'must be {}, not {}'.format(types.UnicodeType, type(substr))
+def unicode_sub_check_type(ty, name):
+    """Check object belongs to unicode type"""
+    if not isinstance(ty, types.UnicodeType):
+        msg = '"{}" must be {}, not {}'.format(name, types.UnicodeType, ty)
         raise TypingError(msg)
 
-    def rfind_impl(s, substr, start=None, end=None):
-        length = len(s)
+
+def generate_finder(find_func):
+    """Generate finder either left or right."""
+    def impl(data, substr, start=None, end=None):
+        length = len(data)
         sub_length = len(substr)
         if start is None:
             start = 0
         if end is None:
             end = length
 
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354
-        def _adjust_indices(length, start, end):
-            if end > length:
-                end = length
-            if end < 0:
-                end += length
-                if end < 0:
-                    end = 0
-            if start < 0:
-                start += length
-                if start < 0:
-                    start = 0
-
-            return start, end
-
         start, end = _adjust_indices(length, start, end)
         if end - start < sub_length:
             return -1
 
-        if sub_length == 0:
-            return end
+        return find_func(data, substr, start, end)
 
-        for i in range(min(len(s), end) - len(substr), start - 1, -1):
-            if _cmp_region(s, i, substr, 0, len(substr)) == 0:
-                return i
-        return -1
-    return rfind_impl
+    return impl
+
+
+@register_jitable
+def _finder(data, substr, start, end):
+    """Left finder."""
+    if len(substr) == 0:
+        return start
+    for i in range(start, min(len(data), end) - len(substr) + 1):
+        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
+            return i
+    return -1
+
+
+@register_jitable
+def _rfinder(data, substr, start, end):
+    """Right finder."""
+    if len(substr) == 0:
+        return end
+    for i in range(min(len(data), end) - len(substr), start - 1, -1):
+        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
+            return i
+    return -1
+
+
+_find = register_jitable(generate_finder(_finder))
+_rfind = register_jitable(generate_finder(_rfinder))
+
+
+@overload_method(types.UnicodeType, 'find')
+def unicode_find(data, substr, start=None, end=None):
+    """Implements str.find()"""
+    if isinstance(substr, types.UnicodeCharSeq):
+        def find_impl(data, substr):
+            return data.find(str(substr))
+        return find_impl
+
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(substr, 'substr')
+
+    return _find
+
+
+@overload_method(types.UnicodeType, 'rfind')
+def unicode_rfind(data, substr, start=None, end=None):
+    """Implements str.rfind()"""
+    if isinstance(substr, types.UnicodeCharSeq):
+        def rfind_impl(data, substr):
+            return data.rfind(str(substr))
+        return rfind_impl
+
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(substr, 'substr')
+
+    return _rfind
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
+@overload_method(types.UnicodeType, 'index')
+def unicode_index(s, sub, start=None, end=None):
+    """Implements str.index()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
+
+    def index_impl(s, sub, start=None, end=None):
+        result = s.find(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return index_impl
 
 
 @overload_method(types.UnicodeType, 'count')
@@ -1480,6 +1531,51 @@ def unicode_istitle(s):
 
         return cased
     return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
+@overload_method(types.UnicodeType, 'isalnum')
+def unicode_isalnum(data):
+    """Implements UnicodeType.isalnum()"""
+
+    def impl(data):
+        length = len(data)
+
+        if length == 1:
+            code_point = _get_code_point(data, 0)
+            if data._is_ascii:
+                return _Py_ISALNUM(code_point)
+            return (_PyUnicode_IsNumeric(code_point) or
+                    _PyUnicode_IsAlpha(code_point))
+
+        if length == 0:
+            return False
+
+        if data._is_ascii:
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _Py_ISALNUM(code_point):
+                    return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if (not _PyUnicode_IsNumeric(code_point) and
+                    not _PyUnicode_IsAlpha(code_point)):
+                return False
+
+        return True
+
+    return impl
+
+
+if sys.version_info[:2] >= (3, 7):
+    @overload_method(types.UnicodeType, 'isascii')
+    def unicode_isascii(data):
+        """Implements UnicodeType.isascii()"""
+
+        def impl(data):
+            return data._is_ascii
+        return impl
 
 
 @overload_method(types.UnicodeType, 'islower')

@@ -3,7 +3,7 @@
 The tests here should exercise everything within an `@njit` context.
 Importantly, the tests should not return a typed list from within such a
 context as this would require code from numba/typed/typedlist.py (this is
-tested seperately).  Tests in this file build on each other in the order of
+tested separately).  Tests in this file build on each other in the order of
 writing. For example, the first test, tests the creation, append and len of the
 list. These are the barebones to do anything useful with a list. The subsequent
 test for getitem assumes makes use of these three operations and therefore
@@ -35,6 +35,38 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
 
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i)
+
+
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_list_allocation(self):
+        @njit
+        def foo_kwarg(n):
+            l = listobject.new_list(int32, allocated=n)
+            return l._allocated()
+
+        for i in range(16):
+            self.assertEqual(foo_kwarg(i), i)
+
+        @njit
+        def foo_posarg(n):
+            l = listobject.new_list(int32, n)
+            return l._allocated()
+        for i in range(16):
+            self.assertEqual(foo_posarg(i), i)
+
+    def test_list_allocation_negative(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32, -1)
+            return l._allocated()
+
+        with self.assertRaises(RuntimeError) as raises:
+            self.assertEqual(foo(), -1)
+        self.assertIn(
+            "expecting *allocated* to be >= 0",
+            str(raises.exception),
+        )
 
 
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):

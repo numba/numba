@@ -5,7 +5,8 @@ import numpy as np
 from numba import types, utils
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from .support import TestCase, tag, MemoryLeakMixin, skip_py38_or_later
+
 
 
 looplift_flags = Flags()
@@ -37,6 +38,7 @@ def lift2(x):
 
 def lift3(x):
     # Output variable from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     for i in range(a.shape[0]):
@@ -45,6 +47,7 @@ def lift3(x):
 
 def lift4(x):
     # Output two variables from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     d = 0
@@ -54,6 +57,7 @@ def lift4(x):
     return c + d
 
 def lift5(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner has a break statement
@@ -86,13 +90,14 @@ def reject1(x):
 
 
 def reject_gen1(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
 def reject_gen2(x):
-    # Outer needs object mode because of np.empty()
+    _ = object()
     a = np.arange(3)
     for i in range(a.size):
         # Middle has a yield => cannot loop-lift
@@ -106,13 +111,14 @@ def reject_gen2(x):
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
     for i in range(a.size):
-        # Inner uses np.arange() => cannot loop-lift unless
-        # enable_pyobject_looplift is enabled.
+        # Inner uses object() => cannot loop-lift
+        _ = object()
         a[i] = np.arange(i + 1)[i]
 
     return a
 
 
+@skip_py38_or_later
 class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
@@ -227,6 +233,7 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
+@skip_py38_or_later
 class TestLoopLiftingAnnotate(TestCase):
     def test_annotate_1(self):
         """
@@ -301,6 +308,7 @@ class TestLoopLiftingAnnotate(TestCase):
         self.assertIn("Loop at line {line}".format(line=line2), annotation)
 
 
+@skip_py38_or_later
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def assert_has_lifted(self, jitted, loopcount):
         lifted = jitted.overloads[jitted.signatures[0]].lifted
