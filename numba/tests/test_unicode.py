@@ -126,7 +126,7 @@ def replace_usecase(s, x, y):
 def replace_with_count_usecase(s, x, y, count):
     return s.replace(x, y, count)
 
-  
+
 def index_usecase(x, y):
     return x.index(y)
 
