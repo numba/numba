@@ -269,7 +269,6 @@ class ParallelOptions(object):
     Options for controlling auto parallelization.
     """
     def __init__(self, value):
-        self.csa = False
         self.gen_openmp = False
         if isinstance(value, bool):
             self.enabled = value
@@ -289,7 +288,6 @@ class ParallelOptions(object):
             self.stencil = value.pop('stencil', True)
             self.fusion = value.pop('fusion', True)
             self.prange = value.pop('prange', True)
-            self.csa = value.pop('csa', False)
             self.gen_openmp = value.pop('openmp', False)
             if value:
                 raise NameError("Unrecognized parallel options: %s" % value.keys())

@@ -35,9 +35,6 @@ import types as pytypes
 
 import warnings
 from ..errors import NumbaParallelSafetyWarning
-#from numba.targets import csa
-#from numba.targets.registry import csa_target
-#from numba.npyufunc import csa
 
 #multi_tile = True
 multi_tile = False
@@ -241,200 +238,6 @@ visit_vars_extensions[openmp_region_start] = visit_vars_openmp_region
 visit_vars_extensions[openmp_region_end] = visit_vars_openmp_region
 
 #----------------------------------------------------------------------------------------------
-
-class parallel_region_start(ir.Stmt):
-    def __init__(self, val, loc):
-        self.val = val
-        self.prs_var = None
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        llvm_int32_t = lc.Type.int(32)
-        param_var = context.get_constant(types.int32, self.val)
-        self.prs_var = cgutils.alloca_once(builder, llvm_int32_t)
-        fnty = lir.FunctionType(llvm_int32_t, [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.parallel.region.entry', (), fnty)
-        builder.store(builder.call(pre_fn, [param_var], tail=True), self.prs_var)
-
-class parallel_region_end(ir.Stmt):
-    def __init__(self, start_region, loc):
-        self.start_region = start_region
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        assert self.start_region.prs_var != None
-
-        llvm_int32_t = lc.Type.int(32)
-        fnty = lir.FunctionType(lc.Type.void(), [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.parallel.region.exit', (), fnty)
-        builder.call(pre_fn, [builder.load(self.start_region.prs_var)], tail=True)
-
-def parallel_region_start_infer(prs, typeinferer):
-    pass
-
-def parallel_region_end_infer(pre, typeinferer):
-    pass
-
-typeinfer.typeinfer_extensions[parallel_region_start] = parallel_region_start_infer
-typeinfer.typeinfer_extensions[parallel_region_end] = parallel_region_end_infer
-
-def _lower_parallel_region_start(lowerer, prs):
-    prs.lower(lowerer)
-
-def _lower_parallel_region_end(lowerer, pre):
-    pre.lower(lowerer)
-
-lowering.lower_extensions[parallel_region_start] = _lower_parallel_region_start
-lowering.lower_extensions[parallel_region_end] = _lower_parallel_region_end
-
-#----------------------------------------------------------------------------------------------
-
-class parallel_section_start(ir.Stmt):
-    def __init__(self, start_region, loc):
-        self.start_region = start_region
-        self.pss_var = None
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        assert self.start_region.prs_var != None
-
-        llvm_int32_t = lc.Type.int(32)
-        self.pss_var = cgutils.alloca_once(builder, llvm_int32_t)
-        fnty = lir.FunctionType(llvm_int32_t, [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.parallel.section.entry', (), fnty)
-        builder.store(builder.call(pre_fn, [builder.load(self.start_region.prs_var)], tail=True), self.pss_var)
-
-class parallel_section_end(ir.Stmt):
-    def __init__(self, start_section, loc):
-        self.start_section = start_section
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        assert self.start_section.pss_var != None
-
-        llvm_int32_t = lc.Type.int(32)
-        fnty = lir.FunctionType(lc.Type.void(), [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.parallel.section.exit', (), fnty)
-        builder.call(pre_fn, [builder.load(self.start_section.pss_var)], tail=True)
-
-def parallel_section_start_infer(prs, typeinferer):
-    pass
-
-def parallel_section_end_infer(pre, typeinferer):
-    pass
-
-typeinfer.typeinfer_extensions[parallel_section_start] = parallel_section_start_infer
-typeinfer.typeinfer_extensions[parallel_section_end] = parallel_section_end_infer
-
-def _lower_parallel_section_start(lowerer, prs):
-    prs.lower(lowerer)
-
-def _lower_parallel_section_end(lowerer, pre):
-    pre.lower(lowerer)
-
-lowering.lower_extensions[parallel_section_start] = _lower_parallel_section_start
-lowering.lower_extensions[parallel_section_end] = _lower_parallel_section_end
-
-#----------------------------------------------------------------------------------------------
-
-class parallel_spmd_start(ir.Stmt):
-    def __init__(self, val, loc):
-        self.val = val
-        self.prs_var = None
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        llvm_int32_t = lc.Type.int(32)
-        param_var = context.get_constant(types.int32, self.val)
-        self.prs_var = cgutils.alloca_once(builder, llvm_int32_t)
-        fnty = lir.FunctionType(llvm_int32_t, [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.spmdization.entry', (), fnty)
-        builder.store(builder.call(pre_fn, [param_var], tail=True), self.prs_var)
-
-class parallel_spmd_end(ir.Stmt):
-    def __init__(self, start_spmd, loc):
-        self.start_spmd = start_spmd
-        self.loc = loc
-
-    def lower(self, lowerer):
-        typingctx = lowerer.context.typing_context
-        targetctx = lowerer.context
-        typemap = lowerer.fndesc.typemap
-        context = lowerer.context
-        builder = lowerer.builder
-        library = lowerer.library
-
-        assert self.start_spmd.prs_var != None
-
-        llvm_int32_t = lc.Type.int(32)
-        fnty = lir.FunctionType(lc.Type.void(), [llvm_int32_t])
-        pre_fn = builder.module.declare_intrinsic('llvm.csa.spmdization.exit', (), fnty)
-        builder.call(pre_fn, [builder.load(self.start_spmd.prs_var)], tail=True)
-
-def parallel_spmd_start_infer(prs, typeinferer):
-    pass
-
-def parallel_spmd_end_infer(pre, typeinferer):
-    pass
-
-typeinfer.typeinfer_extensions[parallel_spmd_start] = parallel_spmd_start_infer
-typeinfer.typeinfer_extensions[parallel_spmd_end] = parallel_spmd_end_infer
-
-def _lower_parallel_spmd_start(lowerer, prs):
-    prs.lower(lowerer)
-
-def _lower_parallel_spmd_end(lowerer, pre):
-    pre.lower(lowerer)
-
-lowering.lower_extensions[parallel_spmd_start] = _lower_parallel_spmd_start
-lowering.lower_extensions[parallel_spmd_end] = _lower_parallel_spmd_end
-
-#----------------------------------------------------------------------------------------------
-
-class CSAFuncDescriptor(object):
-    def __init__(self, name, restype, argtypes):
-        self.mangled_name = name
-        self.restype = restype
-        self.argtypes = argtypes
-
-    @property
-    def llvm_func_name(self):
-        return self.mangled_name
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -646,7 +449,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # get the shape signature
     get_shape_classes = parfor.get_shape_classes
-    use_sched = True if (not targetctx.auto_parallel.csa or multi_tile) else False
+    use_sched = True
     if use_sched:
         func_args = ['sched'] + func_args
     num_reductions = len(parfor_redvars)
@@ -666,15 +469,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         print("loop_ranges = ", loop_ranges)
     if not use_sched:
         assert(0)
-#        call_csa_kernel(
-#            lowerer,
-#            func,
-#            func_sig,
-#            func_args,
-#            loop_ranges,
-#            parfor_redvars,
-#            parfor_reddict,
-#            parfor.init_block)
     else:
         gu_signature = _create_shape_signature(
             parfor.get_shape_classes,
@@ -1186,14 +980,12 @@ def _create_gufunc_for_parfor_body(
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
-    use_sched = True if (not targetctx.auto_parallel.csa or multi_tile) else False
+    use_sched = True
 
     # Get all the parfor params.
     parfor_params = parfor.params
     if not use_sched:
         for start, stop, step in loop_ranges:
-            if config.DEBUG_CSA:
-                print("start", start, type(start), "stop", stop, type(stop))
             if isinstance(start, ir.Var):
                 parfor_params.add(start.name)
             if isinstance(stop, ir.Var):
@@ -1352,16 +1144,6 @@ def _create_gufunc_for_parfor_body(
     # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
     # end_dim1, ..., end_dimN
     for eachdim in range(parfor_dim):
-        if config.DEBUG_CSA:
-            print("eachdim", eachdim)
-        if targetctx.auto_parallel.csa:
-#            for indent in range(eachdim + 1):
-#                gufunc_txt += "    "
-#            gufunc_txt += "numba.npyufunc.parfor.par_start_spmd(" + str(eachdim) + ", 4)\n"
-            for indent in range(eachdim + 1):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_start_region(" + str(eachdim) + ")\n"
-        
         for indent in range(eachdim + 1):
             gufunc_txt += "    "
         sched_dim = eachdim
@@ -1383,10 +1165,6 @@ def _create_gufunc_for_parfor_body(
                        str(sched_dim +
                            parfor_dim) +
                        "] + np.uint8(1)):\n")
-        if targetctx.auto_parallel.csa:
-            for indent in range(eachdim + 2):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_start_section(" + str(eachdim) + ")\n"
 
     if config.DEBUG_ARRAY_OPT_RUNTIME:
         for indent in range(parfor_dim + 1):
@@ -1402,18 +1180,6 @@ def _create_gufunc_for_parfor_body(
         gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
     
-    if targetctx.auto_parallel.csa:
-        for eachdim in reversed(range(parfor_dim)):
-            for indent in range(eachdim + 2):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_end_section(" + str(eachdim) + ")\n"
-            for indent in range(eachdim + 1):
-                gufunc_txt += "    "
-            gufunc_txt += "numba.npyufunc.parfor.par_end_region(" + str(eachdim) + ")\n"
-#            for indent in range(eachdim + 1):
-#                gufunc_txt += "    "
-#            gufunc_txt += "numba.npyufunc.parfor.par_end_spmd(" + str(eachdim) + ")\n"
-            
     # Add assignments of reduction variables (for returning the value)
     redargstartdim = {}
     for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -1464,79 +1230,6 @@ def _create_gufunc_for_parfor_body(
     prs_dict = {}
     pss_dict = {}
     pspmd_dict = {}
-
-    if targetctx.auto_parallel.csa:
-        # Create a new start block with parallel_region_start at the beginning.
-        min_label = min(gufunc_ir.blocks.keys())
-
-        loc = gufunc_ir.blocks[min_label].loc
-
-#        new_start_block = gufunc_ir.blocks[min_label].copy()
-#        new_start_block.clear()
-#        prs = parallel_region_start(1000, loc)
-#        new_start_block.append(prs)
-#        new_start_block.body.extend(gufunc_ir.blocks[min_label].body)
-#        gufunc_ir.blocks[min_label] = new_start_block
-
-        gufunc_ir._definitions = build_definitions(gufunc_ir.blocks)
-
-        # End the parallel region before each return statement.
-        for label, block in gufunc_ir.blocks.items():
-            new_block = block.copy()
-            new_block.clear()
-            for instr in block.body:
-                if isinstance(instr, ir.Assign):
-                    rhs = instr.value
-                    if isinstance(rhs, ir.Expr) and rhs.op == 'call':
-#                        print("definitions", gufunc_ir._definitions)
-                        #pdb.set_trace()
-#                        func_def = get_definition(gufunc_ir, rhs.func)
-                        callname = find_callname(gufunc_ir, rhs)
-#                        print("func_def", func_def, type(func_def))
-                        if callname[1] == 'numba.npyufunc.parfor':
-                            if callname[0] == 'par_start_region':
-                                psr_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                prs_dict[psr_loc] = parallel_region_start(1000, loc)
-                                new_block.append(prs_dict[psr_loc])
-                                continue
-                            elif callname[0] == 'par_end_region':
-                                per_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                new_block.append(parallel_region_end(prs_dict[per_loc], loc))
-                                continue
-                            elif callname[0] == 'par_start_section':
-                                pss_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                pss_dict[pss_loc] = parallel_section_start(prs_dict[pss_loc], loc)
-                                new_block.append(pss_dict[pss_loc])
-                                continue
-                            elif callname[0] == 'par_end_section':
-                                pes_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                new_block.append(parallel_section_end(pss_dict[pes_loc], loc))
-                                continue
-                            elif callname[0] == 'par_start_spmd':
-                                pss_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                pnum_threads = gufunc_ir._definitions[rhs.args[1].name][0].value
-                                pspmd_dict[pss_loc] = parallel_spmd_start(pnum_threads, loc)
-                                new_block.append(pspmd_dict[pss_loc])
-                                continue
-                            elif callname[0] == 'par_end_spmd':
-                                pes_loc = gufunc_ir._definitions[rhs.args[0].name][0].value
-                                new_block.append(parallel_spmd_end(pspmd_dict[pes_loc], loc))
-                                continue
-                new_block.append(instr)
-            gufunc_ir.blocks[label] = new_block
-            block = gufunc_ir.blocks[label]
-
-            if isinstance(block.body[-1], ir.Return):
-                new_block = block.copy()
-                new_block.clear()
-                new_block.body.extend(block.body[:-2])
-#                new_block.append(parallel_region_end(prs, block.loc))
-                new_block.append(block.body[-1])
-                gufunc_ir.blocks[label] = new_block
-
-        if config.DEBUG_ARRAY_OPT:
-            print("gufunc_ir after removing par functions")
-            gufunc_ir.dump()
 
     if use_sched:
         gufunc_param_types = [
@@ -1682,47 +1375,17 @@ def _create_gufunc_for_parfor_body(
 
     kernel_sig = signature(types.none, *gufunc_param_types)
 
-    if config.DEBUG_CSA:
-        print("Before compile gufunc.")
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
-    if targetctx.auto_parallel.csa:
-        ajck = csa.AutoJitCSAKernel(gufunc_ir, True, flags, {})
-        # Returns CSAKernel
-        kernel_func = ajck.compile(tuple(gufunc_param_types))
-        assert(isinstance(kernel_func, csa.CSAKernel))
-        if config.DEBUG_CSA:
-            print("After compile gufunc.")
-            print("kernel_func", kernel_func, type(kernel_func))
-            sys.stdout.flush()
-        kernel_func = compiler.compile_result(typing_context=typingctx,
-                                       target_context=targetctx,
-                                       entry_point=kernel_func.kernel,
-                                       signature=kernel_sig,
-                                       library=kernel_func.library,
-                                       fndesc=CSAFuncDescriptor(kernel_func.entry_name,
-                                                  kernel_sig.return_type,
-                                                  kernel_sig.args),
-                                       environment=lowerer.env)
-    else:
-        kernel_func = compiler.compile_ir(
-            typingctx,
-            targetctx,
-            gufunc_ir,
-            gufunc_param_types,
-            types.none,
-            flags,
-            locals)
-        if config.DEBUG_CSA:
-            print("After compile gufunc.")
-            print("kernel_func", kernel_func, type(kernel_func))
-            print("LLVM")
 
-            llvm_str = kernel_func.library.get_llvm_str()
-            llvm_out = gufunc_name + ".ll"
-            print(llvm_out, llvm_str)
-            with open(llvm_out, "w") as llvm_file:
-                llvm_file.write(llvm_str)
+    kernel_func = compiler.compile_ir(
+        typingctx,
+        targetctx,
+        gufunc_ir,
+        gufunc_param_types,
+        types.none,
+        flags,
+        locals)
 
     flags.noalias = old_alias
 
@@ -1764,50 +1427,6 @@ def replace_var_with_array(vars, loop_body, typemap, calltypes):
         typemap.pop(v, None)
         typemap[v] = types.npytypes.Array(el_typ, 1, "C")
 
-def call_csa_kernel(lowerer, cres, outer_sig, expr_args,
-                         loop_ranges, redvars, reddict, init_block):
-    # cres should be of type CSAKernel
-    #assert(isinstance(cres, csa.CSAKernel))
-    assert(isinstance(cres, compiler.CompileResult))
-    context = lowerer.context
-    builder = lowerer.builder
-    library = lowerer.library
-    if config.DEBUG_CSA:
-        print("call_csa_kernel", cres, type(cres))
-        print("outer_sig", outer_sig, type(outer_sig), outer_sig.return_type, outer_sig.args)
-        print(expr_args, loop_ranges, redvars, reddict, init_block)
-        print("context", context, type(context))
-
-    # Commonly used LLVM types and constants
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
-    intp_t = context.get_value_type(types.intp)
-    uintp_t = context.get_value_type(types.uintp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
-    zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
-    one_type = one.type
-    sizeof_intp = context.get_abi_sizeof(intp_t)
-
-    # init reduction array allocation here.
-    nredvars = len(redvars)
-    ninouts = len(expr_args) - nredvars
-    redarrs = []
-
-    # Prepare arguments: args, shapes, steps, data
-    if config.DEBUG_CSA:
-        print("expr_args[:ninouts]", expr_args[:ninouts], nredvars, ninouts)
-    all_args = [lowerer.loadvar(x) for x in expr_args[:ninouts]] + redarrs
-#    all_args = [lowerer.loadvar(x) for x in expr_args[:ninouts]]
-    if config.DEBUG_CSA:
-        print("all_args", all_args)
-
-    fndesc = funcdesc.ExternalFunctionDescriptor(cres.fndesc.llvm_func_name, outer_sig.return_type, outer_sig.args)
-    if config.DEBUG_CSA:
-        print("library", library, type(library))
-    context.call_internal(builder, fndesc, outer_sig, all_args)
-
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr_arg_types,
                          loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races):
     '''
@@ -1835,9 +1454,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # Build the wrapper for GUFunc
     args, return_type = sigutils.normalize_signature(outer_sig)
-    #if isinstance(cres, csa.CSAKernel):
-    #    llvm_func = cres.kernel
-    #else:
     llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
 
     if config.DEBUG_ARRAY_OPT:
