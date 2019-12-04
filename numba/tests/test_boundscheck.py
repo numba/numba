@@ -104,6 +104,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         # Doesn't raise
         boundscheck(b)
 
+    @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_no_cuda_boundscheck(self):
         with self.assertRaises(NotImplementedError):
             @cuda.jit(boundscheck=True)
