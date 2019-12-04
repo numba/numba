@@ -5,6 +5,8 @@ import sys
 
 ffibuilder = FFI()
 
+oneapiGlueHome = os.path.dirname(os.path.realpath(__file__))
+
 BAD_ENV_PATH_ERRMSG = """
 NUMBA_ONEAPI_GLUE_HOME is set to '{0}' which is not a valid path to a
 dynamic link library for your system.
@@ -16,11 +18,11 @@ def _raise_bad_env_path(path, extra=None):
         error_message += extra
     raise ValueError(error_message)
 
-oneapiGlueHome = os.environ.get('NUMBA_ONEAPI_GLUE_HOME', None)
+#oneapiGlueHome = os.environ.get('NUMBA_ONEAPI_GLUE_HOME', None)
 
-if oneapiGlueHome is None:
-    raise ValueError("FATAL: Set the NUMBA_ONEAPI_GLUE_HOME for "
-                     "numba_oneapi_glue.h and libnumbaoneapiglue.so")
+#if oneapiGlueHome is None:
+#    raise ValueError("FATAL: Set the NUMBA_ONEAPI_GLUE_HOME for "
+#                     "numba_oneapi_glue.h and libnumbaoneapiglue.so")
 
 if oneapiGlueHome is not None:
     try:
@@ -28,8 +30,8 @@ if oneapiGlueHome is not None:
     except ValueError:
         _raise_bad_env_path(oneapiGlueHome)
 
-    if not os.path.isfile(oneapiGlueHome+"/lib/libnumbaoneapiglue.so"):
-        _raise_bad_env_path(oneapiGlueHome+"/lib/libnumbaoneapiglue.so")
+    if not os.path.isfile(oneapiGlueHome+"/libnumbaoneapiglue.so"):
+        _raise_bad_env_path(oneapiGlueHome+"/libnumbaoneapiglue.so")
 
 # cdef() expects a single string declaring the C types, functions and
 # globals needed to use the shared object. It must be in valid C syntax.
@@ -139,8 +141,8 @@ ffibuilder.set_source(
          #include "numba_oneapi_glue.h"   // the C header of the library
     """,
     libraries=["numbaoneapiglue", "OpenCL"],
-    include_dirs=[oneapiGlueHome + "/include"],
-    library_dirs=[oneapiGlueHome + "/lib"]
+    include_dirs=[oneapiGlueHome],
+    library_dirs=[oneapiGlueHome]
 )   # library name, for the linker
 
 
