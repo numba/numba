@@ -823,17 +823,21 @@ class TestListBuiltinConstructors(TestCase):
         self.assertEqual(list, type(foo_false_received[1]))
 
     def test_square_bracket_builtin_from_iter_type_coercion(self):
-        @njit
         def foo():
-
             l = [1, 1.0]
             return l
-        expected = List()
-        expected.append(1.0)
-        expected.append(1.0)
-        received = foo()
+        foo_true, foo_false = self._njit_both(foo)
+        foo_true_expected = List()
+        foo_true_expected.append(1.0)
+        foo_true_expected.append(1.0)
+        foo_false_expected = [1.0, 1.0]
+        foo_true_received, foo_false_received = foo_true(), foo_false()
         # FIXME: the first item is coerced to float
-        self.assertEqual(expected, received)
+
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(List, type(foo_true_received))
+        self.assertEqual(list, type(foo_false_received))
 
     def test_square_bracket_builtin_from_iter_type_exception(self):
         @njit
@@ -852,7 +856,7 @@ class TestListBuiltinConstructors(TestCase):
 class TestConversionListToImmutableTypedList(TestCase):
 
     def test_simple_conversion(self):
-        @njit
+        @njit(disable_reflected_list=True)
         def foo(lst):
             return lst
         # Python list goes in and Numba immutable typed list comes out
@@ -863,7 +867,8 @@ class TestConversionListToImmutableTypedList(TestCase):
         self.assertEqual(received, expected)
 
     def test_nested_conversion(self):
-        @njit
+        # nested lists are incompatible with reflected list
+        @njit(disable_reflected_list=True)
         def foo(lst):
             return lst
         a = List()
