@@ -488,6 +488,11 @@ class InlineOverloads(FunctionPass):
         if not matched:
             return False
         template = matched['template']
+        if getattr(template, 'is_method', False):
+            # The attribute template is representing a method.
+            # Don't inline the getattr.
+            return False
+
         inline_type = getattr(template, '_inline', None)
         if inline_type is None:
             # inline not defined

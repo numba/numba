@@ -845,6 +845,23 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             block_count=1,
         )
 
+    def test_overload_method_default_args_always(self):
+        @overload_method(self.DummyType, "inline_method", inline='always')
+        def _get_inlined_method(obj, val=None, val2=None):
+            def get(obj, val=None, val2=None):
+                return ("THIS IS INLINED", val, val2)
+            return get
+
+        def foo(obj):
+            return obj.inline_method(123)
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected=("THIS IS INLINED", 123, None),
+            block_count=1,
+        )
+
     @unittest.expectedFailure
     def test_overload_method_cost_driven(self):
         def costmodel(*args):

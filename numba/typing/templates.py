@@ -708,6 +708,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     """
     A base class of templates for @overload_attribute functions.
     """
+    is_method = False
 
     def __init__(self, context):
         super(_OverloadAttributeTemplate, self).__init__(context)
@@ -754,6 +755,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     A base class of templates for @overload_method functions.
     """
+    is_method = True
 
     @classmethod
     def do_class_init(cls):
