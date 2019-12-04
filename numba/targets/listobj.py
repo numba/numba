@@ -1035,7 +1035,7 @@ _sorting_init = False
 
 def load_sorts():
     """
-    Load quicksort lazily, to avoid circular imports accross the jit() global.
+    Load quicksort lazily, to avoid circular imports across the jit() global.
     """
     g = globals()
     if g['_sorting_init']:

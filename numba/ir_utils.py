@@ -1320,7 +1320,7 @@ def merge_adjacent_blocks(blocks):
                 break
             next_block = blocks[next_label]
             # XXX: commented out since scope objects are not consistent
-            # thoughout the compiler. for example, pieces of code are compiled
+            # throughout the compiler. for example, pieces of code are compiled
             # and inlined on the fly without proper scope merge.
             # if block.scope != next_block.scope:
             #     break

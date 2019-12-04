@@ -390,6 +390,8 @@ def _choose_gitdiff_tests(tests):
     path = os.path.join('numba', 'tests')
     target = 'origin/master..HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
+    # normalise the paths as they are unix style from repo.git.diff
+    gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
     selected = []
     if PYVERSION > (2, 7): # inspect output changes in py3
         gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff_paths]
