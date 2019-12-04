@@ -615,7 +615,7 @@ def unicode_count(src, sub, start=None, end=None):
     _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
-        def count_impl(src, sub, start=start, end=end):
+        def count_impl(src, sub, start=None, end=None):
             count = 0
             src_len = len(src)
             sub_len = len(sub)
