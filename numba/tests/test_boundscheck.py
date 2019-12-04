@@ -110,6 +110,16 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
             def func():
                 pass
 
+        with override_env_config('NUMBA_BOUNDSCHECK', '1'):
+            @cuda.jit
+            def func2(x, a):
+                a[1] = x[1]
+
+            a = np.ones((1,))
+            x = np.zeros((1,))
+            # Out of bounds but doesn't raise
+            func2(x, a)
+
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
 
