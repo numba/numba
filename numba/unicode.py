@@ -1,5 +1,5 @@
-import operator
 import sys
+import operator
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
