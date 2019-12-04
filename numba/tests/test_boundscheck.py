@@ -3,10 +3,10 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
-from numba import typeof, config, cuda
+from numba import typeof, config, cuda, njit
 from numba.types import float64, intp
 from numba import unittest_support as unittest
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, override_env_config
 
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
 BOUNDSCHECK_FLAGS.set('boundscheck', True)
@@ -179,6 +179,58 @@ class TestBoundsCheckError(unittest.TestCase):
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
 
+class TestBoundsEnvironmentVariable(unittest.TestCase):
+    def setUp(self):
+        self.old_boundscheck = config.BOUNDSCHECK
+        config.BOUNDSCHECK = None
+
+        @njit
+        def default(x):
+            return x[1]
+
+        @njit(boundscheck=False)
+        def off(x):
+            return x[1]
+
+        @njit(boundscheck=True)
+        def on(x):
+            return x[1]
+
+        self.default = default
+        self.off = off
+        self.on = on
+
+    def test_boundscheck_unset(self):
+        with override_env_config('NUMBA_BOUNDSCHECK', ''):
+            a = np.array([1])
+
+            # Doesn't raise
+            self.default(a)
+            self.off(a)
+
+            with self.assertRaises(IndexError):
+                self.on(a)
+
+    def test_boundscheck_enabled(self):
+        with override_env_config('NUMBA_BOUNDSCHECK', '1'):
+            a = np.array([1])
+
+            with self.assertRaises(IndexError):
+                self.default(a)
+                self.off(a)
+                self.on(a)
+
+    def test_boundscheck_disabled(self):
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            a = np.array([1])
+
+            # Doesn't raise
+            self.default(a)
+            self.off(a)
+            self.on(a)
+
+    def tearDown(self):
+        config.BOUNDSCHECK = self.old_boundscheck
 
 if __name__ == '__main__':
     unittest.main()

@@ -14,7 +14,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing, funcdesc, debuginfo
+from numba import types, utils, cgutils, typing, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
 from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
@@ -197,7 +197,15 @@ class BaseContext(object):
     DIBuilder = debuginfo.DIBuilder
 
     # Bound checking
-    enable_boundscheck = False
+    @property
+    def enable_boundscheck(self):
+        if config.BOUNDSCHECK is not None:
+            return config.BOUNDSCHECK
+        return self._boundscheck
+
+    @enable_boundscheck.setter
+    def enable_boundscheck(self, value):
+        self._boundscheck = value
 
     # NRT
     enable_nrt = False
@@ -243,6 +251,8 @@ class BaseContext(object):
         self.cached_internal_func = {}
         self._pid = None
         self._codelib_stack = []
+
+        self._boundscheck = False
 
         self.data_model_manager = datamodel.default_manager
 
