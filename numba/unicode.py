@@ -39,7 +39,7 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
-                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric, 
+                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
                               _PyUnicode_IsDecimalDigit)
 
 # DATA MODEL
