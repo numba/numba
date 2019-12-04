@@ -1032,7 +1032,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
     """Look for array(list) call where list is a constant list created by build_list,
     and turn them into direct array creation and initialization, if the following
     conditions are met:
-      1. The build_list call immediate preceeds the array call;
+      1. The build_list call immediate precedes the array call;
       2. The list variable is no longer live after array call;
     If any condition check fails, no modification will be made.
     """

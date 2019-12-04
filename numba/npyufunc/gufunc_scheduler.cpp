@@ -182,7 +182,7 @@ void divide_work(const RangeActual &full_iteration_space,
         if(build.size() == dims.size()) {
             assignments[start_thread] = isfRangeToActual(build);
         } else {
-            // There are still more dimenions to add.
+            // There are still more dimensions to add.
             // Create a copy of the incoming build.
             std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
             // Add an entry to new_build for this thread to handle the entire current dimension.

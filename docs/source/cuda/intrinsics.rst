@@ -36,7 +36,7 @@ of finding a maximum in this case, but that it serves as an example::
 
     max_example[256,64](result, arr)
     print(result[0]) # Found using cuda.atomic.max
-    print(max(arr))  # Print max(arr) for comparision (should be equal!)
+    print(max(arr))  # Print max(arr) for comparison (should be equal!)
 
 
 Multiple dimension arrays are supported by using a tuple of ints for the index::
