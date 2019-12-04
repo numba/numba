@@ -9,7 +9,6 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -187,7 +186,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test getitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
         # initialize regular list
@@ -234,7 +234,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test setitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
@@ -370,7 +371,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test delitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
@@ -610,22 +612,10 @@ class TestComparisons(MemoryLeakMixin, TestCase):
         expected = False, False, False, True, True, True
         self._cmp_dance(expected, pa, pb, na, nb)
 
-    def test_typing_mimatch(self):
-        self.disable_leak_check()
+    def test_equals_non_list(self):
         l = to_tl([1, 2, 3])
-
-        with self.assertRaises(TypingError) as raises:
-            cmp.py_func(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
-        with self.assertRaises(TypingError) as raises:
-            cmp(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
+        self.assertFalse(any(cmp.py_func(l, 1)))
+        self.assertFalse(any(cmp(l, 1)))
 
 
 class TestListInferred(TestCase):
@@ -684,6 +674,19 @@ class TestListInferred(TestCase):
         self.assertEqual(expected, got)
         self.assertEqual(list(got), [0, 1, 2])
         self.assertEqual(typeof(got).item_type, typeof(1))
+
+    def test_refine_list_extend_iter(self):
+        @njit
+        def foo():
+            l = List()
+            d = Dict()
+            d[0] = 0
+            # d.keys() provides a DictKeysIterableType
+            l.extend(d.keys())
+            return l
+
+        got = foo()
+        self.assertEqual(0, got[0])
 
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
@@ -863,3 +866,44 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # test
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_equal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 1
+        c.append(d)
+
+        self.assertEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_dicts(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 2
+        c.append(d)
+
+        self.assertNotEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d, e = List(), Dict(), Dict()
+        d["a"] = 1
+        e["b"] = 2
+        c.append(d)
+        c.append(e)
+
+        self.assertNotEqual(a, c)

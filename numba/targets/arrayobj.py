@@ -2225,7 +2225,7 @@ def array_complex_attr(context, builder, typ, value, attr):
         ^   ^   ^
 
     (`R` indicates a float for the real part;
-     `C` indicates a float for the imaginery part;
+     `C` indicates a float for the imaginary part;
      the `^` indicates the start of each element)
 
     To get the real part, we can simply change the dtype and itemsize to that
@@ -3765,7 +3765,18 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        dtype = types.intp
+        # numerous attempts were made at guessing this type from the NumPy
+        # source but it turns out on running `np.arange(10).dtype` on pretty
+        # much all platform and python combinations that it matched np.int?!
+        # Windows 64 is broken by default here because Numba (as of 0.47) does
+        # not differentiate between Python and NumPy integers, so a `typeof(1)`
+        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
+        # be typed as arange(int64) and the following will yield int64 opposed
+        # to int32. Example: without a load of analysis to work out of the args
+        # were wrapped in NumPy int*() calls it's not possible to detect the
+        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
+        dtype = max(bounds + [NPY_TY,])
 
     return dtype
 
@@ -3816,6 +3827,9 @@ def np_arange(start, stop=None, step=None, dtype=None):
             _start, _stop = 0, lit_start
         else:
             _start, _stop = lit_start, lit_stop
+
+        if _step == 0:
+            raise ValueError("Maximum allowed size exceeded")
 
         nitems_c = (_stop - _start) / _step
         nitems_r = int(math.ceil(nitems_c.real))

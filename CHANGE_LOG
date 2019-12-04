@@ -2831,7 +2831,7 @@ make it cleaner and more rational:
 * The numba.vectorize namespace is gone. The vectorize decorator will
   be in the main numba namespace.
 * Added a guvectorize decorator in the main numba namespace. It is
-  similiar to numba.vectorize, but takes a dimension signature. It
+  similar to numba.vectorize, but takes a dimension signature. It
   generates gufuncs. This is a replacement for the GUVectorize gufunc
   factory which has been deprecated.
 
