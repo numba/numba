@@ -247,6 +247,13 @@ class TestBuiltins(TestCase):
         for x in complex_values:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
+        for unsigned_type in types.unsigned_domain:
+            unsigned_values = [0, 10, 2, 2 ** unsigned_type.bitwidth - 1]
+            cr = compile_isolated(pyfunc, (unsigned_type,), flags=flags)
+            cfunc = cr.entry_point
+            for x in unsigned_values:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
     @tag('important')
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
