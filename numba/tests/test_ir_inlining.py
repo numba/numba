@@ -814,7 +814,8 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         self.Dummy = Dummy
         self.DummyType = DummyType
 
-    def check_method(self, test_impl, args, expected, block_count):
+    def check_method(self, test_impl, args, expected, block_count,
+                     expects_inlined=True):
         j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
         # check they produce the same answer first!
         self.assertEqual(j_func(*args), expected)
@@ -823,10 +824,39 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
         fir.blocks = fir.blocks
         self.assertEqual(len(fir.blocks), block_count)
-        # assert no calls
-        for block in fir.blocks.values():
-            calls = list(block.find_exprs('call'))
-            self.assertFalse(calls)
+        if expects_inlined:
+            # assert no calls
+            for block in fir.blocks.values():
+                calls = list(block.find_exprs('call'))
+                self.assertFalse(calls)
+        else:
+            # assert has call
+            allcalls = []
+            for block in fir.blocks.values():
+                allcalls += list(block.find_exprs('call'))
+            self.assertTrue(allcalls)
+
+    def check_getattr(self, test_impl, args, expected, block_count,
+                      expects_inlined=True):
+        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        # check they produce the same answer first!
+        self.assertEqual(j_func(*args), expected)
+
+        # make sure IR doesn't have branches
+        fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
+        fir.blocks = fir.blocks
+        self.assertEqual(len(fir.blocks), block_count)
+        if expects_inlined:
+            # assert no getattr
+            for block in fir.blocks.values():
+                getattrs = list(block.find_exprs('getattr'))
+                self.assertFalse(getattrs)
+        else:
+            # assert has getattr
+            allgetattrs = []
+            for block in fir.blocks.values():
+                allgetattrs += list(block.find_exprs('getattr'))
+            self.assertTrue(allgetattrs)
 
     def test_overload_method_always(self):
         @overload_method(self.DummyType, "inline_method", inline='always')
@@ -862,16 +892,14 @@ class TestOverloadMethsAttrsInlining(InliningBase):
             block_count=1,
         )
 
-    @unittest.expectedFailure
-    def test_overload_method_cost_driven(self):
+    def make_overload_method_cost_driven_test(self, should_inline):
         def costmodel(*args):
-            raise NotImplementedError('to be implemented')
-            return True
+            return should_inline
 
         @overload_method(self.DummyType, "inline_method", inline=costmodel)
         def _get_inlined_method(obj, val):
             def get(obj, val):
-                return ("THIS IS INLINED", val)
+                return ("THIS IS INLINED!!!", val)
             return get
 
         def foo(obj):
@@ -880,9 +908,16 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         self.check_method(
             test_impl=foo,
             args=[self.Dummy()],
-            expected=("THIS IS INLINED", 123),
+            expected=("THIS IS INLINED!!!", 123),
             block_count=1,
+            expects_inlined=should_inline,
         )
+
+    def test_overload_method_cost_driven_must_inline(self):
+        self.make_overload_method_cost_driven_test(True)
+
+    def test_overload_method_cost_driven_no_inline(self):
+        self.make_overload_method_cost_driven_test(False)
 
     def test_overload_attribute_always(self):
         @overload_attribute(self.DummyType, "inlineme", inline='always')
@@ -894,12 +929,39 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         def foo(obj):
             return obj.inlineme
 
-        self.check_method(
+        self.check_getattr(
             test_impl=foo,
             args=[self.Dummy()],
             expected="MY INLINED ATTRS",
             block_count=1,
         )
+
+    def make_overload_attribute_costmodel_test(self, should_inline):
+        def costmodel(*args):
+            return should_inline
+
+        @overload_attribute(self.DummyType, "inlineme", inline=costmodel)
+        def _get_inlineme(obj):
+            def get(obj):
+                return "MY INLINED ATTRS"
+            return get
+
+        def foo(obj):
+            return obj.inlineme
+
+        self.check_getattr(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected="MY INLINED ATTRS",
+            block_count=1,
+            expects_inlined=should_inline,
+        )
+
+    def test_overload_attribute_costmodel_must_inline(self):
+        self.make_overload_attribute_costmodel_test(True)
+
+    def test_overload_attribute_costmodel_no_inline(self):
+        self.make_overload_attribute_costmodel_test(False)
 
 
 class TestGeneralInlining(InliningBase):
