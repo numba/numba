@@ -271,7 +271,7 @@
           // scroll so pointer is still in same place
           $element.scrollLeft((rx * $svg.width()) + 0.5 - px)
           $element.scrollTop((ry * $svg.height()) + 0.5 - py)
-          return false // stop propogation
+          return false // stop propagation
         }
       })
   }

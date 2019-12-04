@@ -696,7 +696,7 @@ numba_dict_insert(
 
     Py_ssize_t ix = numba_dict_lookup(d, key_bytes, hash, oldval_bytes);
     if (ix == DKIX_ERROR) {
-        // exception in key comparision in lookup.
+        // exception in key comparison in lookup.
         return ERR_CMP_FAILED;
     }
 

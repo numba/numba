@@ -2127,9 +2127,9 @@ def np_interp_impl_inner(x, xp, fp, dtype):
     # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
     # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532    # noqa: E501
-    dz = np.asarray(x)
-    dx = np.asarray(xp)
-    dy = np.asarray(fp)
+    dz = np.asarray(x, dtype=np.float64)
+    dx = np.asarray(xp, dtype=np.float64)
+    dy = np.asarray(fp, dtype=np.float64)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -2212,9 +2212,9 @@ def np_interp_impl_inner_factory(np117_nan_handling):
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
         # Permanent reference:
         # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473     # noqa: E501
-        dz = np.asarray(x)
-        dx = np.asarray(xp)
-        dy = np.asarray(fp)
+        dz = np.asarray(x, dtype=np.float64)
+        dx = np.asarray(xp, dtype=np.float64)
+        dy = np.asarray(fp, dtype=np.float64)
 
         if len(dx) == 0:
             raise ValueError('array of sample points is empty')
