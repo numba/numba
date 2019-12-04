@@ -93,9 +93,9 @@ class DeviceArray:
 
 class Device():
 
-    _device_ptr = None
-    _context_ptr = None
-    _queue_ptr = None
+    #_device_ptr = None
+    #_context_ptr = None
+    #_queue_ptr = None
 
     def __init__(self, device_ptr, context_ptr, queue_ptr):
         self._device_ptr = device_ptr
@@ -185,10 +185,11 @@ class Device():
                       self._device_ptr,
                       self.spirv_bc,
                       len(self.spirv_bc),
-                      prog_t_obj)
+                      prog_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error("create_and_build_numba_oneapi_program_from_spirv", -1)
+        return prog_t_obj
 
 
 ################################## Runtime class #########################
