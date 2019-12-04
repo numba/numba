@@ -117,8 +117,10 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
 
             a = np.ones((1,))
             x = np.zeros((1,))
-            # Out of bounds but doesn't raise
-            func2(x, a)
+            # Out of bounds but doesn't raise (it does raise in the simulator,
+            # so skip there)
+            if not config.ENABLE_CUDASIM:
+                func2(x, a)
 
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck
