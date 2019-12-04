@@ -607,6 +607,11 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
+        # if one of the args has been typed as a reflected list, re-type it
+        if hasattr(self, "targetoptions") \
+                and self.targetoptions.get("disable_reflected_list", False) \
+                and isinstance(tp, types.List):
+            tp = types.ListType(tp.dtype, mutable=False)
         return tp
 
 
