@@ -4,7 +4,7 @@ import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
 from numba import typeof, config, cuda, njit
-from numba.types import float64, intp
+from numba.types import float64
 from numba import unittest_support as unittest
 from .support import MemoryLeakMixin, override_env_config
 
@@ -87,7 +87,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         fancy_array_access(b)
 
         at = typeof(a)
-        rt = intp[:]
+        rt = at.dtype[:]
         c_noboundscheck = compile_isolated(fancy_array_access, [at],
                                            return_type=rt,
                                            flags=DEFAULT_FLAGS)
@@ -181,7 +181,7 @@ class TestBoundsCheckError(unittest.TestCase):
         fancy_array_access(b)
 
         at = typeof(a)
-        rt = intp[:]
+        rt = at.dtype[:]
         c_boundscheck = compile_isolated(fancy_array_access, [at],
                                          return_type=rt,
                                          flags=BOUNDSCHECK_FLAGS)
