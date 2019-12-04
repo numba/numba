@@ -690,7 +690,7 @@ class BaseCPUCodegen(object):
         """
         # Check the locale bug at https://github.com/numba/numba/issues/1569
         # Note we can't cache the result as locale settings can change
-        # accross a process's lifetime.  Also, for this same reason,
+        # across a process's lifetime.  Also, for this same reason,
         # the check here is a mere heuristic (there may be a race condition
         # between now and actually compiling IR).
         ir = """
