@@ -22,7 +22,15 @@
         break;                                                                 \
     case -36:                                                                  \
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
-                retval, "command_queue is not a valid command-queue.",         \
+                retval, "[CL_INVALID_COMMAND_QUEUE]command_queue is not a "    \
+                        "valid command-queue.",                                \
+                __LINE__, __FILE__);                                           \
+        goto error;                                                            \
+    case -45:                                                                  \
+        fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
+                retval, "[CL_INVALID_PROGRAM_EXECUTABLE] no successfully "     \
+                        "built program executable available for device "       \
+                        "associated with command_queue.",                      \
                 __LINE__, __FILE__);                                           \
         goto error;                                                            \
     default:                                                                   \
@@ -621,7 +629,7 @@ int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff)
 
     return NUMBA_ONEAPI_SUCCESS;
 
-    error:
+error:
     return NUMBA_ONEAPI_FAILURE;
 }
 
@@ -697,6 +705,182 @@ int read_numba_oneapi_mem_buffer_from_device (const void *queue_ptr,
     //--- TODO: Implement a version that uses clEnqueueMapBuffer
 
     return NUMBA_ONEAPI_SUCCESS;
+error:
+    return NUMBA_ONEAPI_FAILURE;
+}
+
+
+int create_and_build_numba_oneapi_program_from_spirv (const device_t *d_ptr,
+                                                      const void *il,
+                                                      size_t length,
+                                                      program_t *program_ptr)
+{
+    cl_int err;
+    cl_context *context;
+    cl_device_id *device;
+    program_t p;
+
+    p = (program_t)malloc(sizeof(struct numba_oneapi_program_t));
+    CHECK_MALLOC_ERROR(program_t, program_ptr);
+
+    context = (cl_context*)d_ptr->context;
+    device = (cl_device_id*)d_ptr->device;
+
+    err = clRetainContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not retain context");
+    // Create a program with a SPIR-V file
+    p->program = clCreateProgramWithIL(*context, il, length, &err);
+    CHECK_OPEN_CL_ERROR(err, "Could not create program with IL");
+#if DEBUG
+    printf("DEBUG: CL program created from spirv...\n");
+#endif
+
+    err = clRetainDevice(*device);
+    CHECK_OPEN_CL_ERROR(err, "Could not retain device");
+    // Build (compile) the program for the device
+    err = clBuildProgram((cl_program)p->program, 1, device, NULL, NULL, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not build program");
+#if DEBUG
+    printf("DEBUG: CL program successfully built.\n");
+#endif
+    err = clReleaseDevice(*device);
+    CHECK_OPEN_CL_ERROR(err, "Could not release device");
+
+    *program_ptr = p;
+
+    err = clReleaseContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not release context");
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+malloc_error:
+    return NUMBA_ONEAPI_FAILURE;
+error:
+    return NUMBA_ONEAPI_FAILURE;
+}
+
+
+int create_and_build_numba_oneapi_program_from_source (const device_t *d_ptr,
+                                                       unsigned int count,
+                                                       const char **strings,
+                                                       const size_t *lengths,
+                                                       program_t *program_ptr)
+{
+    cl_int err;
+    cl_context *context;
+    cl_device_id *device;
+    program_t p;
+
+    p = (program_t)malloc(sizeof(struct numba_oneapi_program_t));
+    CHECK_MALLOC_ERROR(program_t, program_ptr);
+
+    context = (cl_context*)d_ptr->context;
+    device = (cl_device_id*)d_ptr->device;
+
+    err = clRetainContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not retain context");
+    // Create a program with string source files
+    p->program = clCreateProgramWithSource(*context, count, strings,
+            lengths, &err);
+    CHECK_OPEN_CL_ERROR(err, "Could not create program with source");
+#if DEBUG
+    printf("DEBUG: CL program created from source...\n");
+#endif
+    err = clRetainDevice(*device);
+    CHECK_OPEN_CL_ERROR(err, "Could not retain device");
+    // Build (compile) the program for the device
+    err = clBuildProgram((cl_program)p->program, 1, device, NULL, NULL, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not build program");
+#if DEBUG
+    printf("DEBUG: CL program successfully built.\n");
+#endif
+    err = clReleaseDevice(*device);
+    CHECK_OPEN_CL_ERROR(err, "Could not release device");
+
+    *program_ptr = p;
+
+    err = clReleaseContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not release context");
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+malloc_error:
+    return NUMBA_ONEAPI_FAILURE;
+error:
+    return NUMBA_ONEAPI_FAILURE;
+}
+
+
+int destroy_numba_oneapi_program (program_t *program_ptr)
+{
+    cl_int err;
+
+    err = clReleaseProgram((cl_program)(*program_ptr)->program);
+    CHECK_OPEN_CL_ERROR(err, "Failed to release CL program.");
+    free(*program_ptr);
+
+#if DEBUG
+    printf("DEBUG: CL program destroyed...\n");
+#endif
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+error:
+    return NUMBA_ONEAPI_FAILURE;
+}
+
+
+/*!
+ *
+ */
+int create_numba_oneapi_kernel (void *context_ptr,
+                                program_t program_ptr,
+                                const char *kernel_name,
+                                kernel_t *kernel_ptr)
+{
+    cl_int err;
+    cl_context *context;
+    kernel_t k;
+
+    k = (kernel_t)malloc(sizeof(struct numba_oneapi_kernel_t));
+    CHECK_MALLOC_ERROR(kernel_t, kernel_ptr);
+
+    context = (cl_context*)(context_ptr);
+    err = clRetainContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not retain context");
+    k->kernel = clCreateKernel((cl_program)(program_ptr->program), kernel_name,
+            &err);
+    CHECK_OPEN_CL_ERROR(err, "Could not create kernel");
+    err = clReleaseContext(*context);
+    CHECK_OPEN_CL_ERROR(err, "Could not release context");
+#if DEBUG
+    printf("DEBUG: CL kernel created\n");
+#endif
+
+    *kernel_ptr = k;
+    return NUMBA_ONEAPI_SUCCESS;
+
+malloc_error:
+    return NUMBA_ONEAPI_FAILURE;
+error:
+    return NUMBA_ONEAPI_FAILURE;
+}
+
+
+int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr)
+{
+    cl_int err;
+
+    err = clReleaseKernel((cl_kernel)(*kernel_ptr)->kernel);
+    CHECK_OPEN_CL_ERROR(err, "Failed to release CL kernel.");
+    free(*kernel_ptr);
+
+#if DEBUG
+    printf("DEBUG: CL kernel destroyed...\n");
+#endif
+
+    return NUMBA_ONEAPI_SUCCESS;
+
 error:
     return NUMBA_ONEAPI_FAILURE;
 }

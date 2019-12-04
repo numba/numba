@@ -19,6 +19,15 @@ typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
 } mem_flags_t;
 
 
+// FIXME
+// 1) device_t is a very bad name. In OpenCL and presumably Level0 API
+//    context is an abstraction over devices. Our naming convention suggests
+//    almost the opposite.
+// 2) device_t and platform_t should be consistent with the other typedefs.
+//    Convert these two typedefs into pointers and then add constructors and
+//    destructors.
+//
+
 /*!
  *
  */
@@ -62,14 +71,15 @@ struct numba_oneapi_kernel_t
     void *kernel;
 };
 
-typedef struct numba_oneapi_kernel_t kernel_t;
+typedef struct numba_oneapi_kernel_t* kernel_t;
+
 
 struct numba_oneapi_program_t
 {
     void *program;
 };
 
-typedef struct numba_oneapi_program_t program_t;
+typedef struct numba_oneapi_program_t* program_t;
 
 
 /*! @struct numba_oneapi_runtime_t
@@ -144,6 +154,9 @@ int create_numba_oneapi_mem_buffers (const void *context_ptr,
                                      const size_t buffsizes[]);
 
 
+/*!
+ *
+ */
 int create_numba_oneapi_rw_mem_buffer (const void *context_ptr,
                                        buffer_t *buff,
                                        const size_t buffsize);
@@ -185,6 +198,41 @@ int read_numba_oneapi_mem_buffer_from_device (const void *queue_ptr,
                                               size_t buffersize,
                                               void* data_ptr);
 
+
+/*!
+ *
+ */
+int create_and_build_numba_oneapi_program_from_spirv (const device_t *d_ptr,
+                                                      const void *il,
+                                                      size_t length,
+                                                      program_t *program_ptr);
+
+
+/*!
+ *
+ */
+int create_and_build_numba_oneapi_program_from_source (const device_t *d_ptr,
+                                                       unsigned int count,
+                                                       const char **strings,
+                                                       const size_t *lengths,
+                                                       program_t *program_ptr);
+
+/*!
+ *
+ */
+int destroy_numba_oneapi_program (program_t *program_ptr);
+
+
+/*!
+ *
+ */
+int create_numba_oneapi_kernel (void *context_ptr,
+                                program_t program_ptr,
+                                const char *kernel_name,
+                                kernel_t *kernel_ptr);
+
+
+int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr);
 
 /*!
  * @brief Creates all the boilerplate around creating an OpenCL kernel from a
