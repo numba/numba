@@ -84,7 +84,7 @@ ffibuilder.cdef("""
                     void *kernel;
                 };
 
-                typedef struct numba_oneapi_kernel_t kernel_t;
+                typedef struct numba_oneapi_kernel_t* kernel_t;
 
 
                 struct numba_oneapi_program_t
@@ -92,7 +92,7 @@ ffibuilder.cdef("""
                     void *program;
                 };
 
-                typedef struct numba_oneapi_program_t program_t;
+                typedef struct numba_oneapi_program_t* program_t;
 
 
                 struct numba_oneapi_runtime_t
@@ -165,4 +165,5 @@ ffibuilder.set_source(
 
 
 if __name__ == "__main__":
+    #ffibuilder.emit_c_code("pybindings.c")
     ffibuilder.compile(verbose=True)
