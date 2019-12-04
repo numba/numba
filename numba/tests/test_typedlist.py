@@ -9,7 +9,6 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -610,22 +609,10 @@ class TestComparisons(MemoryLeakMixin, TestCase):
         expected = False, False, False, True, True, True
         self._cmp_dance(expected, pa, pb, na, nb)
 
-    def test_typing_mimatch(self):
-        self.disable_leak_check()
+    def test_equals_non_list(self):
         l = to_tl([1, 2, 3])
-
-        with self.assertRaises(TypingError) as raises:
-            cmp.py_func(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
-        with self.assertRaises(TypingError) as raises:
-            cmp(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
+        self.assertFalse(any(cmp.py_func(l, 1)))
+        self.assertFalse(any(cmp(l, 1)))
 
 
 class TestListInferred(TestCase):
@@ -876,3 +863,44 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # test
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_equal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 1
+        c.append(d)
+
+        self.assertEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_dicts(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 2
+        c.append(d)
+
+        self.assertNotEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d, e = List(), Dict(), Dict()
+        d["a"] = 1
+        e["b"] = 2
+        c.append(d)
+        c.append(e)
+
+        self.assertNotEqual(a, c)

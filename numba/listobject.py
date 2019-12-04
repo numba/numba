@@ -1040,6 +1040,35 @@ def impl_index(l, item, start=None, end=None):
     return impl
 
 
+def _equals_helper(this, other, OP):
+    if not isinstance(this, types.ListType):
+        return
+    if not isinstance(other, types.ListType):
+        return lambda this, other: False
+
+    def impl(this, other):
+        def equals(this, other):
+            if len(this) != len(other):
+                return False
+            for i in range(len(this)):
+                if this[i] != other[i]:
+                    return False
+            else:
+                return True
+        return OP(equals(this, other))
+    return impl
+
+
+@overload(operator.eq)
+def impl_equals(this, other):
+    return _equals_helper(this, other, operator.truth)
+
+
+@overload(operator.ne)
+def impl_not_equals(this, other):
+    return _equals_helper(this, other, operator.not_)
+
+
 @register_jitable
 def compare(this, other):
     """Oldschool (python 2.x) cmp.
@@ -1062,21 +1091,11 @@ def compare_helper(this, other, accepted):
     if not isinstance(this, types.ListType):
         return
     if not isinstance(other, types.ListType):
-        raise TypingError("list can only be compared to list")
+        return lambda this, other: False
 
     def impl(this, other):
         return compare(this, other) in accepted
     return impl
-
-
-@overload(operator.eq)
-def impl_equal(this, other):
-    return compare_helper(this, other, (0,))
-
-
-@overload(operator.ne)
-def impl_not_equal(this, other):
-    return compare_helper(this, other, (-1, 1))
 
 
 @overload(operator.lt)
