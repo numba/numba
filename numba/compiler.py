@@ -282,44 +282,7 @@ class CompilerBase(object):
         targetctx.refresh()
 
         self.state = StateDict()
-
-        # begin dealing with disable_reflected_list
-        typingctx_copy = copy.copy(typingctx)
-        typingctx_copy.disable_reflected_list = flags.disable_reflected_list
-        self.state.typingctx = typingctx_copy
-        self.state.typingctx._globals = copy.copy(typingctx._globals)
-
-        from numba.typing.templates import (AbstractTemplate,
-                                            Registry,
-                                            signature,
-                                            )
-        from numba import types
-        registry = Registry()
-
-        infer_global = registry.register_global
-
-        if flags.disable_reflected_list:
-            correct_list_type = types.ListType
-        else:
-            correct_list_type = types.List
-
-        @infer_global(list)
-        class ListBuiltin(AbstractTemplate):
-
-            def generic(self, args, kws):
-                assert not kws
-                if args:
-                    iterable, = args
-                    if isinstance(iterable, types.IterableType):
-                        dtype = iterable.iterator_type.yield_type
-                        return signature(correct_list_type(dtype), iterable)
-                else:
-                    return signature(correct_list_type(types.undefined))
-
-        self.state.typingctx.install_registry(registry)
-        self.state.typingctx.refresh()
-        # end dealing with disable_reflected_list
-
+        self.state.typingctx = typingctx
         self.state.targetctx = _make_subtarget(targetctx, flags)
         self.state.library = library
         self.state.args = args
@@ -351,6 +314,21 @@ class CompilerBase(object):
             can_fallback=self.state.flags.enable_pyobject,
             can_giveup=config.COMPATIBILITY_MODE
         )
+
+    def _activate_disable_reflected_list(self):
+        self.state.typingctx.disable_reflected_list = \
+            self.state.flags.disable_reflected_list
+        #disable = self.state.flags.disable_reflected_list
+        ## make a shallow copy of the typingctx and set disable flag
+        #typingctx_copy = copy.copy(self.state.typingctx)
+        #typingctx_copy.disable_reflected_list = disable
+        #self.state.typingctx = typingctx_copy
+        ## shallow copy the _globals too
+        ##self.state.typingctx._globals = \
+        #        copy.copy(self.state.typingctx._globals)
+
+    def _deactivate_disable_reflected_list(self):
+        self.state.typingctx.disable_reflected_list = False
 
     def compile_extra(self, func):
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)
@@ -386,6 +364,7 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
+        self._activate_disable_reflected_list()
         pms = self.define_pipelines()
         for pm in pms:
             pipeline_name = pm.pipeline_name
@@ -410,6 +389,7 @@ class CompilerBase(object):
 
         # Pipeline is done, remove self reference to release refs to user code
         self.state.pipeline = None
+        self._deactivate_disable_reflected_list()
 
         # organise a return
         if res is not None:

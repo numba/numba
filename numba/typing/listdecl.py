@@ -14,6 +14,22 @@ infer = registry.register
 infer_global = registry.register_global
 infer_getattr = registry.register_attr
 
+@infer_global(list)
+class ListBuiltin(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        correct_list_type = (types.ListType
+                             if self.context.disable_reflected_list
+                             else types.List)
+        if args:
+            iterable, = args
+            if isinstance(iterable, types.IterableType):
+                dtype = iterable.iterator_type.yield_type
+                return signature(correct_list_type(dtype), iterable)
+        else:
+            return signature(correct_list_type(types.undefined))
+
 
 @infer_global(sorted)
 class SortedBuiltin(CallableTemplate):
