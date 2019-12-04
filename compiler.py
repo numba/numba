@@ -128,7 +128,7 @@ class OneAPIKernelBase(object):
 #                                          'kernarg_region'])
 
 
-#class _CachedProgram(object):
+# class _CachedProgram(object):
 #    def __init__(self, entry_name, binary):
 #        self._entry_name = entry_name
 #        self._binary = binary
@@ -181,12 +181,12 @@ class OneAPIKernel(OneAPIKernelBase):
 
     def __call__(self, *args):
 
-        
         # Make a library call that does the following:
         #    i.   create a program
         #    ii.  create a kernel
         #    iii. sets args to the kernel
         #    iv.  enqueues the kernel
+
         raise ValueError("TODO")
         #program = context.create_program_from_il(spirv_bc)
         #program.build()
@@ -279,7 +279,7 @@ class OneAPIKernel(OneAPIKernelBase):
 
 class AutoJitOneAPIKernel(OneAPIKernelBase):
     def __init__(self, func):
-        print("AutoJITOneAPIKernel init...")
+
         super(AutoJitOneAPIKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
