@@ -30,8 +30,8 @@ if oneapiGlueHome is not None:
     except ValueError:
         _raise_bad_env_path(oneapiGlueHome)
 
-    if not os.path.isfile(oneapiGlueHome+"/libnumbaoneapiglue.so"):
-        _raise_bad_env_path(oneapiGlueHome+"/libnumbaoneapiglue.so")
+    if not os.path.isfile(oneapiGlueHome+"/libnumbaoneapiglue.a"):
+        _raise_bad_env_path(oneapiGlueHome+"/libnumbaoneapiglue.a")
 
 # cdef() expects a single string declaring the C types, functions and
 # globals needed to use the shared object. It must be in valid C syntax.
