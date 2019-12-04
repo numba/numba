@@ -37,7 +37,6 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
     if debug:
-        flags.set('boundscheck')
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')

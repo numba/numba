@@ -316,7 +316,7 @@ def iternext_array(context, builder, sig, args, result):
 # Basic indexing (with integers and slices only)
 
 def basic_indexing(context, builder, aryty, ary, index_types, indices,
-                   boundscheck=True):
+                   boundscheck=None):
     """
     Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
@@ -400,7 +400,8 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
     returning either a scalar or a view.
     """
     dataptr, view_shapes, view_strides = \
-        basic_indexing(context, builder, aryty, ary, index_types, indices)
+        basic_indexing(context, builder, aryty, ary, index_types, indices,
+                       boundscheck=context.enable_boundscheck)
 
     if isinstance(return_type, types.Buffer):
         # Build array view
@@ -478,7 +479,8 @@ def setitem_array(context, builder, sig, args):
                                              index_types, indices)
     try:
         dataptr, shapes, strides = \
-            basic_indexing(context, builder, aryty, ary, index_types, indices)
+            basic_indexing(context, builder, aryty, ary, index_types, indices,
+                           boundscheck=context.enable_boundscheck)
     except NotImplementedError:
         use_fancy_indexing = True
     else:
@@ -1030,7 +1032,7 @@ def fancy_getitem(context, builder, sig, args,
     # a positive index is returned.
     ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                     aryty.layout, indices, wraparound=False,
-                                    boundscheck=True)
+                                    boundscheck=context.enable_boundscheck)
     val = load_item(context, builder, aryty, ptr)
 
     # Since the destination is C-contiguous, no need for multi-dimensional
