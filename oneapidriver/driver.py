@@ -177,6 +177,20 @@ class Device():
     def get_context(self):
         return self._context_ptr
 
+    def create_program_from_spirv(self, spirv):
+        prog_t_obj = _numba_oneapi_pybindings.ffi.new("program_t *")
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .create_and_build_numba_oneapi_program_from_spirv(
+                      self._device_ptr,
+                      self.spirv_bc,
+                      len(self.spirv_bc),
+                      prog_t_obj)
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error("create_and_build_numba_oneapi_program_from_spirv", -1)
+
+
 ################################## Runtime class #########################
 
 
