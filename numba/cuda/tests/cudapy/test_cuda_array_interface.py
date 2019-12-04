@@ -141,7 +141,7 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(arr[::2].nbytes,
                          arr_strided.size * arr_strided.dtype.itemsize)
 
-        # __setitem__ interface propogates into external array
+        # __setitem__ interface propagates into external array
 
         # Writes to a slice
         arr[:5] = np.pi

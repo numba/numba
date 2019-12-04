@@ -186,7 +186,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test getitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
         # initialize regular list
@@ -233,7 +234,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test setitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
@@ -369,7 +371,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test delitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
