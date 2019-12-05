@@ -199,29 +199,6 @@ static int dump_numba_oneapi_runtime_info (void *obj)
     return NUMBA_ONEAPI_SUCCESS;
 }
 
-#if 0
-/*!
- *
- */
-static int initialize_cl_platform_infos (cl_platform_id platform,
-                                         platform_t platfrom_t_ptr)
-{
-    cl_int err;
-
-    if((set_platform_name(platform, platfrom_t_ptr)) == NUMBA_ONEAPI_FAILURE)
-        goto error;
-
-    // get the number of devices on this platform
-    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL,
-                            &platfrom_t_ptr->num_devices);
-    CHECK_OPEN_CL_ERROR(err, "Could not get device count.");
-
-    return NUMBA_ONEAPI_SUCCESS;
-
-error:
-    return NUMBA_ONEAPI_FAILURE;
-}
-#endif
 
 /*!
  *
@@ -360,29 +337,6 @@ static int init_runtime_t_obj (runtime_t rt)
     // Get the platforms
     status = clGetPlatformIDs(rt->num_platforms, rt->platform_ids, NULL);
     CHECK_OPEN_CL_ERROR(status, "Could not get platform ids");
-#if 0
-    // Allocate memory for the platform_info array
-    rt->platform_infos = (platform_t*)malloc(
-                                sizeof(platform_t)*rt->num_platforms
-                           );
-    CHECK_MALLOC_ERROR(platform_t, rt->platform_infos);
-
-    // Initialize the platform_infos
-    for(i = 0; i < rt->num_platforms; ++i) {
-        // Initialize the platform_t object
-        (rt->platform_infos+i)->platform_name = NULL;
-        //(rt->platform_infos+i)->devices       = NULL;
-        (rt->platform_infos+i)->num_devices   = 0;
-
-        if((status = initialize_cl_platform_infos(
-               platforms+i, rt->platform_infos+i)) == NUMBA_ONEAPI_FAILURE)
-            goto error;
-#if DEBUG
-        printf("DEBUG: Platform name : %s\n",
-               (rt->platform_infos+i)->platform_name);
-#endif
-    }
-#endif
     // Cast rt->platforms to a pointer of type cl_platform_id, as we cannot do
     // pointer arithmetic on void*.
     platforms = (cl_platform_id*)rt->platform_ids;
