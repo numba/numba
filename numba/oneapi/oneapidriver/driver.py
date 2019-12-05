@@ -6,7 +6,9 @@ from numpy import ndarray
 
 ffi = FFI()
 
-# Exception classes ######################################################
+##########################################################################
+# Exception classes
+##########################################################################
 
 
 class OneapiGlueDriverError(Exception):
@@ -46,7 +48,11 @@ def _raise_unsupported_type_error(fname):
     raise e
 
 
-############################### DeviceArray class ########################
+##########################################################################
+# DeviceArray class
+##########################################################################
+
+
 class DeviceArray:
 
     _buffObj = None
@@ -88,38 +94,97 @@ class DeviceArray:
     def get_data_ptr(self):
         return ffi.cast("void*", self._ndarray.ctypes.data)
 
-############################## Device class ##############################
+##########################################################################
+# Program class
+##########################################################################
+
+
+class Program():
+
+    def __init__(self, device, spirv_module):
+        self._prog_t_obj = _numba_oneapi_pybindings.ffi.new("program_t *")
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .create_and_build_numba_oneapi_program_from_spirv(
+                      device.get_device_t_obj(),
+                      spirv_module,
+                      len(spirv_module),
+                      self._prog_t_obj))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error(
+                "create_and_build_numba_oneapi_program_from_spirv", -1)
+
+    def __del__(self):
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .destroy_numba_oneapi_program(self._prog_t_obj))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error("destroy_numba_oneapi_program", -1)
+
+    def get_prog_t_obj(self):
+        return self._prog_t_obj
+
+
+##########################################################################
+# Kernel class
+##########################################################################
+
+class Kernel():
+
+    def __init__(self, context_ptr, prog_t_obj, kenrel_name):
+        self._kernel_t_obj = _numba_oneapi_pybindings.ffi.new("kernel_t *")
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .create_numba_oneapi_kernel(
+                      context_ptr,
+                      prog_t_obj,
+                      kernel_name,
+                      self._kernel_t_obj))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error("create_numba_oneapi_kernel", -1)
+
+    def __del__(self):
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .destroy_numba_oneapi_kernel(self._kernel_t_obj))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error("destroy_numba_oneapi_kernel", -1)
+
+    def get_kernel_t_obj(self):
+        return self._kernel_t_obj
+
+
+##########################################################################
+# Device class
+##########################################################################
 
 
 class Device():
 
-    #_device_ptr = None
-    #_context_ptr = None
-    #_queue_ptr = None
-
-    def __init__(self, device_ptr, context_ptr, queue_ptr):
-        self._device_ptr = device_ptr
-        self._context_ptr = context_ptr
-        self._queue_ptr = queue_ptr
-        pass
+    def __init__(self, device_t_obj):
+        self._device_t_obj = device_t_obj
 
     def __del__(self):
         pass
 
     def retain_context(self):
-        print('return first_cpu_conext.context after calling clRetinContext')
+        print('return first_cpu_conext.context after calling clRetainContext')
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .retain_numba_oneapi_context(self._context))
+                  .retain_numba_oneapi_context(self._device_t_obj.context))
         if(retval == -1):
             _raise_driver_error("retain_numba_oneapi_context", -1)
 
-        return (self.__cpu_context)
+        return (self._device_t_obj.context)
 
     def release_context(self):
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .release_numba_oneapi_context(self._context))
+                  .release_numba_oneapi_context(self._device_t_obj.context))
         if retval == -1:
             _raise_driver_error("release_numba_oneapi_context", -1)
 
@@ -128,7 +193,7 @@ class Device():
             retval = (_numba_oneapi_pybindings
                       .lib
                       .write_numba_oneapi_mem_buffer_to_device(
-                          self._queue_ptr,
+                          self._device_t_obj.queue,
                           array.get_buffer_obj()[0],
                           True,
                           0,
@@ -140,11 +205,11 @@ class Device():
                                     -1)
             return array
         elif isinstance(array, ndarray):
-            dArr = DeviceArray(self._context_ptr, array)
+            dArr = DeviceArray(self._device_t_obj.context, array)
             retval = (_numba_oneapi_pybindings
                       .lib
                       .write_numba_oneapi_mem_buffer_to_device(
-                          self._queue_ptr,
+                          self._device_t_obj.queue,
                           dArr.get_buffer_obj()[0],
                           True,
                           0,
@@ -164,7 +229,7 @@ class Device():
         retval = (_numba_oneapi_pybindings
                   .lib
                   .read_numba_oneapi_mem_buffer_from_device(
-                      self._queue_ptr,
+                      self._device_t_obj.queue,
                       array.get_buffer_obj()[0],
                       True,
                       0,
@@ -174,25 +239,22 @@ class Device():
             print("Error Code  : ", retval)
             _raise_driver_error("read_numba_oneapi_mem_buffer_from_device", -1)
 
-    def get_context(self):
-        return self._context_ptr
+    def get_context_ptr(self):
+        return self._device_t_obj.context
 
-    def create_program_from_spirv(self, spirv):
-        prog_t_obj = _numba_oneapi_pybindings.ffi.new("program_t *")
-        retval = (_numba_oneapi_pybindings
-                  .lib
-                  .create_and_build_numba_oneapi_program_from_spirv(
-                      self._device_ptr,
-                      self.spirv_bc,
-                      len(self.spirv_bc),
-                      prog_t_obj))
-        if retval == -1:
-            print("Error Code  : ", retval)
-            _raise_driver_error("create_and_build_numba_oneapi_program_from_spirv", -1)
-        return prog_t_obj
+    def get_device_ptr(self):
+        return self._device_t_obj.device
+
+    def get_queue_ptr(self):
+        return self._device_t_obj.queue
+
+    def get_device_t_obj(self):
+        return self._device_t_obj
 
 
-################################## Runtime class #########################
+##########################################################################
+# Runtime class
+##########################################################################
 
 
 class _Runtime():
@@ -224,10 +286,7 @@ class _Runtime():
             cls._runtime = ffiobj
 
             if cls._runtime[0][0].has_cpu:
-                cls._cpu_device = Device(
-                    cls._runtime[0][0].first_cpu_device.device,
-                    cls._runtime[0][0].first_cpu_device.context,
-                    cls._runtime[0][0].first_cpu_device.queue)
+                cls._cpu_device = Device(cls._runtime[0][0].first_cpu_device)
             else:
                 # What should we do here? Raise an exception? Provide warning?
                 # Maybe do not do anything here, only when this context is to
@@ -235,10 +294,7 @@ class _Runtime():
                 print("No CPU device")
 
             if cls._runtime[0][0].has_gpu:
-                cls._gpu_device = Device(
-                    cls._runtime[0][0].first_gpu_device.device,
-                    cls._runtime[0][0].first_gpu_device.context,
-                    cls._runtime[0][0].first_gpu_device.queue)
+                cls._gpu_device = Device(cls._runtime[0][0].first_gpu_device)
             else:
                 # Same as the cpu case above.
                 print("No GPU device")
