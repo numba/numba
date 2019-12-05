@@ -480,56 +480,6 @@ error:
     return NUMBA_ONEAPI_FAILURE;
 }
 
-#if 0
-/*!
- *
- */
-int create_numba_oneapi_mem_buffers (const void *context_ptr,
-                                     buffer_t buffs[],
-                                     size_t nbuffers,
-                                     const mem_flags_t mem_flags[],
-                                     const size_t buffsizes[])
-{
-    size_t i;
-    cl_int err, err1;
-
-    // Get the context from the device
-    cl_context *context = (cl_context*)(context_ptr);
-    err = clRetainContext(*context);
-    CHECK_OPEN_CL_ERROR(err, "Failed to retain context.");
-
-    // create the buffers
-    err = 0;
-    for(i = 0; i < nbuffers; ++i) {
-
-        // Allocate a numba_oneapi_buffer_t object
-        buffs[i] = (buffer_t)malloc(sizeof(struct numba_oneapi_buffer_t));
-        CHECK_MALLOC_ERROR(buffer_t, buffs[i]);
-
-        // Create the OpenCL buffer.
-        // NOTE : Copying of data from host to device needs to happen
-        // explicitly using clEnqueue[Write|Read]Buffer. This would change in
-        // the future.
-        buffs[i]->buffer = clCreateBuffer(*context, mem_flags[i], buffsizes[i],
-                NULL, &err1);
-        err |= err1;
-    }
-    CHECK_OPEN_CL_ERROR(err, "Failed to create CL buffer.");
-#if DEBUG
-    printf("DEBUG: CL buffers created...\n");
-#endif
-
-    err = clReleaseContext(*context);
-    CHECK_OPEN_CL_ERROR(err, "Failed to release context.");
-
-    return NUMBA_ONEAPI_SUCCESS;
-
-malloc_error:
-    return NUMBA_ONEAPI_FAILURE;
-error:
-    return NUMBA_ONEAPI_FAILURE;
-}
-#endif
 
 int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
                                        size_t buffsize,
@@ -572,30 +522,6 @@ error:
     return NUMBA_ONEAPI_FAILURE;
 }
 
-#if 0
-/*!
- *
- */
-int destroy_numba_oneapi_mem_buffers (buffer_t buffs[], size_t nbuffers)
-{
-    size_t i;
-    cl_int err;
-
-    for(i = 0; i < nbuffers; ++i) {
-        err = clReleaseMemObject((cl_mem)buffs[i]->buffer);
-        free(buffs[i]);
-        CHECK_OPEN_CL_ERROR(err, "Failed to release CL buffer.");
-    }
-#if DEBUG
-    printf("DEBUG: CL buffers destroyed...\n");
-#endif
-
-    return NUMBA_ONEAPI_SUCCESS;
-
-error:
-    return NUMBA_ONEAPI_FAILURE;
-}
-#endif
 
 int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff)
 {
