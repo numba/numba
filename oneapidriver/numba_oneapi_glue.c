@@ -828,6 +828,7 @@ int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
  */
 int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
                                               kernel_t kernel_t_ptr,
+                                              size_t nargs,
                                               const kernel_arg_t *array_of_args,
                                               unsigned int work_dim,
                                               const size_t *global_work_offset,
