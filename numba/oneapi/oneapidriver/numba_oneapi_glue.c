@@ -547,7 +547,7 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
                                              bool blocking,
                                              size_t offset,
                                              size_t buffersize,
-                                             const void* data_ptr)
+                                             const void *data_ptr)
 {
     cl_int err;
     cl_command_queue queue;
@@ -589,7 +589,7 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
                                               bool blocking,
                                               size_t offset,
                                               size_t buffersize,
-                                              void* data_ptr)
+                                              void *data_ptr)
 {
     cl_int err;
     cl_command_queue queue;
