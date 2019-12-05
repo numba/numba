@@ -294,6 +294,14 @@ def constant_function_pointer(context, builder, ty, pyval):
     return builder.bitcast(ptrval, ptrty)
 
 
+@lower_constant(types.Optional)
+def constant_optional(context, builder, ty, pyval):
+    if pyval is None:
+        return context.make_optional_none(builder, ty.type)
+    else:
+        return context.make_optional_value(builder, ty.type, pyval)
+
+
 # -----------------------------------------------------------------------------
 
 @lower_builtin(type, types.Any)

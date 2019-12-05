@@ -107,7 +107,8 @@ class InliningBase(TestCase):
         if self._DEBUG:
             print("FIR".center(80, "-"))
             fir.dump()
-        self.assertEqual(len(fir.blocks), block_count)
+        if block_count != 'SKIP':
+            self.assertEqual(len(fir.blocks), block_count)
         block = next(iter(fir.blocks.values()))
 
         # if we don't expect the function to be inlined then make sure there is
@@ -1008,6 +1009,20 @@ class TestGeneralInlining(InliningBase):
             return bar(a + b, c=19)
 
         self.check(impl, 3, 4, inline_expect={'bar': True})
+
+    def test_inlining_optional_constant(self):
+        # This testcase causes `b` to be a Optional(bool) constant once it is
+        # inlined into foo().
+        @njit(inline='always')
+        def bar(a=None, b=None):
+            if b is None:
+                b = 123     # this changes the type of `b` due to lack of SSA
+            return (a, b)
+
+        def impl():
+            return bar(), bar(123), bar(b=321)
+
+        self.check(impl, block_count='SKIP', inline_expect={'bar': True})
 
 
 class TestInlineOptions(TestCase):
