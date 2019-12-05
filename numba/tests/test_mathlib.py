@@ -154,6 +154,8 @@ def lgamma(x):
 def pow(x, y):
     return math.pow(x, y)
 
+def gcd(x, y):
+    return math.gcd(x, y)
 
 def copysign(x, y):
     return math.copysign(x, y)
@@ -622,6 +624,23 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         y_values = [x * 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
+    def test_gcd(self, flags=enable_pyobj_flags):
+        from itertools import product, repeat, chain
+        pyfunc = gcd
+        signed_args = product(
+            sorted(types.signed_domain), *repeat((-2, -1, 0, 1, 2, 7, 10), 2)
+        )
+        unsigned_args = product(
+            sorted(types.unsigned_domain), *repeat((0, 1, 2, 7, 9, 16), 2)
+        )
+        x_types, x_values, y_values = zip(*chain(signed_args, unsigned_args))
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
+    def test_gcd_npm(self):
+        self.test_gcd(flags=no_pyobj_flags)
 
     @tag('important')
     def test_pow_npm(self):
