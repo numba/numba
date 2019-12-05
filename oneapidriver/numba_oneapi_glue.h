@@ -19,48 +19,26 @@ typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
 } mem_flags_t;
 
 
-// FIXME
-// 1) device_t is a very bad name. In OpenCL and presumably Level0 API
-//    context is an abstraction over devices. Our naming convention suggests
-//    almost the opposite.
-// 2) device_t and platform_t should be consistent with the other typedefs.
-//    Convert these two typedefs into pointers and then add constructors and
-//    destructors.
-//
-
 /*!
  *
  */
-struct numba_oneapi_device_t
+struct numba_oneapi_env_t
 {
     // TODO : Add members to store more device related information such as name
-    void *device;
     void *context;
+    void *device;
     void *queue;
     unsigned int max_work_item_dims;
+    int (*dump_fn) (void *);
 };
 
-typedef struct numba_oneapi_device_t device_t;
-
-/*! @struct numba_oneapi_platform_t
- *  @brief Stores the various information for a given platform/driver including
- *  an array of devices for this platform.
- *
- */
-struct numba_oneapi_platform_t
-{
-    char *platform_name;
-    unsigned num_devices;
-};
-
-typedef struct numba_oneapi_platform_t platform_t;
+typedef struct numba_oneapi_env_t* env_t;
 
 
 struct numba_oneapi_buffer_t
 {
     void *buffer;
-    // mem flag
-    // context
+    // type of buffer ?
 };
 
 typedef struct numba_oneapi_buffer_t* buffer_t;
@@ -98,11 +76,12 @@ struct numba_oneapi_runtime_t
 {
     unsigned num_platforms;
     void *platform_ids;
-    platform_t *platform_infos;
+    //platform_t *platform_infos;
     bool has_cpu;
     bool has_gpu;
-    device_t first_cpu_device;
-    device_t first_gpu_device;
+    env_t first_cpu_env;
+    env_t first_gpu_env;
+    int (*dump_fn) (void *);
 };
 
 typedef struct numba_oneapi_runtime_t* runtime_t;
@@ -129,7 +108,7 @@ int create_numba_oneapi_runtime (runtime_t *rt);
  */
 int destroy_numba_oneapi_runtime (runtime_t *rt);
 
-
+#if 0
 /*!
  * @brief Create memory buffers.
  *
@@ -147,21 +126,21 @@ int destroy_numba_oneapi_runtime (runtime_t *rt);
  * @return An error code indicating if all the buffers were successfully created
  *         or not.
  */
-int create_numba_oneapi_mem_buffers (const void *context_ptr,
+int create_numba_oneapi_mem_buffers (const env_t env_t_ptr,
                                      buffer_t buffs[],
                                      size_t nbuffers,
                                      const mem_flags_t mem_flags[],
                                      const size_t buffsizes[]);
-
+#endif
 
 /*!
  *
  */
-int create_numba_oneapi_rw_mem_buffer (const void *context_ptr,
-                                       buffer_t *buff,
-                                       const size_t buffsize);
+int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
+                                       size_t buffsize,
+                                       buffer_t *buff);
 
-
+#if 0
 /*!
  * @brief Frees the memory allocated for each buffer_t object.
  *
@@ -172,7 +151,7 @@ int create_numba_oneapi_rw_mem_buffer (const void *context_ptr,
  *         destroyed or not.
  */
 int destroy_numba_oneapi_mem_buffers (buffer_t buffs[], size_t nbuffers);
-
+#endif
 
 int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff);
 
@@ -180,7 +159,7 @@ int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff);
 /*!
  *
  */
-int write_numba_oneapi_mem_buffer_to_device (const void *queue_ptr,
+int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
                                              buffer_t buff,
                                              bool blocking_copy,
                                              size_t offset,
@@ -191,7 +170,7 @@ int write_numba_oneapi_mem_buffer_to_device (const void *queue_ptr,
 /*!
  *
  */
-int read_numba_oneapi_mem_buffer_from_device (const void *queue_ptr,
+int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
                                               buffer_t buff,
                                               bool blocking_copy,
                                               size_t offset,
@@ -202,31 +181,33 @@ int read_numba_oneapi_mem_buffer_from_device (const void *queue_ptr,
 /*!
  *
  */
-int create_and_build_numba_oneapi_program_from_spirv (const device_t *d_ptr,
-                                                      const void *il,
-                                                      size_t length,
-                                                      program_t *program_ptr);
+int create_numba_oneapi_program_from_spirv (env_t env_t_ptr,
+                                            const void *il,
+                                            size_t length,
+                                            program_t *program_t_ptr);
 
 
 /*!
  *
  */
-int create_and_build_numba_oneapi_program_from_source (const device_t *d_ptr,
-                                                       unsigned int count,
-                                                       const char **strings,
-                                                       const size_t *lengths,
-                                                       program_t *program_ptr);
+int create_numba_oneapi_program_from_source (env_t env_t_ptr,
+                                             unsigned int count,
+                                             const char **strings,
+                                             const size_t *lengths,
+                                             program_t *program_t_ptr);
 
 /*!
  *
  */
-int destroy_numba_oneapi_program (program_t *program_ptr);
+int destroy_numba_oneapi_program (program_t *program_t_ptr);
 
+
+int build_numba_oneapi_program (env_t env_t_ptr, program_t program_t_ptr);
 
 /*!
  *
  */
-int create_numba_oneapi_kernel (void *context_ptr,
+int create_numba_oneapi_kernel (env_t env_t_ptr,
                                 program_t program_ptr,
                                 const char *kernel_name,
                                 kernel_t *kernel_ptr);
@@ -234,13 +215,14 @@ int create_numba_oneapi_kernel (void *context_ptr,
 
 int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr);
 
+#if 0
 /*!
  * @brief Creates all the boilerplate around creating an OpenCL kernel from a
  * source string. CreateProgram, BuildProgram, CreateKernel, CreateKernelArgs,
  * EnqueueKernels.
  *
  */
-int enqueue_numba_oneapi_kernel_from_source (const device_t *device_ptr,
+int enqueue_numba_oneapi_kernel_from_source (env_t env_t_ptr,
                                              const char **program_src,
                                              const char *kernel_name,
                                              const buffer_t buffers[],
@@ -249,17 +231,18 @@ int enqueue_numba_oneapi_kernel_from_source (const device_t *device_ptr,
                                              const size_t *global_work_offset,
                                              const size_t *global_work_size,
                                              const size_t *local_work_size);
+#endif
 
 /*!
  *
  */
-int retain_numba_oneapi_context (const void *context_ptr);
+int retain_numba_oneapi_context (env_t env_t_ptr);
 
 
 /*!
  *
  */
-int release_numba_oneapi_context (const void *context_ptr);
+int release_numba_oneapi_context (env_t env_t_ptr);
 
 
 //---- TODO:
@@ -267,15 +250,5 @@ int release_numba_oneapi_context (const void *context_ptr);
 // 1. Add release/retain methods for buffers
 
 //---------
-
-
-/*!
- * @brief Helper function to print out information about the platform and
- * devices available to this runtime.
- */
-int dump_numba_oneapi_runtime_info (const runtime_t rt);
-
-
-int dump_device_info (const device_t *device_ptr);
 
 #endif /*--- NUMBA_ONEAPI_GLUE_H_ ---*/
