@@ -286,7 +286,7 @@ class _Runtime():
             cls._runtime = ffiobj
 
             if cls._runtime[0][0].has_cpu:
-                cls._cpu_device = Device(cls._runtime[0][0].first_cpu_device)
+                cls._cpu_device = Device(cls._runtime[0][0].first_cpu_env)
             else:
                 # What should we do here? Raise an exception? Provide warning?
                 # Maybe do not do anything here, only when this context is to
@@ -294,7 +294,7 @@ class _Runtime():
                 print("No CPU device")
 
             if cls._runtime[0][0].has_gpu:
-                cls._gpu_device = Device(cls._runtime[0][0].first_gpu_device)
+                cls._gpu_device = Device(cls._runtime[0][0].first_gpu_env)
             else:
                 # Same as the cpu case above.
                 print("No GPU device")
