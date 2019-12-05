@@ -892,7 +892,7 @@ class TestConversionListToImmutableTypedList(TestCase):
                 def bar(lst):
                     {}
                 """.format(line)), context)
-            return njit(context["bar"])
+            return njit(context["bar"], disable_reflected_list=True)
         for line in ("lst.append(0)",
                      "lst[0] = 0",
                      "lst.pop()",
