@@ -316,6 +316,7 @@ class CompilerBase(object):
         )
 
     def _activate_disable_reflected_list(self):
+        self.state.old_dlr = self.state.typingctx.disable_reflected_list
         self.state.typingctx.disable_reflected_list = \
             self.state.flags.disable_reflected_list
         #disable = self.state.flags.disable_reflected_list
@@ -328,7 +329,7 @@ class CompilerBase(object):
         #        copy.copy(self.state.typingctx._globals)
 
     def _deactivate_disable_reflected_list(self):
-        self.state.typingctx.disable_reflected_list = False
+        self.state.typingctx.disable_reflected_list = self.state.old_dlr
 
     def compile_extra(self, func):
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)
