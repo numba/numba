@@ -785,7 +785,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
             _inline = self._inline
-            _overload_func = self._overload_func
+            _overload_func = staticmethod(self._overload_func)
             _inline_overloads = self._inline_overloads
 
             def generic(_, args, kws):
