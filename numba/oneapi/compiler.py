@@ -189,9 +189,6 @@ class OneAPIKernel(OneAPIKernelBase):
         #    iv.  enqueues the kernel
 
         raise ValueError("TODO")
-        #program = context.create_program_from_il(spirv_bc)
-        # program.build()
-        #kernel = program.create_kernel(self._entry_name)
 
         #context, device, program, kernel = self.bind()
         #queue = devices.get_queue()
@@ -234,6 +231,20 @@ class OneAPIKernel(OneAPIKernelBase):
                 retr.append(lambda: devary.copy_to_host(val, stream=queue))
 
             c_intp = ctypes.c_ssize_t
+
+""" New version
+            meminfo = ctypes.c_void_p(0)
+            parent = ctypes.c_void_p(0)
+            nitems = c_intp(devary.size)
+            itemsize = c_intp(devary.dtype.itemsize)
+            data = driver.device_pointer(devary)  # @@
+
+            kernelargs.append(driver.runtime.create_kernel_arg(meminfo))
+            kernelargs.append(driver.runtime.create_kernel_arg(parent))
+            kernelargs.append(driver.runtime.create_kernel_arg(nitems))
+            kernelargs.append(driver.runtime.create_kernel_arg(itemsize))
+            kernelargs.append(driver.runtime.create_kernel_arg(data))
+"""
 
             meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)

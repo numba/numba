@@ -334,5 +334,23 @@ class _Runtime():
 
         return self._gpu_device
 
+"""
+    def enqueue_kernel(arguments,...):  # arguments is of type list(kernel_arg_t)
+        kernel_arg_array = _numba_oneapi_pybindings.ffi.new("kernel_arg_t [" + str(len(arguments)) + "]")
+        for i in range(len(arguments)):
+            kernel_arg_array[i] = arguments[i]
+
+    def create_kernel_arg(arg):
+        new_kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
+        if isinstance(arg, DeviceArray):
+            retval = (_numba_oneapi_pybindings
+                      .lib
+                      .create_numba_oneapi_kernel_arg(arg.buffer, sizeof(cl_mem), new_kernel_arg_t))
+            if(retval):
+                _raise_driver_error("destroy_numba_oneapi_runtime", -1)
+        elif isinstance(arg, ...):
+        return new_kernel_arg_t
+            
+"""
 
 runtime = _Runtime()
