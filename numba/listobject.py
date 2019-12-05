@@ -1063,7 +1063,13 @@ def _equals_helper(this, other, OP):
             if len(this) != len(other):
                 return False
             for i in range(len(this)):
-                if this[i] != other[i]:
+                if this[i] is None:
+                    if other[i] is not None:
+                        return False
+                elif other[i] is None:
+                    if this[i] is not None:
+                        return False
+                elif this[i] != other[i]:
                     return False
             else:
                 return True
