@@ -71,8 +71,8 @@ class DeviceArray:
         retval = (_numba_oneapi_pybindings
                   .lib
                   .create_numba_oneapi_rw_mem_buffer(context_ptr,
-                                                     self._buffObj,
-                                                     self._buffSize))
+                                                     self._buffSize,
+                                                     self._buffObj))
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error("create_numba_oneapi_runtime", -1)
