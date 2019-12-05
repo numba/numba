@@ -202,13 +202,13 @@ int create_numba_oneapi_program_from_source (env_t env_t_ptr,
 int destroy_numba_oneapi_program (program_t *program_t_ptr);
 
 
-int build_numba_oneapi_program (env_t env_t_ptr, program_t program_t_ptr);
+int build_numba_oneapi_program (env_t env_t_ptr, program_t *program_t_ptr);
 
 /*!
  *
  */
 int create_numba_oneapi_kernel (env_t env_t_ptr,
-                                program_t program_ptr,
+                                program_t *program_ptr,
                                 const char *kernel_name,
                                 kernel_t *kernel_ptr);
 
