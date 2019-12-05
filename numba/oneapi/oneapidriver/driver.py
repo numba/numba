@@ -119,7 +119,7 @@ class Program():
                   .lib
                   .build_numba_oneapi_program(
                       device.get_env_ptr(),
-                      self._prog_t_obj))
+                      self._prog_t_obj[0]))
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error(
