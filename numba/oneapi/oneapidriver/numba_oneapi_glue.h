@@ -38,6 +38,7 @@ typedef struct numba_oneapi_env* env_t;
 struct numba_oneapi_buffer
 {
     void *buffer;
+    size_t size_of_buff_obj;
     // type of buffer ?
 };
 

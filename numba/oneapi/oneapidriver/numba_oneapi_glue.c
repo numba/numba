@@ -759,6 +759,7 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
     cl_context context;
     kernel_t ker;
 
+    ker = NULL;
     ker = (kernel_t)malloc(sizeof(struct numba_oneapi_kernel));
     CHECK_MALLOC_ERROR(kernel_t, kernel_ptr);
 
@@ -780,6 +781,7 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
 malloc_error:
     return NUMBA_ONEAPI_FAILURE;
 error:
+    free(ker);
     return NUMBA_ONEAPI_FAILURE;
 }
 
@@ -810,7 +812,25 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
                                     size_t arg_size,
                                     kernel_arg_t *kernel_arg_t_ptr)
 {
+    kernel_arg_t kernel_arg;
 
+    kernel_arg = NULL;
+    kernel_arg = (kernel_arg_t)malloc(sizeof(struct numba_oneapi_kernel_arg));
+    CHECK_MALLOC_ERROR(kernel_arg_t, kernel_arg);
+
+    kernel_arg->arg_size = arg_size;
+    kernel_arg->arg_value = arg_value;
+
+#if DEBUG
+    printf("DEBUG: kernel arg created\n");
+#endif
+
+    *kernel_arg_t_ptr = kernel_arg;
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+malloc_error:
+    return NUMBA_ONEAPI_FAILURE;
 }
 
 
@@ -819,7 +839,13 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
  */
 int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
 {
+    free(*kernel_arg_t_ptr);
 
+#if DEBUG
+    printf("DEBUG: kernel arg destroyed...\n");
+#endif
+
+    return NUMBA_ONEAPI_SUCCESS;
 }
 
 
@@ -835,7 +861,7 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
                                               const size_t *global_work_size,
                                               const size_t *local_work_size)
 {
-    int i;
+    size_t i;
     cl_int err;
     cl_kernel kernel;
     cl_command_queue queue;
