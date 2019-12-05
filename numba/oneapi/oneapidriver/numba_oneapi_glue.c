@@ -835,7 +835,34 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
                                               const size_t *global_work_size,
                                               const size_t *local_work_size)
 {
+    int i;
+    cl_int err;
+    cl_kernel kernel;
+    cl_command_queue queue;
 
+    err = 0;
+
+    kernel = (cl_kernel)kernel_t_ptr->kernel;
+    queue = (cl_command_queue)env_t_ptr->queue;
+
+    // Set the kernel arguments
+    for(i = 0; i < nargs; ++i)
+        err |= clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
+                array_of_args[i]->arg_value);
+    CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
+
+    // Execute the kernel. Not using events for the time being.
+    err = clEnqueueNDRangeKernel(queue, kernel, work_dim, global_work_offset,
+            global_work_size, local_work_size, 0, NULL, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not enqueue the kernel");
+
+    err = clFinish(queue);
+    CHECK_OPEN_CL_ERROR(err, "Failed while waiting for queue to finish");
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+error:
+    return NUMBA_ONEAPI_FAILURE;
 }
 
 
