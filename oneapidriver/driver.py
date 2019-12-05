@@ -59,7 +59,7 @@ class DeviceArray:
     _ndarray = None
     _buffSize = None
 
-    def __init__(self, context_ptr, arr):
+    def __init__(self, env_ptr, arr):
 
         if not isinstance(arr, ndarray):
             _raise_unsupported_type_error("DeviceArray constructor")
@@ -70,7 +70,7 @@ class DeviceArray:
         self._buffSize = arr.itemsize * arr.size
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .create_numba_oneapi_rw_mem_buffer(context_ptr,
+                  .create_numba_oneapi_rw_mem_buffer(env_ptr,
                                                      self._buffSize,
                                                      self._buffObj))
         if retval == -1:
@@ -166,7 +166,7 @@ class Kernel():
 class Device():
 
     def __init__(self, device_t_obj):
-        self._device_t_obj = device_t_obj
+        self._env_ptr = device_t_obj
 
     def __del__(self):
         pass
@@ -175,16 +175,16 @@ class Device():
         print('return first_cpu_conext.context after calling clRetainContext')
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .retain_numba_oneapi_context(self._device_t_obj.context))
+                  .retain_numba_oneapi_context(self._env_ptr.context))
         if(retval == -1):
             _raise_driver_error("retain_numba_oneapi_context", -1)
 
-        return (self._device_t_obj.context)
+        return (self._env_ptr.context)
 
     def release_context(self):
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .release_numba_oneapi_context(self._device_t_obj.context))
+                  .release_numba_oneapi_context(self._env_ptr.context))
         if retval == -1:
             _raise_driver_error("release_numba_oneapi_context", -1)
 
@@ -193,7 +193,7 @@ class Device():
             retval = (_numba_oneapi_pybindings
                       .lib
                       .write_numba_oneapi_mem_buffer_to_device(
-                          self._device_t_obj.queue,
+                          self._env_ptr,
                           array.get_buffer_obj()[0],
                           True,
                           0,
@@ -205,11 +205,11 @@ class Device():
                                     -1)
             return array
         elif isinstance(array, ndarray):
-            dArr = DeviceArray(self._device_t_obj.context, array)
+            dArr = DeviceArray(self._env_ptr, array)
             retval = (_numba_oneapi_pybindings
                       .lib
                       .write_numba_oneapi_mem_buffer_to_device(
-                          self._device_t_obj.queue,
+                          self._env_ptr,
                           dArr.get_buffer_obj()[0],
                           True,
                           0,
@@ -229,7 +229,7 @@ class Device():
         retval = (_numba_oneapi_pybindings
                   .lib
                   .read_numba_oneapi_mem_buffer_from_device(
-                      self._device_t_obj.queue,
+                      self._env_ptr.queue,
                       array.get_buffer_obj()[0],
                       True,
                       0,
@@ -240,16 +240,16 @@ class Device():
             _raise_driver_error("read_numba_oneapi_mem_buffer_from_device", -1)
 
     def get_context_ptr(self):
-        return self._device_t_obj.context
+        return self._env_ptr.context
 
     def get_device_ptr(self):
-        return self._device_t_obj.device
+        return self._env_ptr.device
 
     def get_queue_ptr(self):
-        return self._device_t_obj.queue
+        return self._env_ptr.queue
 
-    def get_device_t_obj(self):
-        return self._device_t_obj
+    def get_env_ptr(self):
+        return self._env_ptr
 
 
 ##########################################################################
