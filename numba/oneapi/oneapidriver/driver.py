@@ -105,15 +105,25 @@ class Program():
         self._prog_t_obj = _numba_oneapi_pybindings.ffi.new("program_t *")
         retval = (_numba_oneapi_pybindings
                   .lib
-                  .create_and_build_numba_oneapi_program_from_spirv(
-                      device.get_device_t_obj(),
+                  .create_numba_oneapi_program_from_spirv(
+                      device.get_env_ptr(),
                       spirv_module,
                       len(spirv_module),
                       self._prog_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error(
-                "create_and_build_numba_oneapi_program_from_spirv", -1)
+                "create_numba_oneapi_program_from_spirv", -1)
+
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .build_numba_oneapi_program(
+                      device.get_env_ptr(),
+                      self._prog_t_obj))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error(
+                "build_numba_oneapi_program", -1)
 
     def __del__(self):
         retval = (_numba_oneapi_pybindings
