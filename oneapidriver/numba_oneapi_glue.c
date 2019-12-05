@@ -229,7 +229,7 @@ error:
  */
 static int get_first_device (cl_platform_id* platforms,
                              cl_uint platformCount,
-                             cl_device_id device,
+                             cl_device_id *device,
                              cl_device_type device_ty)
 {
     cl_int status;
@@ -243,7 +243,7 @@ static int get_first_device (cl_platform_id* platforms,
         if(!ndevices) continue;
 
         // get the first device
-        status = clGetDeviceIDs(platforms[i], device_ty, 1, &device, NULL);
+        status = clGetDeviceIDs(platforms[i], device_ty, 1, device, NULL);
         CHECK_OPEN_CL_ERROR(status, "Could not get first cl_device_id.");
 
         // If the first device of this type was discovered, no need to look more
@@ -282,24 +282,24 @@ static int create_numba_oneapi_env_t (cl_platform_id* platforms,
     env->device = NULL;
     env->context = NULL;
     env->queue = NULL;
-    err1 = get_first_device(platforms, nplatforms, (cl_device_id)env->device,
+    err1 = get_first_device(platforms, nplatforms, &device,
             device_ty);
     CHECK_NUMBA_ONEAPI_GLUE_ERROR(err1, "Failed inside get_first_device");
 
     // get the CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS for this device
-    err = clGetDeviceInfo((cl_device_id)env->device,
+    err = clGetDeviceInfo(device,
             CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
             sizeof(env->max_work_item_dims), &env->max_work_item_dims, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get max work item dims");
 
     // Create a context and associate it with device
-    device = (cl_device_id)env->device;
+    env->device = device;
     env->context = clCreateContext(NULL, 1, &device, NULL,
             NULL, &err);
     CHECK_OPEN_CL_ERROR(err, "Could not create device context.");
     // Create a queue and associate it with the context
     env->queue = clCreateCommandQueueWithProperties((cl_context)env->context,
-            (cl_device_id)env->device, 0, &err);
+            device, 0, &err);
     CHECK_OPEN_CL_ERROR(err, "Could not create command queue.");
 
     env ->dump_fn = dump_device_info;
