@@ -253,7 +253,7 @@ static int create_numba_oneapi_env_t (cl_platform_id* platforms,
     device = NULL;
 
     // Allocate the env_t object
-    env = (env_t)malloc(sizeof(struct numba_oneapi_env_t));
+    env = (env_t)malloc(sizeof(struct numba_oneapi_env));
     CHECK_MALLOC_ERROR(env_t, env);
 
     device = (cl_device_id*)malloc(sizeof(cl_device_id));
@@ -388,8 +388,8 @@ int create_numba_oneapi_runtime (runtime_t *rt)
     runtime_t rtobj;
 
     rtobj = NULL;
-    // Allocate a new struct numba_oneapi_runtime_t object
-    rtobj = (runtime_t)malloc(sizeof(struct numba_oneapi_runtime_t));
+    // Allocate a new struct numba_oneapi_runtime object
+    rtobj = (runtime_t)malloc(sizeof(struct numba_oneapi_runtime));
     CHECK_MALLOC_ERROR(runtime_t, rt);
 
     rtobj->num_platforms = 0;
@@ -496,8 +496,8 @@ int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
     err = clRetainContext(context);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain context.");
 
-    // Allocate a numba_oneapi_buffer_t object
-    buff = (buffer_t)malloc(sizeof(struct numba_oneapi_buffer_t));
+    // Allocate a numba_oneapi_buffer object
+    buff = (buffer_t)malloc(sizeof(struct numba_oneapi_buffer));
     CHECK_MALLOC_ERROR(buffer_t, buffer_t_ptr);
 
     // Create the OpenCL buffer.
@@ -633,7 +633,7 @@ int create_numba_oneapi_program_from_spirv (env_t env_t_ptr,
 
     prog = NULL;
 
-    prog = (program_t)malloc(sizeof(struct numba_oneapi_program_t));
+    prog = (program_t)malloc(sizeof(struct numba_oneapi_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
     context = (cl_context)env_t_ptr->context;
@@ -673,7 +673,7 @@ int create_numba_oneapi_program_from_source (env_t env_t_ptr,
     program_t prog;
 
     prog = NULL;
-    prog = (program_t)malloc(sizeof(struct numba_oneapi_program_t));
+    prog = (program_t)malloc(sizeof(struct numba_oneapi_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
     context = (cl_context)env_t_ptr->context;
@@ -759,7 +759,7 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
     cl_context context;
     kernel_t ker;
 
-    ker = (kernel_t)malloc(sizeof(struct numba_oneapi_kernel_t));
+    ker = (kernel_t)malloc(sizeof(struct numba_oneapi_kernel));
     CHECK_MALLOC_ERROR(kernel_t, kernel_ptr);
 
     context = (cl_context)(env_t_ptr->context);

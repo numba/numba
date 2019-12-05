@@ -22,7 +22,7 @@ typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
 /*!
  *
  */
-struct numba_oneapi_env_t
+struct numba_oneapi_env
 {
     // TODO : Add members to store more device related information such as name
     void *context;
@@ -32,32 +32,32 @@ struct numba_oneapi_env_t
     int (*dump_fn) (void *);
 };
 
-typedef struct numba_oneapi_env_t* env_t;
+typedef struct numba_oneapi_env* env_t;
 
 
-struct numba_oneapi_buffer_t
+struct numba_oneapi_buffer
 {
     void *buffer;
     // type of buffer ?
 };
 
-typedef struct numba_oneapi_buffer_t* buffer_t;
+typedef struct numba_oneapi_buffer* buffer_t;
 
 
-struct numba_oneapi_kernel_t
+struct numba_oneapi_kernel
 {
     void *kernel;
 };
 
-typedef struct numba_oneapi_kernel_t* kernel_t;
+typedef struct numba_oneapi_kernel* kernel_t;
 
 
-struct numba_oneapi_program_t
+struct numba_oneapi_program
 {
     void *program;
 };
 
-typedef struct numba_oneapi_program_t* program_t;
+typedef struct numba_oneapi_program* program_t;
 
 
 struct numba_oneapi_kernel_arg
@@ -81,7 +81,7 @@ typedef struct numba_oneapi_kernel_arg* kernel_arg_t;
  *  @var numba_one_api_runtime_t::platform_infos
  *  An array of platform_t objects each corresponding to an OpenCL platform
  */
-struct numba_oneapi_runtime_t
+struct numba_oneapi_runtime
 {
     unsigned num_platforms;
     void *platform_ids;
@@ -93,7 +93,7 @@ struct numba_oneapi_runtime_t
     int (*dump_fn) (void *);
 };
 
-typedef struct numba_oneapi_runtime_t* runtime_t;
+typedef struct numba_oneapi_runtime* runtime_t;
 
 
 /*!

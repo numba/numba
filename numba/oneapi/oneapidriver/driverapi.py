@@ -53,7 +53,7 @@ ffibuilder.cdef("""
     } mem_flags_t;
 
 
-    struct numba_oneapi_env_t
+    struct numba_oneapi_env
     {
         void *context;
         void *device;
@@ -62,33 +62,33 @@ ffibuilder.cdef("""
         int (*dump_fn) (void *);
     };
 
-    typedef struct numba_oneapi_env_t* env_t;
+    typedef struct numba_oneapi_env* env_t;
 
-    struct numba_oneapi_buffer_t
+    struct numba_oneapi_buffer
     {
         void *buffer;
     };
 
-    typedef struct numba_oneapi_buffer_t* buffer_t;
+    typedef struct numba_oneapi_buffer* buffer_t;
 
 
-    struct numba_oneapi_kernel_t
+    struct numba_oneapi_kernel
     {
         void *kernel;
     };
 
-    typedef struct numba_oneapi_kernel_t* kernel_t;
+    typedef struct numba_oneapi_kernel* kernel_t;
 
 
-    struct numba_oneapi_program_t
+    struct numba_oneapi_program
     {
         void *program;
     };
 
-    typedef struct numba_oneapi_program_t* program_t;
+    typedef struct numba_oneapi_program* program_t;
 
 
-    struct numba_oneapi_runtime_t
+    struct numba_oneapi_runtime
     {
         unsigned num_platforms;
         void *platform_ids;
@@ -99,7 +99,7 @@ ffibuilder.cdef("""
         int (*dump_fn) (void *);
     };
 
-    typedef struct numba_oneapi_runtime_t* runtime_t;
+    typedef struct numba_oneapi_runtime* runtime_t;
 
     int create_numba_oneapi_runtime (runtime_t *rt);
     
@@ -108,6 +108,7 @@ ffibuilder.cdef("""
     int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
                                            size_t buffsize,
                                            buffer_t *buff);
+
     int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff);
     
     int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
@@ -116,7 +117,7 @@ ffibuilder.cdef("""
                                                  size_t offset,
                                                  size_t buffersize,
                                                  const void* d_ptr);
-                                                 
+
     int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
                                                   buffer_t buff,
                                                   bool blocking_copy,
