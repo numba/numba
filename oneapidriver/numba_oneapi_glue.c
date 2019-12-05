@@ -796,7 +796,7 @@ error:
 }
 
 
-int build_numba_oneapi_program (env_t env_t_ptr, program_t *program_t_ptr)
+int build_numba_oneapi_program (env_t env_t_ptr, program_t program_t_ptr)
 {
     cl_int err;
     cl_device_id device;
@@ -805,7 +805,7 @@ int build_numba_oneapi_program (env_t env_t_ptr, program_t *program_t_ptr)
     err = clRetainDevice(device);
     CHECK_OPEN_CL_ERROR(err, "Could not retain device");
     // Build (compile) the program for the device
-    err = clBuildProgram((cl_program)(*program_t_ptr)->program, 1, &device, NULL,
+    err = clBuildProgram((cl_program)program_t_ptr->program, 1, &device, NULL,
             NULL, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not build program");
 #if DEBUG
@@ -825,7 +825,7 @@ error:
  *
  */
 int create_numba_oneapi_kernel (env_t env_t_ptr,
-                                program_t *program_t_ptr,
+                                program_t program_t_ptr,
                                 const char *kernel_name,
                                 kernel_t *kernel_ptr)
 {
@@ -839,7 +839,7 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
     context = (cl_context)(env_t_ptr->context);
     err = clRetainContext(context);
     CHECK_OPEN_CL_ERROR(err, "Could not retain context");
-    ker->kernel = clCreateKernel((cl_program)((*program_t_ptr)->program),
+    ker->kernel = clCreateKernel((cl_program)(program_t_ptr->program),
             kernel_name, &err);
     CHECK_OPEN_CL_ERROR(err, "Could not create kernel");
     err = clReleaseContext(context);
