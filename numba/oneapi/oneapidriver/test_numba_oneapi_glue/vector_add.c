@@ -166,28 +166,26 @@ void buildAndExecuteKernel (const runtime_t rt, execution_ty ex)
 int main (int argc, char** argv)
 {
     runtime_t rt;
-    int status;
+    int err;
 
-    status = create_numba_oneapi_runtime(&rt);
-#if 0
-    if(status == NUMBA_ONEAPI_FAILURE)
-        goto error;
-    dump_numba_oneapi_runtime_info(rt);
+    err = create_numba_oneapi_runtime(&rt);
+    if(err == NUMBA_ONEAPI_FAILURE) goto error;
+    rt->dump_fn(rt);
 
     printf("\n===================================\n\n");
     //--- Execute on CPU
     printf("Executing on the first CPU device info: \n");
-    dump_device_info(&rt->first_cpu_device);
-    buildAndExecuteKernel(rt, ON_CPU);
+    rt->first_cpu_env->dump_fn(rt->first_cpu_env);
+    //buildAndExecuteKernel(rt, ON_CPU);
 
     printf("\n===================================\n\n");
 
     printf("Executing on the first GPU device info: \n");
-    dump_device_info(&rt->first_gpu_device);
-    buildAndExecuteKernel(rt, ON_GPU);
+    rt->first_gpu_env->dump_fn(rt->first_gpu_env);
+    //buildAndExecuteKernel(rt, ON_GPU);
 
     printf("\n===================================\n\n");
-#endif
+
     //--- Cleanup
     destroy_numba_oneapi_runtime(&rt);
 

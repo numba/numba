@@ -77,20 +77,19 @@
 /*------------------------------- Private helpers ----------------------------*/
 
 
-static int get_platform_name (cl_platform_id platform, char *platform_name)
+static int get_platform_name (cl_platform_id platform, char **platform_name)
 {
     cl_int err;
-    size_t len;
+    size_t n;
 
-    err = clGetPlatformInfo(platform, CL_PLATFORM_NAME, 0, platform_name, &len);
+    err = clGetPlatformInfo(platform, CL_PLATFORM_NAME, 0, *platform_name, &n);
     CHECK_OPEN_CL_ERROR(err, "Could not get platform name length.");
 
     // Allocate memory for the platform name string
-    platform_name = NULL;
-    platform_name = (char*)malloc(sizeof(char)*len);
-    CHECK_MALLOC_ERROR(char, platform_name);
+    *platform_name = (char*)malloc(sizeof(char)*n);
+    CHECK_MALLOC_ERROR(char*, *platform_name);
 
-    err = clGetPlatformInfo(platform, CL_PLATFORM_NAME, len, platform_name,
+    err = clGetPlatformInfo(platform, CL_PLATFORM_NAME, n, *platform_name,
             NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get platform name.");
 
@@ -99,7 +98,7 @@ static int get_platform_name (cl_platform_id platform, char *platform_name)
 malloc_error:
     return NUMBA_ONEAPI_FAILURE;
 error:
-    free(platform_name);
+    free(*platform_name);
     return NUMBA_ONEAPI_FAILURE;
 }
 
@@ -191,7 +190,7 @@ static int dump_numba_oneapi_runtime_info (void *obj)
         cl_platform_id *platforms = rt->platform_ids;
         for(i = 0; i < rt->num_platforms; ++i) {
             char *platform_name = NULL;
-            get_platform_name(platforms[i], platform_name);
+            get_platform_name(platforms[i], &platform_name);
             printf("Platform #%ld: %s\n", i, platform_name);
             free(platform_name);
         }
@@ -229,7 +228,7 @@ error:
  */
 static int get_first_device (cl_platform_id* platforms,
                              cl_uint platformCount,
-                             cl_device_id device,
+                             cl_device_id *device,
                              cl_device_type device_ty)
 {
     cl_int status;
@@ -243,7 +242,7 @@ static int get_first_device (cl_platform_id* platforms,
         if(!ndevices) continue;
 
         // get the first device
-        status = clGetDeviceIDs(platforms[i], device_ty, 1, &device, NULL);
+        status = clGetDeviceIDs(platforms[i], device_ty, 1, device, NULL);
         CHECK_OPEN_CL_ERROR(status, "Could not get first cl_device_id.");
 
         // If the first device of this type was discovered, no need to look more
@@ -271,39 +270,36 @@ static int create_numba_oneapi_env_t (cl_platform_id* platforms,
     cl_int err;
     int err1;
     env_t env;
-    cl_device_id device;
+    cl_device_id *device;
 
     env = NULL;
+    device = NULL;
 
     // Allocate the env_t object
     env = (env_t)malloc(sizeof(struct numba_oneapi_env_t));
     CHECK_MALLOC_ERROR(env_t, env);
-    // Initialize the members to NULL
-    env->device = NULL;
-    env->context = NULL;
-    env->queue = NULL;
-    err1 = get_first_device(platforms, nplatforms, (cl_device_id)env->device,
-            device_ty);
+
+    device = (cl_device_id*)malloc(sizeof(cl_device_id));
+
+    err1 = get_first_device(platforms, nplatforms, device, device_ty);
     CHECK_NUMBA_ONEAPI_GLUE_ERROR(err1, "Failed inside get_first_device");
 
     // get the CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS for this device
-    err = clGetDeviceInfo((cl_device_id)env->device,
-            CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
+    err = clGetDeviceInfo(*device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
             sizeof(env->max_work_item_dims), &env->max_work_item_dims, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get max work item dims");
 
     // Create a context and associate it with device
-    device = (cl_device_id)env->device;
-    env->context = clCreateContext(NULL, 1, &device, NULL,
-            NULL, &err);
+    env->context = clCreateContext(NULL, 1, device, NULL, NULL, &err);
     CHECK_OPEN_CL_ERROR(err, "Could not create device context.");
     // Create a queue and associate it with the context
     env->queue = clCreateCommandQueueWithProperties((cl_context)env->context,
-            (cl_device_id)env->device, 0, &err);
+            *device, 0, &err);
     CHECK_OPEN_CL_ERROR(err, "Could not create command queue.");
 
+    env->device = *device;
     env ->dump_fn = dump_device_info;
-
+    free(device);
     *env_t_ptr = env;
 
     return NUMBA_ONEAPI_SUCCESS;
