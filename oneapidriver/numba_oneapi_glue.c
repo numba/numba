@@ -802,6 +802,42 @@ error:
     return NUMBA_ONEAPI_FAILURE;
 }
 
+
+/*!
+ *
+ */
+int create_numba_oneapi_kernel_arg (const void *arg_value,
+                                    size_t arg_size,
+                                    kernel_arg_t *kernel_arg_t_ptr)
+{
+
+}
+
+
+/*!
+ *
+ */
+int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
+{
+
+}
+
+
+/*!
+ *
+ */
+int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
+                                              kernel_t kernel_t_ptr,
+                                              const kernel_arg_t *array_of_args,
+                                              unsigned int work_dim,
+                                              const size_t *global_work_offset,
+                                              const size_t *global_work_size,
+                                              const size_t *local_work_size)
+{
+
+}
+
+
 #if 0
 /*!
  *
