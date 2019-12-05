@@ -295,6 +295,7 @@ static int create_numba_oneapi_env_t (cl_platform_id* platforms,
     // Create a queue and associate it with the context
     env->queue = clCreateCommandQueueWithProperties((cl_context)env->context,
             *device, 0, &err);
+
     CHECK_OPEN_CL_ERROR(err, "Could not create command queue.");
 
     env->device = *device;
