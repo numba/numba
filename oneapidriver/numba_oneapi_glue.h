@@ -108,30 +108,6 @@ int create_numba_oneapi_runtime (runtime_t *rt);
  */
 int destroy_numba_oneapi_runtime (runtime_t *rt);
 
-#if 0
-/*!
- * @brief Create memory buffers.
- *
- * @param[in] context_ptr- The context in which the buffer needs to be created.
- * @param[in/out] buffs  - An array of buffer_t objects that would be
- *                         initialized by create_numba_oneapi_mem_buffers.
- * @param[in] nbuffers   - The number of buffer objects in the buffs array.
- * @param[in] mem_flags  - An array of flags indicating the type of buffer.
- *                         Currently, we only support the flags in mem_flags_t.
- *                         The size of this array needs to be equal to nbuffers.
- * @param[in] buffsizes  - An array of size_t indicating the size of each
- *                         buffer. The size of this array needs to be equal to
- *                         nbuffers.
- *
- * @return An error code indicating if all the buffers were successfully created
- *         or not.
- */
-int create_numba_oneapi_mem_buffers (const env_t env_t_ptr,
-                                     buffer_t buffs[],
-                                     size_t nbuffers,
-                                     const mem_flags_t mem_flags[],
-                                     const size_t buffsizes[]);
-#endif
 
 /*!
  *
@@ -140,18 +116,6 @@ int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
                                        size_t buffsize,
                                        buffer_t *buff);
 
-#if 0
-/*!
- * @brief Frees the memory allocated for each buffer_t object.
- *
- * @param[in] buffs    - The array of buffer_t objects.
- * @param[in] nbuffers -  The size of the buffs array.
- *
- * @return An error code indicating if all the buffers were successfully
- *         destroyed or not.
- */
-int destroy_numba_oneapi_mem_buffers (buffer_t buffs[], size_t nbuffers);
-#endif
 
 int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff);
 
