@@ -991,10 +991,12 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            # return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            # return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
@@ -1431,7 +1433,7 @@ class PythonAPI(object):
         out = self.from_native_value(typ, val, env_manager)
         return out
 
-    def from_native_value(self, typ, val, env_manager=None):
+    def from_native_value(self, typ, val, env_manager):
         """
         Box the native value of the given Numba type.  A Python object
         pointer is returned (NULL if an error occurred).

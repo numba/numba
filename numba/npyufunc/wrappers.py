@@ -482,12 +482,17 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         innercall, error = _prepare_call_to_object_mode(self.context,
                                                         builder, pyapi, func,
                                                         self.signature,
-                                                        args)
+                                                        args, self.envptr, self.env)
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
         # Acquire the GIL
         self.gil = pyapi.gil_ensure()
+
+        # prepare the env
+        envname = self.context.get_env_name(self.cres.fndesc)
+        self.env = self.cres.environment
+        self.envptr = builder.load(self.context.declare_env_global(builder.module, envname))
 
     def gen_epilogue(self, builder, pyapi):
         # Release GIL
@@ -496,6 +501,7 @@ class _GufuncObjectWrapper(_GufuncWrapper):
 
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     signature = cres.signature
+
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
@@ -505,8 +511,11 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
 
 
 def _prepare_call_to_object_mode(context, builder, pyapi, func,
-                                 signature, args):
+                                 signature, args, envptr, env):
     mod = builder.module
+
+    env_body = context.get_env_body(builder, envptr)
+    env_manager = pyapi.get_env_manager(env, env_body, envptr)
 
     bb_core_return = builder.append_basic_block('ufunc.core.return')
 
@@ -567,7 +576,7 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
                                               type_num, itemsize])
         else:
             # Other argument types => use generic boxing
-            obj = pyapi.from_native_value(argty, arg)
+            obj = pyapi.from_native_value(argty, arg, env_manager)
 
         builder.store(obj, objptr)
         object_args.append(obj)
