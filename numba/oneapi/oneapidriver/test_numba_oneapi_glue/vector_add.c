@@ -29,6 +29,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
+    kernel_arg_t kernel_args[3];
     float *A, *B, *C;
     size_t i;
     size_t datasize;
@@ -87,39 +88,46 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
         exit(1);
     }
 
-#if 0
+    // Set kernel arguments
+    err =  create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
+                                          buffers[0]->sizeof_buffer_ptr,
+                                          &kernel_args[0]);
+    err |= create_numba_oneapi_kernel_arg(&buffers[1]->buffer_ptr,
+                                          buffers[1]->sizeof_buffer_ptr,
+                                          &kernel_args[1]);
+    err |= create_numba_oneapi_kernel_arg(&buffers[2]->buffer_ptr,
+                                          buffers[2]->sizeof_buffer_ptr,
+                                          &kernel_args[2]);
+    if(err) {
+        fprintf(stderr, "Could not create the kernel_args. Abort!\n");
+        exit(1);
+    }
+
     // There are 'N' work-items
     indexSpaceSize[0] = N;
     workGroupSize[0] = 256;
 
     // Create a program with source code
-    err = enqueue_numba_oneapi_kernel_from_source(
-            &device,
-            (const char **)&programSource,
-            "vecadd",
-            buffers,
-            num_buffers,
-            1,
-            NULL,
-            indexSpaceSize,
-            workGroupSize);
+    err = set_args_and_enqueue_numba_oneapi_kernel(env_t_ptr, kernel_ptr,
+            3, kernel_args, 1, NULL, indexSpaceSize, workGroupSize);
 
     if(err) {
-        fprintf(stderr, "ERROR (%d): Could not build OpenCL program. Abort!\n",
+        fprintf(stderr, "ERROR (%d): Could not build enqueue kernel. Abort!\n",
                 err);
         exit(1);
     }
-#endif
+
     // Copy the device output buffer to the host output array
-    err = read_numba_oneapi_mem_buffer_from_device(env_t_ptr, buffers[0], true,
+    err = read_numba_oneapi_mem_buffer_from_device(env_t_ptr, buffers[2], true,
             0, datasize, C);
 
 #if 1
     // Validate the output
     for(i = 0; i < N; ++i) {
-        //if(C[i] != (i+1 + 2*(i+1))) {
-        if(C[i] != A[i]) {
-            printf("Position %ld Wrong Result\n", i);
+        if(C[i] != (i+1 + 2*(i+1))) {
+        //if(C[i] != A[i]) {
+            printf("Wrong value at C[%ld]. Expected %ld Actual %f\n",
+                    i, (i+1 + 2*(i+1)), C[i]);
             printf("%s", "Stop validating and exit...\n");
             exit(1);
         }
@@ -128,6 +136,10 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
 #endif
 
     // Cleanup
+    // free the kernel args
+    destroy_numba_oneapi_kernel_arg(&kernel_args[0]);
+    destroy_numba_oneapi_kernel_arg(&kernel_args[1]);
+    destroy_numba_oneapi_kernel_arg(&kernel_args[2]);
     // free the kernel
     destroy_numba_oneapi_kernel(&kernel_ptr);
     // free the program
@@ -162,7 +174,7 @@ int main (int argc, char** argv)
 
     printf("Executing on the first GPU device info: \n");
     rt->first_gpu_env->dump_fn(rt->first_gpu_env);
-    //buildAndExecuteKernel(rt, ON_GPU);
+    buildAndExecuteKernel(rt, ON_GPU);
 
     printf("\n===================================\n\n");
 

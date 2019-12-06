@@ -29,6 +29,13 @@
                         "valid command-queue.",                                \
                 __LINE__, __FILE__);                                           \
         goto error;                                                            \
+    case -38:                                                                  \
+        fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n"    \
+                        "%s\n",                                                \
+                retval, "[CL_INVALID_MEM_OBJECT] memory object is not a "      \
+                        "valid OpenCL memory object.",                         \
+                __LINE__, __FILE__,M);                                         \
+        goto error;                                                            \
     case -45:                                                                  \
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
                 retval, "[CL_INVALID_PROGRAM_EXECUTABLE] no successfully "     \
@@ -503,9 +510,11 @@ int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
     // Create the OpenCL buffer.
     // NOTE : Copying of data from host to device needs to happen explicitly
     // using clEnqueue[Write|Read]Buffer. This would change in the future.
-    buff->buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, buffsize, NULL,
-                                  &err);
+    buff->buffer_ptr = clCreateBuffer(context, CL_MEM_READ_WRITE, buffsize,
+                                      NULL, &err);
     CHECK_OPEN_CL_ERROR(err, "Failed to create CL buffer.");
+
+    buff->sizeof_buffer_ptr = sizeof(cl_mem);
 #if DEBUG
     printf("DEBUG: CL RW buffer created...\n");
 #endif
@@ -527,7 +536,7 @@ int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff)
 {
     cl_int err;
 
-    err = clReleaseMemObject((cl_mem)(*buff)->buffer);
+    err = clReleaseMemObject((cl_mem)(*buff)->buffer_ptr);
     CHECK_OPEN_CL_ERROR(err, "Failed to release CL buffer.");
     free(*buff);
 
@@ -554,7 +563,7 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
     cl_mem mem;
 
     queue = (cl_command_queue)env_t_ptr->queue;
-    mem = (cl_mem)buffer_t_ptr->buffer;
+    mem = (cl_mem)buffer_t_ptr->buffer_ptr;
 
 #if DEBUG
     assert(mem && "buffer memory is NULL");
@@ -596,7 +605,7 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
     cl_mem mem;
 
     queue = (cl_command_queue)env_t_ptr->queue;
-    mem = (cl_mem)buffer_t_ptr->buffer;
+    mem = (cl_mem)buffer_t_ptr->buffer_ptr;
 
     err = clRetainMemObject(mem);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain the command queue.");
