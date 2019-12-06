@@ -11,14 +11,6 @@ enum NUMBA_ONEAPI_GLUE_ERROR_CODES
 };
 
 
-typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
-{
-    NUMBA_ONEAPI_READ_WRITE = 0x0,
-    NUMBA_ONEAPI_WRITE_ONLY,
-    NUMBA_ONEAPI_READ_ONLY
-} mem_flags_t;
-
-
 /*!
  *
  */
