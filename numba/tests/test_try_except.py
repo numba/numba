@@ -11,7 +11,7 @@ from numba.errors import (
 )
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
-    skip_tryexcept_supported, MemoryLeakMixin
+    skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported
 )
 
 
@@ -519,6 +519,7 @@ class TestTryExceptOtherControlFlow(TestCase):
 
 
 @skip_tryexcept_unsupported
+@skip_parfors_unsupported
 class TestTryExceptParfors(TestCase):
     @unittest.expectedFailure
     def test_try_in_prange_reduction(self):
