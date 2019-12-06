@@ -58,19 +58,6 @@ class CPUContext(BaseContext):
 
     @global_compiler_lock
     def init(self):
-        """
-#        ll.set_option('openmp', '-debug')
-        ll.set_option('openmp', '-paropt=31')
-        ll.set_option('openmp', '-fopenmp')
-#        ll.set_option('openmp', '-fiopenmp')
-        ll.set_option('openmp', '-fintel-compatibility')
-        ll.set_option('openmp', '-mllvm')
-        ll.set_option('openmp', '-fintel-openmp-region')
-        ll.set_option('openmp', '-fopenmp-threadprivate-legacy')
-        #ll.set_option('openmp', '-print-after-all')
-        #ll.set_option('openmp', '-debug-pass=Structure')
-        """
-
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
@@ -270,6 +257,7 @@ class ParallelOptions(object):
     """
     def __init__(self, value):
         self.gen_openmp = False
+        self.gen_spirv = False
         if isinstance(value, bool):
             self.enabled = value
             self.comprehension = value
@@ -289,11 +277,14 @@ class ParallelOptions(object):
             self.fusion = value.pop('fusion', True)
             self.prange = value.pop('prange', True)
             self.gen_openmp = value.pop('openmp', False)
+            self.gen_spirv = value.pop('spirv', False)
             if value:
                 raise NameError("Unrecognized parallel options: %s" % value.keys())
         else:
             raise ValueError("Expect parallel option to be either a bool or a dict")
 
+        if self.gen_openmp + self.gen_spirv > 1:
+            raise VAlueError("At most one of the openmp and spirv options may be specified.")
 
 # ----------------------------------------------------------------------------
 # TargetOptions

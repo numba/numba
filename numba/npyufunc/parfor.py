@@ -27,7 +27,7 @@ from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks,
                             ir_extension_usedefs, _use_defs_result)
 from ..typing import signature
-from numba import config, typeinfer
+from numba import config, typeinfer, oneapi
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
@@ -435,21 +435,27 @@ def _lower_parfor_parallel(lowerer, parfor):
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = copy.copy(parfor.flags)
     flags.set('error_model', 'numpy')
-    # Can't get here unless  flags.set('auto_parallel', ParallelOptions(True))
+    # Can't get here unless flags.set('auto_parallel', ParallelOptions(True))
     index_var_typ = typemap[parfor.loop_nests[0].index_variable.name]
     # index variables should have the same type, check rest of indices
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
+
+    # Determine if target is cpu, csa, or spirv.  openmp should not get here
+    target = 'cpu'
+    if targetctx.auto_parallel.gen_spirv:
+        target = 'spirv'
+
     func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, loop_ranges, {},
+        lowerer, parfor, target, typemap, typingctx, targetctx, flags, loop_ranges, {},
         bool(alias_map), index_var_typ, parfor.races)
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     get_shape_classes = parfor.get_shape_classes
-    use_sched = True
+    use_sched = True if (not target=='spirv' or multi_tile) else False
     if use_sched:
         func_args = ['sched'] + func_args
     num_reductions = len(parfor_redvars)
@@ -468,7 +474,10 @@ def _lower_parfor_parallel(lowerer, parfor):
         print("loop_nests = ", parfor.loop_nests)
         print("loop_ranges = ", loop_ranges)
     if not use_sched:
-        assert(0)
+        if target=='spirv':
+            assert(0)
+        else:
+            assert(0)
     else:
         gu_signature = _create_shape_signature(
             parfor.get_shape_classes,
@@ -947,6 +956,7 @@ def legalize_names_with_typemap(names, typemap):
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
+        target,
         typemap,
         typingctx,
         targetctx,
@@ -980,7 +990,7 @@ def _create_gufunc_for_parfor_body(
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
 
-    use_sched = True
+    use_sched = True if (not target=='spirv' or multi_tile) else False
 
     # Get all the parfor params.
     parfor_params = parfor.params
@@ -1127,6 +1137,10 @@ def _create_gufunc_for_parfor_body(
 #            gufunc_txt += ("    " + parfor_params_orig[pindex]
 #                + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
+    # spirv target doesn't handle reductions yet
+    if len(parfor_redvars) > 0 and target=='spirv':
+        assert(0)
+
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
         # If reduction variable is a scalar then save current value to
@@ -1139,45 +1153,54 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += "    " + param_dict[var] + \
                  "=np.copy(" + param_dict[arr] + ")\n"
 
-    # For each dimension of the parfor, create a for loop in the generated gufunc function.
-    # Iterate across the proper values extracted from the schedule.
-    # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
-    # end_dim1, ..., end_dimN
-    for eachdim in range(parfor_dim):
-        for indent in range(eachdim + 1):
-            gufunc_txt += "    "
-        sched_dim = eachdim
-        if not use_sched:
-            start, stop, step = loop_ranges[eachdim]
-            start = param_dict.get(str(start), start)
-            stop = param_dict.get(str(stop), stop)
-            gufunc_txt += ("for " +
-                       legal_loop_indices[eachdim] +
-                       " in range(" + str(start) +
-                       ", " + str(stop) +
-                       " + 1):\n")
-        else:
-            gufunc_txt += ("for " +
-                       legal_loop_indices[eachdim] +
-                       " in range(sched[" +
-                       str(sched_dim) +
-                       "], sched[" +
-                       str(sched_dim +
-                           parfor_dim) +
-                       "] + np.uint8(1)):\n")
-
-    if config.DEBUG_ARRAY_OPT_RUNTIME:
-        for indent in range(parfor_dim + 1):
-            gufunc_txt += "    "
-        gufunc_txt += "print("
+    if target=='spirv':
         for eachdim in range(parfor_dim):
-            gufunc_txt += "\"" + legal_loop_indices[eachdim] + "\"," + legal_loop_indices[eachdim] + ","
-        gufunc_txt += ")\n"
+            for indent in range(eachdim + 1):
+                gufunc_txt += "    "
+            gufunc_txt += legal_loop_indices[eachdim] + " = " + "oneapi.get_global_id(" + str(eachdim) + ")\n"
+    else:
+        # For each dimension of the parfor, create a for loop in the generated gufunc function.
+        # Iterate across the proper values extracted from the schedule.
+        # The form of the schedule is start_dim0, start_dim1, ..., start_dimN, end_dim0,
+        # end_dim1, ..., end_dimN
+        for eachdim in range(parfor_dim):
+            for indent in range(eachdim + 1):
+                gufunc_txt += "    "
+            sched_dim = eachdim
+            if not use_sched:
+                start, stop, step = loop_ranges[eachdim]
+                start = param_dict.get(str(start), start)
+                stop = param_dict.get(str(stop), stop)
+                gufunc_txt += ("for " +
+                           legal_loop_indices[eachdim] +
+                           " in range(" + str(start) +
+                           ", " + str(stop) +
+                           " + 1):\n")
+            else:
+                gufunc_txt += ("for " +
+                           legal_loop_indices[eachdim] +
+                           " in range(sched[" +
+                           str(sched_dim) +
+                           "], sched[" +
+                           str(sched_dim +
+                               parfor_dim) +
+                           "] + np.uint8(1)):\n")
+
+        if config.DEBUG_ARRAY_OPT_RUNTIME:
+            for indent in range(parfor_dim + 1):
+                gufunc_txt += "    "
+            gufunc_txt += "print("
+            for eachdim in range(parfor_dim):
+                gufunc_txt += "\"" + legal_loop_indices[eachdim] + "\"," + legal_loop_indices[eachdim] + ","
+            gufunc_txt += ")\n"
 
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
-    for indent in range(parfor_dim + 1):
+    if target=='spirv':
         gufunc_txt += "    "
+    else:
+        for indent in range(parfor_dim + 1):
+            gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
     
     # Add assignments of reduction variables (for returning the value)
@@ -1199,6 +1222,8 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
     globls = {"np": np, "numba": numba}
+    if target=='spirv':
+        globls["oneapi"] = oneapi
     locls = {}
     exec_(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
@@ -1378,14 +1403,20 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
-    kernel_func = compiler.compile_ir(
-        typingctx,
-        targetctx,
-        gufunc_ir,
-        gufunc_param_types,
-        types.none,
-        flags,
-        locals)
+    if target=='spirv':
+        kernel_func = numba.oneapi.compiler.compile_kernel_parfor(
+            numba.oneapi.oneapidriver.driver.runtime.get_gpu_device(),
+            gufunc_ir,
+            gufunc_param_types)
+    else:
+        kernel_func = compiler.compile_ir(
+            typingctx,
+            targetctx,
+            gufunc_ir,
+            gufunc_param_types,
+            types.none,
+            flags,
+            locals)
 
     flags.noalias = old_alias
 
