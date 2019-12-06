@@ -160,12 +160,16 @@ class BaseLower(object):
         """
 
     def return_exception(self, exc_class, exc_args=None, loc=None):
+        """Propagate exception to the caller.
+        """
         self.call_conv.return_user_exc(
             self.builder, exc_class, exc_args,
             loc=loc, func_name=self.func_ir.func_id.func_name,
         )
 
     def set_exception(self, exc_class, exc_args=None, loc=None):
+        """Set exception state in the current function.
+        """
         self.call_conv.set_static_user_exc(
             self.builder, exc_class, exc_args,
             loc=loc, func_name=self.func_ir.func_id.func_name,

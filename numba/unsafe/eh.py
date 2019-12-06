@@ -8,7 +8,7 @@ from numba.extending import intrinsic
 
 @intrinsic
 def exception_check(typingctx):
-    """Intrinsic to check if an exception is raised
+    """An intrinsic to check if an exception is raised
     """
     def codegen(context, builder, signature, args):
         nrt = context.nrt
@@ -20,6 +20,8 @@ def exception_check(typingctx):
 
 @intrinsic
 def mark_try_block(typingctx):
+    """An intrinsic to mark the start of a *try* block.
+    """
     def codegen(context, builder, signature, args):
         nrt = context.nrt
         nrt.eh_try(builder)
@@ -31,6 +33,8 @@ def mark_try_block(typingctx):
 
 @intrinsic
 def end_try_block(typingctx):
+    """An intrinsic to mark the end of a *try* block.
+    """
     def codegen(context, builder, signature, args):
         nrt = context.nrt
         nrt.eh_end_try(builder)
@@ -42,11 +46,16 @@ def end_try_block(typingctx):
 
 @intrinsic
 def exception_match(typingctx, exc_value, exc_class):
+    """Basically do ``isinstance(exc_value, exc_class)`` for exception objects.
+    Used in ``except Exception:`` syntax.
+    """
+    # Check for our limitation
     if exc_class.exc_class is not Exception:
         msg = "Exception matching is limited to {}"
         raise errors.UnsupportedError(msg.format(Exception))
 
     def codegen(context, builder, signature, args):
+        # Intentionally always True.
         return cgutils.true_bit
 
     restype = types.boolean

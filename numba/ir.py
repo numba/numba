@@ -712,7 +712,7 @@ class StaticRaise(Terminator):
 
 class TryRaise(Stmt):
     """A raise statement inside a try-block
-    Similar to Raise but does not terminate.
+    Similar to ``Raise`` but does not terminate.
     """
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
@@ -726,7 +726,7 @@ class TryRaise(Stmt):
 
 class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
-    Similar to StaticRaise but does not terminate.
+    Similar to ``StaticRaise`` but does not terminate.
     """
 
     def __init__(self, exc_class, exc_args, loc):

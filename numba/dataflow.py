@@ -921,5 +921,7 @@ class BlockInfo(object):
     @property
     def active_try_block(self):
         """Try except not supported.
+
+        See byteflow.py
         """
         return None

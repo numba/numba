@@ -158,9 +158,12 @@ class Interpreter(object):
         self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            # Handle ending try block
+            # Handle ending try block.
             tryblk = self.dfainfo.active_try_block
             if tryblk is not None:
+                # We are in a try-block, insert a branch to except-block.
+                # This logic cannot be in self._end_current_block()
+                # because we the non-raising next block-offset.
                 branch = ir.Branch(
                     cond=self.get('$exception_check'),
                     truebr=tryblk['end'],
@@ -193,6 +196,8 @@ class Interpreter(object):
         self._insert_outgoing_phis()
 
     def _insert_try_block_begin(self):
+        """Insert IR-nodes to mark the start of a `try` block.
+        """
         from numba.unsafe.eh import mark_try_block
         gv_fn = ir.Global(
             "mark_try_block", mark_try_block, loc=self.loc,
@@ -203,6 +208,8 @@ class Interpreter(object):
         self.store(value=mark_try, name='$mark_try', redefine=True)
 
     def _insert_try_block_end(self):
+        """Insert IR-nodes to mark the end of a `try` block.
+        """
         from numba.unsafe.eh import end_try_block
         gv_fn = ir.Global(
             "end_try_block", end_try_block, loc=self.loc,
@@ -213,22 +220,27 @@ class Interpreter(object):
         self.store(value=end_try, name='$end_try', redefine=True)
 
     def _insert_exception_variables(self):
+        """Insert IR-nodes to initialize the exception variables.
+        """
         tryblk = self.dfainfo.active_try_block
-        # Fill exception variables
+        # Get exception variables
         endblk = tryblk['end']
         edgepushed = self.dfainfo.outgoing_edgepushed.get(endblk)
         # Note: the last value on the stack is the exception value
+        # Note: due to the current limitation, all exception variables are None
         if edgepushed:
             scope = self.current_scope
             const_none = ir.Const(value=None, loc=self.loc)
+            # For each variable going to the handler block.
             for var in edgepushed:
-                try:
-                    scope.get(var)
-                except ir.NotDefinedError:
-                    self.store(value=const_none, name=var)
+                if var in self.definitions:
+                    raise AssertionError(
+                        "exception variable CANNOT be defined by other code",
+                    )
+                self.store(value=const_none, name=var)
 
     def _insert_exception_check(self):
-        """Called before the end of a block to inject
+        """Called before the end of a block to inject checks if
         """
         from numba.unsafe.eh import exception_check
 
@@ -262,10 +274,10 @@ class Interpreter(object):
         to subsequent blocks.
         """
         for phiname, varname in self.dfainfo.outgoing_phis.items():
-            value = self.get(varname)
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=value, target=target, loc=self.loc)
+            stmt = ir.Assign(value=self.get(varname), target=target,
+                             loc=self.loc)
             self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
                 self.current_block.append(stmt)
@@ -743,9 +755,11 @@ class Interpreter(object):
         "no-op"
 
     def op_BEGIN_FINALLY(self, inst, temps):
+        # The *temps* are the exception variables
+        const_none = ir.Const(None, loc=self.loc)
         for tmp in temps:
-            self.store(ir.Const(None, loc=self.loc),
-                       name=tmp)
+            # Set to None for now
+            self.store(const_none, name=tmp)
 
     if PYVERSION < (3, 6):
 
@@ -1126,6 +1140,7 @@ class Interpreter(object):
             self._insert_try_block_end()
             self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
         else:
+            # Not in a try block
             stmt = ir.Raise(exception=exc, loc=self.loc)
             self.current_block.append(stmt)
 

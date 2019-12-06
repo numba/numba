@@ -249,11 +249,15 @@ class NRTContext(object):
         return has_raised
 
     def eh_try(self, builder):
+        """Begin a try-block.
+        """
         ctx = self._context
         cc = ctx.call_conv
         cc.set_try_status(builder)
 
     def eh_end_try(self, builder):
+        """End a try-block
+        """
         ctx = self._context
         cc = ctx.call_conv
         cc.unset_try_status(builder)
