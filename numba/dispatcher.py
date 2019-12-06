@@ -592,6 +592,16 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
+    def convert_reflected_list(self, tp):
+        # if one of the args has been typed as a reflected list, re-type it
+        if hasattr(tp, "dtype"):
+            if hasattr(self, "targetoptions") \
+                    and self.targetoptions.get("disable_reflected_list", False) \
+                    and isinstance(tp, types.List):
+                dt = self.convert_reflected_list(tp.dtype)
+                tp = types.ListType(dt, mutable=False)
+        return tp
+
     def typeof_pyval(self, val):
         """
         Resolve the Numba type of Python value *val*.
@@ -607,11 +617,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        # if one of the args has been typed as a reflected list, re-type it
-        if hasattr(self, "targetoptions") \
-                and self.targetoptions.get("disable_reflected_list", False) \
-                and isinstance(tp, types.List):
-            tp = types.ListType(tp.dtype, mutable=False)
+        tp = self.convert_reflected_list(tp)
         return tp
 
 
