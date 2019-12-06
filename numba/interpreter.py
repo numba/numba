@@ -15,6 +15,7 @@ from .utils import (
     OPERATORS_TO_BUILTINS,
     )
 from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+from numba.unsafe import eh
 
 
 _logger = logging.getLogger(__name__)
@@ -198,9 +199,8 @@ class Interpreter(object):
     def _insert_try_block_begin(self):
         """Insert IR-nodes to mark the start of a `try` block.
         """
-        from numba.unsafe.eh import mark_try_block
         gv_fn = ir.Global(
-            "mark_try_block", mark_try_block, loc=self.loc,
+            "mark_try_block", eh.mark_try_block, loc=self.loc,
         )
         mark_try_name = 'mark_try_fn'
         self.store(value=gv_fn, name=mark_try_name, redefine=True)
@@ -210,9 +210,8 @@ class Interpreter(object):
     def _insert_try_block_end(self):
         """Insert IR-nodes to mark the end of a `try` block.
         """
-        from numba.unsafe.eh import end_try_block
         gv_fn = ir.Global(
-            "end_try_block", end_try_block, loc=self.loc,
+            "end_try_block", eh.end_try_block, loc=self.loc,
         )
         end_try_name = 'end_try_fn'
         self.store(value=gv_fn, name=end_try_name, redefine=True)
@@ -242,12 +241,10 @@ class Interpreter(object):
     def _insert_exception_check(self):
         """Called before the end of a block to inject checks if
         """
-        from numba.unsafe.eh import exception_check
-
         self._insert_exception_variables()
         # Do exception check
         gv_check_fn = ir.Global(
-            "exception_check", exception_check, loc=self.loc,
+            "exception_check", eh.exception_check, loc=self.loc,
         )
         raise_check_name = 'raise_check_fn'
         self.store(value=gv_check_fn, name=raise_check_name, redefine=True)
@@ -1076,10 +1073,8 @@ class Interpreter(object):
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
         elif op == 'exception match':
-            from numba.unsafe.eh import exception_match
-
             gv_fn = ir.Global(
-                "exception_match", exception_match, loc=self.loc,
+                "exception_match", eh.exception_match, loc=self.loc,
             )
             exc_match_name = '$exc_match'
             self.store(value=gv_fn, name=exc_match_name, redefine=True)
