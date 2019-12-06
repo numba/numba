@@ -319,14 +319,6 @@ class CompilerBase(object):
         self.state.old_dlr = self.state.typingctx.disable_reflected_list
         self.state.typingctx.disable_reflected_list = \
             self.state.flags.disable_reflected_list
-        #disable = self.state.flags.disable_reflected_list
-        ## make a shallow copy of the typingctx and set disable flag
-        #typingctx_copy = copy.copy(self.state.typingctx)
-        #typingctx_copy.disable_reflected_list = disable
-        #self.state.typingctx = typingctx_copy
-        ## shallow copy the _globals too
-        ##self.state.typingctx._globals = \
-        #        copy.copy(self.state.typingctx._globals)
 
     def _deactivate_disable_reflected_list(self):
         self.state.typingctx.disable_reflected_list = self.state.old_dlr
