@@ -3,12 +3,15 @@ import copy
 from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
-from numba import types, compiler
+from numba import types, compiler, ir
 from .oneapidriver import driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
 from numba.oneapi.oneapidriver import spirv_generator
+from types import FunctionType
+import os
 
+DEBUG=os.environ.get('NUMBA_ONEAPI_DEBUG', None)
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
@@ -29,13 +32,24 @@ def compile_with_oneapi(pyfunc, return_type, args, debug):
     flags.set('no_cpython_wrapper')
     flags.unset('nrt')
     # Run compilation pipeline
-    cres = compiler.compile_extra(typingctx=typingctx,
-                                  targetctx=targetctx,
-                                  func=pyfunc,
-                                  args=args,
-                                  return_type=return_type,
-                                  flags=flags,
-                                  locals={})
+    if isinstance(pyfunc, FunctionType):
+        cres = compiler.compile_extra(typingctx=typingctx,
+                                      targetctx=targetctx,
+                                      func=pyfunc,
+                                      args=args,
+                                      return_type=return_type,
+                                      flags=flags,
+                                      locals={})
+    elif isinstance(pyfunc, ir.FunctionIR):
+        cres = compiler.compile_ir(typingctx=typingctx,
+                                   targetctx=targetctx,
+                                   func_ir=pyfunc,
+                                   args=args,
+                                   return_type=return_type,
+                                   flags=flags,
+                                   locals={})
+    else:
+        assert(0)
 
     # Linking depending libraries
     # targetctx.link_dependencies(cres.llvm_module, cres.target_context.linking)
@@ -46,6 +60,8 @@ def compile_with_oneapi(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(device, pyfunc, args, debug=False):
+    if DEBUG:
+        print("compile_kernel", args)
     cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
@@ -55,6 +71,18 @@ def compile_kernel(device, pyfunc, args, debug=False):
                            argtypes=cres.signature.args)
     return oclkern
 
+
+def compile_kernel_parfor(device, func_ir, args, debug=False):
+    if DEBUG:
+        print("compile_kernel_parfor", args)
+    cres = compile_with_oneapi(func_ir, types.void, args, debug=debug)
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
+    oclkern = OneAPIKernel(device=device,
+                           llvm_module=kernel.module,
+                           name=kernel.name,
+                           argtypes=cres.signature.args)
+    return oclkern
 
 def _ensure_list(val):
     if not isinstance(val, (tuple, list)):
@@ -232,7 +260,7 @@ class OneAPIKernel(OneAPIKernelBase):
 
             c_intp = ctypes.c_ssize_t
 
-""" New version
+            """ New version
             meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
@@ -244,7 +272,7 @@ class OneAPIKernel(OneAPIKernelBase):
             kernelargs.append(driver.runtime.create_kernel_arg(nitems))
             kernelargs.append(driver.runtime.create_kernel_arg(itemsize))
             kernelargs.append(driver.runtime.create_kernel_arg(data))
-"""
+            """
 
             meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)
