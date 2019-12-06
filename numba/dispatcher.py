@@ -592,8 +592,11 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
-    def convert_reflected_list(self, tp):
-        # if one of the args has been typed as a reflected list, re-type it
+    def _convert_reflected_list(self, tp):
+        """
+        Recursively re-type a reflected list (of type List) to be a typed list
+        (of type ListType).
+        """
         if hasattr(tp, "dtype"):
             if hasattr(self, "targetoptions") \
                     and self.targetoptions.get("disable_reflected_list", False) \
@@ -617,7 +620,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        tp = self.convert_reflected_list(tp)
+        # attempt to convert List
+        tp = self._convert_reflected_list(tp)
         return tp
 
 
