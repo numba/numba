@@ -438,6 +438,7 @@ class TestTryExceptUnsupported(TestCase):
         self.check(foo, True)
 
 
+@skip_tryexcept_unsupported
 class TestTryExceptRefct(MemoryLeakMixin, TestCase):
     def test_list_direct_raise(self):
         @njit
@@ -484,6 +485,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(list(out), [0xbe11] + list(range(10)))
 
 
+@skip_tryexcept_unsupported
 class TestTryExceptOtherControlFlow(TestCase):
     def test_yield(self):
         @njit
@@ -516,6 +518,7 @@ class TestTryExceptOtherControlFlow(TestCase):
         )
 
 
+@skip_tryexcept_unsupported
 class TestTryExceptParfors(TestCase):
     @unittest.expectedFailure
     def test_try_in_prange_reduction(self):
