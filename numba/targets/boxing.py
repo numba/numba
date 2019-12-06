@@ -165,7 +165,8 @@ def box_enum(typ, val, c):
     """
     valobj = c.box(typ.dtype, val)
     # Call the enum class with the value object
-    cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    # cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    cls_obj = c.env_manager.read_const(c.env_manager.add_const(typ.instance_class))
     return c.pyapi.call_function_objargs(cls_obj, (valobj,))
 
 
@@ -502,10 +503,11 @@ def box_namedtuple(typ, val, c):
     """
     Convert native array or structure *val* to a namedtuple object.
     """
-    cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    # cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    cls_obj = c.env_manager.read_const(c.env_manager.add_const(typ.instance_class))
     tuple_obj = box_tuple(typ, val, c)
     obj = c.pyapi.call(cls_obj, tuple_obj)
-    c.pyapi.decref(cls_obj)
+    # c.pyapi.decref(cls_obj)   # read_const gives borrowed ref
     c.pyapi.decref(tuple_obj)
     return obj
 
@@ -987,7 +989,10 @@ def unbox_generator(typ, obj, c):
 @box(types.DType)
 def box_dtype(typ, val, c):
     np_dtype = numpy_support.as_dtype(typ.dtype)
-    return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+    # return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+    obj = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+    c.pyapi.incref(obj)
+    return obj
 
 @unbox(types.DType)
 def unbox_dtype(typ, val, c):
@@ -997,7 +1002,10 @@ def unbox_dtype(typ, val, c):
 @box(types.NumberClass)
 def box_number_class(typ, val, c):
     np_dtype = numpy_support.as_dtype(typ.dtype)
-    return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+    # return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+    obj = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+    c.pyapi.incref(obj)
+    return obj
 
 @unbox(types.NumberClass)
 def unbox_number_class(typ, val, c):
@@ -1082,7 +1090,10 @@ def box_literal(typ, val, c):
     # which we can directly return.
     retval = typ.literal_value
     # Serialize the value into the IR
-    return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
+    # return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
+    obj = c.env_manager.read_const(c.env_manager.add_const(retval))
+    c.pyapi.incref(obj)
+    return obj
 
 
 @box(types.MemInfoPointer)

@@ -227,7 +227,8 @@ def box_dicttype(typ, val, c):
     typeddict_mod = c.pyapi.import_module_noblock(modname)
     fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
 
-    dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
+    # dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
+    dicttype_obj = c.env_manager.read_const(c.env_manager.add_const(typ))
 
     res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
     c.pyapi.decref(fmp_fn)
