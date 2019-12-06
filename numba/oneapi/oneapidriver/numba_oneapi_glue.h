@@ -217,23 +217,6 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
                                               const size_t *global_work_size,
                                               const size_t *local_work_size);
 
-#if 0
-/*!
- * @brief Creates all the boilerplate around creating an OpenCL kernel from a
- * source string. CreateProgram, BuildProgram, CreateKernel, CreateKernelArgs,
- * EnqueueKernels.
- *
- */
-int enqueue_numba_oneapi_kernel_from_source (env_t env_t_ptr,
-                                             const char **program_src,
-                                             const char *kernel_name,
-                                             const buffer_t buffers[],
-                                             size_t nbuffers,
-                                             unsigned int work_dim,
-                                             const size_t *global_work_offset,
-                                             const size_t *global_work_size,
-                                             const size_t *local_work_size);
-#endif
 
 /*!
  *
