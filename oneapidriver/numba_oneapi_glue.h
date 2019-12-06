@@ -37,7 +37,6 @@ typedef struct numba_oneapi_env* env_t;
 
 struct numba_oneapi_buffer
 {
-    void *buffer;
     // This may, for example, be a cl_mem pointer
     void *buffer_ptr;
     // Stores the size of the buffer_ptr (e.g sizeof(cl_mem))
