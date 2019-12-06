@@ -35,7 +35,9 @@ if oneapiGlueHome is not None:
     if not os.path.isfile(oneapiGlueHome + "/libnumbaoneapiglue.a"):
         _raise_bad_env_path(oneapiGlueHome + "/libnumbaoneapiglue.a")
 
-glue_h = ''.join(list(filter(lambda x: len(x) > 0 and x[0] != "#", open(oneapiGlueHome + '/numba_oneapi_glue.h', 'r').readlines())))
+glue_h = ''.join(list(filter(lambda x: len(x) > 0 and x[0] != "#", 
+                             open(oneapiGlueHome + '/numba_oneapi_glue.h', 'r')
+                             .readlines())))
 
 # cdef() expects a single string declaring the C types, functions and
 # globals needed to use the shared object. It must be in valid C syntax.
