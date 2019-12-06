@@ -482,7 +482,8 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         innercall, error = _prepare_call_to_object_mode(self.context,
                                                         builder, pyapi, func,
                                                         self.signature,
-                                                        args, self.envptr, self.env)
+                                                        args,
+                                                        self.envptr, self.env)
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
@@ -490,9 +491,8 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         self.gil = pyapi.gil_ensure()
 
         # prepare the env
-        envname = self.context.get_env_name(self.cres.fndesc)
-        self.env = self.cres.environment
-        self.envptr = builder.load(self.context.declare_env_global(builder.module, envname))
+        self.envptr = builder.load(
+            self.context.declare_env_global(builder.module, self.env.env_name))
 
     def gen_epilogue(self, builder, pyapi):
         # Release GIL
