@@ -601,7 +601,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if hasattr(self, "targetoptions") \
                     and self.targetoptions.get("disable_reflected_list", False) \
                     and isinstance(tp, types.List):
-                dt = self.convert_reflected_list(tp.dtype)
+                dt = self._convert_reflected_list(tp.dtype)
                 tp = types.ListType(dt, mutable=False)
         return tp
 
