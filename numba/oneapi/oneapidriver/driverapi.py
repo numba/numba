@@ -45,14 +45,6 @@ ffibuilder.cdef("""
     };
 
 
-    typedef enum NUMBA_ONEAPI_GLUE_MEM_FLAGS
-    {
-        NUMBA_ONEAPI_READ_WRITE = 0x0,
-        NUMBA_ONEAPI_WRITE_ONLY,
-        NUMBA_ONEAPI_READ_ONLY,
-    } mem_flags_t;
-
-
     struct numba_oneapi_env
     {
         void *context;
@@ -66,7 +58,10 @@ ffibuilder.cdef("""
 
     struct numba_oneapi_buffer
     {
-        void *buffer;
+        // This may, for example, be a cl_mem pointer
+        void *buffer_ptr;
+        // Stores the size of the buffer_ptr (e.g sizeof(cl_mem))
+        size_t sizeof_buffer_ptr;
     };
 
     typedef struct numba_oneapi_buffer* buffer_t;
@@ -87,6 +82,13 @@ ffibuilder.cdef("""
 
     typedef struct numba_oneapi_program* program_t;
 
+    struct numba_oneapi_kernel_arg
+    {
+        const void *arg_value;
+        size_t arg_size;
+    };
+    
+    typedef struct numba_oneapi_kernel_arg* kernel_arg_t;
 
     struct numba_oneapi_runtime
     {
@@ -147,7 +149,22 @@ ffibuilder.cdef("""
 
 
     int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr);
+  
+    int create_numba_oneapi_kernel_arg (const void *arg_value,
+                                        size_t arg_size,
+                                        kernel_arg_t *kernel_arg_t_ptr);
 
+    int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr);
+
+    int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
+                                                  kernel_t kernel_t_ptr,
+                                                  size_t nargs,
+                                                  const kernel_arg_t *args,
+                                                  unsigned int work_dim,
+                                                  const size_t *gbl_work_offset,
+                                                  const size_t *gbl_work_size,
+                                                  const size_t *lcl_work_size);
+    
     int retain_numba_oneapi_context (env_t env_t_ptr);
 
     int release_numba_oneapi_context (env_t env_t_ptr);
