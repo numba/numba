@@ -16,11 +16,14 @@ from numba.errors import UnsupportedError
 _logger = logging.getLogger(__name__)
 
 
-_FINALLY_POP = 6 if PYVERSION >= (3, 8) else 1
+_EXCEPT_STACK_OFFSET = 6
+_FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
 
 
 @total_ordering
 class BlockKind(object):
+    """Kinds of block to make related code safer than just `str`.
+    """
     _members = frozenset({
         'LOOP',
         'TRY', 'EXCEPT', 'FINALLY',
@@ -103,6 +106,7 @@ class Flow(object):
                     if state.has_terminated():
                         break
                     elif state.has_active_try():
+                        # Is in an *try* block
                         state.fork(pc=state.get_inst().next)
                         tryblk = state.get_top_block('TRY')
                         state.pop_block_and_above(tryblk)
@@ -112,7 +116,7 @@ class Flow(object):
                             kwargs['npop'] = nstack - tryblk['entry_stack']
                         handler = tryblk['handler']
                         kwargs['npush'] = {
-                            BlockKind('EXCEPT'): 6,
+                            BlockKind('EXCEPT'): _EXCEPT_STACK_OFFSET,
                             BlockKind('FINALLY'): _FINALLY_POP
                         }[handler['kind']]
                         kwargs['extra_block'] = handler
@@ -137,33 +141,6 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
-
-    def _render_dot(self, statemap, bytecodemap):
-        try:
-            import graphviz as gv
-        except ImportError:
-            raise ImportError(
-                "The feature requires `graphviz` but it is not available. "
-                "Please install with `pip install graphviz`"
-            )
-
-        g = gv.Digraph()
-        for k, st in statemap.items():
-            lines = [str(st) + '\n']
-            lines += [r'\l{}:{}'.format(k, bytecodemap[k])
-                      for k, v in st.instructions]
-            body = ''.join(lines)
-            g.node(str(k), shape='rect', label=body)
-        for k, st in statemap.items():
-            for edge in st.outgoing_edges:
-                dst = edge.pc
-                edgelabel = "nstack={} nblock={} npush={}".format(
-                    len(edge.stack), len(edge.blockstack),
-                    edge.npush,
-                )
-                g.edge(str(k), str(dst), label=edgelabel)
-
-        g.view()
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -621,7 +598,7 @@ class TraceRunner(object):
 
     def op_BEGIN_FINALLY(self, state, inst):
         temps = []
-        for i in range(6):
+        for i in range(_EXCEPT_STACK_OFFSET):
             tmp = state.make_temp()
             temps.append(tmp)
             state.push(tmp)
@@ -1120,13 +1097,23 @@ class State(object):
 
     @property
     def blockstack_initial(self):
+        """A copy of the initial state of the blockstack
+        """
         return self._blockstack_initial
 
     @property
     def stack_depth(self):
+        """The current size of the stack
+
+        Returns
+        -------
+        res : int
+        """
         return len(self._stack)
 
-    def initial_try_block(self):
+    def find_initial_try_block(self):
+        """Find the initial *try* block.
+        """
         for blk in reversed(self._blockstack_initial):
             if blk['kind'] == BlockKind('TRY'):
                 return blk
@@ -1181,17 +1168,21 @@ class State(object):
         return self._stack.pop()
 
     def push_block(self, synblk):
+        """Push a block to blockstack
+        """
         assert 'stack_depth' in synblk
         self._blockstack.append(synblk)
 
     def reset_stack(self, depth):
         """Reset the stack to the given stack depth.
-        Returning the popped items
+        Returning the popped items.
         """
         self._stack, popped = self._stack[:depth], self._stack[depth:]
         return popped
 
     def make_block(self, kind, end, reset_stack=True, handler=None):
+        """Make a new block
+        """
         d = {
             'kind': BlockKind(kind),
             'end': end,
@@ -1205,22 +1196,31 @@ class State(object):
         return d
 
     def pop_block(self):
+        """Pop a block and unwind the stack
+        """
         b = self._blockstack.pop()
         self.reset_stack(b['stack_depth'])
         return b
 
     def pop_block_and_above(self, blk):
+        """Find *blk* in the blockstack and remove it and all blocks above it
+        from the stack.
+        """
         idx = self._blockstack.index(blk)
         assert 0 <= idx < len(self._blockstack)
         self._blockstack = self._blockstack[:idx]
 
     def get_top_block(self, kind):
+        """Find the first block that matches *kind*
+        """
         kind = BlockKind(kind)
         for bs in reversed(self._blockstack):
             if bs['kind'] == kind:
                 return bs
 
     def has_active_try(self):
+        """Returns a boolean indicating if the top-block is a *try* block
+        """
         return self.get_top_block('TRY') is not None
 
     def get_varname(self, inst):
@@ -1315,7 +1315,7 @@ def adapt_state_infos(state):
         insts=tuple(state.instructions),
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
-        active_try_block=state.initial_try_block(),
+        active_try_block=state.find_initial_try_block(),
         outgoing_edgepushed=state.get_outgoing_edgepushed(),
     )
 
