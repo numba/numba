@@ -2966,7 +2966,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         for stmt in reversed(parfor.loop_body[label].body):
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
-                        or stmt.target.name in var_to_param)):
+                      or stmt.target.name in var_to_param)):
                 lhs = stmt.target.name
                 rhs = stmt.value
                 cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
@@ -2987,6 +2987,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
                     reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
@@ -2995,6 +2996,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
+            check_conflicting_reduction_operators(param, reduce_nodes)
             gri_out = guard(get_reduction_init, reduce_nodes)
             if gri_out is not None:
                 init_val, redop = gri_out
@@ -3002,7 +3004,27 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 init_val = None
                 redop = None
             reductions[param] = (init_val, reduce_nodes, redop)
+
     return reduce_varnames, reductions
+
+def check_conflicting_reduction_operators(param, nodes):
+    """In prange, a user could theoretically specify conflicting
+       reduction operators.  For example, in one spot it is += and
+       another spot *=.  Here, we raise an exception if multiple
+       different reduction operators are used in one prange.
+    """
+    first_red_func = None
+    for node in nodes:
+        if (isinstance(node, ir.Assign) and
+            isinstance(node.value, ir.Expr) and
+            node.value.op=='inplace_binop'):
+            if first_red_func is None:
+                first_red_func = node.value.fn
+            else:
+                if first_red_func != node.value.fn:
+                    raise ValueError("Reduction variable " + param +
+                                     " has multiple conflicting reduction" +
+                                     " operators.")
 
 def get_reduction_init(nodes):
     """
