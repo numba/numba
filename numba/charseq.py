@@ -6,6 +6,7 @@ from llvmlite import ir
 from numba import types, cgutils, unicode
 from numba.extending import (overload, intrinsic, overload_method, lower_cast,
                              register_jitable)
+from numba.cgutils import is_nonelike
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,
@@ -128,14 +129,6 @@ def _same_kind(a, b):
 
 def _is_bytes(a):
     return isinstance(a, (types.CharSeq, types.Bytes))
-
-
-def is_none_or_missing(chars):
-    return (
-        chars is None
-        or isinstance(chars, types.NoneType)
-        or isinstance(chars, types.Omitted)
-    )
 
 
 def is_default(x, default):
@@ -798,7 +791,7 @@ def unicode_charseq_split(a, sep=None, maxsplit=-1):
             def impl(a, sep=None, maxsplit=-1):
                 return str(a).split(sep=sep, maxsplit=maxsplit)
             return impl
-        if is_none_or_missing(sep):
+        if is_nonelike(sep):
             if is_default(maxsplit, -1):
                 def impl(a, sep=None, maxsplit=-1):
                     return str(a).split()
@@ -812,7 +805,7 @@ def unicode_charseq_split(a, sep=None, maxsplit=-1):
                 return _map_bytes(a._to_str().split(sep._to_str(),
                                                     maxsplit=maxsplit))
             return impl
-        if is_none_or_missing(sep):
+        if is_nonelike(sep):
             if is_default(maxsplit, -1):
                 def impl(a, sep=None, maxsplit=-1):
                     return _map_bytes(a._to_str().split())
@@ -927,7 +920,7 @@ def unicode_charseq_zfill(a, width):
 @overload_method(types.Bytes, 'lstrip')
 def unicode_charseq_lstrip(a, chars=None):
     if isinstance(a, types.UnicodeCharSeq):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return str(a).lstrip()
             return impl
@@ -940,7 +933,7 @@ def unicode_charseq_lstrip(a, chars=None):
                 return str(a).lstrip(chars)
             return impl
     if isinstance(a, (types.CharSeq, types.Bytes)):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return a._to_str().lstrip()._to_bytes()
             return impl
@@ -955,7 +948,7 @@ def unicode_charseq_lstrip(a, chars=None):
 @overload_method(types.Bytes, 'rstrip')
 def unicode_charseq_rstrip(a, chars=None):
     if isinstance(a, types.UnicodeCharSeq):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return str(a).rstrip()
             return impl
@@ -968,7 +961,7 @@ def unicode_charseq_rstrip(a, chars=None):
                 return str(a).rstrip(chars)
             return impl
     if isinstance(a, (types.CharSeq, types.Bytes)):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return a._to_str().rstrip()._to_bytes()
             return impl
@@ -983,7 +976,7 @@ def unicode_charseq_rstrip(a, chars=None):
 @overload_method(types.Bytes, 'strip')
 def unicode_charseq_strip(a, chars=None):
     if isinstance(a, types.UnicodeCharSeq):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return str(a).strip()
             return impl
@@ -996,7 +989,7 @@ def unicode_charseq_strip(a, chars=None):
                 return str(a).strip(chars)
             return impl
     if isinstance(a, (types.CharSeq, types.Bytes)):
-        if is_none_or_missing(chars):
+        if is_nonelike(chars):
             def impl(a, chars=None):
                 return a._to_str().strip()._to_bytes()
             return impl
