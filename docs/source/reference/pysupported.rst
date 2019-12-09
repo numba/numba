@@ -186,6 +186,7 @@ The following functions, attributes and methods are currently supported:
 * ``.upper()``
 * ``.islower()``
 * ``.lower()``
+* ``.isprintable()``
 * ``.zfill()``
 * ``.rpartition()``
 * ``.count()``

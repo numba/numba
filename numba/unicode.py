@@ -34,7 +34,8 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToTitleFull, _PyUnicode_IsSpace,
+                              _PyUnicode_ToTitleFull, _PyUnicode_IsPrintable,
+                              _PyUnicode_IsSpace,
                               _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
@@ -1485,6 +1486,26 @@ def unicode_istitle(s):
                 previous_is_cased = False
 
         return cased
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
+@overload_method(types.UnicodeType, 'isprintable')
+def unicode_isprintable(data):
+    """Implements UnicodeType.isprintable()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsPrintable(_get_code_point(data, 0))
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsPrintable(code_point):
+                return False
+
+        return True
+
     return impl
 
 
