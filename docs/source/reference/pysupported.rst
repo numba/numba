@@ -192,6 +192,7 @@ The following functions, attributes and methods are currently supported:
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
+* ``.rindex()``
 * ``.index()``
 * ``.title()``
 * ``.isalpha()``
