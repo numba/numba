@@ -284,16 +284,17 @@ class TestTryBareExcept(TestCase):
             def bar(z):
                 raise ValueError("exception")
             try:
+                # An SSA problem makes it impossible to find the code constant
+                # for the closure
                 [x for x in map(bar, [1, 2, 3])]
             except:  # noqa: E722
                 print("CAUGHT")
                 return x
 
-        with captured_stdout() as stdout:
-            res = foo(10)
-
-        self.assertEqual(res, 10)
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",])
+        with self.assertRaises(UnsupportedError) as raises:
+            foo(10)
+        pat = "Unsupported use of closure."
+        self.assertIn(pat, str(raises.exception))
 
     def test_real_problem(self):
         @njit
