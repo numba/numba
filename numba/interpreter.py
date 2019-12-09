@@ -273,16 +273,10 @@ class Interpreter(object):
         """
         for phiname, varname in self.dfainfo.outgoing_phis.items():
             target = self.current_scope.get_or_define(phiname,
-                                                    loc=self.loc)
+                                                      loc=self.loc)
             stmt = ir.Assign(value=self.get(varname), target=target,
-                            loc=self.loc)
-            rhs_defns = self.definitions.get(varname, ())
-            if len(rhs_defns) == 1:
-                # FIXME: pretending to be SSA by propagating the RHS definition
-                #        MAKE_FUNCTION depends on this for some CFG structure.
-                self.definitions[target.name] = [rhs_defns[0]]
-            else:
-                self.definitions[target.name].append(stmt.value)
+                             loc=self.loc)
+            self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
                 self.current_block.append(stmt)
             else:
