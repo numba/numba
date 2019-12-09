@@ -11,7 +11,8 @@ from numba.errors import (
 )
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
-    skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported
+    skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported,
+    skip_unless_scipy,
 )
 
 
@@ -296,6 +297,7 @@ class TestTryBareExcept(TestCase):
         pat = "Unsupported use of closure."
         self.assertIn(pat, str(raises.exception))
 
+    @skip_unless_scipy
     def test_real_problem(self):
         @njit
         def foo():

@@ -21,6 +21,10 @@ import multiprocessing as mp
 from contextlib import contextmanager
 
 import numpy as np
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 from numba import config, errors, typing, utils, numpy_support, testing
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
@@ -61,6 +65,9 @@ skip_tryexcept_supported = unittest.skipIf(
     utils.PYVERSION >= (3, 7),
     "try-except supported on py3.7 or later"
 )
+
+_msg = "SciPy needed for test"
+skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
 
 class CompilationCache(object):
