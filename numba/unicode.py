@@ -585,7 +585,7 @@ _rfind = register_jitable(generate_finder(_rfinder))
 def unicode_find(data, substr, start=None, end=None):
     """Implements str.find()"""
     if isinstance(substr, types.UnicodeCharSeq):
-        def find_impl(data, substr):
+        def find_impl(data, substr, start=None, end=None):
             return data.find(str(substr))
         return find_impl
 
@@ -600,7 +600,7 @@ def unicode_find(data, substr, start=None, end=None):
 def unicode_rfind(data, substr, start=None, end=None):
     """Implements str.rfind()"""
     if isinstance(substr, types.UnicodeCharSeq):
-        def rfind_impl(data, substr):
+        def rfind_impl(data, substr, start=None, end=None):
             return data.rfind(str(substr))
         return rfind_impl
 
@@ -653,7 +653,7 @@ def unicode_count(src, sub, start=None, end=None):
     _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
-        def count_impl(src, sub, start=start, end=end):
+        def count_impl(src, sub, start=None, end=None):
             count = 0
             src_len = len(src)
             sub_len = len(sub)
@@ -753,12 +753,12 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeCharSeq):
-        def split_impl(a, sep, maxsplit=1):
+        def split_impl(a, sep=None, maxsplit=-1):
             return a.split(str(sep), maxsplit=maxsplit)
         return split_impl
 
     if isinstance(sep, types.UnicodeType):
-        def split_impl(a, sep, maxsplit=-1):
+        def split_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
             sep_len = len(sep)
 
@@ -836,7 +836,7 @@ def unicode_center(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def center_impl(string, width, fillchar):
+        def center_impl(string, width, fillchar=' '):
             return string.center(width, str(fillchar))
         return center_impl
 
@@ -874,7 +874,7 @@ def unicode_ljust(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def ljust_impl(string, width, fillchar):
+        def ljust_impl(string, width, fillchar=' '):
             return string.ljust(width, str(fillchar))
         return ljust_impl
 
@@ -905,7 +905,7 @@ def unicode_rjust(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def rjust_impl(string, width, fillchar):
+        def rjust_impl(string, width, fillchar=' '):
             return string.rjust(width, str(fillchar))
         return rjust_impl
 
@@ -1084,7 +1084,7 @@ def _count_args_types_check(arg):
 def unicode_lstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def lstrip_impl(string, chars):
+        def lstrip_impl(string, chars=None):
             return string.lstrip(str(chars))
         return lstrip_impl
 
@@ -1099,7 +1099,7 @@ def unicode_lstrip(string, chars=None):
 def unicode_rstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def rstrip_impl(string, chars):
+        def rstrip_impl(string, chars=None):
             return string.rstrip(str(chars))
         return rstrip_impl
 
@@ -1114,7 +1114,7 @@ def unicode_rstrip(string, chars=None):
 def unicode_strip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def strip_impl(string, chars):
+        def strip_impl(string, chars=None):
             return string.strip(str(chars))
         return strip_impl
 
