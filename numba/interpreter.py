@@ -1155,7 +1155,16 @@ class Interpreter(object):
                 defaults = tuple([self.get(name) for name in defaults])
             else:
                 defaults = self.get(defaults)
-        fcode = self.definitions[code][0].value
+
+        assume_code_const = self.definitions[code][0]
+        if not isinstance(assume_code_const, ir.Const):
+            msg = (
+                "Unsupported use of closure. "
+                "Probably caused by complex control-flow constructs; "
+                "i.e. try-except"
+            )
+            raise errors.UnsupportedError(msg, loc=self.loc)
+        fcode = assume_code_const.value
         if name:
             name = self.get(name)
         if closure:
