@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from . import _numba_oneapi_pybindings
 from cffi import FFI
 from numpy import ndarray
+from numba import ctypes_support as ctypes
 
 ffi = FFI()
 
@@ -29,6 +30,11 @@ class UnsupportedTypeError(Exception):
     pass
 
 
+##########################################################################
+# Helper functions
+##########################################################################
+
+
 def _raise_driver_error(fname, errcode):
     e = OneapiGlueDriverError("NUMBA_ONEAPI_FAILURE encountered")
     e.fname = fname
@@ -47,6 +53,21 @@ def _raise_unsupported_type_error(fname):
     e.fname = fname
     raise e
 
+
+def _raise_unsupported_kernel_arg_error(fname):
+    e = (UnsupportedTypeError("Type needs to be DeviceArray or a supported "
+                              "ctypes type "
+                              "(refer _is_supported_ctypes_raw_obj)"))
+    e.fname = fname
+    raise e
+
+
+def _is_supported_ctypes_raw_obj(obj):
+    return isinstance(obj, (ctypes.c_ssize_t,
+                            ctypes.c_double,
+                            ctypes.c_float,
+                            ctypes.c_uint8,
+                            ctypes.c_size_t))
 
 ##########################################################################
 # DeviceArray class
@@ -90,7 +111,10 @@ class DeviceArray:
 
     def get_buffer_size(self):
         return self._buffSize
-
+    
+    def get_buffer_ptr(self):
+        return self.get_buffer_obj()[0].buffer_ptr
+    
     def get_data_ptr(self):
         return ffi.cast("void*", self._ndarray.ctypes.data)
 
@@ -101,12 +125,12 @@ class DeviceArray:
 
 class Program():
 
-    def __init__(self, device, spirv_module):
+    def __init__(self, device_env, spirv_module):
         self._prog_t_obj = _numba_oneapi_pybindings.ffi.new("program_t *")
         retval = (_numba_oneapi_pybindings
                   .lib
                   .create_numba_oneapi_program_from_spirv(
-                      device.get_env_ptr(),
+                      device_env.get_env_ptr(),
                       spirv_module,
                       len(spirv_module),
                       self._prog_t_obj))
@@ -118,7 +142,7 @@ class Program():
         retval = (_numba_oneapi_pybindings
                   .lib
                   .build_numba_oneapi_program(
-                      device.get_env_ptr(),
+                      device_env.get_env_ptr(),
                       self._prog_t_obj[0]))
         if retval == -1:
             print("Error Code  : ", retval)
@@ -134,7 +158,7 @@ class Program():
             _raise_driver_error("destroy_numba_oneapi_program", -1)
 
     def get_prog_t_obj(self):
-        return self._prog_t_obj
+        return self._prog_t_obj[0]
 
 
 ##########################################################################
@@ -143,14 +167,14 @@ class Program():
 
 class Kernel():
 
-    def __init__(self, context_ptr, prog_t_obj, kenrel_name):
+    def __init__(self, device_env, prog_t_obj, kernel_name):
         self._kernel_t_obj = _numba_oneapi_pybindings.ffi.new("kernel_t *")
         retval = (_numba_oneapi_pybindings
                   .lib
                   .create_numba_oneapi_kernel(
-                      context_ptr,
-                      prog_t_obj,
-                      kernel_name,
+                      device_env.get_env_ptr(),
+                      prog_t_obj.get_prog_t_obj(),
+                      kernel_name.encode(),
                       self._kernel_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
@@ -165,18 +189,73 @@ class Kernel():
             _raise_driver_error("destroy_numba_oneapi_kernel", -1)
 
     def get_kernel_t_obj(self):
-        return self._kernel_t_obj
+        return self._kernel_t_obj[0]
 
 
 ##########################################################################
-# Device class
+# KernelArg class
+##########################################################################
+
+class KernelArg():
+
+    def __init__(self, arg, void_p_arg=False):
+        self.kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
+        if void_p_arg is True:
+            void_p = ffi.cast("void *", 0)
+            retval = (_numba_oneapi_pybindings
+                      .lib
+                      .create_numba_oneapi_kernel_arg(
+                          void_p,
+                          ffi.sizeof(void_p),
+                          self.kernel_arg_t))
+            if(retval):
+                _raise_driver_error("create_numba_oneapi_kernel_arg", -1)
+        else:
+            if isinstance(arg, DeviceArray):
+                retval = (_numba_oneapi_pybindings
+                          .lib
+                          .create_numba_oneapi_kernel_arg(
+                              arg.get_buffer_obj()[0].buffer_ptr,
+                              arg.get_buffer_obj()[0].sizeof_buffer_ptr,
+                              self.kernel_arg_t))
+                if(retval):
+                    _raise_driver_error("create_numba_oneapi_kernel_arg", -1)
+            elif isinstance(arg, int):
+                size_t_arg = ffi.new("size_t *") 
+                size_t_arg[0] = arg
+                retval = (_numba_oneapi_pybindings
+                          .lib
+                          .create_numba_oneapi_kernel_arg(
+                              size_t_arg,
+                              ffi.sizeof("size_t"),
+                              self.kernel_arg_t))
+                if(retval):
+                    _raise_driver_error("create_numba_oneapi_kernel_arg", -1)
+            else:
+                print(type(arg))
+                _raise_unsupported_kernel_arg_error("KernelArg init")
+
+    def __del__(self):
+        retval = (_numba_oneapi_pybindings
+                  .lib
+                  .destroy_numba_oneapi_kernel_arg(self.kernel_arg_t))
+        if retval == -1:
+            print("Error Code  : ", retval)
+            _raise_driver_error("destroy_numba_oneapi_kernel_arg", -1)
+
+    def get_kernel_arg_obj(self):
+        return self.kernel_arg_t[0]
+
+
+##########################################################################
+# DeviceEnv class
 ##########################################################################
 
 
-class Device():
+class DeviceEnv():
 
-    def __init__(self, device_t_obj):
-        self._env_ptr = device_t_obj
+    def __init__(self, env_t_obj):
+        self._env_ptr = env_t_obj
 
     def __del__(self):
         pass
@@ -296,7 +375,7 @@ class _Runtime():
             cls._runtime = ffiobj
 
             if cls._runtime[0][0].has_cpu:
-                cls._cpu_device = Device(cls._runtime[0][0].first_cpu_env)
+                cls._cpu_device = DeviceEnv(cls._runtime[0][0].first_cpu_env)
             else:
                 # What should we do here? Raise an exception? Provide warning?
                 # Maybe do not do anything here, only when this context is to
@@ -304,7 +383,7 @@ class _Runtime():
                 print("No CPU device")
 
             if cls._runtime[0][0].has_gpu:
-                cls._gpu_device = Device(cls._runtime[0][0].first_gpu_env)
+                cls._gpu_device = DeviceEnv(cls._runtime[0][0].first_gpu_env)
             else:
                 # Same as the cpu case above.
                 print("No GPU device")
@@ -334,23 +413,39 @@ class _Runtime():
 
         return self._gpu_device
 
-"""
-    def enqueue_kernel(arguments,...):  # arguments is of type list(kernel_arg_t)
-        kernel_arg_array = _numba_oneapi_pybindings.ffi.new("kernel_arg_t [" + str(len(arguments)) + "]")
-        for i in range(len(arguments)):
-            kernel_arg_array[i] = arguments[i]
-
-    def create_kernel_arg(arg):
-        new_kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
-        if isinstance(arg, DeviceArray):
-            retval = (_numba_oneapi_pybindings
-                      .lib
-                      .create_numba_oneapi_kernel_arg(arg.buffer, sizeof(cl_mem), new_kernel_arg_t))
-            if(retval):
-                _raise_driver_error("destroy_numba_oneapi_runtime", -1)
-        elif isinstance(arg, ...):
-        return new_kernel_arg_t
-            
-"""
 
 runtime = _Runtime()
+
+##########################################################################
+# Public API
+##########################################################################
+
+
+def enqueue_kernel(device_env, kernel, kernelargs, global_work_size,
+                   local_work_size):
+    kernel_arg_array = _numba_oneapi_pybindings.ffi.new(
+                        "kernel_arg_t [" + str(len(kernelargs)) + "]")
+    g_work_size_array = _numba_oneapi_pybindings.ffi.new(
+                        "size_t [" + str(len(global_work_size)) + "]")
+    l_work_size_array = _numba_oneapi_pybindings.ffi.new(
+                        "size_t [" + str(len(local_work_size)) + "]")
+    for i in range(len(kernelargs)):
+        kernel_arg_array[i] = kernelargs[i].get_kernel_arg_obj()
+    for i in range(len(global_work_size)):
+        g_work_size_array[i] = global_work_size[i]
+    for i in range(len(local_work_size)):
+        l_work_size_array[i] = local_work_size[i]
+    retval = (_numba_oneapi_pybindings
+              .lib
+              .set_args_and_enqueue_numba_oneapi_kernel(
+                  device_env.get_env_ptr(),
+                  kernel.get_kernel_t_obj(),
+                  len(kernelargs),
+                  kernel_arg_array,
+                  len(global_work_size),
+                  ffi.NULL,
+                  g_work_size_array,
+                  l_work_size_array
+                  ))
+    if(retval):
+        _raise_driver_error("set_args_and_enqueue_numba_oneapi_kernel", -1)

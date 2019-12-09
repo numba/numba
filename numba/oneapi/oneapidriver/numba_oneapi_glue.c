@@ -831,7 +831,7 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
     kernel_arg->arg_value = arg_value;
 
 #if DEBUG
-    printf("DEBUG: kernel arg created\n");
+    printf("DEBUG: CL kernel arg created\n");
 #endif
 
     *kernel_arg_t_ptr = kernel_arg;
@@ -851,7 +851,7 @@ int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
     free(*kernel_arg_t_ptr);
 
 #if DEBUG
-    printf("DEBUG: kernel arg destroyed...\n");
+    printf("DEBUG: CL kernel arg destroyed...\n");
 #endif
 
     return NUMBA_ONEAPI_SUCCESS;
@@ -885,7 +885,9 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
         err |= clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
                 array_of_args[i]->arg_value);
     CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
-
+#if DEBUG
+    printf("DEBUG: CL Kernel Args set...\n");
+#endif
     // Execute the kernel. Not using events for the time being.
     err = clEnqueueNDRangeKernel(queue, kernel, work_dim, global_work_offset,
             global_work_size, local_work_size, 0, NULL, NULL);
