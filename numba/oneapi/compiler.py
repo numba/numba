@@ -65,7 +65,7 @@ def compile_kernel(device, pyfunc, args, debug=False):
     cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = OneAPIKernel(device=device,
+    oclkern = OneAPIKernel(device_env=device,
                            llvm_module=kernel.module,
                            name=kernel.name,
                            argtypes=cres.signature.args)
@@ -78,7 +78,7 @@ def compile_kernel_parfor(device, func_ir, args, debug=False):
     cres = compile_with_oneapi(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = OneAPIKernel(device=device,
+    oclkern = OneAPIKernel(device_env=device,
                            llvm_module=kernel.module,
                            name=kernel.name,
                            argtypes=cres.signature.args)
@@ -104,12 +104,12 @@ class OneAPIKernelBase(object):
     def __init__(self):
         self.global_size = (1,)
         self.local_size = (1,)
-        self.device = None
+        self.device_env = None
 
     def copy(self):
         return copy.copy(self)
 
-    def configure(self, device, global_size, local_size=None):
+    def configure(self, device_env, global_size, local_size=None):
         """Configure the OpenCL kernel local_size can be None
         """
         global_size = _ensure_list(global_size)
@@ -123,7 +123,7 @@ class OneAPIKernelBase(object):
         clone = self.copy()
         clone.global_size = tuple(global_size)
         clone.local_size = tuple(local_size) if local_size else None
-        clone.device = device
+        clone.device_env = device_env
 
         return clone
 
@@ -141,7 +141,7 @@ class OneAPIKernelBase(object):
         griddim.
         """
 
-        device = args[0]
+        device_env = args[0]
         griddim = _ensure_list(args[1])
         blockdim = _ensure_list(args[2])
         size = max(len(griddim), len(blockdim))
@@ -149,7 +149,7 @@ class OneAPIKernelBase(object):
         _ensure_size_or_append(blockdim, size)
         # Compute global_size
         gs = [g * l for g, l in zip(griddim, blockdim)]
-        return self.configure(device, gs, blockdim)
+        return self.configure(device_env, gs, blockdim)
 
 
 #_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
@@ -188,7 +188,7 @@ class OneAPIKernel(OneAPIKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, device, llvm_module, name, argtypes):
+    def __init__(self, device_env, llvm_module, name, argtypes):
         super(OneAPIKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
@@ -200,11 +200,11 @@ class OneAPIKernel(OneAPIKernelBase):
         #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
-        print("OneAPIKernel:", self.spirv_bc, type(self.spirv_bc))
+        #print("OneAPIKernel:", self.spirv_bc, type(self.spirv_bc))
         # create a program
-        self.program = driver.Program(device, self.spirv_bc)
+        self.program = driver.Program(device_env, self.spirv_bc)
         #  create a kernel
-
+        self.kernel = driver.Kernel(device_env, self.program, self.entry_name)
     # def bind(self):
     #    """
     #    Bind kernel to device
@@ -213,27 +213,16 @@ class OneAPIKernel(OneAPIKernelBase):
 
     def __call__(self, *args):
 
-        #    iii. sets args to the kernel
-        #    iv.  enqueues the kernel
-
-        raise ValueError("TODO")
-
-        #context, device, program, kernel = self.bind()
-        #queue = devices.get_queue()
-
+        # Create an array of KenrelArgs
         # Unpack pyobject values into ctypes scalar values
-        # retr = []  # hold functors for writeback
-        #kernelargs = []
-        # for ty, val in zip(self.argument_types, args):
-        #    self._unpack_argument(ty, val, queue, retr, kernelargs)
-
-        # Insert kernel arguments
-        # kernel.set_args(kernelargs)
-
-        # Invoke kernel
-        # queue.enqueue_nd_range_kernel(kernel, len(self.global_size),
-        #                              self.global_size, self.local_size)
-        # queue.finish()
+        retr = []  # hold functors for writeback
+        kernelargs = []
+        for ty, val in zip(self.argument_types, args):
+            self._unpack_argument(ty, val, self.device_env, retr, kernelargs)
+        
+        # enqueues the kernel
+        driver.enqueue_kernel(self.device_env, self.kernel, kernelargs,
+                              self.global_size, self.local_size)
 
         # retrieve auto converted arrays
         # for wb in retr:
@@ -243,8 +232,31 @@ class OneAPIKernel(OneAPIKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
-        if isinstance(ty, types.Array):
+        print("=======================================================")
+        print("Unpack Args of type :", ty)
+        print("Arg Val :", val)
+        print("Type of val :", type(val))
+        print("=======================================================")
+        # DRD : Check if the val is of type driver.DeviceArray before checking
+        # if ty is of type ndarray. Argtypes retuends ndarray for both
+        # DeviceArray and ndarray. This is a hack to get around the issue,
+        # till I understand the typing infrastructure of NUMBA better.
+        if isinstance(val, driver.DeviceArray):
+            void_ptr_arg = True
+            ## TODO : What and how are meminfo and parent used
+            # meminfo 
+            kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+            # parent
+            kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+            kernelargs.append(driver.KernelArg(val._ndarray.size))
+            kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
+            kernelargs.append(driver.KernelArg(val))
+            for ax in range(val._ndarray.ndim):
+                kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
+            for ax in range(val._ndarray.ndim):
+                kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
 
+        elif isinstance(ty, types.Array):
             # DRD: This unpack routine is commented out for the time-being.
             # NUMBA does not know anything about SmartArrayTypes.
 
@@ -254,13 +266,13 @@ class OneAPIKernel(OneAPIKernelBase):
             #    outer_parent = ctypes.c_void_p(0)
             #    kernelargs.append(outer_parent)
             # else:
-            devary, conv = devicearray.auto_device(val, stream=queue)
-            if conv:
-                retr.append(lambda: devary.copy_to_host(val, stream=queue))
-
+            #devary, conv = devicearray.auto_device(val, stream=queue)
+            #if conv:
+            #    retr.append(lambda: devary.copy_to_host(val, stream=queue))
+            """
             c_intp = ctypes.c_ssize_t
 
-            """ New version
+            # TA: New version
             meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
@@ -272,7 +284,6 @@ class OneAPIKernel(OneAPIKernelBase):
             kernelargs.append(driver.runtime.create_kernel_arg(nitems))
             kernelargs.append(driver.runtime.create_kernel_arg(itemsize))
             kernelargs.append(driver.runtime.create_kernel_arg(data))
-            """
 
             meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)
@@ -288,30 +299,40 @@ class OneAPIKernel(OneAPIKernelBase):
                 kernelargs.append(c_intp(devary.shape[ax]))
             for ax in range(devary.ndim):
                 kernelargs.append(c_intp(devary.strides[ax]))
+            """
+            raise NotImplementedError(ty, val)
 
         elif isinstance(ty, types.Integer):
             cval = getattr(ctypes, "c_%s" % ty)(val)
-            kernelargs.append(cval)
+            #kernelargs.append(cval)
+            raise NotImplementedError(ty, val)
 
         elif ty == types.float64:
             cval = ctypes.c_double(val)
-            kernelargs.append(cval)
+            #kernelargs.append(cval)
+            raise NotImplementedError(ty, val)
 
         elif ty == types.float32:
             cval = ctypes.c_float(val)
-            kernelargs.append(cval)
+            #kernelargs.append(cval)
+            raise NotImplementedError(ty, val)
 
         elif ty == types.boolean:
             cval = ctypes.c_uint8(int(val))
-            kernelargs.append(cval)
+            #kernelargs.append(cval)
+            raise NotImplementedError(ty, val)
 
         elif ty == types.complex64:
-            kernelargs.append(ctypes.c_float(val.real))
-            kernelargs.append(ctypes.c_float(val.imag))
+            #kernelargs.append(ctypes.c_float(val.real))
+            #kernelargs.append(ctypes.c_float(val.imag))
+            raise NotImplementedError(ty, val)
+
 
         elif ty == types.complex128:
-            kernelargs.append(ctypes.c_double(val.real))
-            kernelargs.append(ctypes.c_double(val.imag))
+            #kernelargs.append(ctypes.c_double(val.real))
+            #kernelargs.append(ctypes.c_double(val.imag))
+            raise NotImplementedError(ty, val)
+
 
         else:
             raise NotImplementedError(ty, val)
@@ -329,10 +350,11 @@ class AutoJitOneAPIKernel(OneAPIKernelBase):
         self.typingctx = OneAPITargetDesc.typingctx
 
     def __call__(self, *args):
-        if self.device is None:
+        if self.device_env is None:
             _raise_no_device_found_error()
         kernel = self.specialize(*args)
-        cfg = kernel.configure(self.device, self.global_size, self.local_size)
+        cfg = kernel.configure(self.device_env, self.global_size, 
+                               self.local_size)
         cfg(*args)
 
     def specialize(self, *args):
@@ -341,6 +363,6 @@ class AutoJitOneAPIKernel(OneAPIKernelBase):
         kernel = self.definitions.get(argtypes)
 
         if kernel is None:
-            kernel = compile_kernel(self.device, self.py_func, argtypes)
+            kernel = compile_kernel(self.device_env, self.py_func, argtypes)
             self.definitions[argtypes] = kernel
         return kernel
