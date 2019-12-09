@@ -187,13 +187,16 @@ The following functions, attributes and methods are currently supported:
 * ``.upper()``
 * ``.islower()``
 * ``.lower()``
+* ``.isprintable()``
 * ``.zfill()``
 * ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
+* ``.rindex()``
 * ``.index()``
 * ``.title()``
+* ``.isalpha()``
 * ``.isalnum()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes

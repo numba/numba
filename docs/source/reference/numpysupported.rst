@@ -605,6 +605,7 @@ Math operations
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
  gcd                 Yes          Yes
+ lcm                 Yes          Yes
 ==============  =============  ===============
 
 
