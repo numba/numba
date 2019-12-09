@@ -344,6 +344,18 @@ class TestTryBareExcept(TestCase):
             ["CAUGHT",] * 4 + ["CAUGHT%s" % i for i in range(1, 4)],
         )
 
+    def test_try_pass(self):
+        @njit
+        def foo(x):
+            try:
+                pass
+            except:     # noqa: E722
+                pass
+            return x
+
+        res = foo(123)
+        self.assertEqual(res, 123)
+
 
 @skip_tryexcept_unsupported
 class TestTryExceptCaught(TestCase):

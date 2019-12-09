@@ -1354,6 +1354,10 @@ class AdaptCFA(object):
         self._backbone = backbone - inloopblocks
 
     @property
+    def graph(self):
+        return self._flow.cfgraph
+
+    @property
     def backbone(self):
         return self._backbone
 

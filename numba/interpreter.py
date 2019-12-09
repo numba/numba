@@ -161,7 +161,8 @@ class Interpreter(object):
         if oldblock is not None and not oldblock.is_terminated:
             # Handle ending try block.
             tryblk = self.dfainfo.active_try_block
-            if tryblk is not None:
+            # If there's an active try-block and the handler block is live.
+            if tryblk is not None and tryblk['end'] in self.cfa.graph.nodes():
                 # We are in a try-block, insert a branch to except-block.
                 # This logic cannot be in self._end_current_block()
                 # because we the non-raising next block-offset.
