@@ -24,21 +24,22 @@ b = np.array(np.random.random(N), dtype=np.float32)
 c = np.ones_like(a)
 
 # Select a device for executing the kernel
-device = None
+device_env = None
 
 if oneapidrv.runtime.get_gpu_device() is not None:
-    device = oneapidrv.runtime.get_gpu_device()
+    device_env = oneapidrv.runtime.get_gpu_device()
 elif oneapidrv.runtime.get_cpu_device() is not None:
-    device = oneapidrv.runtime.get_cpu_device()
+    device_env = oneapidrv.runtime.get_cpu_device()
 else:
     e = oneapidrv.DeviceNotFoundError("No OpenCL devices found on the system")
     raise e
 
 # Copy the data to the device
-dA = device.copy_array_to_device(a)
-dB = device.copy_array_to_device(b)
+dA = device_env.copy_array_to_device(a)
+dB = device_env.copy_array_to_device(b)
+dC = oneapidrv.DeviceArray(device_env.get_env_ptr(), c)
 
-data_parallel_sum[device,global_size,local_size](a,b,c)
+data_parallel_sum[device_env,global_size,local_size](dA, dB, dC)
 
 """
 ts = time()
