@@ -234,7 +234,6 @@ class TestTryBareExcept(TestCase):
                     raise ValueError("exception")   # never hit
                 except Exception:
                     print("CAUGHT")
-                    return 12
 
         @njit
         def bar(z):
