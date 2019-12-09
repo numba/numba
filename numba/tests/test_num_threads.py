@@ -8,6 +8,7 @@ from numba import (njit, set_num_threads, get_num_threads, get_thread_num,
 from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported
 
+
 class TestNumThreads(TestCase):
     _numba_parallel_test_ = False
 
@@ -171,7 +172,7 @@ class TestNumThreads(TestCase):
             set_num_threads(nthreads)
             for i in prange(M):
                 local_mask = 1 + i % mask
-                set_num_threads(local_mask) # set threads in parent function
+                set_num_threads(local_mask)  # set threads in parent function
                 if local_mask == 1:
                     child1(buf)
                 elif local_mask == 2:
@@ -190,10 +191,9 @@ class TestNumThreads(TestCase):
         math_acc = np.sum(1 + np.arange(M) % mask)
         self.assertEqual(math_acc, got_acc)
         math_arr = np.zeros((M, N))
-        for i in range(1, 4): # there's branches on 1, 2, 3
+        for i in range(1, 4):  # there's branches on 1, 2, 3
             math_arr[i, :] = i
         np.testing.assert_equal(math_arr, got_arr)
-
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
@@ -202,51 +202,70 @@ class TestNumThreads(TestCase):
     def test_nested_parallelism_2(self):
         # check that get_thread_num is ok in nesting
 
-        N = 4
-        M = 8
-        def gen(fid):
-            @njit(parallel=True)
-            def child_func(buf):
-                M, N = buf.shape
-                set_num_threads(fid) # set threads in child function
-                for i in prange(N):
-                    buf[fid, i] = get_num_threads()
-            return child_func
+        N = 5
+        M = 17
+        def get_impl(flag):
 
-        child1 = gen(1)
-        child2 = gen(2)
-        child3 = gen(3)
+            if flag == True:
+                dec = njit(parallel=True)
+            elif flag == False:
+                dec = njit(parallel=False)
+            else:
+                def dec(x): return x
 
-        @njit(parallel=True)
-        def test_func(nthreads):
-            acc = 0
-            buf = np.zeros((M, N))
-            set_num_threads(nthreads)
-            for i in prange(M):
-                local_mask = 1 + i % mask
-                if local_mask == 1:
-                    child1(buf)
-                elif local_mask == 2:
-                    child2(buf)
-                elif local_mask == 3:
-                    child3(buf)
-                acc += get_num_threads()
-            return acc, buf
+            def gen(fid):
+                @dec
+                def child_func(buf):
+                    M, N = buf.shape
+                    set_num_threads(fid)  # set threads in child function
+                    for i in prange(N):
+                        buf[fid, i] = get_num_threads()
+                return child_func
+
+            child1 = gen(1)
+            child2 = gen(2)
+            child3 = gen(3)
+
+            @dec
+            def test_func(nthreads):
+                acc = 0
+                buf = np.zeros((M, N))
+                set_num_threads(nthreads)
+                for i in prange(M):
+                    local_mask = 1 + i % mask
+                    # when the threads exit the child functions they should have
+                    # a TLS slot value of the local mask as it was set in
+                    # child
+                    if local_mask == 1:
+                        child1(buf)
+                        assert get_num_threads() == local_mask
+                    elif local_mask == 2:
+                        child2(buf)
+                        assert get_num_threads() == local_mask
+                    elif local_mask == 3:
+                        child3(buf)
+                        assert get_num_threads() == local_mask
+                return buf
+            return test_func
 
         mask = config.NUMBA_NUM_THREADS - 1
-        got_acc, got_arr = test_func(mask)
-        exp_acc, exp_arr = test_func.py_func(mask)
-        self.assertEqual(exp_acc, got_acc)
-        np.testing.assert_equal(exp_arr, got_arr)
+        set_num_threads(mask)
+        pf_arr = get_impl(True)(mask)
+        set_num_threads(mask)
+        nj_arr = get_impl(False)(mask)
+        set_num_threads(mask)
+        py_arr = get_impl(None)(mask)
+
+        np.testing.assert_equal(pf_arr, py_arr)
+        np.testing.assert_equal(nj_arr, py_arr)
 
         # check the maths reconciles
-        math_acc = np.sum(1 + np.arange(M) % mask)
-        self.assertEqual(math_acc, got_acc)
         math_arr = np.zeros((M, N))
-        for i in range(1, 4): # there's branches on 1, 2, 3
+        for i in range(
+                1, 4):  # there's branches on modulo mask but only 3 funcs
             math_arr[i, :] = i
-        np.testing.assert_equal(math_arr, got_arr)
 
+        np.testing.assert_equal(math_arr, pf_arr)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
@@ -289,6 +308,7 @@ class TestNumThreads(TestCase):
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
+
 
 if __name__ == '__main__':
     unittest.main()
