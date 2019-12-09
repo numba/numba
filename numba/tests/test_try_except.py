@@ -207,14 +207,13 @@ class TestTryBareExcept(TestCase):
         )
         self.assertEqual(res, 123)
 
-
     def test_recursion(self):
         @njit
         def foo(x):
             if x > 0:
                 try:
                     foo(x - 1)
-                except:
+                except:   # noqa: E722
                     print("CAUGHT")
                     return 12
             if x == 1:
@@ -223,17 +222,17 @@ class TestTryBareExcept(TestCase):
         with captured_stdout() as stdout:
             res = foo(10)
 
+        self.assertIsNone(res)
         self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
 
-    # this is broken
     def test_yield(self):
         @njit
         def foo(x):
             if x > 0:
                 try:
                     yield 7
-                    raise ValueError("exception")
-                except:
+                    raise ValueError("exception")   # never hit
+                except Exception:
                     print("CAUGHT")
                     return 12
 
@@ -244,25 +243,8 @@ class TestTryBareExcept(TestCase):
         with captured_stdout() as stdout:
             res = bar(10)
 
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
-
-    # segfault, uncaught runaway recursion?
-    def test_closure(self):
-        @njit
-        def foo(x):
-            def bar():
-                try:
-                    raise ValueError("exception")
-                except:
-                    print("CAUGHT")
-                    return 12
-            bar()
-            foo(x)
-
-        with captured_stdout() as stdout:
-            res = foo(10)
-
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
+        self.assertEqual(res, 7)
+        self.assertEqual(stdout.getvalue().split(), [])
 
     def test_closure2(self):
         @njit
@@ -270,13 +252,13 @@ class TestTryBareExcept(TestCase):
             def bar():
                 try:
                     raise ValueError("exception")
-                except:
+                except:  # noqa: E722
                     print("CAUGHT")
                     return 12
             bar()
 
         with captured_stdout() as stdout:
-            res = foo(10)
+            foo(10)
 
         self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
 
@@ -286,7 +268,7 @@ class TestTryBareExcept(TestCase):
             def bar(z):
                 try:
                     raise ValueError("exception")
-                except:
+                except:  # noqa: E722
                     print("CAUGHT")
                     return z
             return [x for x in map(bar, [1, 2, 3])]
@@ -294,13 +276,9 @@ class TestTryBareExcept(TestCase):
         with captured_stdout() as stdout:
             res = foo(10)
 
+        self.assertEqual(res, [1, 2, 3])
         self.assertEqual(stdout.getvalue().split(), ["CAUGHT",] * 3,)
 
-    # fail:
-    # interpreter.py", line 1158, in op_MAKE_FUNCTION
-    # fcode = self.definitions[code][0].value
-    # AttributeError: Failed in nopython mode pipeline (step: analyzing bytecode)
-    # 'Var' object has no attribute 'value'
     def test_closure4(self):
         @njit
         def foo(x):
@@ -308,15 +286,15 @@ class TestTryBareExcept(TestCase):
                 raise ValueError("exception")
             try:
                 [x for x in map(bar, [1, 2, 3])]
-            except:
+            except:  # noqa: E722
                 print("CAUGHT")
                 return x
 
         with captured_stdout() as stdout:
             res = foo(10)
 
+        self.assertEqual(res, 10)
         self.assertEqual(stdout.getvalue().split(), ["CAUGHT",])
-
 
     def test_real_problem(self):
         @njit
@@ -324,15 +302,14 @@ class TestTryBareExcept(TestCase):
             a = np.zeros((4, 4))
             try:
                 chol = np.linalg.cholesky(a)
-            except:
+            except:  # noqa: E722
                 print("CAUGHT")
                 return chol
 
         with captured_stdout() as stdout:
-            res = foo()
+            foo()
 
         self.assertEqual(stdout.getvalue().split(), ["CAUGHT",])
-
 
     def test_for_loop(self):
         @njit
@@ -342,7 +319,7 @@ class TestTryBareExcept(TestCase):
                 try:
                     if i > 5:
                         raise ValueError
-                except:
+                except:  # noqa: E722
                     print("CAUGHT")
             else:
                 try:
@@ -350,21 +327,22 @@ class TestTryBareExcept(TestCase):
                         try:
                             if i > 5:
                                 raise ValueError
-                        except:
+                        except:  # noqa: E722
                             print("CAUGHT1")
                             raise
-                    except:
+                    except:  # noqa: E722
                         print("CAUGHT2")
                         raise
-                except:
+                except:  # noqa: E722
                     print("CAUGHT3")
 
         with captured_stdout() as stdout:
-            res = foo(10)
+            foo(10)
 
-        self.assertEqual(stdout.getvalue().split(),
-                         ["CAUGHT",] * 4 + ["CAUGHT%s" % i for i in range(1, 4)]
-                         )
+        self.assertEqual(
+            stdout.getvalue().split(),
+            ["CAUGHT",] * 4 + ["CAUGHT%s" % i for i in range(1, 4)],
+        )
 
 
 @skip_tryexcept_unsupported
