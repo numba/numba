@@ -1329,7 +1329,7 @@ class TestJitOptionsNoNRT(TestCase):
     # Test overload*(jit_options={...}) by turning off _nrt
 
     def check_error_no_nrt(self, func, *args, **kwargs):
-        # Check that the compilation fail with a complaint about dynamic array
+        # Check that the compilation fails with a complaint about dynamic array
         msg = ("Only accept returning of array passed into "
                "the function as argument")
         with self.assertRaises(errors.TypingError) as raises:

@@ -603,7 +603,8 @@ class InlineOverloads(FunctionPass):
 
         if do_inline:
             if is_method:
-                self._add_method_self_arg(state, expr)
+                if not self._add_method_self_arg(state, expr):
+                    return False
             arg_typs = template._inline_overloads[arg_typs]['folded_args']
             # pass is typed so use the callee globals
             inline_closure_call(state.func_ir, impl.__globals__,
@@ -619,7 +620,11 @@ class InlineOverloads(FunctionPass):
             return False
 
     def _add_method_self_arg(self, state, expr):
-        expr.args.insert(0, get_definition(state.func_ir, expr.func).value)
+        func_def = guard(get_definition, state.func_ir, expr.func)
+        if func_def is None:
+            return False
+        expr.args.insert(0, func_def.value)
+        return True
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)

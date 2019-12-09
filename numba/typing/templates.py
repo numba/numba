@@ -463,7 +463,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # overload available i.e. function is always inlined, the key still
             # needs to exist for type resolution
 
-            # FIXME: The lack of inlining-pass should not cause this failure.
+            # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
+            #       the inliner has failed to inline this entry corretly.
             impl_init = _EmptyImplementationEntry('always inlined')
             self._compiled_overloads[sig.args] = impl_init
             if not self._inline.is_always_inline:
