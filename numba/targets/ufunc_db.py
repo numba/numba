@@ -286,6 +286,19 @@ def _fill_ufunc_db(ufunc_db):
             'QQ->Q': npyfuncs.np_gcd_impl,
         }
 
+        ufunc_db[np.lcm] = {
+            'bb->b': npyfuncs.np_lcm_impl,
+            'BB->B': npyfuncs.np_lcm_impl,
+            'hh->h': npyfuncs.np_lcm_impl,
+            'HH->H': npyfuncs.np_lcm_impl,
+            'ii->i': npyfuncs.np_lcm_impl,
+            'II->I': npyfuncs.np_lcm_impl,
+            'll->l': npyfuncs.np_lcm_impl,
+            'LL->L': npyfuncs.np_lcm_impl,
+            'qq->q': npyfuncs.np_lcm_impl,
+            'QQ->Q': npyfuncs.np_lcm_impl,
+        }
+
     ufunc_db[np.rint] = {
         'f->f': npyfuncs.np_real_rint_impl,
         'd->d': npyfuncs.np_real_rint_impl,
