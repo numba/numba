@@ -144,7 +144,7 @@ class TestNumThreads(TestCase):
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
-    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 4, "Not enough CPU cores")
     def test_nested_parallelism_1(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
@@ -200,7 +200,7 @@ class TestNumThreads(TestCase):
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
-    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 4, "Not enough CPU cores")
     def test_nested_parallelism_2(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
