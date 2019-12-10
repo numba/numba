@@ -1535,5 +1535,150 @@ class TestLiteralUnrollPy2(TestCase):
                       str(raises.exception))
 
 
+class TestMore(TestCase):
+    def test_invalid_use_of_unroller(self):
+        @njit
+        def foo():
+            x = (10, 20)
+            r = 0
+            for a in literal_unroll(x, x):
+                r += a
+            return r
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+        self.assertIn(
+            "literal_unroll takes one argument, found 2",
+            str(raises.exception),
+        )
+
+    def test_non_constant_list(self):
+
+        @njit
+        def foo(y):
+            x = [10, y]
+            r = 0
+            for a in literal_unroll(x):
+                r += a
+            return r
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo(10)
+        self.assertIn(
+            "Found non-constant value at position 1 in a list argument to literal_unroll",
+            str(raises.exception)
+        )
+
+    def test_literally_constant_list(self):
+        # FAIL. May need to consider it in a future PR
+        from numba import literally
+
+        @njit
+        def foo(y):
+            x = [10, literally(y)]
+            r = 0
+            for a in literal_unroll(x):
+                r += a
+            return r
+
+        foo(12)  # Found non-constant value at position 1 in a list argument to literal_unroll
+
+        @njit
+        def bar():
+            return foo(12)
+
+        bar()  # Found non-constant value at position 1 in a list argument to literal_unroll
+
+    def test_inlined_unroll_list(self):
+        @njit(inline='always')
+        def foo(y):
+            x = [10, y]
+            r = 0
+            for a in literal_unroll(x):
+                r += a
+            return r
+
+        @njit
+        def bar():
+            return foo(12)
+
+        self.assertEqual(bar(), 10 + 12)
+
+    def test_unroll_tuple_arg(self):
+        @njit
+        def foo(y):
+            x = (10, y)
+            r = 0
+            for a in literal_unroll(x):
+                r += a
+            return r
+
+        self.assertEqual(foo(12), foo.py_func(12))
+        self.assertEqual(foo(1.2), foo.py_func(1.2))
+
+    def test_unroll_tuple_arg2(self):
+        @njit
+        def foo(x):
+            r = 0
+            for a in literal_unroll(x):
+                r += a
+            return r
+
+        self.assertEqual(foo((12, 1.2)), foo.py_func((12, 1.2)))
+        self.assertEqual(foo((12, 1.2)), foo.py_func((12, 1.2)))
+
+    def test_unroll_tuple_alias(self):
+        @njit
+        def foo():
+            x = (10, 1.2)
+            out = 0
+            for i in literal_unroll(x):
+                j = i
+                k = j
+                out += j + k + i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_tuple_nested(self):
+        # FAIL
+        @njit
+        def foo():
+            x = ((10, 1.2), (1j, 3.))
+            out = 0
+            for i in literal_unroll(x):
+                for j in (i):
+                    out += j
+            return out
+
+        # Can literal_unroll give a better error message?
+        # errmsg: Invalid use of getiter with parameters (Tuple(int64, float64))
+        foo()
+
+    def test_unroll_tuple_of_dict(self):
+        from numba.tests.support import captured_stdout
+        @njit
+        def foo():
+            x = {}
+            x["a"] = 1
+            x["b"] = 2
+            y = {}
+            y[3] = "c"
+            y[4] = "d"
+
+            for it in literal_unroll((x, y)):
+                for k, v in it.items():
+                    print(k, v)
+
+        with captured_stdout() as stdout:
+            foo()
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            lines,
+            ['a 1', 'b 2', '3 c', '4 d'],
+        )
+
+
+
 if __name__ == '__main__':
     unittest.main()
