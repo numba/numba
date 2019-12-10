@@ -201,6 +201,8 @@ class KernelArg():
     def __init__(self, arg, void_p_arg=False):
         self.kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
         if void_p_arg is True:
+            void_p = ffi.new("void **")
+#            void_p[0] = ffi.new("void*")
             void_p = ffi.cast("void *", 0)
             retval = (_numba_oneapi_pybindings
                       .lib
