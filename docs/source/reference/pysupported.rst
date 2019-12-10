@@ -171,6 +171,7 @@ The following functions, attributes and methods are currently supported:
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
+* ``.expandtabs()``
 * ``.isspace()``
 * ``.isidentifier()``
 * ``.find()``
