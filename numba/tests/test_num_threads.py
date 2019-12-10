@@ -233,7 +233,6 @@ class TestNumThreads(TestCase):
 
             @dec
             def test_func(nthreads):
-                acc = 0
                 buf = np.zeros((M, N))
                 set_num_threads(nthreads)
                 for i in prange(M):
@@ -296,7 +295,6 @@ class TestNumThreads(TestCase):
 
         @njit(parallel=True)
         def test_func(nthreads):
-            acc = 0
             set_num_threads(nthreads)
             lens = np.zeros(nthreads)
             total = 0
