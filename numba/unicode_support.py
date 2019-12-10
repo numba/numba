@@ -679,6 +679,5 @@ def _Py_ISSPACE(ch):
     """
     return _Py_ctype_table[_Py_CHARMASK(ch)] & _PY_CTF.SPACE
 
-
 # End code related to/from CPython's pyctype
 # ------------------------------------------------------------------------------
