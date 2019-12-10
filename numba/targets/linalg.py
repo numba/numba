@@ -34,7 +34,7 @@ ll_intp_p = intp_t.as_pointer()
 
 
 # fortran int type, this needs to match the F_INT C declaration in
-# _lapack.c and is present to accomodate potential future 64bit int
+# _lapack.c and is present to accommodate potential future 64bit int
 # based LAPACK use.
 F_INT_nptype = np.int32
 F_INT_nbtype = types.int32

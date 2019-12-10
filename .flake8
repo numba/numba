@@ -243,7 +243,6 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py

@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import collections
 import dis
 import operator
+import logging
 
 from . import config, ir, controlflow, dataflow, utils, errors, six
 from .utils import builtins, PYVERSION
@@ -13,6 +14,10 @@ from .utils import (
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
     )
+from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Assigner(object):
@@ -92,15 +97,23 @@ class Interpreter(object):
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
-        # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        self.cfa.run()
-        if config.DUMP_CFG:
-            self.cfa.dump()
+        if PYVERSION < (3, 7):
+            # Control flow analysis
+            self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+            self.cfa.run()
+            if config.DUMP_CFG:
+                self.cfa.dump()
 
-        # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
+            # Data flow analysis
+            self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+            self.dfa.run()
+        else:
+            flow = Flow(bytecode)
+            flow.run()
+            self.dfa = AdaptDFA(flow)
+            self.cfa = AdaptCFA(flow)
+            if config.DUMP_CFG:
+                self.cfa.dump()
 
         # Temp states during interpretation
         self.current_block = None
@@ -114,9 +127,11 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
-        return ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
+        fir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
+        _logger.debug(fir.dump_to_string())
+        return fir
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -126,11 +141,11 @@ class Interpreter(object):
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
-            firstinst = self.bytecode[block.body[0]]
-            self._start_new_block(firstinst)
+            firstinst = self.bytecode[block.offset]
+            self.loc = self.loc.with_lineno(firstinst.lineno)
+            self._start_new_block(block.offset)
             if blkct == 0:
                 # Is first block
-                self.loc = self.loc.with_lineno(firstinst.lineno)
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
@@ -138,19 +153,19 @@ class Interpreter(object):
                 yield inst, kws
             self._end_current_block()
 
-    def _start_new_block(self, inst):
+    def _start_new_block(self, offset):
         oldblock = self.current_block
-        self.insert_block(inst.offset)
+        self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            jmp = ir.Jump(inst.offset, loc=self.loc)
+            jmp = ir.Jump(offset, loc=self.loc)
             oldblock.append(jmp)
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
         while self.syntax_blocks:
-            if inst.offset >= self.syntax_blocks[-1].exit:
+            if offset >= self.syntax_blocks[-1].exit:
                 self.syntax_blocks.pop()
             else:
                 break
@@ -303,6 +318,9 @@ class Interpreter(object):
         return blk
 
     # --- Bytecode handlers ---
+
+    def op_NOP(self, inst):
+        pass
 
     def op_PRINT_ITEM(self, inst, item, printvar, res):
         item = self.get(item)
@@ -645,6 +663,11 @@ class Interpreter(object):
     def op_END_FINALLY(self, inst):
         "no-op"
 
+    def op_BEGIN_FINALLY(self, inst, state):
+        "no-op"
+        none = ir.Const(None, loc=self.loc)
+        self.store(value=none, name=state)
+
     if PYVERSION < (3, 6):
 
         def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
@@ -959,10 +982,12 @@ class Interpreter(object):
         else:
             self._binop(op, lhs, rhs, res)
 
-    def op_BREAK_LOOP(self, inst):
-        loop = self.syntax_blocks[-1]
-        assert isinstance(loop, ir.Loop)
-        jmp = ir.Jump(target=loop.exit, loc=self.loc)
+    def op_BREAK_LOOP(self, inst, end=None):
+        if end is None:
+            loop = self.syntax_blocks[-1]
+            assert isinstance(loop, ir.Loop)
+            end = loop.exit
+        jmp = ir.Jump(target=end, loc=self.loc)
         self.current_block.append(jmp)
 
     def _op_JUMP_IF(self, inst, pred, iftrue):
@@ -1049,7 +1074,6 @@ class Interpreter(object):
         self.store(value=appendattr, name=appendvar)
         appendinst = ir.Expr.call(self.get(appendvar), (value,), (), loc=self.loc)
         self.store(value=appendinst, name=res)
-
 
     # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
     # however this means a new object (the bound-method instance) could be

@@ -25,13 +25,19 @@ from numba.extending import (
 
 
 @njit
-def _make_list(itemty):
-    return listobject._as_meminfo(listobject.new_list(itemty))
+def _make_list(itemty, allocated=0):
+    return listobject._as_meminfo(listobject.new_list(itemty,
+                                                      allocated=allocated))
 
 
 @njit
 def _length(l):
     return len(l)
+
+
+@njit
+def _allocated(l):
+    return l._allocated()
 
 
 @njit
@@ -144,11 +150,17 @@ class List(MutableSequence):
     Implements the MutableSequence interface.
     """
     @classmethod
-    def empty_list(cls, item_type):
-        """Create a new empty List with *item_type* as the type for the items
-        of the list .
+    def empty_list(cls, item_type, allocated=0):
+        """Create a new empty List.
+
+        Parameters
+        ----------
+        item_type: Numba type
+            type of the list item.
+        allocated: int
+            number of items to pre-allocate
         """
-        return cls(lsttype=ListType(item_type))
+        return cls(lsttype=ListType(item_type), allocated=allocated)
 
     def __init__(self, **kwargs):
         """
@@ -161,20 +173,22 @@ class List(MutableSequence):
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
+        allocated: int; keyword-only
+            Used internally to pre-allocate space for items
         """
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
         else:
             self._list_type = None
 
-    def _parse_arg(self, lsttype, meminfo=None):
+    def _parse_arg(self, lsttype, meminfo=None, allocated=0):
         if not isinstance(lsttype, ListType):
             raise TypeError('*lsttype* must be a ListType')
 
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_list(lsttype.item_type)
+            opaque = _make_list(lsttype.item_type, allocated=allocated)
         return lsttype, opaque
 
     @property
@@ -198,6 +212,12 @@ class List(MutableSequence):
             return 0
         else:
             return _length(self)
+
+    def _allocated(self):
+        if not self._typed:
+            return 0
+        else:
+            return _allocated(self)
 
     def __eq__(self, other):
         return _eq(self, other)
