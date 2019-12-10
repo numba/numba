@@ -17,7 +17,7 @@ static const size_t N = 2048;
 /* OpenCl kernel for element-wise addition of two arrays */
 const char* programSource =
     "__kernel                                                             \n"
-    "void vecadd(__global float *A, __global float *B, __global float *C) \n"
+    "void vecadd(__global float *A, __global float *B, __global float *C, __global void *meminfo) \n"
     "{                                                                    \n"
     "   int idx = get_global_id(0);                                       \n"
     "   C[idx] = A[idx] + B[idx];                                         \n"
@@ -29,13 +29,15 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
-    kernel_arg_t kernel_args[3];
+    size_t num_args = 4;
+    kernel_arg_t kernel_args[num_args];
     float *A, *B, *C;
     size_t i;
     size_t datasize;
-    size_t num_buffers = 3;
-    size_t indexSpaceSize[1], workGroupSize[1];
+        size_t indexSpaceSize[1], workGroupSize[1];
     buffer_t buffers[3];
+    void *void_p;
+    void_p = NULL;
 
     if(ex == ON_CPU)
         env_t_ptr = rt->first_cpu_env;
@@ -89,7 +91,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     }
     kernel_ptr->dump_fn(kernel_ptr);
     // Set kernel arguments
-    err =  create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
+    err = create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
                                           buffers[0]->sizeof_buffer_ptr,
                                           &kernel_args[0]);
     err |= create_numba_oneapi_kernel_arg(&buffers[1]->buffer_ptr,
@@ -98,6 +100,8 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     err |= create_numba_oneapi_kernel_arg(&buffers[2]->buffer_ptr,
                                           buffers[2]->sizeof_buffer_ptr,
                                           &kernel_args[2]);
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[3]);
     if(err) {
         fprintf(stderr, "Could not create the kernel_args. Abort!\n");
         exit(1);
@@ -109,7 +113,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
 
     // Create a program with source code
     err = set_args_and_enqueue_numba_oneapi_kernel(env_t_ptr, kernel_ptr,
-            3, kernel_args, 1, NULL, indexSpaceSize, workGroupSize);
+            num_args, kernel_args, 1, NULL, indexSpaceSize, workGroupSize);
 
     if(err) {
         fprintf(stderr, "ERROR (%d): Could not build enqueue kernel. Abort!\n",

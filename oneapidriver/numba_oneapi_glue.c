@@ -918,7 +918,9 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 
     kernel = (cl_kernel)kernel_t_ptr->kernel;
     queue = (cl_command_queue)env_t_ptr->queue;
-
+#if DEBUG
+    kernel_t_ptr->dump_fn(kernel_t_ptr);
+#endif
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
 #if DEBUG
@@ -926,13 +928,14 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
         printf("Arg size : %ld\n", array_of_args[i]->arg_size);
         printf("Arg val addr : %p\n", array_of_args[i]->arg_value);
 #endif
-        err |= clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
-                array_of_args[i]->arg_value);
+        err = clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
+                             array_of_args[i]->arg_value);
+        CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
 #if DEBUG
         printf("Arg # %ld set\n", i);
 #endif
     }
-    CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
+
 #if DEBUG
     printf("DEBUG: CL Kernel Args set...\n");
 #endif
