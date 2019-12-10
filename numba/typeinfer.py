@@ -517,6 +517,13 @@ class CallConstraint(object):
                 and sig.recvr is not None
                 and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
+            if (refined_this is None and
+                    fnty.this.is_precise() and
+                    sig.recvr.is_precise()):
+                msg = "Cannot refine type {} to {}".format(
+                    sig.recvr, fnty.this,
+                )
+                raise TypingError(msg, loc=self.loc)
             if refined_this is not None and refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)

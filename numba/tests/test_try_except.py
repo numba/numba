@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import njit, typed, objmode, prange
 from numba.errors import (
-    UnsupportedError, CompilerError, NumbaPerformanceWarning,
+    UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
 from .support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
@@ -634,6 +634,27 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(list(out), [0xbe11] + list(range(5)))
         out = udt(10, raise_at=10)
         self.assertEqual(list(out), [0xbe11] + list(range(10)))
+
+    def test_incompatible_refinement(self):
+        @njit
+        def udt():
+            try:
+                lst = typed.List()
+                print("A")
+                lst.append(0)
+                print("B")
+                lst.append("fda") # invalid type will cause typing error
+                print("C")
+                return lst
+            except Exception:
+                print("D")
+
+        with self.assertRaises(TypingError) as raises:
+            udt()
+        self.assertIn(
+            "Cannot refine type",
+            str(raises.exception),
+        )
 
 
 @skip_tryexcept_unsupported
