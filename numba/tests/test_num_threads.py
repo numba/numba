@@ -4,7 +4,7 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import (njit, set_num_threads, get_num_threads, get_thread_num,
-                   prange, config, threading_layer)
+                   prange, config, threading_layer, guvectorize)
 from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported
 
@@ -68,6 +68,60 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
+    def test_set_num_threads_basic_guvectorize(self):
+        max_threads = config.NUMBA_NUM_THREADS
+
+        @guvectorize(['void(int64[:])'],
+                     '(n)',
+                     nopython=True,
+                     target='parallel')
+        def get_n(x):
+            x[:] = get_num_threads()
+
+        @guvectorize(['void(int64[:])'],
+                     '(n)',
+                     nopython=True,
+                     target='parallel')
+        def set_n(n):
+            set_num_threads(n[0])
+
+        x = np.zeros((5000000,), dtype=np.int64)
+        get_n(x)
+        np.testing.assert_equal(x, max_threads)
+        set_n(np.array([2]))
+        x = np.zeros((5000000,), dtype=np.int64)
+        get_n(x)
+        np.testing.assert_equal(x, 2)
+        set_n(np.array([max_threads]))
+        x = np.zeros((5000000,), dtype=np.int64)
+        get_n(x)
+        np.testing.assert_equal(x, max_threads)
+
+        @guvectorize(['void(int64[:])'],
+                     '(n)',
+                     nopython=True,
+                     target='parallel')
+        def set_get_n(n):
+            set_num_threads(n[0])
+            n[:] = get_num_threads()
+
+        x = np.zeros((5000000,), dtype=np.int64)
+        x[0] = 2
+        set_get_n(x)
+        np.testing.assert_equal(x, 2)
+        x = np.zeros((5000000,), dtype=np.int64)
+        x[0] = max_threads
+        set_get_n(x)
+        np.testing.assert_equal(x, max_threads)
+
+        with self.assertRaises(ValueError):
+            set_n(np.array([0]))
+
+        with self.assertRaises(ValueError):
+            set_n(np.array([max_threads + 1]))
+
+    @skip_parfors_unsupported
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_set_num_threads_outside_jit(self):
 
         # Test set_num_threads outside a jitted function
@@ -81,8 +135,20 @@ class TestNumThreads(TestCase):
                 buf[i] = get_num_threads()
             return buf
 
+        @guvectorize(['void(int64[:])'],
+                     '(n)',
+                     nopython=True,
+                     target='parallel')
+        def test_gufunc(x):
+            x[:] = get_num_threads()
+
+
         out = test_func()
         np.testing.assert_equal(out, 2)
+
+        x = np.zeros((5000000,), dtype=np.int64)
+        test_gufunc(x)
+        np.testing.assert_equal(x, 2)
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -100,6 +166,24 @@ class TestNumThreads(TestCase):
         mask = 2
         out = test_func(mask)
         np.testing.assert_equal(out, mask)
+
+    @skip_parfors_unsupported
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
+    def test_set_num_threads_inside_guvectorize(self):
+        # Test set_num_threads inside a jitted guvectorize function
+        @guvectorize(['void(int64[:])'],
+                     '(n)',
+                     nopython=True,
+                     target='parallel')
+        def test_func(x):
+            set_num_threads(x[0])
+            x[:] = get_num_threads()
+
+        x = np.zeros((5000000,), dtype=np.int64)
+        mask = 2
+        x[0] = mask
+        test_func(x)
+        np.testing.assert_equal(x, mask)
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -121,6 +205,20 @@ class TestNumThreads(TestCase):
             out = test_func()
             self.assertEqual(out, (mask, mask))
 
+            @guvectorize(['void(int64[:], int64[:])'],
+                         '(n), (m)',
+                         nopython=True,
+                         target='parallel')
+            def test_gufunc(x, out):
+                x[:] = get_thread_num() # XXX: Doesn't actually work
+                out[0] = len(np.unique(x))
+                out[1] = get_num_threads()
+
+            x = np.full((5000000,), -1, dtype=np.int64)
+            out = np.zeros((mask,), dtype=np.int64)
+            test_gufunc(x, out)
+            np.testing.assert_equal(out, np.array([mask, mask]), str(x[0]))
+
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_get_num_threads_truth_inside_jit(self):
@@ -140,6 +238,21 @@ class TestNumThreads(TestCase):
 
             out = test_func()
             self.assertEqual(out, (mask, mask))
+
+            @guvectorize(['void(int64[:], int64[:])'],
+                         '(n), (m)',
+                         nopython=True,
+                         target='parallel')
+            def test_gufunc(x, out):
+                set_num_threads(mask)
+                x[:] = get_thread_num() # XXX: Doesn't actually work
+                out[0] = len(np.unique(x))
+                out[1] = get_num_threads()
+
+            x = np.full((5000000,), -1, dtype=np.int64)
+            out = np.zeros((mask,), dtype=np.int64)
+            test_gufunc(x, out)
+            np.testing.assert_equal(out, np.array([mask, mask]), str(x[0]))
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
