@@ -87,6 +87,9 @@ class Interpreter(object):
         self.blocks = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
+        # A set to keep track of all exception variables.
+        # To be used in _legalize_exception_vars()
+        self._exception_vars = set()
 
     def interpret(self, bytecode):
         """
@@ -128,11 +131,36 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
+        self._legalize_exception_vars()
+
+        # Prepare FunctionIR
         fir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
         _logger.debug(fir.dump_to_string())
         return fir
+
+    def _legalize_exception_vars(self):
+        """Search for unsupported use of exception variables.
+        Note, they cannot be stored into user variable.
+        """
+        # Build a set of exception variables
+        excvars = self._exception_vars.copy()
+        # Propagate the exception variables to LHS of assignment
+        for varname, defnvars in self.definitions.items():
+            for v in defnvars:
+                if isinstance(v, ir.Var):
+                    k = v.name
+                    if k in excvars:
+                        excvars.add(varname)
+        # Filter out the user variables.
+        uservar = list(filter(lambda x: not x.startswith('$'), excvars))
+        if uservar:
+            # Complain about the first user-variable storing an exception
+            first = uservar[0]
+            loc = self.current_scope.get(first).loc
+            msg = "Exception object cannot be stored into variable."
+            raise errors.UnsupportedError(msg, loc=loc)
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -238,6 +266,7 @@ class Interpreter(object):
                         "exception variable CANNOT be defined by other code",
                     )
                 self.store(value=const_none, name=var)
+                self._exception_vars.add(var)
 
     def _insert_exception_check(self):
         """Called before the end of a block to inject checks if
@@ -758,6 +787,7 @@ class Interpreter(object):
         for tmp in temps:
             # Set to None for now
             self.store(const_none, name=tmp)
+            self._exception_vars.add(tmp)
 
     if PYVERSION < (3, 6):
 

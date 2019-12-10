@@ -431,37 +431,20 @@ class TestTryExceptCaught(TestCase):
         @njit
         def udt(x):
             try:
-                print("A")
                 if x:
                     raise ZeroDivisionError
-                print("B")
                 r = 123
             except Exception as e:  # noqa: F841
-                print("C")
                 r = 321
                 return r
-            print("D")
             return r
 
-        # case 1
-        with captured_stdout() as stdout:
-            res = udt(True)
-
-        self.assertEqual(
-            stdout.getvalue().split(),
-            ["A", "C"],
+        with self.assertRaises(UnsupportedError) as raises:
+            udt(True)
+        self.assertIn(
+            "Exception object cannot be stored into variable",
+            str(raises.exception)
         )
-        self.assertEqual(res, 321)
-
-        # case 2
-        with captured_stdout() as stdout:
-            res = udt(False)
-
-        self.assertEqual(
-            stdout.getvalue().split(),
-            ["A", "B", "D"],
-        )
-        self.assertEqual(res, 123)
 
 
 @skip_tryexcept_unsupported
@@ -493,7 +476,7 @@ class TestTryExceptNested(TestCase):
                         print('D')
                         raise MyError("y")
                     print('E')
-                except Exception as e: # noqa: F841
+                except Exception: # noqa: F722
                     print('F')
                     try:
                         print('H')
