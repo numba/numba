@@ -87,7 +87,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
         fprintf(stderr, "Could not create the kernel. Abort!\n");
         exit(1);
     }
-
+    kernel_ptr->dump_fn(kernel_ptr);
     // Set kernel arguments
     err =  create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
                                           buffers[0]->sizeof_buffer_ptr,
