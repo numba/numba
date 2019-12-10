@@ -3,6 +3,7 @@ from __future__ import print_function
 import itertools
 import functools
 import sys
+import operator
 
 import numpy as np
 
@@ -162,6 +163,9 @@ def sum_usecase(x):
 def type_unary_usecase(a, b):
     return type(a)(b)
 
+def truth_usecase(p):
+    return operator.truth(p)
+
 def unichr_usecase(x):
     return unichr(x)
 
@@ -242,6 +246,13 @@ class TestBuiltins(TestCase):
         cfunc = cr.entry_point
         for x in complex_values:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+        for unsigned_type in types.unsigned_domain:
+            unsigned_values = [0, 10, 2, 2 ** unsigned_type.bitwidth - 1]
+            cr = compile_isolated(pyfunc, (unsigned_type,), flags=flags)
+            cfunc = cr.entry_point
+            for x in unsigned_values:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     @tag('important')
     def test_abs_npm(self):
@@ -885,6 +896,13 @@ class TestBuiltins(TestCase):
     def test_sum_npm(self):
         with self.assertTypingError():
             self.test_sum(flags=no_pyobj_flags)
+
+    def test_truth(self):
+        pyfunc = truth_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertEqual(pyfunc(True), cfunc(True))
+        self.assertEqual(pyfunc(False), cfunc(False))
 
     def test_type_unary(self):
         # Test type(val) and type(val)(other_val)

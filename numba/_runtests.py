@@ -29,7 +29,7 @@ def _main(argv, **kwds):
 
 
 def main(*argv, **kwds):
-    """keyword arguments are accepted for backward compatiblity only.
+    """keyword arguments are accepted for backward compatibility only.
     See `numba.testing.run_tests()` documentation for details."""
     return _main(['<main>'] + list(argv), **kwds)
 
