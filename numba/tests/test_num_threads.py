@@ -202,6 +202,9 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_2(self):
+        if threading_layer() == 'workqueue':
+            self.skipTest("workqueue is not threadsafe")
+
         # check that get_thread_num is ok in nesting
 
         N = 5
