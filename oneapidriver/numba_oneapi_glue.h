@@ -41,6 +41,7 @@ typedef struct numba_oneapi_buffer* buffer_t;
 struct numba_oneapi_kernel
 {
     void *kernel;
+    int (*dump_fn) (void *);
 };
 
 typedef struct numba_oneapi_kernel* kernel_t;

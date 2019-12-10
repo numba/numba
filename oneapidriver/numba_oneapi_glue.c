@@ -121,8 +121,8 @@ static int dump_device_info (void *obj)
     cl_uint maxComputeUnits;
     env_t env_t_ptr;
 
+    value = NULL;
     env_t_ptr = (env_t)obj;
-
     cl_device_id device = (cl_device_id)(env_t_ptr->device);
 
     err = clRetainDevice(device);
@@ -176,6 +176,7 @@ static int dump_device_info (void *obj)
     return NUMBA_ONEAPI_SUCCESS;
 
 error:
+    free(value);
     return NUMBA_ONEAPI_FAILURE;
 }
 
@@ -204,6 +205,44 @@ static int dump_numba_oneapi_runtime_info (void *obj)
     }
 
     return NUMBA_ONEAPI_SUCCESS;
+}
+
+
+/*!
+ *
+ */
+static int dump_numba_oneapi_kernel_info (void *obj)
+{
+    cl_int err;
+    char *value;
+    size_t size;
+    cl_uint numKernelArgs;
+    cl_kernel kernel;
+    kernel_t kernel_t_ptr;
+
+    kernel_t_ptr = (kernel_t)obj;
+    kernel = (cl_kernel)(kernel_t_ptr->kernel);
+
+    // print kernel function name
+    err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, 0, NULL, &size);
+    CHECK_OPEN_CL_ERROR(err, "Could not get kernel function name size.");
+    value = (char*)malloc(size);
+    err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, size, value, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not get kernel function name.");
+    printf("Kernel Function name: %s\n", value);
+    free(value);
+
+    // print the number of kernel args
+    err = clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(numKernelArgs),
+            &numKernelArgs, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not get kernel num args.");
+    printf("Number of kernel arguments : %d\n", numKernelArgs);
+
+    return NUMBA_ONEAPI_SUCCESS;
+
+error:
+    free(value);
+    return NUMBA_ONEAPI_FAILURE;
 }
 
 
@@ -783,7 +822,7 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
 #if DEBUG
     printf("DEBUG: CL kernel created\n");
 #endif
-
+    ker->dump_fn = dump_numba_oneapi_kernel_info;
     *kernel_ptr = ker;
     return NUMBA_ONEAPI_SUCCESS;
 
