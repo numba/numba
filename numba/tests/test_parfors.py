@@ -2321,6 +2321,30 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl)
 
     @skip_unsupported
+    def test_copy_global_for_parfor(self):
+        """ issue4903: a global is copied next to a parfor so that
+            it can be inlined into the parfor and thus not have to be
+            passed to the parfor (i.e., an unsupported function type).
+            This global needs to be renamed in the block into which
+            it is copied.
+        """
+        def test_impl(zz, tc):
+            lh = np.zeros(len(tc))
+            lc = np.zeros(len(tc))
+            for i in range(1):
+                nt = tc[i]
+                for t in range(nt):
+                    lh += np.exp(zz[i, t])
+                for t in range(nt):
+                    lc += np.exp(zz[i, t])
+            return lh, lc
+
+        m = 2
+        zz = np.ones((m, m, m))
+        tc = np.ones(m, dtype=np.int_)
+        self.prange_tester(test_impl, zz, tc, patch_instance=[0])
+
+    @skip_unsupported
     def test_multiple_call_getattr_object(self):
         def test_impl(n):
             B = 0
