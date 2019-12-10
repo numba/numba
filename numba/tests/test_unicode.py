@@ -1150,7 +1150,7 @@ class TestUnicode(BaseTest):
                              cfunc(test_str),
                              "'%s'.split()?" % (test_str,))
 
-    def test_split_exception_invalid_keepends(self):
+    def test_splitlines_exception_invalid_keepends(self):
         pyfunc = splitlines_with_keepends_usecase
         cfunc = njit(pyfunc)
 
