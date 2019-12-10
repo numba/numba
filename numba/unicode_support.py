@@ -248,12 +248,6 @@ def _PyUnicode_IsUppercase(ch):
 
 
 @register_jitable
-def _PyUnicode_IsLineBreak(ch):
-    ctype = _PyUnicode_gettyperecord(ch)
-    return ctype.flags & _PyUnicode_TyperecordMasks.LINEBREAK_MASK != 0
-
-
-@register_jitable
 def _PyUnicode_ToUppercase(ch):
     raise NotImplementedError
 
@@ -583,40 +577,6 @@ _Py_ctype_toupper = np.array([
 ], dtype=np.uint8)
 
 
-class _PY_CTF_LB(IntEnum):
-    LINE_BREAK = 0x01
-    LINE_FEED = 0x02
-    CARRIAGE_RETURN = 0x04
-
-
-_Py_ctype_islinebreak = np.array([
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    _PY_CTF_LB.LINE_BREAK | _PY_CTF_LB.LINE_FEED,  # 0xa '\n'
-    _PY_CTF_LB.LINE_BREAK,  # 0xb '\v'
-    _PY_CTF_LB.LINE_BREAK,  # 0xc '\f'
-    _PY_CTF_LB.LINE_BREAK | _PY_CTF_LB.CARRIAGE_RETURN,  # 0xd '\r'
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    _PY_CTF_LB.LINE_BREAK,  # 0x1c '\x1c'
-    _PY_CTF_LB.LINE_BREAK,  # 0x1d '\x1d'
-    _PY_CTF_LB.LINE_BREAK,  # 0x1e '\x1e'
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    _PY_CTF_LB.LINE_BREAK,  # 0x85 '\x85'
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0,
-], dtype=np.intc)
-
-
 # Translation of:
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pymacro.h#L25    # noqa: E501
 @register_jitable
@@ -718,24 +678,6 @@ def _Py_ISSPACE(ch):
     Equivalent to the CPython macro `Py_ISSPACE()`
     """
     return _Py_ctype_table[_Py_CHARMASK(ch)] & _PY_CTF.SPACE
-
-
-@register_jitable
-def _Py_ISLINEBREAK(ch):
-    """Check if character is ASCII line break"""
-    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.LINE_BREAK
-
-
-@register_jitable
-def _Py_ISLINEFEED(ch):
-    """Check if character is line feed `\n`"""
-    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.LINE_FEED
-
-
-@register_jitable
-def _Py_ISCARRIAGERETURN(ch):
-    """Check if character is carriage return `\r`"""
-    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.CARRIAGE_RETURN
 
 
 # End code related to/from CPython's pyctype

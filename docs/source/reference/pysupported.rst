@@ -179,7 +179,6 @@ The following functions, attributes and methods are currently supported:
 * ``.ljust()``
 * ``.rjust()``
 * ``.split()``
-* ``.splitlines()``
 * ``.join()``
 * ``.lstrip()``
 * ``.rstrip()``
