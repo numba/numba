@@ -4,10 +4,9 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 
 from numba import (njit, set_num_threads, get_num_threads, get_thread_num,
-                   prange, config)
+                   prange, config, threading_layer)
 from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported
-
 
 class TestNumThreads(TestCase):
     _numba_parallel_test_ = False
@@ -147,6 +146,9 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_1(self):
+        if threading_layer() == 'workqueue':
+            return unittest.skip("workqueue is not threadsafe")
+
         # check that get_thread_num is ok in nesting
         mask = config.NUMBA_NUM_THREADS - 1
 
@@ -272,6 +274,9 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_3(self):
+        if threading_layer() == 'workqueue':
+            return unittest.skip("workqueue is not threadsafe")
+
         # check that the right number of threads are present in nesting
         # this relies on there being a load of cores present
         BIG = 1000000
