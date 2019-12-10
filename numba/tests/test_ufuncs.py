@@ -374,6 +374,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.binary_ufunc_test(np.power, flags=flags,
                                positive_only=after_numpy_112)
 
+    def test_gcd_ufunc(self, flags=no_pyobj_flags):
+        if numpy_support.version >= (1, 15):
+            self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
+
+    def test_lcm_ufunc(self, flags=no_pyobj_flags):
+        if numpy_support.version >= (1, 15):
+            self.binary_ufunc_test(np.lcm, flags=flags, kinds="iu")
+
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
         self.binary_ufunc_test(np.remainder, flags=flags)
@@ -1212,7 +1220,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     @tag('important')
     def test_floor_divide_array_op(self):
         # Avoid floating-point zeros as x // 0.0 can have varying results
-        # depending on the algorithm (which changed accross Numpy versions)
+        # depending on the algorithm (which changed across Numpy versions)
         self.inputs = [
             (np.uint32(1), types.uint32),
             (np.int32(-2), types.int32),

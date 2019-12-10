@@ -34,7 +34,6 @@ class List(object):
         """
         self.tc = tc
         self.item_size = item_size
-        self.allocated = allocated
         self.lp = self.list_new(item_size, allocated)
 
     # The following methods implement part of the list API
@@ -57,6 +56,10 @@ class List(object):
     def __delitem__(self, i):
         self.list_delitem(i)
 
+    @property
+    def allocated(self):
+        return self.list_allocated()
+
     def append(self, item):
         self.list_append(item)
 
@@ -75,6 +78,9 @@ class List(object):
 
     def list_length(self):
         return self.tc.numba_list_length(self.lp)
+
+    def list_allocated(self):
+        return self.tc.numba_list_allocated(self.lp)
 
     def list_setitem(self, i, item):
         status = self.tc.numba_list_setitem(self.lp, i, item)
@@ -195,6 +201,12 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t],
         )
+        # numba_list_allocated(NB_List *l)
+        self.numba_list_allocated = wrap(
+            'list_allocated',
+            ctypes.c_int,
+            [list_t],
+        )
         # numba_list_setitem(NB_List *l, Py_ssize_t i, const char *item)
         self.numba_list_setitem = wrap(
             'list_setitem',
@@ -260,6 +272,12 @@ class TestListImpl(TestCase):
     def test_length(self):
         l = List(self, 8, 0)
         self.assertEqual(len(l), 0)
+
+    def test_allocation(self):
+        for i in range(16):
+            l = List(self, 8, i)
+            self.assertEqual(len(l), 0)
+            self.assertEqual(l.allocated, i)
 
     def test_append_get_string(self):
         l = List(self, 8, 1)

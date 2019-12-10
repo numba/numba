@@ -122,7 +122,10 @@ class internal_prange(object):
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def min_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def min_1(in_arr):
             numba.parfor.init_prange()
             min_checker(len(in_arr))
@@ -141,7 +144,10 @@ def min_parallel_impl(return_type, arg):
     return min_1
 
 def max_parallel_impl(return_type, arg):
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def max_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def max_1(in_arr):
             numba.parfor.init_prange()
             max_checker(len(in_arr))
@@ -238,7 +244,10 @@ def dot_parallel_impl(return_type, atyp, btyp):
 def sum_parallel_impl(return_type, arg):
     zero = return_type(0)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def sum_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def sum_1(in_arr):
             numba.parfor.init_prange()
             val = zero
@@ -257,7 +266,10 @@ def sum_parallel_impl(return_type, arg):
 def prod_parallel_impl(return_type, arg):
     one = return_type(1)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def prod_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def prod_1(in_arr):
             numba.parfor.init_prange()
             val = one
@@ -278,7 +290,10 @@ def mean_parallel_impl(return_type, arg):
     # can't reuse sum since output type is different
     zero = return_type(0)
 
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def mean_1(in_arr):
+            return in_arr[()]
+    elif arg.ndim == 1:
         def mean_1(in_arr):
             numba.parfor.init_prange()
             val = zero
@@ -295,8 +310,10 @@ def mean_parallel_impl(return_type, arg):
     return mean_1
 
 def var_parallel_impl(return_type, arg):
-
-    if arg.ndim == 1:
+    if arg.ndim == 0:
+        def var_1(in_arr):
+            return 0
+    elif arg.ndim == 1:
         def var_1(in_arr):
             # Compute the mean
             m = in_arr.mean()
@@ -1517,7 +1534,14 @@ class ParforPass(object):
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
-            parfor_ids = get_parfor_params(self.func_ir.blocks, self.options.fusion, self.nested_fusion_info)
+            parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
+                                                    self.options.fusion,
+                                                    self.nested_fusion_info)
+            for p in parfors:
+                numba.parfor.get_parfor_reductions(self.func_ir,
+                                                   p,
+                                                   p.params,
+                                                   self.calltypes)
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -2330,7 +2354,7 @@ class ParforPass(object):
         """
         from numba.inline_closurecall import check_reduce_func
         reduce_func = get_definition(self.func_ir, call_name)
-        check_reduce_func(self.func_ir, reduce_func)
+        fcode = check_reduce_func(self.func_ir, reduce_func)
 
         arr_typ = self.typemap[in_arr.name]
         in_typ = arr_typ.dtype
@@ -2345,7 +2369,7 @@ class ParforPass(object):
             in_typ, arr_typ, index_var_type)
         body_block.append(ir.Assign(getitem_call, tmp_var, loc))
 
-        reduce_f_ir = compile_to_numba_ir(reduce_func,
+        reduce_f_ir = compile_to_numba_ir(fcode,
                                         self.func_ir.func_id.func.__globals__,
                                         self.typingctx,
                                         (in_typ, in_typ),
@@ -2843,6 +2867,7 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
     # that could be undefined before. So we only consider variables that are
     # actually defined before the parfor body in the program.
     parfor_ids = set()
+    parfors = []
     pre_defs = set()
     _, all_defs = compute_use_defs(blocks)
     topo_order = find_topo_order(blocks)
@@ -2856,9 +2881,10 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             pre_defs |= before_defs
             parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
             parfor_ids.add(parfor.id)
+            parfors.append(parfor)
 
         pre_defs |= all_defs[label]
-    return parfor_ids
+    return parfor_ids, parfors
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -2867,7 +2893,7 @@ def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    parfor_ids = get_parfor_params(blocks, options_fusion, fusion_info)
+    parfor_ids, _ = get_parfor_params(blocks, options_fusion, fusion_info)
     n_parfors = len(parfor_ids)
     if n_parfors > 0:
         if config.DEBUG_ARRAY_OPT_STATS:
@@ -2911,7 +2937,7 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
+def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=None,
         reduce_varnames=None, param_uses=None, param_nodes=None,
         var_to_param=None):
     """find variables that are updated using their previous values and an array
@@ -2959,7 +2985,7 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
                 param_nodes[cur_param].append(stmt_cp)
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
-                get_parfor_reductions(stmt, parfor_params, calltypes,
+                get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
                     reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
@@ -2968,7 +2994,7 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
         if param in used_vars and param not in reduce_varnames:
             reduce_varnames.append(param)
             param_nodes[param].reverse()
-            reduce_nodes = get_reduce_nodes(param, param_nodes[param])
+            reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
             gri_out = guard(get_reduction_init, reduce_nodes)
             if gri_out is not None:
                 init_val, redop = gri_out
@@ -2997,7 +3023,17 @@ def get_reduction_init(nodes):
         return 1, acc_expr.fn
     return None, None
 
-def get_reduce_nodes(name, nodes):
+def supported_reduction(x, func_ir):
+    if x.op == 'inplace_binop' or x.op == 'binop':
+        return True
+    if x.op == 'call':
+        callname = guard(find_callname, func_ir, x)
+        callname = tuple(i if i != '__builtin__' else 'builtins' for i in callname)
+        if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
+            return True
+    return False
+
+def get_reduce_nodes(name, nodes, func_ir):
     """
     Get nodes that combine the reduction variable with a sentinel variable.
     Recognizes the first node that combines the reduction variable with another
@@ -3022,6 +3058,15 @@ def get_reduce_nodes(name, nodes):
         if isinstance(rhs, ir.Expr):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
+                next_node = nodes[i+1]
+                if not (isinstance(next_node, ir.Assign) and next_node.target.name == name):
+                    raise ValueError(("Use of reduction variable " + name +
+                                      " other than in a supported reduction"
+                                      " function is not permitted."))
+
+                if not supported_reduction(rhs, func_ir):
+                    raise ValueError(("Use of reduction variable " + name +
+                                      " in an unsupported reduction function."))
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
