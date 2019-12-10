@@ -147,7 +147,7 @@ class TestNumThreads(TestCase):
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_1(self):
         if threading_layer() == 'workqueue':
-            return unittest.skip("workqueue is not threadsafe")
+            self.skipTest("workqueue is not threadsafe")
 
         # check that get_thread_num is ok in nesting
         mask = config.NUMBA_NUM_THREADS - 1
@@ -275,7 +275,7 @@ class TestNumThreads(TestCase):
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_3(self):
         if threading_layer() == 'workqueue':
-            return unittest.skip("workqueue is not threadsafe")
+            self.skipTest("workqueue is not threadsafe")
 
         # check that the right number of threads are present in nesting
         # this relies on there being a load of cores present
