@@ -1,4 +1,3 @@
-import sys
 import operator
 import sys
 
