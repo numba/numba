@@ -473,6 +473,48 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         received = foo()
         self.assertEqual(expected, received)
 
+    def test_pop(self):
+        # This fails
+        # TypeError: expected int64, got None
+        @njit
+        def foo():
+            l = List()
+            l.append(None)
+            return l.pop()
+
+        self.assertIsNone(foo())
+
+    def test_count(self):
+        # This fails to compile
+        @njit
+        def foo():
+            l = List()
+            l.append(None)
+            l.append(None)
+            l.append(None)
+            return l.count(None)
+
+        self.assertEqual(foo(), 3)
+
+    def test_insert(self):
+        # This fails to compile
+        @njit
+        def foo():
+            l = List()
+            l.insert(0, None)
+            return l
+        self.assertEqual(list(foo()), [None])
+
+    def test_index(self):
+        # This fails to compile
+        @njit
+        def foo():
+            l = List()
+            l.append(None)
+            l.append(None)
+            return l.index(None)
+        self.assertEqual(foo(), 0)
+
 
 class TestAllocation(MemoryLeakMixin, TestCase):
 
