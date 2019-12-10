@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils, config
+from . import utils, config, types
 
 
 bool_t = ir.IntType(1)
@@ -1096,3 +1096,12 @@ def hexdump(builder, ptr, nbytes):
         val = builder.load(offset)
         printf(builder, " %02x", val)
     printf(builder, "\n")
+
+
+def is_nonelike(ty):
+    """ returns if 'ty' is none """
+    return (
+        ty is None or
+        isinstance(ty, types.NoneType) or
+        isinstance(ty, types.Omitted)
+    )

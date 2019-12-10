@@ -1,3 +1,4 @@
+import sys
 import operator
 
 import numpy as np
@@ -20,7 +21,6 @@ from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
 from numba.datamodel import register_default, StructModel
 from numba import cgutils
 from numba import types
-from numba import njit
 from numba.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
@@ -32,11 +32,16 @@ from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
+                              _PyUnicode_ToTitleFull, _PyUnicode_IsPrintable,
+                              _PyUnicode_IsSpace,
+                              _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
+                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
+                              _Py_ISALPHA,)
 
 # DATA MODEL
 
@@ -240,7 +245,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
     return sig, details
 
 
-@njit
+@register_jitable
 def _empty_string(kind, length, is_ascii=0):
     char_width = _kind_to_byte_width(kind)
     s = _malloc_string(kind, char_width, length, is_ascii)
@@ -249,7 +254,7 @@ def _empty_string(kind, length, is_ascii=0):
 
 
 # Disable RefCt for performance.
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _get_code_point(a, i):
     if a._kind == PY_UNICODE_1BYTE_KIND:
         return deref_uint8(a._data, i)
@@ -295,7 +300,7 @@ def set_uint32(typingctx, data, idx, ch):
     return sig, make_set_codegen(32)
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _set_code_point(a, i, ch):
     # WARNING: This method is very dangerous:
     #   * Assumes that data contents can be changed (only allowed for new
@@ -314,7 +319,7 @@ def _set_code_point(a, i, ch):
             "Unexpected unicode representation in _set_code_point")
 
 
-@njit
+@register_jitable
 def _pick_kind(kind1, kind2):
     if kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND:
         raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
@@ -332,14 +337,14 @@ def _pick_kind(kind1, kind2):
         raise AssertionError("Unexpected unicode representation in _pick_kind")
 
 
-@njit
+@register_jitable
 def _pick_ascii(is_ascii1, is_ascii2):
     if is_ascii1 == 1 and is_ascii2 == 1:
         return types.uint32(1)
     return types.uint32(0)
 
 
-@njit
+@register_jitable
 def _kind_to_byte_width(kind):
     if kind == PY_UNICODE_1BYTE_KIND:
         return 1
@@ -353,7 +358,7 @@ def _kind_to_byte_width(kind):
         raise AssertionError("Unexpected unicode encoding encountered")
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _cmp_region(a, a_offset, b, b_offset, n):
     if n == 0:
         return 0
@@ -371,50 +376,6 @@ def _cmp_region(a, a_offset, b, b_offset, n):
             return 1
 
     return 0
-
-
-@njit(_nrt=False)
-def _find(substr, s):
-    # Naive, slow string matching for now
-    for i in range(len(s) - len(substr) + 1):
-        if _cmp_region(s, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
-@njit
-def _is_whitespace(code_point):
-    # list copied from
-    # https://github.com/python/cpython/blob/master/Objects/unicodetype_db.h
-    return code_point == 0x0009 \
-        or code_point == 0x000A \
-        or code_point == 0x000B \
-        or code_point == 0x000C \
-        or code_point == 0x000D \
-        or code_point == 0x001C \
-        or code_point == 0x001D \
-        or code_point == 0x001E \
-        or code_point == 0x001F \
-        or code_point == 0x0020 \
-        or code_point == 0x0085 \
-        or code_point == 0x00A0 \
-        or code_point == 0x1680 \
-        or code_point == 0x2000 \
-        or code_point == 0x2001 \
-        or code_point == 0x2002 \
-        or code_point == 0x2003 \
-        or code_point == 0x2004 \
-        or code_point == 0x2005 \
-        or code_point == 0x2006 \
-        or code_point == 0x2007 \
-        or code_point == 0x2008 \
-        or code_point == 0x2009 \
-        or code_point == 0x200A \
-        or code_point == 0x2028 \
-        or code_point == 0x2029 \
-        or code_point == 0x202F \
-        or code_point == 0x205F \
-        or code_point == 0x3000
 
 
 @register_jitable
@@ -527,20 +488,162 @@ def unicode_contains(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
         def contains_impl(a, b):
             # note parameter swap: contains(a, b) == b in a
-            return _find(substr=b, s=a) > -1
+            return _find(a, b) > -1
         return contains_impl
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
+@register_jitable
+def _adjust_indices(length, start, end):
+    if end > length:
+        end = length
+    if end < 0:
+        end += length
+        if end < 0:
+            end = 0
+    if start < 0:
+        start += length
+        if start < 0:
+            start = 0
+
+    return start, end
+
+
+def unicode_idx_check_type(ty, name):
+    """Check object belongs to one of specific types
+    ty: type
+        Type of the object
+    name: str
+        Name of the object
+    """
+    thety = ty
+    # if the type is omitted, the concrete type is the value
+    if isinstance(ty, types.Omitted):
+        thety = ty.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(ty, types.Optional):
+        thety = ty.type
+
+    accepted = (types.Integer, types.NoneType)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+
+
+def unicode_sub_check_type(ty, name):
+    """Check object belongs to unicode type"""
+    if not isinstance(ty, types.UnicodeType):
+        msg = '"{}" must be {}, not {}'.format(name, types.UnicodeType, ty)
+        raise TypingError(msg)
+
+
+def generate_finder(find_func):
+    """Generate finder either left or right."""
+    def impl(data, substr, start=None, end=None):
+        length = len(data)
+        sub_length = len(substr)
+        if start is None:
+            start = 0
+        if end is None:
+            end = length
+
+        start, end = _adjust_indices(length, start, end)
+        if end - start < sub_length:
+            return -1
+
+        return find_func(data, substr, start, end)
+
+    return impl
+
+
+@register_jitable
+def _finder(data, substr, start, end):
+    """Left finder."""
+    if len(substr) == 0:
+        return start
+    for i in range(start, min(len(data), end) - len(substr) + 1):
+        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
+            return i
+    return -1
+
+
+@register_jitable
+def _rfinder(data, substr, start, end):
+    """Right finder."""
+    if len(substr) == 0:
+        return end
+    for i in range(min(len(data), end) - len(substr), start - 1, -1):
+        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
+            return i
+    return -1
+
+
+_find = register_jitable(generate_finder(_finder))
+_rfind = register_jitable(generate_finder(_rfinder))
+
+
 @overload_method(types.UnicodeType, 'find')
-def unicode_find(a, b):
-    if isinstance(b, types.UnicodeType):
-        def find_impl(a, b):
-            return _find(substr=b, s=a)
+def unicode_find(data, substr, start=None, end=None):
+    """Implements str.find()"""
+    if isinstance(substr, types.UnicodeCharSeq):
+        def find_impl(data, substr, start=None, end=None):
+            return data.find(str(substr))
         return find_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def find_impl(a, b):
-            return a.find(str(b))
-        return find_impl
+
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(substr, 'substr')
+
+    return _find
+
+
+@overload_method(types.UnicodeType, 'rfind')
+def unicode_rfind(data, substr, start=None, end=None):
+    """Implements str.rfind()"""
+    if isinstance(substr, types.UnicodeCharSeq):
+        def rfind_impl(data, substr, start=None, end=None):
+            return data.rfind(str(substr))
+        return rfind_impl
+
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(substr, 'substr')
+
+    return _rfind
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12831-L12857    # noqa: E501
+@overload_method(types.UnicodeType, 'rindex')
+def unicode_rindex(s, sub, start=None, end=None):
+    """Implements str.rindex()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
+
+    def rindex_impl(s, sub, start=None, end=None):
+        result = s.rfind(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return rindex_impl
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
+@overload_method(types.UnicodeType, 'index')
+def unicode_index(s, sub, start=None, end=None):
+    """Implements str.index()"""
+    unicode_idx_check_type(start, 'start')
+    unicode_idx_check_type(end, 'end')
+    unicode_sub_check_type(sub, 'sub')
+
+    def index_impl(s, sub, start=None, end=None):
+        result = s.find(sub, start, end)
+        if result < 0:
+            raise ValueError('substring not found')
+
+        return result
+
+    return index_impl
 
 
 @overload_method(types.UnicodeType, 'count')
@@ -550,7 +653,7 @@ def unicode_count(src, sub, start=None, end=None):
     _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
-        def count_impl(src, sub, start=start, end=end):
+        def count_impl(src, sub, start=None, end=None):
             count = 0
             src_len = len(src)
             sub_len = len(sub)
@@ -577,6 +680,42 @@ def unicode_count(src, sub, start=None, end=None):
         return count_impl
     error_msg = "The substring must be a UnicodeType, not {}"
     raise TypingError(error_msg.format(type(sub)))
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12979-L13033    # noqa: E501
+@overload_method(types.UnicodeType, 'rpartition')
+def unicode_rpartition(data, sep):
+    """Implements str.rpartition()"""
+    thety = sep
+    # if the type is omitted, the concrete type is the value
+    if isinstance(sep, types.Omitted):
+        thety = sep.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(sep, types.Optional):
+        thety = sep.type
+
+    accepted = (types.UnicodeType, types.UnicodeCharSeq)
+    if thety is not None and not isinstance(thety, accepted):
+        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        raise TypingError(msg)
+
+    def impl(data, sep):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
+        empty_str = _empty_string(data._kind, 0, data._is_ascii)
+        sep_length = len(sep)
+        if data._kind < sep._kind or len(data) < sep_length:
+            return empty_str, empty_str, data
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+
+        pos = data.rfind(sep)
+        if pos < 0:
+            return empty_str, empty_str, data
+
+        return data[0:pos], sep, data[pos + sep_length:len(data)]
+
+    return impl
 
 
 @overload_method(types.UnicodeType, 'startswith')
@@ -614,12 +753,12 @@ def unicode_split(a, sep=None, maxsplit=-1):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeCharSeq):
-        def split_impl(a, sep, maxsplit=1):
+        def split_impl(a, sep=None, maxsplit=-1):
             return a.split(str(sep), maxsplit=maxsplit)
         return split_impl
 
     if isinstance(sep, types.UnicodeType):
-        def split_impl(a, sep, maxsplit=-1):
+        def split_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
             sep_len = len(sep)
 
@@ -667,7 +806,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
 
             for idx in range(a_len):
                 code_point = _get_code_point(a, idx)
-                is_whitespace = _is_whitespace(code_point)
+                is_whitespace = _PyUnicode_IsSpace(code_point)
                 if in_whitespace_block:
                     if is_whitespace:
                         pass  # keep consuming space
@@ -697,7 +836,7 @@ def unicode_center(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def center_impl(string, width, fillchar):
+        def center_impl(string, width, fillchar=' '):
             return string.center(width, str(fillchar))
         return center_impl
 
@@ -735,7 +874,7 @@ def unicode_ljust(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def ljust_impl(string, width, fillchar):
+        def ljust_impl(string, width, fillchar=' '):
             return string.ljust(width, str(fillchar))
         return ljust_impl
 
@@ -766,7 +905,7 @@ def unicode_rjust(string, width, fillchar=' '):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def rjust_impl(string, width, fillchar):
+        def rjust_impl(string, width, fillchar=' '):
             return string.rjust(width, str(fillchar))
         return rjust_impl
 
@@ -791,7 +930,7 @@ def unicode_rjust(string, width, fillchar=' '):
     return rjust_impl
 
 
-@njit
+@register_jitable
 def join_list(sep, parts):
     parts_len = len(parts)
     if parts_len == 0:
@@ -876,6 +1015,30 @@ def unicode_zfill(string, width):
     return zfill_impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
+@overload_method(types.UnicodeType, 'isidentifier')
+def unicode_isidentifier(data):
+    """Implements UnicodeType.isidentifier()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        first_cp = _get_code_point(data, 0)
+        if not _PyUnicode_IsXidStart(first_cp) and first_cp != 0x5F:
+            return False
+
+        for i in range(1, length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsXidContinue(code_point):
+                return False
+
+        return True
+
+    return impl
+
+
 @register_jitable
 def unicode_strip_left_bound(string, chars):
     chars = ' ' if chars is None else chars
@@ -921,7 +1084,7 @@ def _count_args_types_check(arg):
 def unicode_lstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def lstrip_impl(string, chars):
+        def lstrip_impl(string, chars=None):
             return string.lstrip(str(chars))
         return lstrip_impl
 
@@ -936,7 +1099,7 @@ def unicode_lstrip(string, chars=None):
 def unicode_rstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def rstrip_impl(string, chars):
+        def rstrip_impl(string, chars=None):
             return string.rstrip(str(chars))
         return rstrip_impl
 
@@ -951,7 +1114,7 @@ def unicode_rstrip(string, chars=None):
 def unicode_strip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
-        def strip_impl(string, chars):
+        def strip_impl(string, chars=None):
             return string.strip(str(chars))
         return strip_impl
 
@@ -966,7 +1129,7 @@ def unicode_strip(string, chars=None):
 
 # String creation
 
-@njit
+@register_jitable
 def normalize_str_idx(idx, length, is_start=True):
     """
     Parameters
@@ -1051,7 +1214,7 @@ def _slice_span(typingctx, sliceobj):
     return sig, codegen
 
 
-@njit(_nrt=False)
+@register_jitable(_nrt=False)
 def _strncpy(dst, dst_offset, src, src_offset, n):
     if src._kind == dst._kind:
         byte_width = _kind_to_byte_width(src._kind)
@@ -1200,6 +1363,36 @@ def unicode_not(a):
         return impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
+@overload_method(types.UnicodeType, 'isalpha')
+def unicode_isalpha(data):
+    """Implements UnicodeType.isalpha()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        if length == 1:
+            code_point = _get_code_point(data, 0)
+            return _PyUnicode_IsAlpha(code_point)
+
+        if data._is_ascii:
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _Py_ISALPHA(code_point):
+                    return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsAlpha(code_point):
+                return False
+
+        return True
+
+    return impl
+
+
 def _is_upper(is_lower, is_upper, is_title):
     # impl is an approximate translation of:
     # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827    # noqa: E501
@@ -1294,6 +1487,29 @@ def unicode_upper(a):
     return impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
+@overload_method(types.UnicodeType, 'isspace')
+def unicode_isspace(data):
+    """Implements UnicodeType.isspace()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsSpace(_get_code_point(data, 0))
+
+        if length == 0:
+            return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsSpace(code_point):
+                return False
+
+        return True
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'istitle')
 def unicode_istitle(s):
     """
@@ -1319,6 +1535,71 @@ def unicode_istitle(s):
 
         return cased
     return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
+@overload_method(types.UnicodeType, 'isprintable')
+def unicode_isprintable(data):
+    """Implements UnicodeType.isprintable()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsPrintable(_get_code_point(data, 0))
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsPrintable(code_point):
+                return False
+
+        return True
+
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
+@overload_method(types.UnicodeType, 'isalnum')
+def unicode_isalnum(data):
+    """Implements UnicodeType.isalnum()"""
+
+    def impl(data):
+        length = len(data)
+
+        if length == 1:
+            code_point = _get_code_point(data, 0)
+            if data._is_ascii:
+                return _Py_ISALNUM(code_point)
+            return (_PyUnicode_IsNumeric(code_point) or
+                    _PyUnicode_IsAlpha(code_point))
+
+        if length == 0:
+            return False
+
+        if data._is_ascii:
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _Py_ISALNUM(code_point):
+                    return False
+
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if (not _PyUnicode_IsNumeric(code_point) and
+                    not _PyUnicode_IsAlpha(code_point)):
+                return False
+
+        return True
+
+    return impl
+
+
+if sys.version_info[:2] >= (3, 7):
+    @overload_method(types.UnicodeType, 'isascii')
+    def unicode_isascii(data):
+        """Implements UnicodeType.isascii()"""
+
+        def impl(data):
+            return data._is_ascii
+        return impl
 
 
 @overload_method(types.UnicodeType, 'islower')
@@ -1351,7 +1632,7 @@ def unicode_islower(data):
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
-    """Handle capital sigma"""
+    """This is a translation of the function that handles the capital sigma."""
     c = 0
     j = idx - 1
     while j >= 0:
@@ -1368,16 +1649,62 @@ def _handle_capital_sigma(data, length, idx):
                 break
             j += 1
         final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
+
     return 0x3c2 if final_sigma else 0x3c3
 
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
 @register_jitable
 def _lower_ucs4(code_point, data, length, idx, mapped):
+    """This is a translation of the function that lowers a character."""
     if code_point == 0x3A3:
         mapped[0] = _handle_capital_sigma(data, length, idx)
         return 1
     return _PyUnicode_ToLowerFull(code_point, mapped)
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
+@register_jitable
+def _do_title(data, length, res, maxchars):
+    """This is a translation of the function that titles a unicode string."""
+    k = 0
+    previous_cased = False
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+    for idx in range(length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        if previous_cased:
+            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        else:
+            n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
+        for m in mapped[:n_res]:
+            maxchar, = maxchars
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+        previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
+    return k
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
+@overload_method(types.UnicodeType, 'title')
+def unicode_title(data):
+    """Implements str.title()"""
+    # https://docs.python.org/3/library/stdtypes.html#str.title
+    def impl(data):
+        length = len(data)
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
+        maxchar = 0
+        maxchars = [maxchar]
+        newlength = _do_title(data, length, tmp, maxchars)
+        maxchar, = maxchars
+        newkind = _codepoint_to_kind(maxchar)
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(res, i, _get_code_point(tmp, i))
+        return res
+    return impl
 
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
@@ -1432,6 +1759,7 @@ def unicode_lower(data):
             for i in range(newlength):
                 _set_code_point(res, i, _get_code_point(tmp, i))
             return res
+
     return impl
 
 

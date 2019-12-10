@@ -6,7 +6,7 @@
 #   define __has_attribute(x) 0
 #endif
 
-/* This attribute marks symbols that can be shared accross C objects
+/* This attribute marks symbols that can be shared across C objects
  * but are not exposed outside of a shared library or executable.
  * Note this is default behaviour for global symbols under Windows.
  */

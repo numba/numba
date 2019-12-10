@@ -16,6 +16,15 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from ..extending import overload
+
+
+@overload(operator.truth)
+def ol_truth(val):
+    if isinstance(val, types.Boolean):
+        def impl(val):
+            return val
+        return impl
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
@@ -294,6 +303,14 @@ def constant_function_pointer(context, builder, ty, pyval):
     return builder.bitcast(ptrval, ptrty)
 
 
+@lower_constant(types.Optional)
+def constant_optional(context, builder, ty, pyval):
+    if pyval is None:
+        return context.make_optional_none(builder, ty.type)
+    else:
+        return context.make_optional_value(builder, ty.type, pyval)
+
+
 # -----------------------------------------------------------------------------
 
 @lower_builtin(type, types.Any)
@@ -525,3 +542,29 @@ def redirect_type_ctor(context, builder, sig, args):
             context.make_tuple(builder, sig.args[1], args))
 
     return context.compile_internal(builder, call_ctor, sig, args)
+
+# ------------------------------------------------------------------------------
+# map, filter, reduce
+
+
+@overload(map)
+def ol_map(func, iterable, *args):
+    def impl(func, iterable, *args):
+        for x in zip(iterable, *args):
+            yield func(*x)
+    return impl
+
+
+@overload(filter)
+def ol_filter(func, iterable):
+    if (func is None) or isinstance(func, types.NoneType):
+        def impl(func, iterable):
+            for x in iterable:
+                if x:
+                    yield x
+    else:
+        def impl(func, iterable):
+            for x in iterable:
+                if func(x):
+                    yield x
+    return impl

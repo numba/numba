@@ -519,7 +519,7 @@ class NestedArray(Array):
     """
     A NestedArray is an array nested within a structured type (which are "void"
     type in NumPy parlance). Unlike an Array, the shape, and not just the number
-    of dimenions is part of the type of a NestedArray.
+    of dimensions is part of the type of a NestedArray.
     """
 
     def __init__(self, dtype, shape):

@@ -133,14 +133,17 @@ class InlineClosureCallPass(object):
         require(not self.parallel_options.reduction)
         require(call_name == ('reduce', 'builtins') or
                 call_name == ('reduce', '_functools'))
-        if len(expr.args) != 3:
+        if len(expr.args) not in (2, 3):
             raise TypeError("invalid reduce call, "
-                            "three arguments including initial "
-                            "value required")
+                            "two arguments are required (optional initial "
+                            "value can also be specified)")
         check_reduce_func(self.func_ir, expr.args[0])
-        def reduce_func(f, A, v):
-            s = v
+        def reduce_func(f, A, v=None):
             it = iter(A)
+            if v is not None:
+                s = v
+            else:
+                s = next(it)
             for a in it:
                s = f(s, a)
             return s
@@ -232,18 +235,26 @@ class InlineClosureCallPass(object):
         return True
 
 def check_reduce_func(func_ir, func_var):
+    """Checks the function at func_var in func_ir to make sure it's amenable
+    for inlining. Returns the function itself"""
     reduce_func = guard(get_definition, func_ir, func_var)
     if reduce_func is None:
         raise ValueError("Reduce function cannot be found for njit \
                             analysis")
-    if not (hasattr(reduce_func, 'code')
+    if isinstance(reduce_func, (ir.FreeVar, ir.Global)):
+        if not isinstance(reduce_func.value,
+                          numba.targets.registry.CPUDispatcher):
+            raise ValueError("Invalid reduction function")
+        # pull out the python function for inlining
+        reduce_func = reduce_func.value.py_func
+    elif not (hasattr(reduce_func, 'code')
             or hasattr(reduce_func, '__code__')):
         raise ValueError("Invalid reduction function")
     f_code = (reduce_func.code if hasattr(reduce_func, 'code')
                                     else reduce_func.__code__)
     if not f_code.co_argcount == 2:
         raise TypeError("Reduction function should take 2 arguments")
-    return
+    return reduce_func
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
@@ -403,7 +414,13 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
     """
-    args = list(call_expr.args)
+    if call_expr.op == 'call':
+        args = list(call_expr.args)
+    elif call_expr.op == 'getattr':
+        args = [call_expr.value]
+    else:
+        raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
+
     debug_print = _make_debug_print("inline_closure_call default handling")
 
     # handle defaults and kw arguments using pysignature if callee is function
@@ -417,7 +434,10 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             raise NotImplementedError(
                 "Stararg not supported in inliner for arg {} {}".format(
                     index, param))
-        kws = dict(call_expr.kws)
+        if call_expr.op == 'call':
+            kws = dict(call_expr.kws)
+        else:
+            kws = {}
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
@@ -1021,7 +1041,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
     """Look for array(list) call where list is a constant list created by build_list,
     and turn them into direct array creation and initialization, if the following
     conditions are met:
-      1. The build_list call immediate preceeds the array call;
+      1. The build_list call immediate precedes the array call;
       2. The list variable is no longer live after array call;
     If any condition check fails, no modification will be made.
     """
