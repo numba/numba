@@ -674,6 +674,11 @@ class Dispatcher(_DispatcherBase):
         functools.update_wrapper(self, py_func)
 
         self.targetoptions = targetoptions
+        if "disable_reflected_list" in py_func.__globals__ and \
+                py_func.__globals__["disable_reflected_list"].__module__ \
+                == "numba.__future__":
+            self.targetoptions["disable_reflected_list"] = True
+
         self.locals = locals
         self._cache = NullCache()
         compiler_class = self._impl_kinds[impl_kind]
