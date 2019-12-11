@@ -461,12 +461,31 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(impl.py_func(), impl())
 
+    def test_len_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return len(l)
+
+        self.assertEqual(impl.py_func(), impl())
+
     def test_getitem_none(self):
         @njit
         def impl():
             l = List()
             l.append(None)
             return l[0]
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_setitem_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l[0] = None
+            return l
 
         self.assertEqual(impl.py_func(), impl())
 
@@ -489,6 +508,20 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             m = List()
             m.append(1)
             return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_iter_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l.append(None)
+            l.append(None)
+            count = 0
+            for i in l:
+                count += 1
+            return count
 
         self.assertEqual(impl.py_func(), impl())
 
