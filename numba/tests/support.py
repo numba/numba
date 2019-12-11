@@ -18,6 +18,7 @@ import time
 import io
 import ctypes
 import multiprocessing as mp
+import warnings
 from contextlib import contextmanager
 
 import numpy as np
@@ -791,3 +792,17 @@ def _remote_runner(fn, qout):
         qout.put(stdout.getvalue())
     qout.put(stderr.getvalue())
     sys.exit(exitcode)
+
+class CheckWarningsMixin(object):
+    @contextlib.contextmanager
+    def check_warnings(self, messages, category=RuntimeWarning):
+        with warnings.catch_warnings(record=True) as catch:
+            warnings.simplefilter("always")
+            yield
+        found = 0
+        for w in catch:
+            for m in messages:
+                if m in str(w.message):
+                    self.assertEqual(w.category, category)
+                    found += 1
+        self.assertEqual(found, len(messages))
