@@ -1,4 +1,4 @@
-from numba import ir
+from numba import ir, errors
 from . import register_rewrite, Rewrite
 
 
@@ -17,20 +17,24 @@ class RewriteConstRaises(Rewrite):
     def _is_exception_type(self, const):
         return isinstance(const, type) and issubclass(const, Exception)
 
-    def _break_constant(self, const):
+    def _break_constant(self, const, loc):
         """
         Break down constant exception.
         """
         if isinstance(const, tuple): # it's a tuple(exception class, args)
             if not self._is_exception_type(const[0]):
-                raise NotImplementedError("unsupported exception constant %r"
-                                          % (const[0],))
+                msg = "Encountered unsupported exception constant %r"
+                raise errors.UnsupportedError(msg % (const[0],), loc)
             return const[0], tuple(const[1])
         elif self._is_exception_type(const):
             return const, None
         else:
-            raise NotImplementedError("unsupported exception constant %r"
-                                      % (const,))
+            if isinstance(const, str):
+                msg = ("Directly raising a string constant as an exception is "
+                       "not supported.")
+            else:
+                msg = "Encountered unsupported constant type used for exception"
+            raise errors.UnsupportedError(msg, loc)
 
     def match(self, func_ir, block, typemap, calltypes):
         self.raises = raises = {}
@@ -44,7 +48,8 @@ class RewriteConstRaises(Rewrite):
             else:
                 # raise <something> => find the definition site for <something>
                 const = func_ir.infer_constant(inst.exception)
-                exc_type, exc_args = self._break_constant(const)
+                loc = inst.exception.loc
+                exc_type, exc_args = self._break_constant(const, loc)
             raises[inst] = exc_type, exc_args
 
         return len(raises) > 0

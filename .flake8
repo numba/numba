@@ -249,7 +249,6 @@ exclude =
     numba/tests/recursion_usecases.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
-    numba/tests/test_exceptions.py
     numba/tests/test_comprehension.py
     numba/tests/ctypes_usecases.py
     numba/tests/test_locals.py
