@@ -146,7 +146,7 @@ class BaseFunction(Callable):
         if len(failures) == 0:
             raise AssertionError("Internal Error. "
                                  "Function resolution ended with no failures "
-                                 "or successfull signature")
+                                 "or successful signature")
         failures.raise_error()
 
     def get_call_signatures(self):

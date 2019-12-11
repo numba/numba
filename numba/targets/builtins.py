@@ -16,6 +16,15 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from ..extending import overload
+
+
+@overload(operator.truth)
+def ol_truth(val):
+    if isinstance(val, types.Boolean):
+        def impl(val):
+            return val
+        return impl
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
@@ -292,6 +301,14 @@ def constant_function_pointer(context, builder, ty, pyval):
     ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),
                                       info=str(pyval))
     return builder.bitcast(ptrval, ptrty)
+
+
+@lower_constant(types.Optional)
+def constant_optional(context, builder, ty, pyval):
+    if pyval is None:
+        return context.make_optional_none(builder, ty.type)
+    else:
+        return context.make_optional_value(builder, ty.type, pyval)
 
 
 # -----------------------------------------------------------------------------

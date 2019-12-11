@@ -414,7 +414,13 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
     """
-    args = list(call_expr.args)
+    if call_expr.op == 'call':
+        args = list(call_expr.args)
+    elif call_expr.op == 'getattr':
+        args = [call_expr.value]
+    else:
+        raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
+
     debug_print = _make_debug_print("inline_closure_call default handling")
 
     # handle defaults and kw arguments using pysignature if callee is function
@@ -428,7 +434,10 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             raise NotImplementedError(
                 "Stararg not supported in inliner for arg {} {}".format(
                     index, param))
-        kws = dict(call_expr.kws)
+        if call_expr.op == 'call':
+            kws = dict(call_expr.kws)
+        else:
+            kws = {}
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
@@ -1032,7 +1041,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
     """Look for array(list) call where list is a constant list created by build_list,
     and turn them into direct array creation and initialization, if the following
     conditions are met:
-      1. The build_list call immediate preceeds the array call;
+      1. The build_list call immediate precedes the array call;
       2. The list variable is no longer live after array call;
     If any condition check fails, no modification will be made.
     """

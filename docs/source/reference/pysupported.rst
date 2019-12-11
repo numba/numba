@@ -172,6 +172,7 @@ The following functions, attributes and methods are currently supported:
 * ``.startswith()``
 * ``.endswith()``
 * ``.encode()``
+* ``.expandtabs()``
 * ``.isspace()``
 * ``.isidentifier()``
 * ``.find()``
@@ -187,12 +188,17 @@ The following functions, attributes and methods are currently supported:
 * ``.upper()``
 * ``.islower()``
 * ``.lower()``
+* ``.isprintable()``
 * ``.zfill()``
 * ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.rfind()``
+* ``.rindex()``
+* ``.index()``
 * ``.title()``
+* ``.isalpha()``
+* ``.isalnum()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -679,6 +685,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.floor`
 * :func:`math.frexp`
 * :func:`math.gamma`
+* :func:`math.gcd`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
