@@ -159,8 +159,8 @@ class Interpreter(object):
             # Complain about the first user-variable storing an exception
             first = uservar[0]
             loc = self.current_scope.get(first).loc
-            msg = "Exception object cannot be stored into variable."
-            raise errors.UnsupportedError(msg, loc=loc)
+            msg = "Exception object cannot be stored into variable ({})."
+            raise errors.UnsupportedError(msg.format(first), loc=loc)
 
     def init_first_block(self):
         # Define variables receiving the function arguments

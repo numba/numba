@@ -457,7 +457,7 @@ class TestTryExceptCaught(TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             udt(True)
         self.assertIn(
-            "Exception object cannot be stored into variable",
+            "Exception object cannot be stored into variable (e)",
             str(raises.exception)
         )
 
