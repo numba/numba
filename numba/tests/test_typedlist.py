@@ -473,6 +473,18 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         received = foo()
         self.assertEqual(expected, received)
 
+    def test_list_comprehension_with_none(self):
+        @njit(disable_reflected_list=True)
+        def foo():
+            l = List()
+            # the following construct results in a List[None] that is discarded
+            [l.append(i) for i in (1, 3, 3)]
+            return l
+        expected = List()
+        [expected.append(i) for i in (1, 3, 3)]
+        received = foo()
+        self.assertEqual(expected, received)
+
     def test_pop(self):
         # This fails
         # TypeError: expected int64, got None
