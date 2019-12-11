@@ -587,7 +587,10 @@ class TraceRunner(object):
         state.push(res)
 
     def op_RAISE_VARARGS(self, state, inst):
-        in_exc_block = state.get_top_block("EXCEPT") is not None
+        in_exc_block = any([
+            state.get_top_block("EXCEPT") is not None,
+            state.get_top_block("FINALLY") is not None
+        ])
         if inst.arg == 0:
             exc = None
             if in_exc_block:
