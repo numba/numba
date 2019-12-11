@@ -1488,6 +1488,24 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raised.exception))
 
     @skip_unsupported
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+
+    @skip_unsupported
+    def test_ndarray_fill2d(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros((2,2))
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'),)) == 1)
+
+    @skip_unsupported
     def test_0d_array(self):
         def test_impl(n):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
