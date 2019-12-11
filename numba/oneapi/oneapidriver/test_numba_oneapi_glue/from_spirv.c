@@ -12,16 +12,7 @@ typedef enum
 void buildAndExecuteKernel (runtime_t rt, execution_ty ex);
 
 // Array sizes
-static const size_t N = 2048;
-
-/* OpenCl kernel for element-wise addition of two arrays */
-const char* programSource =
-    "__kernel                                                             \n"
-    "void vecadd(__global float *A, __global float *B, __global float *C, __global void *meminfo) \n"
-    "{                                                                    \n"
-    "   int idx = get_global_id(0);                                       \n"
-    "   C[idx] = A[idx] + B[idx];                                         \n"
-    "}";
+static const size_t N = 1600;
 
 void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
 {
@@ -29,15 +20,25 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
-    size_t num_args = 4;
+    size_t num_args = 21;
     kernel_arg_t kernel_args[num_args];
     float *A, *B, *C;
     size_t i;
     size_t datasize;
-        size_t indexSpaceSize[1], workGroupSize[1];
+    size_t indexSpaceSize[1], workGroupSize[1];
     buffer_t buffers[3];
     void *void_p;
     void_p = NULL;
+    char spirv_buf[20000];
+    FILE *spirv_file;
+    size_t actual_read = 0;
+    size_t elem_size = sizeof(float);
+    size_t stride = 1;
+
+    spirv_file = fopen("latest.spirv", "rb");
+    actual_read = fread(spirv_buf, 1, sizeof(spirv_buf), spirv_file);
+    fclose(spirv_file);
+    printf("Actual read = %ld\n", actual_read);
 
     if(ex == ON_CPU)
         env_t_ptr = rt->first_cpu_env;
@@ -76,14 +77,14 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
         exit(1);
     }
 
-    err = create_numba_oneapi_program_from_source(env_t_ptr, 1,
-            (const char **)&programSource, NULL, &program_ptr);
+    err = create_numba_oneapi_program_from_spirv(env_t_ptr, spirv_buf,
+            actual_read, &program_ptr);
     err |= build_numba_oneapi_program (env_t_ptr, program_ptr);
     if(err) {
         fprintf(stderr, "Could not create the program. Abort!\n");
         exit(1);
     }
-    err = create_numba_oneapi_kernel(env_t_ptr, program_ptr, "vecadd",
+    err = create_numba_oneapi_kernel(env_t_ptr, program_ptr, "oneapiPy_oneapi_py_devfn__5F__5F_main_5F__5F__2E_data_5F_parallel_5F_sum_24_1_2E_array_28_float32_2C__20_1d_2C__20_C_29__2E_array_28_float32_2C__20_1d_2C__20_C_29__2E_array_28_float32_2C__20_1d_2C__20_C_29_",
             &kernel_ptr);
     if(err) {
         fprintf(stderr, "Could not create the kernel. Abort!\n");
@@ -91,17 +92,56 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     }
     kernel_ptr->dump_fn(kernel_ptr);
     // Set kernel arguments
-    err = create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
+    err = 0;
+    // --------------------------------------------------
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[0]);
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[1]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[2]);
+    err |=  create_numba_oneapi_kernel_arg(&elem_size, sizeof(elem_size),
+                                           &kernel_args[3]);
+    err |= create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
                                           buffers[0]->sizeof_buffer_ptr,
-                                          &kernel_args[0]);
+                                          &kernel_args[4]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[5]);
+    err |=  create_numba_oneapi_kernel_arg(&stride, sizeof(stride),
+                                           &kernel_args[6]);
+    // --------------------------------------------------
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[7]);
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[8]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[9]);
+    err |=  create_numba_oneapi_kernel_arg(&elem_size, sizeof(elem_size),
+                                           &kernel_args[10]);
     err |= create_numba_oneapi_kernel_arg(&buffers[1]->buffer_ptr,
                                           buffers[1]->sizeof_buffer_ptr,
-                                          &kernel_args[1]);
+                                          &kernel_args[11]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[12]);
+    err |=  create_numba_oneapi_kernel_arg(&stride, sizeof(stride),
+                                           &kernel_args[13]);
+    // --------------------------------------------------
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[14]);
+    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
+                                           &kernel_args[15]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[16]);
+    err |=  create_numba_oneapi_kernel_arg(&elem_size, sizeof(elem_size),
+                                           &kernel_args[17]);
     err |= create_numba_oneapi_kernel_arg(&buffers[2]->buffer_ptr,
                                           buffers[2]->sizeof_buffer_ptr,
-                                          &kernel_args[2]);
-    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
-                                           &kernel_args[3]);
+                                          &kernel_args[18]);
+    err |=  create_numba_oneapi_kernel_arg(&N, sizeof(N),
+                                           &kernel_args[19]);
+    err |=  create_numba_oneapi_kernel_arg(&stride, sizeof(stride),
+                                           &kernel_args[20]);
+    // --------------------------------------------------
     if(err) {
         fprintf(stderr, "Could not create the kernel_args. Abort!\n");
         exit(1);
@@ -159,7 +199,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
 }
 
 
-int main (int argc, char** argv)
+int main ()
 {
     runtime_t rt;
     int err;

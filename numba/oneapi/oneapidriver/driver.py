@@ -199,16 +199,17 @@ class Kernel():
 class KernelArg():
 
     def __init__(self, arg, void_p_arg=False):
+        self.arg = arg
         self.kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
         if void_p_arg is True:
-            void_p = ffi.new("void **")
-#            void_p[0] = ffi.new("void*")
-            void_p = ffi.cast("void *", 0)
+            print("KernelArg for void_p_arg:", type(arg))
+            self.void_p = ffi.new("void **")
+            self.void_p[0] = ffi.cast("void *", 0)
             retval = (_numba_oneapi_pybindings
                       .lib
                       .create_numba_oneapi_kernel_arg(
-                          void_p,
-                          ffi.sizeof(void_p),
+                          self.void_p,
+                          ffi.sizeof(self.void_p),
                           self.kernel_arg_t))
             if(retval):
                 _raise_driver_error("create_numba_oneapi_kernel_arg", -1)
