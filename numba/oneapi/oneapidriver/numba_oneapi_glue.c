@@ -81,38 +81,48 @@
 } while(0)
 
 
-/*------------------------------- Magic numbers ----------------------------*/
+/*------------------------------- Magic numbers ------------------------------*/
 
-#define RUNTIME_MAGIC   0x6dd5e8c8
-#define ENV_MAGIC       0x6c78fd87
-#define BUFFER_MAGIC    0xc55c47b1
-#define KERNEL_MAGIC    0x032dc08e
-#define PROGRAM_MAGIC   0xc3842d12
-#define KERNELARG_MAGIC 0xd42f630f
+#define RUNTIME_ID   0x6dd5e8c8
+#define ENV_ID       0x6c78fd87
+#define BUFFER_ID    0xc55c47b1
+#define KERNEL_ID    0x032dc08e
+#define PROGRAM_ID   0xc3842d12
+#define KERNELARG_ID 0xd42f630f
 
-void check_runtime_magic(runtime_t x) {
-    assert(x->magic == RUNTIME_MAGIC);
+#if DEBUG
+
+static void check_runtime_id (runtime_t x)
+{
+    assert(x->id_ == RUNTIME_ID);
 }
 
-void check_env_magic(env_t x) {
-    assert(x->magic == ENV_MAGIC);
+static void check_env_id (env_t x)
+{
+    assert(x->id_ == ENV_ID);
 }
 
-void check_buffer_magic(buffer_t x) {
-    assert(x->magic == BUFFER_MAGIC);
+static void check_buffer_id (buffer_t x)
+{
+    assert(x->id_ == BUFFER_ID);
 }
 
-void check_kernel_magic(kernel_t x) {
-    assert(x->magic == KERNEL_MAGIC);
+static void check_kernel_id (kernel_t x)
+{
+    assert(x->id_ == KERNEL_ID);
 }
 
-void check_program_magic(program_t x) {
-    assert(x->magic == PROGRAM_MAGIC);
+static void check_program_id (program_t x)
+{
+    assert(x->id_ == PROGRAM_ID);
 }
 
-void check_kernelarg_magic(kernel_arg_t x) {
-    assert(x->magic == KERNELARG_MAGIC);
+static void check_kernelarg_id (kernel_arg_t x)
+{
+    assert(x->id_ == KERNELARG_ID);
 }
+
+#endif
 
 /*------------------------------- Private helpers ----------------------------*/
 
@@ -225,8 +235,9 @@ static int dump_numba_oneapi_runtime_info (void *obj)
     runtime_t rt;
 
     rt = (runtime_t)obj;
-    check_runtime_magic(rt);
-
+#if DEBUG
+    check_runtime_id(rt);
+#endif
     if(rt) {
         printf("Number of platforms : %d\n", rt->num_platforms);
         cl_platform_id *platforms = rt->platform_ids;
@@ -255,7 +266,9 @@ static int dump_numba_oneapi_kernel_info (void *obj)
     kernel_t kernel_t_ptr;
 
     kernel_t_ptr = (kernel_t)obj;
-    check_kernel_magic(kernel_t_ptr);
+#if DEBUG
+    check_kernel_id(kernel_t_ptr);
+#endif
     kernel = (cl_kernel)(kernel_t_ptr->kernel);
 
     // print kernel function name
@@ -336,7 +349,7 @@ static int create_numba_oneapi_env_t (cl_platform_id* platforms,
     // Allocate the env_t object
     env = (env_t)malloc(sizeof(struct numba_oneapi_env));
     CHECK_MALLOC_ERROR(env_t, env);
-    env->magic = ENV_MAGIC;
+    env->id_ = ENV_ID;
 
     device = (cl_device_id*)malloc(sizeof(cl_device_id));
 
@@ -375,9 +388,9 @@ error:
 static int destroy_numba_oneapi_env_t (env_t *env_t_ptr)
 {
     cl_int err;
-
-    check_env_magic(*env_t_ptr);
-
+#if DEBUG
+    check_env_id(*env_t_ptr);
+#endif
     err = clReleaseCommandQueue((cl_command_queue)(*env_t_ptr)->queue);
     CHECK_OPEN_CL_ERROR(err, "Could not release command queue.");
     err = clReleaseDevice((cl_device_id)(*env_t_ptr)->device);
@@ -402,8 +415,9 @@ static int init_runtime_t_obj (runtime_t rt)
     cl_int status;
     int ret;
     cl_platform_id *platforms;
-
-    check_runtime_magic(rt);
+#if DEBUG
+    check_runtime_id(rt);
+#endif
     // get count of available platforms
     status = clGetPlatformIDs(0, NULL, &(rt->num_platforms));
     CHECK_OPEN_CL_ERROR(status, "Could not get platform count.");
@@ -477,7 +491,7 @@ int create_numba_oneapi_runtime (runtime_t *rt)
     rtobj = (runtime_t)malloc(sizeof(struct numba_oneapi_runtime));
     CHECK_MALLOC_ERROR(runtime_t, rt);
 
-    rtobj->magic = RUNTIME_MAGIC;
+    rtobj->id_ = RUNTIME_ID;
     rtobj->num_platforms = 0;
     rtobj->platform_ids  = NULL;
     err = init_runtime_t_obj(rtobj);
@@ -505,7 +519,9 @@ error:
 int destroy_numba_oneapi_runtime (runtime_t *rt)
 {
     int err;
-    check_runtime_magic(*rt);
+#if DEBUG
+    check_runtime_id(*rt);
+#endif
 
 #if DEBUG
     printf("DEBUG: Going to destroy the numba_oneapi_runtime object\n");
@@ -540,9 +556,9 @@ int retain_numba_oneapi_context (env_t env_t_ptr)
 {
     cl_int err;
     cl_context context;
-
-    check_env_magic(env_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     context = (cl_context)(env_t_ptr->context);
     err = clRetainContext(context);
     CHECK_OPEN_CL_ERROR(err, "Failed when calling clRetainContext.");
@@ -560,9 +576,9 @@ int release_numba_oneapi_context (env_t env_t_ptr)
 {
     cl_int err;
     cl_context context;
-
-    check_env_magic(env_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     context = (cl_context)(env_t_ptr->context);
     err = clReleaseContext(context);
     CHECK_OPEN_CL_ERROR(err, "Failed when calling clRetainContext.");
@@ -580,9 +596,9 @@ int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
     cl_int err;
     buffer_t buff;
     cl_context context;
-
-    check_env_magic(env_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     buff = NULL;
 
     // Get the context from the device
@@ -594,7 +610,7 @@ int create_numba_oneapi_rw_mem_buffer (env_t env_t_ptr,
     buff = (buffer_t)malloc(sizeof(struct numba_oneapi_buffer));
     CHECK_MALLOC_ERROR(buffer_t, buffer_t_ptr);
 
-    buff->magic = BUFFER_MAGIC;
+    buff->id_ = BUFFER_ID;
 
     // Create the OpenCL buffer.
     // NOTE : Copying of data from host to device needs to happen explicitly
@@ -624,9 +640,9 @@ error:
 int destroy_numba_oneapi_rw_mem_buffer (buffer_t *buff)
 {
     cl_int err;
-
-    check_buffer_magic(*buff);
-
+#if DEBUG
+    check_buffer_id(*buff);
+#endif
     err = clReleaseMemObject((cl_mem)(*buff)->buffer_ptr);
     CHECK_OPEN_CL_ERROR(err, "Failed to release CL buffer.");
     free(*buff);
@@ -652,10 +668,10 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
     cl_int err;
     cl_command_queue queue;
     cl_mem mem;
-
-    check_env_magic(env_t_ptr);
-    check_buffer_magic(buffer_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+    check_buffer_id(buffer_t_ptr);
+#endif
     queue = (cl_command_queue)env_t_ptr->queue;
     mem = (cl_mem)buffer_t_ptr->buffer_ptr;
 
@@ -697,10 +713,10 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
     cl_int err;
     cl_command_queue queue;
     cl_mem mem;
-
-    check_env_magic(env_t_ptr);
-    check_buffer_magic(buffer_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+    check_buffer_id(buffer_t_ptr);
+#endif
     queue = (cl_command_queue)env_t_ptr->queue;
     mem = (cl_mem)buffer_t_ptr->buffer_ptr;
 
@@ -736,20 +752,24 @@ int create_numba_oneapi_program_from_spirv (env_t env_t_ptr,
     cl_int err;
     cl_context context;
     program_t prog;
+#if DUMP_SPIRV
     FILE *write_file;
-
-    check_env_magic(env_t_ptr);
-
+#endif
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     prog = NULL;
 
+#if DUMP_SPIRV
     write_file = fopen("latest.spirv","wb");
     fwrite(il,length,1,write_file);
     fclose(write_file);
+#endif
 
     prog = (program_t)malloc(sizeof(struct numba_oneapi_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
-    prog->magic = PROGRAM_MAGIC;
+    prog->id_ = PROGRAM_ID;
 
     context = (cl_context)env_t_ptr->context;
 
@@ -786,14 +806,14 @@ int create_numba_oneapi_program_from_source (env_t env_t_ptr,
     cl_int err;
     cl_context context;
     program_t prog;
-
-    check_env_magic(env_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     prog = NULL;
     prog = (program_t)malloc(sizeof(struct numba_oneapi_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
-    prog->magic = PROGRAM_MAGIC;
+    prog->id_ = PROGRAM_ID;
 
     context = (cl_context)env_t_ptr->context;
 
@@ -825,9 +845,9 @@ error:
 int destroy_numba_oneapi_program (program_t *program_ptr)
 {
     cl_int err;
-
-    check_program_magic(*program_ptr);
-
+#if DEBUG
+    check_program_id(*program_ptr);
+#endif
     err = clReleaseProgram((cl_program)(*program_ptr)->program);
     CHECK_OPEN_CL_ERROR(err, "Failed to release CL program.");
     free(*program_ptr);
@@ -847,10 +867,10 @@ int build_numba_oneapi_program (env_t env_t_ptr, program_t program_t_ptr)
 {
     cl_int err;
     cl_device_id device;
-
-    check_env_magic(env_t_ptr);
-    check_program_magic(program_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+    check_program_id(program_t_ptr);
+#endif
     device = (cl_device_id)env_t_ptr->device;
     err = clRetainDevice(device);
     CHECK_OPEN_CL_ERROR(err, "Could not retain device");
@@ -882,14 +902,14 @@ int create_numba_oneapi_kernel (env_t env_t_ptr,
     cl_int err;
     cl_context context;
     kernel_t ker;
-
-    check_env_magic(env_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+#endif
     ker = NULL;
     ker = (kernel_t)malloc(sizeof(struct numba_oneapi_kernel));
     CHECK_MALLOC_ERROR(kernel_t, kernel_ptr);
 
-    ker->magic = KERNEL_MAGIC;
+    ker->id_ = KERNEL_ID;
 
     context = (cl_context)(env_t_ptr->context);
     err = clRetainContext(context);
@@ -917,9 +937,9 @@ error:
 int destroy_numba_oneapi_kernel (kernel_t *kernel_ptr)
 {
     cl_int err;
-
-    check_kernel_magic(*kernel_ptr);
-
+#if DEBUG
+    check_kernel_id(*kernel_ptr);
+#endif
     err = clReleaseKernel((cl_kernel)(*kernel_ptr)->kernel);
     CHECK_OPEN_CL_ERROR(err, "Failed to release CL kernel.");
     free(*kernel_ptr);
@@ -948,7 +968,7 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
     kernel_arg = (kernel_arg_t)malloc(sizeof(struct numba_oneapi_kernel_arg));
     CHECK_MALLOC_ERROR(kernel_arg_t, kernel_arg);
 
-    kernel_arg->magic = KERNELARG_MAGIC;
+    kernel_arg->id_ = KERNELARG_ID;
     kernel_arg->arg_size = arg_size;
     kernel_arg->arg_value = arg_value;
 
@@ -998,10 +1018,10 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
     cl_command_queue queue;
 
     err = 0;
-
-    check_env_magic(env_t_ptr);
-    check_kernel_magic(kernel_t_ptr);
-
+#if DEBUG
+    check_env_id(env_t_ptr);
+    check_kernel_id(kernel_t_ptr);
+#endif
     kernel = (cl_kernel)kernel_t_ptr->kernel;
     queue = (cl_command_queue)env_t_ptr->queue;
 #if DEBUG
@@ -1010,23 +1030,15 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
 #if DEBUG
-        printf("Try to set Arg # %ld\n", i);
-        printf("Arg size : %ld\n", array_of_args[i]->arg_size);
-        printf("Arg val addr : %p\n", array_of_args[i]->arg_value);
         void **tp = (void**)array_of_args[i]->arg_value;
-        printf("Deref: %p\n", *tp);
+        printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
+                array_of_args[i]->arg_size, *tp);
 #endif
         err = clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
                              array_of_args[i]->arg_value);
         CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
-#if DEBUG
-        printf("Arg # %ld set\n", i);
-#endif
     }
 
-#if DEBUG
-    printf("DEBUG: CL Kernel Args set...\n");
-#endif
     // Execute the kernel. Not using events for the time being.
     err = clEnqueueNDRangeKernel(queue, kernel, work_dim, global_work_offset,
             global_work_size, local_work_size, 0, NULL, NULL);
