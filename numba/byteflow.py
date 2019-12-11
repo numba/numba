@@ -106,7 +106,7 @@ class Flow(object):
                     if state.has_terminated():
                         break
                     elif state.has_active_try():
-                        # Is in an *try* block
+                        # Is in a *try* block
                         state.fork(pc=state.get_inst().next)
                         tryblk = state.get_top_block('TRY')
                         state.pop_block_and_above(tryblk)

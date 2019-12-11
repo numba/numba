@@ -1195,7 +1195,7 @@ class Interpreter(object):
             msg = (
                 "Unsupported use of closure. "
                 "Probably caused by complex control-flow constructs; "
-                "i.e. try-except"
+                "e.g. try-except"
             )
             raise errors.UnsupportedError(msg, loc=self.loc)
         fcode = assume_code_const.value
