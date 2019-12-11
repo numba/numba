@@ -26,6 +26,7 @@ from numba.types import (
     ListTypeIterableType,
     ListTypeIteratorType,
     Type,
+    NoneType,
 )
 from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
@@ -97,6 +98,11 @@ def _raise_if_error(context, builder, status, msg):
 def _check_for_mutable(lst):
     if not lst.mutable:
         raise TypingError("unable to mutate immutable typed list")
+
+
+def _check_for_none_typed(lst):
+    if isinstance(lst.dtype, NoneType):
+        raise TypingError("method support for List[None] is limited")
 
 
 @intrinsic
@@ -778,6 +784,7 @@ def impl_pop(l, index=-1):
         return
 
     _check_for_mutable(l)
+    _check_for_none_typed(l)
 
     indexty = INDEXTY
 
@@ -865,6 +872,7 @@ def impl_contains(l, item):
         return
 
     itemty = l.item_type
+    _check_for_none_typed(l)
 
     def impl(l, item):
         casteditem = _cast(item, itemty)
@@ -880,6 +888,8 @@ def impl_contains(l, item):
 def impl_count(l, item):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_none_typed(l)
 
     itemty = l.item_type
 
@@ -948,6 +958,10 @@ def impl_insert(l, index, item):
         return
 
     _check_for_mutable(l)
+    _check_for_none_typed(l)
+    # insert can refine
+    if isinstance(item, NoneType):
+        raise TypingError("method support for List[None] is limited")
 
     if index in index_types:
         def impl(l, index, item):
@@ -991,6 +1005,8 @@ def impl_remove(l, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l)
+
     itemty = l.item_type
 
     def impl(l, item):
@@ -1025,6 +1041,7 @@ def impl_reverse(l):
         return
 
     _check_for_mutable(l)
+    _check_for_none_typed(l)
 
     def impl(l):
         front = 0
@@ -1039,6 +1056,9 @@ def impl_reverse(l):
 
 @overload_method(types.ListType, 'copy')
 def impl_copy(l):
+
+    _check_for_none_typed(l)
+
     if isinstance(l, types.ListType):
         def impl(l):
             return l[:]
@@ -1050,6 +1070,9 @@ def impl_copy(l):
 def impl_index(l, item, start=None, end=None):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_none_typed(l)
+
     itemty = l.item_type
 
     def check_arg(arg, name):

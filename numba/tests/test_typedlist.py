@@ -549,47 +549,39 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         received = foo()
         self.assertEqual(expected, received)
 
-    def test_pop(self):
-        # This fails
-        # TypeError: expected int64, got None
-        @njit
-        def foo():
-            l = List()
-            l.append(None)
-            return l.pop()
-
-        self.assertIsNone(foo())
-
-    def test_count(self):
-        # This fails to compile
-        @njit
-        def foo():
-            l = List()
-            l.append(None)
-            l.append(None)
-            l.append(None)
-            return l.count(None)
-
-        self.assertEqual(foo(), 3)
-
-    def test_insert(self):
-        # This fails to compile
-        @njit
-        def foo():
-            l = List()
-            l.insert(0, None)
-            return l
-        self.assertEqual(list(foo()), [None])
-
-    def test_index(self):
-        # This fails to compile
-        @njit
-        def foo():
-            l = List()
-            l.append(None)
-            l.append(None)
-            return l.index(None)
-        self.assertEqual(foo(), 0)
+    def test_none_typed_method_fails(self):
+        """ Test that unsupported operations on List[None] raise. """
+        def generate_function(line1, line2):
+            context = {}
+            exec_(dedent("""
+                from numba.typed import List
+                def bar():
+                    lst = List()
+                    {}
+                    {}
+                """.format(line1, line2)), context)
+            return njit(context["bar"], disable_reflected_list=True)
+        for line1, line2 in (
+                ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "lst.count(None)"),
+                ("lst.append(None)", "lst.index(None)"),
+                ("lst.append(None)", "lst.insert(0, None)"),
+                (""                , "lst.insert(0, None)"),
+                ("lst.append(None)", "lst.clear()"),
+                ("lst.append(None)", "lst.copy()"),
+                ("lst.append(None)", "lst.extend([None])"),
+                ("",                 "lst.extend([None])"),
+                ("lst.append(None)", "lst.remove(None)"),
+                ("lst.append(None)", "lst.reverse()"),
+                ("lst.append(None)", "None in lst"),
+        ):
+            with self.assertRaises(TypingError) as raises:
+                foo = generate_function(line1, line2)
+                foo()
+            self.assertIn(
+                "method support for List[None] is limited",
+                str(raises.exception),
+            )
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):
