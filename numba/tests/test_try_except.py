@@ -283,19 +283,25 @@ class TestTryBareExcept(TestCase):
         @njit
         def foo(x):
             def bar(z):
-                raise ValueError("exception")
+                if z < 0:
+                    raise ValueError("exception")
+                return z
+
             try:
-                # An SSA problem makes it impossible to find the code constant
-                # for the closure
-                [x for x in map(bar, [1, 2, 3])]
+                return [x for x in map(bar, [1, 2, 3, x])]
             except:  # noqa: E722
                 print("CAUGHT")
-                return x
 
-        with self.assertRaises(UnsupportedError) as raises:
-            foo(10)
-        pat = "Unsupported use of closure."
-        self.assertIn(pat, str(raises.exception))
+        with captured_stdout() as stdout:
+            res = foo(-1)
+
+        self.assertEqual(stdout.getvalue().strip(), "CAUGHT")
+        self.assertIsNone(res)
+
+        with captured_stdout() as stdout:
+            res = foo(4)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(res, [1, 2, 3, 4])
 
     @skip_unless_scipy
     def test_real_problem(self):
@@ -730,6 +736,29 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             udt()
+        self.assertIn(
+            "Does not support with-context that contain branches",
+            str(raises.exception),
+        )
+
+    def test_objmode_output_type(self):
+        def bar(x):
+            return np.asarray(list(reversed(x.tolist())))
+
+        @njit
+        def test_objmode():
+            x = np.arange(5)
+            y = np.zeros_like(x)
+            try:
+                with objmode(y='intp[:]'):  # annotate return type
+                    # this region is executed by object-mode.
+                    y += bar(x)
+            except Exception:
+                pass
+            return y
+
+        with self.assertRaises(CompilerError) as raises:
+            test_objmode()
         self.assertIn(
             "Does not support with-context that contain branches",
             str(raises.exception),

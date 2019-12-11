@@ -18,6 +18,9 @@ _logger = logging.getLogger(__name__)
 
 _EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
+_NO_RAISE_OPS = frozenset({
+    'LOAD_CONST',
+})
 
 
 @total_ordering
@@ -105,7 +108,8 @@ class Flow(object):
                     # Terminated?
                     if state.has_terminated():
                         break
-                    elif state.has_active_try():
+                    elif (state.has_active_try() and
+                            state.get_inst().opname not in _NO_RAISE_OPS):
                         # Is in a *try* block
                         state.fork(pc=state.get_inst().next)
                         tryblk = state.get_top_block('TRY')
