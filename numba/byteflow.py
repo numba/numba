@@ -599,7 +599,7 @@ class TraceRunner(object):
             exc = None
             if in_exc_block:
                 raise UnsupportedError(
-                    "Re-raise exception not supported, yet.",
+                    "The re-raising of an exception is not yet supported.",
                     loc=self.get_debug_loc(inst.lineno),
                 )
         elif inst.arg == 1:

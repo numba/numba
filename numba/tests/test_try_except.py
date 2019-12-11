@@ -375,7 +375,7 @@ class TestTryBareExcept(TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             udt()
         self.assertIn(
-            "Re-raise exception not supported, yet.",
+            "The re-raising of an exception is not yet supported.",
             str(raises.exception),
         )
 
@@ -478,7 +478,7 @@ class TestTryExceptCaught(TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             udt()
         self.assertIn(
-            "Re-raise exception not supported, yet.",
+            "The re-raising of an exception is not yet supported.",
             str(raises.exception),
         )
 
@@ -496,7 +496,7 @@ class TestTryExceptCaught(TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             udt()
         self.assertIn(
-            "Re-raise exception not supported, yet.",
+            "The re-raising of an exception is not yet supported.",
             str(raises.exception),
         )
 
