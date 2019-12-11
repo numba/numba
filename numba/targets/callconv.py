@@ -435,13 +435,6 @@ class CPUCallConv(BaseCallConv):
         null = cgutils.get_null_value(excinfoptr.type.pointee)
         builder.store(null, excinfoptr)
 
-    def get_try_block_status(self, builder):
-        trystatus = self.check_try_status(builder)
-        return trystatus.in_try
-
-    def set_exception(self, builder, exc):
-        self.set_static_user_exc(builder, exc=Exception)
-
     def return_status_propagate(self, builder, status):
         trystatus = self.check_try_status(builder)
         excptr = self._get_excinfo_argument(builder.function)
