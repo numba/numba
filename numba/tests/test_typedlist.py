@@ -461,10 +461,8 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(impl.py_func(), impl())
 
-    @unittest.expectedFailure
     def test_square_bracket_builtin_with_None(self):
-        # FIXME: disable_refelected_list
-        @njit
+        @njit(disable_reflected_list=True)
         def foo():
             l = [None, None, None]
             return l
@@ -473,9 +471,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         expected.append(None)
         expected.append(None)
         received = foo()
-        del expected, received
-        self.assertTrue(False)
-        #self.assertEqual(expected, received)
+        self.assertEqual(expected, received)
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):
