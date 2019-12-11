@@ -16,7 +16,7 @@ enum NUMBA_ONEAPI_GLUE_ERROR_CODES
  */
 struct numba_oneapi_env
 {
-    unsigned magic;
+    unsigned id_;
     // TODO : Add members to store more device related information such as name
     void *context;
     void *device;
@@ -30,7 +30,7 @@ typedef struct numba_oneapi_env* env_t;
 
 struct numba_oneapi_buffer
 {
-    unsigned magic;
+    unsigned id_;
     // This may, for example, be a cl_mem pointer
     void *buffer_ptr;
     // Stores the size of the buffer_ptr (e.g sizeof(cl_mem))
@@ -42,7 +42,7 @@ typedef struct numba_oneapi_buffer* buffer_t;
 
 struct numba_oneapi_kernel
 {
-    unsigned magic;
+    unsigned id_;
     void *kernel;
     int (*dump_fn) (void *);
 };
@@ -52,7 +52,7 @@ typedef struct numba_oneapi_kernel* kernel_t;
 
 struct numba_oneapi_program
 {
-    unsigned magic;
+    unsigned id_;
     void *program;
 };
 
@@ -61,7 +61,7 @@ typedef struct numba_oneapi_program* program_t;
 
 struct numba_oneapi_kernel_arg
 {
-    unsigned magic;
+    unsigned id_;
     const void *arg_value;
     size_t arg_size;
 };
@@ -83,7 +83,7 @@ typedef struct numba_oneapi_kernel_arg* kernel_arg_t;
  */
 struct numba_oneapi_runtime
 {
-    unsigned magic;
+    unsigned id_;
     unsigned num_platforms;
     void *platform_ids;
     //platform_t *platform_infos;
