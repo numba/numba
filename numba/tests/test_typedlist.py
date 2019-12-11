@@ -470,6 +470,28 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(impl.py_func(), impl())
 
+    def test_equals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(None)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_unequals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(1)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
     def test_square_bracket_builtin_with_None(self):
         @njit(disable_reflected_list=True)
         def foo():
