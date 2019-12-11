@@ -225,27 +225,35 @@ class Interpreter(object):
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
 
+    def _inject_call(self, func, gv_name, res_name=None):
+        """A helper function to inject a call to *func* which is a python
+        function.
+
+        Parameters
+        ----------
+        func : callable
+            The function object to be called.
+        gv_name : str
+            The variable name to be used to store the function object.
+        res_name : str; optional
+            The variable name to be used to store the call result.
+            If ``None``, a name is created automatically.
+        """
+        gv_fn = ir.Global(gv_name, func, loc=self.loc)
+        self.store(value=gv_fn, name=gv_name, redefine=True)
+        callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
+        res_name = res_name or '$callres_{}'.format(gv_name)
+        self.store(value=callres, name=res_name, redefine=True)
+
     def _insert_try_block_begin(self):
         """Insert IR-nodes to mark the start of a `try` block.
         """
-        gv_fn = ir.Global(
-            "mark_try_block", eh.mark_try_block, loc=self.loc,
-        )
-        mark_try_name = 'mark_try_fn'
-        self.store(value=gv_fn, name=mark_try_name, redefine=True)
-        mark_try = ir.Expr.call(self.get(mark_try_name), (), (), loc=self.loc)
-        self.store(value=mark_try, name='$mark_try', redefine=True)
+        self._inject_call(eh.mark_try_block, 'mark_try_block')
 
     def _insert_try_block_end(self):
         """Insert IR-nodes to mark the end of a `try` block.
         """
-        gv_fn = ir.Global(
-            "end_try_block", eh.end_try_block, loc=self.loc,
-        )
-        end_try_name = 'end_try_fn'
-        self.store(value=gv_fn, name=end_try_name, redefine=True)
-        end_try = ir.Expr.call(self.get(end_try_name), (), (), loc=self.loc)
-        self.store(value=end_try, name='$end_try', redefine=True)
+        self._inject_call(eh.end_try_block, 'end_try_block')
 
     def _insert_exception_variables(self):
         """Insert IR-nodes to initialize the exception variables.
@@ -269,17 +277,12 @@ class Interpreter(object):
                 self._exception_vars.add(var)
 
     def _insert_exception_check(self):
-        """Called before the end of a block to inject checks if
+        """Called before the end of a block to inject checks if raised.
         """
         self._insert_exception_variables()
         # Do exception check
-        gv_check_fn = ir.Global(
-            "exception_check", eh.exception_check, loc=self.loc,
-        )
-        raise_check_name = 'raise_check_fn'
-        self.store(value=gv_check_fn, name=raise_check_name, redefine=True)
-        raised = ir.Expr.call(self.get(raise_check_name), (), (), loc=self.loc)
-        self.store(value=raised, name='$exception_check', redefine=True)
+        self._inject_call(eh.exception_check, 'exception_check',
+                          '$exception_check')
 
     def _remove_unused_temporaries(self):
         """
