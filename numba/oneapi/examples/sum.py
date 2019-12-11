@@ -39,18 +39,9 @@ dA = device_env.copy_array_to_device(a)
 dB = device_env.copy_array_to_device(b)
 dC = oneapidrv.DeviceArray(device_env.get_env_ptr(), c)
 
+print("before : ", dC._ndarray)
 data_parallel_sum[device_env,global_size,local_size](dA, dB, dC)
+device_env.copy_array_from_device(dC)
+print("after : ", dC._ndarray)
 
-"""
-ts = time()
-#dA = ocl.to_device(a)
-#dB = ocl.to_device(b)
-#dC = ocl.device_array_like(c)
-ocl_sum[global_size,local_size](a, b, c)
-#dC.copy_to_host(c)
-te = time()
-
-print(te - ts)
-assert (a + b == c).all()
-#print c
-"""
+print("Done...")
