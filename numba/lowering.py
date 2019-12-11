@@ -9,7 +9,7 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
-               typing, utils)
+               typing, utils, ir_utils)
 from .errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 from .targets import removerefctpass
@@ -159,6 +159,11 @@ class BaseLower(object):
         Called before lowering a block.
         """
 
+    def post_block(self, block):
+        """
+        Called after lowering a block.
+        """
+
     def return_exception(self, exc_class, exc_args=None, loc=None):
         """Propagate exception to the caller.
         """
@@ -269,6 +274,7 @@ class BaseLower(object):
             with new_error_context('lowering "{inst}" at {loc}', inst=inst,
                                    loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
+        self.post_block(block)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -304,6 +310,34 @@ lower_extensions = {}
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
+
+    def pre_block(self, block):
+        from numba.unsafe import eh
+
+        super(Lower, self).pre_block(block)
+
+        # Detect if we are in a TRY block by looking for a call to
+        # `eh.exception_check`.
+        for call in block.find_exprs(op='call'):
+            defn = ir_utils.guard(
+                ir_utils.get_definition, self.func_ir, call.func,
+            )
+            if defn is not None and isinstance(defn, ir.Global):
+                if defn.value is eh.exception_check:
+                    if isinstance(block.terminator, ir.Branch):
+                        targetblk = self.blkmap[block.terminator.truebr]
+                        # NOTE: This hacks in an attribute for call_conv to
+                        #       pick up. This hack is no longer needed when
+                        #       all old-style implementation are gone.
+                        self.builder._in_try_block = {'target': targetblk}
+                        break
+
+    def post_block(self, block):
+        # Cleaup
+        try:
+            del self.builder._in_try_block
+        except AttributeError:
+            pass
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions

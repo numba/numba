@@ -461,7 +461,6 @@ class TestTryExceptCaught(TestCase):
             str(raises.exception)
         )
 
-    # runtime error no active exception to reraise
     def test_try_except_reraise(self):
         @njit
         def udt():
@@ -494,6 +493,21 @@ class TestTryExceptCaught(TestCase):
             "Re-raise exception not supported, yet.",
             str(raises.exception),
         )
+
+    def test_division_operator(self):
+        # This test that old-style implementation propagate exception
+        # to the exception handler properly.
+        @njit
+        def udt(y):
+            try:
+                1 / y
+            except Exception:
+                return 0xdead
+            else:
+                return 1 / y
+
+        self.assertEqual(udt(0), 0xdead)
+        self.assertEqual(udt(2), 0.5)
 
 
 @skip_tryexcept_unsupported

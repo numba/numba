@@ -382,10 +382,17 @@ class CPUCallConv(BaseCallConv):
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
+        try_info = getattr(builder, '_in_try_block', False)
         self.set_static_user_exc(builder, exc, exc_args=exc_args,
                                    loc=loc, func_name=func_name)
         trystatus = self.check_try_status(builder)
-        self._return_errcode_raw(builder, RETCODE_USEREXC)
+        if try_info:
+            # This is a hack for old-style impl.
+            # We will branch directly to the exception handler.
+            builder.branch(try_info['target'])
+        else:
+            # Return from the current function
+            self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def _get_try_state(self, builder):
         try:
@@ -427,6 +434,10 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = self._get_excinfo_argument(builder.function)
         null = cgutils.get_null_value(excinfoptr.type.pointee)
         builder.store(null, excinfoptr)
+
+    def get_try_block_status(self, builder):
+        trystatus = self.check_try_status(builder)
+        return trystatus.in_try
 
     def set_exception(self, builder, exc):
         self.set_static_user_exc(builder, exc=Exception)
