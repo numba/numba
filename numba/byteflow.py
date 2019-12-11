@@ -1288,7 +1288,7 @@ class State(object):
         -------
         Dict[int, int]
             where keys are the PC
-                  values are the edge-pushed stack values
+            values are the edge-pushed stack values
         """
 
         return {edge.pc: tuple(edge.stack[-edge.npush:])
