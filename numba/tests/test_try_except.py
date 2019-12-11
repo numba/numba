@@ -331,10 +331,10 @@ class TestTryBareExcept(TestCase):
                                 raise ValueError
                         except:  # noqa: E722
                             print("CAUGHT1")
-                            raise
+                            raise ValueError
                     except:  # noqa: E722
                         print("CAUGHT2")
-                        raise
+                        raise ValueError
                 except:  # noqa: E722
                     print("CAUGHT3")
 
@@ -357,6 +357,21 @@ class TestTryBareExcept(TestCase):
 
         res = foo(123)
         self.assertEqual(res, 123)
+
+    def test_try_except_reraise(self):
+        @njit
+        def udt():
+            try:
+                raise ValueError("ERROR")
+            except:    # noqa: E722
+                raise
+
+        with self.assertRaises(UnsupportedError) as raises:
+            udt()
+        self.assertIn(
+            "Re-raise exception not supported, yet.",
+            str(raises.exception),
+        )
 
 
 @skip_tryexcept_unsupported
@@ -444,6 +459,40 @@ class TestTryExceptCaught(TestCase):
         self.assertIn(
             "Exception object cannot be stored into variable",
             str(raises.exception)
+        )
+
+    # runtime error no active exception to reraise
+    def test_try_except_reraise(self):
+        @njit
+        def udt():
+            try:
+                raise ValueError("ERROR")
+            except Exception:
+                raise
+
+        with self.assertRaises(UnsupportedError) as raises:
+            udt()
+        self.assertIn(
+            "Re-raise exception not supported, yet.",
+            str(raises.exception),
+        )
+
+    def test_try_except_reraise_chain(self):
+        @njit
+        def udt():
+            try:
+                raise ValueError("ERROR")
+            except Exception:
+                try:
+                    raise
+                except Exception:
+                    raise
+
+        with self.assertRaises(UnsupportedError) as raises:
+            udt()
+        self.assertIn(
+            "Re-raise exception not supported, yet.",
+            str(raises.exception),
         )
 
 

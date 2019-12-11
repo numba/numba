@@ -587,8 +587,14 @@ class TraceRunner(object):
         state.push(res)
 
     def op_RAISE_VARARGS(self, state, inst):
+        in_exc_block = state.get_top_block("EXCEPT") is not None
         if inst.arg == 0:
             exc = None
+            if in_exc_block:
+                raise UnsupportedError(
+                    "Re-raise exception not supported, yet.",
+                    loc=self.get_debug_loc(inst.lineno),
+                )
         elif inst.arg == 1:
             exc = state.pop()
         else:
