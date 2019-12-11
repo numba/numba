@@ -227,6 +227,21 @@ class OneAPIKernel(OneAPIKernelBase):
         # retrieve auto converted arrays
         # for wb in retr:
         #    wb()
+    
+    def _unpack_device_array_argument(self, val, kernelargs):
+        void_ptr_arg = True
+        # meminfo 
+        kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+        # parent
+        kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+        kernelargs.append(driver.KernelArg(val._ndarray.size))
+        kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
+        kernelargs.append(driver.KernelArg(val))
+        for ax in range(val._ndarray.ndim):
+            kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
+        for ax in range(val._ndarray.ndim):
+            kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
+
 
     def _unpack_argument(self, ty, val, queue, retr, kernelargs):
         """
@@ -237,19 +252,7 @@ class OneAPIKernel(OneAPIKernelBase):
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
         if isinstance(val, driver.DeviceArray):
-            void_ptr_arg = True
-            ## TODO : What and how are meminfo and parent used
-            # meminfo 
-            kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-            # parent
-            kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-            kernelargs.append(driver.KernelArg(val._ndarray.size))
-            kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
-            kernelargs.append(driver.KernelArg(val))
-            for ax in range(val._ndarray.ndim):
-                kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
-            for ax in range(val._ndarray.ndim):
-                kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
+            _unpack_device_array_argument(val, kernelargs)
 
         elif isinstance(ty, types.Array):
             # DRD: This unpack routine is commented out for the time-being.
