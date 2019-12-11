@@ -1034,7 +1034,9 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 
     err = clFinish(queue);
     CHECK_OPEN_CL_ERROR(err, "Failed while waiting for queue to finish");
-
+#if DEBUG
+    printf("DEBUG: CL Kernel Finish...\n");
+#endif
     return NUMBA_ONEAPI_SUCCESS;
 
 error:
