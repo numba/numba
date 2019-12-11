@@ -165,6 +165,7 @@ class Program():
 # Kernel class
 ##########################################################################
 
+
 class Kernel():
 
     def __init__(self, device_env, prog_t_obj, kernel_name):
@@ -196,29 +197,31 @@ class Kernel():
 # KernelArg class
 ##########################################################################
 
+
 class KernelArg():
 
     def __init__(self, arg, void_p_arg=False):
         self.arg = arg
         self.kernel_arg_t = _numba_oneapi_pybindings.ffi.new("kernel_arg_t *")
         if void_p_arg is True:
-            print("KernelArg for void_p_arg:", type(arg))
-            self.void_p = ffi.new("void **")
-            self.void_p[0] = ffi.cast("void *", 0)
+            self.ptr_to_arg_p = ffi.new("void **")
+            self.ptr_to_arg_p[0] = ffi.cast("void *", 0)
             retval = (_numba_oneapi_pybindings
                       .lib
                       .create_numba_oneapi_kernel_arg(
-                          self.void_p,
-                          ffi.sizeof(self.void_p),
+                          self.ptr_to_arg_p,
+                          ffi.sizeof(self.ptr_to_arg_p),
                           self.kernel_arg_t))
             if(retval):
                 _raise_driver_error("create_numba_oneapi_kernel_arg", -1)
         else:
             if isinstance(arg, DeviceArray):
+                self.ptr_to_arg_p = ffi.new("void **")
+                self.ptr_to_arg_p[0] = arg.get_buffer_obj()[0].buffer_ptr
                 retval = (_numba_oneapi_pybindings
                           .lib
                           .create_numba_oneapi_kernel_arg(
-                              arg.get_buffer_obj()[0].buffer_ptr,
+                              self.ptr_to_arg_p,
                               arg.get_buffer_obj()[0].sizeof_buffer_ptr,
                               self.kernel_arg_t))
                 if(retval):
@@ -321,7 +324,7 @@ class DeviceEnv():
         retval = (_numba_oneapi_pybindings
                   .lib
                   .read_numba_oneapi_mem_buffer_from_device(
-                      self._env_ptr.queue,
+                      self._env_ptr,
                       array.get_buffer_obj()[0],
                       True,
                       0,

@@ -232,11 +232,6 @@ class OneAPIKernel(OneAPIKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
-        print("=======================================================")
-        print("Unpack Args of type :", ty)
-        print("Arg Val :", val)
-        print("Type of val :", type(val))
-        print("=======================================================")
         # DRD : Check if the val is of type driver.DeviceArray before checking
         # if ty is of type ndarray. Argtypes retuends ndarray for both
         # DeviceArray and ndarray. This is a hack to get around the issue,
