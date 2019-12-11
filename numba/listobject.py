@@ -94,6 +94,11 @@ def _raise_if_error(context, builder, status, msg):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
+def _check_for_mutable(lst):
+    if not lst.mutable:
+        raise TypingError("unable to mutate immutable typed list")
+
+
 @intrinsic
 def _as_meminfo(typingctx, lstobj):
     """Returns the MemInfoPointer of a list.
@@ -477,8 +482,8 @@ def _list_append(typingctx, l, item):
 def impl_append(l, item):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     itemty = l.item_type
 
@@ -695,8 +700,8 @@ def _list_setitem(typingctx, l, index, item):
 def impl_setitem(l, index, item):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     indexty = INDEXTY
     itemty = l.item_type
@@ -771,8 +776,8 @@ def impl_setitem(l, index, item):
 def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     indexty = INDEXTY
 
@@ -832,8 +837,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
 def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     if index in index_types:
         def integer_impl(l, index):
@@ -893,8 +898,9 @@ def impl_count(l, item):
 def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
+
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
@@ -940,8 +946,8 @@ def impl_extend(l, iterable):
 def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     if index in index_types:
         def impl(l, index, item):
@@ -1003,8 +1009,8 @@ def impl_remove(l, item):
 def impl_clear(l):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     def impl(l):
         while len(l):
@@ -1017,8 +1023,8 @@ def impl_clear(l):
 def impl_reverse(l):
     if not isinstance(l, types.ListType):
         return
-    if not l.mutable:
-        raise TypingError("unable to mutate immutable typed list")
+
+    _check_for_mutable(l)
 
     def impl(l):
         front = 0
