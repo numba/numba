@@ -184,7 +184,7 @@ def _list_codegen_set_method_table(context, builder, lp, itemty):
     item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
     item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
 
-    dm_item = context.data_model_manager[itemty.instance_type]
+    dm_item = context.data_model_manager[itemty]
     if dm_item.contains_nrt_meminfo():
         item_incref, item_decref = _get_incref_decref(
             context, builder.module, dm_item, "list"
@@ -209,7 +209,8 @@ def _list_set_method_table(typingctx, lp, itemty):
     sig = resty(lp, itemty)
 
     def codegen(context, builder, sig, args):
-        _list_codegen_set_method_table(context, builder, args[0], itemty)
+        _list_codegen_set_method_table(
+            context, builder, args[0], itemty.instance_type)
 
     return sig, codegen
 

@@ -416,42 +416,11 @@ def unbox_listtype(typ, val, c):
             # create ptr to new typed list
             error_handler = ErrorHandler(pyapi, errorptr)
             ptr = listobject._list_new_codegen(
-                context, builder,itemty, size, error_handler)
+                context, builder, itemty, size, error_handler)
             lstruct.data = ptr
-
-            # setup typed list method table
-            vtablety = ir.LiteralStructType([
-                listobject.ll_voidptr_type,  # item incref
-                listobject.ll_voidptr_type,  # item decref
-            ])
-            setmethod_fnty = ir.FunctionType(
-                ir.VoidType(),
-                [listobject.ll_list_type, vtablety.as_pointer()]
-            )
-            setmethod_fn = builder.module.get_or_insert_function(
-                setmethod_fnty,
-                name='numba_list_set_method_table')
-            vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
-
-            # install item incref/decref
-            item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
-            item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
-
-            dm_item = context.data_model_manager[itemty]
-            if dm_item.contains_nrt_meminfo():
-                item_incref, item_decref = listobject._get_incref_decref(
-                    context, builder.module, dm_item, "list"
-                )
-                builder.store(
-                    builder.bitcast(item_incref, item_incref_ptr.type.pointee),
-                    item_incref_ptr,
-                )
-                builder.store(
-                    builder.bitcast(item_decref, item_decref_ptr.type.pointee),
-                    item_decref_ptr,
-                )
-
-            builder.call(setmethod_fn, [ptr, vtable])
+            # setup method table
+            listobject._list_codegen_set_method_table(
+                context, builder, ptr, itemty)
 
             # setup builder representation for typed-list
             alloc_size = context.get_abi_sizeof(
