@@ -1,4 +1,5 @@
 from __future__ import absolute_import, print_function
+import llvmlite.binding as ll
 
 
 def init_jit():
@@ -8,7 +9,8 @@ def init_jit():
 def initialize_all():
     from numba.targets.registry import dispatcher_registry
     dispatcher_registry.ondemand['ocl'] = init_jit
-
+    ll.load_library_permanently('libnumbaoneapiglue_so.so')
+    ll.load_library_permanently('libOpenCL.so')
 
 def _initialize_ufunc():
     from numba.npyufunc import Vectorize
