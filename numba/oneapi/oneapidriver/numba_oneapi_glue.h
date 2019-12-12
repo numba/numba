@@ -227,6 +227,19 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 /*!
  *
  */
+int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
+                                                            kernel_t kernel_t_ptr,
+                                                            size_t nargs,
+                                                            const kernel_arg_t *array_of_args,
+							    unsigned int num_dims,
+							    size_t *dim_starts,
+							    size_t *dim_stops);
+
+
+
+/*!
+ *
+ */
 int retain_numba_oneapi_context (env_t env_t_ptr);
 
 
