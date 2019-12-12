@@ -86,13 +86,17 @@ class ListStatus(IntEnum):
     LIST_ERR_ITER_EXHAUSTED = -4
 
 
-def _raise_if_error(context, builder, pyapi, status, msg, errorptr):
-    """Raise an internal error depending on the value of *status*
-    """
-    ok_status = status.type(int(ListStatus.LIST_OK))
-    with builder.if_then(builder.icmp_signed('!=', status, ok_status),
-                         likely=True):
-        context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+class ErrorHandler(object):
+
+    def __init__(self, context):
+        self.context = context
+
+    def __call__(self, builder, status, msg):
+        ok_status = status.type(int(ListStatus.LIST_OK))
+        with builder.if_then(builder.icmp_signed('!=', status, ok_status),
+                             likely=True):
+            self.context.call_conv.return_user_exc(
+                builder, RuntimeError, (msg,))
 
 
 def _check_for_mutable(lst):
@@ -307,8 +311,7 @@ def _make_list(typingctx, itemty, ptr):
     return sig, codegen
 
 
-def _list_new_codegen(context, builder, pyapi, itemty, new_size, error_func,
-                      errorptr):
+def _list_new_codegen(context, builder, itemty, new_size, error_handler):
     fnty = ir.FunctionType(
         ll_status,
         [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
@@ -323,13 +326,10 @@ def _list_new_codegen(context, builder, pyapi, itemty, new_size, error_func,
         [reflp, ll_ssize_t(sz_item), new_size],
     )
     msg = "Failed to allocate list"
-    error_func(
-        context,
+    error_handler(
         builder,
-        pyapi,
         status,
         msg,
-        errorptr,
     )
     lp = builder.load(reflp)
     return lp
@@ -353,13 +353,12 @@ def _list_new(typingctx, itemty, allocated):
     sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
+        error_handler = ErrorHandler(context)
         return _list_new_codegen(context,
                                  builder,
-                                 None,
                                  itemty.instance_type,
                                  args[1],
-                                 _raise_if_error,
-                                 None,
+                                 error_handler,
                                  )
 
     return sig, codegen

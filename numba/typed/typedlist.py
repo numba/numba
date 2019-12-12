@@ -354,23 +354,29 @@ def box_lsttype(typ, val, c):
     return res
 
 
-def _raise_if_error(context, builder, pyapi, status, msg, errorptr):
-    ok_status = status.type(int(listobject.ListStatus.LIST_OK))
-    with builder.if_then(builder.icmp_signed('!=', status, ok_status),
-                         likely=True):
-        if IS_PY3:
-            pyapi.err_format(
-                "PyExc_RuntimeError",
-                msg
-            )
-        else:
-            # Python2 doesn't have "%S" format string.
-            pyapi.err_set_string(
-                "PyExc_RuntimeError",
-                msg
-            )
-        builder.store(cgutils.true_bit, errorptr)
-        builder.ret(pyapi.get_null_object())
+class ErrorHandler(object):
+
+    def __init__(self, pyapi, errorptr):
+        self.pyapi = pyapi
+        self.errorptr = errorptr
+
+    def __call__(self, builder, status, msg):
+        ok_status = status.type(int(listobject.ListStatus.LIST_OK))
+        with builder.if_then(builder.icmp_signed('!=', status, ok_status),
+                             likely=True):
+            if IS_PY3:
+                self.pyapi.err_format(
+                    "PyExc_RuntimeError",
+                    msg
+                )
+            else:
+                # Python2 doesn't have "%S" format string.
+                self.pyapi.err_set_string(
+                    "PyExc_RuntimeError",
+                    msg
+                )
+            builder.store(cgutils.true_bit, self.errorptr)
+            builder.ret(self.pyapi.get_null_object())
 
 
 @unbox(types.ListType)
@@ -408,9 +414,9 @@ def unbox_listtype(typ, val, c):
             size = c.pyapi.list_size(val)
             itemty = typ.item_type
             # create ptr to new typed list
+            error_handler = ErrorHandler(pyapi, errorptr)
             ptr = listobject._list_new_codegen(
-                context, builder, pyapi, itemty,
-                size, _raise_if_error, errorptr)
+                context, builder,itemty, size, error_handler)
             lstruct.data = ptr
 
             # setup typed list method table
@@ -537,8 +543,7 @@ def unbox_listtype(typ, val, c):
                         ],
                     )
                     msg = "failed to append to list during unboxing"
-                    _raise_if_error(
-                        context, builder, pyapi, status, msg, errorptr)
+                    error_handler(builder, status, msg)
 
                 c.pyapi.decref(expected_typobj)
 
