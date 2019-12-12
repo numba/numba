@@ -86,7 +86,7 @@ class ListStatus(IntEnum):
     LIST_ERR_ITER_EXHAUSTED = -4
 
 
-def _raise_if_error(context, builder, status, msg):
+def _raise_if_error(context, builder, pyapi, status, msg, errorptr):
     """Raise an internal error depending on the value of *status*
     """
     ok_status = status.type(int(ListStatus.LIST_OK))
@@ -307,6 +307,34 @@ def _make_list(typingctx, itemty, ptr):
     return sig, codegen
 
 
+def _list_new_codegen(context, builder, pyapi, itemty, new_size, error_func,
+                      errorptr):
+    fnty = ir.FunctionType(
+        ll_status,
+        [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
+    )
+    fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
+    # Determine sizeof item types
+    ll_item = context.get_data_type(itemty)
+    sz_item = context.get_abi_sizeof(ll_item)
+    reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
+    status = builder.call(
+        fn,
+        [reflp, ll_ssize_t(sz_item), new_size],
+    )
+    msg = "Failed to allocate list"
+    error_func(
+        context,
+        builder,
+        pyapi,
+        status,
+        msg,
+        errorptr,
+    )
+    lp = builder.load(reflp)
+    return lp
+
+
 @intrinsic
 def _list_new(typingctx, itemty, allocated):
     """Wrap numba_list_new.
@@ -325,25 +353,14 @@ def _list_new(typingctx, itemty, allocated):
     sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
-        )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
-        # Determine sizeof item types
-        ll_item = context.get_data_type(itemty.instance_type)
-        sz_item = context.get_abi_sizeof(ll_item)
-        reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
-        status = builder.call(
-            fn,
-            [reflp, ll_ssize_t(sz_item), args[1]],
-        )
-        _raise_if_error(
-            context, builder, status,
-            msg="Failed to allocate list",
-        )
-        lp = builder.load(reflp)
-        return lp
+        return _list_new_codegen(context,
+                                 builder,
+                                 None,
+                                 itemty.instance_type,
+                                 args[1],
+                                 _raise_if_error,
+                                 None,
+                                 )
 
     return sig, codegen
 

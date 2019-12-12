@@ -354,7 +354,7 @@ def box_lsttype(typ, val, c):
     return res
 
 
-def _raise_if_error(builder, pyapi, errorptr, status, msg):
+def _raise_if_error(context, builder, pyapi, status, msg, errorptr):
     ok_status = status.type(int(listobject.ListStatus.LIST_OK))
     with builder.if_then(builder.icmp_signed('!=', status, ok_status),
                          likely=True):
@@ -406,30 +406,11 @@ def unbox_listtype(typ, val, c):
         with is_python_list:
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             size = c.pyapi.list_size(val)
-
-            # create ptr to new typed list
             itemty = typ.item_type
-            fnty = ir.FunctionType(
-                listobject.ll_status,
-                [listobject.ll_list_type.as_pointer(),
-                 listobject.ll_ssize_t,
-                 listobject.ll_ssize_t],
-            )
-            fn = builder.module.get_or_insert_function(
-                fnty, name='numba_list_new')
-            ll_item = context.get_data_type(itemty)
-            sz_item = context.get_abi_sizeof(ll_item)
-            reflp = cgutils.alloca_once(
-                builder, listobject.ll_list_type, zfill=True)
-            status = builder.call(
-                fn,
-                [reflp, listobject.ll_ssize_t(sz_item), size],
-            )
-            _raise_if_error(builder, pyapi, errorptr, status,
-                            "unable to allocate memory for unboxing list")
-
-            ptr = builder.load(reflp)
-
+            # create ptr to new typed list
+            ptr = listobject._list_new_codegen(
+                context, builder, pyapi, itemty,
+                size, _raise_if_error, errorptr)
             lstruct.data = ptr
 
             # setup typed list method table
@@ -555,8 +536,9 @@ def unbox_listtype(typ, val, c):
                             _as_bytes(builder, ptr_item),
                         ],
                     )
-                    _raise_if_error(builder, pyapi, errorptr, status,
-                                    "failed to append to list during unboxing")
+                    msg = "failed to append to list during unboxing"
+                    _raise_if_error(
+                        context, builder, pyapi, status, msg, errorptr)
 
                 c.pyapi.decref(expected_typobj)
 
