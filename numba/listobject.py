@@ -1059,9 +1059,14 @@ def impl_copy(l):
 
     _check_for_none_typed(l)
 
+    itemty = l.item_type
+
     if isinstance(l, types.ListType):
         def impl(l):
-            return l[:]
+            newl = new_list(itemty, len(l))
+            for i in l:
+                newl.append(i)
+            return newl
 
         return impl
 
