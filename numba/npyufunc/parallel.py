@@ -576,10 +576,12 @@ def get_thread_num():
     """
     docs
     """
+    _launch_threads()
     return _get_thread_num()
 
 @overload(get_thread_num)
 def ol_get_thread_num():
+    _launch_threads()
     def impl():
         return _get_thread_num()
     return impl
