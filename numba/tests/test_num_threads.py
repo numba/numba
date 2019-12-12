@@ -43,14 +43,10 @@ class TestNumThreads(TestCase):
         def get_n():
             return get_num_threads()
 
-        @njit
-        def set_n(n):
-            set_num_threads(n)
-
         self.assertEqual(get_n(), max_threads)
-        set_n(2)
+        set_num_threads(2)
         self.assertEqual(get_n(), 2)
-        set_n(max_threads)
+        set_num_threads(max_threads)
         self.assertEqual(get_n(), max_threads)
 
         @njit
@@ -62,10 +58,10 @@ class TestNumThreads(TestCase):
         self.assertEqual(set_get_n(max_threads), max_threads)
 
         with self.assertRaises(ValueError):
-            set_n(0)
+            set_get_n(0)
 
         with self.assertRaises(ValueError):
-            set_n(max_threads + 1)
+            set_get_n(max_threads + 1)
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -79,21 +75,14 @@ class TestNumThreads(TestCase):
         def get_n(x):
             x[:] = get_num_threads()
 
-        @guvectorize(['void(int64[:])'],
-                     '(n)',
-                     nopython=True,
-                     target='parallel')
-        def set_n(n):
-            set_num_threads(n[0])
-
         x = np.zeros((5000000,), dtype=np.int64)
         get_n(x)
         np.testing.assert_equal(x, max_threads)
-        set_n(np.array([2]))
+        set_num_threads(2)
         x = np.zeros((5000000,), dtype=np.int64)
         get_n(x)
         np.testing.assert_equal(x, 2)
-        set_n(np.array([max_threads]))
+        set_num_threads(max_threads)
         x = np.zeros((5000000,), dtype=np.int64)
         get_n(x)
         np.testing.assert_equal(x, max_threads)
@@ -116,10 +105,10 @@ class TestNumThreads(TestCase):
         np.testing.assert_equal(x, max_threads)
 
         with self.assertRaises(ValueError):
-            set_n(np.array([0]))
+            set_get_n(np.array([0]))
 
         with self.assertRaises(ValueError):
-            set_n(np.array([max_threads + 1]))
+            set_get_n(np.array([max_threads + 1]))
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
