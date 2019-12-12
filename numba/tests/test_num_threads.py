@@ -210,14 +210,15 @@ class TestNumThreads(TestCase):
                          nopython=True,
                          target='parallel')
             def test_gufunc(x, out):
-                x[:] = get_thread_num() # XXX: Doesn't actually work
-                out[0] = len(np.unique(x))
-                out[1] = get_num_threads()
+                x[:] = get_thread_num()
+                out[0] = get_num_threads()
 
-            x = np.full((5000000,), -1, dtype=np.int64)
-            out = np.zeros((mask,), dtype=np.int64)
+            # Reshape to force parallelism
+            x = np.full((5000000,), -1, dtype=np.int64).reshape((100, 50000))
+            out = np.zeros((1,), dtype=np.int64)
             test_gufunc(x, out)
-            np.testing.assert_equal(out, np.array([mask, mask]), str(x[0]))
+            np.testing.assert_equal(out, np.array([mask]))
+            self.assertEqual(len(np.unique(x)), mask)
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -239,20 +240,22 @@ class TestNumThreads(TestCase):
             out = test_func()
             self.assertEqual(out, (mask, mask))
 
+
             @guvectorize(['void(int64[:], int64[:])'],
                          '(n), (m)',
                          nopython=True,
                          target='parallel')
             def test_gufunc(x, out):
                 set_num_threads(mask)
-                x[:] = get_thread_num() # XXX: Doesn't actually work
-                out[0] = len(np.unique(x))
-                out[1] = get_num_threads()
+                x[:] = get_thread_num()
+                out[0] = get_num_threads()
 
-            x = np.full((5000000,), -1, dtype=np.int64)
-            out = np.zeros((mask,), dtype=np.int64)
+            # Reshape to force parallelism
+            x = np.full((5000000,), -1, dtype=np.int64).reshape((100, 50000))
+            out = np.zeros((1,), dtype=np.int64)
             test_gufunc(x, out)
-            np.testing.assert_equal(out, np.array([mask, mask]), str(x[0]))
+            np.testing.assert_equal(out, np.array([mask]))
+            self.assertEqual(len(np.unique(x)), mask)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
