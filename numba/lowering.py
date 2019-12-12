@@ -328,12 +328,12 @@ class Lower(BaseLower):
                         targetblk = self.blkmap[block.terminator.truebr]
                         # NOTE: This hacks in an attribute for call_conv to
                         #       pick up. This hack is no longer needed when
-                        #       all old-style implementation are gone.
+                        #       all old-style implementations are gone.
                         self.builder._in_try_block = {'target': targetblk}
                         break
 
     def post_block(self, block):
-        # Cleaup
+        # Clean-up
         try:
             del self.builder._in_try_block
         except AttributeError:
