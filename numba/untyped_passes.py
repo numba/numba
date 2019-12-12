@@ -1078,67 +1078,6 @@ class MixedContainerUnroller(FunctionPass):
         # 2. Opt in via `numba.literal_unroll`
         # 3. No multiple mix-tuple use
 
-        # TODO: Add the following in so that loop nests are walked in reverse
-        # nesting order and as a result nested transforms become valid.
-        def true_body(loop):
-            # computes blocks reachable from a loop head
-            return loop.body - {loop.header} - loop.exits
-
-        def get_loop_nest(structure):
-            all_children = []
-            for x in structure.values():
-                all_children.extend(x)
-
-            # BFS order
-            def BFS(root):
-                acc = []
-
-                def walk(node):
-                    for x in structure[node]:
-                        acc.append(x)
-                    for x in structure[node]:
-                        walk(x)
-                walk(root)
-                return acc
-
-            nest = {}
-            for x in structure.keys():
-                if x not in all_children:
-                    nest[x] = BFS(x)
-            return nest
-
-        def compute_loop_structure(loops):
-            """
-            Return BFS ordered list of loop nests
-            """
-            # a loop can only have one loop parent, but a loop parent may have
-            # many children
-            children = defaultdict(list)
-            for loop in loops.values():
-                for test_loop in loops.values():
-                    if loop.header in true_body(test_loop):
-                        # loop is a child of test_loop
-                        children[test_loop.header].append(loop.header)
-                else:
-                    # loop is inner most
-                    children[test_loop.header] = []
-            # any loop which has children which also have children themselves
-            # needs fixing up as children!=grandchildren
-            ck = [x for x in children.keys()]
-            for k in ck:
-                for child in children[k][:]:
-                    grandchildren = children[child]
-                    for grandchild in grandchildren:
-                        if grandchild in children[k]:
-                            children[k].remove(grandchild)
-
-            loop_nest = get_loop_nest(children)
-            # any loops with that are not in children's keys are parents without
-            # children
-            for loop in loops.values():
-                if loop.header not in children:
-                    loop_nest[loop.header] = []
-
         # keep running the transform loop until it reports no more changes
         while(True):
             stat = self.apply_transform(state)
