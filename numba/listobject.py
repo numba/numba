@@ -165,6 +165,42 @@ def _from_meminfo(typingctx, mi, listtyperef):
     return sig, codegen
 
 
+def _list_codegen_set_method_table(context, builder, lp, itemty):
+    vtablety = ir.LiteralStructType([
+        ll_voidptr_type,  # item incref
+        ll_voidptr_type,  # item decref
+    ])
+    setmethod_fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_list_type, vtablety.as_pointer()]
+    )
+
+    setmethod_fn = builder.module.get_or_insert_function(
+        setmethod_fnty,
+        name='numba_list_set_method_table')
+    vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
+
+    # install item incref/decref
+    item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+    item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
+
+    dm_item = context.data_model_manager[itemty.instance_type]
+    if dm_item.contains_nrt_meminfo():
+        item_incref, item_decref = _get_incref_decref(
+            context, builder.module, dm_item, "list"
+        )
+        builder.store(
+            builder.bitcast(item_incref, item_incref_ptr.type.pointee),
+            item_incref_ptr,
+        )
+        builder.store(
+            builder.bitcast(item_decref, item_decref_ptr.type.pointee),
+            item_decref_ptr,
+        )
+
+    builder.call(setmethod_fn, [lp, vtable])
+
+
 @intrinsic
 def _list_set_method_table(typingctx, lp, itemty):
     """Wrap numba_list_set_method_table
@@ -173,40 +209,7 @@ def _list_set_method_table(typingctx, lp, itemty):
     sig = resty(lp, itemty)
 
     def codegen(context, builder, sig, args):
-        vtablety = ir.LiteralStructType([
-            ll_voidptr_type,  # item incref
-            ll_voidptr_type,  # item decref
-        ])
-        setmethod_fnty = ir.FunctionType(
-            ir.VoidType(),
-            [ll_list_type, vtablety.as_pointer()]
-        )
-
-        setmethod_fn = builder.module.get_or_insert_function(
-            setmethod_fnty,
-            name='numba_list_set_method_table')
-        dp = args[0]
-        vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
-
-        # install item incref/decref
-        item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
-        item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
-
-        dm_item = context.data_model_manager[itemty.instance_type]
-        if dm_item.contains_nrt_meminfo():
-            item_incref, item_decref = _get_incref_decref(
-                context, builder.module, dm_item, "list"
-            )
-            builder.store(
-                builder.bitcast(item_incref, item_incref_ptr.type.pointee),
-                item_incref_ptr,
-            )
-            builder.store(
-                builder.bitcast(item_decref, item_decref_ptr.type.pointee),
-                item_decref_ptr,
-            )
-
-        builder.call(setmethod_fn, [dp, vtable])
+        _list_codegen_set_method_table(context, builder, args[0], itemty)
 
     return sig, codegen
 
