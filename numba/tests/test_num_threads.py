@@ -3,8 +3,9 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 
-from numba import (njit, set_num_threads, get_num_threads, get_thread_id,
-                   prange, config, threading_layer, guvectorize)
+from numba import (njit, set_num_threads, get_num_threads, prange, config,
+                   threading_layer, guvectorize)
+from numba.npyufunc.parallel import _get_thread_id
 from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported
 
@@ -199,7 +200,7 @@ class TestNumThreads(TestCase):
                 x = 5000000
                 buf = np.empty((x,))
                 for i in prange(x):
-                    buf[i] = get_thread_id()
+                    buf[i] = _get_thread_id()
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
@@ -210,7 +211,7 @@ class TestNumThreads(TestCase):
                          nopython=True,
                          target='parallel')
             def test_gufunc(x, out):
-                x[:] = get_thread_id()
+                x[:] = _get_thread_id()
                 out[0] = get_num_threads()
 
             # Reshape to force parallelism
@@ -234,7 +235,7 @@ class TestNumThreads(TestCase):
                 x = 5000000
                 buf = np.empty((x,))
                 for i in prange(x):
-                    buf[i] = get_thread_id()
+                    buf[i] = _get_thread_id()
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
@@ -247,7 +248,7 @@ class TestNumThreads(TestCase):
                          target='parallel')
             def test_gufunc(x, out):
                 set_num_threads(mask)
-                x[:] = get_thread_id()
+                x[:] = _get_thread_id()
                 out[0] = get_num_threads()
 
             # Reshape to force parallelism
@@ -265,7 +266,7 @@ class TestNumThreads(TestCase):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
-        # check that get_thread_id is ok in nesting
+        # check that _get_thread_id is ok in nesting
         mask = config.NUMBA_NUM_THREADS - 1
 
         N = 4
@@ -321,7 +322,7 @@ class TestNumThreads(TestCase):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
-        # check that get_thread_id is ok in nesting
+        # check that _get_thread_id is ok in nesting
 
         N = 5
         M = 17
@@ -406,7 +407,7 @@ class TestNumThreads(TestCase):
             set_num_threads(local_nt)
             for i in prange(BIG):
                 acc += 1
-                tid[i] = get_thread_id()
+                tid[i] = _get_thread_id()
             return acc, np.unique(tid)
 
         @njit(parallel=True)

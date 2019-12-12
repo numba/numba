@@ -572,14 +572,14 @@ def ol_get_num_threads():
         return _get_num_threads()
     return impl
 
-def get_thread_id():
+def _get_thread_id():
     """
     docs
     """
     _launch_threads()
     return _get_thread_id()
 
-@overload(get_thread_id)
+@overload(_get_thread_id)
 def ol_get_thread_id():
     _launch_threads()
     def impl():
