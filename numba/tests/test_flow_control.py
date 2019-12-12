@@ -5,9 +5,9 @@ import itertools
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
-from numba import types, errors
+from numba import types
 from numba.bytecode import FunctionIdentity, ByteCode
-from numba.utils import IS_PY3, PYVERSION
+from numba.utils import IS_PY3
 from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
@@ -396,17 +396,6 @@ class TestFlowControl(TestCase):
 
     def test_double_infinite_loop_npm(self):
         self.test_double_infinite_loop(flags=no_pyobj_flags)
-
-    def test_try_except_raises(self):
-        pyfunc = try_except_usecase
-        for f in [no_pyobj_flags, enable_pyobj_flags]:
-            with self.assertRaises(errors.UnsupportedError) as e:
-                compile_isolated(pyfunc, (), flags=f)
-            if PYVERSION >= (3, 8):
-                msg = "Use of unsupported opcode (SETUP_FINALLY) found"
-            else:
-                msg = "Use of unsupported opcode (SETUP_EXCEPT) found"
-            self.assertIn(msg, str(e.exception))
 
 
 class TestCFGraph(TestCase):

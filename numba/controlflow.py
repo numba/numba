@@ -682,12 +682,17 @@ class ControlFlowAnalysis(object):
             fn = getattr(self, fname, None)
             if fn is not None:
                 fn(inst)
-            else:
+            elif inst.is_jump:
                 # this catches e.g. try... except
-                if inst.is_jump:
-                    l = Loc(self.bytecode.func_id.filename, inst.lineno)
+                l = Loc(self.bytecode.func_id.filename, inst.lineno)
+                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                    msg = "'try' block not supported until python3.7 or later"
+                else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
-                    raise UnsupportedError(msg, loc=l)
+                raise UnsupportedError(msg, loc=l)
+            else:
+                # Non-jump instructions are ignored
+                pass  # intentionally
 
         # Close all blocks
         for cur, nxt in zip(self.blockseq, self.blockseq[1:]):

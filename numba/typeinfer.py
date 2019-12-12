@@ -538,6 +538,13 @@ class CallConstraint(object):
                 and sig.recvr is not None
                 and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
+            if (refined_this is None and
+                    fnty.this.is_precise() and
+                    sig.recvr.is_precise()):
+                msg = "Cannot refine type {} to {}".format(
+                    sig.recvr, fnty.this,
+                )
+                raise TypingError(msg, loc=self.loc)
             if refined_this is not None and refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
@@ -1275,7 +1282,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
-        elif isinstance(inst, ir.StaticRaise):
+        elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
